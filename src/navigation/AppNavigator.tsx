@@ -1,0 +1,170 @@
+import React from 'react';
+import { View, Text, StyleSheet } from 'react-native';
+import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { TodayScreen } from '../screens/TodayScreen';
+import { WorkoutsScreen } from '../screens/WorkoutsScreen';
+import { ProfileScreen } from '../screens/ProfileScreen';
+import { CycleDetailScreen } from '../screens/CycleDetailScreen';
+import { WorkoutExecutionScreen } from '../screens/WorkoutExecutionScreen';
+import { ExerciseDetailScreen } from '../screens/ExerciseDetailScreen';
+import { DesignSystemScreen } from '../screens/DesignSystemScreen';
+import HIITTimerListScreen from '../screens/HIITTimerListScreen';
+import HIITTimerFormScreen from '../screens/HIITTimerFormScreen';
+import HIITTimerExecutionScreen from '../screens/HIITTimerExecutionScreen';
+import { IconCalendar, IconWorkouts } from '../components/icons';
+import { COLORS } from '../constants';
+
+export type RootStackParamList = {
+  Tabs: undefined;
+  Profile: undefined;
+  DesignSystem: undefined;
+  CycleDetail: { cycleId: string };
+  WorkoutExecution: { workoutTemplateId: string; date: string };
+  ExerciseDetail: { exerciseId: string; workoutKey: string };
+  HIITTimerList: undefined;
+  HIITTimerForm: { mode: 'create' } | { mode: 'edit'; timerId: string };
+  HIITTimerExecution: { timerId: string };
+};
+
+const Tab = createBottomTabNavigator();
+const Stack = createNativeStackNavigator<RootStackParamList>();
+
+const TAB_BAR_PRIMARY = '#FD6B00';
+
+function CustomTabBarBackground() {
+  return (
+    <View style={styles.tabBarBackground}>
+      <View style={styles.tabBarBorderTop} />
+      <View style={styles.tabBarBorderBottom} />
+    </View>
+  );
+}
+
+function TabNavigator() {
+  return (
+    <Tab.Navigator
+      screenOptions={{
+        headerShown: false,
+        tabBarStyle: {
+          backgroundColor: COLORS.backgroundContainer,
+          borderTopWidth: 0,
+          height: 100,
+        },
+        tabBarItemStyle: {
+          paddingVertical: 20,
+        },
+        tabBarBackground: () => <CustomTabBarBackground />,
+        tabBarActiveTintColor: '#000000',
+        tabBarInactiveTintColor: COLORS.textMeta,
+      }}
+    >
+      <Tab.Screen
+        name="Today"
+        component={TodayScreen}
+        options={{
+          tabBarIcon: ({ color, focused }) =>
+            focused ? (
+              <View style={styles.tabWrapper} pointerEvents="box-none">
+                <View style={styles.activeTab} pointerEvents="box-none">
+                  <IconCalendar size={24} color={color} />
+                  <Text style={[styles.activeLabel, { color }]}>Today</Text>
+                </View>
+              </View>
+            ) : (
+              <View style={styles.tabWrapper} pointerEvents="box-none">
+                <IconCalendar size={24} color={color} />
+              </View>
+            ),
+          tabBarLabel: () => null,
+        }}
+      />
+      <Tab.Screen
+        name="Workouts"
+        component={WorkoutsScreen}
+        options={{
+          tabBarIcon: ({ color, focused }) =>
+            focused ? (
+              <View style={styles.tabWrapper} pointerEvents="box-none">
+                <View style={styles.activeTab} pointerEvents="box-none">
+                  <IconWorkouts size={24} color={color} />
+                  <Text style={[styles.activeLabel, { color }]}>Workouts</Text>
+                </View>
+              </View>
+            ) : (
+              <View style={styles.tabWrapper} pointerEvents="box-none">
+                <IconWorkouts size={24} color={color} />
+              </View>
+            ),
+          tabBarLabel: () => null,
+        }}
+      />
+    </Tab.Navigator>
+  );
+}
+
+const styles = StyleSheet.create({
+  tabBarBackground: {
+    flex: 1,
+    backgroundColor: COLORS.backgroundContainer,
+  },
+  tabBarBorderTop: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.3)',
+  },
+  tabBarBorderBottom: {
+    position: 'absolute',
+    top: 1,
+    left: 0,
+    right: 0,
+    height: 1,
+    backgroundColor: '#FFFFFF',
+  },
+  tabWrapper: {
+    width: '100%',
+    height: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  activeTab: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 8,
+  },
+  activeLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    lineHeight: 24,
+    paddingTop: 1,
+    minWidth: 60,
+  },
+});
+
+// Note: NavigationContainer moved to RootNavigator.tsx for onboarding flow integration
+export default function AppNavigator() {
+  return (
+    <Stack.Navigator
+      screenOptions={{
+        headerShown: false,
+        contentStyle: { backgroundColor: COLORS.backgroundCanvas },
+      }}
+    >
+      <Stack.Screen name="Tabs" component={TabNavigator} />
+      <Stack.Screen name="Profile" component={ProfileScreen} />
+      <Stack.Screen name="DesignSystem" component={DesignSystemScreen} />
+      <Stack.Screen name="CycleDetail" component={CycleDetailScreen} />
+      <Stack.Screen name="WorkoutExecution" component={WorkoutExecutionScreen} />
+      <Stack.Screen name="ExerciseDetail" component={ExerciseDetailScreen} />
+      <Stack.Screen name="HIITTimerList" component={HIITTimerListScreen} />
+      <Stack.Screen name="HIITTimerForm" component={HIITTimerFormScreen} />
+      <Stack.Screen name="HIITTimerExecution" component={HIITTimerExecutionScreen} />
+    </Stack.Navigator>
+  );
+}
+
+

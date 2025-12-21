@@ -1,0 +1,644 @@
+import React from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
+import Svg, { Path } from 'react-native-svg';
+import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS, GRADIENTS } from '../constants';
+import { 
+  IconAdd, IconCheck, IconPlay, IconPause, IconEdit, IconTrash, 
+  IconCalendar, IconWorkouts, IconUser, IconArrowLeft 
+} from '../components/icons';
+
+interface DesignSystemScreenProps {
+  navigation: any;
+}
+
+const LIGHT_COLORS = {
+  backgroundCanvas: COLORS.backgroundCanvas,
+  backgroundContainer: COLORS.backgroundContainer,
+  textPrimary: '#000000',
+  textSecondary: '#3C3C43',
+  textMeta: COLORS.textMeta,
+  border: COLORS.border,
+  accentPrimary: COLORS.accentPrimary,
+  accentPrimaryLight: COLORS.accentPrimaryLight,
+  accentPrimaryDark: COLORS.accentPrimaryDark,
+  signalPositive: COLORS.signalPositive,
+  overlay: COLORS.overlay,
+};
+
+export function DesignSystemScreen({ navigation }: DesignSystemScreenProps) {
+  return (
+    <LinearGradient
+      colors={['#E3E6E0', '#D4D6D1']}
+      style={styles.gradient}
+    >
+      <SafeAreaView style={styles.container} edges={['top']}>
+        {/* Header */}
+        <View style={styles.header}>
+          <TouchableOpacity
+            onPress={() => navigation.goBack()}
+            style={styles.backButton}
+          >
+            <Svg width={24} height={24} viewBox="0 0 24 24" fill="none">
+              <Path
+                d="M15 18L9 12L15 6"
+                stroke="#000000"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </Svg>
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Design System</Text>
+          <View style={{ width: 24 }} />
+        </View>
+
+        <ScrollView style={styles.scrollView}>
+          {/* Colors Section */}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Colors</Text>
+            <View style={styles.colorList}>
+              {Object.entries(LIGHT_COLORS).map(([name, value]) => (
+                <View key={name} style={styles.colorRow}>
+                  <View style={styles.colorInfo}>
+                    <Text style={styles.colorName}>{name}</Text>
+                    <Text style={styles.colorValue}>{value}</Text>
+                  </View>
+                  {name === 'accentPrimary' ? (
+                    <View style={styles.colorSwatchWrapper}>
+                      <LinearGradient
+                        colors={GRADIENTS.accentPrimary.colors}
+                        start={GRADIENTS.accentPrimary.start}
+                        end={GRADIENTS.accentPrimary.end}
+                        style={styles.colorSwatchGradient}
+                      />
+                    </View>
+                  ) : name === 'accentPrimaryLight' || name === 'accentPrimaryDark' ? (
+                    <View style={styles.colorSwatchWrapper}>
+                      <View style={[styles.colorSwatchGradient, { backgroundColor: value }]} />
+                    </View>
+                  ) : (
+                    <View style={[styles.colorSwatch, { backgroundColor: value }]} />
+                  )}
+                </View>
+              ))}
+            </View>
+          </View>
+
+          {/* Spacing Section */}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Spacing</Text>
+            {Object.entries(SPACING).map(([name, value], index) => (
+              <View key={name}>
+                <View style={styles.spacingRow}>
+                  <View style={styles.spacingInfo}>
+                    <Text style={styles.spacingName}>{name}</Text>
+                    <Text style={styles.spacingValue}>{value}px</Text>
+                  </View>
+                  <View style={[styles.spacingBar, { width: value }]} />
+                </View>
+                {index < Object.entries(SPACING).length - 1 && <View style={styles.divider} />}
+              </View>
+            ))}
+          </View>
+
+          {/* Typography Section */}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Typography</Text>
+            <View style={styles.typographyRow}>
+              <Text style={[styles.typographyLabel, TYPOGRAPHY.h1]}>H1 Heading</Text>
+              <Text style={styles.typographyMeta}>
+                {TYPOGRAPHY.h1.fontSize}px / {TYPOGRAPHY.h1.fontWeight}
+              </Text>
+            </View>
+            <View style={styles.divider} />
+            <View style={styles.typographyRow}>
+              <Text style={[styles.typographyLabel, TYPOGRAPHY.h2]}>H2 Heading</Text>
+              <Text style={styles.typographyMeta}>
+                {TYPOGRAPHY.h2.fontSize}px / {TYPOGRAPHY.h2.fontWeight}
+              </Text>
+            </View>
+            <View style={styles.divider} />
+            <View style={styles.typographyRow}>
+              <Text style={[styles.typographyLabel, TYPOGRAPHY.h3]}>H3 Heading</Text>
+              <Text style={styles.typographyMeta}>
+                {TYPOGRAPHY.h3.fontSize}px / {TYPOGRAPHY.h3.fontWeight}
+              </Text>
+            </View>
+            <View style={styles.divider} />
+            <View style={styles.typographyRow}>
+              <Text style={[styles.typographyLabel, TYPOGRAPHY.body]}>Body Text</Text>
+              <Text style={styles.typographyMeta}>
+                {TYPOGRAPHY.body.fontSize}px / {TYPOGRAPHY.body.fontWeight}
+              </Text>
+            </View>
+            <View style={styles.divider} />
+            <View style={styles.typographyRow}>
+              <Text style={[styles.typographyLabel, TYPOGRAPHY.meta]}>Meta Text</Text>
+              <Text style={styles.typographyMeta}>
+                {TYPOGRAPHY.meta.fontSize}px / {TYPOGRAPHY.meta.fontWeight}
+              </Text>
+            </View>
+          </View>
+
+          {/* Border Radius Section */}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Border Radius</Text>
+            <View style={styles.radiusList}>
+              {Object.entries(BORDER_RADIUS).map(([name, value]) => (
+                <View key={name} style={styles.radiusItem}>
+                  <View style={[styles.radiusBoxWrapper, { borderRadius: value }]}>
+                    <LinearGradient
+                      colors={GRADIENTS.accentPrimary.colors}
+                      start={GRADIENTS.accentPrimary.start}
+                      end={GRADIENTS.accentPrimary.end}
+                      style={[styles.radiusBox, { borderRadius: value }]}
+                    />
+                  </View>
+                  <Text style={styles.radiusName}>{name}</Text>
+                  <Text style={styles.radiusValue}>{value}px</Text>
+                </View>
+              ))}
+            </View>
+          </View>
+
+          {/* Components Section */}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Components</Text>
+            
+            {/* Buttons */}
+            <View style={styles.componentGroup}>
+              <Text style={styles.componentGroupTitle}>Buttons</Text>
+              
+              {/* Primary Button - No Icon */}
+              <TouchableOpacity style={styles.buttonPrimaryWrapper} activeOpacity={0.8}>
+                <LinearGradient
+                  colors={GRADIENTS.accentPrimary.colors}
+                  start={GRADIENTS.accentPrimary.start}
+                  end={GRADIENTS.accentPrimary.end}
+                  style={styles.buttonPrimary}
+                >
+                  <Text style={styles.buttonPrimaryText}>Primary Button</Text>
+                </LinearGradient>
+              </TouchableOpacity>
+              
+              {/* Primary Button - Icon Left */}
+              <TouchableOpacity style={styles.buttonPrimaryWrapper} activeOpacity={0.8}>
+                <LinearGradient
+                  colors={GRADIENTS.accentPrimary.colors}
+                  start={GRADIENTS.accentPrimary.start}
+                  end={GRADIENTS.accentPrimary.end}
+                  style={styles.buttonPrimary}
+                >
+                  <IconPlay size={16} color="#FFFFFF" />
+                  <Text style={styles.buttonPrimaryText}>With Icon Left</Text>
+                </LinearGradient>
+              </TouchableOpacity>
+              
+              {/* Primary Button - Icon Right */}
+              <TouchableOpacity style={styles.buttonPrimaryWrapper} activeOpacity={0.8}>
+                <LinearGradient
+                  colors={GRADIENTS.accentPrimary.colors}
+                  start={GRADIENTS.accentPrimary.start}
+                  end={GRADIENTS.accentPrimary.end}
+                  style={styles.buttonPrimary}
+                >
+                  <Text style={styles.buttonPrimaryText}>With Icon Right</Text>
+                  <View style={styles.triangleIcon}>
+                    <Svg width={12} height={12} viewBox="0 0 24 24" fill="none">
+                      <Path d="M8 5L16 12L8 19V5Z" fill="#000000" />
+                    </Svg>
+                  </View>
+                </LinearGradient>
+              </TouchableOpacity>
+              
+              {/* Secondary Button - No Icon */}
+              <TouchableOpacity style={styles.buttonSecondary} activeOpacity={0.8}>
+                <Text style={styles.buttonSecondaryText}>Secondary Button</Text>
+              </TouchableOpacity>
+              
+              {/* Secondary Button - Icon Left */}
+              <TouchableOpacity style={styles.buttonSecondary} activeOpacity={0.8}>
+                <IconEdit size={16} color={LIGHT_COLORS.textPrimary} />
+                <Text style={styles.buttonSecondaryText}>With Icon Left</Text>
+              </TouchableOpacity>
+              
+              {/* Secondary Button - Icon Right */}
+              <TouchableOpacity style={styles.buttonSecondary} activeOpacity={0.8}>
+                <Text style={styles.buttonSecondaryText}>With Icon Right</Text>
+                <IconArrowLeft size={16} color={LIGHT_COLORS.textPrimary} />
+              </TouchableOpacity>
+              
+              {/* Text Button - No Icon */}
+              <TouchableOpacity style={styles.buttonText} activeOpacity={0.7}>
+                <Text style={styles.buttonTextLabel}>Text Button</Text>
+              </TouchableOpacity>
+              
+              {/* Text Button - Icon Left */}
+              <TouchableOpacity style={styles.buttonText} activeOpacity={0.7}>
+                <IconAdd size={16} color={LIGHT_COLORS.textMeta} />
+                <Text style={styles.buttonTextLabel}>With Icon Left</Text>
+              </TouchableOpacity>
+              
+              {/* Text Button - Icon Right */}
+              <TouchableOpacity style={styles.buttonText} activeOpacity={0.7}>
+                <Text style={styles.buttonTextLabel}>With Icon Right</Text>
+                <IconCheck size={16} color={LIGHT_COLORS.textMeta} />
+              </TouchableOpacity>
+            </View>
+            
+            {/* Icons */}
+            <View style={styles.componentGroup}>
+              <Text style={styles.componentGroupTitle}>Icons</Text>
+              <View style={styles.iconGrid}>
+                <View style={styles.iconItem}>
+                  <IconAdd size={24} color={LIGHT_COLORS.textPrimary} />
+                  <Text style={styles.iconLabel}>Add</Text>
+                </View>
+                <View style={styles.iconItem}>
+                  <IconCheck size={24} color={LIGHT_COLORS.textPrimary} />
+                  <Text style={styles.iconLabel}>Check</Text>
+                </View>
+                <View style={styles.iconItem}>
+                  <IconPlay size={24} color={LIGHT_COLORS.textPrimary} />
+                  <Text style={styles.iconLabel}>Play</Text>
+                </View>
+                <View style={styles.iconItem}>
+                  <IconPause size={24} color={LIGHT_COLORS.textPrimary} />
+                  <Text style={styles.iconLabel}>Pause</Text>
+                </View>
+                <View style={styles.iconItem}>
+                  <IconEdit size={24} color={LIGHT_COLORS.textPrimary} />
+                  <Text style={styles.iconLabel}>Edit</Text>
+                </View>
+                <View style={styles.iconItem}>
+                  <IconTrash size={24} color={LIGHT_COLORS.textPrimary} />
+                  <Text style={styles.iconLabel}>Trash</Text>
+                </View>
+                <View style={styles.iconItem}>
+                  <IconCalendar size={24} color={LIGHT_COLORS.textPrimary} />
+                  <Text style={styles.iconLabel}>Calendar</Text>
+                </View>
+                <View style={styles.iconItem}>
+                  <IconWorkouts size={24} color={LIGHT_COLORS.textPrimary} />
+                  <Text style={styles.iconLabel}>Workouts</Text>
+                </View>
+                <View style={styles.iconItem}>
+                  <IconUser size={24} color={LIGHT_COLORS.textPrimary} />
+                  <Text style={styles.iconLabel}>User</Text>
+                </View>
+                <View style={styles.iconItem}>
+                  <IconArrowLeft size={24} color={LIGHT_COLORS.textPrimary} />
+                  <Text style={styles.iconLabel}>Arrow</Text>
+                </View>
+              </View>
+            </View>
+            
+            {/* Cards */}
+            <View style={styles.componentGroup}>
+              <Text style={styles.componentGroupTitle}>Cards</Text>
+              
+              {/* Basic Card */}
+              <View style={styles.cardExample}>
+                <Text style={styles.cardTitle}>Basic Card</Text>
+                <Text style={styles.cardDescription}>
+                  A simple card with white background and border radius
+                </Text>
+              </View>
+              
+              {/* Card with Shadow */}
+              <View style={styles.cardShadowBlack}>
+                <View style={styles.cardShadowWhite}>
+                  <View style={styles.cardWithShadow}>
+                    <View style={styles.cardWithShadowInner}>
+                      <Text style={styles.cardTitle}>Card with Dual Shadows</Text>
+                      <Text style={styles.cardDescription}>
+                        Black (-1,-1, 8%) and white (1,1, 100%) shadows with border token and inner borders for depth
+                      </Text>
+                    </View>
+                  </View>
+                </View>
+              </View>
+            </View>
+          </View>
+
+          <View style={{ height: 40 }} />
+        </ScrollView>
+      </SafeAreaView>
+    </LinearGradient>
+  );
+}
+
+const styles = StyleSheet.create({
+  gradient: {
+    flex: 1,
+  },
+  container: {
+    flex: 1,
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: SPACING.xl,
+    paddingVertical: SPACING.lg,
+  },
+  backButton: {
+    width: 24,
+    height: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  headerTitle: {
+    ...TYPOGRAPHY.h2,
+    color: LIGHT_COLORS.textPrimary,
+  },
+  scrollView: {
+    flex: 1,
+    paddingHorizontal: SPACING.xl,
+  },
+  section: {
+    marginBottom: SPACING.xxxl,
+  },
+  sectionTitle: {
+    ...TYPOGRAPHY.h3,
+    color: LIGHT_COLORS.textPrimary,
+    marginBottom: SPACING.lg,
+  },
+  
+  // Colors
+  colorList: {
+  },
+  colorRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: SPACING.md,
+  },
+  colorInfo: {
+    flex: 1,
+  },
+  colorSwatchWrapper: {
+    width: 60,
+    height: 60,
+    borderRadius: BORDER_RADIUS.md,
+    borderTopWidth: 2,
+    borderLeftWidth: 2,
+    borderBottomWidth: 2,
+    borderRightWidth: 2,
+    borderTopColor: 'rgba(255, 255, 255, 0.2)',
+    borderLeftColor: 'rgba(255, 255, 255, 0.2)',
+    borderBottomColor: 'rgba(0, 0, 0, 0.2)',
+    borderRightColor: 'rgba(0, 0, 0, 0.2)',
+    overflow: 'hidden',
+  },
+  colorSwatchGradient: {
+    width: 60,
+    height: 60,
+    borderRadius: BORDER_RADIUS.md,
+  },
+  colorSwatch: {
+    width: 60,
+    height: 60,
+    borderRadius: BORDER_RADIUS.md,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 0, 0, 0.1)',
+  },
+  colorName: {
+    ...TYPOGRAPHY.body,
+    color: LIGHT_COLORS.textPrimary,
+    marginBottom: 2,
+  },
+  colorValue: {
+    ...TYPOGRAPHY.meta,
+    color: LIGHT_COLORS.textMeta,
+  },
+
+  // Spacing
+  spacingRow: {
+    paddingVertical: SPACING.md,
+  },
+  spacingInfo: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: SPACING.sm,
+  },
+  spacingName: {
+    ...TYPOGRAPHY.body,
+    color: LIGHT_COLORS.textPrimary,
+  },
+  spacingValue: {
+    ...TYPOGRAPHY.body,
+    color: LIGHT_COLORS.textMeta,
+  },
+  spacingBar: {
+    height: 8,
+    backgroundColor: LIGHT_COLORS.accentPrimary,
+    borderRadius: 4,
+  },
+  divider: {
+    height: 1,
+    backgroundColor: COLORS.border,
+  },
+
+  // Typography
+  typographyRow: {
+    paddingVertical: SPACING.md,
+  },
+  typographyLabel: {
+    color: LIGHT_COLORS.textPrimary,
+    marginBottom: SPACING.xs,
+  },
+  typographyMeta: {
+    ...TYPOGRAPHY.meta,
+    color: LIGHT_COLORS.textMeta,
+  },
+
+  // Border Radius
+  radiusList: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: SPACING.lg,
+  },
+  radiusItem: {
+    width: '30%',
+    alignItems: 'center',
+  },
+  radiusBoxWrapper: {
+    width: 60,
+    height: 60,
+    borderTopWidth: 2,
+    borderLeftWidth: 2,
+    borderBottomWidth: 2,
+    borderRightWidth: 2,
+    borderTopColor: 'rgba(255, 255, 255, 0.2)',
+    borderLeftColor: 'rgba(255, 255, 255, 0.2)',
+    borderBottomColor: 'rgba(0, 0, 0, 0.2)',
+    borderRightColor: 'rgba(0, 0, 0, 0.2)',
+    overflow: 'hidden',
+    marginBottom: SPACING.sm,
+  },
+  radiusBox: {
+    width: 60,
+    height: 60,
+  },
+  radiusName: {
+    ...TYPOGRAPHY.body,
+    color: LIGHT_COLORS.textPrimary,
+    marginBottom: 2,
+  },
+  radiusValue: {
+    ...TYPOGRAPHY.meta,
+    color: LIGHT_COLORS.textMeta,
+  },
+
+  // Components
+  componentGroup: {
+    marginBottom: SPACING.xxl,
+  },
+  componentGroupTitle: {
+    ...TYPOGRAPHY.body,
+    fontWeight: '600',
+    color: LIGHT_COLORS.textPrimary,
+    marginBottom: SPACING.md,
+  },
+
+  // Buttons
+  buttonPrimaryWrapper: {
+    marginBottom: SPACING.md,
+    borderRadius: BORDER_RADIUS.md,
+    borderTopWidth: 2,
+    borderLeftWidth: 2,
+    borderBottomWidth: 2,
+    borderRightWidth: 2,
+    borderTopColor: COLORS.accentPrimaryLight,
+    borderLeftColor: COLORS.accentPrimaryLight,
+    borderBottomColor: COLORS.accentPrimaryDark,
+    borderRightColor: COLORS.accentPrimaryDark,
+    overflow: 'hidden',
+  },
+  buttonPrimary: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: SPACING.sm,
+    paddingVertical: SPACING.md,
+    paddingHorizontal: SPACING.xl,
+    borderRadius: BORDER_RADIUS.md,
+  },
+  buttonPrimaryText: {
+    ...TYPOGRAPHY.body,
+    fontWeight: '600',
+    color: '#FFFFFF',
+  },
+  buttonSecondary: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: SPACING.sm,
+    backgroundColor: '#E3E3DE',
+    paddingVertical: SPACING.md,
+    paddingHorizontal: SPACING.xl,
+    borderRadius: BORDER_RADIUS.md,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 0, 0, 0.25)',
+    marginBottom: SPACING.md,
+  },
+  buttonSecondaryText: {
+    ...TYPOGRAPHY.body,
+    fontWeight: '600',
+    color: LIGHT_COLORS.textPrimary,
+  },
+  triangleIcon: {
+    width: 12,
+    height: 12,
+  },
+  buttonText: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: SPACING.sm,
+    paddingVertical: SPACING.sm,
+    marginBottom: SPACING.md,
+  },
+  buttonTextLabel: {
+    ...TYPOGRAPHY.body,
+    color: LIGHT_COLORS.textMeta,
+  },
+
+  // Icons
+  iconGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: SPACING.lg,
+  },
+  iconItem: {
+    width: 60,
+    alignItems: 'center',
+  },
+  iconLabel: {
+    ...TYPOGRAPHY.meta,
+    color: LIGHT_COLORS.textMeta,
+    marginTop: SPACING.xs,
+  },
+
+  // Cards
+  cardExample: {
+    backgroundColor: '#FFFFFF',
+    padding: SPACING.lg,
+    borderRadius: BORDER_RADIUS.md,
+    marginBottom: SPACING.lg,
+  },
+  cardShadowBlack: {
+    // Black shadow: -1, -1, 8% opacity, 1px blur
+    shadowColor: '#000000',
+    shadowOffset: { width: -1, height: -1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 1,
+    elevation: 2,
+  },
+  cardShadowWhite: {
+    // Bottom-right shadow: 1, 1, 100% opacity, 1px blur
+    shadowColor: '#FFFFFF',
+    shadowOffset: { width: 1, height: 1 },
+    shadowOpacity: 1,
+    shadowRadius: 1,
+    elevation: 1,
+  },
+  cardWithShadow: {
+    backgroundColor: '#E3E3DE',
+    borderRadius: 12,
+    borderCurve: 'continuous',
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    overflow: 'hidden',
+  },
+  cardWithShadowInner: {
+    backgroundColor: '#E2E3DF',
+    borderRadius: 12,
+    borderCurve: 'continuous',
+    paddingHorizontal: 24,
+    paddingTop: 16,
+    paddingBottom: 20,
+    borderTopWidth: 2,
+    borderLeftWidth: 2,
+    borderBottomWidth: 2,
+    borderRightWidth: 2,
+    borderTopColor: 'rgba(255, 255, 255, 0.75)',
+    borderLeftColor: 'rgba(255, 255, 255, 0.75)',
+    borderBottomColor: 'rgba(0, 0, 0, 0.08)',
+    borderRightColor: 'rgba(0, 0, 0, 0.08)',
+  },
+  cardTitle: {
+    ...TYPOGRAPHY.body,
+    fontWeight: '600',
+    color: LIGHT_COLORS.textPrimary,
+    marginBottom: SPACING.xs,
+  },
+  cardDescription: {
+    ...TYPOGRAPHY.meta,
+    color: LIGHT_COLORS.textMeta,
+  },
+});
+
