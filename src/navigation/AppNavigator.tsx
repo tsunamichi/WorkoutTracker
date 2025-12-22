@@ -63,7 +63,7 @@ function TabNavigator() {
       screenOptions={{
         headerShown: false,
         tabBarStyle: {
-          backgroundColor: COLORS.backgroundContainer,
+          backgroundColor: 'red',
           borderTopWidth: 0,
           height: 80,
           position: 'absolute',
@@ -71,9 +71,12 @@ function TabNavigator() {
           left: 8,
           right: 8,
           borderRadius: 16,
+          marginHorizontal: 0,
+          paddingHorizontal: 0,
         },
         tabBarItemStyle: {
-          paddingVertical: 16,
+          justifyContent: 'center',
+          alignItems: 'center',
         },
         tabBarBackground: () => null,
         tabBarActiveTintColor: '#000000',
