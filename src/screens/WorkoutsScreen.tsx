@@ -565,8 +565,10 @@ const styles = StyleSheet.create({
     ...TYPOGRAPHY.h3,
     color: LIGHT_COLORS.textPrimary,
     marginBottom: 24,
+    paddingHorizontal: 24,
   },
   carouselContent: {
+    paddingLeft: 24,
     paddingRight: CARD_SPACING,
     paddingVertical: 4,
   },
