@@ -560,6 +560,7 @@ const styles = StyleSheet.create({
   
   // Templates Section
   templatesSection: {
+    overflow: 'visible',
   },
   sectionTitle: {
     ...TYPOGRAPHY.h3,
@@ -568,12 +569,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.xxl,
   },
   carouselContent: {
-    paddingLeft: SPACING.xxl,
-    paddingRight: SPACING.xxl - CARD_SPACING,
+    paddingRight: CARD_SPACING,
+    paddingVertical: 4,
   },
   carouselCard: {
     width: CARD_WIDTH,
     marginRight: CARD_SPACING,
+    overflow: 'visible',
   },
   pagination: {
     flexDirection: 'row',
