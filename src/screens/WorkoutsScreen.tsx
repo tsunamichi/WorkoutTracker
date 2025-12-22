@@ -546,7 +546,6 @@ const styles = StyleSheet.create({
   
   // Templates Section
   templatesSection: {
-    gap: 16,
   },
   sectionTitle: {
     ...TYPOGRAPHY.h3,
