@@ -345,9 +345,7 @@ export function WorkoutsScreen({ navigation }: WorkoutsScreenProps) {
                             <Text style={styles.templateName}>{template.name}</Text>
                             <Text style={styles.templateDescription}>{template.description}</Text>
                           </View>
-                          <View style={styles.templateArrow}>
-                            <Text style={styles.arrowText}>→</Text>
-                          </View>
+                          <View style={styles.templateTriangle} />
                         </TouchableOpacity>
                       </View>
                     </View>
@@ -551,7 +549,7 @@ const styles = StyleSheet.create({
     gap: 16,
   },
   sectionTitle: {
-    ...TYPOGRAPHY.h3,
+    ...TYPOGRAPHY.h2,
     color: LIGHT_COLORS.textPrimary,
     marginBottom: 8,
   },
@@ -580,6 +578,8 @@ const styles = StyleSheet.create({
   templateCard: {
     backgroundColor: '#E3E3DE',
     borderRadius: 12,
+    borderWidth: 1,
+    borderColor: COLORS.border,
     padding: 20,
     flexDirection: 'row',
     alignItems: 'center',
@@ -590,27 +590,28 @@ const styles = StyleSheet.create({
     marginRight: 12,
   },
   templateName: {
-    fontSize: 18,
-    fontWeight: '600',
+    ...TYPOGRAPHY.h3,
     color: LIGHT_COLORS.textPrimary,
-    marginBottom: 6,
+    marginBottom: 4,
   },
   templateDescription: {
-    fontSize: 14,
+    ...TYPOGRAPHY.body,
     color: LIGHT_COLORS.textMeta,
     lineHeight: 20,
   },
-  templateArrow: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#F2F2F7',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  arrowText: {
-    fontSize: 20,
-    color: LIGHT_COLORS.textPrimary,
+  templateTriangle: {
+    width: 0,
+    height: 0,
+    backgroundColor: 'transparent',
+    borderStyle: 'solid',
+    borderLeftWidth: 8,
+    borderRightWidth: 0,
+    borderTopWidth: 4.5,
+    borderBottomWidth: 4.5,
+    borderLeftColor: '#000000',
+    borderRightColor: 'transparent',
+    borderTopColor: 'transparent',
+    borderBottomColor: 'transparent',
   },
   
   // Cycles Section
