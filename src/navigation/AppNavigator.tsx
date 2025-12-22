@@ -173,8 +173,10 @@ const styles = StyleSheet.create({
   activeTab: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: 6,
     paddingHorizontal: 8,
+    height: '100%',
     borderWidth: 2,
     borderColor: 'green',
   },
