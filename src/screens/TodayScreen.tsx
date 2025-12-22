@@ -317,7 +317,7 @@ export function TodayScreen({ navigation }: TodayScreenProps) {
         colors={['#E3E6E0', '#D4D6D1']}
         style={styles.gradient}
       >
-        <SafeAreaView style={styles.container} edges={['bottom']}>
+        <SafeAreaView style={[styles.container, { paddingBottom: 108 }]} edges={[]}>
           {/* Header with Cycle Info and Avatar - Fixed - Always shown */}
           <View style={[styles.header, { paddingTop: insets.top }]}>
             <View style={styles.topBar}>
@@ -688,7 +688,7 @@ export function TodayScreen({ navigation }: TodayScreenProps) {
             
             {/* Fixed HIIT Timer Button - Only show when there's an active cycle */}
             {activeCycle && (
-              <View style={[styles.fixedTimerButtonContainer, { bottom: 20 + insets.bottom }]}>
+              <View style={styles.fixedTimerButtonContainer}>
                 <TouchableOpacity 
                   style={styles.fixedTimerButton}
                   activeOpacity={0.7}
@@ -1221,6 +1221,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: 0,
     right: 0,
+    bottom: 128, // 8px tab bar margin + 100px tab bar height + 20px gap
     alignItems: 'center',
   },
   fixedTimerButton: {
