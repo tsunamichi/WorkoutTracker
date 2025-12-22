@@ -59,7 +59,7 @@ function CustomTabBarBackground() {
 
 function TabNavigator() {
   return (
-    <View style={{ flex: 1, paddingHorizontal: 8 }}>
+    <View style={{ flex: 1, paddingHorizontal: 8, backgroundColor: COLORS.backgroundCanvas }}>
       <Tab.Navigator
         screenOptions={{
           headerShown: false,
@@ -74,6 +74,7 @@ function TabNavigator() {
             borderRadius: 16,
           },
           tabBarItemStyle: {
+            height: 80,
             justifyContent: 'center',
             alignItems: 'center',
           },
@@ -151,7 +152,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
   },
   tabWrapper: {
-    flex: 1,
+    height: 80,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -176,7 +177,7 @@ export default function AppNavigator() {
     <Stack.Navigator
       screenOptions={{
         headerShown: false,
-        contentStyle: { backgroundColor: COLORS.backgroundCanvas },
+        contentStyle: { backgroundColor: 'transparent' },
       }}
     >
       <Stack.Screen name="Tabs" component={TabNavigator} />

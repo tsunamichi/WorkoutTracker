@@ -812,7 +812,6 @@ export function TodayScreen({ navigation }: TodayScreenProps) {
 const styles = StyleSheet.create({
   gradient: {
     flex: 1,
-    paddingHorizontal: 8,
   },
   container: {
     flex: 1,
