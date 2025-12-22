@@ -327,33 +327,30 @@ export function WorkoutsScreen({ navigation }: WorkoutsScreenProps) {
                 const isLast = index === TEMPLATES.filter(t => t.id !== 'custom').length - 1;
                 return (
                   <View key={template.id} style={[styles.templateCardWrapper, !isLast && styles.templateCardWrapperMargin]}>
-                    <TouchableOpacity
-                      style={styles.templateCard}
-                      onPress={() => {
-                        // Set default preferences
-                        setPrefs({ daysPerWeek: template.idealDays[0] || 3, sessionMinutes: 60 });
-                        // Start draft from selected template
-                        startDraftFromTemplate(template.id);
-                        // Navigate to template editor
-                        navigation.navigate('TemplateEditor', { templateId: template.id });
-                      }}
-                      activeOpacity={0.8}
-                    >
-                      <View style={styles.templateInfo}>
-                        <Text style={styles.templateName}>{template.name}</Text>
-                        <Text style={styles.templateDescription}>{template.description}</Text>
-                        <View style={styles.templateTags}>
-                          {template.tags.slice(0, 3).map((tag, i) => (
-                            <View key={i} style={styles.tag}>
-                              <Text style={styles.tagText}>{tag}</Text>
-                            </View>
-                          ))}
-                        </View>
+                    <View style={styles.templateCardBlackShadow}>
+                      <View style={styles.templateCardWhiteShadow}>
+                        <TouchableOpacity
+                          style={styles.templateCard}
+                          onPress={() => {
+                            // Set default preferences
+                            setPrefs({ daysPerWeek: template.idealDays[0] || 3, sessionMinutes: 60 });
+                            // Start draft from selected template
+                            startDraftFromTemplate(template.id);
+                            // Navigate to template editor
+                            navigation.navigate('TemplateEditor', { templateId: template.id });
+                          }}
+                          activeOpacity={0.8}
+                        >
+                          <View style={styles.templateInfo}>
+                            <Text style={styles.templateName}>{template.name}</Text>
+                            <Text style={styles.templateDescription}>{template.description}</Text>
+                          </View>
+                          <View style={styles.templateArrow}>
+                            <Text style={styles.arrowText}>→</Text>
+                          </View>
+                        </TouchableOpacity>
                       </View>
-                      <View style={styles.templateArrow}>
-                        <Text style={styles.arrowText}>→</Text>
-                      </View>
-                    </TouchableOpacity>
+                    </View>
                   </View>
                 );
               })}
@@ -554,8 +551,7 @@ const styles = StyleSheet.create({
     gap: 16,
   },
   sectionTitle: {
-    fontSize: 24,
-    fontWeight: '700',
+    ...TYPOGRAPHY.h3,
     color: LIGHT_COLORS.textPrimary,
     marginBottom: 8,
   },
@@ -565,15 +561,29 @@ const styles = StyleSheet.create({
   templateCardWrapperMargin: {
     marginBottom: 12,
   },
+  templateCardBlackShadow: {
+    // Black shadow: -1, -1, 8% opacity, 1px blur
+    shadowColor: '#000000',
+    shadowOffset: { width: -1, height: -1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 1,
+    elevation: 2,
+  },
+  templateCardWhiteShadow: {
+    // Bottom-right shadow: 1, 1, 100% opacity, 1px blur
+    shadowColor: '#FFFFFF',
+    shadowOffset: { width: 1, height: 1 },
+    shadowOpacity: 1,
+    shadowRadius: 1,
+    elevation: 1,
+  },
   templateCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
+    backgroundColor: '#E3E3DE',
+    borderRadius: 12,
     padding: 20,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    borderWidth: 1,
-    borderColor: LIGHT_COLORS.border,
   },
   templateInfo: {
     flex: 1,
@@ -589,23 +599,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: LIGHT_COLORS.textMeta,
     lineHeight: 20,
-    marginBottom: 12,
-  },
-  templateTags: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
-  },
-  tag: {
-    backgroundColor: '#F2F2F7',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 6,
-  },
-  tagText: {
-    fontSize: 12,
-    color: LIGHT_COLORS.textSecondary,
-    fontWeight: '500',
   },
   templateArrow: {
     width: 32,
