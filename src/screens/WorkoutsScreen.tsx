@@ -549,7 +549,7 @@ const styles = StyleSheet.create({
     gap: 16,
   },
   sectionTitle: {
-    ...TYPOGRAPHY.h2,
+    ...TYPOGRAPHY.h3,
     color: LIGHT_COLORS.textPrimary,
     marginBottom: 8,
   },
@@ -590,7 +590,7 @@ const styles = StyleSheet.create({
     marginRight: 12,
   },
   templateName: {
-    ...TYPOGRAPHY.h3,
+    ...TYPOGRAPHY.bodyBold,
     color: LIGHT_COLORS.textPrimary,
     marginBottom: 4,
   },
