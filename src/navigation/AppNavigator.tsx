@@ -152,7 +152,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
   },
   tabWrapper: {
-    flex: 1,
+    width: '100%',
+    height: '100%',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 2,
