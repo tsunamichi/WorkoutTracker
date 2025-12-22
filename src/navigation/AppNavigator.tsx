@@ -59,30 +59,29 @@ function CustomTabBarBackground() {
 
 function TabNavigator() {
   return (
-    <Tab.Navigator
-      screenOptions={{
-        headerShown: false,
-        tabBarStyle: {
-          backgroundColor: 'red',
-          borderTopWidth: 0,
-          height: 80,
-          position: 'absolute',
-          bottom: 8,
-          left: 8,
-          right: 8,
-          borderRadius: 16,
-          marginHorizontal: 0,
-          paddingHorizontal: 0,
-        },
-        tabBarItemStyle: {
-          justifyContent: 'center',
-          alignItems: 'center',
-        },
-        tabBarBackground: () => null,
-        tabBarActiveTintColor: '#000000',
-        tabBarInactiveTintColor: COLORS.textMeta,
-      }}
-    >
+    <View style={{ flex: 1, paddingHorizontal: 8 }}>
+      <Tab.Navigator
+        screenOptions={{
+          headerShown: false,
+          tabBarStyle: {
+            backgroundColor: 'red',
+            borderTopWidth: 0,
+            height: 80,
+            position: 'absolute',
+            bottom: 8,
+            left: 0,
+            right: 0,
+            borderRadius: 16,
+          },
+          tabBarItemStyle: {
+            justifyContent: 'center',
+            alignItems: 'center',
+          },
+          tabBarBackground: () => null,
+          tabBarActiveTintColor: '#000000',
+          tabBarInactiveTintColor: COLORS.textMeta,
+        }}
+      >
       <Tab.Screen
         name="Today"
         component={TodayScreen}
@@ -124,6 +123,7 @@ function TabNavigator() {
         }}
       />
     </Tab.Navigator>
+    </View>
   );
 }
 
@@ -151,8 +151,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
   },
   tabWrapper: {
-    width: '100%',
-    height: '100%',
+    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
   },
