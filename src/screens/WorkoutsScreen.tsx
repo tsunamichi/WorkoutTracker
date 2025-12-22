@@ -590,14 +590,14 @@ const styles = StyleSheet.create({
     marginRight: 12,
   },
   templateName: {
-    ...TYPOGRAPHY.bodyBold,
+    ...TYPOGRAPHY.body,
     color: LIGHT_COLORS.textPrimary,
     marginBottom: 4,
   },
   templateDescription: {
-    ...TYPOGRAPHY.body,
+    ...TYPOGRAPHY.meta,
     color: LIGHT_COLORS.textMeta,
-    lineHeight: 20,
+    lineHeight: 18,
   },
   templateTriangle: {
     width: 0,
