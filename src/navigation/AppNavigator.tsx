@@ -15,9 +15,14 @@ import HIITTimerExecutionScreen from '../screens/HIITTimerExecutionScreen';
 import { TemplateEditorScreen } from '../screens/onboarding/TemplateEditorScreen';
 import { CustomTemplateInputScreen } from '../screens/onboarding/CustomTemplateInputScreen';
 import { ReviewCreateCycleScreen } from '../screens/onboarding/ReviewCreateCycleScreen';
+import { CreateCycleBasics } from '../screens/manualCycle/CreateCycleBasics';
+import { CreateCycleDaysOverview } from '../screens/manualCycle/CreateCycleDaysOverview';
+import { CreateCycleDayEditor } from '../screens/manualCycle/CreateCycleDayEditor';
+import { CreateCycleReview } from '../screens/manualCycle/CreateCycleReview';
 import { IconCalendar, IconWorkouts } from '../components/icons';
 import { COLORS } from '../constants';
 import { CycleTemplateId } from '../types/workout';
+import { Weekday } from '../types/manualCycle';
 
 export type RootStackParamList = {
   Tabs: undefined;
@@ -32,6 +37,10 @@ export type RootStackParamList = {
   TemplateEditor: { templateId?: CycleTemplateId };
   CustomTemplateInput: undefined;
   ReviewCreateCycle: undefined;
+  CreateCycleBasics: undefined;
+  CreateCycleDaysOverview: undefined;
+  CreateCycleDayEditor: { weekday: Weekday };
+  CreateCycleReview: undefined;
 };
 
 const Tab = createBottomTabNavigator();
@@ -173,6 +182,10 @@ export default function AppNavigator() {
       <Stack.Screen name="TemplateEditor" component={TemplateEditorScreen} />
       <Stack.Screen name="CustomTemplateInput" component={CustomTemplateInputScreen} />
       <Stack.Screen name="ReviewCreateCycle" component={ReviewCreateCycleScreen} />
+      <Stack.Screen name="CreateCycleBasics" component={CreateCycleBasics} />
+      <Stack.Screen name="CreateCycleDaysOverview" component={CreateCycleDaysOverview} />
+      <Stack.Screen name="CreateCycleDayEditor" component={CreateCycleDayEditor} />
+      <Stack.Screen name="CreateCycleReview" component={CreateCycleReview} />
     </Stack.Navigator>
   );
 }

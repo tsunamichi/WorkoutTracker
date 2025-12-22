@@ -401,12 +401,8 @@ export function WorkoutsScreen({ navigation }: WorkoutsScreenProps) {
               <TouchableOpacity
                 style={styles.createButton}
                 onPress={() => {
-                  // Set default preferences
-                  setPrefs({ daysPerWeek: 3, sessionMinutes: 60 });
-                  // Start draft from custom
-                  startDraftFromTemplate('custom');
-                  // Navigate to template editor
-                  navigation.navigate('TemplateEditor', {});
+                  // Navigate to manual cycle creation flow
+                  navigation.navigate('CreateCycleBasics');
                 }}
                 activeOpacity={0.8}
               >
@@ -423,7 +419,10 @@ export function WorkoutsScreen({ navigation }: WorkoutsScreenProps) {
           ) : (
             <TouchableOpacity
               style={styles.createButton}
-              onPress={() => setShowBottomSheet(true)}
+              onPress={() => {
+                // Navigate to manual cycle creation flow for existing users too
+                navigation.navigate('CreateCycleBasics');
+              }}
               activeOpacity={1}
             >
               <Text style={styles.createButtonText}>Create New Cycle</Text>
