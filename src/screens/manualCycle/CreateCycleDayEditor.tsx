@@ -8,7 +8,7 @@ import {
   TextInput,
   Alert,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import BottomSheet from '@gorhom/bottom-sheet';
 import { useCreateCycleDraftStore } from '../../store/useCreateCycleDraftStore';
@@ -40,6 +40,7 @@ const LIGHT_COLORS = {
 };
 
 export function CreateCycleDayEditor({ navigation, route }: CreateCycleDayEditorProps) {
+  const insets = useSafeAreaInsets();
   const { weekday } = route.params;
 
   const { workouts, setWorkoutDayName, addExerciseToDay, removeExerciseFromDay } =
@@ -90,9 +91,9 @@ export function CreateCycleDayEditor({ navigation, route }: CreateCycleDayEditor
 
   return (
     <LinearGradient colors={['#E3E6E0', '#D4D6D1']} style={styles.gradient}>
-      <SafeAreaView style={styles.container} edges={['bottom']}>
+      <View style={styles.container}>
         {/* Header */}
-        <View style={styles.header}>
+        <View style={[styles.header, { paddingTop: insets.top }]}>
           <TouchableOpacity
             onPress={() => navigation.goBack()}
             style={styles.backButton}
@@ -182,7 +183,7 @@ export function CreateCycleDayEditor({ navigation, route }: CreateCycleDayEditor
             <Text style={styles.saveButtonText}>Save day</Text>
           </TouchableOpacity>
         </View>
-      </SafeAreaView>
+      </View>
 
       {/* Exercise Picker Modal */}
       {showExercisePicker && (
@@ -215,7 +216,6 @@ const styles = StyleSheet.create({
   },
   header: {
     paddingHorizontal: SPACING.xxl,
-    paddingTop: SPACING.md,
     paddingBottom: SPACING.lg,
   },
   backButton: {

@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useCreateCycleDraftStore } from '../../store/useCreateCycleDraftStore';
 import { DAY_ORDER, WORKOUT_LENGTHS, Weekday, WorkoutLength } from '../../types/manualCycle';
@@ -24,6 +24,7 @@ const LIGHT_COLORS = {
 };
 
 export function CreateCycleBasics({ navigation }: CreateCycleBasicsProps) {
+  const insets = useSafeAreaInsets();
   const {
     weeks,
     frequencyDays,
@@ -49,9 +50,9 @@ export function CreateCycleBasics({ navigation }: CreateCycleBasicsProps) {
 
   return (
     <LinearGradient colors={['#E3E6E0', '#D4D6D1']} style={styles.gradient}>
-      <SafeAreaView style={styles.container} edges={['bottom']}>
+      <View style={styles.container}>
         {/* Header */}
-        <View style={styles.header}>
+        <View style={[styles.header, { paddingTop: insets.top }]}>
           <TouchableOpacity
             onPress={() => navigation.goBack()}
             style={styles.backButton}
@@ -169,7 +170,7 @@ export function CreateCycleBasics({ navigation }: CreateCycleBasicsProps) {
             </Text>
           </TouchableOpacity>
         </View>
-      </SafeAreaView>
+      </View>
     </LinearGradient>
   );
 }
@@ -183,7 +184,6 @@ const styles = StyleSheet.create({
   },
   header: {
     paddingHorizontal: SPACING.xxl,
-    paddingTop: SPACING.md,
     paddingBottom: SPACING.lg,
   },
   backButton: {

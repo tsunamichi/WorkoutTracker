@@ -8,7 +8,7 @@ import {
   Platform,
   Alert,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import dayjs from 'dayjs';
@@ -39,6 +39,7 @@ const LIGHT_COLORS = {
 };
 
 export function CreateCycleReview({ navigation }: CreateCycleReviewProps) {
+  const insets = useSafeAreaInsets();
   const {
     weeks,
     frequencyDays,
@@ -178,9 +179,9 @@ export function CreateCycleReview({ navigation }: CreateCycleReviewProps) {
 
   return (
     <LinearGradient colors={['#E3E6E0', '#D4D6D1']} style={styles.gradient}>
-      <SafeAreaView style={styles.container} edges={['bottom']}>
+      <View style={styles.container}>
         {/* Header */}
-        <View style={styles.header}>
+        <View style={[styles.header, { paddingTop: insets.top }]}>
           <TouchableOpacity
             onPress={() => navigation.goBack()}
             style={styles.backButton}
@@ -301,7 +302,7 @@ export function CreateCycleReview({ navigation }: CreateCycleReviewProps) {
             </Text>
           </TouchableOpacity>
         </View>
-      </SafeAreaView>
+      </View>
 
       {/* Date Picker */}
       {showDatePicker && (
@@ -326,7 +327,6 @@ const styles = StyleSheet.create({
   },
   header: {
     paddingHorizontal: SPACING.xxl,
-    paddingTop: SPACING.md,
     paddingBottom: SPACING.lg,
   },
   backButton: {
