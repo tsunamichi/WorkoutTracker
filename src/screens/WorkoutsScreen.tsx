@@ -5,6 +5,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { ProfileAvatar } from '../components/ProfileAvatar';
 import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS } from '../constants';
 import { useStore } from '../store';
+import { useOnboardingStore } from '../store/useOnboardingStore';
 import { TEMPLATES } from '../data/templates';
 import dayjs from 'dayjs';
 import isoWeek from 'dayjs/plugin/isoWeek';
@@ -31,6 +32,7 @@ const LIGHT_COLORS = {
 export function WorkoutsScreen({ navigation }: WorkoutsScreenProps) {
   const insets = useSafeAreaInsets();
   const { cycles, addCycle, getNextCycleNumber, assignWorkout, exercises, addExercise, updateCycle, clearWorkoutAssignmentsForDateRange } = useStore();
+  const { startDraftFromTemplate, startDraftFromCustomText, setPrefs } = useOnboardingStore();
   const [showBottomSheet, setShowBottomSheet] = useState(false);
   const [workoutDetails, setWorkoutDetails] = useState('');
   
@@ -328,8 +330,12 @@ export function WorkoutsScreen({ navigation }: WorkoutsScreenProps) {
                     <TouchableOpacity
                       style={styles.templateCard}
                       onPress={() => {
-                        // TODO: Navigate to manual cycle creation with template selected
-                        Alert.alert('Coming Soon', `${template.name} template will start the workout creation process`);
+                        // Set default preferences
+                        setPrefs({ daysPerWeek: template.idealDays[0] || 3, sessionMinutes: 60 });
+                        // Start draft from selected template
+                        startDraftFromTemplate(template.id);
+                        // Navigate to template editor
+                        navigation.navigate('TemplateEditor', { templateId: template.id });
                       }}
                       activeOpacity={0.8}
                     >
@@ -395,8 +401,12 @@ export function WorkoutsScreen({ navigation }: WorkoutsScreenProps) {
               <TouchableOpacity
                 style={styles.createButton}
                 onPress={() => {
-                  // TODO: Navigate to manual cycle creation screen
-                  Alert.alert('Coming Soon', 'Manual cycle creation screen');
+                  // Set default preferences
+                  setPrefs({ daysPerWeek: 3, sessionMinutes: 60 });
+                  // Start draft from custom
+                  startDraftFromTemplate('custom');
+                  // Navigate to template editor
+                  navigation.navigate('TemplateEditor', {});
                 }}
                 activeOpacity={0.8}
               >

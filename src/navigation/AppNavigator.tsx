@@ -12,8 +12,12 @@ import { DesignSystemScreen } from '../screens/DesignSystemScreen';
 import HIITTimerListScreen from '../screens/HIITTimerListScreen';
 import HIITTimerFormScreen from '../screens/HIITTimerFormScreen';
 import HIITTimerExecutionScreen from '../screens/HIITTimerExecutionScreen';
+import { TemplateEditorScreen } from '../screens/onboarding/TemplateEditorScreen';
+import { CustomTemplateInputScreen } from '../screens/onboarding/CustomTemplateInputScreen';
+import { ReviewCreateCycleScreen } from '../screens/onboarding/ReviewCreateCycleScreen';
 import { IconCalendar, IconWorkouts } from '../components/icons';
 import { COLORS } from '../constants';
+import { CycleTemplateId } from '../types/workout';
 
 export type RootStackParamList = {
   Tabs: undefined;
@@ -25,6 +29,9 @@ export type RootStackParamList = {
   HIITTimerList: undefined;
   HIITTimerForm: { mode: 'create' } | { mode: 'edit'; timerId: string };
   HIITTimerExecution: { timerId: string };
+  TemplateEditor: { templateId?: CycleTemplateId };
+  CustomTemplateInput: undefined;
+  ReviewCreateCycle: undefined;
 };
 
 const Tab = createBottomTabNavigator();
@@ -163,6 +170,9 @@ export default function AppNavigator() {
       <Stack.Screen name="HIITTimerList" component={HIITTimerListScreen} />
       <Stack.Screen name="HIITTimerForm" component={HIITTimerFormScreen} />
       <Stack.Screen name="HIITTimerExecution" component={HIITTimerExecutionScreen} />
+      <Stack.Screen name="TemplateEditor" component={TemplateEditorScreen} />
+      <Stack.Screen name="CustomTemplateInput" component={CustomTemplateInputScreen} />
+      <Stack.Screen name="ReviewCreateCycle" component={ReviewCreateCycleScreen} />
     </Stack.Navigator>
   );
 }

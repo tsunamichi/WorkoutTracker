@@ -78,11 +78,17 @@ export function ReviewCreateCycleScreen({ navigation }: ReviewCreateCycleScreenP
         }
         
         // Navigate to main app
-        // @ts-ignore - navigation will be properly typed when integrated
-        navigation.reset({
-          index: 0,
-          routes: [{ name: 'AppTabs' }],
-        });
+        // Try to navigate to Tabs (main app) or fall back to goBack
+        try {
+          // @ts-ignore - navigation context varies
+          navigation.reset({
+            index: 0,
+            routes: [{ name: 'Tabs' }],
+          });
+        } catch {
+          // If reset fails, just go back to previous screen
+          navigation.goBack();
+        }
       } catch (error) {
         console.error('Failed to save cycle to main store:', error);
         Alert.alert(
