@@ -318,56 +318,39 @@ export function TodayScreen({ navigation }: TodayScreenProps) {
         style={styles.gradient}
       >
         <SafeAreaView style={styles.container} edges={['bottom']}>
-          {!activeCycle ? (
-          /* Empty State */
-          <View style={styles.emptyState}>
-            <Text style={styles.emptyTitle}>No Workouts</Text>
-            <Text style={styles.emptyText}>
-              Create a new workout to get started with your training
-            </Text>
-            <TouchableOpacity
-              style={styles.createButton}
-              onPress={() => navigation.navigate('Workouts')}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.createButtonText}>Create a New Workout</Text>
-            </TouchableOpacity>
-          </View>
-        ) : (
-          <>
-            {/* Header with Cycle Info and Avatar - Fixed */}
-            <View style={[styles.header, { paddingTop: insets.top }]}>
-              <View style={styles.topBar}>
-                <Text style={styles.headerTitle}>
-                  Cycle {activeCycle.cycleNumber} — Week {currentWeek}
-                </Text>
-                <View style={styles.headerRight}>
-                  {weekOffset !== 0 && (
-                    <TouchableOpacity
-                      style={styles.calendarButton}
-                      onPress={handleBackToToday}
-                      activeOpacity={0.7}
-                    >
-                      <IconCalendar size={24} color="#000000" />
-                    </TouchableOpacity>
-                  )}
-                  <ProfileAvatar 
-                    onPress={() => navigation.navigate('Profile')}
-                    size={40}
-                    backgroundColor="#9E9E9E"
-                    textColor="#FFFFFF"
-                    showInitial={true}
-                  />
-                </View>
+          {/* Header with Cycle Info and Avatar - Fixed - Always shown */}
+          <View style={[styles.header, { paddingTop: insets.top }]}>
+            <View style={styles.topBar}>
+              <Text style={styles.headerTitle}>
+                {activeCycle ? `Cycle ${activeCycle.cycleNumber} — Week ${currentWeek}` : 'Today'}
+              </Text>
+              <View style={styles.headerRight}>
+                {activeCycle && weekOffset !== 0 && (
+                  <TouchableOpacity
+                    style={styles.calendarButton}
+                    onPress={handleBackToToday}
+                    activeOpacity={0.7}
+                  >
+                    <IconCalendar size={24} color="#000000" />
+                  </TouchableOpacity>
+                )}
+                <ProfileAvatar 
+                  onPress={() => navigation.navigate('Profile')}
+                  size={40}
+                  backgroundColor="#9E9E9E"
+                  textColor="#FFFFFF"
+                  showInitial={true}
+                />
               </View>
             </View>
-            
-            {/* Week Calendar - Fixed */}
-            <View style={styles.weekCalendar}>
-              {weekDays.map((day, index) => {
-                const isSelected = day.date === selectedDate;
-                const isToday = day.isToday;
-                const isCompleted = day.isCompleted;
+          </View>
+          
+          {/* Week Calendar - Fixed - Always shown, disabled when no cycle */}
+          <View style={[styles.weekCalendar, !activeCycle && styles.weekCalendarDisabled]}>
+            {weekDays.map((day, index) => {
+              const isSelected = day.date === selectedDate;
+              const isToday = day.isToday;
+              const isCompleted = day.isCompleted;
                 
                 return (
                   <View
@@ -376,8 +359,9 @@ export function TodayScreen({ navigation }: TodayScreenProps) {
                   >
                   <TouchableOpacity
                     style={styles.dayTouchable}
-                    onPress={() => handleDayChange(day.date)}
+                    onPress={() => activeCycle && handleDayChange(day.date)}
                     activeOpacity={1}
+                    disabled={!activeCycle}
                   >
                     <View style={styles.dayLabelContainer}>
                       <Text style={styles.dayLabel}>{day.dayLetter}</Text>
@@ -413,10 +397,26 @@ export function TodayScreen({ navigation }: TodayScreenProps) {
               })}
             </View>
             
-            {/* Scrollable Content with Swipe Gesture */}
-            <GestureDetector gesture={swipeGesture}>
-              <ScrollView style={styles.content} contentContainerStyle={styles.scrollContent}>
-              <View style={styles.cardsContainer}>
+            {/* Scrollable Content with Swipe Gesture or Empty State */}
+            {!activeCycle ? (
+              /* Empty State */
+              <View style={styles.emptyStateContent}>
+                <Text style={styles.emptyTitle}>No Workouts</Text>
+                <Text style={styles.emptyText}>
+                  Create a new workout to get started with your training
+                </Text>
+                <TouchableOpacity
+                  style={styles.createButton}
+                  onPress={() => navigation.navigate('Workouts')}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.createButtonText}>Create a New Workout</Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <GestureDetector gesture={swipeGesture}>
+                <ScrollView style={styles.content} contentContainerStyle={styles.scrollContent}>
+                <View style={styles.cardsContainer}>
               {/* Old workout card during transition */}
               {isTransitioning && previousWorkoutData?.workout && (
                 <Animated.View 
@@ -684,22 +684,23 @@ export function TodayScreen({ navigation }: TodayScreenProps) {
               </View>
             </ScrollView>
             </GestureDetector>
+            )}
             
-            {/* Fixed HIIT Timer Button */}
-            <View style={[styles.fixedTimerButtonContainer, { bottom: 20 + insets.bottom }]}>
-              <TouchableOpacity 
-                style={styles.fixedTimerButton}
-                activeOpacity={0.7}
-                onPress={() => navigation.navigate('HIITTimerList')}
-              >
-                <Text style={styles.fixedTimerButtonText}>timer</Text>
-                <View style={styles.timerIconWrapper}>
-                  <IconStopwatch size={20} color={COLORS.accentPrimary} />
-                </View>
-              </TouchableOpacity>
-            </View>
-          </>
-        )}
+            {/* Fixed HIIT Timer Button - Only show when there's an active cycle */}
+            {activeCycle && (
+              <View style={[styles.fixedTimerButtonContainer, { bottom: 20 + insets.bottom }]}>
+                <TouchableOpacity 
+                  style={styles.fixedTimerButton}
+                  activeOpacity={0.7}
+                  onPress={() => navigation.navigate('HIITTimerList')}
+                >
+                  <Text style={styles.fixedTimerButtonText}>timer</Text>
+                  <View style={styles.timerIconWrapper}>
+                    <IconStopwatch size={20} color={COLORS.accentPrimary} />
+                  </View>
+                </TouchableOpacity>
+              </View>
+            )}
         </SafeAreaView>
       </LinearGradient>
       
@@ -839,6 +840,13 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingVertical: SPACING.xxxl * 3,
   },
+  emptyStateContent: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: SPACING.xxl,
+    paddingVertical: SPACING.xxxl * 2,
+  },
   emptyTitle: {
     ...TYPOGRAPHY.h2,
     color: LIGHT_COLORS.textPrimary,
@@ -896,6 +904,9 @@ const styles = StyleSheet.create({
     gap: SPACING.sm,
     paddingHorizontal: 24,
     position: 'relative',
+  },
+  weekCalendarDisabled: {
+    opacity: 0.5,
   },
   dayContainer: {
     flex: 1,
