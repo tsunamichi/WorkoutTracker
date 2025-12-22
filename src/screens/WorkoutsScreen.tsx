@@ -32,7 +32,7 @@ const LIGHT_COLORS = {
 const SCREEN_WIDTH = Dimensions.get('window').width;
 const CARD_SPACING = 12;
 const HORIZONTAL_PADDING = 24;
-const CARD_WIDTH = (SCREEN_WIDTH - HORIZONTAL_PADDING * 2 - CARD_SPACING * 2) / 2.15; // ~2.15 cards in view, 3rd card barely peeks
+const CARD_WIDTH = (SCREEN_WIDTH - HORIZONTAL_PADDING * 2 - CARD_SPACING * 2) / 2.05; // ~2.05 cards in view, only first letter of 3rd card visible
 
 export function WorkoutsScreen({ navigation }: WorkoutsScreenProps) {
   const insets = useSafeAreaInsets();
