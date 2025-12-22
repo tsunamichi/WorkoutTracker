@@ -10,7 +10,6 @@ import {
   SafeAreaView,
 } from 'react-native';
 import { useStore } from '../../store';
-import { IconSearch, IconClose } from '../icons';
 import { SPACING } from '../../constants';
 
 interface ExercisePickerModalProps {
@@ -74,13 +73,13 @@ export function ExercisePickerModal({
             onPress={handleClose}
             activeOpacity={0.7}
           >
-            <IconClose size={24} color={LIGHT_COLORS.textPrimary} />
+            <Text style={styles.closeButtonText}>✕</Text>
           </TouchableOpacity>
         </View>
 
         {/* Search Input */}
         <View style={styles.searchContainer}>
-          <IconSearch size={20} color={LIGHT_COLORS.textMeta} />
+          <Text style={styles.searchIcon}>🔍</Text>
           <TextInput
             style={styles.searchInput}
             value={searchQuery}
@@ -94,7 +93,7 @@ export function ExercisePickerModal({
               onPress={() => setSearchQuery('')}
               activeOpacity={0.7}
             >
-              <IconClose size={18} color={LIGHT_COLORS.textMeta} />
+              <Text style={styles.clearIcon}>✕</Text>
             </TouchableOpacity>
           )}
         </View>
@@ -156,6 +155,10 @@ const styles = StyleSheet.create({
   closeButton: {
     padding: 8,
   },
+  closeButtonText: {
+    fontSize: 20,
+    color: LIGHT_COLORS.textPrimary,
+  },
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -172,6 +175,14 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 16,
     color: LIGHT_COLORS.textPrimary,
+  },
+  searchIcon: {
+    fontSize: 18,
+    color: LIGHT_COLORS.textMeta,
+  },
+  clearIcon: {
+    fontSize: 16,
+    color: LIGHT_COLORS.textMeta,
   },
   listContent: {
     paddingHorizontal: SPACING.xxl,
