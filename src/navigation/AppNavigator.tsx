@@ -64,7 +64,7 @@ function TabNavigator() {
         screenOptions={{
           headerShown: false,
           tabBarStyle: {
-            backgroundColor: 'red',
+            backgroundColor: COLORS.backgroundContainer,
             borderTopWidth: 0,
             height: 80,
             position: 'absolute',
@@ -72,11 +72,15 @@ function TabNavigator() {
             left: 8,
             right: 8,
             borderRadius: 16,
+            borderWidth: 3,
+            borderColor: 'red',
           },
           tabBarItemStyle: {
             flex: 1,
             justifyContent: 'center',
             alignItems: 'center',
+            borderWidth: 2,
+            borderColor: 'yellow',
           },
           tabBarBackground: () => null,
           tabBarActiveTintColor: '#000000',
@@ -164,6 +168,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 6,
     paddingHorizontal: 8,
+    borderWidth: 2,
+    borderColor: 'green',
   },
   activeLabel: {
     fontSize: 12,
