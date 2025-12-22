@@ -76,7 +76,7 @@ function TabNavigator() {
             borderColor: 'red',
           },
           tabBarItemStyle: {
-            flex: 1,
+            height: '100%',
             justifyContent: 'center',
             alignItems: 'center',
             borderWidth: 2,
