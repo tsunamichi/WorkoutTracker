@@ -313,10 +313,11 @@ export function TodayScreen({ navigation }: TodayScreenProps) {
   
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <LinearGradient
-        colors={['#E3E6E0', '#D4D6D1']}
-        style={styles.gradient}
-      >
+      <View style={{ flex: 1, paddingHorizontal: 8 }}>
+        <LinearGradient
+          colors={['#E3E6E0', '#D4D6D1']}
+          style={styles.gradient}
+        >
         <SafeAreaView style={[styles.container, { paddingBottom: 88 }]} edges={[]}>
           {/* Header with Cycle Info and Avatar - Fixed - Always shown */}
           <View style={[styles.header, { paddingTop: insets.top }]}>
@@ -703,6 +704,7 @@ export function TodayScreen({ navigation }: TodayScreenProps) {
             )}
         </SafeAreaView>
       </LinearGradient>
+      </View>
       
       {/* Swap Bottom Sheet Modal - Renders at root level above tab bar */}
       <Modal

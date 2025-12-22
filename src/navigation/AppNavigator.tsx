@@ -59,7 +59,7 @@ function CustomTabBarBackground() {
 
 function TabNavigator() {
   return (
-    <View style={{ flex: 1, paddingHorizontal: 8, backgroundColor: COLORS.backgroundCanvas }}>
+    <View style={{ flex: 1, backgroundColor: COLORS.backgroundCanvas }}>
       <Tab.Navigator
         screenOptions={{
           headerShown: false,
@@ -69,8 +69,8 @@ function TabNavigator() {
             height: 80,
             position: 'absolute',
             bottom: 8,
-            left: 0,
-            right: 0,
+            left: 8,
+            right: 8,
             borderRadius: 16,
           },
           tabBarItemStyle: {
@@ -155,6 +155,8 @@ const styles = StyleSheet.create({
     height: 80,
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: 'blue',
   },
   activeTab: {
     flexDirection: 'row',

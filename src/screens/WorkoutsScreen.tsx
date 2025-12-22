@@ -306,10 +306,11 @@ export function WorkoutsScreen({ navigation }: WorkoutsScreenProps) {
   };
   
   return (
-    <LinearGradient
-      colors={['#E3E6E0', '#D4D6D1']}
-      style={styles.gradient}
-    >
+    <View style={{ flex: 1, paddingHorizontal: 8 }}>
+      <LinearGradient
+        colors={['#E3E6E0', '#D4D6D1']}
+        style={styles.gradient}
+      >
       <SafeAreaView style={[styles.container, { paddingBottom: 88 }]} edges={[]}>
         {/* Header - Fixed */}
         <View style={[styles.header, { paddingTop: insets.top }]}>
@@ -486,6 +487,7 @@ export function WorkoutsScreen({ navigation }: WorkoutsScreenProps) {
         </Modal>
       </SafeAreaView>
     </LinearGradient>
+    </View>
   );
 }
 
