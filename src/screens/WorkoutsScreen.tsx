@@ -365,7 +365,6 @@ export function WorkoutsScreen({ navigation }: WorkoutsScreenProps) {
                             <Text style={styles.templateName}>{template.name}</Text>
                             <Text style={styles.templateDescription}>{template.description}</Text>
                           </View>
-                          <View style={styles.templateTriangle} />
                         </TouchableOpacity>
                       </View>
                     </View>
@@ -501,7 +500,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    padding: SPACING.xxl,
+    paddingVertical: SPACING.xxl,
     paddingBottom: 100,
   },
   
@@ -566,7 +565,6 @@ const styles = StyleSheet.create({
     ...TYPOGRAPHY.h3,
     color: LIGHT_COLORS.textPrimary,
     marginBottom: 24,
-    paddingHorizontal: SPACING.xxl,
   },
   carouselContent: {
     paddingRight: CARD_SPACING,
@@ -617,14 +615,10 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: COLORS.border,
     padding: 20,
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
     minHeight: 120,
   },
   templateInfo: {
     flex: 1,
-    marginRight: 8,
   },
   templateName: {
     ...TYPOGRAPHY.body,
@@ -636,24 +630,11 @@ const styles = StyleSheet.create({
     color: LIGHT_COLORS.textMeta,
     lineHeight: 18,
   },
-  templateTriangle: {
-    width: 0,
-    height: 0,
-    backgroundColor: 'transparent',
-    borderStyle: 'solid',
-    borderLeftWidth: 8,
-    borderRightWidth: 0,
-    borderTopWidth: 4.5,
-    borderBottomWidth: 4.5,
-    borderLeftColor: '#000000',
-    borderRightColor: 'transparent',
-    borderTopColor: 'transparent',
-    borderBottomColor: 'transparent',
-  },
   
   // Cycles Section
   cyclesSection: {
     gap: 12,
+    paddingHorizontal: SPACING.xxl,
   },
   cycleCardWrapper: {
     width: '100%',
