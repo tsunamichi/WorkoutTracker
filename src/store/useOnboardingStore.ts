@@ -22,6 +22,7 @@ interface OnboardingStore {
   // Actions
   hydrate: () => Promise<void>;
   setAuthStatus: (status: AuthStatus) => void;
+  finishOnboarding: () => Promise<void>;
   setPrefs: (prefs: Partial<UserPrefs>) => void;
   
   // Draft management
@@ -130,6 +131,11 @@ export const useOnboardingStore = create<OnboardingStore>((set, get) => ({
   setAuthStatus: (status) => {
     set({ authStatus: status });
     get()._persist();
+  },
+
+  finishOnboarding: async () => {
+    set({ hasCompletedOnboarding: true });
+    await get()._persist();
   },
 
   setPrefs: (prefsUpdate) => {

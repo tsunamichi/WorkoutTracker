@@ -5,6 +5,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { ProfileAvatar } from '../components/ProfileAvatar';
 import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS } from '../constants';
 import { useStore } from '../store';
+import { TEMPLATES } from '../data/templates';
 import dayjs from 'dayjs';
 import isoWeek from 'dayjs/plugin/isoWeek';
 
@@ -316,8 +317,42 @@ export function WorkoutsScreen({ navigation }: WorkoutsScreenProps) {
         </View>
         
         <ScrollView style={styles.content} contentContainerStyle={styles.scrollContent}>
-          {/* Cycles List */}
-          {cycles.length > 0 && (
+          {/* Templates or Cycles List */}
+          {cycles.length === 0 ? (
+            <View style={styles.templatesSection}>
+              <Text style={styles.sectionTitle}>Choose a Workout Template</Text>
+              {TEMPLATES.filter(t => t.id !== 'custom').map((template, index) => {
+                const isLast = index === TEMPLATES.filter(t => t.id !== 'custom').length - 1;
+                return (
+                  <View key={template.id} style={[styles.templateCardWrapper, !isLast && styles.templateCardWrapperMargin]}>
+                    <TouchableOpacity
+                      style={styles.templateCard}
+                      onPress={() => {
+                        // TODO: Navigate to manual cycle creation with template selected
+                        Alert.alert('Coming Soon', `${template.name} template will start the workout creation process`);
+                      }}
+                      activeOpacity={0.8}
+                    >
+                      <View style={styles.templateInfo}>
+                        <Text style={styles.templateName}>{template.name}</Text>
+                        <Text style={styles.templateDescription}>{template.description}</Text>
+                        <View style={styles.templateTags}>
+                          {template.tags.slice(0, 3).map((tag, i) => (
+                            <View key={i} style={styles.tag}>
+                              <Text style={styles.tagText}>{tag}</Text>
+                            </View>
+                          ))}
+                        </View>
+                      </View>
+                      <View style={styles.templateArrow}>
+                        <Text style={styles.arrowText}>→</Text>
+                      </View>
+                    </TouchableOpacity>
+                  </View>
+                );
+              })}
+            </View>
+          ) : (
             <View style={styles.cyclesSection}>
               {cycles
                 .sort((a, b) => b.cycleNumber - a.cycleNumber)
@@ -355,13 +390,35 @@ export function WorkoutsScreen({ navigation }: WorkoutsScreenProps) {
         
         {/* Create Cycle Button - Sticky Bottom */}
         <View style={styles.stickyButtonContainer}>
-          <TouchableOpacity
-            style={styles.createButton}
-            onPress={() => setShowBottomSheet(true)}
-            activeOpacity={1}
-          >
-            <Text style={styles.createButtonText}>Create New Cycle</Text>
-          </TouchableOpacity>
+          {cycles.length === 0 ? (
+            <>
+              <TouchableOpacity
+                style={styles.createButton}
+                onPress={() => {
+                  // TODO: Navigate to manual cycle creation screen
+                  Alert.alert('Coming Soon', 'Manual cycle creation screen');
+                }}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.createButtonText}>Create My Own Cycle</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.secondaryButton}
+                onPress={() => setShowBottomSheet(true)}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.secondaryButtonText}>Paste Cycle</Text>
+              </TouchableOpacity>
+            </>
+          ) : (
+            <TouchableOpacity
+              style={styles.createButton}
+              onPress={() => setShowBottomSheet(true)}
+              activeOpacity={1}
+            >
+              <Text style={styles.createButtonText}>Create New Cycle</Text>
+            </TouchableOpacity>
+          )}
         </View>
         
         {/* Bottom Sheet */}
@@ -464,11 +521,94 @@ const styles = StyleSheet.create({
     paddingVertical: SPACING.lg,
     borderRadius: BORDER_RADIUS.md,
     alignItems: 'center',
+    marginBottom: 12,
   },
   createButtonText: {
     fontSize: 17,
     fontWeight: '600',
     color: '#FFFFFF',
+  },
+  secondaryButton: {
+    backgroundColor: LIGHT_COLORS.buttonBg,
+    paddingVertical: SPACING.lg,
+    borderRadius: BORDER_RADIUS.md,
+    alignItems: 'center',
+  },
+  secondaryButtonText: {
+    fontSize: 17,
+    fontWeight: '600',
+    color: LIGHT_COLORS.buttonText,
+  },
+  
+  // Templates Section
+  templatesSection: {
+    gap: 16,
+  },
+  sectionTitle: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: LIGHT_COLORS.textPrimary,
+    marginBottom: 8,
+  },
+  templateCardWrapper: {
+    width: '100%',
+  },
+  templateCardWrapperMargin: {
+    marginBottom: 12,
+  },
+  templateCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderWidth: 1,
+    borderColor: LIGHT_COLORS.border,
+  },
+  templateInfo: {
+    flex: 1,
+    marginRight: 12,
+  },
+  templateName: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: LIGHT_COLORS.textPrimary,
+    marginBottom: 6,
+  },
+  templateDescription: {
+    fontSize: 14,
+    color: LIGHT_COLORS.textMeta,
+    lineHeight: 20,
+    marginBottom: 12,
+  },
+  templateTags: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  tag: {
+    backgroundColor: '#F2F2F7',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  tagText: {
+    fontSize: 12,
+    color: LIGHT_COLORS.textSecondary,
+    fontWeight: '500',
+  },
+  templateArrow: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#F2F2F7',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  arrowText: {
+    fontSize: 20,
+    color: LIGHT_COLORS.textPrimary,
   },
   
   // Cycles Section

@@ -321,16 +321,16 @@ export function TodayScreen({ navigation }: TodayScreenProps) {
           {!activeCycle ? (
           /* Empty State */
           <View style={styles.emptyState}>
-            <Text style={styles.emptyTitle}>No Active Cycle</Text>
+            <Text style={styles.emptyTitle}>No Workouts</Text>
             <Text style={styles.emptyText}>
-              Create a workout cycle to get started
+              Create a new workout to get started with your training
             </Text>
             <TouchableOpacity
               style={styles.createButton}
               onPress={() => navigation.navigate('Workouts')}
-              activeOpacity={1}
+              activeOpacity={0.8}
             >
-              <Text style={styles.createButtonText}>Go to Workouts</Text>
+              <Text style={styles.createButtonText}>Create a New Workout</Text>
             </TouchableOpacity>
           </View>
         ) : (

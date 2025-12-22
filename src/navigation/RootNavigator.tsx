@@ -44,7 +44,8 @@ export function RootNavigator() {
   }
 
   // Determine which stack to show
-  const showOnboarding = authStatus === 'unknown' || !hasCompletedOnboarding || !activeCycleId;
+  // Only show onboarding if user hasn't logged in or completed initial flow
+  const showOnboarding = authStatus === 'unknown' || !hasCompletedOnboarding;
 
   return (
     <NavigationContainer>

@@ -13,16 +13,19 @@ type WelcomeScreenProps = {
 };
 
 export function WelcomeScreen({ navigation }: WelcomeScreenProps) {
-  const setAuthStatus = useOnboardingStore((state) => state.setAuthStatus);
+  const { setAuthStatus, finishOnboarding } = useOnboardingStore();
 
-  const handleContinueWithApple = () => {
+  const handleContinueWithApple = async () => {
+    // TODO: Implement Apple Sign In
     setAuthStatus('apple');
-    navigation.navigate('ScheduleSetup');
+    await finishOnboarding();
+    // Navigation will be handled by RootNavigator
   };
 
-  const handleContinueAsGuest = () => {
+  const handleContinueAsGuest = async () => {
     setAuthStatus('guest');
-    navigation.navigate('ScheduleSetup');
+    await finishOnboarding();
+    // Navigation will be handled by RootNavigator
   };
 
   return (
