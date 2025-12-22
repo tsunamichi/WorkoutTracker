@@ -69,8 +69,8 @@ function TabNavigator() {
             height: 80,
             position: 'absolute',
             bottom: 8,
-            left: 8,
-            right: 8,
+            left: 0,
+            right: 0,
             borderRadius: 16,
           },
           tabBarItemStyle: {
