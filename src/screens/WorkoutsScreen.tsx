@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Modal, TextInput, ScrollView, Alert, KeyboardAvoidingView, Platform } from 'react-native';
+import React, { useState, useRef } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Modal, TextInput, ScrollView, Alert, KeyboardAvoidingView, Platform, FlatList, Dimensions } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { ProfileAvatar } from '../components/ProfileAvatar';
@@ -29,12 +29,18 @@ const LIGHT_COLORS = {
   buttonText: '#000000',
 };
 
+const SCREEN_WIDTH = Dimensions.get('window').width;
+const CARD_SPACING = 12;
+const CARD_WIDTH = (SCREEN_WIDTH - (SPACING.xxl * 2) - CARD_SPACING) / 2.5;
+
 export function WorkoutsScreen({ navigation }: WorkoutsScreenProps) {
   const insets = useSafeAreaInsets();
   const { cycles, addCycle, getNextCycleNumber, assignWorkout, exercises, addExercise, updateCycle, clearWorkoutAssignmentsForDateRange } = useStore();
   const { startDraftFromTemplate, startDraftFromCustomText, setPrefs } = useOnboardingStore();
   const [showBottomSheet, setShowBottomSheet] = useState(false);
   const [workoutDetails, setWorkoutDetails] = useState('');
+  const [currentPage, setCurrentPage] = useState(0);
+  const flatListRef = useRef<FlatList>(null);
   
   const handleCreateCycle = async () => {
     try {
@@ -323,10 +329,24 @@ export function WorkoutsScreen({ navigation }: WorkoutsScreenProps) {
           {cycles.length === 0 ? (
             <View style={styles.templatesSection}>
               <Text style={styles.sectionTitle}>Choose a Workout Template</Text>
-              {TEMPLATES.filter(t => t.id !== 'custom').map((template, index) => {
-                const isLast = index === TEMPLATES.filter(t => t.id !== 'custom').length - 1;
-                return (
-                  <View key={template.id} style={[styles.templateCardWrapper, !isLast && styles.templateCardWrapperMargin]}>
+              
+              <FlatList
+                ref={flatListRef}
+                data={TEMPLATES.filter(t => t.id !== 'custom')}
+                horizontal
+                pagingEnabled={false}
+                showsHorizontalScrollIndicator={false}
+                snapToInterval={CARD_WIDTH + CARD_SPACING}
+                decelerationRate="fast"
+                contentContainerStyle={styles.carouselContent}
+                onScroll={(event) => {
+                  const offsetX = event.nativeEvent.contentOffset.x;
+                  const page = Math.round(offsetX / (CARD_WIDTH + CARD_SPACING));
+                  setCurrentPage(page);
+                }}
+                scrollEventThrottle={16}
+                renderItem={({ item: template }) => (
+                  <View style={styles.carouselCard}>
                     <View style={styles.templateCardBlackShadow}>
                       <View style={styles.templateCardWhiteShadow}>
                         <TouchableOpacity
@@ -350,8 +370,22 @@ export function WorkoutsScreen({ navigation }: WorkoutsScreenProps) {
                       </View>
                     </View>
                   </View>
-                );
-              })}
+                )}
+                keyExtractor={(item) => item.id}
+              />
+              
+              {/* Pagination Dots */}
+              <View style={styles.pagination}>
+                {TEMPLATES.filter(t => t.id !== 'custom').map((_, index) => (
+                  <View
+                    key={index}
+                    style={[
+                      styles.paginationDot,
+                      index === currentPage && styles.paginationDotActive,
+                    ]}
+                  />
+                ))}
+              </View>
             </View>
           ) : (
             <View style={styles.cyclesSection}>
@@ -391,38 +425,18 @@ export function WorkoutsScreen({ navigation }: WorkoutsScreenProps) {
         
         {/* Create Cycle Button - Sticky Bottom */}
         <View style={styles.stickyButtonContainer}>
-          {cycles.length === 0 ? (
-            <>
-              <TouchableOpacity
-                style={styles.createButton}
-                onPress={() => {
-                  // Navigate to manual cycle creation flow
-                  navigation.navigate('CreateCycleBasics');
-                }}
-                activeOpacity={0.8}
-              >
-                <Text style={styles.createButtonText}>Create My Own Cycle</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.secondaryButton}
-                onPress={() => setShowBottomSheet(true)}
-                activeOpacity={0.8}
-              >
-                <Text style={styles.secondaryButtonText}>Paste Cycle</Text>
-              </TouchableOpacity>
-            </>
-          ) : (
-            <TouchableOpacity
-              style={styles.createButton}
-              onPress={() => {
-                // Navigate to manual cycle creation flow for existing users too
-                navigation.navigate('CreateCycleBasics');
-              }}
-              activeOpacity={1}
-            >
-              <Text style={styles.createButtonText}>Create New Cycle</Text>
-            </TouchableOpacity>
-          )}
+          <TouchableOpacity
+            style={styles.createButton}
+            onPress={() => {
+              // Navigate to manual cycle creation flow
+              navigation.navigate('CreateCycleBasics');
+            }}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.createButtonText}>
+              {cycles.length === 0 ? 'Create My Own Cycle' : 'Create New Cycle'}
+            </Text>
+          </TouchableOpacity>
         </View>
         
         {/* Bottom Sheet */}
@@ -550,13 +564,34 @@ const styles = StyleSheet.create({
   sectionTitle: {
     ...TYPOGRAPHY.h3,
     color: LIGHT_COLORS.textPrimary,
-    marginBottom: 8,
+    marginBottom: 24,
+    paddingHorizontal: SPACING.xxl,
   },
-  templateCardWrapper: {
-    width: '100%',
+  carouselContent: {
+    paddingLeft: SPACING.xxl,
+    paddingRight: SPACING.xxl - CARD_SPACING,
   },
-  templateCardWrapperMargin: {
-    marginBottom: 12,
+  carouselCard: {
+    width: CARD_WIDTH,
+    marginRight: CARD_SPACING,
+  },
+  pagination: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 20,
+    gap: 8,
+  },
+  paginationDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: LIGHT_COLORS.textMeta,
+    opacity: 0.3,
+  },
+  paginationDotActive: {
+    backgroundColor: LIGHT_COLORS.textPrimary,
+    opacity: 1,
   },
   templateCardBlackShadow: {
     // Black shadow: -1, -1, 8% opacity, 1px blur
@@ -581,12 +616,13 @@ const styles = StyleSheet.create({
     borderColor: COLORS.border,
     padding: 20,
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     justifyContent: 'space-between',
+    minHeight: 120,
   },
   templateInfo: {
     flex: 1,
-    marginRight: 12,
+    marginRight: 8,
   },
   templateName: {
     ...TYPOGRAPHY.body,
