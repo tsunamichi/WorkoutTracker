@@ -310,7 +310,7 @@ export function WorkoutsScreen({ navigation }: WorkoutsScreenProps) {
       colors={['#E3E6E0', '#D4D6D1']}
       style={styles.gradient}
     >
-      <SafeAreaView style={[styles.container, { paddingBottom: 108 }]} edges={[]}>
+      <SafeAreaView style={[styles.container, { paddingBottom: 88 }]} edges={[]}>
         {/* Header - Fixed */}
         <View style={[styles.header, { paddingTop: insets.top }]}>
           <View style={styles.topBar}>
@@ -502,7 +502,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingVertical: SPACING.xxl,
-    paddingBottom: 100,
+    paddingBottom: 80,
   },
   
   // Header
@@ -524,7 +524,7 @@ const styles = StyleSheet.create({
   // Sticky Button Container
   stickyButtonContainer: {
     position: 'absolute',
-    bottom: 108, // 8px tab bar margin + 100px tab bar height
+    bottom: 88, // 8px tab bar margin + 80px tab bar height
     left: 0,
     right: 0,
     paddingHorizontal: SPACING.xxl,

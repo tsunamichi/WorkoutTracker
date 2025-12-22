@@ -317,7 +317,7 @@ export function TodayScreen({ navigation }: TodayScreenProps) {
         colors={['#E3E6E0', '#D4D6D1']}
         style={styles.gradient}
       >
-        <SafeAreaView style={[styles.container, { paddingBottom: 108 }]} edges={[]}>
+        <SafeAreaView style={[styles.container, { paddingBottom: 88 }]} edges={[]}>
           {/* Header with Cycle Info and Avatar - Fixed - Always shown */}
           <View style={[styles.header, { paddingTop: insets.top }]}>
             <View style={styles.topBar}>
@@ -1221,7 +1221,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: 0,
     right: 0,
-    bottom: 128, // 8px tab bar margin + 100px tab bar height + 20px gap
+    bottom: 108, // 8px tab bar margin + 80px tab bar height + 20px gap
     alignItems: 'center',
   },
   fixedTimerButton: {
