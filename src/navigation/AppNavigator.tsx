@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, StyleSheet } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { TodayScreen } from '../screens/TodayScreen';
@@ -94,19 +94,11 @@ function TabNavigator() {
         name="Today"
         component={TodayScreen}
         options={{
-          tabBarIcon: ({ color, focused }) =>
-            focused ? (
-              <View style={styles.tabWrapper} pointerEvents="box-none">
-                <View style={styles.activeTab} pointerEvents="box-none">
-                  <IconCalendar size={24} color={color} />
-                  <Text style={[styles.activeLabel, { color }]}>Today</Text>
-                </View>
-              </View>
-            ) : (
-              <View style={styles.tabWrapper} pointerEvents="box-none">
-                <IconCalendar size={24} color={color} />
-              </View>
-            ),
+          tabBarIcon: ({ color }) => (
+            <View style={styles.tabWrapper} pointerEvents="box-none">
+              <IconCalendar size={24} color={color} />
+            </View>
+          ),
           tabBarLabel: () => null,
         }}
       />
@@ -114,19 +106,11 @@ function TabNavigator() {
         name="Workouts"
         component={WorkoutsScreen}
         options={{
-          tabBarIcon: ({ color, focused }) =>
-            focused ? (
-              <View style={styles.tabWrapper} pointerEvents="box-none">
-                <View style={styles.activeTab} pointerEvents="box-none">
-                  <IconWorkouts size={24} color={color} />
-                  <Text style={[styles.activeLabel, { color }]}>Workouts</Text>
-                </View>
-              </View>
-            ) : (
-              <View style={styles.tabWrapper} pointerEvents="box-none">
-                <IconWorkouts size={24} color={color} />
-              </View>
-            ),
+          tabBarIcon: ({ color }) => (
+            <View style={styles.tabWrapper} pointerEvents="box-none">
+              <IconWorkouts size={24} color={color} />
+            </View>
+          ),
           tabBarLabel: () => null,
         }}
       />
@@ -163,21 +147,6 @@ const styles = StyleSheet.create({
     height: '100%',
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  activeTab: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    paddingHorizontal: 8,
-    height: '100%',
-  },
-  activeLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-    lineHeight: 24,
-    paddingTop: 1,
-    minWidth: 60,
   },
 });
 
