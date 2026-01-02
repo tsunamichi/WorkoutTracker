@@ -296,6 +296,18 @@ export const CARDS = {
   },
 };
 
+// Button styles
+export const BUTTONS = {
+  primaryButtonNoLabel: {
+    width: 80,
+    height: 80,
+    borderRadius: 12,
+    backgroundColor: '#1B1B1B',
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+  },
+};
+
 // Seed exercises for initial app state
 export const SEED_EXERCISES = [
   // Chest

@@ -6,15 +6,16 @@ import {
   TouchableOpacity,
   Alert,
   Animated,
+  Easing,
   Dimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Audio } from 'expo-av';
+import Svg, { Circle, Path } from 'react-native-svg';
 import { useStore } from '../store';
-import { COLORS, SPACING, TYPOGRAPHY, GRADIENTS } from '../constants';
+import { COLORS, SPACING, TYPOGRAPHY, GRADIENTS, BUTTONS } from '../constants';
 import { IconArrowLeft, IconPlay, IconPause, IconSpeaker, IconSkip } from '../components/icons';
-import { TimerDotCircle } from '../components/TimerDotCircle';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/AppNavigator';
 
@@ -25,15 +26,16 @@ type TimerPhase = 'countdown' | 'work' | 'workRest' | 'roundRest' | 'complete';
 const LIGHT_COLORS = {
   backgroundCanvas: '#E3E6E0',
   text: '#1B1B1B',
-  textPrimary: '#000000',
+  secondary: '#1B1B1B',
   textSecondary: '#3C3C43',
   textMeta: '#817B77',
+  border: '#CDCABB',
 };
 
 export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
   const insets = useSafeAreaInsets();
   const { timerId } = route.params;
-  const { hiitTimers } = useStore();
+  const { hiitTimers, addHIITTimer, deleteHIITTimer } = useStore();
   
   const timer = hiitTimers.find(t => t.id === timerId);
   
@@ -56,6 +58,27 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
   
   // Animated values for side buttons: 0 = hidden, 1 = visible
   const sideButtonsAnim = useRef(new Animated.Value(0)).current;
+  
+  // Animated value for timer progress (smooth transitions)
+  const progressAnim = useRef(new Animated.Value(1)).current;
+  
+  // Animated value for phase transitions: -1 = countdown, 0 = work, 1 = rest
+  const getPhaseValue = (phase: typeof currentPhase) => {
+    if (phase === 'countdown') return -1;
+    if (phase === 'work') return 0;
+    return 1;
+  };
+  const phaseTransitionAnim = useRef(new Animated.Value(getPhaseValue(currentPhase))).current;
+  
+  // Animated values for countdown flash effect
+  const countdownFlashAnim = useRef(new Animated.Value(1)).current;
+  const countdownOpacityAnim = useRef(new Animated.Value(1)).current;
+  
+  // Animated value for urgency state (time <= 5 seconds): 0 = normal, 1 = urgent
+  const urgencyAnim = useRef(new Animated.Value(0)).current;
+  
+  // Track previous phase for transition detection
+  const prevPhaseRef = useRef(currentPhase);
 
   // Animate button shape and side buttons based on state
   useEffect(() => {
@@ -76,6 +99,90 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
       }),
     ]).start();
   }, [hasStarted, buttonShapeAnim, sideButtonsAnim]);
+
+  // Animate phase transitions (colors, fonts, flex, gap, border radius)
+  useEffect(() => {
+    const targetValue = getPhaseValue(currentPhase);
+    const prevPhase = prevPhaseRef.current;
+    
+    // Detect countdown -> work transition for special handling
+    const isCountdownToWork = prevPhase === 'countdown' && currentPhase === 'work';
+    
+    Animated.timing(phaseTransitionAnim, {
+      toValue: targetValue,
+      duration: isCountdownToWork ? 350 : 300, // Faster transition
+      useNativeDriver: false,
+      easing: Easing.out(Easing.exp), // Exponential ease-out for dramatic deceleration
+    }).start();
+    
+    prevPhaseRef.current = currentPhase;
+  }, [currentPhase, phaseTransitionAnim]);
+
+  // Flash animation for countdown
+  useEffect(() => {
+    if (currentPhase === 'countdown' && secondsRemaining > 0) {
+      // Reset to large scale and low opacity
+      countdownFlashAnim.setValue(1.3);
+      countdownOpacityAnim.setValue(0.3);
+      
+      // Animate back to normal with a bounce
+      Animated.parallel([
+        Animated.spring(countdownFlashAnim, {
+          toValue: 1,
+          useNativeDriver: false,
+          tension: 50,
+          friction: 7,
+        }),
+        Animated.timing(countdownOpacityAnim, {
+          toValue: 1,
+          duration: 200,
+          useNativeDriver: false,
+        }),
+      ]).start();
+    }
+  }, [currentPhase, secondsRemaining, countdownFlashAnim, countdownOpacityAnim]);
+
+  // Animate urgency state when time reaches 5 seconds
+  useEffect(() => {
+    if (currentPhase === 'work' || currentPhase === 'workRest' || currentPhase === 'roundRest') {
+      const isUrgent = secondsRemaining <= 5;
+      Animated.timing(urgencyAnim, {
+        toValue: isUrgent ? 1 : 0,
+        duration: 300,
+        useNativeDriver: false,
+        easing: Easing.inOut(Easing.ease),
+      }).start();
+    } else {
+      urgencyAnim.setValue(0);
+    }
+  }, [currentPhase, secondsRemaining, urgencyAnim]);
+
+  // Animate progress bar (flex values)
+  useEffect(() => {
+    if (!timer || currentPhase === 'countdown' || currentPhase === 'complete') {
+      // During countdown, progressAnim is 1.0 (full time remaining)
+      // During complete, progressAnim is 0 (no time remaining)
+      progressAnim.setValue(currentPhase === 'countdown' ? 1.0 : 0);
+      return;
+    }
+
+    let totalPhaseSeconds = 0;
+    if (currentPhase === 'work') totalPhaseSeconds = timer.work;
+    else if (currentPhase === 'workRest') totalPhaseSeconds = timer.workRest;
+    else if (currentPhase === 'roundRest') totalPhaseSeconds = timer.roundRest;
+
+    const clampedProgress = totalPhaseSeconds > 0 ? secondsRemaining / totalPhaseSeconds : 0;
+
+    const isPhaseTransition = prevPhaseRef.current !== currentPhase;
+    const isWorkToRest = (prevPhaseRef.current === 'work' && (currentPhase === 'workRest' || currentPhase === 'roundRest'));
+
+    Animated.timing(progressAnim, {
+      toValue: clampedProgress,
+      duration: (isPhaseTransition && !isWorkToRest) ? 0 : 1000, // Smooth transition for work->rest
+      useNativeDriver: false,
+      easing: (t) => t, // Linear easing
+    }).start();
+  }, [secondsRemaining, currentPhase, timer, progressAnim]);
 
   useEffect(() => {
     let mounted = true;
@@ -304,6 +411,116 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
     });
   };
 
+  // Calculate total workout time (excluding countdown)
+  const getTotalWorkoutTime = () => {
+    if (!timer) return 0;
+    const totalWorkTime = timer.work * timer.sets * timer.rounds;
+    // Work rest after each set except the last set of each round
+    const totalWorkRestTime = timer.workRest * (timer.sets - 1) * timer.rounds;
+    const totalRoundRestTime = timer.roundRest * (timer.rounds - 1); // Last round has no rest
+    return totalWorkTime + totalWorkRestTime + totalRoundRestTime;
+  };
+
+  // Calculate remaining workout time (excluding countdown)
+  const getRemainingWorkoutTime = () => {
+    if (!timer) return 0;
+    if (currentPhase === 'complete') return 0;
+    if (currentPhase === 'countdown') return getTotalWorkoutTime(); // Show full time during countdown
+
+    let remaining = 0;
+
+    // Add remaining time in current phase
+    remaining += secondsRemaining;
+
+    // Add remaining sets in current round (after current set)
+    if (currentPhase === 'work') {
+      // If not the last set of the round, add rest after this work
+      if (currentSet < timer.sets) {
+        remaining += timer.workRest;
+      }
+      // Add all remaining sets after current (each has work + rest, except last set has no rest)
+      const setsAfterCurrent = timer.sets - currentSet;
+      if (setsAfterCurrent > 0) {
+        remaining += timer.work * setsAfterCurrent;
+        remaining += timer.workRest * (setsAfterCurrent - 1); // No rest after last set
+      }
+    } else if (currentPhase === 'workRest') {
+      // Add all remaining sets after current (each has work + rest, except last set has no rest)
+      const setsAfterCurrent = timer.sets - currentSet;
+      if (setsAfterCurrent > 0) {
+        remaining += timer.work * setsAfterCurrent;
+        remaining += timer.workRest * (setsAfterCurrent - 1); // No rest after last set
+      }
+    }
+
+    // Add remaining rounds (after current round)
+    if (currentRound < timer.rounds) {
+      const remainingRounds = timer.rounds - currentRound;
+      // Each remaining round has all sets with their rests
+      remaining += (timer.work * timer.sets) * remainingRounds;
+      remaining += (timer.workRest * (timer.sets - 1)) * remainingRounds;
+      // Plus round rest between rounds (but not after the last round)
+      remaining += timer.roundRest * (remainingRounds - 1);
+      
+      // If we're not in roundRest yet and not in the last round, add round rest
+      if (currentPhase !== 'roundRest' && currentRound < timer.rounds) {
+        remaining += timer.roundRest;
+      }
+    }
+    
+    return remaining;
+  };
+
+  const handleMenu = () => {
+    Alert.alert(
+      'Timer Options',
+      '',
+      [
+        {
+          text: 'Delete Timer',
+          onPress: () => {
+            Alert.alert(
+              'Delete Timer',
+              'Are you sure you want to delete this timer?',
+              [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                  text: 'Delete',
+                  style: 'destructive',
+                  onPress: () => {
+                    if (timerId) {
+                      deleteHIITTimer(timerId);
+                      navigation.goBack();
+                    }
+                  },
+                },
+              ]
+            );
+          },
+          style: 'destructive',
+        },
+        {
+          text: 'Duplicate Timer',
+          onPress: () => {
+            if (timer) {
+              const newTimerId = `hiit-${Date.now()}`;
+              const duplicatedTimer = {
+                ...timer,
+                id: newTimerId,
+                name: `${timer.name} 2`,
+                createdAt: new Date().toISOString(),
+              };
+              addHIITTimer(duplicatedTimer);
+              navigation.replace('HIITTimerForm', { timerId: newTimerId });
+            }
+          },
+        },
+        { text: 'Cancel', style: 'cancel' },
+      ],
+      { cancelable: true }
+    );
+  };
+
   const handleToggleSound = () => {
     setSoundEnabled(prev => !prev);
   };
@@ -434,47 +651,236 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
             <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
               <IconArrowLeft size={24} color={LIGHT_COLORS.text} />
             </TouchableOpacity>
-            <View style={{ width: 48 }} />
+            <TouchableOpacity onPress={handleMenu} style={styles.menuButton}>
+              <View style={styles.menuDot} />
+              <View style={styles.menuDot} />
+              <View style={styles.menuDot} />
+            </TouchableOpacity>
           </View>
           
-          <View style={styles.pageTitleContainer}>
+          {/* Page Title and Set/Round Info */}
+          <View style={styles.headerInfoContainer}>
+            <View style={styles.headerInfoLeft}>
             <Text style={styles.pageTitle}>{timer.name}</Text>
+              <Text style={styles.progressInfo}>
+                <Text style={styles.progressLabel}>Set </Text>
+                <Text style={styles.progressValue}>{currentSet}/{timer.sets}</Text>
+                <Text style={styles.progressLabel}>     Round </Text>
+                <Text style={styles.progressValue}>{currentRound}/{timer.rounds}</Text>
+              </Text>
+              </View>
+            
+            {/* Total Time - right aligned */}
+            <View style={styles.totalTimeContainer}>
+              <Text style={styles.totalTimeText}>{formatTime(getRemainingWorkoutTime())}</Text>
+              <Svg height="16" width="16" viewBox="0 0 16 16" style={styles.totalTimeCircle}>
+                {(() => {
+                  const progress = getTotalWorkoutTime() > 0 ? getRemainingWorkoutTime() / getTotalWorkoutTime() : 0;
+                  const isFullCircle = progress >= 0.999;
+                  
+                  return (
+                    <>
+                      {/* Background circle */}
+                      <Circle
+                        cx="8"
+                        cy="8"
+                        r="8"
+                        fill={LIGHT_COLORS.border}
+                      />
+                      {/* Progress pie - starts full and drains */}
+                      {isFullCircle ? (
+                        <Circle
+                          cx="8"
+                          cy="8"
+                          r="8"
+                          fill={LIGHT_COLORS.text}
+                        />
+                      ) : progress > 0 ? (
+                        <Path
+                          d={`M 8 8 L 8 0 A 8 8 0 ${progress > 0.5 ? 1 : 0} 1 ${
+                            8 + 8 * Math.sin(2 * Math.PI * progress)
+                          } ${
+                            8 - 8 * Math.cos(2 * Math.PI * progress)
+                          } Z`}
+                          fill={LIGHT_COLORS.text}
+                        />
+                      ) : null}
+                    </>
+                  );
+                })()}
+              </Svg>
+            </View>
+            </View>
           </View>
-        </View>
 
         <View style={styles.content}>
-          {/* Row with Set, Round, and Phase */}
-          <View style={styles.infoRow}>
-            <View style={styles.leftInfoContainer}>
-              <View style={styles.progressItem}>
-                <Text style={styles.progressLabel}>Set</Text>
-                <Text style={styles.progressValue}>{currentSet}/{timer.sets}</Text>
-              </View>
-              <View style={styles.progressItem}>
-                <Text style={styles.progressLabel}>Round</Text>
-                <Text style={styles.progressValue}>{currentRound}/{timer.rounds}</Text>
-              </View>
-            </View>
-            <View style={styles.phaseContainer}>
-              <Text style={[styles.phaseText, { color: getPhaseColor() }]}>
-                {getPhaseText()}
-              </Text>
-            </View>
-          </View>
 
-          <View style={styles.timerContainer}>
-            <TimerDotCircle 
-              progress={getTimerProgress()} 
-              size={Dimensions.get('window').width - 80} // 40px spacing on each side
-              isWorkPhase={currentPhase === 'work' || currentPhase === 'countdown'}
-              totalSeconds={getTotalSeconds()}
-            />
+          {/* Timer Blocks */}
+          <View style={styles.timerBlocksContainer}>
+            {currentPhase === 'complete' ? (
+              // Complete Phase: Show completion message
+              <View style={[styles.timerBlock, { backgroundColor: '#227132', flex: 1 }]}>
+                <Text style={[styles.currentPhaseTime, { color: '#FFFFFF' }]}>
+                  Complete!
+                </Text>
           </View>
-
-          <View style={styles.counterContainer}>
-            <View style={styles.timeTextContainer}>
-              <Text style={styles.timeText}>{formatTime(secondsRemaining)}</Text>
-            </View>
+            ) : (
+              // Two-block vertical layout: Always render two blocks, animate properties
+              <>
+                {/* Top Block */}
+                <Animated.View 
+                  style={[
+                    styles.timerBlock,
+                    {
+                      backgroundColor: 
+                        currentPhase === 'countdown' 
+                          ? '#FDB022' // Countdown yellow
+                          : currentPhase === 'work'
+                            ? urgencyAnim.interpolate({
+                                inputRange: [0, 1],
+                                outputRange: [LIGHT_COLORS.secondary, COLORS.accentPrimary], // Animate from black to orange
+                              })
+                            : '#CDCABB', // Rest phase (inactive - gray)
+                      flex: (currentPhase === 'countdown' || currentPhase === 'work') 
+                        ? Animated.add(
+                            Animated.multiply(
+                              progressAnim.interpolate({
+                                inputRange: [0.1, 1],
+                                outputRange: [0.25, 0.8],
+                                extrapolate: 'clamp',
+                              }),
+                              phaseTransitionAnim.interpolate({
+                                inputRange: [-1, 0],
+                                outputRange: [0, 1],
+                                extrapolate: 'clamp',
+                              })
+                            ),
+                            phaseTransitionAnim.interpolate({
+                              inputRange: [-1, 0],
+                              outputRange: [1, 0],
+                              extrapolate: 'clamp',
+                            })
+                          )
+                        : progressAnim.interpolate({
+                            inputRange: [0.1, 1],
+                            outputRange: [0.75, 0.25],
+                            extrapolate: 'clamp',
+                          }),
+                      borderBottomLeftRadius: phaseTransitionAnim.interpolate({
+                        inputRange: [-1, 0],
+                        outputRange: [32, 0],
+                        extrapolate: 'clamp',
+                      }),
+                      borderBottomRightRadius: phaseTransitionAnim.interpolate({
+                        inputRange: [-1, 0],
+                        outputRange: [32, 0],
+                        extrapolate: 'clamp',
+                      }),
+                      marginBottom: phaseTransitionAnim.interpolate({
+                        inputRange: [-1, 0, 1],
+                        outputRange: [0, 4, 4],
+                        extrapolate: 'clamp',
+                      }),
+                    },
+                  ]}
+                >
+                  <Animated.Text 
+                    style={[
+                      styles.currentPhaseTime, 
+                      { 
+                        color: (currentPhase === 'countdown' || currentPhase === 'work') 
+                          ? '#FFFFFF' 
+                          : phaseTransitionAnim.interpolate({
+                              inputRange: [0, 1],
+                              outputRange: ['#FFFFFF', '#817B77'],
+                            }),
+                        fontSize: (currentPhase === 'countdown' || currentPhase === 'work') 
+                          ? phaseTransitionAnim.interpolate({
+                              inputRange: [-1, 0, 1],
+                              outputRange: [72, 72, 28],
+                            })
+                          : TYPOGRAPHY.h3.fontSize, // Use h3 for "Move" label
+                        transform: currentPhase === 'countdown' ? [{ scale: countdownFlashAnim }] : [],
+                        opacity: currentPhase === 'countdown' ? countdownOpacityAnim : 1,
+                      }
+                    ]}
+                  >
+                    {currentPhase === 'countdown' 
+                      ? secondsRemaining 
+                      : (currentPhase === 'work' ? formatTime(secondsRemaining) : 'Move')
+                    }
+                  </Animated.Text>
+                </Animated.View>
+                
+                {/* Bottom Block */}
+                <Animated.View 
+                  style={[
+                    styles.timerBlock,
+                    {
+                      backgroundColor: (currentPhase === 'workRest' || currentPhase === 'roundRest') 
+                        ? urgencyAnim.interpolate({
+                            inputRange: [0, 1],
+                            outputRange: ['#FDB022', COLORS.accentPrimary], // Animate from yellow to orange
+                          })
+                        : '#CDCABB', // Inactive rest block
+                      flex: (currentPhase === 'countdown' || currentPhase === 'work')
+                        ? Animated.multiply(
+                            progressAnim.interpolate({
+                              inputRange: [0.1, 1],
+                              outputRange: [0.75, 0.2],
+                              extrapolate: 'clamp',
+                            }),
+                            phaseTransitionAnim.interpolate({
+                              inputRange: [-1, 0],
+                              outputRange: [0, 1],
+                              extrapolate: 'clamp',
+                            })
+                          )
+                        : progressAnim.interpolate({
+                            inputRange: [0.1, 1],
+                            outputRange: [0.25, 0.75],
+                            extrapolate: 'clamp',
+                          }),
+                      maxHeight: phaseTransitionAnim.interpolate({
+                        inputRange: [-1, -0.5, 0],
+                        outputRange: [0, 5000, 10000],
+                        extrapolate: 'clamp',
+                      }),
+                      borderTopLeftRadius: 0,
+                      borderTopRightRadius: 0,
+                      overflow: 'hidden',
+                    },
+                  ]}
+                >
+                  <Animated.Text 
+                    style={[
+                      styles.currentPhaseTime,
+                      {
+                        color: (currentPhase === 'workRest' || currentPhase === 'roundRest') 
+                          ? '#FFFFFF' // White text on yellow/orange background
+                          : LIGHT_COLORS.textMeta,
+                        fontSize: (currentPhase === 'workRest' || currentPhase === 'roundRest')
+                          ? phaseTransitionAnim.interpolate({
+                              inputRange: [0, 1],
+                              outputRange: [28, 72],
+                            })
+                          : TYPOGRAPHY.h3.fontSize, // Use h3 for "Rest" label
+                        opacity: phaseTransitionAnim.interpolate({
+                          inputRange: [-1, -0.7, 0],
+                          outputRange: [0, 0, 1],
+                          extrapolate: 'clamp',
+                        }),
+                      }
+                    ]}
+                  >
+                    {(currentPhase === 'workRest' || currentPhase === 'roundRest') 
+                      ? formatTime(secondsRemaining) 
+                      : 'Rest'
+                    }
+                  </Animated.Text>
+                </Animated.View>
+              </>
+            )}
           </View>
 
           <View style={styles.stickyButtonContainer}>
@@ -508,35 +914,17 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
               </TouchableOpacity>
             </Animated.View>
 
-            {/* Center button: Play/Pause */}
+            {/* Play/Pause Button */}
             <TouchableOpacity
               onPress={handlePlayPause}
+              style={[BUTTONS.primaryButtonNoLabel, styles.playPauseButton]}
               activeOpacity={0.8}
             >
-              <Animated.View
-                style={[
-                  styles.controlButton,
-                  {
-                    borderRadius: 12,
-                    width: buttonShapeAnim.interpolate({
-                      inputRange: [0, 1],
-                      outputRange: [Dimensions.get('window').width - (SPACING.xxl * 2), 56], // Full width to square (56x56)
-                    }),
-                    height: 56, // Fixed height (square when compact)
-                  },
-                ]}
-              >
-                {!hasStarted ? (
-                  // Initial state: "Start" text
-                  <Text style={styles.buttonText}>Start</Text>
-                ) : isRunning ? (
-                  // Running state: Pause icon
-                  <IconPause size={24} color="#FFFFFF" />
-                ) : (
-                  // Paused state: Play icon
-                  <IconPlay size={24} color="#FFFFFF" />
-                )}
-              </Animated.View>
+              {isRunning ? (
+                <IconPause size={32} color={'#FFFFFF'} />
+              ) : (
+                <IconPlay size={32} color={'#FFFFFF'} />
+              )}
             </TouchableOpacity>
 
             {/* Right button: Skip */}
@@ -597,77 +985,92 @@ const styles = StyleSheet.create({
     height: 48,
     justifyContent: 'center',
     alignItems: 'flex-start',
+    marginLeft: -4,
   },
-  pageTitleContainer: {
-    paddingHorizontal: SPACING.xxl,
-    paddingTop: SPACING.md,
+  menuButton: {
+    width: 48,
+    height: 48,
+    justifyContent: 'center',
+    alignItems: 'flex-end',
+    marginRight: -4,
+    gap: 4,
   },
-  pageTitle: {
-    ...TYPOGRAPHY.h2,
-    color: LIGHT_COLORS.textPrimary,
+  menuDot: {
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: LIGHT_COLORS.secondary,
   },
   content: {
     flex: 1,
-    alignItems: 'center',
-    justifyContent: 'space-evenly',
-    paddingTop: SPACING.xxl,
-    paddingBottom: 136, // Button height (56) + button bottom spacing (40) + 40px gap
-    paddingHorizontal: 40, // Minimum 40px spacing from edges
+    paddingHorizontal: SPACING.xxl,
+    justifyContent: 'flex-start',
+    paddingBottom: 176, // Space for button (80px height + 48px from bottom + 48px gap)
   },
-  infoRow: {
+  headerInfoContainer: {
+    paddingHorizontal: SPACING.xxl,
+    paddingTop: SPACING.md, // Matches other leaf pages
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    width: '100%',
+    alignItems: 'flex-end', // Align to baseline
   },
-  leftInfoContainer: {
-    flexDirection: 'row',
-    gap: 40,
-    alignItems: 'flex-start',
+  headerInfoLeft: {
+    flexDirection: 'column',
+    gap: 8, // Space between title and set/round info
+    flex: 1, // Take remaining space
   },
-  progressItem: {
-    alignItems: 'flex-start',
-  },
-  progressLabel: {
-    ...TYPOGRAPHY.meta,
-    color: LIGHT_COLORS.textMeta,
-    marginBottom: SPACING.xs,
-  },
-  progressValue: {
-    ...TYPOGRAPHY.h3,
+  pageTitle: {
+    ...TYPOGRAPHY.h2,
     color: LIGHT_COLORS.text,
   },
-  phaseContainer: {
-    alignItems: 'flex-end',
+  progressInfo: {
+    ...TYPOGRAPHY.body,
+    color: LIGHT_COLORS.textMeta,
   },
-  timerContainer: {
+  progressLabel: {
+    color: LIGHT_COLORS.textMeta,
+  },
+  progressValue: {
+    color: LIGHT_COLORS.text,
+  },
+  totalTimeContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8, // Space between time text and circle
+  },
+  totalTimeText: {
+    ...TYPOGRAPHY.body, // Matches set/round indicator style
+    color: LIGHT_COLORS.text,
+  },
+  totalTimeCircle: {
+    width: 16,
+    height: 16,
+  },
+  timerBlocksContainer: {
     width: '100%',
-    aspectRatio: 1,
+    flex: 1, // Take remaining space
+    marginTop: 48, // 48px gap between set/round info and blocks
+  },
+  timerBlock: {
     alignItems: 'center',
     justifyContent: 'center',
+    borderRadius: 32,
+    borderCurve: 'continuous',
   },
-  counterContainer: {
-    alignItems: 'center',
-  },
-  phaseText: {
-    ...TYPOGRAPHY.meta,
-    fontWeight: '600',
-  },
-  timeTextContainer: {
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  timeText: {
-    fontSize: 56,
-    color: LIGHT_COLORS.textPrimary,
+  currentPhaseTime: {
+    fontSize: 72,
     fontWeight: '300',
-    fontFamily: 'System',
-    includeFontPadding: false,
+    textAlign: 'center',
+  },
+  nextPhaseTime: {
+    fontSize: 28,
+    fontWeight: '300',
+    color: LIGHT_COLORS.textMeta,
     textAlign: 'center',
   },
   stickyButtonContainer: {
     position: 'absolute',
-    bottom: 0,
+    bottom: 48, // 48px from bottom of block
     left: 0,
     right: 0,
     flexDirection: 'row',
@@ -675,19 +1078,17 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 20, // Space between buttons
     paddingHorizontal: SPACING.xxl,
-    paddingBottom: 40, // 40px spacing below button
-    paddingTop: SPACING.md,
-    backgroundColor: 'transparent',
   },
-  controlButton: {
-    backgroundColor: '#FD6B00',
-    alignItems: 'center',
-    justifyContent: 'center',
-    // width and height are animated
+  playPauseButton: {
+    backgroundColor: LIGHT_COLORS.secondary,
   },
   sideButton: {
-    width: 56,
-    height: 56,
+    width: 48,
+    height: 48,
+    borderRadius: 12,
+    backgroundColor: LIGHT_COLORS.backgroundCanvas,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   sideButtonTouchable: {
     width: '100%',
@@ -695,16 +1096,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  buttonText: {
-    fontSize: 17,
-    fontWeight: '600',
-    color: '#FFFFFF',
-  },
   errorText: {
     ...TYPOGRAPHY.body,
-    color: LIGHT_COLORS.textPrimary,
+    color: LIGHT_COLORS.secondary,
     textAlign: 'center',
     marginTop: SPACING.xxl,
   },
 });
+
 

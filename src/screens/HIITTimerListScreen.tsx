@@ -21,7 +21,7 @@ type Props = NativeStackScreenProps<RootStackParamList, 'HIITTimerList'>;
 const LIGHT_COLORS = {
   backgroundCanvas: '#E3E6E0',
   text: '#1B1B1B',
-  textPrimary: '#000000',
+  secondary: '#1B1B1B',
   textSecondary: '#3C3C43',
   textMeta: '#817B77',
 };
@@ -73,6 +73,19 @@ export default function HIITTimerListScreen({ navigation }: Props) {
     return secs > 0 ? `${mins}m ${secs}s` : `${mins}m`;
   };
 
+  const calculateTotalTime = (timer: HIITTimer) => {
+    // Time per set: work + workRest
+    const timePerSet = timer.work + timer.workRest;
+    // Time per round: timePerSet * sets
+    const timePerRound = timePerSet * timer.sets;
+    // Total time: timePerRound * rounds + roundRest between rounds
+    const totalTime = timePerRound * timer.rounds + timer.roundRest * (timer.rounds - 1);
+    
+    const mins = Math.floor(totalTime / 60);
+    const secs = totalTime % 60;
+    return secs > 0 ? `${mins}:${secs.toString().padStart(2, '0')}min` : `${mins}:00min`;
+  };
+
   return (
     <LinearGradient
       colors={GRADIENTS.backgroundLight.colors}
@@ -91,7 +104,7 @@ export default function HIITTimerListScreen({ navigation }: Props) {
           </View>
           
           <View style={styles.pageTitleContainer}>
-            <Text style={styles.pageTitle}>Timer</Text>
+            <Text style={styles.pageTitle}>Saved timers</Text>
           </View>
         </View>
 
@@ -103,36 +116,42 @@ export default function HIITTimerListScreen({ navigation }: Props) {
             <TouchableOpacity
               key={timer.id}
               onPress={() => handleSelectTemplate(timer)}
-              activeOpacity={0.7}
+              onLongPress={() => {
+                Alert.alert(
+                  timer.name,
+                  'What would you like to do?',
+                  [
+                    { text: 'Cancel', style: 'cancel' },
+                    {
+                      text: 'Edit',
+                      onPress: () => handleEditTemplate(timer),
+                    },
+                    {
+                      text: 'Delete',
+                      style: 'destructive',
+                      onPress: () => handleDeleteTemplate(timer),
+                    },
+                  ]
+                );
+              }}
+              activeOpacity={0.95}
             >
               <View style={[CARDS.cardDeep.blackShadow, styles.timerCardBlackShadow]}>
-                <View style={[CARDS.cardDeep.whiteShadow, styles.timerCardWhiteShadow]}>
-                  <View style={[CARDS.cardDeep.outer, styles.timerCard]}>
+                <View style={CARDS.cardDeep.whiteShadow}>
+                  <View style={CARDS.cardDeep.outer}>
                     <View style={[CARDS.cardDeep.inner, styles.timerCardInner]}>
                       <Text style={styles.timerName}>{timer.name}</Text>
-                      <View style={styles.timerDetails}>
-                        <Text style={styles.timerDetailText}>
-                          Work: {formatTime(timer.work)}
-                        </Text>
-                        <Text style={styles.timerDetailText}>
-                          Rest: {formatTime(timer.workRest)}
-                        </Text>
-                        <Text style={styles.timerDetailText}>
-                          {timer.sets} sets × {timer.rounds} rounds
-                        </Text>
-                      </View>
-                      <View style={styles.timerActions}>
+                      
+                      {/* Bottom row with time and start button */}
+                      <View style={styles.timerBottom}>
+                        <Text style={styles.totalTime}>{calculateTotalTime(timer)}</Text>
                         <TouchableOpacity
-                          onPress={() => handleEditTemplate(timer)}
-                          style={styles.timerActionButton}
+                          onPress={() => handleSelectTemplate(timer)}
+                          style={styles.startButton}
+                          activeOpacity={0.7}
                         >
-                          <Text style={styles.timerActionText}>Edit</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                          onPress={() => handleDeleteTemplate(timer)}
-                          style={styles.timerActionButton}
-                        >
-                          <Text style={[styles.timerActionText, styles.deleteText]}>Delete</Text>
+                          <Text style={styles.startButtonText}>Start</Text>
+                          <View style={styles.playIcon} />
                         </TouchableOpacity>
                       </View>
                     </View>
@@ -180,6 +199,7 @@ const styles = StyleSheet.create({
     height: 48,
     justifyContent: 'center',
     alignItems: 'flex-start',
+    marginLeft: -4,
   },
   pageTitleContainer: {
     paddingHorizontal: SPACING.xxl,
@@ -187,7 +207,7 @@ const styles = StyleSheet.create({
   },
   pageTitle: {
     ...TYPOGRAPHY.h2,
-    color: LIGHT_COLORS.textPrimary,
+    color: LIGHT_COLORS.secondary,
   },
   scrollView: {
     flex: 1,
@@ -218,44 +238,45 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
   },
   timerCardBlackShadow: {
-    marginBottom: SPACING.md,
-  },
-  timerCardWhiteShadow: {
-    // Shadow layer
-  },
-  timerCard: {
-    // Outer card
+    marginBottom: SPACING.lg,
   },
   timerCardInner: {
-    padding: SPACING.lg,
+    paddingHorizontal: 23,
+    paddingTop: 15,
+    paddingBottom: 19,
   },
   timerName: {
-    ...TYPOGRAPHY.h3,
-    color: LIGHT_COLORS.textPrimary,
-    marginBottom: SPACING.sm,
-  },
-  timerDetails: {
+    ...TYPOGRAPHY.h2,
+    color: LIGHT_COLORS.secondary,
     marginBottom: SPACING.md,
   },
-  timerDetailText: {
-    ...TYPOGRAPHY.body,
-    color: LIGHT_COLORS.textSecondary,
-    marginBottom: SPACING.xs,
-  },
-  timerActions: {
+  timerBottom: {
     flexDirection: 'row',
-    gap: SPACING.md,
+    justifyContent: 'space-between',
+    alignItems: 'center',
   },
-  timerActionButton: {
-    paddingVertical: SPACING.xs,
-    paddingHorizontal: SPACING.md,
-  },
-  timerActionText: {
+  totalTime: {
     ...TYPOGRAPHY.meta,
-    color: LIGHT_COLORS.textSecondary,
+    color: LIGHT_COLORS.textMeta,
   },
-  deleteText: {
-    color: '#FF3B30',
+  startButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  startButtonText: {
+    ...TYPOGRAPHY.metaBold,
+    color: LIGHT_COLORS.secondary,
+  },
+  playIcon: {
+    width: 0,
+    height: 0,
+    borderLeftWidth: 12,
+    borderTopWidth: 8,
+    borderBottomWidth: 8,
+    borderLeftColor: '#FD6B00',
+    borderTopColor: 'transparent',
+    borderBottomColor: 'transparent',
   },
 });
 

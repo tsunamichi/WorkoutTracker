@@ -25,7 +25,7 @@ const DAYS_SHORT = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
 const LIGHT_COLORS = {
   backgroundCanvas: '#E3E6E0',
   backgroundContainer: '#CDCABB',
-  textPrimary: '#000000',
+  secondary: '#1B1B1B',
   textSecondary: '#3C3C43',
   textMeta: '#817B77',
   border: '#C7C7CC',
@@ -849,7 +849,7 @@ const styles = StyleSheet.create({
   },
   emptyTitle: {
     ...TYPOGRAPHY.h2,
-    color: LIGHT_COLORS.textPrimary,
+    color: LIGHT_COLORS.secondary,
     marginBottom: SPACING.sm,
   },
   emptyText: {
@@ -882,7 +882,7 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     ...TYPOGRAPHY.h2,
-    color: LIGHT_COLORS.textPrimary,
+    color: LIGHT_COLORS.secondary,
   },
   headerRight: {
     flexDirection: 'row',
@@ -991,7 +991,7 @@ const styles = StyleSheet.create({
   },
   dayNumber: {
     ...TYPOGRAPHY.metaBold,
-    color: LIGHT_COLORS.textPrimary,
+    color: LIGHT_COLORS.secondary,
   },
   dayNumberToday: {
     ...TYPOGRAPHY.metaBold,
@@ -1057,7 +1057,7 @@ const styles = StyleSheet.create({
   },
   workoutName: {
     ...TYPOGRAPHY.h2,
-    color: LIGHT_COLORS.textPrimary,
+    color: LIGHT_COLORS.secondary,
   },
   completionPercentage: {
     ...TYPOGRAPHY.h3,
@@ -1172,7 +1172,7 @@ const styles = StyleSheet.create({
   },
   restDayText: {
     ...TYPOGRAPHY.h2,
-    color: LIGHT_COLORS.textPrimary,
+    color: LIGHT_COLORS.secondary,
     marginBottom: 4,
   },
   restDaySubtext: {
@@ -1271,7 +1271,7 @@ const styles = StyleSheet.create({
   },
   swapSheetTitle: {
     ...TYPOGRAPHY.h2,
-    color: LIGHT_COLORS.textPrimary,
+    color: LIGHT_COLORS.secondary,
     marginBottom: SPACING.xl,
   },
   swapSheetList: {
@@ -1299,7 +1299,7 @@ const styles = StyleSheet.create({
   },
   swapSheetItemTitle: {
     ...TYPOGRAPHY.h3,
-    color: LIGHT_COLORS.textPrimary,
+    color: LIGHT_COLORS.secondary,
     marginBottom: SPACING.xs,
   },
   swapSheetItemSubtitle: {

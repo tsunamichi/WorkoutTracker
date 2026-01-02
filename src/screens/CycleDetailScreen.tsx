@@ -24,7 +24,7 @@ interface CycleDetailScreenProps {
 const LIGHT_COLORS = {
   backgroundCanvas: '#E3E6E0',
   backgroundContainer: '#CDCABB',
-  textPrimary: '#000000',
+  secondary: '#1B1B1B',
   textSecondary: '#3C3C43',
   textMeta: '#817B77',
   border: '#C7C7CC',
@@ -169,7 +169,7 @@ export function CycleDetailScreen({ route, navigation }: CycleDetailScreenProps)
             
             <TouchableOpacity onPress={handleExportData} style={styles.exportButton}>
               <Text style={styles.exportButtonText}>Export Data</Text>
-              <IconShare size={16} color={LIGHT_COLORS.textPrimary} />
+              <IconShare size={16} color={LIGHT_COLORS.secondary} />
             </TouchableOpacity>
           </View>
           
@@ -438,6 +438,7 @@ const styles = StyleSheet.create({
     height: 48,
     justifyContent: 'center',
     alignItems: 'flex-start',
+    marginLeft: -4,
   },
   exportButton: {
     flexDirection: 'row',
@@ -446,7 +447,7 @@ const styles = StyleSheet.create({
   },
   exportButtonText: {
     ...TYPOGRAPHY.bodySmall,
-    color: LIGHT_COLORS.textPrimary,
+    color: LIGHT_COLORS.secondary,
     fontWeight: '600',
   },
   pageTitleContainer: {
@@ -455,7 +456,7 @@ const styles = StyleSheet.create({
   },
   pageTitle: {
     ...TYPOGRAPHY.h2,
-    color: LIGHT_COLORS.textPrimary,
+    color: LIGHT_COLORS.secondary,
   },
   content: {
     flex: 1,
@@ -478,7 +479,7 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     ...TYPOGRAPHY.bodyBold,
-    color: LIGHT_COLORS.textPrimary,
+    color: LIGHT_COLORS.secondary,
     marginBottom: SPACING.xs,
   },
   emptySubtext: {
@@ -542,7 +543,7 @@ const styles = StyleSheet.create({
   },
   weekLabel: {
     ...TYPOGRAPHY.meta,
-    color: LIGHT_COLORS.textPrimary,
+    color: LIGHT_COLORS.secondary,
   },
   weekDate: {
     ...TYPOGRAPHY.meta,
@@ -622,7 +623,7 @@ const styles = StyleSheet.create({
   },
   workoutName: {
     ...TYPOGRAPHY.h3,
-    color: LIGHT_COLORS.textPrimary,
+    color: LIGHT_COLORS.secondary,
   },
   workoutTriangle: {
     width: 0,
@@ -716,7 +717,7 @@ const styles = StyleSheet.create({
   sheetTitle: {
     fontSize: 28,
     fontWeight: '600',
-    color: LIGHT_COLORS.textPrimary,
+    color: LIGHT_COLORS.secondary,
     marginBottom: SPACING.xs,
   },
   sheetSubtitle: {
@@ -747,7 +748,7 @@ const styles = StyleSheet.create({
   exerciseName: {
     fontSize: 17,
     fontWeight: '600',
-    color: LIGHT_COLORS.textPrimary,
+    color: LIGHT_COLORS.secondary,
     marginBottom: 2,
   },
   exerciseDetails: {

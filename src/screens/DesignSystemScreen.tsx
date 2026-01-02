@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-nati
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Path } from 'react-native-svg';
-import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS, GRADIENTS } from '../constants';
+import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS, GRADIENTS, BUTTONS } from '../constants';
 import { 
   IconAdd, IconCheck, IconPlay, IconPause, IconEdit, IconTrash, 
   IconCalendar, IconWorkouts, IconUser, IconArrowLeft 
@@ -16,7 +16,7 @@ interface DesignSystemScreenProps {
 const LIGHT_COLORS = {
   backgroundCanvas: COLORS.backgroundCanvas,
   backgroundContainer: COLORS.backgroundContainer,
-  textPrimary: '#000000',
+  secondary: '#1B1B1B',
   textSecondary: '#3C3C43',
   textMeta: COLORS.textMeta,
   border: COLORS.border,
@@ -213,6 +213,19 @@ export function DesignSystemScreen({ navigation }: DesignSystemScreenProps) {
                 </LinearGradient>
               </TouchableOpacity>
               
+              {/* Primary Button No Label */}
+              <View style={styles.buttonRowWithLabel}>
+                <TouchableOpacity style={BUTTONS.primaryButtonNoLabel} activeOpacity={0.8}>
+                  <IconPlay size={24} color="#FFFFFF" />
+                </TouchableOpacity>
+                <View style={styles.buttonInfo}>
+                  <Text style={styles.buttonInfoLabel}>Primary Button No Label</Text>
+                  <Text style={styles.buttonInfoMeta}>
+                    {BUTTONS.primaryButtonNoLabel.width}×{BUTTONS.primaryButtonNoLabel.height}px / {BUTTONS.primaryButtonNoLabel.borderRadius}px radius
+                  </Text>
+                </View>
+              </View>
+              
               {/* Secondary Button - No Icon */}
               <TouchableOpacity style={styles.buttonSecondary} activeOpacity={0.8}>
                 <Text style={styles.buttonSecondaryText}>Secondary Button</Text>
@@ -220,14 +233,14 @@ export function DesignSystemScreen({ navigation }: DesignSystemScreenProps) {
               
               {/* Secondary Button - Icon Left */}
               <TouchableOpacity style={styles.buttonSecondary} activeOpacity={0.8}>
-                <IconEdit size={16} color={LIGHT_COLORS.textPrimary} />
+                <IconEdit size={16} color={LIGHT_COLORS.secondary} />
                 <Text style={styles.buttonSecondaryText}>With Icon Left</Text>
               </TouchableOpacity>
               
               {/* Secondary Button - Icon Right */}
               <TouchableOpacity style={styles.buttonSecondary} activeOpacity={0.8}>
                 <Text style={styles.buttonSecondaryText}>With Icon Right</Text>
-                <IconArrowLeft size={16} color={LIGHT_COLORS.textPrimary} />
+                <IconArrowLeft size={16} color={LIGHT_COLORS.secondary} />
               </TouchableOpacity>
               
               {/* Text Button - No Icon */}
@@ -253,43 +266,43 @@ export function DesignSystemScreen({ navigation }: DesignSystemScreenProps) {
               <Text style={styles.componentGroupTitle}>Icons</Text>
               <View style={styles.iconGrid}>
                 <View style={styles.iconItem}>
-                  <IconAdd size={24} color={LIGHT_COLORS.textPrimary} />
+                  <IconAdd size={24} color={LIGHT_COLORS.secondary} />
                   <Text style={styles.iconLabel}>Add</Text>
                 </View>
                 <View style={styles.iconItem}>
-                  <IconCheck size={24} color={LIGHT_COLORS.textPrimary} />
+                  <IconCheck size={24} color={LIGHT_COLORS.secondary} />
                   <Text style={styles.iconLabel}>Check</Text>
                 </View>
                 <View style={styles.iconItem}>
-                  <IconPlay size={24} color={LIGHT_COLORS.textPrimary} />
+                  <IconPlay size={24} color={LIGHT_COLORS.secondary} />
                   <Text style={styles.iconLabel}>Play</Text>
                 </View>
                 <View style={styles.iconItem}>
-                  <IconPause size={24} color={LIGHT_COLORS.textPrimary} />
+                  <IconPause size={24} color={LIGHT_COLORS.secondary} />
                   <Text style={styles.iconLabel}>Pause</Text>
                 </View>
                 <View style={styles.iconItem}>
-                  <IconEdit size={24} color={LIGHT_COLORS.textPrimary} />
+                  <IconEdit size={24} color={LIGHT_COLORS.secondary} />
                   <Text style={styles.iconLabel}>Edit</Text>
                 </View>
                 <View style={styles.iconItem}>
-                  <IconTrash size={24} color={LIGHT_COLORS.textPrimary} />
+                  <IconTrash size={24} color={LIGHT_COLORS.secondary} />
                   <Text style={styles.iconLabel}>Trash</Text>
                 </View>
                 <View style={styles.iconItem}>
-                  <IconCalendar size={24} color={LIGHT_COLORS.textPrimary} />
+                  <IconCalendar size={24} color={LIGHT_COLORS.secondary} />
                   <Text style={styles.iconLabel}>Calendar</Text>
                 </View>
                 <View style={styles.iconItem}>
-                  <IconWorkouts size={24} color={LIGHT_COLORS.textPrimary} />
+                  <IconWorkouts size={24} color={LIGHT_COLORS.secondary} />
                   <Text style={styles.iconLabel}>Workouts</Text>
                 </View>
                 <View style={styles.iconItem}>
-                  <IconUser size={24} color={LIGHT_COLORS.textPrimary} />
+                  <IconUser size={24} color={LIGHT_COLORS.secondary} />
                   <Text style={styles.iconLabel}>User</Text>
                 </View>
                 <View style={styles.iconItem}>
-                  <IconArrowLeft size={24} color={LIGHT_COLORS.textPrimary} />
+                  <IconArrowLeft size={24} color={LIGHT_COLORS.secondary} />
                   <Text style={styles.iconLabel}>Arrow</Text>
                 </View>
               </View>
@@ -349,10 +362,11 @@ const styles = StyleSheet.create({
     height: 24,
     justifyContent: 'center',
     alignItems: 'center',
+    marginLeft: -4,
   },
   headerTitle: {
     ...TYPOGRAPHY.h2,
-    color: LIGHT_COLORS.textPrimary,
+    color: LIGHT_COLORS.secondary,
   },
   scrollView: {
     flex: 1,
@@ -363,7 +377,7 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     ...TYPOGRAPHY.h3,
-    color: LIGHT_COLORS.textPrimary,
+    color: LIGHT_COLORS.secondary,
     marginBottom: SPACING.lg,
   },
   
@@ -407,7 +421,7 @@ const styles = StyleSheet.create({
   },
   colorName: {
     ...TYPOGRAPHY.body,
-    color: LIGHT_COLORS.textPrimary,
+    color: LIGHT_COLORS.secondary,
     marginBottom: 2,
   },
   colorValue: {
@@ -426,7 +440,7 @@ const styles = StyleSheet.create({
   },
   spacingName: {
     ...TYPOGRAPHY.body,
-    color: LIGHT_COLORS.textPrimary,
+    color: LIGHT_COLORS.secondary,
   },
   spacingValue: {
     ...TYPOGRAPHY.body,
@@ -447,7 +461,7 @@ const styles = StyleSheet.create({
     paddingVertical: SPACING.md,
   },
   typographyLabel: {
-    color: LIGHT_COLORS.textPrimary,
+    color: LIGHT_COLORS.secondary,
     marginBottom: SPACING.xs,
   },
   typographyMeta: {
@@ -485,7 +499,7 @@ const styles = StyleSheet.create({
   },
   radiusName: {
     ...TYPOGRAPHY.body,
-    color: LIGHT_COLORS.textPrimary,
+    color: LIGHT_COLORS.secondary,
     marginBottom: 2,
   },
   radiusValue: {
@@ -500,7 +514,7 @@ const styles = StyleSheet.create({
   componentGroupTitle: {
     ...TYPOGRAPHY.body,
     fontWeight: '600',
-    color: LIGHT_COLORS.textPrimary,
+    color: LIGHT_COLORS.secondary,
     marginBottom: SPACING.md,
   },
 
@@ -532,6 +546,25 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#FFFFFF',
   },
+  buttonRowWithLabel: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.lg,
+    marginBottom: SPACING.md,
+  },
+  buttonInfo: {
+    flex: 1,
+  },
+  buttonInfoLabel: {
+    ...TYPOGRAPHY.body,
+    fontWeight: '600',
+    color: LIGHT_COLORS.secondary,
+    marginBottom: SPACING.xs,
+  },
+  buttonInfoMeta: {
+    ...TYPOGRAPHY.meta,
+    color: LIGHT_COLORS.textMeta,
+  },
   buttonSecondary: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -548,7 +581,7 @@ const styles = StyleSheet.create({
   buttonSecondaryText: {
     ...TYPOGRAPHY.body,
     fontWeight: '600',
-    color: LIGHT_COLORS.textPrimary,
+    color: LIGHT_COLORS.secondary,
   },
   triangleIcon: {
     width: 12,
@@ -633,7 +666,7 @@ const styles = StyleSheet.create({
   cardTitle: {
     ...TYPOGRAPHY.body,
     fontWeight: '600',
-    color: LIGHT_COLORS.textPrimary,
+    color: LIGHT_COLORS.secondary,
     marginBottom: SPACING.xs,
   },
   cardDescription: {

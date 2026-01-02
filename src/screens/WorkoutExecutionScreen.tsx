@@ -922,7 +922,7 @@ export function WorkoutExecutionScreen({ route, navigation }: WorkoutExecutionSc
 const LIGHT_COLORS = {
   backgroundCanvas: '#E3E6E0',
   backgroundContainer: '#CDCABB',
-  textPrimary: '#000000',
+  secondary: '#1B1B1B',
   textSecondary: '#3C3C43',
   textMeta: '#817B77',
   border: '#C7C7CC',
@@ -964,16 +964,18 @@ const styles = StyleSheet.create({
     height: 48,
     justifyContent: 'center',
     alignItems: 'flex-start',
+    marginLeft: -4,
   },
   menuButton: {
     width: 48,
     height: 48,
     justifyContent: 'center',
     alignItems: 'flex-end',
+    marginRight: -4,
   },
   headerTitle: {
     ...TYPOGRAPHY.h2,
-    color: LIGHT_COLORS.textPrimary,
+    color: LIGHT_COLORS.secondary,
     marginLeft: 0,
   },
   completionText: {
@@ -1060,7 +1062,7 @@ const styles = StyleSheet.create({
   },
   exerciseName: {
     ...TYPOGRAPHY.h3,
-    color: LIGHT_COLORS.textPrimary,
+    color: LIGHT_COLORS.secondary,
   },
   exerciseNameDisabled: {
     opacity: 0.4,
@@ -1251,7 +1253,7 @@ const styles = StyleSheet.create({
   menuItemText: {
     fontSize: 17,
     fontWeight: '400',
-    color: LIGHT_COLORS.textPrimary,
+    color: LIGHT_COLORS.secondary,
   },
   menuItemTextDestructive: {
     color: '#FF3B30',

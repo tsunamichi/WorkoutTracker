@@ -15,7 +15,7 @@ interface ProfileScreenProps {
 type TabType = 'progress' | 'settings';
 
 const LIGHT_COLORS = {
-  textPrimary: '#000000',
+  secondary: '#1B1B1B',
   textMeta: '#817B77',
 };
 
@@ -427,6 +427,7 @@ const styles = StyleSheet.create({
     height: 48,
     justifyContent: 'center',
     alignItems: 'flex-start',
+    marginLeft: -4,
   },
   header: {
     paddingBottom: SPACING.md,
@@ -440,7 +441,7 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     ...TYPOGRAPHY.h2,
-    color: LIGHT_COLORS.textPrimary,
+    color: LIGHT_COLORS.secondary,
     marginLeft: 0,
   },
   segmentedControl: {
@@ -458,11 +459,11 @@ const styles = StyleSheet.create({
     borderRadius: BORDER_RADIUS.sm,
   },
   segmentActive: {
-    backgroundColor: LIGHT_COLORS.textPrimary,
+    backgroundColor: LIGHT_COLORS.secondary,
   },
   segmentText: {
     ...TYPOGRAPHY.bodyBold,
-    color: LIGHT_COLORS.textPrimary,
+    color: LIGHT_COLORS.secondary,
   },
   segmentTextActive: {
     color: COLORS.backgroundCanvas,
@@ -486,7 +487,7 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     ...TYPOGRAPHY.h3,
-    color: LIGHT_COLORS.textPrimary,
+    color: LIGHT_COLORS.secondary,
     marginBottom: SPACING.md,
   },
   statsGrid: {
@@ -520,12 +521,12 @@ const styles = StyleSheet.create({
   },
   statValue: {
     ...TYPOGRAPHY.h1,
-    color: LIGHT_COLORS.textPrimary,
+    color: LIGHT_COLORS.secondary,
     marginBottom: SPACING.xs,
   },
   statLabel: {
     ...TYPOGRAPHY.body,
-    color: LIGHT_COLORS.textPrimary,
+    color: LIGHT_COLORS.secondary,
     textAlign: 'center',
   },
   emptyState: {
@@ -553,7 +554,7 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     ...TYPOGRAPHY.body,
-    color: LIGHT_COLORS.textPrimary,
+    color: LIGHT_COLORS.secondary,
   },
   weightList: {
   },
@@ -585,11 +586,11 @@ const styles = StyleSheet.create({
   },
   weightDate: {
     ...TYPOGRAPHY.body,
-    color: LIGHT_COLORS.textPrimary,
+    color: LIGHT_COLORS.secondary,
   },
   weightValue: {
     ...TYPOGRAPHY.bodyBold,
-    color: LIGHT_COLORS.textPrimary,
+    color: LIGHT_COLORS.secondary,
   },
   settingRow: {
     backgroundColor: '#E3E3DE',
@@ -623,19 +624,19 @@ const styles = StyleSheet.create({
   },
   settingLabel: {
     ...TYPOGRAPHY.bodyBold,
-    color: LIGHT_COLORS.textPrimary,
+    color: LIGHT_COLORS.secondary,
     marginBottom: 4,
   },
   settingDescription: {
     ...TYPOGRAPHY.meta,
-    color: LIGHT_COLORS.textPrimary,
+    color: LIGHT_COLORS.secondary,
   },
   settingChevron: {
     marginLeft: SPACING.sm,
   },
   chevronText: {
     fontSize: 24,
-    color: LIGHT_COLORS.textPrimary,
+    color: LIGHT_COLORS.secondary,
     fontWeight: '300',
   },
   settingsList: {
@@ -667,15 +668,15 @@ const styles = StyleSheet.create({
   },
   restTimeOptionText: {
     ...TYPOGRAPHY.bodyBold,
-    color: LIGHT_COLORS.textPrimary,
+    color: LIGHT_COLORS.secondary,
   },
   restTimeOptionTextSelected: {
-    color: LIGHT_COLORS.textPrimary,
+    color: LIGHT_COLORS.secondary,
   },
   restTimeCheckmark: {
     fontSize: 20,
     fontWeight: '600',
-    color: LIGHT_COLORS.textPrimary,
+    color: LIGHT_COLORS.secondary,
   },
   modalOverlay: {
     flex: 1,
@@ -693,7 +694,7 @@ const styles = StyleSheet.create({
   },
   modalTitle: {
     ...TYPOGRAPHY.h2,
-    color: LIGHT_COLORS.textPrimary,
+    color: LIGHT_COLORS.secondary,
     marginBottom: SPACING.lg,
     textAlign: 'center',
   },
@@ -702,7 +703,7 @@ const styles = StyleSheet.create({
     borderRadius: BORDER_RADIUS.md,
     padding: SPACING.lg,
     ...TYPOGRAPHY.body,
-    color: LIGHT_COLORS.textPrimary,
+    color: LIGHT_COLORS.secondary,
     marginBottom: SPACING.lg,
   },
   modalActions: {
@@ -728,14 +729,14 @@ const styles = StyleSheet.create({
   },
   modalButtonPrimaryText: {
     ...TYPOGRAPHY.button,
-    color: LIGHT_COLORS.textPrimary,
+    color: LIGHT_COLORS.secondary,
   },
   modalButtonSecondary: {
     backgroundColor: COLORS.backgroundCanvas,
   },
   modalButtonSecondaryText: {
     ...TYPOGRAPHY.button,
-    color: LIGHT_COLORS.textPrimary,
+    color: LIGHT_COLORS.secondary,
   },
   // Dual shadow styles
   cardBlackShadow: {

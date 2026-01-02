@@ -30,7 +30,7 @@ interface CreateCycleReviewProps {
 const LIGHT_COLORS = {
   backgroundCanvas: '#E3E6E0',
   backgroundContainer: '#FFFFFF',
-  textPrimary: '#000000',
+  secondary: '#1B1B1B',
   textSecondary: '#3C3C43',
   textMeta: '#817B77',
   accent: '#FD6B00',
@@ -334,10 +334,11 @@ const styles = StyleSheet.create({
     height: 40,
     justifyContent: 'center',
     marginBottom: SPACING.md,
+    marginLeft: -4,
   },
   backText: {
     fontSize: 28,
-    color: LIGHT_COLORS.textPrimary,
+    color: LIGHT_COLORS.secondary,
   },
   headerTitleContainer: {
     gap: 4,
@@ -349,7 +350,7 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     ...TYPOGRAPHY.h2,
-    color: LIGHT_COLORS.textPrimary,
+    color: LIGHT_COLORS.secondary,
   },
   content: {
     flex: 1,
@@ -364,7 +365,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 20,
     fontWeight: '600',
-    color: LIGHT_COLORS.textPrimary,
+    color: LIGHT_COLORS.secondary,
     marginBottom: SPACING.lg,
   },
   summaryCard: {
@@ -376,7 +377,7 @@ const styles = StyleSheet.create({
   summaryTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: LIGHT_COLORS.textPrimary,
+    color: LIGHT_COLORS.secondary,
     marginBottom: SPACING.md,
   },
   summaryRow: {
@@ -392,7 +393,7 @@ const styles = StyleSheet.create({
   summaryValue: {
     fontSize: 15,
     fontWeight: '600',
-    color: LIGHT_COLORS.textPrimary,
+    color: LIGHT_COLORS.secondary,
   },
   datePickerButton: {
     backgroundColor: LIGHT_COLORS.backgroundContainer,
@@ -403,7 +404,7 @@ const styles = StyleSheet.create({
   },
   datePickerText: {
     fontSize: 16,
-    color: LIGHT_COLORS.textPrimary,
+    color: LIGHT_COLORS.secondary,
     fontWeight: '500',
   },
   dateRangeText: {
@@ -440,7 +441,7 @@ const styles = StyleSheet.create({
   workoutDay: {
     fontSize: 18,
     fontWeight: '600',
-    color: LIGHT_COLORS.textPrimary,
+    color: LIGHT_COLORS.secondary,
   },
   workoutName: {
     fontSize: 14,

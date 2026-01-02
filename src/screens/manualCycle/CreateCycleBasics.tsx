@@ -14,7 +14,7 @@ interface CreateCycleBasicsProps {
 
 const LIGHT_COLORS = {
   backgroundCanvas: '#E3E6E0',
-  textPrimary: '#000000',
+  secondary: '#1B1B1B',
   textSecondary: '#3C3C43',
   textMeta: '#817B77',
   accent: '#FD6B00',
@@ -134,7 +134,7 @@ export function CreateCycleBasics({ navigation }: CreateCycleBasicsProps) {
                 disabled={weeks <= 1}
                 activeOpacity={0.7}
               >
-                <IconMinus size={20} color={weeks <= 1 ? LIGHT_COLORS.textMeta : LIGHT_COLORS.textPrimary} />
+                <IconMinus size={20} color={weeks <= 1 ? LIGHT_COLORS.textMeta : LIGHT_COLORS.secondary} />
               </TouchableOpacity>
               <View style={styles.stepperValue}>
                 <Text style={styles.stepperNumber}>{weeks}</Text>
@@ -146,7 +146,7 @@ export function CreateCycleBasics({ navigation }: CreateCycleBasicsProps) {
                 disabled={weeks >= 12}
                 activeOpacity={0.7}
               >
-                <IconAdd size={20} color={weeks >= 12 ? LIGHT_COLORS.textMeta : LIGHT_COLORS.textPrimary} />
+                <IconAdd size={20} color={weeks >= 12 ? LIGHT_COLORS.textMeta : LIGHT_COLORS.secondary} />
               </TouchableOpacity>
             </View>
           </View>
@@ -191,10 +191,11 @@ const styles = StyleSheet.create({
     height: 40,
     justifyContent: 'center',
     marginBottom: SPACING.md,
+    marginLeft: -4,
   },
   backText: {
     fontSize: 28,
-    color: LIGHT_COLORS.textPrimary,
+    color: LIGHT_COLORS.secondary,
   },
   headerTitleContainer: {
     gap: 4,
@@ -206,7 +207,7 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     ...TYPOGRAPHY.h2,
-    color: LIGHT_COLORS.textPrimary,
+    color: LIGHT_COLORS.secondary,
   },
   content: {
     flex: 1,
@@ -221,7 +222,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 20,
     fontWeight: '600',
-    color: LIGHT_COLORS.textPrimary,
+    color: LIGHT_COLORS.secondary,
     marginBottom: 4,
   },
   sectionSubtitle: {
@@ -251,7 +252,7 @@ const styles = StyleSheet.create({
   dayChipText: {
     fontSize: 15,
     fontWeight: '600',
-    color: LIGHT_COLORS.textPrimary,
+    color: LIGHT_COLORS.secondary,
   },
   dayChipTextSelected: {
     color: '#FFFFFF',
@@ -273,7 +274,7 @@ const styles = StyleSheet.create({
   lengthChipText: {
     fontSize: 15,
     fontWeight: '600',
-    color: LIGHT_COLORS.textPrimary,
+    color: LIGHT_COLORS.secondary,
   },
   lengthChipTextSelected: {
     color: '#FFFFFF',
@@ -303,7 +304,7 @@ const styles = StyleSheet.create({
   stepperNumber: {
     fontSize: 36,
     fontWeight: '700',
-    color: LIGHT_COLORS.textPrimary,
+    color: LIGHT_COLORS.secondary,
   },
   stepperLabel: {
     fontSize: 14,

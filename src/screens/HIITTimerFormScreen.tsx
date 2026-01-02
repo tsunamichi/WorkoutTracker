@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -13,7 +13,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useStore } from '../store';
 import { COLORS, SPACING, CARDS, TYPOGRAPHY, GRADIENTS } from '../constants';
 import { IconArrowLeft, IconEdit } from '../components/icons';
-import { CustomSlider } from '../components/CustomSlider';
+import { TimerValueSheet } from '../components/timer/TimerValueSheet';
 import type { HIITTimer } from '../types';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/AppNavigator';
@@ -23,10 +23,12 @@ type Props = NativeStackScreenProps<RootStackParamList, 'HIITTimerForm'>;
 const LIGHT_COLORS = {
   backgroundCanvas: '#E3E6E0',
   text: '#1B1B1B',
-  textPrimary: '#000000',
+  secondary: '#1B1B1B',
   textSecondary: '#3C3C43',
   textMeta: '#817B77',
 };
+
+type SheetType = 'work' | 'workRest' | 'sets' | 'rounds' | 'roundRest' | null;
 
 export default function HIITTimerFormScreen({ navigation, route }: Props) {
   const insets = useSafeAreaInsets();
@@ -35,25 +37,37 @@ export default function HIITTimerFormScreen({ navigation, route }: Props) {
   
   const existingTimer = timerId ? hiitTimers.find(t => t.id === timerId) : undefined;
   
-  const [name, setName] = useState(existingTimer?.name || 'Timer Name');
+  const [name, setName] = useState(existingTimer?.name || 'Timer name');
   const [isEditingName, setIsEditingName] = useState(false);
   const [work, setWork] = useState<number>(existingTimer?.work || 30);
-  const [workRest, setWorkRest] = useState<number>(existingTimer?.workRest || 10);
-  const [sets, setSets] = useState<number>(existingTimer?.sets || 8);
+  const [workRest, setWorkRest] = useState<number>(existingTimer?.workRest || 30);
+  const [sets, setSets] = useState<number>(existingTimer?.sets || 3);
   const [rounds, setRounds] = useState<number>(existingTimer?.rounds || 1);
-  const [roundRest, setRoundRest] = useState<number>(existingTimer?.roundRest || 60);
+  const [roundRest, setRoundRest] = useState<number>(existingTimer?.roundRest || 30);
+  const [activeSheet, setActiveSheet] = useState<SheetType>(null);
+  
+  // Track if timer was already saved to prevent duplicates
+  const hasSavedRef = useRef(false);
+
+  // Reset saved flag when screen gets focus (for new edits)
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('focus', () => {
+      hasSavedRef.current = false;
+    });
+    return unsubscribe;
+  }, [navigation]);
 
   // Check if there are unsaved changes
   const hasChanges = () => {
     if (mode === 'create') {
       // For new timers, check if anything differs from defaults
       return (
-        name !== 'Timer Name' ||
+        name !== 'Timer name' ||
         work !== 30 ||
-        workRest !== 10 ||
-        sets !== 8 ||
+        workRest !== 30 ||
+        sets !== 3 ||
         rounds !== 1 ||
-        roundRest !== 60
+        roundRest !== 30
       );
     } else if (existingTimer) {
       // For editing, check if anything changed
@@ -67,6 +81,13 @@ export default function HIITTimerFormScreen({ navigation, route }: Props) {
       );
     }
     return false;
+  };
+
+  const formatTime = (seconds: number) => {
+    if (seconds < 60) return `${seconds}s`;
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return secs > 0 ? `${mins}m ${secs}s` : `${mins}m`;
   };
 
   // Save timer without navigating
@@ -97,41 +118,26 @@ export default function HIITTimerFormScreen({ navigation, route }: Props) {
       await updateHIITTimer(timerId!, timer);
     }
     
+    hasSavedRef.current = true;
     return true;
   }, [name, work, workRest, sets, rounds, roundRest, mode, timerId, existingTimer, addHIITTimer, updateHIITTimer]);
 
-  // Intercept back navigation to show warning if there are changes
+  // Auto-save when navigating back if there are changes
   useEffect(() => {
-    const unsubscribe = navigation.addListener('beforeRemove', (e) => {
-      if (!hasChanges()) {
-        // No changes, allow navigation
-        return;
+    const unsubscribe = navigation.addListener('beforeRemove', async (e) => {
+      // Only auto-save if there are changes AND we haven't already saved
+      if (hasChanges() && !hasSavedRef.current) {
+        // Prevent default navigation
+        e.preventDefault();
+        
+        // Save the timer
+        const saved = await handleSave();
+        if (saved) {
+          hasSavedRef.current = true;
+          // Allow navigation after saving
+          navigation.dispatch(e.data.action);
+        }
       }
-
-      // Prevent default behavior
-      e.preventDefault();
-
-      // Show alert
-      Alert.alert(
-        'Save changes?',
-        'You have unsaved changes. What would you like to do?',
-        [
-          {
-            text: 'Discard',
-            style: 'destructive',
-            onPress: () => navigation.dispatch(e.data.action),
-          },
-          {
-            text: 'Save',
-            onPress: async () => {
-              const saved = await handleSave();
-              if (saved) {
-                navigation.dispatch(e.data.action);
-              }
-            },
-          },
-        ]
-      );
     });
 
     return unsubscribe;
@@ -164,6 +170,9 @@ export default function HIITTimerFormScreen({ navigation, route }: Props) {
       await updateHIITTimer(timerId!, timer);
     }
     
+    // Mark as saved to prevent duplicate save on back navigation
+    hasSavedRef.current = true;
+    
     // Navigate to execution
     navigation.replace('HIITTimerExecution', { timerId: newTimerId });
   };
@@ -182,6 +191,11 @@ export default function HIITTimerFormScreen({ navigation, route }: Props) {
             <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
               <IconArrowLeft size={24} color={LIGHT_COLORS.text} />
             </TouchableOpacity>
+            <View style={styles.menuButton}>
+              <View style={styles.menuDot} />
+              <View style={styles.menuDot} />
+              <View style={styles.menuDot} />
+            </View>
           </View>
           
           <TouchableOpacity 
@@ -211,88 +225,180 @@ export default function HIITTimerFormScreen({ navigation, route }: Props) {
         <ScrollView 
           style={styles.scrollView} 
           contentContainerStyle={styles.scrollContent}
-          scrollEnabled={false}
-          bounces={false}
         >
-          <View style={styles.form}>
-            <View style={styles.formGroup}>
-              <Text style={styles.label}>Work</Text>
-              <View style={styles.sliderWrapper}>
-                <CustomSlider
-                  value={work}
-                  onValueChange={(val) => setWork(val)}
-                  min={5}
-                  max={90}
-                  step={5}
-                />
+          {/* Exercise Section */}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Exercise</Text>
+            
+            {/* Move for card */}
+            <TouchableOpacity
+              onPress={() => setActiveSheet('work')}
+              activeOpacity={0.7}
+            >
+              <View style={[CARDS.cardDeep.blackShadow, styles.cardBlackShadow]}>
+                <View style={CARDS.cardDeep.whiteShadow}>
+                  <View style={CARDS.cardDeep.outer}>
+                    <View style={[CARDS.cardDeep.inner, styles.cardInner]}>
+                      <Text style={styles.cardLabel}>Move for</Text>
+                      <Text style={styles.cardValue}>{formatTime(work)}</Text>
+                    </View>
+                  </View>
+                </View>
               </View>
-            </View>
+            </TouchableOpacity>
 
-            <View style={styles.formGroup}>
-              <Text style={styles.label}>Work Rest</Text>
-              <View style={styles.sliderWrapper}>
-                <CustomSlider
-                  value={workRest}
-                  onValueChange={(val) => setWorkRest(val)}
-                  min={5}
-                  max={90}
-                  step={5}
-                />
+            {/* Rest after each exercise card */}
+            <TouchableOpacity
+              onPress={() => setActiveSheet('workRest')}
+              activeOpacity={0.7}
+            >
+              <View style={[CARDS.cardDeep.blackShadow, styles.cardBlackShadow]}>
+                <View style={CARDS.cardDeep.whiteShadow}>
+                  <View style={CARDS.cardDeep.outer}>
+                    <View style={[CARDS.cardDeep.inner, styles.cardInner]}>
+                      <Text style={styles.cardLabel}>Rest after each exercise</Text>
+                      <Text style={styles.cardValue}>{formatTime(workRest)}</Text>
+                    </View>
+                  </View>
+                </View>
               </View>
-            </View>
+            </TouchableOpacity>
+          </View>
 
-            <View style={styles.formGroup}>
-              <Text style={styles.label}>Sets</Text>
-              <View style={styles.sliderWrapper}>
-                <CustomSlider
-                  value={sets}
-                  onValueChange={(val) => setSets(val)}
-                  min={1}
-                  max={20}
-                  step={1}
-                />
+          {/* Round Section */}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Round</Text>
+            
+            {/* Exercises in a round card */}
+            <TouchableOpacity
+              onPress={() => setActiveSheet('sets')}
+              activeOpacity={0.7}
+            >
+              <View style={[CARDS.cardDeep.blackShadow, styles.cardBlackShadow]}>
+                <View style={CARDS.cardDeep.whiteShadow}>
+                  <View style={CARDS.cardDeep.outer}>
+                    <View style={[CARDS.cardDeep.inner, styles.cardInner]}>
+                      <Text style={styles.cardLabel}>Exercises in a round</Text>
+                      <Text style={styles.cardValue}>{sets}</Text>
+                    </View>
+                  </View>
+                </View>
               </View>
-            </View>
+            </TouchableOpacity>
 
-            <View style={styles.formGroup}>
-              <Text style={styles.label}>Rounds</Text>
-              <View style={styles.sliderWrapper}>
-                <CustomSlider
-                  value={rounds}
-                  onValueChange={(val) => setRounds(val)}
-                  min={1}
-                  max={10}
-                  step={1}
-                />
+            {/* Rounds card */}
+            <TouchableOpacity
+              onPress={() => setActiveSheet('rounds')}
+              activeOpacity={0.7}
+            >
+              <View style={[CARDS.cardDeep.blackShadow, styles.cardBlackShadow]}>
+                <View style={CARDS.cardDeep.whiteShadow}>
+                  <View style={CARDS.cardDeep.outer}>
+                    <View style={[CARDS.cardDeep.inner, styles.cardInner]}>
+                      <Text style={styles.cardLabel}>Rounds</Text>
+                      <Text style={styles.cardValue}>{rounds}</Text>
+                    </View>
+                  </View>
+                </View>
               </View>
-            </View>
+            </TouchableOpacity>
 
-            <View style={styles.formGroup}>
-              <Text style={styles.label}>Round Rest</Text>
-              <View style={styles.sliderWrapper}>
-                <CustomSlider
-                  value={roundRest}
-                  onValueChange={(val) => setRoundRest(val)}
-                  min={5}
-                  max={90}
-                  step={5}
-                />
+            {/* Rest between rounds card */}
+            <TouchableOpacity
+              onPress={() => setActiveSheet('roundRest')}
+              activeOpacity={0.7}
+            >
+              <View style={[CARDS.cardDeep.blackShadow, styles.cardBlackShadow]}>
+                <View style={CARDS.cardDeep.whiteShadow}>
+                  <View style={CARDS.cardDeep.outer}>
+                    <View style={[CARDS.cardDeep.inner, styles.cardInner]}>
+                      <Text style={styles.cardLabel}>Rest between rounds</Text>
+                      <Text style={styles.cardValue}>{formatTime(roundRest)}</Text>
+                    </View>
+                  </View>
+                </View>
               </View>
-            </View>
+            </TouchableOpacity>
           </View>
         </ScrollView>
 
-        {/* Start Now Button - Fixed Bottom */}
+        {/* Create Timer Button - Fixed Bottom */}
         <View style={styles.stickyButtonContainer}>
           <TouchableOpacity 
             style={styles.startButton} 
             onPress={handleStartNow}
             activeOpacity={1}
           >
-            <Text style={styles.startButtonText}>Start Now</Text>
+            <Text style={styles.startButtonText}>Create Timer</Text>
           </TouchableOpacity>
         </View>
       </View>
+
+      {/* Bottom Sheets */}
+      <TimerValueSheet
+        visible={activeSheet === 'work'}
+        onClose={() => setActiveSheet(null)}
+        onSave={(val) => setWork(val)}
+        title="Move for"
+        label="Exercise"
+        value={work}
+        min={5}
+        max={120}
+        step={5}
+        formatValue={formatTime}
+      />
+
+      <TimerValueSheet
+        visible={activeSheet === 'workRest'}
+        onClose={() => setActiveSheet(null)}
+        onSave={(val) => setWorkRest(val)}
+        title="Rest after each exercise"
+        label="Exercise"
+        value={workRest}
+        min={5}
+        max={120}
+        step={5}
+        formatValue={formatTime}
+      />
+
+      <TimerValueSheet
+        visible={activeSheet === 'sets'}
+        onClose={() => setActiveSheet(null)}
+        onSave={(val) => setSets(val)}
+        title="Exercises in a round"
+        label="Round"
+        value={sets}
+        min={1}
+        max={20}
+        step={1}
+        formatValue={(val) => `${val}`}
+      />
+
+      <TimerValueSheet
+        visible={activeSheet === 'rounds'}
+        onClose={() => setActiveSheet(null)}
+        onSave={(val) => setRounds(val)}
+        title="Rounds"
+        label="Round"
+        value={rounds}
+        min={1}
+        max={10}
+        step={1}
+        formatValue={(val) => `${val}`}
+      />
+
+      <TimerValueSheet
+        visible={activeSheet === 'roundRest'}
+        onClose={() => setActiveSheet(null)}
+        onSave={(val) => setRoundRest(val)}
+        title="Rest between rounds"
+        label="Round"
+        value={roundRest}
+        min={5}
+        max={180}
+        step={5}
+        formatValue={formatTime}
+      />
     </LinearGradient>
   );
 }
@@ -310,6 +416,7 @@ const styles = StyleSheet.create({
   topBar: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     minHeight: 48,
     paddingHorizontal: SPACING.xxl,
   },
@@ -318,6 +425,22 @@ const styles = StyleSheet.create({
     height: 48,
     justifyContent: 'center',
     alignItems: 'flex-start',
+    marginLeft: -4,
+  },
+  menuButton: {
+    width: 48,
+    height: 48,
+    justifyContent: 'center',
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: 4,
+    marginRight: -4,
+  },
+  menuDot: {
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: LIGHT_COLORS.secondary,
   },
   pageTitleContainer: {
     paddingHorizontal: SPACING.xxl,
@@ -330,11 +453,11 @@ const styles = StyleSheet.create({
   },
   pageTitle: {
     ...TYPOGRAPHY.h2,
-    color: LIGHT_COLORS.textPrimary,
+    color: LIGHT_COLORS.secondary,
   },
   pageTitleInput: {
     ...TYPOGRAPHY.h2,
-    color: LIGHT_COLORS.textPrimary,
+    color: LIGHT_COLORS.secondary,
     borderBottomWidth: 1,
     borderBottomColor: COLORS.border,
     paddingVertical: 0,
@@ -343,29 +466,35 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    padding: SPACING.xxl,
+    paddingHorizontal: SPACING.xxl,
+    paddingTop: 48,
     paddingBottom: 140, // Space for fixed button + 40px
   },
-  form: {
-    ...CARDS.cardDeep,
-    paddingVertical: SPACING.lg,
-    paddingHorizontal: 0,
+  section: {
+    marginBottom: 56,
   },
-  formGroup: {
-    marginBottom: SPACING.xxl,
+  sectionTitle: {
+    ...TYPOGRAPHY.h3,
+    color: LIGHT_COLORS.textMeta,
+    marginBottom: SPACING.lg,
+  },
+  cardBlackShadow: {
+    marginBottom: 8,
+  },
+  cardInner: {
+    paddingVertical: SPACING.lg,
+    paddingHorizontal: SPACING.xxl,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
   },
-  label: {
+  cardLabel: {
     ...TYPOGRAPHY.body,
-    color: COLORS.text,
-    flex: 0,
-    minWidth: 100,
+    color: LIGHT_COLORS.secondary,
   },
-  sliderWrapper: {
-    flex: 1,
-    marginLeft: SPACING.md,
+  cardValue: {
+    ...TYPOGRAPHY.h3,
+    color: LIGHT_COLORS.secondary,
   },
   stickyButtonContainer: {
     position: 'absolute',
@@ -378,7 +507,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'transparent',
   },
   startButton: {
-    backgroundColor: '#FD6B00',
+    backgroundColor: '#000000',
     paddingVertical: SPACING.lg,
     borderRadius: 12,
     alignItems: 'center',

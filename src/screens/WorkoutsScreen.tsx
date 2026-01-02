@@ -20,7 +20,7 @@ interface WorkoutsScreenProps {
 const LIGHT_COLORS = {
   backgroundCanvas: '#E3E6E0',
   backgroundContainer: '#CDCABB',
-  textPrimary: '#000000',
+  secondary: '#1B1B1B',
   textSecondary: '#3C3C43',
   textMeta: '#817B77',
   border: '#C7C7CC',
@@ -518,7 +518,7 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     ...TYPOGRAPHY.h2,
-    color: LIGHT_COLORS.textPrimary,
+    color: LIGHT_COLORS.secondary,
   },
   
   // Sticky Button Container
@@ -564,7 +564,7 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     ...TYPOGRAPHY.h3,
-    color: LIGHT_COLORS.textPrimary,
+    color: LIGHT_COLORS.secondary,
     marginBottom: 24,
     paddingHorizontal: 24,
   },
@@ -593,7 +593,7 @@ const styles = StyleSheet.create({
     opacity: 0.3,
   },
   paginationDotActive: {
-    backgroundColor: LIGHT_COLORS.textPrimary,
+    backgroundColor: LIGHT_COLORS.secondary,
     opacity: 1,
   },
   templateCardBlackShadow: {
@@ -625,7 +625,7 @@ const styles = StyleSheet.create({
   },
   templateName: {
     ...TYPOGRAPHY.body,
-    color: LIGHT_COLORS.textPrimary,
+    color: LIGHT_COLORS.secondary,
     marginBottom: 4,
   },
   templateDescription: {
@@ -707,7 +707,7 @@ const styles = StyleSheet.create({
   },
   cycleName: {
     ...TYPOGRAPHY.h3,
-    color: LIGHT_COLORS.textPrimary,
+    color: LIGHT_COLORS.secondary,
   },
   cycleDate: {
     ...TYPOGRAPHY.meta,
@@ -746,7 +746,7 @@ const styles = StyleSheet.create({
   sheetTitle: {
     fontSize: 28,
     fontWeight: '600',
-    color: LIGHT_COLORS.textPrimary,
+    color: LIGHT_COLORS.secondary,
     marginBottom: SPACING.xl,
   },
   textInput: {
@@ -754,7 +754,7 @@ const styles = StyleSheet.create({
     borderRadius: BORDER_RADIUS.md,
     padding: SPACING.lg,
     fontSize: 16,
-    color: LIGHT_COLORS.textPrimary,
+    color: LIGHT_COLORS.secondary,
     height: 200,
     marginBottom: SPACING.xl,
     borderWidth: 1,
