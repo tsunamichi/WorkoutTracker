@@ -13,6 +13,7 @@ export { IconShare } from './IconShare';
 export { IconPause } from './IconPause';
 export { IconPlay } from './IconPlay';
 export { IconPR } from './IconPR';
+export { IconRestart } from './IconRestart';
 export { IconSave } from './IconSave';
 export { IconSkip } from './IconSkip';
 export { IconSpeaker } from './IconSpeaker';

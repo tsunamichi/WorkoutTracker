@@ -3,7 +3,7 @@
 
 import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { View, Text, StyleSheet, TextInput, TouchableOpacity, FlatList, Keyboard } from 'react-native';
-import BottomSheet, { BottomSheetBackdrop } from '@gorhom/bottom-sheet';
+// import BottomSheet, { BottomSheetBackdrop } from '@gorhom/bottom-sheet';
 import { MovementPattern, Equipment, Exercise } from '../../types/workout';
 import { searchExercises, ExerciseLibraryEntry } from '../../utils/exerciseLibrary';
 

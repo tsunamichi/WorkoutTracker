@@ -8,7 +8,7 @@ import {
   ScrollView,
   Switch,
 } from 'react-native';
-import BottomSheet, { BottomSheetScrollView } from '@gorhom/bottom-sheet';
+// import BottomSheet, { BottomSheetScrollView } from '@gorhom/bottom-sheet';
 import { useCreateCycleDraftStore } from '../../store/useCreateCycleDraftStore';
 import { useStore } from '../../store';
 import { ExerciseBlock, Weekday, ExerciseWeekPlan } from '../../types/manualCycle';

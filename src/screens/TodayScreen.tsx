@@ -3,8 +3,9 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Animated, Modal }
 import Svg, { Path } from 'react-native-svg';
 import * as Haptics from 'expo-haptics';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { GestureHandlerRootView, GestureDetector, Gesture } from 'react-native-gesture-handler';
-import { runOnJS } from 'react-native-reanimated';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
+// import { GestureDetector, Gesture } from 'react-native-gesture-handler';
+// import { runOnJS } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useStore } from '../store';
 import { ProfileAvatar } from '../components/ProfileAvatar';
@@ -301,12 +302,11 @@ export function TodayScreen({ navigation }: TodayScreenProps) {
     }
   };
 
-  // Swipe gesture to navigate between days
-  const swipeGesture = Gesture.Pan()
-    .onEnd((event) => {
-      // Move to JS thread to execute non-worklet functions
-      runOnJS(handleSwipe)(event.velocityX, event.translationX);
-    });
+  // Swipe gesture DISABLED for debugging
+  // const swipeGesture = Gesture.Pan()
+  //   .onEnd((event) => {
+  //     runOnJS(handleSwipe)(event.velocityX, event.translationX);
+  //   });
   
   // Match device corner radius (iPhone rounded corners)
   const deviceCornerRadius = insets.bottom > 0 ? 40 : 24;
@@ -414,7 +414,7 @@ export function TodayScreen({ navigation }: TodayScreenProps) {
                 </TouchableOpacity>
               </View>
             ) : (
-              <GestureDetector gesture={swipeGesture}>
+              // <GestureDetector gesture={swipeGesture}>
                 <ScrollView style={styles.content} contentContainerStyle={styles.scrollContent}>
                 <View style={styles.cardsContainer}>
               {/* Old workout card during transition */}
@@ -683,7 +683,7 @@ export function TodayScreen({ navigation }: TodayScreenProps) {
               
               </View>
             </ScrollView>
-            </GestureDetector>
+            // </GestureDetector>
             )}
             
             {/* Fixed HIIT Timer Button - Only show when there's an active cycle */}

@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
-import BottomSheet from '@gorhom/bottom-sheet';
+// import BottomSheet from '@gorhom/bottom-sheet';
 import { useCreateCycleDraftStore } from '../../store/useCreateCycleDraftStore';
 import { formatWeekdayFull, getExerciseSummary } from '../../utils/manualCycleUtils';
 import { Weekday, ExerciseBlock } from '../../types/manualCycle';

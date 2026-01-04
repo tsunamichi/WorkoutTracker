@@ -15,7 +15,7 @@ import { Audio } from 'expo-av';
 import Svg, { Circle, Path } from 'react-native-svg';
 import { useStore } from '../store';
 import { COLORS, SPACING, TYPOGRAPHY, GRADIENTS, BUTTONS } from '../constants';
-import { IconArrowLeft, IconPlay, IconPause, IconSpeaker, IconSkip } from '../components/icons';
+import { IconArrowLeft, IconPlay, IconPause, IconSpeaker, IconSkip, IconRestart } from '../components/icons';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/AppNavigator';
 
@@ -32,20 +32,60 @@ const LIGHT_COLORS = {
   border: '#CDCABB',
 };
 
+const PHASE_COLORS = {
+  countdown: '#FDB022', // Yellow
+  work: '#5E9EFF', // Blue
+  rest: '#FF6B6B', // Red
+  complete: '#227132', // Green
+};
+
+const MIN_SIZE = 180;
+const SCREEN_WIDTH = Dimensions.get('window').width;
+const CONTAINER_WIDTH = SCREEN_WIDTH - (SPACING.xxl * 2);
+
+interface Particle {
+  id: number;
+  x: Animated.Value;
+  y: Animated.Value;
+  opacity: Animated.Value;
+  rotation: Animated.Value;
+  color: string;
+  size: number;
+}
+
 export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
   const insets = useSafeAreaInsets();
   const { timerId } = route.params;
-  const { hiitTimers, addHIITTimer, deleteHIITTimer } = useStore();
+  const { hiitTimers, deleteHIITTimer } = useStore();
   
   const timer = hiitTimers.find(t => t.id === timerId);
   
+  if (!timer) {
+    return (
+      <LinearGradient
+        colors={GRADIENTS.backgroundLight.colors}
+        start={GRADIENTS.backgroundLight.start}
+        end={GRADIENTS.backgroundLight.end}
+        style={styles.container}
+      >
+        <View style={styles.innerContainer}>
+          <Text style={styles.errorText}>Timer not found</Text>
+          <TouchableOpacity onPress={() => navigation.goBack()}>
+            <Text style={styles.errorText}>Go Back</Text>
+          </TouchableOpacity>
+        </View>
+      </LinearGradient>
+    );
+  }
+  
   const [isRunning, setIsRunning] = useState(false);
-  const [hasStarted, setHasStarted] = useState(false); // Track if timer has ever been started
-  const [soundEnabled, setSoundEnabled] = useState(true); // Track if sounds are enabled
+  const [soundEnabled, setSoundEnabled] = useState(true);
   const [currentPhase, setCurrentPhase] = useState<TimerPhase>('countdown');
   const [currentSet, setCurrentSet] = useState(1);
   const [currentRound, setCurrentRound] = useState(1);
-  const [secondsRemaining, setSecondsRemaining] = useState(5); // Start with 5-second countdown
+  const [secondsRemaining, setSecondsRemaining] = useState(5);
+  const [showGo, setShowGo] = useState(false);
+  const [particles, setParticles] = useState<Particle[]>([]);
   
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const countdownSoundRef = useRef<Audio.Sound | null>(null);
@@ -53,234 +93,197 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
   const lastPlayedSecondRef = useRef<number | null>(null);
   const isTransitioningRef = useRef(false);
   
-  // Animated value for button shape: 0 = full width, 1 = compact rectangular
-  const buttonShapeAnim = useRef(new Animated.Value(0)).current;
+  // Refs to track current state for callbacks (avoid stale closures)
+  const currentPhaseRef = useRef<TimerPhase>(currentPhase);
+  const currentSetRef = useRef(currentSet);
+  const currentRoundRef = useRef(currentRound);
   
-  // Animated values for side buttons: 0 = hidden, 1 = visible
+  // Animated values
+  const sizeAnim = useRef(new Animated.Value(1)).current; // 1 = 100%, 0 = MIN_SIZE
+  const colorAnim = useRef(new Animated.Value(0)).current; // For color transitions
+  const borderRadiusAnim = useRef(new Animated.Value(CONTAINER_WIDTH / 2)).current; // Circle to rounded rect
   const sideButtonsAnim = useRef(new Animated.Value(0)).current;
+  const celebrationPulseAnim = useRef(new Animated.Value(1)).current; // For pulsing celebration
   
-  // Animated value for timer progress (smooth transitions)
-  const progressAnim = useRef(new Animated.Value(1)).current;
-  
-  // Animated value for phase transitions: -1 = countdown, 0 = work, 1 = rest
-  const getPhaseValue = (phase: typeof currentPhase) => {
-    if (phase === 'countdown') return -1;
-    if (phase === 'work') return 0;
-    return 1;
+  // Track previous phase for color interpolation
+  const prevPhaseRef = useRef<TimerPhase>('countdown');
+
+  // Update refs whenever state changes
+  useEffect(() => {
+    currentPhaseRef.current = currentPhase;
+    currentSetRef.current = currentSet;
+    currentRoundRef.current = currentRound;
+  }, [currentPhase, currentSet, currentRound]);
+
+  // Get total seconds for current phase
+  const getTotalSeconds = () => {
+    switch (currentPhase) {
+      case 'countdown':
+        return 5;
+      case 'work':
+        return timer.work;
+      case 'workRest':
+        return timer.workRest;
+      case 'roundRest':
+        return timer.roundRest;
+      case 'complete':
+        return 0;
+    }
   };
-  const phaseTransitionAnim = useRef(new Animated.Value(getPhaseValue(currentPhase))).current;
-  
-  // Animated values for countdown flash effect
-  const countdownFlashAnim = useRef(new Animated.Value(1)).current;
-  const countdownOpacityAnim = useRef(new Animated.Value(1)).current;
-  
-  // Animated value for urgency state (time <= 5 seconds): 0 = normal, 1 = urgent
-  const urgencyAnim = useRef(new Animated.Value(0)).current;
-  
-  // Track previous phase for transition detection
-  const prevPhaseRef = useRef(currentPhase);
 
-  // Animate button shape and side buttons based on state
+  // Animate size based on time remaining
   useEffect(() => {
-    // hasStarted = false: full width "Start" button (value = 0), side buttons hidden
-    // hasStarted = true: compact rectangular button (value = 1), side buttons visible
-    Animated.parallel([
-      Animated.spring(buttonShapeAnim, {
-        toValue: hasStarted ? 1 : 0,
-        useNativeDriver: false,
-        tension: 100,
-        friction: 10,
-      }),
-      Animated.spring(sideButtonsAnim, {
-        toValue: hasStarted ? 1 : 0,
-        useNativeDriver: true,
-        tension: 100,
-        friction: 10,
-      }),
-    ]).start();
-  }, [hasStarted, buttonShapeAnim, sideButtonsAnim]);
-
-  // Animate phase transitions (colors, fonts, flex, gap, border radius)
-  useEffect(() => {
-    const targetValue = getPhaseValue(currentPhase);
-    const prevPhase = prevPhaseRef.current;
-    
-    // Detect countdown -> work transition for special handling
-    const isCountdownToWork = prevPhase === 'countdown' && currentPhase === 'work';
-    
-    Animated.timing(phaseTransitionAnim, {
-      toValue: targetValue,
-      duration: isCountdownToWork ? 350 : 300, // Faster transition
-      useNativeDriver: false,
-      easing: Easing.out(Easing.exp), // Exponential ease-out for dramatic deceleration
-    }).start();
-    
-    prevPhaseRef.current = currentPhase;
-  }, [currentPhase, phaseTransitionAnim]);
-
-  // Flash animation for countdown
-  useEffect(() => {
-    if (currentPhase === 'countdown' && secondsRemaining > 0) {
-      // Reset to large scale and low opacity
-      countdownFlashAnim.setValue(1.3);
-      countdownOpacityAnim.setValue(0.3);
-      
-      // Animate back to normal with a bounce
-      Animated.parallel([
-        Animated.spring(countdownFlashAnim, {
-          toValue: 1,
-          useNativeDriver: false,
-          tension: 50,
-          friction: 7,
-        }),
-        Animated.timing(countdownOpacityAnim, {
-          toValue: 1,
-          duration: 200,
-          useNativeDriver: false,
-        }),
-      ]).start();
-    }
-  }, [currentPhase, secondsRemaining, countdownFlashAnim, countdownOpacityAnim]);
-
-  // Animate urgency state when time reaches 5 seconds
-  useEffect(() => {
-    if (currentPhase === 'work' || currentPhase === 'workRest' || currentPhase === 'roundRest') {
-      const isUrgent = secondsRemaining <= 5;
-      Animated.timing(urgencyAnim, {
-        toValue: isUrgent ? 1 : 0,
-        duration: 300,
-        useNativeDriver: false,
+    if (currentPhase === 'complete') {
+      // Don't shrink on complete
+      Animated.timing(sizeAnim, {
+        toValue: 0.6, // Stay at medium size
+        duration: 600,
         easing: Easing.inOut(Easing.ease),
+        useNativeDriver: false,
       }).start();
-    } else {
-      urgencyAnim.setValue(0);
-    }
-  }, [currentPhase, secondsRemaining, urgencyAnim]);
-
-  // Animate progress bar (flex values)
-  useEffect(() => {
-    if (!timer || currentPhase === 'countdown' || currentPhase === 'complete') {
-      // During countdown, progressAnim is 1.0 (full time remaining)
-      // During complete, progressAnim is 0 (no time remaining)
-      progressAnim.setValue(currentPhase === 'countdown' ? 1.0 : 0);
       return;
     }
 
-    let totalPhaseSeconds = 0;
-    if (currentPhase === 'work') totalPhaseSeconds = timer.work;
-    else if (currentPhase === 'workRest') totalPhaseSeconds = timer.workRest;
-    else if (currentPhase === 'roundRest') totalPhaseSeconds = timer.roundRest;
-
-    const clampedProgress = totalPhaseSeconds > 0 ? secondsRemaining / totalPhaseSeconds : 0;
-
-    const isPhaseTransition = prevPhaseRef.current !== currentPhase;
-    const isWorkToRest = (prevPhaseRef.current === 'work' && (currentPhase === 'workRest' || currentPhase === 'roundRest'));
-
-    Animated.timing(progressAnim, {
-      toValue: clampedProgress,
-      duration: (isPhaseTransition && !isWorkToRest) ? 0 : 1000, // Smooth transition for work->rest
+    const totalSeconds = getTotalSeconds();
+    const progress = totalSeconds > 0 ? secondsRemaining / totalSeconds : 0;
+    
+    // Animate size smoothly based on progress
+    Animated.timing(sizeAnim, {
+      toValue: progress,
+      duration: 1000,
+      easing: Easing.linear,
       useNativeDriver: false,
-      easing: (t) => t, // Linear easing
     }).start();
-  }, [secondsRemaining, currentPhase, timer, progressAnim]);
+  }, [secondsRemaining, currentPhase, sizeAnim]);
 
+  // Animate phase transitions (color and reset to 100%)
   useEffect(() => {
-    let mounted = true;
-
-    const loadSounds = async () => {
-      try {
-        console.log('🔊 Loading HIIT timer sounds...');
-        
-        // Configure audio mode to play even when device is in silent mode
-        await Audio.setAudioModeAsync({
-          allowsRecordingIOS: false,
-          playsInSilentModeIOS: true,
-          staysActiveInBackground: false,
-          shouldDuckAndroid: true,
+    const prevPhase = prevPhaseRef.current;
+    
+    if (prevPhase !== currentPhase) {
+      // Phase transition - animate back to 100% size (fast start, slow deceleration)
+      Animated.timing(sizeAnim, {
+        toValue: 1,
+        duration: 600,
+        easing: Easing.out(Easing.exp), // Fast start, slow deceleration
+        useNativeDriver: false,
+      }).start();
+      
+      // Animate color transition
+      let colorValue = 0;
+      switch (currentPhase) {
+        case 'countdown':
+          colorValue = 0;
+          break;
+        case 'work':
+          colorValue = 1;
+          break;
+        case 'workRest':
+        case 'roundRest':
+          colorValue = 2;
+          break;
+        case 'complete':
+          colorValue = 3;
+          break;
+      }
+      
+      Animated.timing(colorAnim, {
+        toValue: colorValue,
+        duration: 600,
+        easing: Easing.inOut(Easing.ease),
+        useNativeDriver: false,
+      }).start();
+      
+      // Morph shape on complete
+      if (currentPhase === 'complete') {
+        Animated.timing(borderRadiusAnim, {
+          toValue: 32, // Rounded rectangle
+          duration: 600,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: false,
+        }).start(() => {
+          // Trigger confetti after shape morph
+          triggerConfetti();
         });
-        
-        // Load countdown sound
+      } else {
+        borderRadiusAnim.setValue(CONTAINER_WIDTH / 2); // Reset to circle
+      }
+      
+      prevPhaseRef.current = currentPhase;
+    }
+  }, [currentPhase, sizeAnim, colorAnim, borderRadiusAnim]);
+
+  // Load audio files
+  useEffect(() => {
+    const loadAudio = async () => {
+      try {
         const { sound: countdownSound } = await Audio.Sound.createAsync(
-          require('../../assets/sounds/countdown.mp3'),
-          { shouldPlay: false, volume: 1.0 }
+          require('../../assets/sounds/countdown.mp3')
         );
-        if (mounted) countdownSoundRef.current = countdownSound;
-        
-        // Load complete sound
         const { sound: completeSound } = await Audio.Sound.createAsync(
-          require('../../assets/sounds/complete.mp3'),
-          { shouldPlay: false, volume: 1.0 }
+          require('../../assets/sounds/complete.mp3')
         );
-        if (mounted) completeSoundRef.current = completeSound;
-        
-        console.log('🔊 HIIT timer sounds loaded successfully');
+        countdownSoundRef.current = countdownSound;
+        completeSoundRef.current = completeSound;
       } catch (error) {
-        console.log('⚠️ Error loading HIIT timer sounds:', error);
+        console.log('⚠️ Error loading sounds:', error);
       }
     };
 
-    loadSounds();
+    loadAudio();
 
     return () => {
-      mounted = false;
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
-      }
-      if (countdownSoundRef.current) {
-        console.log('🔊 Unloading countdown sound');
-        countdownSoundRef.current.unloadAsync();
-        countdownSoundRef.current = null;
-      }
-      if (completeSoundRef.current) {
-        console.log('🔊 Unloading complete sound');
-        completeSoundRef.current.unloadAsync();
-        completeSoundRef.current = null;
-      }
+      // Cleanup sounds
+      countdownSoundRef.current?.unloadAsync();
+      completeSoundRef.current?.unloadAsync();
     };
   }, []);
 
+  // Show side buttons after first start (hide on complete)
+  useEffect(() => {
+    Animated.spring(sideButtonsAnim, {
+      toValue: (isRunning && currentPhase !== 'complete') ? 1 : 0,
+      useNativeDriver: true,
+      tension: 100,
+      friction: 10,
+    }).start();
+  }, [isRunning, currentPhase, sideButtonsAnim]);
+
+  // Stop celebration animation when leaving complete phase
+  useEffect(() => {
+    if (currentPhase !== 'complete') {
+      celebrationPulseAnim.stopAnimation(() => {
+        celebrationPulseAnim.setValue(1);
+      });
+    }
+  }, [currentPhase, celebrationPulseAnim]);
+
+  // Timer interval
   useEffect(() => {
     if (isRunning) {
-      // Small delay to ensure transition flag is cleared
-      const startTimer = () => {
-        intervalRef.current = setInterval(() => {
-          setSecondsRemaining(prev => {
-            const newTime = prev - 1;
-            
-            // Play countdown sound at 3, 2, 1 seconds
-            if (soundEnabled && (newTime === 3 || newTime === 2 || newTime === 1) && lastPlayedSecondRef.current !== newTime) {
-              lastPlayedSecondRef.current = newTime;
-              if (countdownSoundRef.current) {
-                console.log('🔊 Playing countdown sound for', newTime, 'seconds');
-                countdownSoundRef.current.setPositionAsync(0).then(() => {
-                  return countdownSoundRef.current?.playAsync();
-                }).catch((error) => {
-                  console.log('⚠️ Error playing countdown sound:', error);
-                });
-              }
+      intervalRef.current = setInterval(() => {
+        setSecondsRemaining(prev => {
+          const newTime = prev - 1;
+          
+          // Play countdown sound at 3, 2, 1
+          if (soundEnabled && (newTime === 3 || newTime === 2 || newTime === 1) && lastPlayedSecondRef.current !== newTime) {
+            lastPlayedSecondRef.current = newTime;
+            if (countdownSoundRef.current) {
+              countdownSoundRef.current.setPositionAsync(0).then(() => {
+                return countdownSoundRef.current?.playAsync();
+              }).catch((error) => {
+                console.log('⚠️ Error playing countdown sound:', error);
+              });
             }
-            
-            if (newTime <= 0 && !isTransitioningRef.current) {
-              // Trigger phase complete on next tick to avoid race conditions
-              setTimeout(() => handlePhaseComplete(), 0);
-              return 0;
-            }
-            return newTime;
-          });
-        }, 1000);
-      };
-      
-      // Wait for transition flag to clear before starting
-      if (isTransitioningRef.current) {
-        const checkInterval = setInterval(() => {
-          if (!isTransitioningRef.current) {
-            clearInterval(checkInterval);
-            startTimer();
           }
-        }, 10);
-      } else {
-        startTimer();
-      }
+          
+          if (newTime <= 0 && !isTransitioningRef.current) {
+            setTimeout(() => handlePhaseComplete(), 0);
+            return 0;
+          }
+          return newTime;
+        });
+      }, 1000);
     } else {
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
@@ -293,182 +296,214 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
         clearInterval(intervalRef.current);
       }
     };
-  }, [isRunning, currentPhase, handlePhaseComplete, soundEnabled]);
+  }, [isRunning, handlePhaseComplete, soundEnabled]);
 
-  const playBeep = useCallback(async () => {
-    if (!soundEnabled) return; // Skip if sounds are disabled
-    
-    try {
-      // Play completion sound
-      if (completeSoundRef.current) {
-        console.log('🔊 Playing phase completion sound');
-        await completeSoundRef.current.setPositionAsync(0);
-        await completeSoundRef.current.playAsync();
-      }
-    } catch (error) {
-      console.log('⚠️ Error playing completion sound:', error);
-    }
-  }, [soundEnabled]);
-
+  // Handle phase completion
   const handlePhaseComplete = useCallback(() => {
-    if (!timer || isTransitioningRef.current) {
-      console.log('⚠️ Skipping phase complete - already transitioning');
-      return;
-    }
+    if (!timer || isTransitioningRef.current) return;
 
-    console.log('✅ Phase complete triggered');
-    
-    // Set flag to prevent multiple calls
     isTransitioningRef.current = true;
-    
-    // Clear interval immediately
-    if (intervalRef.current) {
-      clearInterval(intervalRef.current);
-      intervalRef.current = null;
-    }
-    
-    playBeep();
-    
-    // Reset countdown tracking for next phase
     lastPlayedSecondRef.current = null;
 
-    if (currentPhase === 'countdown') {
-      // Move from countdown to first work phase
-      setCurrentPhase('work');
-      setSecondsRemaining(timer.work);
-      setTimeout(() => {
-        isTransitioningRef.current = false;
-        console.log('✅ Transition flag cleared');
-      }, 50);
-    } else if (currentPhase === 'work') {
-      // Check if this is the last work round
-      const isLastSet = currentSet === timer.sets;
-      const isLastRound = currentRound === timer.rounds;
+    const phase = currentPhaseRef.current;
+    const set = currentSetRef.current;
+    const round = currentRoundRef.current;
+
+    console.log('🎯 Phase complete:', phase, 'Set:', set, 'Round:', round);
+
+    // Play completion sound for non-countdown phases
+    if (soundEnabled && phase !== 'countdown' && completeSoundRef.current) {
+      completeSoundRef.current.setPositionAsync(0).then(() => {
+        return completeSoundRef.current?.playAsync();
+      }).catch((error) => {
+        console.log('⚠️ Error playing completion sound:', error);
+      });
+    }
+
+    if (phase === 'countdown') {
+      // Show "Go!" briefly before transitioning
+      setShowGo(true);
       
-      if (isLastSet && isLastRound) {
-        // Last work complete - navigate back instead of rest
-        console.log('🏁 Last work complete - navigating back');
-        setIsRunning(false);
-        navigation.goBack();
-        return;
-      }
-      
-      // Move to work rest
-      setCurrentPhase('workRest');
-      setSecondsRemaining(timer.workRest);
-      // Clear transition flag immediately so timer can restart
       setTimeout(() => {
-        isTransitioningRef.current = false;
-        console.log('✅ Transition flag cleared');
-      }, 50);
-    } else if (currentPhase === 'workRest') {
-      if (currentSet < timer.sets) {
-        // Move to next set
-        setCurrentSet(prev => prev + 1);
+        setShowGo(false);
         setCurrentPhase('work');
         setSecondsRemaining(timer.work);
-        setTimeout(() => {
-          isTransitioningRef.current = false;
-          console.log('✅ Transition flag cleared');
-        }, 50);
-      } else if (currentRound < timer.rounds) {
-        // Move to round rest
-        setCurrentPhase('roundRest');
-        setSecondsRemaining(timer.roundRest);
-        setTimeout(() => {
-          isTransitioningRef.current = false;
-          console.log('✅ Transition flag cleared');
-        }, 50);
-      } else {
-        // Complete!
+        isTransitioningRef.current = false;
+      }, 400);
+    } else if (phase === 'work') {
+      const isLastSet = set === timer.sets;
+      const isLastRound = round === timer.rounds;
+      
+      console.log('💪 Work complete - isLastSet:', isLastSet, 'isLastRound:', isLastRound);
+      
+      if (isLastSet && isLastRound) {
+        // Workout complete - stop timer
+        console.log('🏁 Workout complete!');
+        if (intervalRef.current) {
+          clearInterval(intervalRef.current);
+          intervalRef.current = null;
+        }
         setCurrentPhase('complete');
         setIsRunning(false);
         isTransitioningRef.current = false;
-        Alert.alert('Complete!', 'Great job! Your HIIT workout is complete.');
+      } else {
+        // Move to work rest - continue without stopping
+        console.log('⏸️ Moving to work rest');
+        setCurrentPhase('workRest');
+        setSecondsRemaining(timer.workRest);
+        setTimeout(() => {
+          isTransitioningRef.current = false;
+        }, 50);
       }
-    } else if (currentPhase === 'roundRest') {
-      // Start new round
+    } else if (phase === 'workRest') {
+      console.log('⏸️ Work rest complete');
+      if (set < timer.sets) {
+        // Next set - continue without stopping
+        console.log('➡️ Next set:', set + 1);
+        setCurrentSet(prev => prev + 1);
+        setCurrentPhase('work');
+        setSecondsRemaining(timer.work);
+      } else if (round < timer.rounds) {
+        // Round rest - continue without stopping
+        console.log('🔄 Moving to round rest');
+        setCurrentPhase('roundRest');
+        setSecondsRemaining(timer.roundRest);
+      }
+      setTimeout(() => {
+        isTransitioningRef.current = false;
+      }, 50);
+    } else if (phase === 'roundRest') {
+      console.log('🔄 Round rest complete');
+      // New round - continue without stopping
+      console.log('➡️ Next round:', round + 1);
       setCurrentRound(prev => prev + 1);
       setCurrentSet(1);
       setCurrentPhase('work');
       setSecondsRemaining(timer.work);
       setTimeout(() => {
         isTransitioningRef.current = false;
-        console.log('✅ Transition flag cleared');
       }, 50);
     }
-  }, [timer, currentPhase, currentSet, currentRound, playBeep]);
+  }, [timer, soundEnabled]);
+
+  // Trigger confetti
+  const triggerConfetti = () => {
+    const particleCount = 50; // More particles!
+    const colors = ['#227132', '#5E9EFF', '#FDB022', '#FF6B6B']; // Green, Blue, Yellow, Red
+    
+    const newParticles: Particle[] = [];
+    
+    for (let i = 0; i < particleCount; i++) {
+      const angle = (Math.PI * 2 * i) / particleCount + (Math.random() - 0.5) * 0.5;
+      const distance = 120 + Math.random() * 150;
+      const duration = 1200 + Math.random() * 400;
+      
+      const particle: Particle = {
+        id: Date.now() + i,
+        x: new Animated.Value(0),
+        y: new Animated.Value(0),
+        opacity: new Animated.Value(1),
+        rotation: new Animated.Value(0),
+        color: colors[Math.floor(Math.random() * colors.length)],
+        size: 6 + Math.random() * 8, // Varied sizes 6-14px
+      };
+      
+      // Animate particle with varied trajectories
+      Animated.parallel([
+        Animated.timing(particle.x, {
+          toValue: Math.cos(angle) * distance,
+          duration,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: true,
+        }),
+        Animated.timing(particle.y, {
+          toValue: Math.sin(angle) * distance + 80, // More gravity effect
+          duration,
+          easing: Easing.out(Easing.quad),
+          useNativeDriver: true,
+        }),
+        Animated.timing(particle.opacity, {
+          toValue: 0,
+          duration: duration * 0.8,
+          delay: duration * 0.2,
+          easing: Easing.ease,
+          useNativeDriver: true,
+        }),
+        Animated.timing(particle.rotation, {
+          toValue: (Math.random() - 0.5) * 6,
+          duration,
+          easing: Easing.linear,
+          useNativeDriver: true,
+        }),
+      ]).start();
+      
+      newParticles.push(particle);
+    }
+    
+    setParticles(newParticles);
+    
+    // Start celebration pulse animation
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(celebrationPulseAnim, {
+          toValue: 1.05,
+          duration: 800,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: false, // Must be false since sizeAnim uses width/height
+        }),
+        Animated.timing(celebrationPulseAnim, {
+          toValue: 1,
+          duration: 800,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: false, // Must be false since sizeAnim uses width/height
+        }),
+      ])
+    ).start();
+    
+    // Clear particles after animation
+    setTimeout(() => setParticles([]), 1600);
+  };
 
   const handlePlayPause = () => {
     setIsRunning(prev => {
-      // Reset countdown tracking when starting
       if (!prev) {
         lastPlayedSecondRef.current = null;
         isTransitioningRef.current = false;
-        setHasStarted(true); // Mark that timer has been started
       }
       return !prev;
     });
   };
 
-  // Calculate total workout time (excluding countdown)
-  const getTotalWorkoutTime = () => {
-    if (!timer) return 0;
-    const totalWorkTime = timer.work * timer.sets * timer.rounds;
-    // Work rest after each set except the last set of each round
-    const totalWorkRestTime = timer.workRest * (timer.sets - 1) * timer.rounds;
-    const totalRoundRestTime = timer.roundRest * (timer.rounds - 1); // Last round has no rest
-    return totalWorkTime + totalWorkRestTime + totalRoundRestTime;
-  };
-
-  // Calculate remaining workout time (excluding countdown)
-  const getRemainingWorkoutTime = () => {
-    if (!timer) return 0;
-    if (currentPhase === 'complete') return 0;
-    if (currentPhase === 'countdown') return getTotalWorkoutTime(); // Show full time during countdown
-
-    let remaining = 0;
-
-    // Add remaining time in current phase
-    remaining += secondsRemaining;
-
-    // Add remaining sets in current round (after current set)
-    if (currentPhase === 'work') {
-      // If not the last set of the round, add rest after this work
-      if (currentSet < timer.sets) {
-        remaining += timer.workRest;
-      }
-      // Add all remaining sets after current (each has work + rest, except last set has no rest)
-      const setsAfterCurrent = timer.sets - currentSet;
-      if (setsAfterCurrent > 0) {
-        remaining += timer.work * setsAfterCurrent;
-        remaining += timer.workRest * (setsAfterCurrent - 1); // No rest after last set
-      }
-    } else if (currentPhase === 'workRest') {
-      // Add all remaining sets after current (each has work + rest, except last set has no rest)
-      const setsAfterCurrent = timer.sets - currentSet;
-      if (setsAfterCurrent > 0) {
-        remaining += timer.work * setsAfterCurrent;
-        remaining += timer.workRest * (setsAfterCurrent - 1); // No rest after last set
-      }
-    }
-
-    // Add remaining rounds (after current round)
-    if (currentRound < timer.rounds) {
-      const remainingRounds = timer.rounds - currentRound;
-      // Each remaining round has all sets with their rests
-      remaining += (timer.work * timer.sets) * remainingRounds;
-      remaining += (timer.workRest * (timer.sets - 1)) * remainingRounds;
-      // Plus round rest between rounds (but not after the last round)
-      remaining += timer.roundRest * (remainingRounds - 1);
-      
-      // If we're not in roundRest yet and not in the last round, add round rest
-      if (currentPhase !== 'roundRest' && currentRound < timer.rounds) {
-        remaining += timer.roundRest;
-      }
-    }
+  const handleRestart = () => {
+    // Reset to initial state
+    setIsRunning(false);
+    setCurrentPhase('countdown');
+    setCurrentSet(1);
+    setCurrentRound(1);
+    setSecondsRemaining(5);
+    setShowGo(false);
+    setParticles([]);
+    isTransitioningRef.current = false;
+    lastPlayedSecondRef.current = null;
     
-    return remaining;
+    // Stop and reset animated values
+    sizeAnim.stopAnimation(() => {
+      sizeAnim.setValue(1);
+    });
+    colorAnim.stopAnimation(() => {
+      colorAnim.setValue(0);
+    });
+    borderRadiusAnim.stopAnimation(() => {
+      borderRadiusAnim.setValue(CONTAINER_WIDTH / 2);
+    });
+    celebrationPulseAnim.stopAnimation(() => {
+      celebrationPulseAnim.setValue(1);
+    });
+    
+    // Auto-start after a brief delay
+    setTimeout(() => {
+      setIsRunning(true);
+    }, 200);
   };
 
   const handleMenu = () => {
@@ -499,22 +534,6 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
           },
           style: 'destructive',
         },
-        {
-          text: 'Duplicate Timer',
-          onPress: () => {
-            if (timer) {
-              const newTimerId = `hiit-${Date.now()}`;
-              const duplicatedTimer = {
-                ...timer,
-                id: newTimerId,
-                name: `${timer.name} 2`,
-                createdAt: new Date().toISOString(),
-              };
-              addHIITTimer(duplicatedTimer);
-              navigation.replace('HIITTimerForm', { timerId: newTimerId });
-            }
-          },
-        },
         { text: 'Cancel', style: 'cancel' },
       ],
       { cancelable: true }
@@ -526,37 +545,15 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
   };
 
   const handleSkip = () => {
-    if (!timer || !hasStarted) return;
+    if (!timer) return;
     
-    // Manually trigger phase complete to skip to next phase
     setIsRunning(false);
     setTimeout(() => {
       handlePhaseComplete();
-      setIsRunning(true);
+      if (currentPhase !== 'complete') {
+        setIsRunning(true);
+      }
     }, 100);
-  };
-
-  const handleReset = () => {
-    Alert.alert(
-      'Reset Timer',
-      'Are you sure you want to reset the timer?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Reset',
-          onPress: () => {
-            setIsRunning(false);
-            setHasStarted(false); // Reset to initial state
-            setCurrentPhase('countdown');
-            setCurrentSet(1);
-            setCurrentRound(1);
-            setSecondsRemaining(5); // Reset to countdown
-            isTransitioningRef.current = false;
-            lastPlayedSecondRef.current = null;
-          },
-        },
-      ]
-    );
   };
 
   const formatTime = (seconds: number) => {
@@ -565,77 +562,87 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
-  const getPhaseColor = () => {
-    switch (currentPhase) {
-      case 'countdown':
-        return COLORS.accentPrimary;
-      case 'work':
-        return COLORS.signalPositive;
-      case 'workRest':
-      case 'roundRest':
-        return COLORS.textSecondary;
-      case 'complete':
-        return COLORS.accentPrimary;
-      default:
-        return COLORS.textPrimary;
-    }
+  // Calculate total workout time (excluding countdown)
+  const getTotalWorkoutTime = () => {
+    if (!timer) return 0;
+    const totalWorkTime = timer.work * timer.sets * timer.rounds;
+    const totalWorkRestTime = timer.workRest * (timer.sets - 1) * timer.rounds;
+    const totalRoundRestTime = timer.roundRest * (timer.rounds - 1);
+    return totalWorkTime + totalWorkRestTime + totalRoundRestTime;
   };
 
-  const getPhaseText = () => {
-    switch (currentPhase) {
-      case 'countdown':
-        return 'Get Ready';
-      case 'work':
-        return 'WORK';
-      case 'workRest':
-        return 'REST';
-      case 'roundRest':
-        return 'ROUND REST';
-      case 'complete':
-        return 'COMPLETE';
-    }
-  };
-
-  const getTotalSeconds = () => {
-    if (!timer) return 30;
-    
-    switch (currentPhase) {
-      case 'countdown':
-        return 5;
-      case 'work':
-        return timer.work;
-      case 'workRest':
-        return timer.workRest;
-      case 'roundRest':
-        return timer.roundRest;
-      case 'complete':
-        return 0;
-    }
-  };
-
-  const getTimerProgress = () => {
-    if (!timer) return 1;
-    
-    const totalSeconds = getTotalSeconds();
+  // Calculate remaining workout time (excluding countdown)
+  const getRemainingWorkoutTime = () => {
+    if (!timer) return 0;
     if (currentPhase === 'complete') return 0;
+    if (currentPhase === 'countdown') return getTotalWorkoutTime();
+
+    let remaining = 0;
+
+    // Add remaining time in current phase
+    remaining += secondsRemaining;
+
+    // Add remaining sets in current round (after current set)
+    if (currentPhase === 'work') {
+      if (currentSet < timer.sets) {
+        remaining += timer.workRest;
+      }
+      const setsAfterCurrent = timer.sets - currentSet;
+      if (setsAfterCurrent > 0) {
+        remaining += timer.work * setsAfterCurrent;
+        remaining += timer.workRest * (setsAfterCurrent - 1);
+      }
+    } else if (currentPhase === 'workRest') {
+      const setsAfterCurrent = timer.sets - currentSet;
+      if (setsAfterCurrent > 0) {
+        remaining += timer.work * setsAfterCurrent;
+        remaining += timer.workRest * (setsAfterCurrent - 1);
+      }
+    }
+
+    // Add remaining rounds (after current round)
+    if (currentRound < timer.rounds) {
+      const remainingRounds = timer.rounds - currentRound;
+      remaining += (timer.work * timer.sets) * remainingRounds;
+      remaining += (timer.workRest * (timer.sets - 1)) * remainingRounds;
+      remaining += timer.roundRest * (remainingRounds - 1);
+      
+      if (currentPhase !== 'roundRest' && currentRound < timer.rounds) {
+        remaining += timer.roundRest;
+      }
+    }
     
-    return totalSeconds > 0 ? secondsRemaining / totalSeconds : 0;
+    return remaining;
   };
 
-  if (!timer) {
-    return (
-      <LinearGradient
-        colors={GRADIENTS.backgroundLight.colors}
-        start={GRADIENTS.backgroundLight.start}
-        end={GRADIENTS.backgroundLight.end}
-        style={styles.container}
-      >
-        <View style={styles.innerContainer}>
-          <Text style={styles.errorText}>Timer not found</Text>
-        </View>
-      </LinearGradient>
-    );
-  }
+  const getDisplayText = () => {
+    if (showGo) return 'Go!';
+    if (currentPhase === 'countdown') return secondsRemaining.toString();
+    if (currentPhase === 'complete') return 'Workout complete';
+    return formatTime(secondsRemaining);
+  };
+
+  const getSubtitleText = () => {
+    if (currentPhase === 'complete') return 'Nice work';
+    return null;
+  };
+
+  // Interpolate size
+  const animatedSize = sizeAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [MIN_SIZE, CONTAINER_WIDTH],
+  });
+
+  // Interpolate color
+  const backgroundColor = colorAnim.interpolate({
+    inputRange: [0, 1, 2, 3],
+    outputRange: [
+      PHASE_COLORS.countdown,
+      PHASE_COLORS.work,
+      PHASE_COLORS.rest,
+      PHASE_COLORS.complete,
+    ],
+  });
 
   return (
     <LinearGradient
@@ -644,7 +651,7 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
       end={GRADIENTS.backgroundLight.end}
       style={styles.container}
     >
-      <View style={styles.innerContainer}>
+      <View style={[styles.innerContainer, { paddingBottom: insets.bottom }]}>
         {/* Header */}
         <View style={[styles.header, { paddingTop: insets.top }]}>
           <View style={styles.topBar}>
@@ -661,14 +668,14 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
           {/* Page Title and Set/Round Info */}
           <View style={styles.headerInfoContainer}>
             <View style={styles.headerInfoLeft}>
-            <Text style={styles.pageTitle}>{timer.name}</Text>
+              <Text style={styles.pageTitle}>{timer.name}</Text>
               <Text style={styles.progressInfo}>
                 <Text style={styles.progressLabel}>Set </Text>
                 <Text style={styles.progressValue}>{currentSet}/{timer.sets}</Text>
                 <Text style={styles.progressLabel}>     Round </Text>
                 <Text style={styles.progressValue}>{currentRound}/{timer.rounds}</Text>
               </Text>
-              </View>
+            </View>
             
             {/* Total Time - right aligned */}
             <View style={styles.totalTimeContainer}>
@@ -710,253 +717,134 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
                 })()}
               </Svg>
             </View>
-            </View>
           </View>
+        </View>
 
-        <View style={styles.content}>
-
-          {/* Timer Blocks */}
-          <View style={styles.timerBlocksContainer}>
+        {/* Timer Circle */}
+        <View style={styles.timerContainer}>
+          {/* Confetti particles */}
+          {particles.map(particle => (
+            <Animated.View
+              key={particle.id}
+              style={[
+                styles.particle,
+                {
+                  width: particle.size,
+                  height: particle.size,
+                  borderRadius: particle.size / 2,
+                  backgroundColor: particle.color,
+                  transform: [
+                    { translateX: particle.x },
+                    { translateY: particle.y },
+                    { rotate: particle.rotation.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: ['0deg', '360deg'],
+                    }) },
+                  ],
+                  opacity: particle.opacity,
+                },
+              ]}
+            />
+          ))}
+          
+          {/* Circle shape */}
+          <Animated.View
+            style={[
+              styles.circle,
+              {
+                width: animatedSize,
+                height: animatedSize,
+                borderRadius: borderRadiusAnim,
+                backgroundColor,
+                transform: currentPhase === 'complete' ? [{ scale: celebrationPulseAnim }] : [],
+              },
+            ]}
+          >
             {currentPhase === 'complete' ? (
-              // Complete Phase: Show completion message
-              <View style={[styles.timerBlock, { backgroundColor: '#227132', flex: 1 }]}>
-                <Text style={[styles.currentPhaseTime, { color: '#FFFFFF' }]}>
-                  Complete!
-                </Text>
-          </View>
-            ) : (
-              // Two-block vertical layout: Always render two blocks, animate properties
               <>
-                {/* Top Block */}
-                <Animated.View 
-                  style={[
-                    styles.timerBlock,
-                    {
-                      backgroundColor: 
-                        currentPhase === 'countdown' 
-                          ? '#FDB022' // Countdown yellow
-                          : currentPhase === 'work'
-                            ? urgencyAnim.interpolate({
-                                inputRange: [0, 1],
-                                outputRange: [LIGHT_COLORS.secondary, COLORS.accentPrimary], // Animate from black to orange
-                              })
-                            : '#CDCABB', // Rest phase (inactive - gray)
-                      flex: (currentPhase === 'countdown' || currentPhase === 'work') 
-                        ? Animated.add(
-                            Animated.multiply(
-                              progressAnim.interpolate({
-                                inputRange: [0.1, 1],
-                                outputRange: [0.25, 0.8],
-                                extrapolate: 'clamp',
-                              }),
-                              phaseTransitionAnim.interpolate({
-                                inputRange: [-1, 0],
-                                outputRange: [0, 1],
-                                extrapolate: 'clamp',
-                              })
-                            ),
-                            phaseTransitionAnim.interpolate({
-                              inputRange: [-1, 0],
-                              outputRange: [1, 0],
-                              extrapolate: 'clamp',
-                            })
-                          )
-                        : progressAnim.interpolate({
-                            inputRange: [0.1, 1],
-                            outputRange: [0.75, 0.25],
-                            extrapolate: 'clamp',
-                          }),
-                      borderBottomLeftRadius: phaseTransitionAnim.interpolate({
-                        inputRange: [-1, 0],
-                        outputRange: [32, 0],
-                        extrapolate: 'clamp',
-                      }),
-                      borderBottomRightRadius: phaseTransitionAnim.interpolate({
-                        inputRange: [-1, 0],
-                        outputRange: [32, 0],
-                        extrapolate: 'clamp',
-                      }),
-                      marginBottom: phaseTransitionAnim.interpolate({
-                        inputRange: [-1, 0, 1],
-                        outputRange: [0, 4, 4],
-                        extrapolate: 'clamp',
-                      }),
-                    },
-                  ]}
-                >
-                  <Animated.Text 
-                    style={[
-                      styles.currentPhaseTime, 
-                      { 
-                        color: (currentPhase === 'countdown' || currentPhase === 'work') 
-                          ? '#FFFFFF' 
-                          : phaseTransitionAnim.interpolate({
-                              inputRange: [0, 1],
-                              outputRange: ['#FFFFFF', '#817B77'],
-                            }),
-                        fontSize: (currentPhase === 'countdown' || currentPhase === 'work') 
-                          ? phaseTransitionAnim.interpolate({
-                              inputRange: [-1, 0, 1],
-                              outputRange: [72, 72, 28],
-                            })
-                          : TYPOGRAPHY.h3.fontSize, // Use h3 for "Move" label
-                        transform: currentPhase === 'countdown' ? [{ scale: countdownFlashAnim }] : [],
-                        opacity: currentPhase === 'countdown' ? countdownOpacityAnim : 1,
-                      }
-                    ]}
-                  >
-                    {currentPhase === 'countdown' 
-                      ? secondsRemaining 
-                      : (currentPhase === 'work' ? formatTime(secondsRemaining) : 'Move')
-                    }
-                  </Animated.Text>
-                </Animated.View>
-                
-                {/* Bottom Block */}
-                <Animated.View 
-                  style={[
-                    styles.timerBlock,
-                    {
-                      backgroundColor: (currentPhase === 'workRest' || currentPhase === 'roundRest') 
-                        ? urgencyAnim.interpolate({
-                            inputRange: [0, 1],
-                            outputRange: ['#FDB022', COLORS.accentPrimary], // Animate from yellow to orange
-                          })
-                        : '#CDCABB', // Inactive rest block
-                      flex: (currentPhase === 'countdown' || currentPhase === 'work')
-                        ? Animated.multiply(
-                            progressAnim.interpolate({
-                              inputRange: [0.1, 1],
-                              outputRange: [0.75, 0.2],
-                              extrapolate: 'clamp',
-                            }),
-                            phaseTransitionAnim.interpolate({
-                              inputRange: [-1, 0],
-                              outputRange: [0, 1],
-                              extrapolate: 'clamp',
-                            })
-                          )
-                        : progressAnim.interpolate({
-                            inputRange: [0.1, 1],
-                            outputRange: [0.25, 0.75],
-                            extrapolate: 'clamp',
-                          }),
-                      maxHeight: phaseTransitionAnim.interpolate({
-                        inputRange: [-1, -0.5, 0],
-                        outputRange: [0, 5000, 10000],
-                        extrapolate: 'clamp',
-                      }),
-                      borderTopLeftRadius: 0,
-                      borderTopRightRadius: 0,
-                      overflow: 'hidden',
-                    },
-                  ]}
-                >
-                  <Animated.Text 
-                    style={[
-                      styles.currentPhaseTime,
-                      {
-                        color: (currentPhase === 'workRest' || currentPhase === 'roundRest') 
-                          ? '#FFFFFF' // White text on yellow/orange background
-                          : LIGHT_COLORS.textMeta,
-                        fontSize: (currentPhase === 'workRest' || currentPhase === 'roundRest')
-                          ? phaseTransitionAnim.interpolate({
-                              inputRange: [0, 1],
-                              outputRange: [28, 72],
-                            })
-                          : TYPOGRAPHY.h3.fontSize, // Use h3 for "Rest" label
-                        opacity: phaseTransitionAnim.interpolate({
-                          inputRange: [-1, -0.7, 0],
-                          outputRange: [0, 0, 1],
-                          extrapolate: 'clamp',
-                        }),
-                      }
-                    ]}
-                  >
-                    {(currentPhase === 'workRest' || currentPhase === 'roundRest') 
-                      ? formatTime(secondsRemaining) 
-                      : 'Rest'
-                    }
-                  </Animated.Text>
-                </Animated.View>
+                <Text style={styles.completeText}>{getDisplayText()}</Text>
+                {getSubtitleText() && (
+                  <Text style={styles.subtitleText}>{getSubtitleText()}</Text>
+                )}
               </>
+            ) : (
+              <Text style={styles.timerText}>{getDisplayText()}</Text>
             )}
-          </View>
+          </Animated.View>
+        </View>
 
-          <View style={styles.stickyButtonContainer}>
-            {/* Left button: Sound toggle */}
-            <Animated.View
-              style={[
-                styles.sideButton,
-                {
-                  opacity: sideButtonsAnim,
-                  transform: [
-                    {
-                      translateX: sideButtonsAnim.interpolate({
-                        inputRange: [0, 1],
-                        outputRange: [50, 0], // Slide in from right
-                      }),
-                    },
-                    {
-                      scale: sideButtonsAnim,
-                    },
-                  ],
-                },
-              ]}
-              pointerEvents={hasStarted ? 'auto' : 'none'}
-            >
-              <TouchableOpacity
-                onPress={handleToggleSound}
-                style={styles.sideButtonTouchable}
-                activeOpacity={0.7}
-              >
-                <IconSpeaker size={24} color={LIGHT_COLORS.textSecondary} muted={!soundEnabled} />
-              </TouchableOpacity>
-            </Animated.View>
-
-            {/* Play/Pause Button */}
+        {/* Controls */}
+        <View style={styles.controls}>
+          {/* Left button: Sound toggle */}
+          <Animated.View
+            style={[
+              styles.sideButton,
+              {
+                opacity: sideButtonsAnim,
+                transform: [
+                  {
+                    translateX: sideButtonsAnim.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [50, 0],
+                    }),
+                  },
+                  { scale: sideButtonsAnim },
+                ],
+              },
+            ]}
+              pointerEvents={(isRunning && currentPhase !== 'complete') ? 'auto' : 'none'}
+          >
             <TouchableOpacity
-              onPress={handlePlayPause}
-              style={[BUTTONS.primaryButtonNoLabel, styles.playPauseButton]}
-              activeOpacity={0.8}
+              onPress={handleToggleSound}
+              style={styles.sideButtonTouchable}
+              activeOpacity={0.7}
             >
-              {isRunning ? (
-                <IconPause size={32} color={'#FFFFFF'} />
-              ) : (
-                <IconPlay size={32} color={'#FFFFFF'} />
-              )}
+              <IconSpeaker size={24} color={LIGHT_COLORS.textSecondary} muted={!soundEnabled} />
             </TouchableOpacity>
+          </Animated.View>
 
-            {/* Right button: Skip */}
-            <Animated.View
-              style={[
-                styles.sideButton,
-                {
-                  opacity: sideButtonsAnim,
-                  transform: [
-                    {
-                      translateX: sideButtonsAnim.interpolate({
-                        inputRange: [0, 1],
-                        outputRange: [-50, 0], // Slide in from left
-                      }),
-                    },
-                    {
-                      scale: sideButtonsAnim,
-                    },
-                  ],
-                },
-              ]}
-              pointerEvents={hasStarted ? 'auto' : 'none'}
+          {/* Play/Pause/Restart Button */}
+          <TouchableOpacity
+            onPress={currentPhase === 'complete' ? handleRestart : handlePlayPause}
+            style={[BUTTONS.primaryButtonNoLabel, styles.playPauseButton]}
+            activeOpacity={0.8}
+          >
+            {currentPhase === 'complete' ? (
+              <IconRestart size={32} color={'#FFFFFF'} />
+            ) : isRunning ? (
+              <IconPause size={32} color={'#FFFFFF'} />
+            ) : (
+              <IconPlay size={32} color={'#FFFFFF'} />
+            )}
+          </TouchableOpacity>
+
+          {/* Right button: Skip */}
+          <Animated.View
+            style={[
+              styles.sideButton,
+              {
+                opacity: sideButtonsAnim,
+                transform: [
+                  {
+                    translateX: sideButtonsAnim.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [-50, 0],
+                    }),
+                  },
+                  { scale: sideButtonsAnim },
+                ],
+              },
+            ]}
+              pointerEvents={(isRunning && currentPhase !== 'complete') ? 'auto' : 'none'}
+          >
+            <TouchableOpacity
+              onPress={handleSkip}
+              style={styles.sideButtonTouchable}
+              activeOpacity={0.7}
             >
-              <TouchableOpacity
-                onPress={handleSkip}
-                style={styles.sideButtonTouchable}
-                activeOpacity={0.7}
-              >
-                <IconSkip size={24} color={LIGHT_COLORS.textSecondary} />
-              </TouchableOpacity>
-            </Animated.View>
-          </View>
+              <IconSkip size={24} color={LIGHT_COLORS.textSecondary} />
+            </TouchableOpacity>
+          </Animated.View>
         </View>
       </View>
     </LinearGradient>
@@ -1001,23 +889,17 @@ const styles = StyleSheet.create({
     borderRadius: 2,
     backgroundColor: LIGHT_COLORS.secondary,
   },
-  content: {
-    flex: 1,
-    paddingHorizontal: SPACING.xxl,
-    justifyContent: 'flex-start',
-    paddingBottom: 176, // Space for button (80px height + 48px from bottom + 48px gap)
-  },
   headerInfoContainer: {
     paddingHorizontal: SPACING.xxl,
-    paddingTop: SPACING.md, // Matches other leaf pages
+    paddingTop: SPACING.md,
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-end', // Align to baseline
+    alignItems: 'flex-end',
   },
   headerInfoLeft: {
     flexDirection: 'column',
-    gap: 8, // Space between title and set/round info
-    flex: 1, // Take remaining space
+    gap: 8,
+    flex: 1,
   },
   pageTitle: {
     ...TYPOGRAPHY.h2,
@@ -1036,48 +918,55 @@ const styles = StyleSheet.create({
   totalTimeContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8, // Space between time text and circle
+    gap: 8,
   },
   totalTimeText: {
-    ...TYPOGRAPHY.body, // Matches set/round indicator style
+    ...TYPOGRAPHY.body,
     color: LIGHT_COLORS.text,
   },
   totalTimeCircle: {
     width: 16,
     height: 16,
   },
-  timerBlocksContainer: {
-    width: '100%',
-    flex: 1, // Take remaining space
-    marginTop: 48, // 48px gap between set/round info and blocks
-  },
-  timerBlock: {
-    alignItems: 'center',
+  timerContainer: {
+    flex: 1,
     justifyContent: 'center',
-    borderRadius: 32,
+    alignItems: 'center',
+    position: 'relative',
+  },
+  circle: {
+    justifyContent: 'center',
+    alignItems: 'center',
     borderCurve: 'continuous',
   },
-  currentPhaseTime: {
+  timerText: {
     fontSize: 72,
     fontWeight: '300',
+    color: '#FFFFFF',
     textAlign: 'center',
   },
-  nextPhaseTime: {
-    fontSize: 28,
-    fontWeight: '300',
-    color: LIGHT_COLORS.textMeta,
+  completeText: {
+    ...TYPOGRAPHY.h2,
+    color: '#FFFFFF',
     textAlign: 'center',
   },
-  stickyButtonContainer: {
+  subtitleText: {
+    ...TYPOGRAPHY.h3,
+    color: '#FFFFFF',
+    textAlign: 'center',
+    marginTop: SPACING.md,
+    opacity: 0.9,
+  },
+  particle: {
     position: 'absolute',
-    bottom: 48, // 48px from bottom of block
-    left: 0,
-    right: 0,
+  },
+  controls: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 20, // Space between buttons
+    gap: 20,
     paddingHorizontal: SPACING.xxl,
+    paddingBottom: 48,
   },
   playPauseButton: {
     backgroundColor: LIGHT_COLORS.secondary,
@@ -1103,5 +992,3 @@ const styles = StyleSheet.create({
     marginTop: SPACING.xxl,
   },
 });
-
-

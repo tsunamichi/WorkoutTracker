@@ -4,7 +4,7 @@
 import React, { useState, useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, SafeAreaView, TouchableOpacity } from 'react-native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import DraggableFlatList, { RenderItemParams, ScaleDecorator } from 'react-native-draggable-flatlist';
+// import DraggableFlatList, { RenderItemParams, ScaleDecorator } from 'react-native-draggable-flatlist';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useOnboardingStore } from '../../store/useOnboardingStore';
 import { ProgressHeader } from '../../components/common/ProgressHeader';
@@ -117,23 +117,18 @@ export function TemplateEditorScreen({ navigation }: TemplateEditorScreenProps) 
                 {isExpanded && (
                   <View style={styles.dayContent}>
                     {hasExercises ? (
-                      <DraggableFlatList
-                        data={day.exercises}
-                        keyExtractor={(item) => item.id}
-                        onDragEnd={({ data }) => reorderExercisesInDay(day.dayIndex, data)}
-                        renderItem={({ item, drag, isActive }: RenderItemParams<Exercise>) => (
-                          <ScaleDecorator>
-                            <View onLongPress={drag}>
-                              <ExerciseRow
-                                exercise={item}
-                                onPress={() => handleEditExercise(item, day.dayIndex)}
-                                onDelete={() => removeExerciseFromDay(day.dayIndex, item.id)}
-                                isDragging={isActive}
-                              />
-                            </View>
-                          </ScaleDecorator>
-                        )}
-                      />
+                      <View>
+                        {day.exercises.map((item) => (
+                          <View key={item.id}>
+                            <ExerciseRow
+                              exercise={item}
+                              onPress={() => handleEditExercise(item, day.dayIndex)}
+                              onDelete={() => removeExerciseFromDay(day.dayIndex, item.id)}
+                              isDragging={false}
+                            />
+                          </View>
+                        ))}
+                      </View>
                     ) : (
                       <Text style={styles.emptyText}>No exercises yet. Add some below!</Text>
                     )}
