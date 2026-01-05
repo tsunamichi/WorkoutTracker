@@ -1021,7 +1021,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   sectionHeaderText: {
-    ...TYPOGRAPHY.h3,
+    ...TYPOGRAPHY.body,
     color: LIGHT_COLORS.textMeta,
   },
   // Exercise Card Shadows (matching Today screen workout card)
@@ -1089,7 +1089,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   exerciseName: {
-    ...TYPOGRAPHY.h3,
+    ...TYPOGRAPHY.body,
     color: LIGHT_COLORS.secondary,
   },
   exerciseNameDisabled: {
