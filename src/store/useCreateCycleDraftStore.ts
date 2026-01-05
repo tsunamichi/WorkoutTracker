@@ -1,6 +1,6 @@
 // Manual Cycle Creation Draft Store
 
-import create from 'zustand';
+import { create } from 'zustand';
 import {
   Weekday,
   WorkoutLength,

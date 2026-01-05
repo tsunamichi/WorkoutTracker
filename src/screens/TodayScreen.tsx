@@ -758,19 +758,6 @@ export function TodayScreen({ navigation }: TodayScreenProps) {
             </ScrollView>
             // </GestureDetector>
             )}
-            
-            {/* Fixed HIIT Timer Button - Only show when there's an active cycle */}
-            {activeCycle && (
-              <View style={styles.fixedTimerButtonContainer}>
-                <TouchableOpacity 
-                  style={styles.fixedTimerButton}
-                  activeOpacity={0.7}
-                  onPress={() => navigation.navigate('HIITTimerList')}
-                >
-                  <IconStopwatch size={24} color="#FFFFFF" />
-                </TouchableOpacity>
-              </View>
-            )}
         </SafeAreaView>
       </LinearGradient>
       
@@ -1287,21 +1274,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   
-  // Fixed Timer Button
-  fixedTimerButtonContainer: {
-    position: 'absolute',
-    right: 8,
-    bottom: 8,
-  },
-  fixedTimerButton: {
-    width: 56,
-    height: 56,
-    borderRadius: 16,
-    backgroundColor: '#1B1B1B',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  
   // Swap Bottom Sheet
   swapSheetOverlay: {
     flex: 1,
@@ -1317,7 +1289,7 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 24,
     paddingTop: SPACING.md,
     paddingBottom: SPACING.xl,
-    paddingHorizontal: SPACING.xxl,
+    paddingHorizontal: SPACING.sm,
     maxHeight: '70%',
   },
   swapSheetInner: {

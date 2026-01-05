@@ -1,4 +1,4 @@
-import create from 'zustand';
+import { create } from 'zustand';
 import dayjs from 'dayjs';
 import type { Cycle, Exercise, WorkoutSession, BodyWeightEntry, AppSettings, WorkoutAssignment, TrainerConversation, ExercisePR, WorkoutProgress, ExerciseProgress, HIITTimer } from '../types';
 import * as storage from '../storage';

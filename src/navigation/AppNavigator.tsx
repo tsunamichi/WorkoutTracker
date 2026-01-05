@@ -1,6 +1,7 @@
 import React from 'react';
-import { View, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { useNavigation } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { TodayScreen } from '../screens/TodayScreen';
 import { WorkoutsScreen } from '../screens/WorkoutsScreen';
@@ -58,19 +59,21 @@ function CustomTabBarBackground() {
 }
 
 function TabNavigator() {
+  const navigation = useNavigation();
+  
   return (
     <View style={{ flex: 1, backgroundColor: COLORS.backgroundCanvas }}>
       <Tab.Navigator
         screenOptions={{
           headerShown: false,
           tabBarStyle: {
-            backgroundColor: COLORS.backgroundContainer,
+            backgroundColor: 'transparent',
             borderTopWidth: 0,
             height: 56,
             position: 'absolute',
-            bottom: 8,
+            bottom: 32,
             left: 8,
-            width: '70%',
+            right: 8,
             borderRadius: 16,
             paddingTop: 0,
             paddingBottom: 0,
@@ -83,12 +86,26 @@ function TabNavigator() {
             justifyContent: 'center',
             alignItems: 'center',
             paddingVertical: 0,
-            paddingHorizontal: 12,
+            paddingHorizontal: 20,
             paddingTop: 0,
             paddingBottom: 0,
             margin: 0,
+            flex: 1,
           },
-          tabBarBackground: () => null,
+          tabBarBackground: () => (
+            <View style={styles.bottomNavContainer}>
+              <View style={styles.bottomNavBar}>
+                <View style={styles.tabBarBackground} />
+              </View>
+              <TouchableOpacity 
+                style={styles.timerButton}
+                activeOpacity={0.7}
+                onPress={() => navigation.navigate('HIITTimerList' as never)}
+              >
+                <IconStopwatch size={24} color="#FFFFFF" />
+              </TouchableOpacity>
+            </View>
+          ),
           tabBarActiveTintColor: '#000000',
           tabBarInactiveTintColor: COLORS.textMeta,
         }}
@@ -100,7 +117,7 @@ function TabNavigator() {
           tabBarIcon: ({ color, focused }) => (
             <View style={styles.tabContentWrapper} pointerEvents="box-none">
               <IconCalendar size={24} color={color} />
-              {focused && <Text style={[styles.tabLabel, { color }]}>Schedule</Text>}
+              <Text style={[styles.tabLabel, { color }]}>Schedule</Text>
             </View>
           ),
           tabBarLabel: () => null,
@@ -113,7 +130,7 @@ function TabNavigator() {
           tabBarIcon: ({ color, focused }) => (
             <View style={styles.tabContentWrapper} pointerEvents="box-none">
               <IconWorkouts size={24} color={color} />
-              {focused && <Text style={[styles.tabLabel, { color }]}>Workouts</Text>}
+              <Text style={[styles.tabLabel, { color }]}>Workouts</Text>
             </View>
           ),
           tabBarLabel: () => null,
@@ -125,6 +142,25 @@ function TabNavigator() {
 }
 
 const styles = StyleSheet.create({
+  bottomNavContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 40,
+    height: 56,
+    paddingHorizontal: 8,
+  },
+  bottomNavBar: {
+    flex: 1,
+    height: 56,
+  },
+  timerButton: {
+    width: 56,
+    height: 56,
+    borderRadius: 16,
+    backgroundColor: '#1B1B1B',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   tabBarBackground: {
     flex: 1,
     backgroundColor: COLORS.backgroundContainer,
