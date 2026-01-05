@@ -74,12 +74,11 @@ export default function HIITTimerListScreen({ navigation }: Props) {
   };
 
   const calculateTotalTime = (timer: HIITTimer) => {
-    // Time per set: work + workRest
-    const timePerSet = timer.work + timer.workRest;
-    // Time per round: timePerSet * sets
-    const timePerRound = timePerSet * timer.sets;
-    // Total time: timePerRound * rounds + roundRest between rounds
-    const totalTime = timePerRound * timer.rounds + timer.roundRest * (timer.rounds - 1);
+    // Calculate total time (excluding countdown, matching execution screen logic)
+    const totalWorkTime = timer.work * timer.sets * timer.rounds;
+    const totalWorkRestTime = timer.workRest * (timer.sets - 1) * timer.rounds; // Rest BETWEEN sets only
+    const totalRoundRestTime = timer.roundRest * (timer.rounds - 1); // Rest BETWEEN rounds only
+    const totalTime = totalWorkTime + totalWorkRestTime + totalRoundRestTime;
     
     const mins = Math.floor(totalTime / 60);
     const secs = totalTime % 60;
