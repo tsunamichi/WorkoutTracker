@@ -39,7 +39,7 @@ const LIGHT_COLORS = {
 
 export function TodayScreen({ navigation }: TodayScreenProps) {
   const insets = useSafeAreaInsets();
-  const { cycles, workoutAssignments, getWorkoutCompletionPercentage, swapWorkoutAssignments } = useStore();
+  const { cycles, workoutAssignments, getWorkoutCompletionPercentage, getExerciseProgress, swapWorkoutAssignments } = useStore();
   const today = dayjs();
   
   // State for selected date (defaults to today)
@@ -108,8 +108,16 @@ export function TodayScreen({ navigation }: TodayScreenProps) {
       : null;
     
     // Check if workout is 100% complete
-    const totalSets = workout?.exercises.reduce((acc, ex) => acc + (ex.targetSets || 0), 0) || 0;
     const workoutKey = workout ? `${workout.id}-${dateStr}` : '';
+    let totalSets = 0;
+    if (workout) {
+      workout.exercises.forEach(ex => {
+        const progress = getExerciseProgress(workoutKey, ex.id);
+        if (!progress?.skipped) {
+          totalSets += ex.targetSets || 0;
+        }
+      });
+    }
     const completionPercentage = workout ? getWorkoutCompletionPercentage(workoutKey, totalSets) : 0;
     const isCompleted = completionPercentage === 100;
     
@@ -437,8 +445,15 @@ export function TodayScreen({ navigation }: TodayScreenProps) {
                     {/* Progress Dots */}
                     <View style={styles.progressDotsContainer}>
                       {(() => {
-                        const totalSets = previousWorkoutData.workout.exercises.reduce((acc: number, ex: any) => acc + (ex.targetSets || 0), 0);
                         const workoutKey = `${previousWorkoutData.workout.id}-${previousWorkoutData.date}`;
+                        // Calculate totalSets excluding skipped exercises
+                        let totalSets = 0;
+                        previousWorkoutData.workout.exercises.forEach((ex: any) => {
+                          const progress = getExerciseProgress(workoutKey, ex.id);
+                          if (!progress?.skipped) {
+                            totalSets += ex.targetSets || 0;
+                          }
+                        });
                         const completionPercentage = getWorkoutCompletionPercentage(workoutKey, totalSets);
                         const totalDots = 96; // 3 rows * 32 dots
                         const completedDots = Math.round((completionPercentage / 100) * totalDots);
@@ -466,8 +481,15 @@ export function TodayScreen({ navigation }: TodayScreenProps) {
                     {/* Footer */}
                     <View style={styles.workoutCardFooter}>
                       {(() => {
-                        const totalSets = previousWorkoutData.workout.exercises.reduce((acc: number, ex: any) => acc + (ex.targetSets || 0), 0);
                         const workoutKey = `${previousWorkoutData.workout.id}-${previousWorkoutData.date}`;
+                        // Calculate totalSets excluding skipped exercises
+                        let totalSets = 0;
+                        previousWorkoutData.workout.exercises.forEach((ex: any) => {
+                          const progress = getExerciseProgress(workoutKey, ex.id);
+                          if (!progress?.skipped) {
+                            totalSets += ex.targetSets || 0;
+                          }
+                        });
                         const completionPercentage = getWorkoutCompletionPercentage(workoutKey, totalSets);
                         
                         // Determine button state
@@ -555,8 +577,15 @@ export function TodayScreen({ navigation }: TodayScreenProps) {
                     {/* Progress Dots - Show total sets across all exercises */}
                     <View style={styles.progressDotsContainer}>
                       {(() => {
-                        const totalSets = selectedDay.workout.exercises.reduce((acc, ex) => acc + (ex.targetSets || 0), 0);
                         const workoutKey = `${selectedDay.workout.id}-${selectedDay.date}`;
+                        // Calculate totalSets excluding skipped exercises
+                        let totalSets = 0;
+                        selectedDay.workout.exercises.forEach((ex: any) => {
+                          const progress = getExerciseProgress(workoutKey, ex.id);
+                          if (!progress?.skipped) {
+                            totalSets += ex.targetSets || 0;
+                          }
+                        });
                         const completionPercentage = getWorkoutCompletionPercentage(workoutKey, totalSets);
                         const totalDots = 96; // 3 rows * 32 dots
                         const completedDots = Math.round((completionPercentage / 100) * totalDots);
@@ -584,8 +613,15 @@ export function TodayScreen({ navigation }: TodayScreenProps) {
                     {/* Footer: Progress and Start/Resume/Edit button */}
                     <View style={styles.workoutCardFooter}>
                       {(() => {
-                        const totalSets = selectedDay.workout.exercises.reduce((acc, ex) => acc + (ex.targetSets || 0), 0);
                         const workoutKey = `${selectedDay.workout.id}-${selectedDay.date}`;
+                        // Calculate totalSets excluding skipped exercises
+                        let totalSets = 0;
+                        selectedDay.workout.exercises.forEach((ex: any) => {
+                          const progress = getExerciseProgress(workoutKey, ex.id);
+                          if (!progress?.skipped) {
+                            totalSets += ex.targetSets || 0;
+                          }
+                        });
                         const completionPercentage = getWorkoutCompletionPercentage(workoutKey, totalSets);
                         
                         // Determine button state
@@ -649,7 +685,6 @@ export function TodayScreen({ navigation }: TodayScreenProps) {
                   onPress={() => setShowSwapSheet(true)}
                   activeOpacity={0.7}
                 >
-                  <Text style={styles.swapButtonText}>swap</Text>
                   <View style={styles.swapIconWrapper}>
                     <Svg width={16} height={16} viewBox="0 0 24 24" fill="none">
                       <Path 
@@ -668,14 +703,22 @@ export function TodayScreen({ navigation }: TodayScreenProps) {
                       />
                     </Svg>
                   </View>
+                  <Text style={styles.swapButtonText}>swap</Text>
                 </TouchableOpacity>
               )}
               
               {/* Swap Button */}
               {selectedDay?.workout && !selectedDay.isCompleted && !isTransitioning && (() => {
                 // Check if workout has any progress
-                const totalSets = selectedDay.workout.exercises.reduce((acc, ex) => acc + (ex.targetSets || 0), 0);
                 const workoutKey = `${selectedDay.workout.id}-${selectedDay.date}`;
+                // Calculate totalSets excluding skipped exercises
+                let totalSets = 0;
+                selectedDay.workout.exercises.forEach((ex: any) => {
+                  const progress = getExerciseProgress(workoutKey, ex.id);
+                  if (!progress?.skipped) {
+                    totalSets += ex.targetSets || 0;
+                  }
+                });
                 const completionPercentage = getWorkoutCompletionPercentage(workoutKey, totalSets);
                 const hasStarted = completionPercentage > 0;
                 
@@ -688,7 +731,6 @@ export function TodayScreen({ navigation }: TodayScreenProps) {
                     onPress={() => setShowSwapSheet(true)}
                     activeOpacity={0.7}
                   >
-                    <Text style={styles.swapButtonText}>swap</Text>
                     <View style={styles.swapIconWrapper}>
                       <Svg width={16} height={16} viewBox="0 0 24 24" fill="none">
                         <Path 
@@ -707,6 +749,7 @@ export function TodayScreen({ navigation }: TodayScreenProps) {
                         />
                       </Svg>
                     </View>
+                    <Text style={styles.swapButtonText}>swap</Text>
                   </TouchableOpacity>
                 );
               })()}
@@ -1108,7 +1151,7 @@ const styles = StyleSheet.create({
     height: 4,
     borderRadius: 2,
     borderCurve: 'continuous',
-    backgroundColor: LIGHT_COLORS.textMeta,
+    backgroundColor: LIGHT_COLORS.progressDot, // Lighter/disabled color
   },
   progressDotCompleted: {
     backgroundColor: '#227132', // Green
@@ -1230,10 +1273,10 @@ const styles = StyleSheet.create({
   swapButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'flex-end',
+    justifyContent: 'flex-start',
     gap: 8,
     marginTop: SPACING.lg,
-    marginLeft: 24,
+    marginLeft: 48,
     paddingVertical: SPACING.md,
   },
   swapButtonText: {
