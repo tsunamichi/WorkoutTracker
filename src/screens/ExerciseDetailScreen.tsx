@@ -1126,18 +1126,11 @@ const styles = StyleSheet.create({
   },
   setCard: {
     ...CARDS.cardDeep.outer,
-    borderTopLeftRadius: 12,
-    borderTopRightRadius: 12,
-    borderBottomLeftRadius: 0,
-    borderBottomRightRadius: 0,
+    borderRadius: 12,
   },
   setCardInner: {
     ...CARDS.cardDeep.inner,
-    borderTopLeftRadius: 12,
-    borderTopRightRadius: 12,
-    borderBottomLeftRadius: 0,
-    borderBottomRightRadius: 0,
-    borderBottomWidth: 0,
+    borderRadius: 12,
   },
   setCardInactive: {
     shadowOpacity: 0,
@@ -1180,9 +1173,9 @@ const styles = StyleSheet.create({
     margin: -4,
   },
   setCardExpanded: {
-    paddingTop: 16,
+    paddingTop: 24,
     paddingHorizontal: 24,
-    paddingBottom: 20,
+    paddingBottom: 24,
   },
   adjustmentRow: {
     flexDirection: 'row',
@@ -1219,8 +1212,6 @@ const styles = StyleSheet.create({
   buttonsContainer: {
     flexDirection: 'row',
     gap: 12,
-    marginLeft: 8,
-    marginRight: -8,
   },
   adjustButtonTapTarget: {
     width: 56,
