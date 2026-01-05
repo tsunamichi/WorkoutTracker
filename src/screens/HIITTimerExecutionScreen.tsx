@@ -695,16 +695,25 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
     });
   }, [sizeAnim]);
 
-  // Don't memoize backgroundColor - it needs to be recreated to trigger re-renders
-  const backgroundColor = colorAnim.interpolate({
-    inputRange: [0, 1, 2, 3],
-    outputRange: [
-      PHASE_COLORS.countdown,
-      PHASE_COLORS.work,
-      PHASE_COLORS.rest,
-      PHASE_COLORS.complete,
-    ],
-  });
+  // Get background color based on current phase (direct approach for reliability)
+  const getBackgroundColor = () => {
+    switch (currentPhase) {
+      case 'countdown':
+        return PHASE_COLORS.countdown;
+      case 'work':
+        return PHASE_COLORS.work;
+      case 'workRest':
+      case 'roundRest':
+        return PHASE_COLORS.rest;
+      case 'complete':
+        return PHASE_COLORS.complete;
+      default:
+        return PHASE_COLORS.countdown;
+    }
+  };
+
+  const currentBackgroundColor = getBackgroundColor();
+  console.log(`🎨 Current phase: ${currentPhase}, color: ${currentBackgroundColor}`);
 
   // Memoize pie chart progress to prevent errors during phase transitions
   const pieChartProgress = useMemo(() => {
@@ -817,7 +826,7 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
               styles.circle,
               {
                 borderRadius: borderRadiusAnim,
-                backgroundColor,
+                backgroundColor: currentBackgroundColor,
                 transform: [{ scale: animatedScale }],
               },
             ]}
