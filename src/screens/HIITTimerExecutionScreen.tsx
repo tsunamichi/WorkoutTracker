@@ -138,7 +138,7 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
         toValue: 0.6, // Stay at medium size
         duration: 600,
         easing: Easing.inOut(Easing.ease),
-        useNativeDriver: false,
+        useNativeDriver: true, // Use native driver for better performance
       }).start();
       return;
     }
@@ -151,7 +151,7 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
       toValue: progress,
       duration: 1000,
       easing: Easing.linear,
-      useNativeDriver: false,
+      useNativeDriver: true, // Use native driver for better performance
     }).start();
   }, [secondsRemaining, currentPhase, sizeAnim]);
 
@@ -165,7 +165,7 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
         toValue: 1,
         duration: 600,
         easing: Easing.out(Easing.exp), // Fast start, slow deceleration
-        useNativeDriver: false,
+        useNativeDriver: true, // Use native driver for better performance
       }).start();
       
       // Animate color transition
@@ -216,6 +216,13 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
   useEffect(() => {
     const loadAudio = async () => {
       try {
+        // Configure audio mode for iOS
+        await Audio.setAudioModeAsync({
+          playsInSilentModeIOS: true,
+          staysActiveInBackground: false,
+          shouldDuckAndroid: false,
+        });
+
         const { sound: countdownSound } = await Audio.Sound.createAsync(
           require('../../assets/sounds/countdown.mp3')
         );
@@ -610,10 +617,11 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
     return null;
   };
 
-  // Interpolate size
-  const animatedSize = sizeAnim.interpolate({
+  // Interpolate scale (from minimum scale to full size)
+  const minScale = MIN_SIZE / CONTAINER_WIDTH;
+  const animatedScale = sizeAnim.interpolate({
     inputRange: [0, 1],
-    outputRange: [MIN_SIZE, CONTAINER_WIDTH],
+    outputRange: [minScale, 1],
   });
 
   // Interpolate color
@@ -735,10 +743,9 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
             style={[
               styles.circle,
               {
-                width: animatedSize,
-                height: animatedSize,
                 borderRadius: borderRadiusAnim,
                 backgroundColor,
+                transform: [{ scale: animatedScale }],
               },
             ]}
           >
@@ -917,6 +924,8 @@ const styles = StyleSheet.create({
     position: 'relative',
   },
   circle: {
+    width: CONTAINER_WIDTH,
+    height: CONTAINER_WIDTH,
     justifyContent: 'center',
     alignItems: 'center',
     borderCurve: 'continuous',
