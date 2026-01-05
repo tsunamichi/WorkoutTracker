@@ -15,7 +15,6 @@ import * as Haptics from 'expo-haptics';
 import { useStore } from '../../store';
 import { SPACING, TYPOGRAPHY } from '../../constants';
 import { IconPlay, IconPause, IconSpeaker, IconSkip } from '../icons';
-import { TimerDotCircle } from '../TimerDotCircle';
 import { startRestTimer, endRestTimer, markRestTimerCompleted } from '../../modules/RestTimerLiveActivity';
 
 interface SetTimerSheetProps {
@@ -35,6 +34,11 @@ const LIGHT_COLORS = {
   textMeta: '#817B77',
 };
 
+const REST_COLOR = '#FF6B6B'; // Red for rest
+const MIN_SIZE = 180;
+const SCREEN_WIDTH = Dimensions.get('window').width;
+const CONTAINER_WIDTH = SCREEN_WIDTH - 96; // 48px padding on each side
+
 export function SetTimerSheet({ 
   visible, 
   onComplete, 
@@ -53,6 +57,7 @@ export function SetTimerSheet({
   const [soundEnabled, setSoundEnabled] = useState(true);
   
   const slideAnim = useRef(new Animated.Value(0)).current;
+  const sizeAnim = useRef(new Animated.Value(1)).current; // 1 = 100%, 0 = MIN_SIZE
   const endTimeRef = useRef<number | null>(null);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const liveActivityIdRef = useRef<string | null>(null);
@@ -136,6 +141,19 @@ export function SetTimerSheet({
     };
   }, []);
 
+  // Animate size based on time remaining
+  useEffect(() => {
+    const progress = restTime > 0 ? timeLeft / restTime : 0;
+    
+    // Animate size smoothly based on progress
+    Animated.timing(sizeAnim, {
+      toValue: progress,
+      duration: 1000,
+      easing: Easing.linear,
+      useNativeDriver: true,
+    }).start();
+  }, [timeLeft, restTime, sizeAnim]);
+
   // Handle visibility changes
   useEffect(() => {
     if (visible) {
@@ -151,7 +169,9 @@ export function SetTimerSheet({
         }
       });
       
+      // Reset and animate in
       slideAnim.setValue(0);
+      sizeAnim.setValue(1); // Start at 100%
       Animated.spring(slideAnim, {
         toValue: 1,
         useNativeDriver: true,
@@ -176,7 +196,7 @@ export function SetTimerSheet({
         liveActivityIdRef.current = null;
       }
     };
-  }, [visible, restTime, slideAnim, workoutName, exerciseName, currentSet, totalSets]);
+  }, [visible, restTime, slideAnim, sizeAnim, workoutName, exerciseName, currentSet, totalSets]);
 
   // Timer logic
   useEffect(() => {
@@ -301,14 +321,21 @@ export function SetTimerSheet({
     return `${minutes}:${seconds.toString().padStart(2, '0')}`;
   };
 
-  // Progress for fade OUT behavior
-  // When timeLeft = restTime (start): progress = 1 (all dots visible)
-  // When timeLeft = 0 (end): progress = 0 (no dots visible)
-  const progress = timeLeft / restTime;
-
   const translateY = slideAnim.interpolate({
     inputRange: [0, 1],
     outputRange: [500, 0],
+  });
+
+  // Calculate circle size based on animation progress
+  const animatedScale = sizeAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [MIN_SIZE / CONTAINER_WIDTH, 1],
+  });
+
+  // Inverse scale for text (keeps text size constant)
+  const textScale = sizeAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [CONTAINER_WIDTH / MIN_SIZE, 1],
   });
 
   if (!visible) return null;
@@ -333,19 +360,28 @@ export function SetTimerSheet({
             <Text style={styles.setValue}>{currentSet}/{totalSets}</Text>
           </View>
 
-          {/* Dot pattern */}
+          {/* Animated Circle Timer */}
           <View style={styles.timerContainer}>
-            <TimerDotCircle 
-              progress={progress} 
-              size={Dimensions.get('window').width - 96} // 48px padding on each side
-              isWorkPhase={true} // Dots fade OUT from center as progress decreases
-              totalSeconds={restTime}
-            />
-          </View>
-
-          {/* Time display */}
-          <View style={styles.counterContainer}>
-            <Text style={styles.timeText}>{formatTime()}</Text>
+            <Animated.View
+              style={[
+                styles.circleContainer,
+                {
+                  transform: [{ scale: animatedScale }],
+                },
+              ]}
+            >
+              <View style={[styles.circle, { backgroundColor: REST_COLOR }]}>
+                <Animated.View
+                  style={{
+                    transform: [{ scale: textScale }],
+                    alignItems: 'center',
+                  }}
+                >
+                  <Text style={styles.timerText}>{formatTime()}</Text>
+                  <Text style={styles.timerLabel}>Rest</Text>
+                </Animated.View>
+              </View>
+            </Animated.View>
           </View>
 
           {/* Controls */}
@@ -422,22 +458,36 @@ const styles = StyleSheet.create({
     color: LIGHT_COLORS.textPrimary,
   },
   timerContainer: {
-    width: '100%',
-    aspectRatio: 1,
+    width: CONTAINER_WIDTH,
+    height: CONTAINER_WIDTH,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: SPACING.lg,
-  },
-  counterContainer: {
-    alignItems: 'center',
     marginBottom: 40,
   },
-  timeText: {
+  circleContainer: {
+    width: CONTAINER_WIDTH,
+    height: CONTAINER_WIDTH,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  circle: {
+    width: '100%',
+    height: '100%',
+    borderRadius: CONTAINER_WIDTH / 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  timerText: {
     fontSize: 56,
-    color: LIGHT_COLORS.textPrimary,
+    color: '#FFFFFF',
     fontWeight: '300',
     fontFamily: 'System',
     textAlign: 'center',
+  },
+  timerLabel: {
+    ...TYPOGRAPHY.h3,
+    color: '#FFFFFF',
+    marginTop: 8,
   },
   stickyButtonContainer: {
     flexDirection: 'row',
