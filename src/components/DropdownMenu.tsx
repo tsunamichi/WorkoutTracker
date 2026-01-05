@@ -1,12 +1,6 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ViewStyle } from 'react-native';
-import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS } from '../constants';
-
-const LIGHT_COLORS = {
-  cardBackground: '#E3E3DE',
-  text: '#161616',
-  border: '#CDCABB',
-};
+import { View, Text, StyleSheet, TouchableOpacity, Modal } from 'react-native';
+import { SPACING, TYPOGRAPHY } from '../constants';
 
 export interface DropdownMenuItem {
   label: string;
@@ -20,81 +14,81 @@ interface DropdownMenuProps {
   items: DropdownMenuItem[];
   top?: number;
   right?: number;
-  style?: ViewStyle;
 }
 
-export function DropdownMenu({ visible, onClose, items, top = 48, right = 24, style }: DropdownMenuProps) {
-  if (!visible) return null;
-
+export function DropdownMenu({ visible, onClose, items, top = 48, right = 18 }: DropdownMenuProps) {
   return (
-    <>
-      {/* Overlay to close menu when tapping outside */}
+    <Modal
+      visible={visible}
+      transparent
+      animationType="fade"
+      onRequestClose={onClose}
+    >
       <TouchableOpacity 
-        style={styles.overlay} 
-        onPress={onClose}
+        style={styles.overlay}
         activeOpacity={1}
-      />
-      {/* Dropdown */}
-      <View style={[styles.dropdown, { top, right }, style]}>
-        {items.map((item, index) => (
-          <React.Fragment key={index}>
-            {index > 0 && <View style={styles.divider} />}
-            <TouchableOpacity 
-              style={styles.item} 
-              onPress={item.onPress}
-              activeOpacity={0.7}
-            >
-              <Text style={[
-                styles.itemText,
-                item.destructive && styles.itemTextDestructive
-              ]}>
-                {item.label}
-              </Text>
-            </TouchableOpacity>
-          </React.Fragment>
-        ))}
-      </View>
-    </>
+        onPress={onClose}
+      >
+        <View style={[styles.menuContainer, { paddingTop: top }]}>
+          <View style={[styles.menu, { marginRight: right }]}>
+            {items.map((item, index) => (
+              <React.Fragment key={index}>
+                {index > 0 && <View style={styles.divider} />}
+                <TouchableOpacity 
+                  style={styles.item} 
+                  onPress={item.onPress}
+                  activeOpacity={1}
+                >
+                  <Text style={[
+                    styles.itemText,
+                    item.destructive && styles.itemTextDestructive
+                  ]}>
+                    {item.label}
+                  </Text>
+                </TouchableOpacity>
+              </React.Fragment>
+            ))}
+          </View>
+        </View>
+      </TouchableOpacity>
+    </Modal>
   );
 }
 
 const styles = StyleSheet.create({
   overlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    zIndex: 999,
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.3)',
   },
-  dropdown: {
-    position: 'absolute',
-    backgroundColor: LIGHT_COLORS.cardBackground,
-    borderRadius: BORDER_RADIUS.lg,
-    paddingVertical: SPACING.xs,
-    minWidth: 120,
-    zIndex: 1000,
+  menuContainer: {
+    alignItems: 'flex-end',
+  },
+  menu: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    borderCurve: 'continuous',
+    minWidth: 160,
     shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 2 },
+    shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.15,
-    shadowRadius: 8,
-    elevation: 5,
+    shadowRadius: 12,
+    elevation: 8,
+    overflow: 'hidden',
   },
   item: {
-    paddingVertical: SPACING.md,
-    paddingHorizontal: SPACING.lg,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
   },
   itemText: {
     ...TYPOGRAPHY.body,
-    color: LIGHT_COLORS.text,
+    color: '#000000',
   },
   itemTextDestructive: {
     color: '#FF3B30',
   },
   divider: {
     height: 1,
-    backgroundColor: LIGHT_COLORS.border,
-    marginHorizontal: SPACING.md,
+    backgroundColor: '#E5E5EA',
   },
 });
 

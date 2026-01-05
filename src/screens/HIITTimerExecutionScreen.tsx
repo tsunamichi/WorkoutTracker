@@ -15,7 +15,7 @@ import { Audio } from 'expo-av';
 import Svg, { Circle, Path } from 'react-native-svg';
 import { useStore } from '../store';
 import { COLORS, SPACING, TYPOGRAPHY, GRADIENTS, BUTTONS, BORDER_RADIUS } from '../constants';
-import { IconArrowLeft, IconPlay, IconPause, IconSpeaker, IconSkip, IconRestart } from '../components/icons';
+import { IconArrowLeft, IconPlay, IconPause, IconSpeaker, IconSkip, IconRestart, IconMenu } from '../components/icons';
 import { DropdownMenu } from '../components/DropdownMenu';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/AppNavigator';
@@ -747,9 +747,7 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
               <IconArrowLeft size={24} color={LIGHT_COLORS.text} />
             </TouchableOpacity>
             <TouchableOpacity onPress={handleMenu} style={styles.menuButton}>
-              <View style={styles.menuDot} />
-              <View style={styles.menuDot} />
-              <View style={styles.menuDot} />
+              <IconMenu size={24} color={LIGHT_COLORS.text} />
             </TouchableOpacity>
           </View>
           
@@ -804,6 +802,7 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
           visible={menuVisible}
           onClose={() => setMenuVisible(false)}
           top={insets.top + 48}
+          right={18}
           items={[
             { label: 'Edit', onPress: handleEdit },
             { label: 'Delete', onPress: handleDelete, destructive: true },
@@ -971,13 +970,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'flex-end',
     marginRight: -4,
-    gap: 4,
-  },
-  menuDot: {
-    width: 4,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: LIGHT_COLORS.secondary,
   },
   headerInfoContainer: {
     paddingHorizontal: SPACING.xxl,
