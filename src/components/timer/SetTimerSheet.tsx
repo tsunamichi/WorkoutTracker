@@ -353,12 +353,18 @@ export function SetTimerSheet({
           }
         ]}
       >
-        <View style={[styles.timerSheet, { paddingBottom: 48 + insets.bottom }]}>
+        <View style={[styles.timerSheet, { paddingBottom: 24 + insets.bottom }]}>
           {/* Next set indicator */}
           <View style={styles.setIndicator}>
-            <Text style={styles.nextSetText}>
-              {currentSet < totalSets ? `Next set ${currentSet + 1} out of ${totalSets}` : `Set ${currentSet} of ${totalSets}`}
-            </Text>
+            {currentSet < totalSets ? (
+              <Text style={styles.nextSetText}>
+                Next set <Text style={styles.nextSetNumber}>{currentSet + 1} out of {totalSets}</Text>
+              </Text>
+            ) : (
+              <Text style={styles.nextSetText}>
+                Set <Text style={styles.nextSetNumber}>{currentSet} of {totalSets}</Text>
+              </Text>
+            )}
           </View>
 
           {/* Animated Circle Timer */}
@@ -437,17 +443,21 @@ const styles = StyleSheet.create({
   timerSheet: {
     backgroundColor: LIGHT_COLORS.backgroundCanvas,
     borderRadius: 40,
-    paddingTop: SPACING.xl,
+    paddingTop: 24,
     paddingHorizontal: 48,
     alignItems: 'center',
   },
   setIndicator: {
     alignItems: 'center',
-    marginBottom: SPACING.xl,
+    marginBottom: 40,
   },
   nextSetText: {
     ...TYPOGRAPHY.body,
     color: LIGHT_COLORS.textMeta,
+  },
+  nextSetNumber: {
+    ...TYPOGRAPHY.body,
+    color: LIGHT_COLORS.textPrimary,
   },
   timerContainer: {
     width: CONTAINER_WIDTH,
