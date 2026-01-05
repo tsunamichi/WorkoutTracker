@@ -1229,6 +1229,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   adjustButtonShadow1: {
+    width: 56,
+    height: 56,
     // Shadow 1: white, opacity 0.35, no blur, offset -1, -1
     shadowColor: '#FFFFFF',
     shadowOffset: { width: -1, height: -1 },
@@ -1237,6 +1239,8 @@ const styles = StyleSheet.create({
     elevation: 1,
   },
   adjustButtonShadow2: {
+    width: 56,
+    height: 56,
     // Shadow 2: black, opacity 0.16, blur 3, offset -2, -2
     shadowColor: '#000000',
     shadowOffset: { width: -2, height: -2 },
@@ -1245,6 +1249,8 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   adjustButtonShadow3: {
+    width: 56,
+    height: 56,
     // Shadow 3: white, opacity 0.8, blur 5, offset 2, 2
     shadowColor: '#FFFFFF',
     shadowOffset: { width: 2, height: 2 },
@@ -1253,6 +1259,8 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   adjustButtonShadow4: {
+    width: 56,
+    height: 56,
     // Shadow 4: white, opacity 1.0, no blur, offset 1, 1
     shadowColor: '#FFFFFF',
     shadowOffset: { width: 1, height: 1 },
@@ -1261,13 +1269,15 @@ const styles = StyleSheet.create({
     elevation: 4,
   },
   adjustButton: {
+    width: 56,
+    height: 56,
     borderRadius: 12,
     borderCurve: 'continuous',
     overflow: 'hidden',
   },
   adjustButtonInner: {
-    width: 40,
-    height: 40,
+    width: 56,
+    height: 56,
     borderRadius: 12,
     borderCurve: 'continuous',
     alignItems: 'center',
@@ -1512,7 +1522,6 @@ const styles = StyleSheet.create({
     right: 0,
     paddingHorizontal: SPACING.xxl,
     paddingTop: 16,
-    backgroundColor: LIGHT_COLORS.backgroundCanvas,
   },
   markAsDoneButton: {
     borderRadius: 12,
