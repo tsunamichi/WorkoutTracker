@@ -170,13 +170,7 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
       else if (currentPhase === 'workRest' || currentPhase === 'roundRest') initialColorValue = 2;
       else if (currentPhase === 'complete') initialColorValue = 3;
       
-      console.log(`🎨 Setting initial color for phase ${currentPhase}: ${initialColorValue}`);
-      
-      // Use setTimeout to ensure it happens after render
-      setTimeout(() => {
-        colorAnim.setValue(initialColorValue);
-        console.log(`🎨 Initial color SET for phase ${currentPhase}: ${initialColorValue}`);
-      }, 0);
+      colorAnim.setValue(initialColorValue);
       
       prevPhaseRef.current = currentPhase;
       return;
@@ -212,16 +206,12 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
               break;
           }
           
-          console.log(`🎨 Animating color for phase ${currentPhase}: ${colorValue}`);
-          
           Animated.timing(colorAnim, {
             toValue: colorValue,
             duration: 600,
             easing: Easing.inOut(Easing.ease),
             useNativeDriver: false,
-          }).start(() => {
-            console.log(`🎨 Color animation complete for ${currentPhase}`);
-          });
+          }).start();
           
           // Morph shape on complete
           if (currentPhase === 'complete') {
@@ -705,30 +695,16 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
     });
   }, [sizeAnim]);
 
-  const backgroundColor = useMemo(() => {
-    const interpolated = colorAnim.interpolate({
-      inputRange: [0, 1, 2, 3],
-      outputRange: [
-        PHASE_COLORS.countdown,
-        PHASE_COLORS.work,
-        PHASE_COLORS.rest,
-        PHASE_COLORS.complete,
-      ],
-    });
-    console.log('🎨 backgroundColor interpolation created');
-    return interpolated;
-  }, [colorAnim]);
-
-  // Add listener to debug color changes
-  useEffect(() => {
-    const listenerId = colorAnim.addListener(({ value }) => {
-      console.log('🎨 colorAnim value changed:', value);
-    });
-    
-    return () => {
-      colorAnim.removeListener(listenerId);
-    };
-  }, [colorAnim]);
+  // Don't memoize backgroundColor - it needs to be recreated to trigger re-renders
+  const backgroundColor = colorAnim.interpolate({
+    inputRange: [0, 1, 2, 3],
+    outputRange: [
+      PHASE_COLORS.countdown,
+      PHASE_COLORS.work,
+      PHASE_COLORS.rest,
+      PHASE_COLORS.complete,
+    ],
+  });
 
   // Memoize pie chart progress to prevent errors during phase transitions
   const pieChartProgress = useMemo(() => {
