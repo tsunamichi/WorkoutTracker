@@ -1018,7 +1018,7 @@ const styles = StyleSheet.create({
   },
   sectionHeader: {
     marginTop: 40,
-    marginBottom: 16,
+    marginBottom: 4,
   },
   sectionHeaderText: {
     ...TYPOGRAPHY.body,
