@@ -1,7 +1,7 @@
 // Dependencies required (install if missing):
 // npm install zustand @react-native-async-storage/async-storage
 
-import { create } from 'zustand';
+import create from 'zustand';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { CycleDraft, SavedCycle, UserPrefs, CycleTemplateId, Exercise, DayPlan } from '../types/workout';
 import { generateDraftFromTemplate, getTemplateById } from '../utils/templateGenerator';
