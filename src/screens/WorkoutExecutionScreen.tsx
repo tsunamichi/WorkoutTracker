@@ -6,7 +6,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useStore } from '../store';
 import * as storage from '../storage';
 import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS } from '../constants';
-import { IconArrowLeft, IconCheck, IconPlay, IconPause, IconMenu } from '../components/icons';
+import { IconArrowLeft, IconCheck, IconPlay, IconPause, IconMenu, IconRestart } from '../components/icons';
 import dayjs from 'dayjs';
 import { startRestTimer, updateRestTimer, endRestTimer, markRestTimerCompleted } from '../modules/RestTimerLiveActivity';
 import * as Haptics from 'expo-haptics';
@@ -710,163 +710,183 @@ export function WorkoutExecutionScreen({ route, navigation }: WorkoutExecutionSc
           <View style={styles.exercisesList}>
             {workout.exercises
               .map((exercise, originalIndex) => ({ exercise, originalIndex }))
-              .sort((a, b) => {
-                // Get progress for both exercises
-                const progressA = getExerciseProgress(workoutKey, a.exercise.id);
-                const progressB = getExerciseProgress(workoutKey, b.exercise.id);
+              .reduce((acc: any[], { exercise, originalIndex }) => {
+                const savedProgress = getExerciseProgress(workoutKey, exercise.id);
+                const isSkipped = savedProgress?.skipped || false;
                 
-                // Calculate completion states
-                const isSkippedA = progressA?.skipped || false;
-                const isSkippedB = progressB?.skipped || false;
-                const completedSetsA = progressA?.sets.filter(set => set.completed).length || 0;
-                const completedSetsB = progressB?.sets.filter(set => set.completed).length || 0;
-                const totalSetsA = a.exercise.targetSets;
-                const totalSetsB = b.exercise.targetSets;
-                const isFullyCompletedA = (completedSetsA === totalSetsA && totalSetsA > 0) || isSkippedA;
-                const isFullyCompletedB = (completedSetsB === totalSetsB && totalSetsB > 0) || isSkippedB;
-                
-                // Determine sort order: completed first (0), then in-progress (1), then skipped (2)
-                const orderA = isSkippedA ? 2 : isFullyCompletedA ? 0 : 1;
-                const orderB = isSkippedB ? 2 : isFullyCompletedB ? 0 : 1;
-                
-                // If same order, maintain original order
-                if (orderA === orderB) return a.originalIndex - b.originalIndex;
-                
-                return orderA - orderB;
-              })
-              .map(({ exercise, originalIndex: index }) => {
-              const exerciseData = exercises.find(e => e.id === exercise.exerciseId);
-              
-              // Get saved exercise progress to check completion
-              const savedProgress = getExerciseProgress(workoutKey, exercise.id);
-              
-              // Debug: Log what we're checking
-              console.log(`🔍 Checking ${exerciseData?.name}:`, {
-                exerciseId: exercise.id,
-                workoutKey,
-                hasProgress: !!savedProgress,
-                isSkipped: savedProgress?.skipped,
-              });
-              
-              const isSkipped = savedProgress?.skipped || false;
-              const completedSets = savedProgress?.sets.filter(set => set.completed).length || 0;
-              const totalSets = exercise.targetSets;
-              const isFullyCompleted = (completedSets === totalSets && totalSets > 0) || isSkipped;
-              const isInProgress = completedSets > 0 && completedSets < totalSets && !isSkipped;
-              
-              // Check if any other exercise is in progress
-              const isAnyExerciseInProgress = workout.exercises.some((ex, idx) => {
-                if (idx === index) return false; // Don't check current exercise
-                const prog = getExerciseProgress(workoutKey, ex.id);
-                if (prog?.skipped) return false; // Skipped exercises don't block others
-                const completed = prog?.sets.filter(set => set.completed).length || 0;
-                const total = ex.targetSets;
-                return completed > 0 && completed < total;
-              });
-              
-              const isDisabled = isAnyExerciseInProgress && !isInProgress && !isFullyCompleted;
-              
-              const handleExerciseTap = () => {
-                if (isDisabled && !isSkipped) return;
-                
-                // If exercise is skipped, show dialog to activate it
                 if (isSkipped) {
-                  Alert.alert(
-                    'Activate Exercise',
-                    `Do you want to activate ${exerciseData?.name || 'this exercise'}?`,
-                    [
-                      {
-                        text: 'Cancel',
-                        style: 'cancel',
-                      },
-                      {
-                        text: 'Activate',
-                        onPress: async () => {
-                          console.log('🔄 Activating exercise:', exercise.id);
-                          // Clear the entire progress for this exercise to reset it
-                          const allProgress = useStore.getState().detailedWorkoutProgress;
-                          const currentProgress = allProgress[workoutKey];
-                          if (currentProgress) {
-                            const { [exercise.id]: _, ...remainingExercises } = currentProgress.exercises;
-                            const updatedProgress = {
-                              ...currentProgress,
-                              exercises: remainingExercises,
-                              lastUpdated: new Date().toISOString(),
-                            };
-                            const newDetailedProgress = {
-                              ...allProgress,
-                              [workoutKey]: updatedProgress,
-                            };
-                            useStore.setState({ detailedWorkoutProgress: newDetailedProgress });
-                            await storage.saveDetailedWorkoutProgress(newDetailedProgress);
-                          }
-                          console.log('✅ Exercise activated - navigating to detail screen');
-                          
-                          // Navigate to the exercise so user can start fresh
-                          setCurrentExerciseIndex(index);
-                          navigation.navigate('ExerciseDetail', {
-                            exercise,
-                            exerciseName: exerciseData?.name || 'Exercise',
-                            workoutName: workout.name,
-                            workoutKey: `${workoutTemplateId}-${date}`,
-                            cycleId,
-                            workoutTemplateId,
-                          });
-                        },
-                      },
-                    ]
-                  );
-                  return;
+                  acc.push({ exercise, originalIndex, group: 'skipped' });
+                } else {
+                  acc.push({ exercise, originalIndex, group: 'active' });
+                }
+                return acc;
+              }, [])
+              .sort((a, b) => {
+                // Separate active and skipped exercises
+                if (a.group !== b.group) {
+                  return a.group === 'active' ? -1 : 1;
                 }
                 
-                // Normal navigation for non-skipped exercises
-                setCurrentExerciseIndex(index);
-                navigation.navigate('ExerciseDetail', {
-                  exercise,
-                  exerciseName: exerciseData?.name || 'Exercise',
-                  workoutName: workout.name,
-                  workoutKey: `${workoutTemplateId}-${date}`,
-                  cycleId,
-                  workoutTemplateId,
+                // For active exercises, sort by completion state
+                if (a.group === 'active') {
+                  const progressA = getExerciseProgress(workoutKey, a.exercise.id);
+                  const progressB = getExerciseProgress(workoutKey, b.exercise.id);
+                  
+                  const completedSetsA = progressA?.sets.filter(set => set.completed).length || 0;
+                  const completedSetsB = progressB?.sets.filter(set => set.completed).length || 0;
+                  const totalSetsA = a.exercise.targetSets;
+                  const totalSetsB = b.exercise.targetSets;
+                  const isFullyCompletedA = completedSetsA === totalSetsA && totalSetsA > 0;
+                  const isFullyCompletedB = completedSetsB === totalSetsB && totalSetsB > 0;
+                  
+                  // Determine sort order: in-progress (0), completed (1)
+                  const orderA = isFullyCompletedA ? 1 : 0;
+                  const orderB = isFullyCompletedB ? 1 : 0;
+                  
+                  // If same order, maintain original order
+                  if (orderA === orderB) return a.originalIndex - b.originalIndex;
+                  
+                  return orderA - orderB;
+                }
+                
+                // For skipped exercises, maintain original order
+                return a.originalIndex - b.originalIndex;
+              })
+              .map(({ exercise, originalIndex: index, group }, arrayIndex, array) => {
+                // Add section header for skipped exercises
+                const prevGroup = arrayIndex > 0 ? array[arrayIndex - 1].group : null;
+                const showSkippedHeader = group === 'skipped' && prevGroup !== 'skipped';
+                const exerciseData = exercises.find(e => e.id === exercise.exerciseId);
+                
+                // Get saved exercise progress to check completion
+                const savedProgress = getExerciseProgress(workoutKey, exercise.id);
+                
+                // Debug: Log what we're checking
+                console.log(`🔍 Checking ${exerciseData?.name}:`, {
+                  exerciseId: exercise.id,
+                  workoutKey,
+                  hasProgress: !!savedProgress,
+                  isSkipped: savedProgress?.skipped,
                 });
-              };
-              
-              return (
-                <View key={exercise.id} style={styles.exerciseCardWrapper}>
-                  <View style={[styles.exerciseCardBlackShadow, isFullyCompleted && styles.noShadow]}>
-                    <View style={[styles.exerciseCardWhiteShadow, isFullyCompleted && styles.noShadow]}>
-                      <View style={[styles.exerciseCard, isDisabled && styles.exerciseCardDisabled]}>
-                        <TouchableOpacity
-                          style={[styles.exerciseCardInner, isFullyCompleted && styles.exerciseCardInnerCompleted]}
-                          onPress={handleExerciseTap}
-                          activeOpacity={1}
-                          disabled={isDisabled && !isSkipped}
-                        >
-                          <View style={styles.exerciseInfo}>
-                            <View>
-                              <Text style={[styles.exerciseName, isDisabled && styles.exerciseNameDisabled]}>
-                                {exerciseData?.name || 'Unknown Exercise'}
-                              </Text>
-                            </View>
+                
+                const isSkipped = savedProgress?.skipped || false;
+                const completedSets = savedProgress?.sets.filter(set => set.completed).length || 0;
+                const totalSets = exercise.targetSets;
+                const isFullyCompleted = (completedSets === totalSets && totalSets > 0) || isSkipped;
+                const isInProgress = completedSets > 0 && completedSets < totalSets && !isSkipped;
+                
+                // Check if any other exercise is in progress
+                const isAnyExerciseInProgress = workout.exercises.some((ex, idx) => {
+                  if (idx === index) return false; // Don't check current exercise
+                  const prog = getExerciseProgress(workoutKey, ex.id);
+                  if (prog?.skipped) return false; // Skipped exercises don't block others
+                  const completed = prog?.sets.filter(set => set.completed).length || 0;
+                  const total = ex.targetSets;
+                  return completed > 0 && completed < total;
+                });
+                
+                const isDisabled = isAnyExerciseInProgress && !isInProgress && !isFullyCompleted;
+                
+                const handleExerciseTap = () => {
+                  if (isDisabled && !isSkipped) return;
+                  
+                  // If exercise is skipped, show dialog to activate it
+                  if (isSkipped) {
+                    Alert.alert(
+                      'Reactivate Exercise',
+                      `Do you want to reactivate ${exerciseData?.name || 'this exercise'}?`,
+                      [
+                        {
+                          text: 'Cancel',
+                          style: 'cancel',
+                        },
+                        {
+                          text: 'Reactivate',
+                          onPress: async () => {
+                            console.log('🔄 Reactivating exercise:', exercise.id);
+                            // Clear the entire progress for this exercise to reset it
+                            const allProgress = useStore.getState().detailedWorkoutProgress;
+                            const currentProgress = allProgress[workoutKey];
+                            if (currentProgress) {
+                              const { [exercise.id]: _, ...remainingExercises } = currentProgress.exercises;
+                              const updatedProgress = {
+                                ...currentProgress,
+                                exercises: remainingExercises,
+                                lastUpdated: new Date().toISOString(),
+                              };
+                              const newDetailedProgress = {
+                                ...allProgress,
+                                [workoutKey]: updatedProgress,
+                              };
+                              useStore.setState({ detailedWorkoutProgress: newDetailedProgress });
+                              await storage.saveDetailedWorkoutProgress(newDetailedProgress);
+                            }
+                            console.log('✅ Exercise reactivated');
+                          },
+                        },
+                      ]
+                    );
+                    return;
+                  }
+                  
+                  // Normal navigation for non-skipped exercises
+                  setCurrentExerciseIndex(index);
+                  navigation.navigate('ExerciseDetail', {
+                    exercise,
+                    exerciseName: exerciseData?.name || 'Exercise',
+                    workoutName: workout.name,
+                    workoutKey: `${workoutTemplateId}-${date}`,
+                    cycleId,
+                    workoutTemplateId,
+                  });
+                };
+                
+                return (
+                  <React.Fragment key={exercise.id}>
+                    {/* Skipped Section Header */}
+                    {showSkippedHeader && (
+                      <View style={styles.sectionHeader}>
+                        <Text style={styles.sectionHeaderText}>Skipped</Text>
+                      </View>
+                    )}
+                    
+                    {/* Exercise Card */}
+                    <View style={styles.exerciseCardWrapper}>
+                      <View style={[styles.exerciseCardBlackShadow, isFullyCompleted && styles.noShadow]}>
+                        <View style={[styles.exerciseCardWhiteShadow, isFullyCompleted && styles.noShadow]}>
+                          <View style={[styles.exerciseCard, isDisabled && styles.exerciseCardDisabled]}>
+                            <TouchableOpacity
+                              style={[styles.exerciseCardInner, isFullyCompleted && styles.exerciseCardInnerCompleted]}
+                              onPress={handleExerciseTap}
+                              activeOpacity={1}
+                              disabled={isDisabled && !isSkipped}
+                            >
+                              <View style={styles.exerciseInfo}>
+                                <View>
+                                  <Text style={[styles.exerciseName, isDisabled && styles.exerciseNameDisabled]}>
+                                    {exerciseData?.name || 'Unknown Exercise'}
+                                  </Text>
+                                </View>
+                              </View>
+                              {isSkipped ? (
+                                <View style={styles.exerciseCheckIcon}>
+                                  <IconRestart size={24} color="#817B77" />
+                                </View>
+                              ) : isFullyCompleted ? (
+                                <View style={styles.exerciseCheckIcon}>
+                                  <IconCheck size={24} color="#227132" />
+                                </View>
+                              ) : (
+                                <View style={styles.exerciseTriangle} />
+                              )}
+                            </TouchableOpacity>
                           </View>
-                                          {isSkipped ? (
-                            <View style={styles.exerciseSkippedLabel}>
-                              <Text style={styles.exerciseSkippedText}>Skipped ✓</Text>
-                            </View>
-                          ) : isFullyCompleted ? (
-                            <View style={styles.exerciseCheckIcon}>
-                              <IconCheck size={24} color="#227132" />
-                            </View>
-                          ) : (
-                            <View style={styles.exerciseTriangle} />
-                          )}
-                        </TouchableOpacity>
+                        </View>
                       </View>
                     </View>
-                  </View>
-                </View>
-              );
-            })}
+                  </React.Fragment>
+                );
+              })}
           </View>
         </ScrollView>
       
@@ -996,6 +1016,14 @@ const styles = StyleSheet.create({
     backgroundColor: 'transparent',
     gap: 12, // Space between cards
   },
+  sectionHeader: {
+    marginTop: 40,
+    marginBottom: 16,
+  },
+  sectionHeaderText: {
+    ...TYPOGRAPHY.h3,
+    color: LIGHT_COLORS.secondary,
+  },
   // Exercise Card Shadows (matching Today screen workout card)
   exerciseCardWrapper: {
     width: '100%',
@@ -1072,16 +1100,6 @@ const styles = StyleSheet.create({
   },
   exerciseCheckIcon: {
     margin: -4,
-  },
-  exerciseSkippedLabel: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-  },
-  exerciseSkippedText: {
-    fontSize: 13,
-    fontWeight: '500',
-    color: COLORS.textMeta,
-    textTransform: 'capitalize',
   },
   exerciseTriangle: {
     width: 0,
