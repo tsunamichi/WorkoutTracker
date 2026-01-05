@@ -322,14 +322,14 @@ export default function HIITTimerFormScreen({ navigation, route }: Props) {
           </View>
         </ScrollView>
 
-        {/* Create Timer Button - Fixed Bottom */}
+        {/* Create/Save Timer Button - Fixed Bottom */}
         <View style={styles.stickyButtonContainer}>
           <TouchableOpacity 
             style={styles.startButton} 
             onPress={handleStartNow}
             activeOpacity={1}
           >
-            <Text style={styles.startButtonText}>Create Timer</Text>
+            <Text style={styles.startButtonText}>{timerId ? 'Save' : 'Create Timer'}</Text>
           </TouchableOpacity>
         </View>
       </View>
