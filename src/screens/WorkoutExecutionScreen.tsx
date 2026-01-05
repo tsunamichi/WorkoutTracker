@@ -1022,7 +1022,7 @@ const styles = StyleSheet.create({
   },
   sectionHeaderText: {
     ...TYPOGRAPHY.h3,
-    color: LIGHT_COLORS.secondary,
+    color: LIGHT_COLORS.textMeta,
   },
   // Exercise Card Shadows (matching Today screen workout card)
   exerciseCardWrapper: {
