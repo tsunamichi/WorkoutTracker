@@ -195,15 +195,20 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
       
       // Morph shape on complete
       if (currentPhase === 'complete') {
-        Animated.timing(borderRadiusAnim, {
-          toValue: 32, // Rounded rectangle
-          duration: 600,
-          easing: Easing.inOut(Easing.ease),
-          useNativeDriver: false,
-        }).start(() => {
-          // Trigger confetti after shape morph
-          triggerConfetti();
-        });
+        try {
+          Animated.timing(borderRadiusAnim, {
+            toValue: 32, // Rounded rectangle
+            duration: 600,
+            easing: Easing.inOut(Easing.ease),
+            useNativeDriver: false,
+          }).start(() => {
+            // Trigger confetti after shape morph
+            triggerConfetti();
+          });
+        } catch (error) {
+          console.log('⚠️ Error morphing shape:', error);
+          triggerConfetti(); // Still trigger confetti even if morph fails
+        }
       } else {
         borderRadiusAnim.setValue(CONTAINER_WIDTH / 2); // Reset to circle
       }
@@ -328,10 +333,15 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
       setShowGo(true);
       
       setTimeout(() => {
-        setShowGo(false);
-        setCurrentPhase('work');
-        setSecondsRemaining(timer.work);
-        isTransitioningRef.current = false;
+        try {
+          setShowGo(false);
+          setCurrentPhase('work');
+          setSecondsRemaining(timer.work);
+        } catch (error) {
+          console.log('⚠️ Error transitioning from countdown:', error);
+        } finally {
+          isTransitioningRef.current = false;
+        }
       }, 400);
     } else if (phase === 'work') {
       const isLastSet = set === timer.sets;
@@ -390,64 +400,68 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
   }, [timer, soundEnabled]);
 
   // Trigger confetti
-  const triggerConfetti = () => {
-    const particleCount = 50; // More particles!
-    const colors = ['#227132', '#5E9EFF', '#FDB022', '#FF6B6B']; // Green, Blue, Yellow, Red
-    
-    const newParticles: Particle[] = [];
-    
-    for (let i = 0; i < particleCount; i++) {
-      const angle = (Math.PI * 2 * i) / particleCount + (Math.random() - 0.5) * 0.5;
-      const distance = 120 + Math.random() * 150;
-      const duration = 1200 + Math.random() * 400;
+  const triggerConfetti = useCallback(() => {
+    try {
+      const particleCount = 50; // More particles!
+      const colors = ['#227132', '#5E9EFF', '#FDB022', '#FF6B6B']; // Green, Blue, Yellow, Red
       
-      const particle: Particle = {
-        id: Date.now() + i,
-        x: new Animated.Value(0),
-        y: new Animated.Value(0),
-        opacity: new Animated.Value(1),
-        rotation: new Animated.Value(0),
-        color: colors[Math.floor(Math.random() * colors.length)],
-        size: 6 + Math.random() * 8, // Varied sizes 6-14px
-      };
+      const newParticles: Particle[] = [];
       
-      // Animate particle with varied trajectories
-      Animated.parallel([
-        Animated.timing(particle.x, {
-          toValue: Math.cos(angle) * distance,
-          duration,
-          easing: Easing.out(Easing.cubic),
-          useNativeDriver: true,
-        }),
-        Animated.timing(particle.y, {
-          toValue: Math.sin(angle) * distance + 80, // More gravity effect
-          duration,
-          easing: Easing.out(Easing.quad),
-          useNativeDriver: true,
-        }),
-        Animated.timing(particle.opacity, {
-          toValue: 0,
-          duration: duration * 0.8,
-          delay: duration * 0.2,
-          easing: Easing.ease,
-          useNativeDriver: true,
-        }),
-        Animated.timing(particle.rotation, {
-          toValue: (Math.random() - 0.5) * 6,
-          duration,
-          easing: Easing.linear,
-          useNativeDriver: true,
-        }),
-      ]).start();
+      for (let i = 0; i < particleCount; i++) {
+        const angle = (Math.PI * 2 * i) / particleCount + (Math.random() - 0.5) * 0.5;
+        const distance = 120 + Math.random() * 150;
+        const duration = 1200 + Math.random() * 400;
+        
+        const particle: Particle = {
+          id: Date.now() + i,
+          x: new Animated.Value(0),
+          y: new Animated.Value(0),
+          opacity: new Animated.Value(1),
+          rotation: new Animated.Value(0),
+          color: colors[Math.floor(Math.random() * colors.length)],
+          size: 6 + Math.random() * 8, // Varied sizes 6-14px
+        };
+        
+        // Animate particle with varied trajectories
+        Animated.parallel([
+          Animated.timing(particle.x, {
+            toValue: Math.cos(angle) * distance,
+            duration,
+            easing: Easing.out(Easing.cubic),
+            useNativeDriver: true,
+          }),
+          Animated.timing(particle.y, {
+            toValue: Math.sin(angle) * distance + 80, // More gravity effect
+            duration,
+            easing: Easing.out(Easing.quad),
+            useNativeDriver: true,
+          }),
+          Animated.timing(particle.opacity, {
+            toValue: 0,
+            duration: duration * 0.8,
+            delay: duration * 0.2,
+            easing: Easing.ease,
+            useNativeDriver: true,
+          }),
+          Animated.timing(particle.rotation, {
+            toValue: (Math.random() - 0.5) * 6,
+            duration,
+            easing: Easing.linear,
+            useNativeDriver: true,
+          }),
+        ]).start();
+        
+        newParticles.push(particle);
+      }
       
-      newParticles.push(particle);
+      setParticles(newParticles);
+      
+      // Clear particles after animation
+      setTimeout(() => setParticles([]), 1600);
+    } catch (error) {
+      console.log('⚠️ Error triggering confetti:', error);
     }
-    
-    setParticles(newParticles);
-    
-    // Clear particles after animation
-    setTimeout(() => setParticles([]), 1600);
-  };
+  }, []);
 
   const handlePlayPause = () => {
     setIsRunning(prev => {
@@ -644,6 +658,17 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
     });
   }, [colorAnim]);
 
+  // Memoize pie chart progress to prevent errors during phase transitions
+  const pieChartProgress = useMemo(() => {
+    if (!timer) return 0;
+    const total = getTotalWorkoutTime();
+    const remaining = getRemainingWorkoutTime();
+    if (total <= 0 || remaining < 0) return 0;
+    const progress = remaining / total;
+    // Ensure progress is between 0 and 1
+    return Math.max(0, Math.min(1, progress));
+  }, [timer, currentPhase, currentSet, currentRound, secondsRemaining]);
+
   return (
     <LinearGradient
       colors={GRADIENTS.backgroundLight.colors}
@@ -681,40 +706,31 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
             <View style={styles.totalTimeContainer}>
               <Text style={styles.totalTimeText}>{formatTime(getRemainingWorkoutTime())}</Text>
               <Svg height="16" width="16" viewBox="0 0 16 16" style={styles.totalTimeCircle}>
-                {(() => {
-                  const progress = getTotalWorkoutTime() > 0 ? getRemainingWorkoutTime() / getTotalWorkoutTime() : 0;
-                  const isFullCircle = progress >= 0.999;
-                  
-                  return (
-                    <>
-                      {/* Background circle */}
-                      <Circle
-                        cx="8"
-                        cy="8"
-                        r="8"
-                        fill={LIGHT_COLORS.border}
-                      />
-                      {/* Progress pie - starts full and drains */}
-                      {isFullCircle ? (
-                        <Circle
-                          cx="8"
-                          cy="8"
-                          r="8"
-                          fill={LIGHT_COLORS.text}
-                        />
-                      ) : progress > 0 ? (
-                        <Path
-                          d={`M 8 8 L 8 0 A 8 8 0 ${progress > 0.5 ? 1 : 0} 1 ${
-                            8 + 8 * Math.sin(2 * Math.PI * progress)
-                          } ${
-                            8 - 8 * Math.cos(2 * Math.PI * progress)
-                          } Z`}
-                          fill={LIGHT_COLORS.text}
-                        />
-                      ) : null}
-                    </>
-                  );
-                })()}
+                {/* Background circle */}
+                <Circle
+                  cx="8"
+                  cy="8"
+                  r="8"
+                  fill={LIGHT_COLORS.border}
+                />
+                {/* Progress pie - starts full and drains */}
+                {pieChartProgress >= 0.999 ? (
+                  <Circle
+                    cx="8"
+                    cy="8"
+                    r="8"
+                    fill={LIGHT_COLORS.text}
+                  />
+                ) : pieChartProgress > 0 ? (
+                  <Path
+                    d={`M 8 8 L 8 0 A 8 8 0 ${pieChartProgress > 0.5 ? 1 : 0} 1 ${
+                      8 + 8 * Math.sin(2 * Math.PI * pieChartProgress)
+                    } ${
+                      8 - 8 * Math.cos(2 * Math.PI * pieChartProgress)
+                    } Z`}
+                    fill={LIGHT_COLORS.text}
+                  />
+                ) : null}
               </Svg>
             </View>
           </View>
