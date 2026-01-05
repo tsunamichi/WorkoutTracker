@@ -423,8 +423,17 @@ export function WorkoutsScreen({ navigation }: WorkoutsScreenProps) {
           )}
         </ScrollView>
         
-        {/* Create Cycle Button - Sticky Bottom */}
+        {/* Create Cycle Buttons - Sticky Bottom */}
         <View style={styles.stickyButtonContainer}>
+          {cycles.length === 0 && (
+            <TouchableOpacity
+              style={[styles.createButton, styles.createButtonSecondary]}
+              onPress={() => setShowBottomSheet(true)}
+              activeOpacity={0.8}
+            >
+              <Text style={[styles.createButtonText, styles.createButtonTextSecondary]}>Paste Workout</Text>
+            </TouchableOpacity>
+          )}
           <TouchableOpacity
             style={styles.createButton}
             onPress={() => {
@@ -434,7 +443,7 @@ export function WorkoutsScreen({ navigation }: WorkoutsScreenProps) {
             activeOpacity={0.8}
           >
             <Text style={styles.createButtonText}>
-              {cycles.length === 0 ? 'Create My Own Cycle' : 'Create New Cycle'}
+              {cycles.length === 0 ? 'Create Manually' : 'Create New Cycle'}
             </Text>
           </TouchableOpacity>
         </View>
@@ -531,20 +540,28 @@ const styles = StyleSheet.create({
     paddingBottom: SPACING.md,
     paddingTop: SPACING.md,
     backgroundColor: 'transparent',
+    flexDirection: 'row',
+    gap: SPACING.md,
   },
   
   // Create Button
   createButton: {
+    flex: 1,
     backgroundColor: LIGHT_COLORS.accentPrimary,
     paddingVertical: SPACING.lg,
     borderRadius: BORDER_RADIUS.md,
     alignItems: 'center',
-    marginBottom: 12,
+  },
+  createButtonSecondary: {
+    backgroundColor: LIGHT_COLORS.buttonBg,
   },
   createButtonText: {
     fontSize: 17,
     fontWeight: '600',
     color: '#FFFFFF',
+  },
+  createButtonTextSecondary: {
+    color: LIGHT_COLORS.buttonText,
   },
   secondaryButton: {
     backgroundColor: LIGHT_COLORS.buttonBg,
