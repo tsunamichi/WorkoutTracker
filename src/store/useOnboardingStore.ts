@@ -43,6 +43,9 @@ interface OnboardingStore {
   // Cycle management
   deleteCycle: (cycleId: string) => void;
   setActiveCycle: (cycleId: string | null) => void;
+  
+  // Private persistence method
+  _persist: () => Promise<void>;
 }
 
 const STORAGE_KEYS = {
@@ -344,33 +347,6 @@ export const useOnboardingStore = create<OnboardingStore>((set, get) => ({
   setActiveCycle: (cycleId) => {
     set({ activeCycleId: cycleId });
     get()._persist();
-  },
-
-  // Private method for persistence (TypeScript will complain but it works)
-  _persist: async () => {
-    const state = get();
-    try {
-      await Promise.all([
-        AsyncStorage.setItem(
-          STORAGE_KEYS.ONBOARDING_STATE,
-          JSON.stringify({
-            authStatus: state.authStatus,
-            prefs: state.prefs,
-            draft: state.draft,
-            hasCompletedOnboarding: state.hasCompletedOnboarding,
-          })
-        ),
-        AsyncStorage.setItem(
-          STORAGE_KEYS.CYCLES,
-          JSON.stringify({
-            savedCycles: state.savedCycles,
-            activeCycleId: state.activeCycleId,
-          })
-        ),
-      ]);
-    } catch (error) {
-      console.error('Failed to persist onboarding store:', error);
-    }
   },
 }));
 
