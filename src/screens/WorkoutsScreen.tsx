@@ -5,7 +5,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { ProfileAvatar } from '../components/ProfileAvatar';
 import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS } from '../constants';
 import { useStore } from '../store';
-import { useOnboardingStore } from '../store/useOnboardingStore';
+// DISABLED: import { useOnboardingStore } from '../store/useOnboardingStore';
 import { TEMPLATES } from '../data/templates';
 import dayjs from 'dayjs';
 import isoWeek from 'dayjs/plugin/isoWeek';
@@ -37,7 +37,7 @@ const CARD_WIDTH = (SCREEN_WIDTH - HORIZONTAL_PADDING * 2 - CARD_SPACING * 2) / 
 export function WorkoutsScreen({ navigation }: WorkoutsScreenProps) {
   const insets = useSafeAreaInsets();
   const { cycles, addCycle, getNextCycleNumber, assignWorkout, exercises, addExercise, updateCycle, clearWorkoutAssignmentsForDateRange } = useStore();
-  const { startDraftFromTemplate, startDraftFromCustomText, setPrefs } = useOnboardingStore();
+  // DISABLED: const { startDraftFromTemplate, startDraftFromCustomText, setPrefs } = useOnboardingStore();
   const [showBottomSheet, setShowBottomSheet] = useState(false);
   const [workoutDetails, setWorkoutDetails] = useState('');
   const [currentPage, setCurrentPage] = useState(0);
@@ -353,12 +353,11 @@ export function WorkoutsScreen({ navigation }: WorkoutsScreenProps) {
                         <TouchableOpacity
                           style={styles.templateCard}
                           onPress={() => {
-                            // Set default preferences
-                            setPrefs({ daysPerWeek: template.idealDays[0] || 3, sessionMinutes: 60 });
-                            // Start draft from selected template
-                            startDraftFromTemplate(template.id);
-                            // Navigate to template editor
-                            navigation.navigate('TemplateEditor', { templateId: template.id });
+                            // DISABLED: Onboarding flow temporarily disabled
+                            Alert.alert('Feature Disabled', 'Template selection is temporarily disabled');
+                            // setPrefs({ daysPerWeek: template.idealDays[0] || 3, sessionMinutes: 60 });
+                            // startDraftFromTemplate(template.id);
+                            // navigation.navigate('TemplateEditor', { templateId: template.id });
                           }}
                           activeOpacity={0.8}
                         >
