@@ -132,6 +132,9 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
 
   // Animate size based on time remaining
   useEffect(() => {
+    // Skip animation during transitions to prevent crashes
+    if (isTransitioningRef.current) return;
+    
     if (currentPhase === 'complete') {
       // Don't shrink on complete
       Animated.timing(sizeAnim, {
@@ -159,63 +162,72 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
   useEffect(() => {
     const prevPhase = prevPhaseRef.current;
     
-    if (prevPhase !== currentPhase) {
-      // Phase transition - animate back to 100% size (fast start, slow deceleration)
-      Animated.timing(sizeAnim, {
-        toValue: 1,
-        duration: 600,
-        easing: Easing.out(Easing.exp), // Fast start, slow deceleration
-        useNativeDriver: true, // Use native driver for better performance
-      }).start();
-      
-      // Animate color transition
-      let colorValue = 0;
-      switch (currentPhase) {
-        case 'countdown':
-          colorValue = 0;
-          break;
-        case 'work':
-          colorValue = 1;
-          break;
-        case 'workRest':
-        case 'roundRest':
-          colorValue = 2;
-          break;
-        case 'complete':
-          colorValue = 3;
-          break;
-      }
-      
-      Animated.timing(colorAnim, {
-        toValue: colorValue,
-        duration: 600,
-        easing: Easing.inOut(Easing.ease),
-        useNativeDriver: false,
-      }).start();
-      
-      // Morph shape on complete
-      if (currentPhase === 'complete') {
+    if (prevPhase !== currentPhase && prevPhase !== null) {
+      // Add a small delay to let React finish the current render cycle
+      const timer = setTimeout(() => {
         try {
-          Animated.timing(borderRadiusAnim, {
-            toValue: 32, // Rounded rectangle
+          // Phase transition - animate back to 100% size (fast start, slow deceleration)
+          Animated.timing(sizeAnim, {
+            toValue: 1,
+            duration: 600,
+            easing: Easing.out(Easing.exp), // Fast start, slow deceleration
+            useNativeDriver: true, // Use native driver for better performance
+          }).start();
+          
+          // Animate color transition
+          let colorValue = 0;
+          switch (currentPhase) {
+            case 'countdown':
+              colorValue = 0;
+              break;
+            case 'work':
+              colorValue = 1;
+              break;
+            case 'workRest':
+            case 'roundRest':
+              colorValue = 2;
+              break;
+            case 'complete':
+              colorValue = 3;
+              break;
+          }
+          
+          Animated.timing(colorAnim, {
+            toValue: colorValue,
             duration: 600,
             easing: Easing.inOut(Easing.ease),
             useNativeDriver: false,
-          }).start(() => {
-            // Trigger confetti after shape morph
-            triggerConfetti();
-          });
+          }).start();
+          
+          // Morph shape on complete
+          if (currentPhase === 'complete') {
+            try {
+              Animated.timing(borderRadiusAnim, {
+                toValue: 32, // Rounded rectangle
+                duration: 600,
+                easing: Easing.inOut(Easing.ease),
+                useNativeDriver: false,
+              }).start(() => {
+                // Trigger confetti after shape morph
+                triggerConfetti();
+              });
+            } catch (error) {
+              console.log('⚠️ Error morphing shape:', error);
+              triggerConfetti(); // Still trigger confetti even if morph fails
+            }
+          } else {
+            borderRadiusAnim.setValue(CONTAINER_WIDTH / 2); // Reset to circle
+          }
         } catch (error) {
-          console.log('⚠️ Error morphing shape:', error);
-          triggerConfetti(); // Still trigger confetti even if morph fails
+          console.log('⚠️ Error in phase transition animation:', error);
         }
-      } else {
-        borderRadiusAnim.setValue(CONTAINER_WIDTH / 2); // Reset to circle
-      }
+      }, 100); // Small delay to let React finish rendering
       
       prevPhaseRef.current = currentPhase;
+      
+      return () => clearTimeout(timer);
     }
-  }, [currentPhase, sizeAnim, colorAnim, borderRadiusAnim]);
+  }, [currentPhase, sizeAnim, colorAnim, borderRadiusAnim, triggerConfetti]);
 
   // Load audio files
   useEffect(() => {
@@ -332,17 +344,25 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
       // Show "Go!" briefly before transitioning
       setShowGo(true);
       
-      setTimeout(() => {
-        try {
-          setShowGo(false);
-          setCurrentPhase('work');
-          setSecondsRemaining(timer.work);
-        } catch (error) {
-          console.log('⚠️ Error transitioning from countdown:', error);
-        } finally {
-          isTransitioningRef.current = false;
-        }
-      }, 400);
+      // Use requestAnimationFrame to ensure smooth transition
+      requestAnimationFrame(() => {
+        setTimeout(() => {
+          try {
+            // Batch state updates to minimize re-renders
+            setShowGo(false);
+            
+            // Use a second RAF to split the updates
+            requestAnimationFrame(() => {
+              setCurrentPhase('work');
+              setSecondsRemaining(timer.work);
+              isTransitioningRef.current = false;
+            });
+          } catch (error) {
+            console.log('⚠️ Error transitioning from countdown:', error);
+            isTransitioningRef.current = false;
+          }
+        }, 400);
+      });
     } else if (phase === 'work') {
       const isLastSet = set === timer.sets;
       const isLastRound = round === timer.rounds;
@@ -401,6 +421,12 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
 
   // Trigger confetti
   const triggerConfetti = useCallback(() => {
+    // Don't trigger confetti during phase transitions
+    if (isTransitioningRef.current) {
+      console.log('⚠️ Skipping confetti during transition');
+      return;
+    }
+    
     try {
       const particleCount = 50; // More particles!
       const colors = ['#227132', '#5E9EFF', '#FDB022', '#FF6B6B']; // Green, Blue, Yellow, Red
