@@ -162,7 +162,21 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
   useEffect(() => {
     const prevPhase = prevPhaseRef.current;
     
-    if (prevPhase !== currentPhase && prevPhase !== null) {
+    // Set initial color on mount
+    if (prevPhase === null) {
+      let initialColorValue = 0;
+      if (currentPhase === 'countdown') initialColorValue = 0;
+      else if (currentPhase === 'work') initialColorValue = 1;
+      else if (currentPhase === 'workRest' || currentPhase === 'roundRest') initialColorValue = 2;
+      else if (currentPhase === 'complete') initialColorValue = 3;
+      
+      colorAnim.setValue(initialColorValue);
+      console.log(`🎨 Initial color set for phase ${currentPhase}: ${initialColorValue}`);
+      prevPhaseRef.current = currentPhase;
+      return;
+    }
+    
+    if (prevPhase !== currentPhase) {
       // Add a small delay to let React finish the current render cycle
       const timer = setTimeout(() => {
         try {
@@ -192,12 +206,16 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
               break;
           }
           
+          console.log(`🎨 Animating color for phase ${currentPhase}: ${colorValue}`);
+          
           Animated.timing(colorAnim, {
             toValue: colorValue,
             duration: 600,
             easing: Easing.inOut(Easing.ease),
             useNativeDriver: false,
-          }).start();
+          }).start(() => {
+            console.log(`🎨 Color animation complete for ${currentPhase}`);
+          });
           
           // Morph shape on complete
           if (currentPhase === 'complete') {
@@ -672,6 +690,15 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
     });
   }, [sizeAnim]);
 
+  // Inverse scale for text to keep it fixed size
+  const textScale = useMemo(() => {
+    const minScale = MIN_SIZE / CONTAINER_WIDTH;
+    return sizeAnim.interpolate({
+      inputRange: [0, 1],
+      outputRange: [1 / minScale, 1], // Inverse of the circle scale
+    });
+  }, [sizeAnim]);
+
   const backgroundColor = useMemo(() => {
     return colorAnim.interpolate({
       inputRange: [0, 1, 2, 3],
@@ -801,14 +828,16 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
             ]}
           >
             {currentPhase === 'complete' ? (
-              <>
+              <Animated.View style={{ transform: [{ scale: textScale }] }}>
                 <Text style={styles.completeText}>{getDisplayText()}</Text>
                 {getSubtitleText() && (
                   <Text style={styles.subtitleText}>{getSubtitleText()}</Text>
                 )}
-              </>
+              </Animated.View>
             ) : (
-              <Text style={styles.timerText}>{getDisplayText()}</Text>
+              <Animated.Text style={[styles.timerText, { transform: [{ scale: textScale }] }]}>
+                {getDisplayText()}
+              </Animated.Text>
             )}
           </Animated.View>
         </View>
