@@ -1015,7 +1015,7 @@ const styles = StyleSheet.create({
     borderCurve: 'continuous',
   },
   timerText: {
-    fontSize: 72,
+    fontSize: 56,
     fontWeight: '300',
     color: '#FFFFFF',
     textAlign: 'center',
