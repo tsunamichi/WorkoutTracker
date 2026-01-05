@@ -103,7 +103,6 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
   const colorAnim = useRef(new Animated.Value(0)).current; // For color transitions
   const borderRadiusAnim = useRef(new Animated.Value(CONTAINER_WIDTH / 2)).current; // Circle to rounded rect
   const sideButtonsAnim = useRef(new Animated.Value(0)).current;
-  const celebrationPulseAnim = useRef(new Animated.Value(1)).current; // For pulsing celebration
   
   // Track previous phase for color interpolation
   const prevPhaseRef = useRef<TimerPhase>('countdown');
@@ -248,15 +247,6 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
       friction: 10,
     }).start();
   }, [isRunning, currentPhase, sideButtonsAnim]);
-
-  // Stop celebration animation when leaving complete phase
-  useEffect(() => {
-    if (currentPhase !== 'complete') {
-      celebrationPulseAnim.stopAnimation(() => {
-        celebrationPulseAnim.setValue(1);
-      });
-    }
-  }, [currentPhase, celebrationPulseAnim]);
 
   // Timer interval
   useEffect(() => {
@@ -442,24 +432,6 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
     
     setParticles(newParticles);
     
-    // Start celebration pulse animation
-    Animated.loop(
-      Animated.sequence([
-        Animated.timing(celebrationPulseAnim, {
-          toValue: 1.05,
-          duration: 800,
-          easing: Easing.inOut(Easing.ease),
-          useNativeDriver: false, // Must be false since sizeAnim uses width/height
-        }),
-        Animated.timing(celebrationPulseAnim, {
-          toValue: 1,
-          duration: 800,
-          easing: Easing.inOut(Easing.ease),
-          useNativeDriver: false, // Must be false since sizeAnim uses width/height
-        }),
-      ])
-    ).start();
-    
     // Clear particles after animation
     setTimeout(() => setParticles([]), 1600);
   };
@@ -496,9 +468,6 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
     borderRadiusAnim.stopAnimation(() => {
       borderRadiusAnim.setValue(CONTAINER_WIDTH / 2);
     });
-    celebrationPulseAnim.stopAnimation(() => {
-      celebrationPulseAnim.setValue(1);
-    });
     
     // Auto-start after a brief delay
     setTimeout(() => {
@@ -524,6 +493,20 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
                   style: 'destructive',
                   onPress: () => {
                     if (timerId) {
+                      // Stop all running operations before deleting
+                      setIsRunning(false);
+                      if (intervalRef.current) {
+                        clearInterval(intervalRef.current);
+                        intervalRef.current = null;
+                      }
+                      
+                      // Stop all animations
+                      sizeAnim.stopAnimation();
+                      colorAnim.stopAnimation();
+                      borderRadiusAnim.stopAnimation();
+                      sideButtonsAnim.stopAnimation();
+                      
+                      // Delete and navigate back
                       deleteHIITTimer(timerId);
                       navigation.goBack();
                     }
@@ -756,7 +739,6 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
                 height: animatedSize,
                 borderRadius: borderRadiusAnim,
                 backgroundColor,
-                transform: currentPhase === 'complete' ? [{ scale: celebrationPulseAnim }] : [],
               },
             ]}
           >
