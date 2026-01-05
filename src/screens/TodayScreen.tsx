@@ -767,10 +767,7 @@ export function TodayScreen({ navigation }: TodayScreenProps) {
                   activeOpacity={0.7}
                   onPress={() => navigation.navigate('HIITTimerList')}
                 >
-                  <Text style={styles.fixedTimerButtonText}>timer</Text>
-                  <View style={styles.timerIconWrapper}>
-                    <IconStopwatch size={20} color={COLORS.accentPrimary} />
-                  </View>
+                  <IconStopwatch size={24} color="#FFFFFF" />
                 </TouchableOpacity>
               </View>
             )}
@@ -1293,25 +1290,16 @@ const styles = StyleSheet.create({
   // Fixed Timer Button
   fixedTimerButtonContainer: {
     position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 108, // 8px tab bar margin + 80px tab bar height + 20px gap
-    alignItems: 'center',
+    right: 8,
+    bottom: 8,
   },
   fixedTimerButton: {
-    flexDirection: 'row',
+    width: 56,
+    height: 56,
+    borderRadius: 16,
+    backgroundColor: '#1B1B1B',
     alignItems: 'center',
-    gap: 8,
-  },
-  fixedTimerButtonText: {
-    ...TYPOGRAPHY.bodyBold,
-    color: '#000000',
-  },
-  timerIconWrapper: {
-    width: 20,
-    height: 20,
     justifyContent: 'center',
-    alignItems: 'center',
   },
   
   // Swap Bottom Sheet

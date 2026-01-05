@@ -19,7 +19,7 @@ import { CreateCycleBasics } from '../screens/manualCycle/CreateCycleBasics';
 import { CreateCycleDaysOverview } from '../screens/manualCycle/CreateCycleDaysOverview';
 import { CreateCycleDayEditor } from '../screens/manualCycle/CreateCycleDayEditor';
 import { CreateCycleReview } from '../screens/manualCycle/CreateCycleReview';
-import { IconCalendar, IconWorkouts } from '../components/icons';
+import { IconCalendar, IconWorkouts, IconStopwatch } from '../components/icons';
 import { COLORS } from '../constants';
 import { CycleTemplateId } from '../types/workout';
 import { Weekday } from '../types/manualCycle';
@@ -66,11 +66,11 @@ function TabNavigator() {
           tabBarStyle: {
             backgroundColor: COLORS.backgroundContainer,
             borderTopWidth: 0,
-            height: 80,
+            height: 56,
             position: 'absolute',
             bottom: 8,
             left: 8,
-            right: 8,
+            width: '70%',
             borderRadius: 16,
             paddingTop: 0,
             paddingBottom: 0,
@@ -78,11 +78,12 @@ function TabNavigator() {
             paddingRight: 0,
           },
           tabBarItemStyle: {
-            height: 80,
+            height: 56,
+            flexDirection: 'row',
             justifyContent: 'center',
             alignItems: 'center',
             paddingVertical: 0,
-            paddingHorizontal: 0,
+            paddingHorizontal: 12,
             paddingTop: 0,
             paddingBottom: 0,
             margin: 0,
@@ -95,28 +96,28 @@ function TabNavigator() {
       <Tab.Screen
         name="Schedule"
         component={TodayScreen}
-        options={{
-          tabBarIcon: ({ color }) => (
-            <View style={styles.tabIconWrapper} pointerEvents="box-none">
+        options={({ route, navigation }) => ({
+          tabBarIcon: ({ color, focused }) => (
+            <View style={styles.tabContentWrapper} pointerEvents="box-none">
               <IconCalendar size={24} color={color} />
+              {focused && <Text style={[styles.tabLabel, { color }]}>Schedule</Text>}
             </View>
           ),
-          tabBarLabel: 'Schedule',
-          tabBarLabelStyle: styles.tabLabel,
-        }}
+          tabBarLabel: () => null,
+        })}
       />
       <Tab.Screen
         name="Workouts"
         component={WorkoutsScreen}
-        options={{
-          tabBarIcon: ({ color }) => (
-            <View style={styles.tabIconWrapper} pointerEvents="box-none">
+        options={({ route, navigation }) => ({
+          tabBarIcon: ({ color, focused }) => (
+            <View style={styles.tabContentWrapper} pointerEvents="box-none">
               <IconWorkouts size={24} color={color} />
+              {focused && <Text style={[styles.tabLabel, { color }]}>Workouts</Text>}
             </View>
           ),
-          tabBarLabel: 'Workouts',
-          tabBarLabelStyle: styles.tabLabel,
-        }}
+          tabBarLabel: () => null,
+        })}
       />
     </Tab.Navigator>
     </View>
@@ -146,15 +147,15 @@ const styles = StyleSheet.create({
     height: 1,
     backgroundColor: '#FFFFFF',
   },
-  tabIconWrapper: {
+  tabContentWrapper: {
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 4,
+    gap: 8,
   },
   tabLabel: {
     fontSize: 13,
     fontWeight: '400',
-    marginTop: 0,
   },
 });
 
