@@ -14,7 +14,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Audio } from 'expo-av';
 import Svg, { Circle, Path } from 'react-native-svg';
 import { useStore } from '../store';
-import { COLORS, SPACING, TYPOGRAPHY, GRADIENTS, BUTTONS, BORDER_RADIUS, CARDS } from '../constants';
+import { COLORS, SPACING, TYPOGRAPHY, GRADIENTS, BUTTONS, BORDER_RADIUS } from '../constants';
 import { IconArrowLeft, IconPlay, IconPause, IconSpeaker, IconSkip, IconRestart } from '../components/icons';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/AppNavigator';
@@ -1117,7 +1117,11 @@ const styles = StyleSheet.create({
     paddingVertical: SPACING.xs,
     minWidth: 120,
     zIndex: 1000,
-    ...CARDS.elevated.shadowStyle,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 5,
   },
   dropdownItem: {
     paddingVertical: SPACING.md,
