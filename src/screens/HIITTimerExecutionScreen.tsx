@@ -170,8 +170,14 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
       else if (currentPhase === 'workRest' || currentPhase === 'roundRest') initialColorValue = 2;
       else if (currentPhase === 'complete') initialColorValue = 3;
       
-      colorAnim.setValue(initialColorValue);
-      console.log(`🎨 Initial color set for phase ${currentPhase}: ${initialColorValue}`);
+      console.log(`🎨 Setting initial color for phase ${currentPhase}: ${initialColorValue}`);
+      
+      // Use setTimeout to ensure it happens after render
+      setTimeout(() => {
+        colorAnim.setValue(initialColorValue);
+        console.log(`🎨 Initial color SET for phase ${currentPhase}: ${initialColorValue}`);
+      }, 0);
+      
       prevPhaseRef.current = currentPhase;
       return;
     }
@@ -700,7 +706,7 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
   }, [sizeAnim]);
 
   const backgroundColor = useMemo(() => {
-    return colorAnim.interpolate({
+    const interpolated = colorAnim.interpolate({
       inputRange: [0, 1, 2, 3],
       outputRange: [
         PHASE_COLORS.countdown,
@@ -709,6 +715,19 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
         PHASE_COLORS.complete,
       ],
     });
+    console.log('🎨 backgroundColor interpolation created');
+    return interpolated;
+  }, [colorAnim]);
+
+  // Add listener to debug color changes
+  useEffect(() => {
+    const listenerId = colorAnim.addListener(({ value }) => {
+      console.log('🎨 colorAnim value changed:', value);
+    });
+    
+    return () => {
+      colorAnim.removeListener(listenerId);
+    };
   }, [colorAnim]);
 
   // Memoize pie chart progress to prevent errors during phase transitions
