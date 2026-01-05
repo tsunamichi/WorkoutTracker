@@ -1276,7 +1276,7 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-start',
     gap: 8,
     marginTop: SPACING.lg,
-    marginLeft: 48,
+    marginLeft: 24,
     paddingVertical: SPACING.md,
   },
   swapButtonText: {
