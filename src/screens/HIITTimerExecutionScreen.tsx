@@ -86,6 +86,7 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
   const [secondsRemaining, setSecondsRemaining] = useState(5);
   const [showGo, setShowGo] = useState(false);
   const [particles, setParticles] = useState<Particle[]>([]);
+  const [menuVisible, setMenuVisible] = useState(false);
   
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const countdownSoundRef = useRef<Audio.Sound | null>(null);
@@ -543,64 +544,54 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
   };
 
   const handleMenu = () => {
+    setMenuVisible(!menuVisible);
+  };
+
+  const handleEdit = () => {
+    setMenuVisible(false);
+    if (timerId) {
+      // Stop timer before navigating to edit
+      setIsRunning(false);
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
+      navigation.navigate('HIITTimerForm', { timerId });
+    }
+  };
+
+  const handleDelete = () => {
+    setMenuVisible(false);
     Alert.alert(
-      '',
-      '',
+      'Delete Timer',
+      'Are you sure you want to delete this timer?',
       [
+        { text: 'Cancel', style: 'cancel' },
         {
-          text: 'Edit',
+          text: 'Delete',
+          style: 'destructive',
           onPress: () => {
             if (timerId) {
-              // Stop timer before navigating to edit
-              setIsRunning(false);
+              // Stop all running operations before deleting
+            setIsRunning(false);
               if (intervalRef.current) {
                 clearInterval(intervalRef.current);
                 intervalRef.current = null;
               }
-              navigation.navigate('HIITTimerForm', { timerId });
+              
+              // Stop all animations
+              sizeAnim.stopAnimation();
+              colorAnim.stopAnimation();
+              borderRadiusAnim.stopAnimation();
+              sideButtonsAnim.stopAnimation();
+              
+              // Delete and navigate back
+              deleteHIITTimer(timerId);
+              navigation.goBack();
             }
           },
         },
-        {
-          text: 'Delete',
-          onPress: () => {
-            Alert.alert(
-              'Delete Timer',
-              'Are you sure you want to delete this timer?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-                  text: 'Delete',
-                  style: 'destructive',
-          onPress: () => {
-                    if (timerId) {
-                      // Stop all running operations before deleting
-            setIsRunning(false);
-                      if (intervalRef.current) {
-                        clearInterval(intervalRef.current);
-                        intervalRef.current = null;
-                      }
-                      
-                      // Stop all animations
-                      sizeAnim.stopAnimation();
-                      colorAnim.stopAnimation();
-                      borderRadiusAnim.stopAnimation();
-                      sideButtonsAnim.stopAnimation();
-                      
-                      // Delete and navigate back
-                      deleteHIITTimer(timerId);
-                      navigation.goBack();
-                    }
-          },
-        },
       ]
-            );
-          },
-          style: 'destructive',
-        },
-        { text: 'Cancel', style: 'cancel' },
-      ],
-      { cancelable: true }
     );
   };
 
@@ -806,6 +797,36 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
             </View>
             </View>
           </View>
+
+        {/* Dropdown Menu */}
+        {menuVisible && (
+          <>
+            {/* Overlay to close menu when tapping outside */}
+            <TouchableOpacity 
+              style={styles.menuOverlay} 
+              onPress={() => setMenuVisible(false)}
+              activeOpacity={1}
+            />
+            {/* Dropdown */}
+            <View style={[styles.dropdown, { top: insets.top + 48 }]}>
+              <TouchableOpacity 
+                style={styles.dropdownItem} 
+                onPress={handleEdit}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.dropdownItemText}>Edit</Text>
+              </TouchableOpacity>
+              <View style={styles.dropdownDivider} />
+              <TouchableOpacity 
+                style={styles.dropdownItem} 
+                onPress={handleDelete}
+                activeOpacity={0.7}
+              >
+                <Text style={[styles.dropdownItemText, styles.dropdownItemTextDestructive]}>Delete</Text>
+              </TouchableOpacity>
+          </View>
+          </>
+        )}
 
         {/* Timer Circle */}
           <View style={styles.timerContainer}>
@@ -1079,5 +1100,39 @@ const styles = StyleSheet.create({
     color: LIGHT_COLORS.secondary,
     textAlign: 'center',
     marginTop: SPACING.xxl,
+  },
+  menuOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 999,
+  },
+  dropdown: {
+    position: 'absolute',
+    right: SPACING.xl,
+    backgroundColor: LIGHT_COLORS.cardBackground,
+    borderRadius: BORDER_RADIUS.lg,
+    paddingVertical: SPACING.xs,
+    minWidth: 120,
+    zIndex: 1000,
+    ...CARDS.elevated.shadowStyle,
+  },
+  dropdownItem: {
+    paddingVertical: SPACING.md,
+    paddingHorizontal: SPACING.lg,
+  },
+  dropdownItemText: {
+    ...TYPOGRAPHY.body,
+    color: LIGHT_COLORS.text,
+  },
+  dropdownItemTextDestructive: {
+    color: '#FF3B30',
+  },
+  dropdownDivider: {
+    height: 1,
+    backgroundColor: LIGHT_COLORS.border,
+    marginHorizontal: SPACING.md,
   },
 });

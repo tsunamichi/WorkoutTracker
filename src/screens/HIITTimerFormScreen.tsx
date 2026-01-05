@@ -166,15 +166,17 @@ export default function HIITTimerFormScreen({ navigation, route }: Props) {
     // Save timer
     if (mode === 'create') {
       await addHIITTimer(timer);
+      // Mark as saved to prevent duplicate save on back navigation
+      hasSavedRef.current = true;
+      // Navigate to execution for new timer
+      navigation.replace('HIITTimerExecution', { timerId: newTimerId });
     } else {
       await updateHIITTimer(timerId!, timer);
+      // Mark as saved to prevent duplicate save on back navigation
+      hasSavedRef.current = true;
+      // Just go back when editing - the execution screen will refresh
+      navigation.goBack();
     }
-    
-    // Mark as saved to prevent duplicate save on back navigation
-    hasSavedRef.current = true;
-    
-    // Navigate to execution
-    navigation.replace('HIITTimerExecution', { timerId: newTimerId });
   };
 
   return (
