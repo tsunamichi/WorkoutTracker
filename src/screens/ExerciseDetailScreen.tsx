@@ -899,27 +899,49 @@ export function ExerciseDetailScreen({ route, navigation }: ExerciseDetailScreen
           </View>
         </ScrollView>
         
-        {/* Mark as Done Button - Fixed at Bottom */}
+        {/* Mark as Done / Save Changes Button - Fixed at Bottom */}
         {expandedSetIndex !== -1 && (
           <View style={[styles.markAsDoneContainer, { paddingBottom: insets.bottom + 16 }]}>
             <TouchableOpacity
               style={styles.markAsDoneButton}
               onPress={() => {
-                if (expandedSetIndex !== null && expandedSetIndex >= 0) {
+                if (allSetsCompleted && hasUnsavedChanges) {
+                  // Save changes mode - just close without navigation
+                  setHasUnsavedChanges(false);
+                  LayoutAnimation.configureNext(
+                    LayoutAnimation.create(
+                      250,
+                      LayoutAnimation.Types.easeInEaseOut,
+                      LayoutAnimation.Properties.opacity
+                    )
+                  );
+                  setExpandedSetIndex(-1);
+                } else if (expandedSetIndex !== null && expandedSetIndex >= 0) {
+                  // Mark as Done mode - record the set
                   handleRecord(expandedSetIndex);
                 }
               }}
               activeOpacity={0.8}
+              disabled={allSetsCompleted && !hasUnsavedChanges}
             >
-              <LinearGradient
-                colors={GRADIENTS.accentPrimary.colors}
-                start={GRADIENTS.accentPrimary.start}
-                end={GRADIENTS.accentPrimary.end}
-                style={styles.markAsDoneButtonInner}
-              >
-                <IconCheck size={24} color="#FFFFFF" />
-                <Text style={styles.markAsDoneButtonText}>Mark as Done</Text>
-              </LinearGradient>
+              {allSetsCompleted ? (
+                // Save Changes button (black background)
+                <View style={[styles.markAsDoneButtonInner, styles.saveChangesButtonBackground, (!hasUnsavedChanges) && styles.buttonDisabled]}>
+                  <IconCheck size={24} color="#FFFFFF" />
+                  <Text style={styles.markAsDoneButtonText}>Save changes</Text>
+                </View>
+              ) : (
+                // Mark as Done button (gradient background)
+                <LinearGradient
+                  colors={GRADIENTS.accentPrimary.colors}
+                  start={GRADIENTS.accentPrimary.start}
+                  end={GRADIENTS.accentPrimary.end}
+                  style={styles.markAsDoneButtonInner}
+                >
+                  <IconCheck size={24} color="#FFFFFF" />
+                  <Text style={styles.markAsDoneButtonText}>Mark as Done</Text>
+                </LinearGradient>
+              )}
             </TouchableOpacity>
           </View>
         )}
@@ -1530,6 +1552,12 @@ const styles = StyleSheet.create({
     ...TYPOGRAPHY.bodyBold,
     color: '#FFFFFF',
     fontSize: 17,
+  },
+  saveChangesButtonBackground: {
+    backgroundColor: '#1B1B1B',
+  },
+  buttonDisabled: {
+    opacity: 0.4,
   },
 });
 
