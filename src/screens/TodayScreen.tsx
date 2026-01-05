@@ -436,16 +436,31 @@ export function TodayScreen({ navigation }: TodayScreenProps) {
                     
                     {/* Progress Dots */}
                     <View style={styles.progressDotsContainer}>
-                      {Array.from({ length: 3 }).map((_, rowIdx) => (
-                        <View key={rowIdx} style={styles.progressDotsRow}>
-                          {Array.from({ length: 32 }).map((_, dotIdx) => (
-                            <View 
-                              key={dotIdx} 
-                              style={styles.progressDot} 
-                            />
-                          ))}
-                        </View>
-                      ))}
+                      {(() => {
+                        const totalSets = previousWorkoutData.workout.exercises.reduce((acc: number, ex: any) => acc + (ex.targetSets || 0), 0);
+                        const workoutKey = `${previousWorkoutData.workout.id}-${previousWorkoutData.date}`;
+                        const completionPercentage = getWorkoutCompletionPercentage(workoutKey, totalSets);
+                        const totalDots = 96; // 3 rows * 32 dots
+                        const completedDots = Math.round((completionPercentage / 100) * totalDots);
+                        
+                        return Array.from({ length: 3 }).map((_, rowIdx) => (
+                          <View key={rowIdx} style={styles.progressDotsRow}>
+                            {Array.from({ length: 32 }).map((_, dotIdx) => {
+                              const absoluteDotIndex = rowIdx * 32 + dotIdx;
+                              const isCompleted = absoluteDotIndex < completedDots;
+                              return (
+                                <View 
+                                  key={dotIdx} 
+                                  style={[
+                                    styles.progressDot,
+                                    isCompleted && styles.progressDotCompleted
+                                  ]} 
+                                />
+                              );
+                            })}
+                          </View>
+                        ));
+                      })()}
                     </View>
                     
                     {/* Footer */}
@@ -463,8 +478,8 @@ export function TodayScreen({ navigation }: TodayScreenProps) {
                         
                         return (
                           <>
-                            <Text style={completionPercentage > 0 ? styles.workoutProgress : styles.workoutExercises}>
-                              {completionPercentage > 0 ? `${completionPercentage}%` : `${previousWorkoutData.workout.exercises.length} exercises`}
+                            <Text style={styles.workoutExercises}>
+                              {previousWorkoutData.workout.exercises.length} exercises
                             </Text>
                             
                             <View style={styles.startButton}>
@@ -539,16 +554,31 @@ export function TodayScreen({ navigation }: TodayScreenProps) {
                     
                     {/* Progress Dots - Show total sets across all exercises */}
                     <View style={styles.progressDotsContainer}>
-                      {Array.from({ length: 3 }).map((_, rowIdx) => (
-                        <View key={rowIdx} style={styles.progressDotsRow}>
-                          {Array.from({ length: 32 }).map((_, dotIdx) => (
-                            <View 
-                              key={dotIdx} 
-                              style={styles.progressDot} 
-                            />
-                          ))}
-                        </View>
-                      ))}
+                      {(() => {
+                        const totalSets = selectedDay.workout.exercises.reduce((acc, ex) => acc + (ex.targetSets || 0), 0);
+                        const workoutKey = `${selectedDay.workout.id}-${selectedDay.date}`;
+                        const completionPercentage = getWorkoutCompletionPercentage(workoutKey, totalSets);
+                        const totalDots = 96; // 3 rows * 32 dots
+                        const completedDots = Math.round((completionPercentage / 100) * totalDots);
+                        
+                        return Array.from({ length: 3 }).map((_, rowIdx) => (
+                          <View key={rowIdx} style={styles.progressDotsRow}>
+                            {Array.from({ length: 32 }).map((_, dotIdx) => {
+                              const absoluteDotIndex = rowIdx * 32 + dotIdx;
+                              const isCompleted = absoluteDotIndex < completedDots;
+                              return (
+                                <View 
+                                  key={dotIdx} 
+                                  style={[
+                                    styles.progressDot,
+                                    isCompleted && styles.progressDotCompleted
+                                  ]} 
+                                />
+                              );
+                            })}
+                          </View>
+                        ));
+                      })()}
                     </View>
                     
                     {/* Footer: Progress and Start/Resume/Edit button */}
@@ -566,8 +596,8 @@ export function TodayScreen({ navigation }: TodayScreenProps) {
                         
                         return (
                           <>
-                            <Text style={completionPercentage > 0 ? styles.workoutProgress : styles.workoutExercises}>
-                              {completionPercentage > 0 ? `${completionPercentage}%` : `${selectedDay.workout.exercises.length} exercises`}
+                            <Text style={styles.workoutExercises}>
+                              {selectedDay.workout.exercises.length} exercises
                             </Text>
                             
                             <View style={styles.startButton}>
@@ -1081,7 +1111,7 @@ const styles = StyleSheet.create({
     backgroundColor: LIGHT_COLORS.textMeta,
   },
   progressDotCompleted: {
-    backgroundColor: LIGHT_COLORS.accentPrimary,
+    backgroundColor: '#227132', // Green
   },
   
   // Footer
@@ -1200,9 +1230,10 @@ const styles = StyleSheet.create({
   swapButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    justifyContent: 'flex-end',
     gap: 8,
     marginTop: SPACING.lg,
+    marginLeft: 24,
     paddingVertical: SPACING.md,
   },
   swapButtonText: {
