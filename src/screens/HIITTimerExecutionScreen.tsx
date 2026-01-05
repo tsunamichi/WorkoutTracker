@@ -16,6 +16,7 @@ import Svg, { Circle, Path } from 'react-native-svg';
 import { useStore } from '../store';
 import { COLORS, SPACING, TYPOGRAPHY, GRADIENTS, BUTTONS, BORDER_RADIUS } from '../constants';
 import { IconArrowLeft, IconPlay, IconPause, IconSpeaker, IconSkip, IconRestart } from '../components/icons';
+import { DropdownMenu } from '../components/DropdownMenu';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/AppNavigator';
 
@@ -799,34 +800,15 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
           </View>
 
         {/* Dropdown Menu */}
-        {menuVisible && (
-          <>
-            {/* Overlay to close menu when tapping outside */}
-            <TouchableOpacity 
-              style={styles.menuOverlay} 
-              onPress={() => setMenuVisible(false)}
-              activeOpacity={1}
-            />
-            {/* Dropdown */}
-            <View style={[styles.dropdown, { top: insets.top + 48 }]}>
-              <TouchableOpacity 
-                style={styles.dropdownItem} 
-                onPress={handleEdit}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.dropdownItemText}>Edit</Text>
-              </TouchableOpacity>
-              <View style={styles.dropdownDivider} />
-              <TouchableOpacity 
-                style={styles.dropdownItem} 
-                onPress={handleDelete}
-                activeOpacity={0.7}
-              >
-                <Text style={[styles.dropdownItemText, styles.dropdownItemTextDestructive]}>Delete</Text>
-              </TouchableOpacity>
-          </View>
-          </>
-        )}
+        <DropdownMenu
+          visible={menuVisible}
+          onClose={() => setMenuVisible(false)}
+          top={insets.top + 48}
+          items={[
+            { label: 'Edit', onPress: handleEdit },
+            { label: 'Delete', onPress: handleDelete, destructive: true },
+          ]}
+        />
 
         {/* Timer Circle */}
           <View style={styles.timerContainer}>
@@ -1100,43 +1082,5 @@ const styles = StyleSheet.create({
     color: LIGHT_COLORS.secondary,
     textAlign: 'center',
     marginTop: SPACING.xxl,
-  },
-  menuOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    zIndex: 999,
-  },
-  dropdown: {
-    position: 'absolute',
-    right: SPACING.xl,
-    backgroundColor: LIGHT_COLORS.cardBackground,
-    borderRadius: BORDER_RADIUS.lg,
-    paddingVertical: SPACING.xs,
-    minWidth: 120,
-    zIndex: 1000,
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
-    elevation: 5,
-  },
-  dropdownItem: {
-    paddingVertical: SPACING.md,
-    paddingHorizontal: SPACING.lg,
-  },
-  dropdownItemText: {
-    ...TYPOGRAPHY.body,
-    color: LIGHT_COLORS.text,
-  },
-  dropdownItemTextDestructive: {
-    color: '#FF3B30',
-  },
-  dropdownDivider: {
-    height: 1,
-    backgroundColor: LIGHT_COLORS.border,
-    marginHorizontal: SPACING.md,
   },
 });
