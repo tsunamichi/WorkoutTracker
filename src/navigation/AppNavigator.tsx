@@ -93,15 +93,16 @@ function TabNavigator() {
         }}
       >
       <Tab.Screen
-        name="Today"
+        name="Schedule"
         component={TodayScreen}
         options={{
           tabBarIcon: ({ color }) => (
-            <View style={styles.tabWrapper} pointerEvents="box-none">
+            <View style={styles.tabIconWrapper} pointerEvents="box-none">
               <IconCalendar size={24} color={color} />
             </View>
           ),
-          tabBarLabel: () => null,
+          tabBarLabel: 'Schedule',
+          tabBarLabelStyle: styles.tabLabel,
         }}
       />
       <Tab.Screen
@@ -109,11 +110,12 @@ function TabNavigator() {
         component={WorkoutsScreen}
         options={{
           tabBarIcon: ({ color }) => (
-            <View style={styles.tabWrapper} pointerEvents="box-none">
+            <View style={styles.tabIconWrapper} pointerEvents="box-none">
               <IconWorkouts size={24} color={color} />
             </View>
           ),
-          tabBarLabel: () => null,
+          tabBarLabel: 'Workouts',
+          tabBarLabelStyle: styles.tabLabel,
         }}
       />
     </Tab.Navigator>
@@ -144,11 +146,15 @@ const styles = StyleSheet.create({
     height: 1,
     backgroundColor: '#FFFFFF',
   },
-  tabWrapper: {
-    flex: 1,
-    width: '100%',
+  tabIconWrapper: {
     alignItems: 'center',
     justifyContent: 'center',
+    marginBottom: 4,
+  },
+  tabLabel: {
+    fontSize: 13,
+    fontWeight: '400',
+    marginTop: 0,
   },
 });
 

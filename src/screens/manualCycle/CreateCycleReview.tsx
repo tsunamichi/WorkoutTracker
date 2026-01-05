@@ -171,7 +171,7 @@ export function CreateCycleReview({ navigation }: CreateCycleReviewProps) {
 
     // Reset draft and navigate
     resetDraft();
-    navigation.navigate('AppTabs', { screen: 'Today' });
+    navigation.navigate('AppTabs', { screen: 'Schedule' });
   };
 
   const endDate = startDate ? calculateEndDate(startDate, weeks) : null;
