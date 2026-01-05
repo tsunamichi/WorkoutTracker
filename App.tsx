@@ -1,17 +1,21 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { ActivityIndicator, View, StyleSheet } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { RootNavigator } from './src/navigation/RootNavigator';
-import { useStore } from './src/store';
+// TEMPORARILY DISABLED: import { useStore } from './src/store';
 import { COLORS } from './src/constants';
 
 export default function App() {
-  const { initialize, isLoading } = useStore();
+  // TEMPORARILY BYPASSING ZUSTAND STORE
+  // const { initialize, isLoading } = useStore();
+  const [isLoading, setIsLoading] = useState(true);
   
   useEffect(() => {
-    initialize();
+    // Simulate initialization without Zustand
+    setTimeout(() => setIsLoading(false), 500);
+    // initialize();
   }, []);
   
   if (isLoading) {
