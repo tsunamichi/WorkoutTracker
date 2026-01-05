@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -255,6 +255,12 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
     }).start();
   }, [isRunning, currentPhase, sideButtonsAnim]);
 
+  // Store handlePhaseComplete in a ref to avoid recreating interval
+  const handlePhaseCompleteRef = useRef(handlePhaseComplete);
+  useEffect(() => {
+    handlePhaseCompleteRef.current = handlePhaseComplete;
+  }, [handlePhaseComplete]);
+
   // Timer interval
   useEffect(() => {
     if (isRunning) {
@@ -275,7 +281,7 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
           }
           
           if (newTime <= 0 && !isTransitioningRef.current) {
-            setTimeout(() => handlePhaseComplete(), 0);
+            setTimeout(() => handlePhaseCompleteRef.current(), 0);
             return 0;
           }
           return newTime;
@@ -293,7 +299,7 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
         clearInterval(intervalRef.current);
       }
     };
-  }, [isRunning, handlePhaseComplete, soundEnabled]);
+  }, [isRunning, soundEnabled]);
 
   // Handle phase completion
   const handlePhaseComplete = useCallback(() => {
@@ -617,23 +623,26 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
     return null;
   };
 
-  // Interpolate scale (from minimum scale to full size)
-  const minScale = MIN_SIZE / CONTAINER_WIDTH;
-  const animatedScale = sizeAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [minScale, 1],
-  });
+  // Memoize interpolations to prevent recreation on every render
+  const animatedScale = useMemo(() => {
+    const minScale = MIN_SIZE / CONTAINER_WIDTH;
+    return sizeAnim.interpolate({
+      inputRange: [0, 1],
+      outputRange: [minScale, 1],
+    });
+  }, [sizeAnim]);
 
-  // Interpolate color
-  const backgroundColor = colorAnim.interpolate({
-    inputRange: [0, 1, 2, 3],
-    outputRange: [
-      PHASE_COLORS.countdown,
-      PHASE_COLORS.work,
-      PHASE_COLORS.rest,
-      PHASE_COLORS.complete,
-    ],
-  });
+  const backgroundColor = useMemo(() => {
+    return colorAnim.interpolate({
+      inputRange: [0, 1, 2, 3],
+      outputRange: [
+        PHASE_COLORS.countdown,
+        PHASE_COLORS.work,
+        PHASE_COLORS.rest,
+        PHASE_COLORS.complete,
+      ],
+    });
+  }, [colorAnim]);
 
   return (
     <LinearGradient
