@@ -85,7 +85,7 @@ const ACCENT_PRIMARY = '#FC6B00';
 export const COLORS = {
   // Core colors
   background: '#E3E6E0',    // Default background
-  backgroundCanvas: '#E3E6E0',  // Page background (like Today tab)
+  backgroundCanvas: '#E2E3DF',  // Page background (like Today tab)
   backgroundContainer: '#CDCABB', // Bottom nav background
   canvas: '#1C1C1E',        // Card/container background (dark mode)
   container: '#2C2C2E',     // Secondary container

@@ -863,7 +863,7 @@ export function WorkoutExecutionScreen({ route, navigation }: WorkoutExecutionSc
                             >
                               <View style={styles.exerciseInfo}>
                                 <View>
-                                  <Text style={[styles.exerciseName, isDisabled && styles.exerciseNameDisabled]}>
+                                  <Text style={[styles.exerciseName, isDisabled && styles.exerciseNameDisabled, isSkipped && styles.exerciseNameSkipped]}>
                                     {exerciseData?.name || 'Unknown Exercise'}
                                   </Text>
                                 </View>
@@ -1094,6 +1094,9 @@ const styles = StyleSheet.create({
   },
   exerciseNameDisabled: {
     opacity: 0.4,
+  },
+  exerciseNameSkipped: {
+    color: LIGHT_COLORS.textMeta,
   },
   exerciseCardDisabled: {
     opacity: 0.5,
