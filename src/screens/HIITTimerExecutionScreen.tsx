@@ -14,7 +14,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Audio } from 'expo-av';
 import Svg, { Circle, Path } from 'react-native-svg';
 import { useStore } from '../store';
-import { COLORS, SPACING, TYPOGRAPHY, GRADIENTS, BUTTONS } from '../constants';
+import { COLORS, SPACING, TYPOGRAPHY, GRADIENTS, BUTTONS, BORDER_RADIUS, CARDS } from '../constants';
 import { IconArrowLeft, IconPlay, IconPause, IconSpeaker, IconSkip, IconRestart } from '../components/icons';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/AppNavigator';
