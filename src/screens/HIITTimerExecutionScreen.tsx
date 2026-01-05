@@ -103,7 +103,7 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
   const colorAnim = useRef(new Animated.Value(0)).current; // For color transitions
   const borderRadiusAnim = useRef(new Animated.Value(CONTAINER_WIDTH / 2)).current; // Circle to rounded rect
   const sideButtonsAnim = useRef(new Animated.Value(0)).current;
-  
+
   // Track previous phase for color interpolation
   const prevPhaseRef = useRef<TimerPhase>('countdown');
 
@@ -253,7 +253,7 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
           staysActiveInBackground: false,
           shouldDuckAndroid: false,
         });
-
+        
         const { sound: countdownSound } = await Audio.Sound.createAsync(
           require('../../assets/sounds/countdown.mp3')
         );
@@ -295,29 +295,29 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
   // Timer interval
   useEffect(() => {
     if (isRunning) {
-      intervalRef.current = setInterval(() => {
-        setSecondsRemaining(prev => {
-          const newTime = prev - 1;
-          
+        intervalRef.current = setInterval(() => {
+          setSecondsRemaining(prev => {
+            const newTime = prev - 1;
+            
           // Play countdown sound at 3, 2, 1
-          if (soundEnabled && (newTime === 3 || newTime === 2 || newTime === 1) && lastPlayedSecondRef.current !== newTime) {
-            lastPlayedSecondRef.current = newTime;
-            if (countdownSoundRef.current) {
-              countdownSoundRef.current.setPositionAsync(0).then(() => {
-                return countdownSoundRef.current?.playAsync();
-              }).catch((error) => {
-                console.log('⚠️ Error playing countdown sound:', error);
-              });
+            if (soundEnabled && (newTime === 3 || newTime === 2 || newTime === 1) && lastPlayedSecondRef.current !== newTime) {
+              lastPlayedSecondRef.current = newTime;
+              if (countdownSoundRef.current) {
+                countdownSoundRef.current.setPositionAsync(0).then(() => {
+                  return countdownSoundRef.current?.playAsync();
+                }).catch((error) => {
+                  console.log('⚠️ Error playing countdown sound:', error);
+                });
+              }
             }
-          }
-          
-          if (newTime <= 0 && !isTransitioningRef.current) {
+            
+            if (newTime <= 0 && !isTransitioningRef.current) {
             setTimeout(() => handlePhaseCompleteRef.current(), 0);
-            return 0;
-          }
-          return newTime;
-        });
-      }, 1000);
+              return 0;
+            }
+            return newTime;
+          });
+        }, 1000);
     } else {
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
@@ -367,9 +367,9 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
             
             // Use a second RAF to split the updates
             requestAnimationFrame(() => {
-              setCurrentPhase('work');
-              setSecondsRemaining(timer.work);
-              isTransitioningRef.current = false;
+      setCurrentPhase('work');
+      setSecondsRemaining(timer.work);
+        isTransitioningRef.current = false;
             });
           } catch (error) {
             console.log('⚠️ Error transitioning from countdown:', error);
@@ -396,11 +396,11 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
       } else {
         // Move to work rest - continue without stopping
         console.log('⏸️ Moving to work rest');
-        setCurrentPhase('workRest');
-        setSecondsRemaining(timer.workRest);
-        setTimeout(() => {
-          isTransitioningRef.current = false;
-        }, 50);
+      setCurrentPhase('workRest');
+      setSecondsRemaining(timer.workRest);
+      setTimeout(() => {
+        isTransitioningRef.current = false;
+      }, 50);
       }
     } else if (phase === 'workRest') {
       console.log('⏸️ Work rest complete');
@@ -416,9 +416,9 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
         setCurrentPhase('roundRest');
         setSecondsRemaining(timer.roundRest);
       }
-      setTimeout(() => {
-        isTransitioningRef.current = false;
-      }, 50);
+        setTimeout(() => {
+          isTransitioningRef.current = false;
+        }, 50);
     } else if (phase === 'roundRest') {
       console.log('🔄 Round rest complete');
       // New round - continue without stopping
@@ -544,24 +544,38 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
 
   const handleMenu = () => {
     Alert.alert(
-      'Timer Options',
+      '',
       '',
       [
         {
-          text: 'Delete Timer',
+          text: 'Edit',
+          onPress: () => {
+            if (timerId) {
+              // Stop timer before navigating to edit
+              setIsRunning(false);
+              if (intervalRef.current) {
+                clearInterval(intervalRef.current);
+                intervalRef.current = null;
+              }
+              navigation.navigate('HIITTimerForm', { timerId });
+            }
+          },
+        },
+        {
+          text: 'Delete',
           onPress: () => {
             Alert.alert(
               'Delete Timer',
               'Are you sure you want to delete this timer?',
-              [
-                { text: 'Cancel', style: 'cancel' },
-                {
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
                   text: 'Delete',
                   style: 'destructive',
-                  onPress: () => {
+          onPress: () => {
                     if (timerId) {
                       // Stop all running operations before deleting
-                      setIsRunning(false);
+            setIsRunning(false);
                       if (intervalRef.current) {
                         clearInterval(intervalRef.current);
                         intervalRef.current = null;
@@ -577,9 +591,9 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
                       deleteHIITTimer(timerId);
                       navigation.goBack();
                     }
-                  },
-                },
-              ]
+          },
+        },
+      ]
             );
           },
           style: 'destructive',
@@ -726,13 +740,13 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
     return Math.max(0, Math.min(1, progress));
   }, [timer, currentPhase, currentSet, currentRound, secondsRemaining]);
 
-  return (
-    <LinearGradient
-      colors={GRADIENTS.backgroundLight.colors}
-      start={GRADIENTS.backgroundLight.start}
-      end={GRADIENTS.backgroundLight.end}
-      style={styles.container}
-    >
+    return (
+      <LinearGradient
+        colors={GRADIENTS.backgroundLight.colors}
+        start={GRADIENTS.backgroundLight.start}
+        end={GRADIENTS.backgroundLight.end}
+        style={styles.container}
+      >
       <View style={[styles.innerContainer, { paddingBottom: insets.bottom }]}>
         {/* Header */}
         <View style={[styles.header, { paddingTop: insets.top }]}>
@@ -750,14 +764,14 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
           {/* Page Title and Set/Round Info */}
           <View style={styles.headerInfoContainer}>
             <View style={styles.headerInfoLeft}>
-              <Text style={styles.pageTitle}>{timer.name}</Text>
+            <Text style={styles.pageTitle}>{timer.name}</Text>
               <Text style={styles.progressInfo}>
                 <Text style={styles.progressLabel}>Set </Text>
                 <Text style={styles.progressValue}>{currentSet}/{timer.sets}</Text>
                 <Text style={styles.progressLabel}>     Round </Text>
                 <Text style={styles.progressValue}>{currentRound}/{timer.rounds}</Text>
               </Text>
-            </View>
+              </View>
             
             {/* Total Time - right aligned */}
             <View style={styles.totalTimeContainer}>
@@ -790,11 +804,11 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
                 ) : null}
               </Svg>
             </View>
+            </View>
           </View>
-        </View>
 
         {/* Timer Circle */}
-        <View style={styles.timerContainer}>
+          <View style={styles.timerContainer}>
           {/* Confetti particles */}
           {particles.map(particle => (
             <Animated.View
@@ -844,80 +858,80 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
               </Animated.Text>
             )}
           </Animated.View>
-        </View>
+          </View>
 
         {/* Controls */}
         <View style={styles.controls}>
-          {/* Left button: Sound toggle */}
-          <Animated.View
-            style={[
-              styles.sideButton,
-              {
-                opacity: sideButtonsAnim,
-                transform: [
-                  {
-                    translateX: sideButtonsAnim.interpolate({
-                      inputRange: [0, 1],
+            {/* Left button: Sound toggle */}
+            <Animated.View
+              style={[
+                styles.sideButton,
+                {
+                  opacity: sideButtonsAnim,
+                  transform: [
+                    {
+                      translateX: sideButtonsAnim.interpolate({
+                        inputRange: [0, 1],
                       outputRange: [50, 0],
-                    }),
-                  },
+                      }),
+                    },
                   { scale: sideButtonsAnim },
-                ],
-              },
-            ]}
+                  ],
+                },
+              ]}
               pointerEvents={(isRunning && currentPhase !== 'complete') ? 'auto' : 'none'}
-          >
-            <TouchableOpacity
-              onPress={handleToggleSound}
-              style={styles.sideButtonTouchable}
-              activeOpacity={0.7}
             >
-              <IconSpeaker size={24} color={LIGHT_COLORS.textSecondary} muted={!soundEnabled} />
-            </TouchableOpacity>
-          </Animated.View>
+              <TouchableOpacity
+                onPress={handleToggleSound}
+                style={styles.sideButtonTouchable}
+                activeOpacity={0.7}
+              >
+                <IconSpeaker size={24} color={LIGHT_COLORS.textSecondary} muted={!soundEnabled} />
+              </TouchableOpacity>
+            </Animated.View>
 
           {/* Play/Pause/Restart Button */}
-          <TouchableOpacity
+            <TouchableOpacity
             onPress={currentPhase === 'complete' ? handleRestart : handlePlayPause}
             style={[BUTTONS.primaryButtonNoLabel, styles.playPauseButton]}
-            activeOpacity={0.8}
-          >
+              activeOpacity={0.8}
+            >
             {currentPhase === 'complete' ? (
               <IconRestart size={32} color={'#FFFFFF'} />
-            ) : isRunning ? (
+                ) : isRunning ? (
               <IconPause size={32} color={'#FFFFFF'} />
-            ) : (
+                ) : (
               <IconPlay size={32} color={'#FFFFFF'} />
-            )}
-          </TouchableOpacity>
-
-          {/* Right button: Skip */}
-          <Animated.View
-            style={[
-              styles.sideButton,
-              {
-                opacity: sideButtonsAnim,
-                transform: [
-                  {
-                    translateX: sideButtonsAnim.interpolate({
-                      inputRange: [0, 1],
-                      outputRange: [-50, 0],
-                    }),
-                  },
-                  { scale: sideButtonsAnim },
-                ],
-              },
-            ]}
-              pointerEvents={(isRunning && currentPhase !== 'complete') ? 'auto' : 'none'}
-          >
-            <TouchableOpacity
-              onPress={handleSkip}
-              style={styles.sideButtonTouchable}
-              activeOpacity={0.7}
-            >
-              <IconSkip size={24} color={LIGHT_COLORS.textSecondary} />
+                )}
             </TouchableOpacity>
-          </Animated.View>
+
+            {/* Right button: Skip */}
+            <Animated.View
+              style={[
+                styles.sideButton,
+                {
+                  opacity: sideButtonsAnim,
+                  transform: [
+                    {
+                      translateX: sideButtonsAnim.interpolate({
+                        inputRange: [0, 1],
+                      outputRange: [-50, 0],
+                      }),
+                    },
+                  { scale: sideButtonsAnim },
+                  ],
+                },
+              ]}
+              pointerEvents={(isRunning && currentPhase !== 'complete') ? 'auto' : 'none'}
+            >
+              <TouchableOpacity
+                onPress={handleSkip}
+                style={styles.sideButtonTouchable}
+                activeOpacity={0.7}
+              >
+                <IconSkip size={24} color={LIGHT_COLORS.textSecondary} />
+              </TouchableOpacity>
+            </Animated.View>
         </View>
       </View>
     </LinearGradient>
