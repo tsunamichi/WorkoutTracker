@@ -353,7 +353,7 @@ export function SetTimerSheet({
           }
         ]}
       >
-        <View style={[styles.timerSheet, { paddingBottom: 24 + insets.bottom }]}>
+        <View style={[styles.timerSheet, { paddingBottom: 8 + insets.bottom }]}>
           {/* Next set indicator */}
           <View style={styles.setIndicator}>
             {currentSet < totalSets ? (
@@ -443,7 +443,7 @@ const styles = StyleSheet.create({
   timerSheet: {
     backgroundColor: LIGHT_COLORS.backgroundCanvas,
     borderRadius: 40,
-    paddingTop: 24,
+    paddingTop: 32,
     paddingHorizontal: 48,
     alignItems: 'center',
   },
