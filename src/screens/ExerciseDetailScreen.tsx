@@ -626,6 +626,33 @@ export function ExerciseDetailScreen({ route, navigation }: ExerciseDetailScreen
             <View style={styles.headerTop}>
               <Text style={styles.headerTitle}>{exerciseName}</Text>
             </View>
+            
+            {/* Barbell Mode Switch */}
+            <TouchableOpacity 
+              style={styles.barbellSwitchContainer}
+              onPress={() => {
+                const newValue = !useBarbellMode;
+                setUseBarbellMode(newValue);
+                if (exercise?.exerciseId) {
+                  setBarbellMode(exercise.exerciseId, newValue);
+                }
+              }}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.barbellSwitchLabel}>Barbell</Text>
+              <Switch
+                value={useBarbellMode}
+                onValueChange={(value) => {
+                  setUseBarbellMode(value);
+                  if (exercise?.exerciseId) {
+                    setBarbellMode(exercise.exerciseId, value);
+                  }
+                }}
+                trackColor={{ false: '#D1D1D6', true: '#34C759' }}
+                thumbColor="#FFFFFF"
+                ios_backgroundColor="#D1D1D6"
+              />
+            </TouchableOpacity>
           </View>
         </View>
         
@@ -809,55 +836,6 @@ export function ExerciseDetailScreen({ route, navigation }: ExerciseDetailScreen
                           </View>
                         </View>
                       </TouchableOpacity>
-                      
-                      {/* Record/Edit button - outside card structure */}
-                      <TouchableOpacity
-                        style={[
-                          styles.recordRowWrapper, 
-                          allSetsCompleted && hasUnsavedChanges && styles.recordRowActive
-                        ]}
-                        onPress={() => {
-                          if (allSetsCompleted) {
-                            // Edit mode - save changes, reset flag, and collapse
-                            setHasUnsavedChanges(false);
-                            
-                            // Animate collapse
-                            LayoutAnimation.configureNext(
-                              LayoutAnimation.create(
-                                250,
-                                LayoutAnimation.Types.easeInEaseOut,
-                                LayoutAnimation.Properties.opacity
-                              )
-                            );
-                            setExpandedSetIndex(-1);
-                          } else {
-                            handleRecord(index);
-                          }
-                        }}
-                        activeOpacity={1}
-                        disabled={allSetsCompleted && !hasUnsavedChanges}
-                      >
-                        <LinearGradient
-                          colors={allSetsCompleted && !hasUnsavedChanges ? [COLORS.backgroundContainer, COLORS.backgroundContainer] : GRADIENTS.accentPrimary.colors}
-                          start={GRADIENTS.accentPrimary.start}
-                          end={GRADIENTS.accentPrimary.end}
-                          style={[
-                            styles.recordRow,
-                            allSetsCompleted && !hasUnsavedChanges && styles.recordRowCompleted,
-                          ]}
-                        >
-                          <Text style={[
-                            styles.recordButtonText,
-                            allSetsCompleted && !hasUnsavedChanges && styles.recordButtonTextDisabled
-                          ]}>{allSetsCompleted ? 'edit' : 'record'}</Text>
-                          <View style={styles.playTriangleWrapper}>
-                            <View style={[
-                              styles.playTriangle,
-                              allSetsCompleted && !hasUnsavedChanges && styles.playTriangleDisabled
-                            ]} />
-                          </View>
-                        </LinearGradient>
-                      </TouchableOpacity>
                     </View>
                   )}
                   
@@ -921,32 +899,30 @@ export function ExerciseDetailScreen({ route, navigation }: ExerciseDetailScreen
           </View>
         </ScrollView>
         
-        {/* Barbell Mode Switch */}
-        <TouchableOpacity 
-          style={styles.barbellSwitchContainer}
-          onPress={() => {
-            const newValue = !useBarbellMode;
-            setUseBarbellMode(newValue);
-            if (exercise?.exerciseId) {
-              setBarbellMode(exercise.exerciseId, newValue);
-            }
-          }}
-          activeOpacity={0.7}
-        >
-          <Text style={styles.barbellSwitchLabel}>Barbell</Text>
-          <Switch
-            value={useBarbellMode}
-            onValueChange={(value) => {
-              setUseBarbellMode(value);
-              if (exercise?.exerciseId) {
-                setBarbellMode(exercise.exerciseId, value);
-              }
-            }}
-            trackColor={{ false: '#D1D1D6', true: '#34C759' }}
-            thumbColor="#FFFFFF"
-            ios_backgroundColor="#D1D1D6"
-          />
-        </TouchableOpacity>
+        {/* Mark as Done Button - Fixed at Bottom */}
+        {expandedSetIndex !== -1 && (
+          <View style={[styles.markAsDoneContainer, { paddingBottom: insets.bottom + 16 }]}>
+            <TouchableOpacity
+              style={styles.markAsDoneButton}
+              onPress={() => {
+                if (expandedSetIndex !== null && expandedSetIndex >= 0) {
+                  handleRecord(expandedSetIndex);
+                }
+              }}
+              activeOpacity={0.8}
+            >
+              <LinearGradient
+                colors={GRADIENTS.accentPrimary.colors}
+                start={GRADIENTS.accentPrimary.start}
+                end={GRADIENTS.accentPrimary.end}
+                style={styles.markAsDoneButtonInner}
+              >
+                <IconCheck size={24} color="#FFFFFF" />
+                <Text style={styles.markAsDoneButtonText}>Mark as Done</Text>
+              </LinearGradient>
+            </TouchableOpacity>
+          </View>
+        )}
         
         {/* Timer Bottom Sheet */}
         <SetTimerSheet
@@ -1127,7 +1103,7 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingHorizontal: SPACING.xxl,
     paddingTop: SPACING.md,
-    paddingBottom: 40,
+    paddingBottom: 120, // Extra space for fixed Mark as Done button
   },
   setsAccordion: {
     gap: 12,
@@ -1242,7 +1218,7 @@ const styles = StyleSheet.create({
   },
   buttonsContainer: {
     flexDirection: 'row',
-    gap: 8,
+    gap: 12,
     marginLeft: 8,
     marginRight: -8,
   },
@@ -1514,6 +1490,46 @@ const styles = StyleSheet.create({
     height: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.1)',
     marginHorizontal: 12,
+  },
+  
+  // Barbell Switch (now in header)
+  barbellSwitchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginTop: 12,
+  },
+  barbellSwitchLabel: {
+    ...TYPOGRAPHY.body,
+    color: LIGHT_COLORS.secondary,
+  },
+  
+  // Mark as Done Button
+  markAsDoneContainer: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    paddingHorizontal: SPACING.xxl,
+    paddingTop: 16,
+    backgroundColor: LIGHT_COLORS.backgroundCanvas,
+  },
+  markAsDoneButton: {
+    borderRadius: 12,
+    borderCurve: 'continuous',
+    overflow: 'hidden',
+  },
+  markAsDoneButtonInner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 16,
+    gap: 8,
+  },
+  markAsDoneButtonText: {
+    ...TYPOGRAPHY.bodyBold,
+    color: '#FFFFFF',
+    fontSize: 17,
   },
 });
 
