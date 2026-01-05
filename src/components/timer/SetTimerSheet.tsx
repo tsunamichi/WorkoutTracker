@@ -349,15 +349,16 @@ export function SetTimerSheet({
           styles.timerDrawer, 
           { 
             transform: [{ translateY }],
-            paddingBottom: insets.bottom + 8, // Account for safe area + 8px spacing
+            paddingBottom: 8, // 8px from bottom of screen
           }
         ]}
       >
-        <View style={styles.timerSheet}>
-          {/* Set indicator */}
+        <View style={[styles.timerSheet, { paddingBottom: 48 + insets.bottom }]}>
+          {/* Next set indicator */}
           <View style={styles.setIndicator}>
-            <Text style={styles.setLabel}>Set</Text>
-            <Text style={styles.setValue}>{currentSet}/{totalSets}</Text>
+            <Text style={styles.nextSetText}>
+              {currentSet < totalSets ? `Next set ${currentSet + 1} out of ${totalSets}` : `Set ${currentSet} of ${totalSets}`}
+            </Text>
           </View>
 
           {/* Animated Circle Timer */}
@@ -378,7 +379,6 @@ export function SetTimerSheet({
                   }}
                 >
                   <Text style={styles.timerText}>{formatTime()}</Text>
-                  <Text style={styles.timerLabel}>Rest</Text>
                 </Animated.View>
               </View>
             </Animated.View>
@@ -391,20 +391,19 @@ export function SetTimerSheet({
               style={styles.sideButtonTouchable}
               activeOpacity={0.7}
             >
-              <IconSpeaker size={24} color={LIGHT_COLORS.textSecondary} muted={!soundEnabled} />
+              <IconSpeaker size={28} color={LIGHT_COLORS.textSecondary} muted={!soundEnabled} />
             </TouchableOpacity>
 
             <TouchableOpacity
               onPress={handleTogglePause}
               activeOpacity={0.8}
+              style={styles.playPauseButton}
             >
-              <View style={styles.controlButton}>
-                {isRunning ? (
-                  <IconPause size={24} color="#FFFFFF" />
-                ) : (
-                  <IconPlay size={24} color="#FFFFFF" />
-                )}
-              </View>
+              {isRunning ? (
+                <IconPause size={32} color="#FFFFFF" />
+              ) : (
+                <IconPlay size={32} color="#FFFFFF" />
+              )}
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -412,7 +411,7 @@ export function SetTimerSheet({
               style={styles.sideButtonTouchable}
               activeOpacity={0.7}
             >
-              <IconSkip size={24} color={LIGHT_COLORS.textSecondary} />
+              <IconSkip size={28} color={LIGHT_COLORS.textSecondary} />
             </TouchableOpacity>
           </View>
         </View>
@@ -440,22 +439,15 @@ const styles = StyleSheet.create({
     borderRadius: 40,
     paddingTop: SPACING.xl,
     paddingHorizontal: 48,
-    paddingBottom: 40,
     alignItems: 'center',
   },
   setIndicator: {
-    flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
     marginBottom: SPACING.xl,
   },
-  setLabel: {
-    ...TYPOGRAPHY.meta,
+  nextSetText: {
+    ...TYPOGRAPHY.body,
     color: LIGHT_COLORS.textMeta,
-  },
-  setValue: {
-    ...TYPOGRAPHY.h3,
-    color: LIGHT_COLORS.textPrimary,
   },
   timerContainer: {
     width: CONTAINER_WIDTH,
@@ -484,23 +476,19 @@ const styles = StyleSheet.create({
     fontFamily: 'System',
     textAlign: 'center',
   },
-  timerLabel: {
-    ...TYPOGRAPHY.h3,
-    color: '#FFFFFF',
-    marginTop: 8,
-  },
   stickyButtonContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 20,
+    gap: 32,
     width: '100%',
   },
-  controlButton: {
-    backgroundColor: '#FD6B00',
-    width: 56,
-    height: 56,
-    borderRadius: 12,
+  playPauseButton: {
+    backgroundColor: '#1B1B1B',
+    width: 80,
+    height: 80,
+    borderRadius: 16,
+    borderCurve: 'continuous',
     alignItems: 'center',
     justifyContent: 'center',
   },
