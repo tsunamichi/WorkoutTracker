@@ -39,13 +39,7 @@ const LIGHT_COLORS = {
 
 export function TodayScreen({ navigation }: TodayScreenProps) {
   const insets = useSafeAreaInsets();
-  // TEMPORARILY DISABLED TO BYPASS ZUSTAND ERROR
-  // const { cycles, workoutAssignments, getWorkoutCompletionPercentage, getExerciseProgress, swapWorkoutAssignments } = useStore();
-  const cycles: any[] = [];
-  const workoutAssignments: any[] = [];
-  const getWorkoutCompletionPercentage = () => 0;
-  const getExerciseProgress = () => undefined;
-  const swapWorkoutAssignments = () => {};
+  const { cycles, workoutAssignments, getWorkoutCompletionPercentage, getExerciseProgress, swapWorkoutAssignments } = useStore();
   const today = dayjs();
   
   // State for selected date (defaults to today)
