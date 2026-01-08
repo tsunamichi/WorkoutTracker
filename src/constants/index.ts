@@ -86,7 +86,7 @@ export const COLORS = {
   // Core colors
   background: '#E3E6E0',    // Default background
   backgroundCanvas: '#E2E3DF',  // Page background (like Today tab)
-  backgroundContainer: '#CDCABB', // Bottom nav background
+  backgroundContainer: '#D0D1CD', // Bottom nav background
   canvas: '#1C1C1E',        // Card/container background (dark mode)
   container: '#2C2C2E',     // Secondary container
   cardBackground: '#E3E3DE', // Card background (light)
@@ -107,9 +107,11 @@ export const COLORS = {
   textPrimary: '#FFFFFF',          // Primary text (white)
   textSecondary: '#3C3C43', // Secondary text
   textMeta: '#817B77',          // Metadata/labels
+  textDisabled: '#C7C7CC',      // Disabled text
   
   // Borders & dividers
   border: '#AEAEAB',        // Subtle borders
+  disabledBorder: '#D2D2D2', // Disabled button border
   divider: '#48484A',       // Dividers
   overlay: 'rgba(0, 0, 0, 0.2)', // Bottom sheet overlays
   
@@ -292,6 +294,85 @@ export const CARDS = {
       borderLeftColor: 'rgba(255, 255, 255, 0.75)',
       borderBottomColor: 'rgba(0, 0, 0, 0.08)',
       borderRightColor: 'rgba(0, 0, 0, 0.08)',
+    },
+  },
+  cardDeepDimmed: {
+    // Same shadows as default
+    blackShadow: {
+      shadowColor: '#000000',
+      shadowOffset: { width: -1, height: -1 },
+      shadowOpacity: 0.08,
+      shadowRadius: 1,
+      elevation: 2,
+    },
+    whiteShadow: {
+      shadowColor: '#FFFFFF',
+      shadowOffset: { width: 1, height: 1 },
+      shadowOpacity: 1,
+      shadowRadius: 1,
+      elevation: 1,
+    },
+    outer: {
+      backgroundColor: '#E3E3DE',
+      borderRadius: 12,
+      borderCurve: 'continuous' as const,
+      borderWidth: 1,
+      borderColor: '#AEAEAB',
+      overflow: 'hidden' as const,
+    },
+    // Inner card WITHOUT borders (dimmed state)
+    inner: {
+      backgroundColor: '#E2E3DF',
+      borderRadius: 12,
+      borderCurve: 'continuous' as const,
+      borderTopWidth: 2,
+      borderLeftWidth: 2,
+      borderBottomWidth: 2,
+      borderRightWidth: 2,
+      borderTopColor: 'transparent',
+      borderLeftColor: 'transparent',
+      borderBottomColor: 'transparent',
+      borderRightColor: 'transparent',
+    },
+  },
+  cardDeepDisabled: {
+    // Same shadows as default
+    blackShadow: {
+      shadowColor: '#000000',
+      shadowOffset: { width: -1, height: -1 },
+      shadowOpacity: 0.08,
+      shadowRadius: 1,
+      elevation: 2,
+    },
+    whiteShadow: {
+      shadowColor: '#FFFFFF',
+      shadowOffset: { width: 1, height: 1 },
+      shadowOpacity: 1,
+      shadowRadius: 1,
+      elevation: 1,
+    },
+    // Outer card with disabled border color
+    outer: {
+      backgroundColor: '#E3E3DE',
+      borderRadius: 12,
+      borderCurve: 'continuous' as const,
+      borderWidth: 1,
+      borderColor: '#D2D2D2', // disabledBorder color
+      overflow: 'hidden' as const,
+    },
+    // Inner card WITHOUT borders (disabled state)
+    inner: {
+      backgroundColor: '#E2E3DF',
+      borderRadius: 12,
+      borderCurve: 'continuous' as const,
+      borderTopWidth: 2,
+      borderLeftWidth: 2,
+      borderBottomWidth: 2,
+      borderRightWidth: 2,
+      borderTopColor: 'transparent',
+      borderLeftColor: 'transparent',
+      borderBottomColor: 'transparent',
+      borderRightColor: 'transparent',
     },
   },
 };

@@ -1,6 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
-import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { View, Text, StyleSheet, TouchableOpacity, Animated } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { TodayScreen } from '../screens/TodayScreen';
@@ -20,8 +19,11 @@ import { CreateCycleBasics } from '../screens/manualCycle/CreateCycleBasics';
 import { CreateCycleDaysOverview } from '../screens/manualCycle/CreateCycleDaysOverview';
 import { CreateCycleDayEditor } from '../screens/manualCycle/CreateCycleDayEditor';
 import { CreateCycleReview } from '../screens/manualCycle/CreateCycleReview';
+import { AIWorkoutCreationScreen } from '../screens/AIWorkoutCreationScreen';
+import { WorkoutCreationOptionsScreen } from '../screens/WorkoutCreationOptionsScreen';
 import { IconCalendar, IconWorkouts, IconStopwatch } from '../components/icons';
-import { COLORS } from '../constants';
+import { COLORS, TYPOGRAPHY } from '../constants';
+import { useStore } from '../store';
 import { CycleTemplateId } from '../types/workout';
 import { Weekday } from '../types/manualCycle';
 
@@ -42,156 +44,201 @@ export type RootStackParamList = {
   CreateCycleDaysOverview: undefined;
   CreateCycleDayEditor: { weekday: Weekday };
   CreateCycleReview: undefined;
+  AIWorkoutCreation: undefined;
+  WorkoutCreationOptions: undefined;
 };
 
-const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator<RootStackParamList>();
-
-const TAB_BAR_PRIMARY = '#FD6B00';
-
-function CustomTabBarBackground() {
-  return (
-    <View style={styles.tabBarBackground}>
-      <View style={styles.tabBarBorderTop} />
-      <View style={styles.tabBarBorderBottom} />
-    </View>
-  );
-}
 
 function TabNavigator() {
   const navigation = useNavigation();
+  const { cycles } = useStore();
+  const [activeTab, setActiveTab] = React.useState<'Schedule' | 'Workouts'>('Schedule');
+  
+  // Animated values for tab widths
+  const scheduleWidth = React.useRef(new Animated.Value(140)).current;
+  const workoutsWidth = React.useRef(new Animated.Value(100)).current;
+  
+  // Animated values for label widths (collapse to 0 when inactive)
+  const scheduleLabelWidth = React.useRef(new Animated.Value(100)).current;
+  const workoutsLabelWidth = React.useRef(new Animated.Value(0)).current;
+  
+  const switchTab = (tab: 'Schedule' | 'Workouts') => {
+    setActiveTab(tab);
+    
+    if (tab === 'Schedule') {
+      // Animate Schedule to active, Workouts to inactive
+      Animated.parallel([
+        Animated.spring(scheduleWidth, {
+          toValue: 140,
+          useNativeDriver: false,
+          tension: 80,
+          friction: 10,
+        }),
+        Animated.spring(workoutsWidth, {
+          toValue: 100,
+          useNativeDriver: false,
+          tension: 80,
+          friction: 10,
+        }),
+        Animated.spring(scheduleLabelWidth, {
+          toValue: 100,
+          useNativeDriver: false,
+          tension: 80,
+          friction: 10,
+        }),
+        Animated.spring(workoutsLabelWidth, {
+          toValue: 0,
+          useNativeDriver: false,
+          tension: 80,
+          friction: 10,
+        }),
+      ]).start();
+    } else {
+      // Animate Workouts to active, Schedule to inactive
+      Animated.parallel([
+        Animated.spring(scheduleWidth, {
+          toValue: 100,
+          useNativeDriver: false,
+          tension: 80,
+          friction: 10,
+        }),
+        Animated.spring(workoutsWidth, {
+          toValue: 140,
+          useNativeDriver: false,
+          tension: 80,
+          friction: 10,
+        }),
+        Animated.spring(scheduleLabelWidth, {
+          toValue: 0,
+          useNativeDriver: false,
+          tension: 80,
+          friction: 10,
+        }),
+        Animated.spring(workoutsLabelWidth, {
+          toValue: 100,
+          useNativeDriver: false,
+          tension: 80,
+          friction: 10,
+        }),
+      ]).start();
+    }
+  };
   
   return (
     <View style={{ flex: 1, backgroundColor: COLORS.backgroundCanvas }}>
-      <Tab.Navigator
-        screenOptions={{
-          headerShown: false,
-          tabBarStyle: {
-            backgroundColor: 'transparent',
-            borderTopWidth: 0,
-            height: 56,
-            position: 'absolute',
-            bottom: 32,
-            left: 8,
-            right: 8,
-            borderRadius: 16,
-            paddingTop: 0,
-            paddingBottom: 0,
-            paddingLeft: 0,
-            paddingRight: 0,
-          },
-          tabBarItemStyle: {
-            height: 56,
-            flexDirection: 'row',
-            justifyContent: 'center',
-            alignItems: 'center',
-            paddingVertical: 0,
-            paddingHorizontal: 20,
-            paddingTop: 0,
-            paddingBottom: 0,
-            margin: 0,
-            flex: 1,
-          },
-          tabBarBackground: () => (
-            <View style={styles.bottomNavContainer}>
-              <View style={styles.bottomNavBar}>
-                <View style={styles.tabBarBackground} />
-              </View>
-              <TouchableOpacity 
-                style={styles.timerButton}
-                activeOpacity={0.7}
-                onPress={() => navigation.navigate('HIITTimerList' as never)}
-              >
-                <IconStopwatch size={24} color="#FFFFFF" />
-              </TouchableOpacity>
-            </View>
-          ),
-          tabBarActiveTintColor: '#000000',
-          tabBarInactiveTintColor: COLORS.textMeta,
-        }}
-      >
-      <Tab.Screen
-        name="Schedule"
-        component={TodayScreen}
-        options={({ route, navigation }) => ({
-          tabBarIcon: ({ color, focused }) => (
-            <View style={styles.tabContentWrapper} pointerEvents="box-none">
-              <IconCalendar size={24} color={color} />
-              <Text style={[styles.tabLabel, { color }]}>Schedule</Text>
-            </View>
-          ),
-          tabBarLabel: () => null,
-        })}
-      />
-      <Tab.Screen
-        name="Workouts"
-        component={WorkoutsScreen}
-        options={({ route, navigation }) => ({
-          tabBarIcon: ({ color, focused }) => (
-            <View style={styles.tabContentWrapper} pointerEvents="box-none">
-              <IconWorkouts size={24} color={color} />
-              <Text style={[styles.tabLabel, { color }]}>Workouts</Text>
-            </View>
-          ),
-          tabBarLabel: () => null,
-        })}
-      />
-    </Tab.Navigator>
+      {/* Screen Content */}
+      {activeTab === 'Schedule' ? <TodayScreen onNavigateToWorkouts={() => switchTab('Workouts')} /> : <WorkoutsScreen />}
+      
+      {/* Custom Bottom Navigation */}
+      <View style={styles.bottomNavContainer}>
+        {/* Tab Bar - 240px wide */}
+        <View style={styles.tabBar}>
+          {/* Schedule Tab */}
+          <TouchableOpacity
+            activeOpacity={0.7}
+            onPress={() => switchTab('Schedule')}
+          >
+            <Animated.View style={[styles.tab, { width: scheduleWidth }]}>
+              <IconCalendar 
+                size={24} 
+                color={activeTab === 'Schedule' ? '#000000' : COLORS.textMeta} 
+              />
+              <Animated.View style={styles.labelContainer}>
+                <Animated.View style={{ maxWidth: scheduleLabelWidth, overflow: 'hidden' }}>
+                  <Text style={styles.tabLabel} numberOfLines={1}>Schedule</Text>
+                </Animated.View>
+              </Animated.View>
+            </Animated.View>
+          </TouchableOpacity>
+          
+          {/* Workouts Tab */}
+          <TouchableOpacity
+            activeOpacity={0.7}
+            onPress={() => switchTab('Workouts')}
+          >
+            <Animated.View style={[styles.tab, { width: workoutsWidth }]}>
+              <IconWorkouts 
+                size={24} 
+                color={activeTab === 'Workouts' ? '#000000' : COLORS.textMeta} 
+              />
+              <Animated.View style={styles.labelContainer}>
+                <Animated.View style={{ maxWidth: workoutsLabelWidth, overflow: 'hidden' }}>
+                  <Text style={styles.tabLabel} numberOfLines={1}>Workouts</Text>
+                </Animated.View>
+              </Animated.View>
+            </Animated.View>
+          </TouchableOpacity>
+        </View>
+        
+        {/* Action Button - Changes based on active tab */}
+        {activeTab === 'Schedule' ? (
+          <TouchableOpacity 
+            style={styles.actionButton}
+            activeOpacity={0.7}
+            onPress={() => navigation.navigate('HIITTimerList' as never)}
+          >
+            <IconStopwatch size={24} color={COLORS.text} />
+            <Text style={styles.actionButtonLabel}>Timer</Text>
+          </TouchableOpacity>
+        ) : cycles.length > 0 ? (
+          <TouchableOpacity 
+            style={styles.actionButton}
+            activeOpacity={0.7}
+            onPress={() => navigation.navigate('WorkoutCreationOptions' as never)}
+          >
+            <IconCalendar size={24} color={COLORS.text} />
+            <Text style={styles.actionButtonLabel}>New</Text>
+          </TouchableOpacity>
+        ) : null}
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   bottomNavContainer: {
+    position: 'absolute',
+    bottom: 32,
+    left: 24,
+    right: 24,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 40,
-    height: 56,
-    paddingHorizontal: 8,
+    justifyContent: 'space-between',
   },
-  bottomNavBar: {
-    flex: 1,
+  tabBar: {
+    width: 240,
     height: 56,
-  },
-  timerButton: {
-    width: 56,
-    height: 56,
-    borderRadius: 16,
-    backgroundColor: '#1B1B1B',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  tabBarBackground: {
-    flex: 1,
     backgroundColor: COLORS.backgroundContainer,
     borderRadius: 16,
+    flexDirection: 'row',
     overflow: 'hidden',
   },
-  tabBarBorderTop: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    height: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.3)',
-  },
-  tabBarBorderBottom: {
-    position: 'absolute',
-    top: 1,
-    left: 0,
-    right: 0,
-    height: 1,
-    backgroundColor: '#FFFFFF',
-  },
-  tabContentWrapper: {
+  tab: {
+    height: '100%',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
+    gap: 4,
+  },
+  labelContainer: {
+    overflow: 'hidden',
   },
   tabLabel: {
-    fontSize: 13,
-    fontWeight: '400',
+    ...TYPOGRAPHY.metaBold,
+    color: COLORS.text,
+  },
+  actionButton: {
+    height: 56,
+    minWidth: 56,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+  },
+  actionButtonLabel: {
+    ...TYPOGRAPHY.metaBold,
+    color: COLORS.text,
   },
 });
 
@@ -220,6 +267,8 @@ export default function AppNavigator() {
       <Stack.Screen name="CreateCycleDaysOverview" component={CreateCycleDaysOverview} />
       <Stack.Screen name="CreateCycleDayEditor" component={CreateCycleDayEditor} />
       <Stack.Screen name="CreateCycleReview" component={CreateCycleReview} />
+      <Stack.Screen name="AIWorkoutCreation" component={AIWorkoutCreationScreen} />
+      <Stack.Screen name="WorkoutCreationOptions" component={WorkoutCreationOptionsScreen} />
     </Stack.Navigator>
   );
 }

@@ -595,10 +595,7 @@ export function ExerciseDetailScreen({ route, navigation }: ExerciseDetailScreen
   const exerciseHistory = getExerciseHistory();
   
   return (
-    <LinearGradient
-      colors={['#E3E6E0', '#D4D6D1']}
-      style={styles.gradient}
-    >
+    <View style={styles.gradient}>
       <View style={styles.container}>
         {/* Header (includes topBar with back/menu + title) */}
         <View style={[styles.header, { paddingTop: insets.top }]}>
@@ -693,11 +690,10 @@ export function ExerciseDetailScreen({ route, navigation }: ExerciseDetailScreen
                         }}
                         disabled={!setsData.every(set => set.completed)}
                       >
-                        <View style={[
-                          styles.setCard,
-                          isCompleted && !isExpanded && styles.setCardInactive
-                        ]}>
-                          <View style={styles.setCardInner}>
+                        <View style={styles.setCardBlackShadow}>
+                          <View style={styles.setCardWhiteShadow}>
+                            <View style={styles.setCard}>
+                              <View style={styles.setCardInner}>
                       {/* Expanded View */}
                       {isExpanded && (
                         <View style={styles.setCardExpanded}>
@@ -833,6 +829,8 @@ export function ExerciseDetailScreen({ route, navigation }: ExerciseDetailScreen
                           </View>
                         </View>
                       )}
+                              </View>
+                            </View>
                           </View>
                         </View>
                       </TouchableOpacity>
@@ -860,14 +858,20 @@ export function ExerciseDetailScreen({ route, navigation }: ExerciseDetailScreen
                       }}
                       disabled={!setsData.every(set => set.completed)}
                     >
-                      <View style={[styles.setCardBlackShadow, (!isExpanded || isCompleted) && styles.noShadow]}>
-                        <View style={[styles.setCardWhiteShadow, (!isExpanded || isCompleted) && styles.noShadow]}>
+                      <View style={[
+                        isExpanded ? styles.setCardBlackShadow : styles.noShadow
+                      ]}>
+                        <View style={[
+                          isExpanded ? styles.setCardWhiteShadow : styles.noShadow
+                        ]}>
                           <View style={[
-                            styles.setCard,
-                            isCompleted && !isExpanded && styles.setCardInactive,
+                            isExpanded ? styles.setCard : styles.setCardDimmed,
                             styles.setCardCollapsedRadius
                           ]}>
-                            <View style={[styles.setCardInner, styles.setCardInnerCollapsedRadius]}>
+                            <View style={[
+                              isExpanded ? styles.setCardInner : styles.setCardInnerDimmed,
+                              styles.setCardInnerCollapsedRadius
+                            ]}>
                               <View style={styles.setCardCollapsed}>
                                 <View style={styles.setCollapsedLeft}>
                                   <View style={styles.collapsedValueRow}>
@@ -1068,13 +1072,14 @@ export function ExerciseDetailScreen({ route, navigation }: ExerciseDetailScreen
           </View>
         )}
       </View>
-    </LinearGradient>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   gradient: {
     flex: 1,
+    backgroundColor: COLORS.backgroundCanvas,
   },
   container: {
     flex: 1,
@@ -1152,6 +1157,14 @@ const styles = StyleSheet.create({
   },
   setCardInner: {
     ...CARDS.cardDeep.inner,
+    borderRadius: 12,
+  },
+  setCardDimmed: {
+    ...CARDS.cardDeepDimmed.outer,
+    borderRadius: 12,
+  },
+  setCardInnerDimmed: {
+    ...CARDS.cardDeepDimmed.inner,
     borderRadius: 12,
   },
   setCardInactive: {

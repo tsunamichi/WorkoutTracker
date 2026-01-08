@@ -90,7 +90,7 @@ export function CreateCycleDayEditor({ navigation, route }: CreateCycleDayEditor
   };
 
   return (
-    <LinearGradient colors={['#E3E6E0', '#D4D6D1']} style={styles.gradient}>
+    <View style={styles.gradient}>
       <View style={styles.container}>
         {/* Header */}
         <View style={[styles.header, { paddingTop: insets.top }]}>
@@ -203,13 +203,14 @@ export function CreateCycleDayEditor({ navigation, route }: CreateCycleDayEditor
           onClose={handleCloseEditor}
         />
       )}
-    </LinearGradient>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   gradient: {
     flex: 1,
+    backgroundColor: '#E2E3DF',
   },
   container: {
     flex: 1,
@@ -341,7 +342,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   saveButtonText: {
-    fontSize: 17,
+    ...TYPOGRAPHY.meta,
+    fontWeight: 'bold',
     fontWeight: '600',
     color: '#FFFFFF',
   },

@@ -29,10 +29,7 @@ const LIGHT_COLORS = {
 
 export function DesignSystemScreen({ navigation }: DesignSystemScreenProps) {
   return (
-    <LinearGradient
-      colors={['#E3E6E0', '#D4D6D1']}
-      style={styles.gradient}
-    >
+    <View style={styles.gradient}>
       <SafeAreaView style={styles.container} edges={['top']}>
         {/* Header */}
         <View style={styles.header}>
@@ -339,13 +336,14 @@ export function DesignSystemScreen({ navigation }: DesignSystemScreenProps) {
           <View style={{ height: 40 }} />
         </ScrollView>
       </SafeAreaView>
-    </LinearGradient>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   gradient: {
     flex: 1,
+    backgroundColor: '#E2E3DF',
   },
   container: {
     flex: 1,

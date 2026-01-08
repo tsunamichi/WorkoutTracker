@@ -5,8 +5,8 @@ import { useFocusEffect } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useStore } from '../store';
 import * as storage from '../storage';
-import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS } from '../constants';
-import { IconArrowLeft, IconCheck, IconPlay, IconPause, IconMenu, IconRestart } from '../components/icons';
+import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS, CARDS } from '../constants';
+import { IconArrowLeft, IconCheck, IconPlay, IconPause, IconMenu, IconRestart, IconAdd } from '../components/icons';
 import dayjs from 'dayjs';
 import { startRestTimer, updateRestTimer, endRestTimer, markRestTimerCompleted } from '../modules/RestTimerLiveActivity';
 import * as Haptics from 'expo-haptics';
@@ -511,14 +511,11 @@ export function WorkoutExecutionScreen({ route, navigation }: WorkoutExecutionSc
   
   if (!workout) {
     return (
-      <LinearGradient
-        colors={['#E3E6E0', '#D4D6D1']}
-        style={styles.gradient}
-      >
+      <View style={styles.gradient}>
         <View style={styles.container}>
           <Text style={styles.errorText}>Workout not found</Text>
         </View>
-      </LinearGradient>
+      </View>
     );
   }
   
@@ -666,10 +663,7 @@ export function WorkoutExecutionScreen({ route, navigation }: WorkoutExecutionSc
   
   
   return (
-    <LinearGradient
-      colors={['#E3E6E0', '#D4D6D1']}
-      style={styles.gradient}
-    >
+    <View style={styles.gradient}>
       <View style={styles.container}>
         {/* Header (includes topBar with back/menu + title) */}
         <View style={[styles.header, { paddingTop: insets.top }]}>
@@ -739,9 +733,9 @@ export function WorkoutExecutionScreen({ route, navigation }: WorkoutExecutionSc
                   const isFullyCompletedA = completedSetsA === totalSetsA && totalSetsA > 0;
                   const isFullyCompletedB = completedSetsB === totalSetsB && totalSetsB > 0;
                   
-                  // Determine sort order: in-progress (0), completed (1)
-                  const orderA = isFullyCompletedA ? 1 : 0;
-                  const orderB = isFullyCompletedB ? 1 : 0;
+                  // Determine sort order: completed (0), in-progress (1) - completed at top
+                  const orderA = isFullyCompletedA ? 0 : 1;
+                  const orderB = isFullyCompletedB ? 0 : 1;
                   
                   // If same order, maintain original order
                   if (orderA === orderB) return a.originalIndex - b.originalIndex;
@@ -852,36 +846,36 @@ export function WorkoutExecutionScreen({ route, navigation }: WorkoutExecutionSc
                     
                     {/* Exercise Card */}
                     <View style={styles.exerciseCardWrapper}>
-                      <View style={[styles.exerciseCardBlackShadow, isFullyCompleted && styles.noShadow]}>
-                        <View style={[styles.exerciseCardWhiteShadow, isFullyCompleted && styles.noShadow]}>
-                          <View style={[styles.exerciseCard, isDisabled && styles.exerciseCardDisabled]}>
-                            <TouchableOpacity
-                              style={[styles.exerciseCardInner, isFullyCompleted && styles.exerciseCardInnerCompleted]}
-                              onPress={handleExerciseTap}
-                              activeOpacity={1}
-                              disabled={isDisabled && !isSkipped}
-                            >
-                              <View style={styles.exerciseInfo}>
-                                <View>
-                                  <Text style={[styles.exerciseName, isDisabled && styles.exerciseNameDisabled, isSkipped && styles.exerciseNameSkipped]}>
-                                    {exerciseData?.name || 'Unknown Exercise'}
-                                  </Text>
-                                </View>
-                              </View>
-                              {isSkipped ? (
-                                <View style={styles.exerciseCheckIcon}>
-                                  <IconRestart size={24} color="#817B77" />
-                                </View>
-                              ) : isFullyCompleted ? (
-                                <View style={styles.exerciseCheckIcon}>
-                                  <IconCheck size={24} color="#227132" />
-                                </View>
-                              ) : (
-                                <View style={styles.exerciseTriangle} />
-                              )}
-                            </TouchableOpacity>
+                      <View style={isSkipped ? CARDS.cardDeepDisabled.outer : isFullyCompleted ? CARDS.cardDeepDimmed.outer : CARDS.cardDeep.outer}>
+                        <TouchableOpacity
+                          style={[
+                            isSkipped ? { ...CARDS.cardDeepDisabled.inner, ...styles.exerciseCardInnerBase } : 
+                            isFullyCompleted ? { ...CARDS.cardDeepDimmed.inner, ...styles.exerciseCardInnerBase } : 
+                            { ...CARDS.cardDeep.inner, ...styles.exerciseCardInnerBase }
+                          ]}
+                          onPress={handleExerciseTap}
+                          activeOpacity={1}
+                          disabled={isDisabled && !isSkipped}
+                        >
+                          <View style={styles.exerciseInfo}>
+                            <View>
+                              <Text style={[styles.exerciseName, isSkipped && styles.exerciseNameSkipped]}>
+                                {exerciseData?.name || 'Unknown Exercise'}
+                              </Text>
+                            </View>
                           </View>
-                        </View>
+                          {isSkipped ? (
+                            <View style={styles.exerciseCheckIcon}>
+                              <IconRestart size={24} color={COLORS.text} />
+                            </View>
+                          ) : isFullyCompleted ? (
+                            <View style={styles.exerciseCheckIcon}>
+                              <IconCheck size={24} color="#227132" />
+                            </View>
+                          ) : (
+                            <View style={styles.exerciseTriangle} />
+                          )}
+                        </TouchableOpacity>
                       </View>
                     </View>
                   </React.Fragment>
@@ -889,6 +883,21 @@ export function WorkoutExecutionScreen({ route, navigation }: WorkoutExecutionSc
               })}
           </View>
         </ScrollView>
+        
+        {/* Add Exercise Button - Fixed to Bottom */}
+        <View style={styles.addExerciseButtonContainer}>
+          <TouchableOpacity
+            style={styles.addExerciseButton}
+            onPress={() => {
+              // TODO: Implement add exercise functionality
+              console.log('Add exercise tapped');
+            }}
+            activeOpacity={1}
+          >
+            <IconAdd size={24} color={COLORS.text} />
+            <Text style={styles.addExerciseButtonText}>Add Exercise</Text>
+          </TouchableOpacity>
+        </View>
       
       <SetTimerSheet
         visible={showTimer}
@@ -935,7 +944,7 @@ export function WorkoutExecutionScreen({ route, navigation }: WorkoutExecutionSc
         </TouchableOpacity>
       </Modal>
       </View>
-    </LinearGradient>
+    </View>
   );
 }
 
@@ -952,6 +961,7 @@ const LIGHT_COLORS = {
 const styles = StyleSheet.create({
   gradient: {
     flex: 1,
+    backgroundColor: COLORS.backgroundCanvas,
   },
   container: {
     flex: 1,
@@ -1009,7 +1019,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingHorizontal: 24,
-    paddingBottom: SPACING.xl,
+    paddingBottom: 100, // Extra padding for fixed Add Exercise button
     paddingTop: SPACING.md,
   },
   exercisesList: {
@@ -1028,59 +1038,13 @@ const styles = StyleSheet.create({
   exerciseCardWrapper: {
     width: '100%',
   },
-  exerciseCardBlackShadow: {
-    // Black shadow: -1, -1, 8% opacity, 1px blur
-    shadowColor: '#000000',
-    shadowOffset: { width: -1, height: -1 },
-    shadowOpacity: 0.08,
-    shadowRadius: 1,
-    elevation: 2,
-  },
-  exerciseCardWhiteShadow: {
-    // Bottom-right shadow: 1, 1, 100% opacity, 1px blur
-    shadowColor: '#FFFFFF',
-    shadowOffset: { width: 1, height: 1 },
-    shadowOpacity: 1,
-    shadowRadius: 1,
-    elevation: 1,
-  },
-  noShadow: {
-    shadowOpacity: 0,
-    elevation: 0,
-  },
-  exerciseCard: {
-    backgroundColor: '#E3E3DE',
-    borderRadius: 12,
-    borderCurve: 'continuous',
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    width: '100%',
-    overflow: 'hidden',
-  },
-  exerciseCardInner: {
-    backgroundColor: '#E2E3DF',
-    borderRadius: 12,
-    borderCurve: 'continuous',
+  exerciseCardInnerBase: {
     paddingHorizontal: 16,
     paddingTop: 16,
     paddingBottom: 18,
-    borderTopWidth: 2,
-    borderLeftWidth: 2,
-    borderBottomWidth: 2,
-    borderRightWidth: 2,
-    borderTopColor: 'rgba(255, 255, 255, 0.75)',
-    borderLeftColor: 'rgba(255, 255, 255, 0.75)',
-    borderBottomColor: 'rgba(0, 0, 0, 0.08)',
-    borderRightColor: 'rgba(0, 0, 0, 0.08)',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-  },
-  exerciseCardInnerCompleted: {
-    borderTopColor: 'transparent',
-    borderLeftColor: 'transparent',
-    borderBottomColor: 'transparent',
-    borderRightColor: 'transparent',
   },
   exerciseInfo: {
     flex: 1,
@@ -1092,14 +1056,8 @@ const styles = StyleSheet.create({
     ...TYPOGRAPHY.body,
     color: LIGHT_COLORS.secondary,
   },
-  exerciseNameDisabled: {
-    opacity: 0.4,
-  },
   exerciseNameSkipped: {
-    color: LIGHT_COLORS.textMeta,
-  },
-  exerciseCardDisabled: {
-    opacity: 0.5,
+    color: COLORS.textMeta,
   },
   exerciseCheckIcon: {
     margin: -4,
@@ -1283,6 +1241,24 @@ const styles = StyleSheet.create({
     height: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.1)',
     marginHorizontal: 12,
+  },
+  addExerciseButtonContainer: {
+    position: 'absolute',
+    bottom: 32,
+    left: 24,
+    right: 24,
+    backgroundColor: 'transparent',
+    alignItems: 'center',
+  },
+  addExerciseButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingVertical: 8,
+  },
+  addExerciseButtonText: {
+    ...TYPOGRAPHY.metaBold,
+    color: COLORS.text,
   },
 });
 

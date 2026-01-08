@@ -100,7 +100,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   primaryButtonText: {
-    fontSize: 17,
+    ...TYPOGRAPHY.meta,
+    fontWeight: 'bold',
     fontWeight: '600',
     color: '#FFFFFF',
   },
@@ -111,7 +112,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   secondaryButtonText: {
-    fontSize: 17,
+    ...TYPOGRAPHY.meta,
+    fontWeight: 'bold',
     fontWeight: '600',
     color: '#3C3C43',
   },

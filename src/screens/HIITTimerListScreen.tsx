@@ -86,12 +86,7 @@ export default function HIITTimerListScreen({ navigation }: Props) {
   };
 
   return (
-    <LinearGradient
-      colors={GRADIENTS.backgroundLight.colors}
-      start={GRADIENTS.backgroundLight.start}
-      end={GRADIENTS.backgroundLight.end}
-      style={styles.container}
-    >
+    <View style={styles.container}>
       <View style={styles.innerContainer}>
         {/* Header */}
         <View style={[styles.header, { paddingTop: insets.top }]}>
@@ -172,13 +167,14 @@ export default function HIITTimerListScreen({ navigation }: Props) {
           </TouchableOpacity>
         </View>
       </View>
-    </LinearGradient>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: '#E2E3DF',
   },
   innerContainer: {
     flex: 1,
@@ -232,7 +228,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   createButtonText: {
-    fontSize: 17,
+    ...TYPOGRAPHY.meta,
+    fontWeight: 'bold',
     fontWeight: '600',
     color: '#FFFFFF',
   },

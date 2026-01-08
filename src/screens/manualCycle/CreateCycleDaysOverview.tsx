@@ -1,10 +1,9 @@
 import React, { useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useCreateCycleDraftStore } from '../../store/useCreateCycleDraftStore';
 import { formatWeekdayFull } from '../../utils/manualCycleUtils';
-import { SPACING, TYPOGRAPHY } from '../../constants';
+import { COLORS, SPACING, TYPOGRAPHY } from '../../constants';
 import { WorkoutDay } from '../../types/manualCycle';
 
 interface CreateCycleDaysOverviewProps {
@@ -52,7 +51,7 @@ export function CreateCycleDaysOverview({ navigation }: CreateCycleDaysOverviewP
   const canContinue = areAllDaysComplete();
 
   return (
-    <LinearGradient colors={['#E3E6E0', '#D4D6D1']} style={styles.gradient}>
+    <View style={styles.gradient}>
       <View style={styles.container}>
         {/* Header */}
         <View style={[styles.header, { paddingTop: insets.top }]}>
@@ -145,13 +144,14 @@ export function CreateCycleDaysOverview({ navigation }: CreateCycleDaysOverviewP
           </TouchableOpacity>
         </View>
       </View>
-    </LinearGradient>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   gradient: {
     flex: 1,
+    backgroundColor: COLORS.backgroundCanvas,
   },
   container: {
     flex: 1,
@@ -282,7 +282,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   backFooterButtonText: {
-    fontSize: 17,
+    ...TYPOGRAPHY.meta,
+    fontWeight: 'bold',
     fontWeight: '600',
     color: LIGHT_COLORS.secondary,
   },
@@ -299,7 +300,8 @@ const styles = StyleSheet.create({
     borderColor: LIGHT_COLORS.chipBorder,
   },
   continueButtonText: {
-    fontSize: 17,
+    ...TYPOGRAPHY.meta,
+    fontWeight: 'bold',
     fontWeight: '600',
     color: '#FFFFFF',
   },

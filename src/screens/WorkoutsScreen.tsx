@@ -1,9 +1,10 @@
-import React, { useState, useRef } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Modal, TextInput, ScrollView, Alert, KeyboardAvoidingView, Platform, FlatList, Dimensions } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Modal, TextInput, ScrollView, Alert, KeyboardAvoidingView, Platform } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { LinearGradient } from 'expo-linear-gradient';
+import { useNavigation } from '@react-navigation/native';
+import Svg, { Circle, Path } from 'react-native-svg';
 import { ProfileAvatar } from '../components/ProfileAvatar';
-import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS } from '../constants';
+import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS, CARDS } from '../constants';
 import { useStore } from '../store';
 import { useOnboardingStore } from '../store/useOnboardingStore';
 import { TEMPLATES } from '../data/templates';
@@ -11,10 +12,6 @@ import dayjs from 'dayjs';
 import isoWeek from 'dayjs/plugin/isoWeek';
 
 dayjs.extend(isoWeek);
-
-interface WorkoutsScreenProps {
-  navigation: any;
-}
 
 // Light theme colors matching Today screen
 const LIGHT_COLORS = {
@@ -27,21 +24,57 @@ const LIGHT_COLORS = {
   accentPrimary: '#FD6B00',
   buttonBg: '#F2F2F7',
   buttonText: '#000000',
+  meta: '#817B77',
 };
 
-const SCREEN_WIDTH = Dimensions.get('window').width;
-const CARD_SPACING = 12;
-const HORIZONTAL_PADDING = 24;
-const CARD_WIDTH = (SCREEN_WIDTH - HORIZONTAL_PADDING * 2 - CARD_SPACING * 2) / 2.05; // ~2.05 cards in view, only first letter of 3rd card visible
-
-export function WorkoutsScreen({ navigation }: WorkoutsScreenProps) {
+export function WorkoutsScreen() {
+  const navigation = useNavigation();
   const insets = useSafeAreaInsets();
-  const { cycles, addCycle, getNextCycleNumber, assignWorkout, exercises, addExercise, updateCycle, clearWorkoutAssignmentsForDateRange } = useStore();
+  const { cycles, addCycle, getNextCycleNumber, assignWorkout, exercises, addExercise, updateCycle, clearWorkoutAssignmentsForDateRange, workoutAssignments, detailedWorkoutProgress } = useStore();
   const { startDraftFromTemplate, startDraftFromCustomText, setPrefs } = useOnboardingStore();
   const [showBottomSheet, setShowBottomSheet] = useState(false);
   const [workoutDetails, setWorkoutDetails] = useState('');
-  const [currentPage, setCurrentPage] = useState(0);
-  const flatListRef = useRef<FlatList>(null);
+  
+  // Calculate cycle completion percentage
+  const getCycleCompletion = (cycleId: string) => {
+    const cycle = cycles.find(c => c.id === cycleId);
+    if (!cycle) return 0;
+    
+    // Get all workout assignments for this cycle
+    const cycleAssignments = Object.entries(workoutAssignments).filter(
+      ([_, assignment]) => assignment.cycleId === cycleId
+    );
+    
+    if (cycleAssignments.length === 0) return 0;
+    
+    let totalSets = 0;
+    let completedSets = 0;
+    
+    cycleAssignments.forEach(([date, assignment]) => {
+      const template = cycle.workoutTemplates.find(t => t.id === assignment.workoutTemplateId);
+      if (!template) return;
+      
+      const workoutKey = `${cycleId}-${date}`;
+      const progress = detailedWorkoutProgress[workoutKey];
+      
+      // Count total sets from template
+      template.exercises.forEach(ex => {
+        totalSets += ex.targetSets;
+      });
+      
+      // Count completed sets from progress
+      if (progress) {
+        Object.values(progress.exercises).forEach(exerciseProgress => {
+          if (!exerciseProgress.skipped) {
+            completedSets += exerciseProgress.sets.filter(set => set.completed).length;
+          }
+        });
+      }
+    });
+    
+    if (totalSets === 0) return 0;
+    return Math.round((completedSets / totalSets) * 100);
+  };
   
   const handleCreateCycle = async () => {
     try {
@@ -306,10 +339,7 @@ export function WorkoutsScreen({ navigation }: WorkoutsScreenProps) {
   };
   
   return (
-    <LinearGradient
-      colors={['#E3E6E0', '#D4D6D1']}
-      style={styles.gradient}
-    >
+    <View style={styles.gradient}>
       <SafeAreaView style={[styles.container, { paddingBottom: 88 }]} edges={[]}>
         {/* Header - Fixed */}
         <View style={[styles.header, { paddingTop: insets.top }]}>
@@ -326,124 +356,142 @@ export function WorkoutsScreen({ navigation }: WorkoutsScreenProps) {
         </View>
         
         <ScrollView style={styles.content} contentContainerStyle={styles.scrollContent}>
-          {/* Templates or Cycles List */}
           {cycles.length === 0 ? (
-            <View style={styles.templatesSection}>
-              <Text style={styles.sectionTitle}>Choose a Workout Template</Text>
+            <>
+              {/* Question Text */}
+              <View style={styles.questionSection}>
+                <Text style={styles.questionText}>
+                  <Text style={styles.questionTextGray}>How do you want to{'\n'}</Text>
+                  <Text style={styles.questionTextBlack}>create a new workout?</Text>
+                </Text>
+              </View>
               
-              <FlatList
-                ref={flatListRef}
-                data={TEMPLATES.filter(t => t.id !== 'custom')}
-                horizontal
-                pagingEnabled={false}
-                showsHorizontalScrollIndicator={false}
-                snapToInterval={CARD_WIDTH + CARD_SPACING}
-                decelerationRate="fast"
-                contentContainerStyle={styles.carouselContent}
-                onScroll={(event) => {
-                  const offsetX = event.nativeEvent.contentOffset.x;
-                  const page = Math.round(offsetX / (CARD_WIDTH + CARD_SPACING));
-                  setCurrentPage(page);
-                }}
-                scrollEventThrottle={16}
-                renderItem={({ item: template }) => (
-                  <View style={styles.carouselCard}>
-                    <View style={styles.templateCardBlackShadow}>
-                      <View style={styles.templateCardWhiteShadow}>
-                        <TouchableOpacity
-                          style={styles.templateCard}
-                          onPress={() => {
-                            setPrefs({ daysPerWeek: template.idealDays[0] || 3, sessionMinutes: 60 });
-                            startDraftFromTemplate(template.id);
-                            navigation.navigate('TemplateEditor', { templateId: template.id });
-                          }}
-                          activeOpacity={0.8}
-                        >
-                          <View style={styles.templateInfo}>
-                            <Text style={styles.templateName}>{template.name}</Text>
-                            <Text style={styles.templateDescription}>{template.description}</Text>
-                          </View>
-                        </TouchableOpacity>
-                      </View>
+              {/* Action Buttons */}
+              <View style={styles.actionsSection}>
+                <TouchableOpacity
+                  style={styles.manuallyButton}
+                  onPress={() => {
+                    navigation.navigate('CreateCycleBasics');
+                  }}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.manuallyButtonText}>Manually</Text>
+                </TouchableOpacity>
+                
+                <TouchableOpacity
+                  style={styles.aiButton}
+                  onPress={() => {
+                    navigation.navigate('AIWorkoutCreation' as never);
+                  }}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.aiButtonText}>With AI help</Text>
+                </TouchableOpacity>
+              </View>
+              
+              {/* Templates Section */}
+              <View style={styles.templatesSection}>
+                <Text style={styles.sectionTitle}>Start with a template</Text>
+                
+                {TEMPLATES.filter(t => t.id !== 'custom').map((template) => (
+                  <View key={template.id} style={styles.templateCardBlackShadow}>
+                    <View style={styles.templateCardWhiteShadow}>
+                      <TouchableOpacity
+                        style={styles.templateCard}
+                        onPress={() => {
+                          setPrefs({ daysPerWeek: template.idealDays[0] || 3, sessionMinutes: 60 });
+                          startDraftFromTemplate(template.id);
+                          navigation.navigate('TemplateEditor', { templateId: template.id });
+                        }}
+                        activeOpacity={0.8}
+                      >
+                        <View style={styles.templateCardContent}>
+                          <Text style={styles.templateName}>{template.name}</Text>
+                          <Text style={styles.templateDescription}>{template.description}</Text>
+                        </View>
+                        <View style={styles.triangle} />
+                      </TouchableOpacity>
                     </View>
                   </View>
-                )}
-                keyExtractor={(item) => item.id}
-              />
-              
-              {/* Pagination Dots */}
-              <View style={styles.pagination}>
-                {TEMPLATES.filter(t => t.id !== 'custom').map((_, index) => (
-                  <View
-                    key={index}
-                    style={[
-                      styles.paginationDot,
-                      index === currentPage && styles.paginationDotActive,
-                    ]}
-                  />
                 ))}
               </View>
-            </View>
+            </>
           ) : (
-            <View style={styles.cyclesSection}>
-              {cycles
-                .sort((a, b) => b.cycleNumber - a.cycleNumber)
-                .map((cycle, index) => {
-                  const isLast = index === cycles.length - 1;
-                  return (
-                    <View key={cycle.id} style={[styles.cycleCardWrapper, !isLast && styles.cycleCardWrapperMargin]}>
-                      <View style={styles.cycleCardBlackShadow}>
-                        <View style={styles.cycleCardWhiteShadow}>
-                          <View style={styles.cycleCard}>
-                            <TouchableOpacity
-                              style={styles.cycleCardInner}
-                              onPress={() => navigation.navigate('CycleDetail', { cycleId: cycle.id })}
-                              activeOpacity={1}
-                            >
-                              <View style={styles.cycleInfo}>
-                                <View>
-                                  <Text style={styles.cycleName}>Cycle {cycle.cycleNumber}</Text>
-                                  <Text style={styles.cycleDate}>
-                                    {dayjs(cycle.startDate).format('MM.DD.YY')}—{cycle.isActive ? 'in progress' : dayjs(cycle.endDate).format('MM.DD.YY')}
-                                  </Text>
-                                </View>
+            <>
+              {/* Active Cycle */}
+              {cycles.filter(c => c.isActive).map((cycle) => {
+                const completion = getCycleCompletion(cycle.id);
+                return (
+                  <View key={cycle.id} style={styles.activeCycleSection}>
+                    <View style={styles.cycleCardBlackShadow}>
+                      <View style={styles.cycleCardWhiteShadow}>
+                        <View style={styles.cycleCard}>
+                          <TouchableOpacity
+                            style={styles.cycleCardContent}
+                            onPress={() => navigation.navigate('CycleDetail' as never, { cycleId: cycle.id } as never)}
+                            activeOpacity={0.8}
+                          >
+                            <Text style={styles.cycleName}>Cycle {cycle.cycleNumber}</Text>
+                            <Text style={styles.cycleDate}>
+                              {dayjs(cycle.startDate).format('MM.DD.YY')} — {cycle.isActive ? 'in progress' : dayjs(cycle.endDate).format('MM.DD.YY')}
+                            </Text>
+                            <View style={styles.cycleFooter}>
+                              <View style={styles.progressIndicator}>
+                                <Svg height="16" width="16" viewBox="0 0 16 16" style={styles.progressCircle}>
+                                  <Circle cx="8" cy="8" r="8" fill={LIGHT_COLORS.border} />
+                                  {completion >= 99.9 ? (
+                                    <Circle cx="8" cy="8" r="8" fill={LIGHT_COLORS.text} />
+                                  ) : completion > 0 ? (
+                                    <Path
+                                      d={`M 8 8 L 8 0 A 8 8 0 ${completion / 100 > 0.5 ? 1 : 0} 1 ${
+                                        8 + 8 * Math.sin(2 * Math.PI * (completion / 100))
+                                      } ${
+                                        8 - 8 * Math.cos(2 * Math.PI * (completion / 100))
+                                      } Z`}
+                                      fill={LIGHT_COLORS.text}
+                                    />
+                                  ) : null}
+                                </Svg>
+                                <Text style={styles.progressText}>{completion}%</Text>
                               </View>
-                              <View style={styles.cycleTriangle} />
-                            </TouchableOpacity>
-                          </View>
+                              <View style={styles.seeDetailsButton}>
+                                <Text style={styles.seeDetailsText}>See details</Text>
+                                <Text style={styles.seeDetailsArrow}>▶</Text>
+                              </View>
+                            </View>
+                          </TouchableOpacity>
                         </View>
                       </View>
                     </View>
-                  );
-                })}
-            </View>
+                  </View>
+                );
+              })}
+              
+              {/* Past Cycles */}
+              {cycles.filter(c => !c.isActive).length > 0 && (
+                <>
+                  <Text style={styles.pastCyclesTitle}>Past Cycles</Text>
+                  {cycles.filter(c => !c.isActive).sort((a, b) => b.cycleNumber - a.cycleNumber).map((cycle) => (
+                    <View key={cycle.id} style={styles.pastCycleCardBlackShadow}>
+                      <View style={styles.pastCycleCardWhiteShadow}>
+                        <View style={styles.pastCycleCard}>
+                          <TouchableOpacity
+                            style={styles.pastCycleCardContent}
+                            onPress={() => navigation.navigate('CycleDetail' as never, { cycleId: cycle.id } as never)}
+                            activeOpacity={0.8}
+                          >
+                            <Text style={styles.pastCycleName}>{cycle.goal || `Cycle ${cycle.cycleNumber}`}</Text>
+                            <View style={styles.triangle} />
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                    </View>
+                  ))}
+                </>
+              )}
+            </>
           )}
         </ScrollView>
-        
-        {/* Create Cycle Buttons - Sticky Bottom */}
-        <View style={styles.stickyButtonContainer}>
-          {cycles.length === 0 && (
-            <TouchableOpacity
-              style={[styles.createButton, styles.createButtonSecondary]}
-              onPress={() => setShowBottomSheet(true)}
-              activeOpacity={0.8}
-            >
-              <Text style={[styles.createButtonText, styles.createButtonTextSecondary]}>Paste Workout</Text>
-            </TouchableOpacity>
-          )}
-          <TouchableOpacity
-            style={styles.createButton}
-            onPress={() => {
-              // Navigate to manual cycle creation flow
-              navigation.navigate('CreateCycleBasics');
-            }}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.createButtonText}>
-              {cycles.length === 0 ? 'Create Manually' : 'Create New Cycle'}
-            </Text>
-          </TouchableOpacity>
-        </View>
         
         {/* Bottom Sheet */}
         <Modal
@@ -491,13 +539,14 @@ export function WorkoutsScreen({ navigation }: WorkoutsScreenProps) {
           </KeyboardAvoidingView>
         </Modal>
       </SafeAreaView>
-    </LinearGradient>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   gradient: {
     flex: 1,
+    backgroundColor: COLORS.backgroundCanvas,
   },
   container: {
     flex: 1,
@@ -507,8 +556,8 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    paddingVertical: SPACING.xxl,
-    paddingBottom: 80,
+    paddingHorizontal: SPACING.xxl,
+    paddingBottom: 120,
   },
   
   // Header
@@ -527,88 +576,62 @@ const styles = StyleSheet.create({
     color: LIGHT_COLORS.secondary,
   },
   
-  // Sticky Button Container
-  stickyButtonContainer: {
-    position: 'absolute',
-    bottom: 88, // 8px tab bar margin + 80px tab bar height
-    left: 0,
-    right: 0,
-    paddingHorizontal: SPACING.xxl,
-    paddingBottom: SPACING.md,
-    paddingTop: SPACING.md,
-    backgroundColor: 'transparent',
-    flexDirection: 'row',
-    gap: SPACING.md,
+  // Question Section
+  questionSection: {
+    marginBottom: SPACING.xl,
+  },
+  questionText: {
+    ...TYPOGRAPHY.h3,
+    lineHeight: 28,
+  },
+  questionTextGray: {
+    color: COLORS.textMeta,
+  },
+  questionTextBlack: {
+    color: COLORS.text,
   },
   
-  // Create Button
-  createButton: {
+  // Actions Section
+  actionsSection: {
+    flexDirection: 'row',
+    gap: SPACING.md,
+    marginBottom: 40,
+  },
+  manuallyButton: {
     flex: 1,
-    backgroundColor: LIGHT_COLORS.accentPrimary,
-    paddingVertical: SPACING.lg,
+    height: 56,
+    backgroundColor: '#1B1B1B',
     borderRadius: BORDER_RADIUS.md,
     alignItems: 'center',
+    justifyContent: 'center',
   },
-  createButtonSecondary: {
-    backgroundColor: LIGHT_COLORS.buttonBg,
-  },
-  createButtonText: {
-    fontSize: 17,
-    fontWeight: '600',
+  manuallyButtonText: {
+    ...TYPOGRAPHY.meta,
+    fontWeight: 'bold',
     color: '#FFFFFF',
   },
-  createButtonTextSecondary: {
-    color: LIGHT_COLORS.buttonText,
-  },
-  secondaryButton: {
-    backgroundColor: LIGHT_COLORS.buttonBg,
-    paddingVertical: SPACING.lg,
+  aiButton: {
+    flex: 1,
+    height: 56,
+    backgroundColor: COLORS.accentPrimary,
     borderRadius: BORDER_RADIUS.md,
     alignItems: 'center',
+    justifyContent: 'center',
   },
-  secondaryButtonText: {
-    fontSize: 17,
-    fontWeight: '600',
-    color: LIGHT_COLORS.buttonText,
+  aiButtonText: {
+    ...TYPOGRAPHY.meta,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
   },
   
   // Templates Section
   templatesSection: {
-    overflow: 'visible',
+    gap: SPACING.sm,
   },
   sectionTitle: {
-    ...TYPOGRAPHY.h3,
-    color: LIGHT_COLORS.secondary,
-    marginBottom: 24,
-    paddingHorizontal: 24,
-  },
-  carouselContent: {
-    paddingLeft: 24,
-    paddingRight: CARD_SPACING,
-    paddingVertical: 4,
-  },
-  carouselCard: {
-    width: CARD_WIDTH,
-    marginRight: CARD_SPACING,
-    overflow: 'visible',
-  },
-  pagination: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginTop: 20,
-    gap: 8,
-  },
-  paginationDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: LIGHT_COLORS.textMeta,
-    opacity: 0.3,
-  },
-  paginationDotActive: {
-    backgroundColor: LIGHT_COLORS.secondary,
-    opacity: 1,
+    ...TYPOGRAPHY.meta,
+    color: COLORS.textMeta,
+    marginBottom: SPACING.sm,
   },
   templateCardBlackShadow: {
     // Black shadow: -1, -1, 8% opacity, 1px blur
@@ -617,6 +640,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.08,
     shadowRadius: 1,
     elevation: 2,
+    marginBottom: SPACING.xs,
   },
   templateCardWhiteShadow: {
     // Bottom-right shadow: 1, 1, 100% opacity, 1px blur
@@ -627,85 +651,29 @@ const styles = StyleSheet.create({
     elevation: 1,
   },
   templateCard: {
-    backgroundColor: '#E3E3DE',
-    borderRadius: 12,
+    backgroundColor: COLORS.backgroundCanvas,
+    borderRadius: BORDER_RADIUS.md,
     borderWidth: 1,
     borderColor: COLORS.border,
-    padding: 20,
-    minHeight: 120,
-  },
-  templateInfo: {
-    flex: 1,
-  },
-  templateName: {
-    ...TYPOGRAPHY.body,
-    color: LIGHT_COLORS.secondary,
-    marginBottom: 4,
-  },
-  templateDescription: {
-    ...TYPOGRAPHY.meta,
-    color: LIGHT_COLORS.textMeta,
-    lineHeight: 18,
-  },
-  
-  // Cycles Section
-  cyclesSection: {
-    gap: 12,
-    paddingHorizontal: SPACING.xxl,
-  },
-  cycleCardWrapper: {
-    width: '100%',
-  },
-  cycleCardWrapperMargin: {
-    marginBottom: 12,
-  },
-  cycleCardBlackShadow: {
-    // Black shadow: -1, -1, 8% opacity, 1px blur
-    shadowColor: '#000000',
-    shadowOffset: { width: -1, height: -1 },
-    shadowOpacity: 0.08,
-    shadowRadius: 1,
-    elevation: 2,
-  },
-  cycleCardWhiteShadow: {
-    // Bottom-right shadow: 1, 1, 100% opacity, 1px blur
-    shadowColor: '#FFFFFF',
-    shadowOffset: { width: 1, height: 1 },
-    shadowOpacity: 1,
-    shadowRadius: 1,
-    elevation: 1,
-  },
-  cycleCard: {
-    backgroundColor: '#E3E3DE',
-    borderRadius: 12,
-    borderCurve: 'continuous',
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    overflow: 'hidden',
-  },
-  cycleCardInner: {
-    backgroundColor: '#E2E3DF',
-    borderRadius: 12,
-    borderCurve: 'continuous',
     paddingHorizontal: 24,
-    paddingTop: 16,
-    paddingBottom: 18,
-    borderTopWidth: 2,
-    borderLeftWidth: 2,
-    borderBottomWidth: 2,
-    borderRightWidth: 2,
-    borderTopColor: 'rgba(255, 255, 255, 0.75)',
-    borderLeftColor: 'rgba(255, 255, 255, 0.75)',
-    borderBottomColor: 'rgba(0, 0, 0, 0.08)',
-    borderRightColor: 'rgba(0, 0, 0, 0.08)',
+    paddingVertical: 16,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
   },
-  cycleInfo: {
+  templateCardContent: {
     flex: 1,
   },
-  cycleTriangle: {
+  templateName: {
+    ...TYPOGRAPHY.body,
+    color: COLORS.text,
+    marginBottom: 4,
+  },
+  templateDescription: {
+    ...TYPOGRAPHY.body,
+    color: COLORS.textMeta,
+  },
+  triangle: {
     width: 0,
     height: 0,
     backgroundColor: 'transparent',
@@ -718,15 +686,84 @@ const styles = StyleSheet.create({
     borderRightColor: 'transparent',
     borderTopColor: 'transparent',
     borderBottomColor: 'transparent',
+    marginLeft: SPACING.md,
+  },
+  
+  // Cycles List
+  activeCycleSection: {
+    marginBottom: SPACING.xl,
+  },
+  cycleCardBlackShadow: CARDS.cardDeep.blackShadow,
+  cycleCardWhiteShadow: CARDS.cardDeep.whiteShadow,
+  cycleCard: CARDS.cardDeep.outer,
+  cycleCardContent: {
+    ...CARDS.cardDeep.inner,
+    padding: SPACING.xl,
   },
   cycleName: {
-    ...TYPOGRAPHY.h3,
-    color: LIGHT_COLORS.secondary,
+    ...TYPOGRAPHY.h2,
+    color: COLORS.text,
+    marginBottom: 4,
   },
   cycleDate: {
     ...TYPOGRAPHY.meta,
-    color: LIGHT_COLORS.textMeta,
-    marginTop: 4,
+    color: COLORS.textMeta,
+    marginBottom: 20,
+  },
+  cycleFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  progressIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  progressCircle: {
+    // No additional styling needed
+  },
+  progressText: {
+    ...TYPOGRAPHY.meta,
+    color: COLORS.textMeta,
+  },
+  seeDetailsButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  seeDetailsText: {
+    ...TYPOGRAPHY.metaBold,
+    color: COLORS.text,
+  },
+  seeDetailsArrow: {
+    fontSize: 12,
+    color: COLORS.accentPrimary,
+  },
+  
+  // Past Cycles
+  pastCyclesTitle: {
+    ...TYPOGRAPHY.body,
+    color: COLORS.textMeta,
+    marginBottom: SPACING.lg,
+  },
+  pastCycleCardBlackShadow: {
+    ...CARDS.cardDeep.blackShadow,
+    marginBottom: SPACING.sm,
+  },
+  pastCycleCardWhiteShadow: CARDS.cardDeep.whiteShadow,
+  pastCycleCard: CARDS.cardDeep.outer,
+  pastCycleCardContent: {
+    ...CARDS.cardDeep.inner,
+    paddingHorizontal: SPACING.xl,
+    paddingVertical: SPACING.lg,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  pastCycleName: {
+    ...TYPOGRAPHY.body,
+    color: COLORS.text,
   },
   
   // Bottom Sheet
@@ -781,8 +818,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   saveButtonText: {
-    fontSize: 17,
-    fontWeight: '600',
+    ...TYPOGRAPHY.meta,
+    fontWeight: 'bold',
     color: '#FFFFFF',
   },
 });

@@ -1,24 +1,18 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Animated, Modal } from 'react-native';
-import Svg, { Path } from 'react-native-svg';
+import { View, Text, StyleSheet, TouchableOpacity, Animated, Modal, ScrollView } from 'react-native';
+import Svg, { Circle, Path } from 'react-native-svg';
 import * as Haptics from 'expo-haptics';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-// import { GestureDetector, Gesture } from 'react-native-gesture-handler';
-// import { runOnJS } from 'react-native-reanimated';
-import { LinearGradient } from 'expo-linear-gradient';
+import { useNavigation } from '@react-navigation/native';
 import { useStore } from '../store';
 import { ProfileAvatar } from '../components/ProfileAvatar';
 import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS, CARDS } from '../constants';
-import { IconCalendar, IconStopwatch } from '../components/icons';
+import { IconCalendar, IconStopwatch, IconWorkouts } from '../components/icons';
 import dayjs from 'dayjs';
 import isoWeek from 'dayjs/plugin/isoWeek';
 
 dayjs.extend(isoWeek);
-
-interface TodayScreenProps {
-  navigation: any;
-}
 
 const DAYS_SHORT = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
 
@@ -37,7 +31,12 @@ const LIGHT_COLORS = {
   progressDotActive: '#000000',
 };
 
-export function TodayScreen({ navigation }: TodayScreenProps) {
+interface TodayScreenProps {
+  onNavigateToWorkouts?: () => void;
+}
+
+export function TodayScreen({ onNavigateToWorkouts }: TodayScreenProps) {
+  const navigation = useNavigation();
   const insets = useSafeAreaInsets();
   const { cycles, workoutAssignments, getWorkoutCompletionPercentage, getExerciseProgress, swapWorkoutAssignments } = useStore();
   const today = dayjs();
@@ -62,6 +61,13 @@ export function TodayScreen({ navigation }: TodayScreenProps) {
   
   // Find active cycle
   const activeCycle = cycles.find(c => c.isActive);
+  
+  // Clear selected day when there are no workouts created
+  useEffect(() => {
+    if (!activeCycle) {
+      setSelectedDate('');
+    }
+  }, [activeCycle]);
   
   console.log('📅 Today Screen Debug:');
   console.log('- Today date:', today.format('YYYY-MM-DD'));
@@ -310,21 +316,14 @@ export function TodayScreen({ navigation }: TodayScreenProps) {
     }
   };
 
-  // Swipe gesture DISABLED for debugging
-  // const swipeGesture = Gesture.Pan()
-  //   .onEnd((event) => {
-  //     runOnJS(handleSwipe)(event.velocityX, event.translationX);
-  //   });
+  // Swipe gesture disabled (requires react-native-reanimated)
   
   // Match device corner radius (iPhone rounded corners)
   const deviceCornerRadius = insets.bottom > 0 ? 40 : 24;
   
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <LinearGradient
-        colors={['#E3E6E0', '#D4D6D1']}
-        style={styles.gradient}
-      >
+      <View style={styles.gradient}>
         <SafeAreaView style={[styles.container, { paddingBottom: 88 }]} edges={[]}>
           {/* Header with Cycle Info and Avatar - Fixed - Always shown */}
           <View style={[styles.header, { paddingTop: insets.top }]}>
@@ -382,20 +381,23 @@ export function TodayScreen({ navigation }: TodayScreenProps) {
                     >
                       <View style={styles.dayButtonBlackShadow}>
                         <View style={styles.dayButtonOuterShadow}>
-                          <LinearGradient
-                            colors={isSelected 
-                              ? (isCompleted ? ['#227132', '#227132'] : ['#000000', '#000000'])
-                              : ['rgba(227, 227, 222, 1)', 'rgba(237, 237, 237, 0.93)']}
-                            start={{ x: 0.42, y: 0.42 }}
-                            end={{ x: 1, y: 1 }}
-                            style={[styles.dayButton, styles.dayButtonWithShadow]}
+                          <View
+                            style={[
+                              styles.dayButton, 
+                              styles.dayButtonWithShadow,
+                              {
+                                backgroundColor: isSelected 
+                                  ? (isCompleted ? '#227132' : '#000000')
+                                  : '#E3E3DE'
+                              }
+                            ]}
                           >
                           <View style={[styles.dayButtonBorder, isSelected && styles.dayButtonBorderActive]}>
                             <Text style={isSelected ? styles.dayNumberToday : styles.dayNumber}>
                               {day.dayNumber}
                             </Text>
                           </View>
-                        </LinearGradient>
+                        </View>
                         </View>
                       </View>
                     </Animated.View>
@@ -409,21 +411,21 @@ export function TodayScreen({ navigation }: TodayScreenProps) {
             {!activeCycle ? (
               /* Empty State */
               <View style={styles.emptyStateContent}>
-                <Text style={styles.emptyTitle}>No Workouts</Text>
+                <Text style={styles.emptyTitle}>No workouts yet</Text>
                 <Text style={styles.emptyText}>
-                  Create a new workout to get started with your training
+                  To get started, you need to create one.
                 </Text>
                 <TouchableOpacity
                   style={styles.createButton}
-                  onPress={() => navigation.navigate('Workouts')}
+                  onPress={onNavigateToWorkouts}
                   activeOpacity={0.8}
                 >
-                  <Text style={styles.createButtonText}>Create a New Workout</Text>
+                  <IconWorkouts size={24} color="#FFFFFF" />
+                  <Text style={styles.createButtonText}>Go to Workouts</Text>
                 </TouchableOpacity>
               </View>
             ) : (
-              // <GestureDetector gesture={swipeGesture}>
-                <ScrollView style={styles.content} contentContainerStyle={styles.scrollContent}>
+              <View style={styles.content}>
                 <View style={styles.cardsContainer}>
               {/* Old workout card during transition */}
               {isTransitioning && previousWorkoutData?.workout && (
@@ -438,51 +440,17 @@ export function TodayScreen({ navigation }: TodayScreenProps) {
                     <View style={styles.workoutCard}>
                       <View style={styles.workoutCardInner}>
                     {/* Workout Name */}
-                    <View style={styles.workoutHeaderRow}>
-                      <Text style={styles.workoutName}>{previousWorkoutData.workout.name}</Text>
-                    </View>
+                    <Text style={styles.workoutName}>{previousWorkoutData.workout.name}</Text>
                     
-                    {/* Progress Dots */}
-                    <View style={styles.progressDotsContainer}>
-                      {(() => {
-                        const workoutKey = `${previousWorkoutData.workout.id}-${previousWorkoutData.date}`;
-                        // Calculate totalSets excluding skipped exercises
-                        let totalSets = 0;
-                        previousWorkoutData.workout.exercises.forEach((ex: any) => {
-                          const progress = getExerciseProgress(workoutKey, ex.id);
-                          if (!progress?.skipped) {
-                            totalSets += ex.targetSets || 0;
-                          }
-                        });
-                        const completionPercentage = getWorkoutCompletionPercentage(workoutKey, totalSets);
-                        const totalDots = 96; // 3 rows * 32 dots
-                        const completedDots = Math.round((completionPercentage / 100) * totalDots);
-                        
-                        return Array.from({ length: 3 }).map((_, rowIdx) => (
-                          <View key={rowIdx} style={styles.progressDotsRow}>
-                            {Array.from({ length: 32 }).map((_, dotIdx) => {
-                              const absoluteDotIndex = rowIdx * 32 + dotIdx;
-                              const isCompleted = absoluteDotIndex < completedDots;
-                              return (
-                                <View 
-                                  key={dotIdx} 
-                                  style={[
-                                    styles.progressDot,
-                                    isCompleted && styles.progressDotCompleted
-                                  ]} 
-                                />
-                              );
-                            })}
-                          </View>
-                        ));
-                      })()}
-                    </View>
+                    {/* Exercises Count */}
+                    <Text style={styles.workoutExercises}>
+                      {previousWorkoutData.workout.exercises.length} exercises
+                    </Text>
                     
                     {/* Footer */}
                     <View style={styles.workoutCardFooter}>
                       {(() => {
                         const workoutKey = `${previousWorkoutData.workout.id}-${previousWorkoutData.date}`;
-                        // Calculate totalSets excluding skipped exercises
                         let totalSets = 0;
                         previousWorkoutData.workout.exercises.forEach((ex: any) => {
                           const progress = getExerciseProgress(workoutKey, ex.id);
@@ -491,19 +459,36 @@ export function TodayScreen({ navigation }: TodayScreenProps) {
                           }
                         });
                         const completionPercentage = getWorkoutCompletionPercentage(workoutKey, totalSets);
+                        const progress = completionPercentage / 100;
                         
-                        // Determine button state
-                        const buttonState = completionPercentage === 100 ? 'edit' 
-                          : completionPercentage > 0 ? 'resume' 
-                          : 'start';
-                        const isOrangeTriangle = buttonState === 'start';
+                        const buttonState = completionPercentage === 100 ? 'Edit' 
+                          : completionPercentage > 0 ? 'Resume' 
+                          : 'Start';
+                        const isOrangeTriangle = buttonState === 'Start';
                         
                         return (
                           <>
-                            <Text style={styles.workoutExercises}>
-                              {previousWorkoutData.workout.exercises.length} exercises
-                            </Text>
+                            {/* Left: Progress Indicator */}
+                            <View style={styles.progressIndicator}>
+                              <Svg height="16" width="16" viewBox="0 0 16 16" style={styles.progressCircle}>
+                                <Circle cx="8" cy="8" r="8" fill={LIGHT_COLORS.border} />
+                                {progress >= 0.999 ? (
+                                  <Circle cx="8" cy="8" r="8" fill={LIGHT_COLORS.text} />
+                                ) : progress > 0 ? (
+                                  <Path
+                                    d={`M 8 8 L 8 0 A 8 8 0 ${progress > 0.5 ? 1 : 0} 1 ${
+                                      8 + 8 * Math.sin(2 * Math.PI * progress)
+                                    } ${
+                                      8 - 8 * Math.cos(2 * Math.PI * progress)
+                                    } Z`}
+                                    fill={LIGHT_COLORS.text}
+                                  />
+                                ) : null}
+                              </Svg>
+                              <Text style={styles.progressText}>{completionPercentage}%</Text>
+                            </View>
                             
+                            {/* Right: Action Button */}
                             <View style={styles.startButton}>
                               <Text style={styles.startButtonText}>{buttonState}</Text>
                               <View style={styles.playTriangleWrapper}>
@@ -570,51 +555,17 @@ export function TodayScreen({ navigation }: TodayScreenProps) {
                         activeOpacity={1}
                       >
                     {/* Workout Name */}
-                    <View style={styles.workoutHeaderRow}>
-                      <Text style={styles.workoutName}>{selectedDay.workout.name}</Text>
-                    </View>
+                    <Text style={styles.workoutName}>{selectedDay.workout.name}</Text>
                     
-                    {/* Progress Dots - Show total sets across all exercises */}
-                    <View style={styles.progressDotsContainer}>
-                      {(() => {
-                        const workoutKey = `${selectedDay.workout.id}-${selectedDay.date}`;
-                        // Calculate totalSets excluding skipped exercises
-                        let totalSets = 0;
-                        selectedDay.workout.exercises.forEach((ex: any) => {
-                          const progress = getExerciseProgress(workoutKey, ex.id);
-                          if (!progress?.skipped) {
-                            totalSets += ex.targetSets || 0;
-                          }
-                        });
-                        const completionPercentage = getWorkoutCompletionPercentage(workoutKey, totalSets);
-                        const totalDots = 96; // 3 rows * 32 dots
-                        const completedDots = Math.round((completionPercentage / 100) * totalDots);
-                        
-                        return Array.from({ length: 3 }).map((_, rowIdx) => (
-                          <View key={rowIdx} style={styles.progressDotsRow}>
-                            {Array.from({ length: 32 }).map((_, dotIdx) => {
-                              const absoluteDotIndex = rowIdx * 32 + dotIdx;
-                              const isCompleted = absoluteDotIndex < completedDots;
-                              return (
-                                <View 
-                                  key={dotIdx} 
-                                  style={[
-                                    styles.progressDot,
-                                    isCompleted && styles.progressDotCompleted
-                                  ]} 
-                                />
-                              );
-                            })}
-                          </View>
-                        ));
-                      })()}
-                    </View>
+                    {/* Exercises Count */}
+                    <Text style={styles.workoutExercises}>
+                      {selectedDay.workout.exercises.length} exercises
+                    </Text>
                     
-                    {/* Footer: Progress and Start/Resume/Edit button */}
+                    {/* Footer */}
                     <View style={styles.workoutCardFooter}>
                       {(() => {
                         const workoutKey = `${selectedDay.workout.id}-${selectedDay.date}`;
-                        // Calculate totalSets excluding skipped exercises
                         let totalSets = 0;
                         selectedDay.workout.exercises.forEach((ex: any) => {
                           const progress = getExerciseProgress(workoutKey, ex.id);
@@ -623,19 +574,36 @@ export function TodayScreen({ navigation }: TodayScreenProps) {
                           }
                         });
                         const completionPercentage = getWorkoutCompletionPercentage(workoutKey, totalSets);
+                        const progress = completionPercentage / 100;
                         
-                        // Determine button state
-                        const buttonState = completionPercentage === 100 ? 'edit' 
-                          : completionPercentage > 0 ? 'resume' 
-                          : 'start';
-                        const isOrangeTriangle = buttonState === 'start';
+                        const buttonState = completionPercentage === 100 ? 'Edit' 
+                          : completionPercentage > 0 ? 'Resume' 
+                          : 'Start';
+                        const isOrangeTriangle = buttonState === 'Start';
                         
                         return (
                           <>
-                            <Text style={styles.workoutExercises}>
-                              {selectedDay.workout.exercises.length} exercises
-                            </Text>
+                            {/* Left: Progress Indicator */}
+                            <View style={styles.progressIndicator}>
+                              <Svg height="16" width="16" viewBox="0 0 16 16" style={styles.progressCircle}>
+                                <Circle cx="8" cy="8" r="8" fill={LIGHT_COLORS.border} />
+                                {progress >= 0.999 ? (
+                                  <Circle cx="8" cy="8" r="8" fill={LIGHT_COLORS.text} />
+                                ) : progress > 0 ? (
+                                  <Path
+                                    d={`M 8 8 L 8 0 A 8 8 0 ${progress > 0.5 ? 1 : 0} 1 ${
+                                      8 + 8 * Math.sin(2 * Math.PI * progress)
+                                    } ${
+                                      8 - 8 * Math.cos(2 * Math.PI * progress)
+                                    } Z`}
+                                    fill={LIGHT_COLORS.text}
+                                  />
+                                ) : null}
+                              </Svg>
+                              <Text style={styles.progressText}>{completionPercentage}%</Text>
+                            </View>
                             
+                            {/* Right: Action Button */}
                             <View style={styles.startButton}>
                               <Text style={styles.startButtonText}>{buttonState}</Text>
                               <View style={styles.playTriangleWrapper}>
@@ -689,21 +657,21 @@ export function TodayScreen({ navigation }: TodayScreenProps) {
                     <Svg width={16} height={16} viewBox="0 0 24 24" fill="none">
                       <Path 
                         d="M7 16V4M7 4L3 8M7 4L11 8" 
-                        stroke="#817B77" 
+                        stroke={COLORS.text}
                         strokeWidth="2" 
                         strokeLinecap="round" 
                         strokeLinejoin="round"
                       />
                       <Path 
                         d="M17 8V20M17 20L21 16M17 20L13 16" 
-                        stroke="#817B77" 
+                        stroke={COLORS.text}
                         strokeWidth="2" 
                         strokeLinecap="round" 
                         strokeLinejoin="round"
                       />
                     </Svg>
                   </View>
-                  <Text style={styles.swapButtonText}>swap</Text>
+                  <Text style={styles.swapButtonText}>Swap</Text>
                 </TouchableOpacity>
               )}
               
@@ -735,31 +703,30 @@ export function TodayScreen({ navigation }: TodayScreenProps) {
                       <Svg width={16} height={16} viewBox="0 0 24 24" fill="none">
                         <Path 
                           d="M7 16V4M7 4L3 8M7 4L11 8" 
-                          stroke="#817B77" 
+                          stroke={COLORS.text}
                           strokeWidth="2" 
                           strokeLinecap="round" 
                           strokeLinejoin="round"
                         />
                         <Path 
                           d="M17 8V20M17 20L21 16M17 20L13 16" 
-                          stroke="#817B77" 
+                          stroke={COLORS.text}
                           strokeWidth="2" 
                           strokeLinecap="round" 
                           strokeLinejoin="round"
                         />
                       </Svg>
                     </View>
-                    <Text style={styles.swapButtonText}>swap</Text>
+                    <Text style={styles.swapButtonText}>Swap</Text>
                   </TouchableOpacity>
                 );
               })()}
               
               </View>
-            </ScrollView>
-            // </GestureDetector>
+            </View>
             )}
         </SafeAreaView>
-      </LinearGradient>
+      </View>
       
       {/* Swap Bottom Sheet Modal - Renders at root level above tab bar */}
       <Modal
@@ -869,6 +836,7 @@ export function TodayScreen({ navigation }: TodayScreenProps) {
 const styles = StyleSheet.create({
   gradient: {
     flex: 1,
+    backgroundColor: COLORS.backgroundCanvas,
   },
   container: {
     flex: 1,
@@ -876,8 +844,6 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
-  },
-  scrollContent: {
     padding: SPACING.xxl,
   },
   cardsContainer: {
@@ -905,24 +871,29 @@ const styles = StyleSheet.create({
     paddingVertical: SPACING.xxxl * 2,
   },
   emptyTitle: {
-    ...TYPOGRAPHY.h2,
-    color: LIGHT_COLORS.secondary,
-    marginBottom: SPACING.sm,
+    ...TYPOGRAPHY.h3,
+    color: COLORS.textMeta,
+    marginBottom: SPACING.xs,
   },
   emptyText: {
-    ...TYPOGRAPHY.body,
-    color: LIGHT_COLORS.textMeta,
+    ...TYPOGRAPHY.h3,
+    color: COLORS.text,
     textAlign: 'center',
     marginBottom: SPACING.xl,
   },
   createButton: {
-    backgroundColor: LIGHT_COLORS.accentPrimary,
-    paddingVertical: SPACING.lg,
+    backgroundColor: '#1B1B1B',
+    height: 56,
     paddingHorizontal: SPACING.xl,
     borderRadius: BORDER_RADIUS.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
   },
   createButtonText: {
-    ...TYPOGRAPHY.button,
+    ...TYPOGRAPHY.meta,
+    fontWeight: 'bold',
     color: '#FFFFFF',
   },
   
@@ -1056,89 +1027,36 @@ const styles = StyleSheet.create({
   },
   
   // Workout Card
-  workoutCardBlackShadow: {
-    // Black shadow: -1, -1, 8% opacity, 1px blur
-    shadowColor: '#000000',
-    shadowOffset: { width: -1, height: -1 },
-    shadowOpacity: 0.08,
-    shadowRadius: 1,
-    elevation: 2,
-  },
-  workoutCardWhiteShadow: {
-    // Bottom-right shadow: 1, 1, 100% opacity, 1px blur
-    shadowColor: '#FFFFFF',
-    shadowOffset: { width: 1, height: 1 },
-    shadowOpacity: 1,
-    shadowRadius: 1,
-    elevation: 1,
-  },
+  workoutCardBlackShadow: CARDS.cardDeep.blackShadow,
+  workoutCardWhiteShadow: CARDS.cardDeep.whiteShadow,
   workoutCard: {
-    backgroundColor: '#E3E3DE',
-    borderRadius: 12,
-    borderCurve: 'continuous',
-    borderWidth: 1,
-    borderColor: COLORS.border,
+    ...CARDS.cardDeep.outer,
     width: '100%',
-    overflow: 'hidden',
   },
   workoutCardPressed: {
     borderWidth: 2,
     borderColor: '#000000',
   },
   workoutCardInner: {
-    backgroundColor: '#E2E3DF',
-    borderRadius: 12,
-    borderCurve: 'continuous',
+    ...CARDS.cardDeep.inner,
     paddingHorizontal: 24,
     paddingTop: 16,
     paddingBottom: 20,
-    borderTopWidth: 2,
-    borderLeftWidth: 2,
-    borderBottomWidth: 2,
-    borderRightWidth: 2,
-    borderTopColor: 'rgba(255, 255, 255, 0.75)',
-    borderLeftColor: 'rgba(255, 255, 255, 0.75)',
-    borderBottomColor: 'rgba(0, 0, 0, 0.08)',
-    borderRightColor: 'rgba(0, 0, 0, 0.08)',
   },
   workoutCardInnerPressed: {
     paddingHorizontal: 23,
     paddingTop: 15,
     paddingBottom: 19,
   },
-  workoutHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: SPACING.xl,
-  },
   workoutName: {
     ...TYPOGRAPHY.h2,
     color: LIGHT_COLORS.secondary,
+    marginBottom: 2,
   },
-  completionPercentage: {
-    ...TYPOGRAPHY.h3,
-    color: '#227132',
-  },
-  
-  // Progress Dots
-  progressDotsContainer: {
-    marginBottom: SPACING.xl,
-    gap: 6,
-  },
-  progressDotsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  progressDot: {
-    width: 4,
-    height: 4,
-    borderRadius: 2,
-    borderCurve: 'continuous',
-    backgroundColor: LIGHT_COLORS.progressDot, // Lighter/disabled color
-  },
-  progressDotCompleted: {
-    backgroundColor: '#227132', // Green
+  workoutExercises: {
+    ...TYPOGRAPHY.meta,
+    color: LIGHT_COLORS.textMeta,
+    marginBottom: 20,
   },
   
   // Footer
@@ -1146,10 +1064,19 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    marginTop: 'auto',
   },
-  workoutExercises: {
-    ...TYPOGRAPHY.body,
-    color: LIGHT_COLORS.textMeta,
+  progressIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  progressCircle: {
+    // No additional styling needed
+  },
+  progressText: {
+    ...TYPOGRAPHY.meta,
+    color: COLORS.textMeta,
   },
   workoutProgress: {
     ...TYPOGRAPHY.body,
@@ -1160,10 +1087,10 @@ const styles = StyleSheet.create({
   startButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 4,
   },
   startButtonText: {
-    ...TYPOGRAPHY.bodyBold,
+    ...TYPOGRAPHY.metaBold,
     color: '#000000',
   },
   playTriangleWrapper: {
@@ -1210,18 +1137,11 @@ const styles = StyleSheet.create({
   
   // Rest Day Card
   restDayCard: {
-    backgroundColor: '#E3E3DE',
-    borderRadius: 12,
-    borderCurve: 'continuous',
-    borderWidth: 1,
-    borderColor: COLORS.border,
+    ...CARDS.cardDeep.outer,
     width: '100%',
-    overflow: 'hidden',
   },
   restDayInner: {
-    backgroundColor: '#E2E3DF',
-    borderRadius: 12,
-    borderCurve: 'continuous',
+    ...CARDS.cardDeep.inner,
     paddingHorizontal: 24,
     paddingTop: 24,
     paddingBottom: 28,
@@ -1258,14 +1178,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'flex-start',
-    gap: 8,
+    gap: 4,
     marginTop: SPACING.lg,
     marginLeft: 24,
-    paddingVertical: SPACING.md,
   },
   swapButtonText: {
-    ...TYPOGRAPHY.body,
-    color: LIGHT_COLORS.textMeta,
+    ...TYPOGRAPHY.metaBold,
+    color: COLORS.text,
   },
   swapIconWrapper: {
     width: 16,

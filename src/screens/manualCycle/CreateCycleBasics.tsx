@@ -49,7 +49,7 @@ export function CreateCycleBasics({ navigation }: CreateCycleBasicsProps) {
   const canContinue = isBasicsValid();
 
   return (
-    <LinearGradient colors={['#E3E6E0', '#D4D6D1']} style={styles.gradient}>
+    <View style={styles.gradient}>
       <View style={styles.container}>
         {/* Header */}
         <View style={[styles.header, { paddingTop: insets.top }]}>
@@ -171,13 +171,14 @@ export function CreateCycleBasics({ navigation }: CreateCycleBasicsProps) {
           </TouchableOpacity>
         </View>
       </View>
-    </LinearGradient>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   gradient: {
     flex: 1,
+    backgroundColor: COLORS.backgroundCanvas,
   },
   container: {
     flex: 1,
@@ -331,7 +332,8 @@ const styles = StyleSheet.create({
     borderColor: LIGHT_COLORS.chipBorder,
   },
   continueButtonText: {
-    fontSize: 17,
+    ...TYPOGRAPHY.meta,
+    fontWeight: 'bold',
     fontWeight: '600',
     color: '#FFFFFF',
   },

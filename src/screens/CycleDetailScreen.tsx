@@ -142,22 +142,16 @@ export function CycleDetailScreen({ route, navigation }: CycleDetailScreenProps)
   
   if (!cycle) {
     return (
-      <LinearGradient
-        colors={['#E3E6E0', '#D4D6D1']}
-        style={styles.gradient}
-      >
+      <View style={styles.gradient}>
         <View style={styles.container}>
           <Text style={styles.errorText}>Cycle not found</Text>
         </View>
-      </LinearGradient>
+      </View>
     );
   }
   
   return (
-    <LinearGradient
-      colors={['#E3E6E0', '#D4D6D1']}
-      style={styles.gradient}
-    >
+    <View style={styles.gradient}>
       <View style={styles.container}>
         {/* Header (includes topBar with back button + title) */}
         <View style={[styles.header, { paddingTop: insets.top }]}>
@@ -411,13 +405,14 @@ export function CycleDetailScreen({ route, navigation }: CycleDetailScreenProps)
         </View>
       </Modal>
       </View>
-    </LinearGradient>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   gradient: {
     flex: 1,
+    backgroundColor: '#E2E3DF',
   },
   container: {
     flex: 1,
@@ -680,7 +675,8 @@ const styles = StyleSheet.create({
     elevation: 6,
   },
   deleteButtonText: {
-    fontSize: 17,
+    ...TYPOGRAPHY.meta,
+    fontWeight: 'bold',
     fontWeight: '600',
     color: '#FFFFFF',
   },

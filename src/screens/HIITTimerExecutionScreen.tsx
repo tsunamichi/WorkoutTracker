@@ -63,19 +63,14 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
   
   if (!timer) {
     return (
-      <LinearGradient
-        colors={GRADIENTS.backgroundLight.colors}
-        start={GRADIENTS.backgroundLight.start}
-        end={GRADIENTS.backgroundLight.end}
-        style={styles.container}
-      >
+      <View style={styles.container}>
         <View style={styles.innerContainer}>
           <Text style={styles.errorText}>Timer not found</Text>
           <TouchableOpacity onPress={() => navigation.goBack()}>
             <Text style={styles.errorText}>Go Back</Text>
           </TouchableOpacity>
         </View>
-      </LinearGradient>
+      </View>
     );
   }
   
@@ -733,12 +728,7 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
   }, [timer, currentPhase, currentSet, currentRound, secondsRemaining]);
 
     return (
-      <LinearGradient
-        colors={GRADIENTS.backgroundLight.colors}
-        start={GRADIENTS.backgroundLight.start}
-        end={GRADIENTS.backgroundLight.end}
-        style={styles.container}
-      >
+      <View style={styles.container}>
       <View style={[styles.innerContainer, { paddingBottom: insets.bottom }]}>
         {/* Header */}
         <View style={[styles.header, { paddingTop: insets.top }]}>
@@ -936,13 +926,14 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
             </Animated.View>
         </View>
       </View>
-    </LinearGradient>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: '#E2E3DF',
   },
   innerContainer: {
     flex: 1,

@@ -51,10 +51,7 @@ export function ProfileScreen({ navigation }: ProfileScreenProps) {
   ).length;
   
   return (
-    <LinearGradient
-      colors={['#E3E6E0', '#D4D6D1']}
-      style={styles.gradient}
-    >
+    <View style={styles.gradient}>
       <View style={styles.container}>
         {/* Header (includes topBar with back button + title) */}
         <View style={[styles.header, { paddingTop: insets.top }]}>
@@ -400,13 +397,14 @@ export function ProfileScreen({ navigation }: ProfileScreenProps) {
           </View>
         </Modal>
       </View>
-    </LinearGradient>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   gradient: {
     flex: 1,
+    backgroundColor: '#E2E3DF',
   },
   container: {
     flex: 1,

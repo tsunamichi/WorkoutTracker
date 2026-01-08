@@ -178,7 +178,7 @@ export function CreateCycleReview({ navigation }: CreateCycleReviewProps) {
   const canCreate = !!startDate;
 
   return (
-    <LinearGradient colors={['#E3E6E0', '#D4D6D1']} style={styles.gradient}>
+    <View style={styles.gradient}>
       <View style={styles.container}>
         {/* Header */}
         <View style={[styles.header, { paddingTop: insets.top }]}>
@@ -314,13 +314,14 @@ export function CreateCycleReview({ navigation }: CreateCycleReviewProps) {
           minimumDate={new Date()}
         />
       )}
-    </LinearGradient>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   gradient: {
     flex: 1,
+    backgroundColor: '#E2E3DF',
   },
   container: {
     flex: 1,
@@ -486,7 +487,8 @@ const styles = StyleSheet.create({
     borderColor: LIGHT_COLORS.border,
   },
   createButtonText: {
-    fontSize: 17,
+    ...TYPOGRAPHY.meta,
+    fontWeight: 'bold',
     fontWeight: '600',
     color: '#FFFFFF',
   },

@@ -180,12 +180,7 @@ export default function HIITTimerFormScreen({ navigation, route }: Props) {
   };
 
   return (
-    <LinearGradient
-      colors={GRADIENTS.backgroundLight.colors}
-      start={GRADIENTS.backgroundLight.start}
-      end={GRADIENTS.backgroundLight.end}
-      style={styles.container}
-    >
+    <View style={styles.container}>
       <View style={styles.innerContainer}>
         {/* Header */}
         <View style={[styles.header, { paddingTop: insets.top }]}>
@@ -401,13 +396,14 @@ export default function HIITTimerFormScreen({ navigation, route }: Props) {
         step={5}
         formatValue={formatTime}
       />
-    </LinearGradient>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: COLORS.backgroundCanvas,
   },
   innerContainer: {
     flex: 1,
@@ -515,7 +511,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   startButtonText: {
-    fontSize: 17,
+    ...TYPOGRAPHY.meta,
+    fontWeight: 'bold',
     fontWeight: '600',
     color: '#FFFFFF',
   },
