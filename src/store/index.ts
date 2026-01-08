@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import dayjs from 'dayjs';
-import type { Cycle, Exercise, WorkoutSession, BodyWeightEntry, AppSettings, WorkoutAssignment, TrainerConversation, ExercisePR, WorkoutProgress, ExerciseProgress, HIITTimer } from '../types';
+import type { Cycle, Exercise, WorkoutSession, BodyWeightEntry, AppSettings, WorkoutAssignment, TrainerConversation, ExercisePR, WorkoutProgress, ExerciseProgress, HIITTimer, HIITTimerSession } from '../types';
 import * as storage from '../storage';
 import { SEED_EXERCISES } from '../constants';
 
@@ -64,6 +64,11 @@ interface WorkoutStore {
   updateHIITTimer: (timerId: string, updates: Partial<HIITTimer>) => Promise<void>;
   deleteHIITTimer: (timerId: string) => Promise<void>;
   getHIITTimerTemplates: () => HIITTimer[];
+  
+  // HIIT Timer Sessions
+  hiitTimerSessions: HIITTimerSession[];
+  addHIITTimerSession: (session: HIITTimerSession) => Promise<void>;
+  getHIITTimerSessionsForDate: (date: string) => HIITTimerSession[];
 }
 
 const DEFAULT_SETTINGS: AppSettings = {
@@ -107,6 +112,7 @@ export const useStore = create<WorkoutStore>((set, get) => ({
   trainerConversations: [],
   exercisePRs: [],
   hiitTimers: [],
+  hiitTimerSessions: [],
   settings: DEFAULT_SETTINGS,
   isLoading: true,
   workoutProgress: {},
@@ -114,7 +120,7 @@ export const useStore = create<WorkoutStore>((set, get) => ({
   
   initialize: async () => {
     try {
-      const [cycles, exercises, sessions, bodyWeightEntries, settings, workoutAssignments, trainerConversations, exercisePRs, workoutProgress, detailedWorkoutProgress, hiitTimers] = await Promise.all([
+      const [cycles, exercises, sessions, bodyWeightEntries, settings, workoutAssignments, trainerConversations, exercisePRs, workoutProgress, detailedWorkoutProgress, hiitTimers, hiitTimerSessions] = await Promise.all([
         storage.loadCycles(),
         storage.loadExercises(),
         storage.loadSessions(),
@@ -126,6 +132,7 @@ export const useStore = create<WorkoutStore>((set, get) => ({
         storage.loadWorkoutProgress(),
         storage.loadDetailedWorkoutProgress(),
         storage.loadHIITTimers(),
+        storage.loadHIITTimerSessions(),
       ]);
       
       // Seed exercises if none exist
@@ -354,6 +361,7 @@ export const useStore = create<WorkoutStore>((set, get) => ({
         workoutProgress,
         detailedWorkoutProgress,
         hiitTimers,
+        hiitTimerSessions,
         isLoading: false,
       });
     } catch (error) {
@@ -726,6 +734,17 @@ export const useStore = create<WorkoutStore>((set, get) => ({
   
   getHIITTimerTemplates: () => {
     return get().hiitTimers.filter(timer => timer.isTemplate);
+  },
+  
+  // HIIT Timer Session actions
+  addHIITTimerSession: async (session) => {
+    const sessions = [...get().hiitTimerSessions, session];
+    set({ hiitTimerSessions: sessions });
+    await storage.saveHIITTimerSessions(sessions);
+  },
+  
+  getHIITTimerSessionsForDate: (date) => {
+    return get().hiitTimerSessions.filter(session => session.date === date);
   },
 }));
 

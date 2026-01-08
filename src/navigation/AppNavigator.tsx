@@ -7,6 +7,7 @@ import { WorkoutsScreen } from '../screens/WorkoutsScreen';
 import { ProfileScreen } from '../screens/ProfileScreen';
 import { CycleDetailScreen } from '../screens/CycleDetailScreen';
 import { WorkoutExecutionScreen } from '../screens/WorkoutExecutionScreen';
+import WorkoutEditScreen from '../screens/WorkoutEditScreen';
 import { ExerciseDetailScreen } from '../screens/ExerciseDetailScreen';
 import { DesignSystemScreen } from '../screens/DesignSystemScreen';
 import HIITTimerListScreen from '../screens/HIITTimerListScreen';
@@ -33,6 +34,7 @@ export type RootStackParamList = {
   DesignSystem: undefined;
   CycleDetail: { cycleId: string };
   WorkoutExecution: { workoutTemplateId: string; date: string };
+  WorkoutEdit: { cycleId: string; workoutTemplateId: string; date: string };
   ExerciseDetail: { exerciseId: string; workoutKey: string };
   HIITTimerList: undefined;
   HIITTimerForm: { mode: 'create' } | { mode: 'edit'; timerId: string };
@@ -54,6 +56,7 @@ function TabNavigator() {
   const navigation = useNavigation();
   const { cycles } = useStore();
   const [activeTab, setActiveTab] = React.useState<'Schedule' | 'Workouts'>('Schedule');
+  const [isViewingToday, setIsViewingToday] = React.useState(true);
   
   // Animated values for tab widths
   const scheduleWidth = React.useRef(new Animated.Value(140)).current;
@@ -128,7 +131,14 @@ function TabNavigator() {
   return (
     <View style={{ flex: 1, backgroundColor: COLORS.backgroundCanvas }}>
       {/* Screen Content */}
-      {activeTab === 'Schedule' ? <TodayScreen onNavigateToWorkouts={() => switchTab('Workouts')} /> : <WorkoutsScreen />}
+      {activeTab === 'Schedule' ? (
+        <TodayScreen 
+          onNavigateToWorkouts={() => switchTab('Workouts')} 
+          onDateChange={(isToday) => setIsViewingToday(isToday)}
+        />
+      ) : (
+        <WorkoutsScreen />
+      )}
       
       {/* Custom Bottom Navigation */}
       <View style={styles.bottomNavContainer}>
@@ -172,7 +182,7 @@ function TabNavigator() {
             </View>
         
         {/* Action Button - Changes based on active tab */}
-        {activeTab === 'Schedule' ? (
+        {activeTab === 'Schedule' && isViewingToday ? (
           <TouchableOpacity 
             style={styles.actionButton}
             activeOpacity={0.7}
@@ -181,7 +191,7 @@ function TabNavigator() {
             <IconStopwatch size={24} color={COLORS.text} />
             <Text style={styles.actionButtonLabel}>Timer</Text>
           </TouchableOpacity>
-        ) : cycles.length > 0 ? (
+        ) : activeTab === 'Workouts' && cycles.length > 0 ? (
           <TouchableOpacity 
             style={styles.actionButton}
             activeOpacity={0.7}
@@ -256,6 +266,7 @@ export default function AppNavigator() {
       <Stack.Screen name="DesignSystem" component={DesignSystemScreen} />
       <Stack.Screen name="CycleDetail" component={CycleDetailScreen} />
       <Stack.Screen name="WorkoutExecution" component={WorkoutExecutionScreen} />
+      <Stack.Screen name="WorkoutEdit" component={WorkoutEditScreen} />
       <Stack.Screen name="ExerciseDetail" component={ExerciseDetailScreen} />
       <Stack.Screen name="HIITTimerList" component={HIITTimerListScreen} />
       <Stack.Screen name="HIITTimerForm" component={HIITTimerFormScreen} />

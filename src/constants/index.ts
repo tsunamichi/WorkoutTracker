@@ -107,6 +107,7 @@ export const COLORS = {
   textPrimary: '#FFFFFF',          // Primary text (white)
   textSecondary: '#3C3C43', // Secondary text
   textMeta: '#817B77',          // Metadata/labels
+  textMetaSoft: '#CBC8C7',      // Soft metadata/dividers
   textDisabled: '#C7C7CC',      // Disabled text
   
   // Borders & dividers

@@ -702,51 +702,63 @@ export function WorkoutExecutionScreen({ route, navigation }: WorkoutExecutionSc
         <ScrollView style={styles.content} contentContainerStyle={styles.scrollContent}>
           {/* Exercises List */}
           <View style={styles.exercisesList}>
-            {workout.exercises
-              .map((exercise, originalIndex) => ({ exercise, originalIndex }))
-              .reduce((acc: any[], { exercise, originalIndex }) => {
+            {(() => {
+              // First, map and sort exercises
+              const sortedExercises = workout.exercises
+                .map((exercise, originalIndex) => ({ exercise, originalIndex }))
+                .reduce((acc: any[], { exercise, originalIndex }) => {
+                  const savedProgress = getExerciseProgress(workoutKey, exercise.id);
+                  const isSkipped = savedProgress?.skipped || false;
+                  
+                  if (isSkipped) {
+                    acc.push({ exercise, originalIndex, group: 'skipped' });
+                  } else {
+                    acc.push({ exercise, originalIndex, group: 'active' });
+                  }
+                  return acc;
+                }, [])
+                .sort((a, b) => {
+                  // Separate active and skipped exercises
+                  if (a.group !== b.group) {
+                    return a.group === 'active' ? -1 : 1;
+                  }
+                  
+                  // For active exercises, sort by completion state
+                  if (a.group === 'active') {
+                    const progressA = getExerciseProgress(workoutKey, a.exercise.id);
+                    const progressB = getExerciseProgress(workoutKey, b.exercise.id);
+                    
+                    const completedSetsA = progressA?.sets.filter(set => set.completed).length || 0;
+                    const completedSetsB = progressB?.sets.filter(set => set.completed).length || 0;
+                    const totalSetsA = a.exercise.targetSets;
+                    const totalSetsB = b.exercise.targetSets;
+                    const isFullyCompletedA = completedSetsA === totalSetsA && totalSetsA > 0;
+                    const isFullyCompletedB = completedSetsB === totalSetsB && totalSetsB > 0;
+                    
+                    // Determine sort order: completed (0), in-progress (1) - completed at top
+                    const orderA = isFullyCompletedA ? 0 : 1;
+                    const orderB = isFullyCompletedB ? 0 : 1;
+                    
+                    // If same order, maintain original order
+                    if (orderA === orderB) return a.originalIndex - b.originalIndex;
+                    
+                    return orderA - orderB;
+                  }
+                  
+                  // For skipped exercises, maintain original order
+                  return a.originalIndex - b.originalIndex;
+                });
+              
+              // Find the first in-progress exercise (first non-completed, non-skipped)
+              const inProgressExerciseId = sortedExercises.find(({ exercise, group }) => {
+                if (group === 'skipped') return false;
                 const savedProgress = getExerciseProgress(workoutKey, exercise.id);
-                const isSkipped = savedProgress?.skipped || false;
-                
-                if (isSkipped) {
-                  acc.push({ exercise, originalIndex, group: 'skipped' });
-                } else {
-                  acc.push({ exercise, originalIndex, group: 'active' });
-                }
-                return acc;
-              }, [])
-              .sort((a, b) => {
-                // Separate active and skipped exercises
-                if (a.group !== b.group) {
-                  return a.group === 'active' ? -1 : 1;
-                }
-                
-                // For active exercises, sort by completion state
-                if (a.group === 'active') {
-                  const progressA = getExerciseProgress(workoutKey, a.exercise.id);
-                  const progressB = getExerciseProgress(workoutKey, b.exercise.id);
-                  
-                  const completedSetsA = progressA?.sets.filter(set => set.completed).length || 0;
-                  const completedSetsB = progressB?.sets.filter(set => set.completed).length || 0;
-                  const totalSetsA = a.exercise.targetSets;
-                  const totalSetsB = b.exercise.targetSets;
-                  const isFullyCompletedA = completedSetsA === totalSetsA && totalSetsA > 0;
-                  const isFullyCompletedB = completedSetsB === totalSetsB && totalSetsB > 0;
-                  
-                  // Determine sort order: completed (0), in-progress (1) - completed at top
-                  const orderA = isFullyCompletedA ? 0 : 1;
-                  const orderB = isFullyCompletedB ? 0 : 1;
-                  
-                  // If same order, maintain original order
-                  if (orderA === orderB) return a.originalIndex - b.originalIndex;
-                  
-                  return orderA - orderB;
-                }
-                
-                // For skipped exercises, maintain original order
-                return a.originalIndex - b.originalIndex;
-              })
-              .map(({ exercise, originalIndex: index, group }, arrayIndex, array) => {
+                const completedSets = savedProgress?.sets.filter(set => set.completed).length || 0;
+                const totalSets = exercise.targetSets;
+                return completedSets < totalSets;
+              })?.exercise.id;
+              
+              return sortedExercises.map(({ exercise, originalIndex: index, group }, arrayIndex, array) => {
                 // Add section header for skipped exercises
                 const prevGroup = arrayIndex > 0 ? array[arrayIndex - 1].group : null;
                 const showSkippedHeader = group === 'skipped' && prevGroup !== 'skipped';
@@ -767,7 +779,7 @@ export function WorkoutExecutionScreen({ route, navigation }: WorkoutExecutionSc
                 const completedSets = savedProgress?.sets.filter(set => set.completed).length || 0;
                 const totalSets = exercise.targetSets;
                 const isFullyCompleted = (completedSets === totalSets && totalSets > 0) || isSkipped;
-                const isInProgress = completedSets > 0 && completedSets < totalSets && !isSkipped;
+                const isCurrentlyInProgress = exercise.id === inProgressExerciseId;
                 
                 // Check if any other exercise is in progress
                 const isAnyExerciseInProgress = workout.exercises.some((ex, idx) => {
@@ -779,7 +791,7 @@ export function WorkoutExecutionScreen({ route, navigation }: WorkoutExecutionSc
                   return completed > 0 && completed < total;
                 });
                 
-                const isDisabled = isAnyExerciseInProgress && !isInProgress && !isFullyCompleted;
+                const isDisabled = isAnyExerciseInProgress && !isCurrentlyInProgress && !isFullyCompleted;
                 
                 const handleExerciseTap = () => {
                   if (isDisabled && !isSkipped) return;
@@ -846,12 +858,12 @@ export function WorkoutExecutionScreen({ route, navigation }: WorkoutExecutionSc
                     
                     {/* Exercise Card */}
                     <View style={styles.exerciseCardWrapper}>
-                      <View style={isSkipped ? CARDS.cardDeepDisabled.outer : isFullyCompleted ? CARDS.cardDeepDimmed.outer : CARDS.cardDeep.outer}>
+                      <View style={isSkipped ? CARDS.cardDeepDisabled.outer : isCurrentlyInProgress ? CARDS.cardDeep.outer : CARDS.cardDeepDimmed.outer}>
                             <TouchableOpacity
                           style={[
                             isSkipped ? { ...CARDS.cardDeepDisabled.inner, ...styles.exerciseCardInnerBase } : 
-                            isFullyCompleted ? { ...CARDS.cardDeepDimmed.inner, ...styles.exerciseCardInnerBase } : 
-                            { ...CARDS.cardDeep.inner, ...styles.exerciseCardInnerBase }
+                            isCurrentlyInProgress ? { ...CARDS.cardDeep.inner, ...styles.exerciseCardInnerBase } : 
+                            { ...CARDS.cardDeepDimmed.inner, ...styles.exerciseCardInnerBase }
                           ]}
                               onPress={handleExerciseTap}
                               activeOpacity={1}
@@ -873,31 +885,18 @@ export function WorkoutExecutionScreen({ route, navigation }: WorkoutExecutionSc
                                   <IconCheck size={24} color="#227132" />
                                 </View>
                               ) : (
-                                <View style={styles.exerciseTriangle} />
+                                <View style={isCurrentlyInProgress ? styles.exerciseTriangle : styles.exerciseTriangleDimmed} />
                               )}
                             </TouchableOpacity>
                       </View>
                     </View>
                   </React.Fragment>
                 );
-              })}
+              });
+            })()}
           </View>
         </ScrollView>
         
-        {/* Add Exercise Button - Fixed to Bottom */}
-        <View style={styles.addExerciseButtonContainer}>
-          <TouchableOpacity
-            style={styles.addExerciseButton}
-            onPress={() => {
-              // TODO: Implement add exercise functionality
-              console.log('Add exercise tapped');
-            }}
-            activeOpacity={1}
-          >
-            <IconAdd size={24} color={COLORS.text} />
-            <Text style={styles.addExerciseButtonText}>Add Exercise</Text>
-          </TouchableOpacity>
-        </View>
       
       <SetTimerSheet
         visible={showTimer}
@@ -922,6 +921,23 @@ export function WorkoutExecutionScreen({ route, navigation }: WorkoutExecutionSc
         >
           <View style={[styles.menuContainer, { paddingTop: insets.top + 48 }]}>
             <View style={styles.menu}>
+              <TouchableOpacity 
+                style={styles.menuItem}
+                onPress={() => {
+                  setShowMenu(false);
+                  navigation.navigate('WorkoutEdit', {
+                    cycleId,
+                    workoutTemplateId,
+                    date,
+                  });
+                }}
+                activeOpacity={1}
+              >
+                <Text style={styles.menuItemText}>Edit</Text>
+              </TouchableOpacity>
+              
+              <View style={styles.menuDivider} />
+              
               <TouchableOpacity 
                 style={styles.menuItem}
                 onPress={handleCompleteWorkout}
@@ -1072,6 +1088,20 @@ const styles = StyleSheet.create({
     borderTopWidth: 4.5,
     borderBottomWidth: 4.5,
     borderLeftColor: '#000000',
+    borderRightColor: 'transparent',
+    borderTopColor: 'transparent',
+    borderBottomColor: 'transparent',
+  },
+  exerciseTriangleDimmed: {
+    width: 0,
+    height: 0,
+    backgroundColor: 'transparent',
+    borderStyle: 'solid',
+    borderLeftWidth: 8,
+    borderRightWidth: 0,
+    borderTopWidth: 4.5,
+    borderBottomWidth: 4.5,
+    borderLeftColor: COLORS.textMeta,
     borderRightColor: 'transparent',
     borderTopColor: 'transparent',
     borderBottomColor: 'transparent',
@@ -1241,24 +1271,6 @@ const styles = StyleSheet.create({
     height: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.1)',
     marginHorizontal: 12,
-  },
-  addExerciseButtonContainer: {
-    position: 'absolute',
-    bottom: 32,
-    left: 24,
-    right: 24,
-    backgroundColor: 'transparent',
-    alignItems: 'center',
-  },
-  addExerciseButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingVertical: 8,
-  },
-  addExerciseButtonText: {
-    ...TYPOGRAPHY.metaBold,
-    color: COLORS.text,
   },
 });
 

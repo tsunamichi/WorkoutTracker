@@ -222,3 +222,13 @@ export interface HIITTimer {
   createdAt: string;
   isTemplate: boolean;
 }
+
+// HIIT Timer Session (completed interval)
+export interface HIITTimerSession {
+  id: string;
+  timerId: string; // Reference to the timer template
+  timerName: string;
+  date: string; // YYYY-MM-DD
+  completedAt: string; // ISO timestamp
+  totalDuration: number; // Total time in seconds
+}

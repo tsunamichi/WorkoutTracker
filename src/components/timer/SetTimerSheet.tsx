@@ -34,7 +34,8 @@ const LIGHT_COLORS = {
   textMeta: '#817B77',
 };
 
-const REST_COLOR = '#FF6B6B'; // Red for rest
+const REST_COLOR_YELLOW = '#FFCC00'; // Yellow for rest
+const REST_COLOR_RED = '#FF6B6B'; // Red for rest (under 5 seconds)
 const MIN_SIZE = 180;
 const SCREEN_WIDTH = Dimensions.get('window').width;
 const CONTAINER_WIDTH = SCREEN_WIDTH - 96; // 48px padding on each side
@@ -58,6 +59,8 @@ export function SetTimerSheet({
   
   const slideAnim = useRef(new Animated.Value(0)).current;
   const sizeAnim = useRef(new Animated.Value(1)).current; // 1 = 100%, 0 = MIN_SIZE
+  const breathingAnim = useRef(new Animated.Value(1)).current; // For breathing animation (1 = 100%, 0.92 = 92%)
+  const restColorAnim = useRef(new Animated.Value(0)).current; // For yellow to red transition (0 = yellow, 1 = red)
   const endTimeRef = useRef<number | null>(null);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const liveActivityIdRef = useRef<string | null>(null);
@@ -150,9 +153,59 @@ export function SetTimerSheet({
       toValue: progress,
       duration: 1000,
       easing: Easing.linear,
-      useNativeDriver: true,
+      useNativeDriver: false, // Changed to false for compatibility with breathing
     }).start();
   }, [timeLeft, restTime, sizeAnim]);
+
+  // Breathing animation for rest phase
+  useEffect(() => {
+    if (!isRunning) {
+      breathingAnim.stopAnimation(() => {
+        breathingAnim.setValue(1);
+      });
+      return;
+    }
+
+    // Start breathing animation - breathe IN (contract, never expand beyond 100%)
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(breathingAnim, {
+          toValue: 0.92, // Contract to 92% (breathe in)
+          duration: 2000,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: false,
+        }),
+        Animated.timing(breathingAnim, {
+          toValue: 1, // Back to normal (100%)
+          duration: 2000,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: false,
+        }),
+      ])
+    ).start();
+
+    return () => {
+      breathingAnim.stopAnimation(() => {
+        breathingAnim.setValue(1);
+      });
+    };
+  }, [isRunning, breathingAnim]);
+
+  // Yellow to red color transition when 5 seconds or less remain
+  useEffect(() => {
+    if (timeLeft <= 5 && timeLeft > 0) {
+      // Transition from yellow (0) to red (1)
+      Animated.timing(restColorAnim, {
+        toValue: 1,
+        duration: 500,
+        easing: Easing.inOut(Easing.ease),
+        useNativeDriver: false,
+      }).start();
+    } else {
+      // Reset to yellow when more than 5 seconds
+      restColorAnim.setValue(0);
+    }
+  }, [timeLeft, restColorAnim]);
 
   // Handle visibility changes
   useEffect(() => {
@@ -172,6 +225,8 @@ export function SetTimerSheet({
       // Reset and animate in
       slideAnim.setValue(0);
       sizeAnim.setValue(1); // Start at 100%
+      breathingAnim.setValue(1);
+      restColorAnim.setValue(0); // Start with yellow
       Animated.spring(slideAnim, {
         toValue: 1,
         useNativeDriver: true,
@@ -183,6 +238,14 @@ export function SetTimerSheet({
       setTimeLeft(restTime);
       setIsRunning(false);
       endTimeRef.current = null;
+      
+      // Stop animations
+      breathingAnim.stopAnimation(() => {
+        breathingAnim.setValue(1);
+      });
+      restColorAnim.stopAnimation(() => {
+        restColorAnim.setValue(0);
+      });
       
       if (liveActivityIdRef.current) {
         endRestTimer();
@@ -196,7 +259,7 @@ export function SetTimerSheet({
         liveActivityIdRef.current = null;
       }
     };
-  }, [visible, restTime, slideAnim, sizeAnim, workoutName, exerciseName, currentSet, totalSets]);
+  }, [visible, restTime, slideAnim, sizeAnim, breathingAnim, restColorAnim, workoutName, exerciseName, currentSet, totalSets]);
 
   // Timer logic
   useEffect(() => {
@@ -235,19 +298,24 @@ export function SetTimerSheet({
           intervalRef.current = null;
         }
         
+        // Stop breathing and keep circle red at completion
+        breathingAnim.stopAnimation(() => {
+          breathingAnim.setValue(1);
+        });
+        restColorAnim.setValue(1);
+        
         playCompletionAlert();
         
         if (liveActivityIdRef.current) {
           markRestTimerCompleted();
         }
         
-        setTimeout(() => {
-          if (liveActivityIdRef.current) {
-            endRestTimer();
-            liveActivityIdRef.current = null;
-          }
-          animateOutAndClose(onComplete);
-        }, 2000);
+        // Dismiss immediately without delay
+        if (liveActivityIdRef.current) {
+          endRestTimer();
+          liveActivityIdRef.current = null;
+        }
+        animateOutAndClose(onComplete);
       }
     };
     
@@ -273,19 +341,25 @@ export function SetTimerSheet({
         if (remaining <= 0) {
           setIsRunning(false);
           endTimeRef.current = null;
+          
+          // Stop breathing and keep circle red at completion
+          breathingAnim.stopAnimation(() => {
+            breathingAnim.setValue(1);
+          });
+          restColorAnim.setValue(1);
+          
           playCompletionAlert();
           
           if (liveActivityIdRef.current) {
             markRestTimerCompleted();
           }
           
-          setTimeout(() => {
-            if (liveActivityIdRef.current) {
-              endRestTimer();
-              liveActivityIdRef.current = null;
-            }
-            animateOutAndClose(onComplete);
-          }, 2000);
+          // Dismiss immediately without delay
+          if (liveActivityIdRef.current) {
+            endRestTimer();
+            liveActivityIdRef.current = null;
+          }
+          animateOutAndClose(onComplete);
         }
       }
     });
@@ -338,11 +412,21 @@ export function SetTimerSheet({
     outputRange: [CONTAINER_WIDTH / MIN_SIZE, 1],
   });
 
+  // Interpolate color from yellow to red
+  const backgroundColor = restColorAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [REST_COLOR_YELLOW, REST_COLOR_RED],
+  });
+
   if (!visible) return null;
 
   return (
-    <View style={styles.timerOverlay} pointerEvents="box-none">
-      <View style={styles.timerBackdrop} pointerEvents="none" />
+    <View style={styles.timerOverlay} pointerEvents="auto">
+      <TouchableOpacity 
+        style={styles.timerBackdrop} 
+        activeOpacity={1}
+        onPress={() => {}} // Block touches but don't close
+      />
       
       <Animated.View 
         style={[
@@ -377,16 +461,28 @@ export function SetTimerSheet({
                 },
               ]}
             >
-              <View style={[styles.circle, { backgroundColor: REST_COLOR }]}>
-                <Animated.View
-                  style={{
+              {/* Circle background with breathing */}
+              <Animated.View 
+                style={[
+                  styles.circle, 
+                  { 
+                    backgroundColor,
+                    transform: [{ scale: breathingAnim }],
+                  }
+                ]} 
+              />
+              
+              {/* Text stays constant size, positioned absolutely on top */}
+              <Animated.View
+                style={[
+                  styles.textContainer,
+                  {
                     transform: [{ scale: textScale }],
-                    alignItems: 'center',
-                  }}
-                >
-                  <Text style={styles.timerText}>{formatTime()}</Text>
-                </Animated.View>
-              </View>
+                  },
+                ]}
+              >
+                <Text style={styles.timerText}>{formatTime()}</Text>
+              </Animated.View>
             </Animated.View>
           </View>
 
@@ -430,7 +526,6 @@ const styles = StyleSheet.create({
   timerOverlay: {
     ...StyleSheet.absoluteFillObject,
     zIndex: 1000,
-    pointerEvents: 'box-none',
     justifyContent: 'flex-end',
   },
   timerBackdrop: {
@@ -473,11 +568,14 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   circle: {
-    width: '100%',
-    height: '100%',
+    ...StyleSheet.absoluteFillObject,
     borderRadius: CONTAINER_WIDTH / 2,
+    borderCurve: 'continuous',
+  },
+  textContainer: {
     alignItems: 'center',
     justifyContent: 'center',
+    zIndex: 1,
   },
   timerText: {
     fontSize: 56,

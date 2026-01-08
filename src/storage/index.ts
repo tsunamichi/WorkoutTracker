@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import type { Cycle, Exercise, WorkoutSession, BodyWeightEntry, AppSettings, WorkoutAssignment, TrainerConversation, ExercisePR, WorkoutProgress, HIITTimer } from '../types';
+import type { Cycle, Exercise, WorkoutSession, BodyWeightEntry, AppSettings, WorkoutAssignment, TrainerConversation, ExercisePR, WorkoutProgress, HIITTimer, HIITTimerSession } from '../types';
 
 const STORAGE_KEYS = {
   CYCLES: '@workout_tracker_cycles',
@@ -13,6 +13,7 @@ const STORAGE_KEYS = {
   WORKOUT_PROGRESS: '@workout_tracker_workout_progress',
   DETAILED_WORKOUT_PROGRESS: '@workout_tracker_detailed_progress',
   HIIT_TIMERS: '@workout_tracker_hiit_timers',
+  HIIT_TIMER_SESSIONS: '@workout_tracker_hiit_timer_sessions',
 };
 
 // Cycles
@@ -236,6 +237,25 @@ export async function saveHIITTimers(timers: HIITTimer[]): Promise<void> {
     await AsyncStorage.setItem(STORAGE_KEYS.HIIT_TIMERS, JSON.stringify(timers));
   } catch (error) {
     console.error('Error saving HIIT timers:', error);
+  }
+}
+
+// HIIT Timer Sessions
+export async function loadHIITTimerSessions(): Promise<HIITTimerSession[]> {
+  try {
+    const data = await AsyncStorage.getItem(STORAGE_KEYS.HIIT_TIMER_SESSIONS);
+    return data ? JSON.parse(data) : [];
+  } catch (error) {
+    console.error('Error loading HIIT timer sessions:', error);
+    return [];
+  }
+}
+
+export async function saveHIITTimerSessions(sessions: HIITTimerSession[]): Promise<void> {
+  try {
+    await AsyncStorage.setItem(STORAGE_KEYS.HIIT_TIMER_SESSIONS, JSON.stringify(sessions));
+  } catch (error) {
+    console.error('Error saving HIIT timer sessions:', error);
   }
 }
 

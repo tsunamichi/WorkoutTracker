@@ -419,22 +419,25 @@ export function WorkoutsScreen() {
           ) : (
             <>
               {/* Active Cycle */}
-              {cycles.filter(c => c.isActive).map((cycle) => {
-                const completion = getCycleCompletion(cycle.id);
-                  return (
-                  <View key={cycle.id} style={styles.activeCycleSection}>
-                      <View style={styles.cycleCardBlackShadow}>
-                        <View style={styles.cycleCardWhiteShadow}>
-                          <View style={styles.cycleCard}>
-                            <TouchableOpacity
-                            style={styles.cycleCardContent}
-                            onPress={() => navigation.navigate('CycleDetail' as never, { cycleId: cycle.id } as never)}
-                            activeOpacity={0.8}
-                            >
-                                  <Text style={styles.cycleName}>Cycle {cycle.cycleNumber}</Text>
-                                  <Text style={styles.cycleDate}>
-                              {dayjs(cycle.startDate).format('MM.DD.YY')} — {cycle.isActive ? 'in progress' : dayjs(cycle.endDate).format('MM.DD.YY')}
-                                  </Text>
+              {cycles.filter(c => c.isActive).length > 0 && (
+                <>
+                  <Text style={styles.inProgressTitle}>In progress</Text>
+                  {cycles.filter(c => c.isActive).map((cycle) => {
+                    const completion = getCycleCompletion(cycle.id);
+                    return (
+                      <View key={cycle.id} style={styles.activeCycleSection}>
+                        <View style={styles.cycleCardBlackShadow}>
+                          <View style={styles.cycleCardWhiteShadow}>
+                            <View style={styles.cycleCard}>
+                              <TouchableOpacity
+                                style={styles.cycleCardContent}
+                                onPress={() => navigation.navigate('CycleDetail' as never, { cycleId: cycle.id } as never)}
+                                activeOpacity={0.8}
+                              >
+                                <Text style={styles.cycleName}>Cycle {cycle.cycleNumber}</Text>
+                                <Text style={styles.cycleDate}>
+                                  {dayjs(cycle.startDate).format('MM.DD.YY')} — {dayjs(cycle.endDate).format('MM.DD.YY')}
+                                </Text>
                             <View style={styles.cycleFooter}>
                               <View style={styles.progressIndicator}>
                                 <Svg height="16" width="16" viewBox="0 0 16 16" style={styles.progressCircle}>
@@ -459,13 +462,15 @@ export function WorkoutsScreen() {
                                 <Text style={styles.seeDetailsArrow}>▶</Text>
                               </View>
                             </View>
-                            </TouchableOpacity>
+                              </TouchableOpacity>
+                            </View>
                           </View>
                         </View>
                       </View>
-                    </View>
-                  );
-                })}
+                    );
+                  })}
+                </>
+              )}
               
               {/* Past Cycles */}
               {cycles.filter(c => !c.isActive).length > 0 && (
@@ -690,6 +695,11 @@ const styles = StyleSheet.create({
   },
   
   // Cycles List
+  inProgressTitle: {
+    ...TYPOGRAPHY.body,
+    color: COLORS.textMeta,
+    marginBottom: SPACING.lg,
+  },
   activeCycleSection: {
     marginBottom: SPACING.xl,
   },

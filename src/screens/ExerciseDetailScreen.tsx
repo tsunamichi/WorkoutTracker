@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, LayoutAnimation, Platform, UIManager, Switch, Animated, Modal, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, LayoutAnimation, Platform, UIManager, Animated, Modal, Alert } from 'react-native';
 
 // Enable LayoutAnimation on Android
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -13,6 +13,7 @@ import { useStore } from '../store';
 import { COLORS, SPACING, TYPOGRAPHY, GRADIENTS, CARDS } from '../constants';
 import { IconArrowLeft, IconPlay, IconCheck, IconMenu } from '../components/icons';
 import { SetTimerSheet } from '../components/timer/SetTimerSheet';
+import { Toggle } from '../components/Toggle';
 
 interface ExerciseDetailScreenProps {
   route?: {
@@ -594,6 +595,17 @@ export function ExerciseDetailScreen({ route, navigation }: ExerciseDetailScreen
   
   const exerciseHistory = getExerciseHistory();
   
+  // Helper function to get ordinal suffix
+  const getOrdinalSuffix = (day: number) => {
+    if (day > 3 && day < 21) return 'th';
+    switch (day % 10) {
+      case 1: return 'st';
+      case 2: return 'nd';
+      case 3: return 'rd';
+      default: return 'th';
+    }
+  };
+  
   return (
     <View style={styles.gradient}>
       <View style={styles.container}>
@@ -624,20 +636,10 @@ export function ExerciseDetailScreen({ route, navigation }: ExerciseDetailScreen
               <Text style={styles.headerTitle}>{exerciseName}</Text>
             </View>
             
-            {/* Barbell Mode Switch */}
-            <TouchableOpacity 
-              style={styles.barbellSwitchContainer}
-              onPress={() => {
-                const newValue = !useBarbellMode;
-                setUseBarbellMode(newValue);
-                if (exercise?.exerciseId) {
-                  setBarbellMode(exercise.exerciseId, newValue);
-                }
-              }}
-              activeOpacity={0.7}
-            >
-              <Text style={styles.barbellSwitchLabel}>Barbell</Text>
-              <Switch
+            {/* Barbell Mode Toggle */}
+            <View style={styles.barbellToggleContainer}>
+              <Toggle
+                label="Barbell"
                 value={useBarbellMode}
                 onValueChange={(value) => {
                   setUseBarbellMode(value);
@@ -645,11 +647,8 @@ export function ExerciseDetailScreen({ route, navigation }: ExerciseDetailScreen
                     setBarbellMode(exercise.exerciseId, value);
                   }
                 }}
-                trackColor={{ false: '#D1D1D6', true: '#34C759' }}
-                thumbColor="#FFFFFF"
-                ios_backgroundColor="#D1D1D6"
               />
-            </TouchableOpacity>
+            </View>
           </View>
         </View>
         
@@ -1037,31 +1036,41 @@ export function ExerciseDetailScreen({ route, navigation }: ExerciseDetailScreen
                   </View>
                 ) : (
                   exerciseHistory.map((workout, workoutIndex) => {
-                    // Group sets by weight and reps
-                    const groupedSets = workout.sets.reduce((acc, set) => {
-                      const key = `${set.weight}-${set.reps}`;
-                      if (!acc[key]) {
-                        acc[key] = { weight: set.weight, reps: set.reps, count: 0 };
-                      }
-                      acc[key].count++;
-                      return acc;
-                    }, {} as Record<string, { weight: number; reps: number; count: number }>);
-                    
-                    const setGroups = Object.values(groupedSets);
-                    const setsText = setGroups.map(group => `${group.count}×${group.reps} @${group.weight}`).join(', ');
-                    
                     return (
                       <View key={workout.sessionId}>
-                        <View style={styles.historyListItem}>
-                          <Text style={styles.historySetText} numberOfLines={1}>
-                            {setsText}
-                          </Text>
-                          <Text style={styles.historyItemDate}>
-                            {dayjs(workout.date).format('MMM D')}
-                          </Text>
+                        <View style={styles.historyWorkoutGroup}>
+                          {/* Date column on the left */}
+                          <View style={styles.historyDateColumn}>
+                            <Text style={styles.historyDateText}>
+                              {dayjs(workout.date).format('MMMM')}
+                            </Text>
+                            <Text style={styles.historyDateText}>
+                              {dayjs(workout.date).date()}{getOrdinalSuffix(dayjs(workout.date).date())}
+                            </Text>
+                          </View>
+                          
+                          {/* Sets column on the right */}
+                          <View style={styles.historySetsColumn}>
+                            {workout.sets.map((set, setIndex) => (
+                              <View key={`${workout.sessionId}-${setIndex}`} style={styles.historySetRow}>
+                                <View style={styles.historyValueColumn}>
+                                  <Text style={styles.setCollapsedText}>{set.weight}</Text>
+                                  <Text style={styles.setCollapsedUnit}>lbs</Text>
+                                </View>
+                                <View style={styles.historyValueColumn}>
+                                  <Text style={styles.setCollapsedText}>{set.reps}</Text>
+                                  <Text style={styles.setCollapsedUnit}>reps</Text>
+                                </View>
+                              </View>
+                            ))}
+                          </View>
                         </View>
+                        
                         {workoutIndex < exerciseHistory.length - 1 && (
-                          <View style={styles.historyDivider} />
+                          <View style={styles.historyDividerContainer}>
+                            <View style={styles.historyDividerTop} />
+                            <View style={styles.historyDividerBottom} />
+                          </View>
                         )}
                       </View>
                     );
@@ -1400,18 +1409,10 @@ const styles = StyleSheet.create({
     borderLeftColor: LIGHT_COLORS.textMeta,
   },
   
-  // Barbell Switch
-  barbellSwitchContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: SPACING.xxl,
-    marginTop: -36,
+  // Barbell Toggle
+  barbellToggleContainer: {
+    marginTop: SPACING.lg,
     paddingBottom: 40,
-  },
-  barbellSwitchLabel: {
-    ...TYPOGRAPHY.h3,
-    color: LIGHT_COLORS.secondary,
   },
   
   // History Bottom Sheet
@@ -1467,26 +1468,48 @@ const styles = StyleSheet.create({
     color: LIGHT_COLORS.textMeta,
     textAlign: 'center',
   },
-  historyListItem: {
+  historyWorkoutGroup: {
     flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
     paddingVertical: SPACING.lg,
-    gap: SPACING.lg,
+    gap: SPACING.xl,
   },
-  historySetText: {
-    ...TYPOGRAPHY.body,
-    color: LIGHT_COLORS.secondary,
-    flex: 1,
-  },
-  historyItemDate: {
-    ...TYPOGRAPHY.meta,
-    color: LIGHT_COLORS.textMeta,
+  historyDateColumn: {
+    width: 80,
     flexShrink: 0,
   },
-  historyDivider: {
+  historyDateText: {
+    ...TYPOGRAPHY.body,
+    color: LIGHT_COLORS.textMeta,
+  },
+  historySetsColumn: {
+    flex: 1,
+    gap: SPACING.md,
+    alignItems: 'flex-end', // Right-align the entire column
+  },
+  historySetRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: 40, // 40px gap between columns
+    justifyContent: 'flex-end', // Right-align the row
+  },
+  historyValueColumn: {
+    width: 64, // 64px width per column
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    justifyContent: 'flex-end', // Right-align text within column
+    gap: 4,
+  },
+  historyDividerContainer: {
+    marginVertical: SPACING.md,
+  },
+  historyDividerTop: {
     height: 1,
-    backgroundColor: COLORS.border,
+    backgroundColor: '#CBC8C7', // metaSoft color
+  },
+  historyDividerBottom: {
+    height: 1,
+    backgroundColor: '#FFFFFF',
+    marginTop: 1, // 1px gap between lines
   },
   
   // Overflow Menu
@@ -1526,18 +1549,6 @@ const styles = StyleSheet.create({
     height: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.1)',
     marginHorizontal: 12,
-  },
-  
-  // Barbell Switch (now in header)
-  barbellSwitchContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    marginTop: 12,
-  },
-  barbellSwitchLabel: {
-    ...TYPOGRAPHY.body,
-    color: LIGHT_COLORS.secondary,
   },
   
   // Mark as Done Button

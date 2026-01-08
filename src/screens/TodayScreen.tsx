@@ -33,12 +33,13 @@ const LIGHT_COLORS = {
 
 interface TodayScreenProps {
   onNavigateToWorkouts?: () => void;
+  onDateChange?: (isToday: boolean) => void;
 }
 
-export function TodayScreen({ onNavigateToWorkouts }: TodayScreenProps) {
+export function TodayScreen({ onNavigateToWorkouts, onDateChange }: TodayScreenProps) {
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
-  const { cycles, workoutAssignments, getWorkoutCompletionPercentage, getExerciseProgress, swapWorkoutAssignments } = useStore();
+  const { cycles, workoutAssignments, getWorkoutCompletionPercentage, getExerciseProgress, swapWorkoutAssignments, getHIITTimerSessionsForDate } = useStore();
   const today = dayjs();
   
   // State for selected date (defaults to today)
@@ -68,6 +69,14 @@ export function TodayScreen({ onNavigateToWorkouts }: TodayScreenProps) {
       setSelectedDate('');
     }
   }, [activeCycle]);
+  
+  // Notify parent when viewing date changes
+  useEffect(() => {
+    if (onDateChange) {
+      const isToday = selectedDate === today.format('YYYY-MM-DD');
+      onDateChange(isToday);
+    }
+  }, [selectedDate, onDateChange]);
   
   console.log('📅 Today Screen Debug:');
   console.log('- Today date:', today.format('YYYY-MM-DD'));
@@ -387,7 +396,7 @@ export function TodayScreen({ onNavigateToWorkouts }: TodayScreenProps) {
                               styles.dayButtonWithShadow,
                               {
                                 backgroundColor: isSelected 
-                                  ? (isCompleted ? '#227132' : '#000000')
+                                  ? '#000000'
                                   : '#E3E3DE'
                               }
                             ]}
@@ -473,7 +482,7 @@ export function TodayScreen({ onNavigateToWorkouts }: TodayScreenProps) {
                               <Svg height="16" width="16" viewBox="0 0 16 16" style={styles.progressCircle}>
                                 <Circle cx="8" cy="8" r="8" fill={LIGHT_COLORS.border} />
                                 {progress >= 0.999 ? (
-                                  <Circle cx="8" cy="8" r="8" fill={LIGHT_COLORS.text} />
+                                  <Circle cx="8" cy="8" r="8" fill="#227132" />
                                 ) : progress > 0 ? (
                                   <Path
                                     d={`M 8 8 L 8 0 A 8 8 0 ${progress > 0.5 ? 1 : 0} 1 ${
@@ -588,7 +597,7 @@ export function TodayScreen({ onNavigateToWorkouts }: TodayScreenProps) {
                               <Svg height="16" width="16" viewBox="0 0 16 16" style={styles.progressCircle}>
                                 <Circle cx="8" cy="8" r="8" fill={LIGHT_COLORS.border} />
                                 {progress >= 0.999 ? (
-                                  <Circle cx="8" cy="8" r="8" fill={LIGHT_COLORS.text} />
+                                  <Circle cx="8" cy="8" r="8" fill="#227132" />
                                 ) : progress > 0 ? (
                                   <Path
                                     d={`M 8 8 L 8 0 A 8 8 0 ${progress > 0.5 ? 1 : 0} 1 ${
@@ -719,6 +728,30 @@ export function TodayScreen({ onNavigateToWorkouts }: TodayScreenProps) {
                     </View>
                     <Text style={styles.swapButtonText}>Swap</Text>
                   </TouchableOpacity>
+                );
+              })()}
+              
+              {/* Completed Intervals Section */}
+              {!isTransitioning && (() => {
+                const completedIntervals = getHIITTimerSessionsForDate(selectedDate);
+                if (completedIntervals.length === 0) return null;
+                
+                return (
+                  <View style={styles.completedIntervalsSection}>
+                    <Text style={styles.completedIntervalsTitle}>Completed intervals</Text>
+                    {completedIntervals.map((session) => {
+                      const minutes = Math.floor(session.totalDuration / 60);
+                      const seconds = session.totalDuration % 60;
+                      const timeDisplay = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+                      
+                      return (
+                        <View key={session.id} style={styles.intervalItem}>
+                          <Text style={styles.intervalName}>{session.timerName}</Text>
+                          <Text style={styles.intervalTime}>{timeDisplay}</Text>
+                        </View>
+                      );
+                    })}
+                  </View>
                 );
               })()}
               
@@ -1191,6 +1224,31 @@ const styles = StyleSheet.create({
     height: 16,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  
+  // Completed Intervals
+  completedIntervalsSection: {
+    marginTop: 80,
+    marginLeft: 0,
+  },
+  completedIntervalsTitle: {
+    ...TYPOGRAPHY.body,
+    color: COLORS.textMeta,
+    marginBottom: SPACING.md,
+  },
+  intervalItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: SPACING.sm,
+  },
+  intervalName: {
+    ...TYPOGRAPHY.body,
+    color: COLORS.text,
+  },
+  intervalTime: {
+    ...TYPOGRAPHY.body,
+    color: COLORS.textMeta,
   },
   
   // Swap Bottom Sheet

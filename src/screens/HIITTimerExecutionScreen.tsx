@@ -13,6 +13,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Audio } from 'expo-av';
 import Svg, { Circle, Path } from 'react-native-svg';
+import dayjs from 'dayjs';
 import { useStore } from '../store';
 import { COLORS, SPACING, TYPOGRAPHY, GRADIENTS, BUTTONS, BORDER_RADIUS } from '../constants';
 import { IconArrowLeft, IconPlay, IconPause, IconSpeaker, IconSkip, IconRestart, IconMenu } from '../components/icons';
@@ -58,7 +59,7 @@ interface Particle {
 export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
   const insets = useSafeAreaInsets();
   const { timerId } = route.params;
-  const { hiitTimers, deleteHIITTimer } = useStore();
+  const { hiitTimers, deleteHIITTimer, addHIITTimerSession } = useStore();
   
   const timer = hiitTimers.find(t => t.id === timerId);
   
@@ -657,6 +658,34 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
           clearInterval(intervalRef.current);
           intervalRef.current = null;
         }
+        
+        // Save the completed session
+        // Calculate total time based on timer template (excluding countdown)
+        const totalWorkTime = timer.work * timer.sets * timer.rounds;
+        const totalWorkRestTime = timer.workRest * (timer.sets - 1) * timer.rounds; // Rest BETWEEN sets only
+        const totalRoundRestTime = timer.roundRest * (timer.rounds - 1); // Rest BETWEEN rounds only
+        const totalDuration = totalWorkTime + totalWorkRestTime + totalRoundRestTime;
+        const today = dayjs().format('YYYY-MM-DD');
+        
+        console.log('⏰ Timer completed:', {
+          totalDuration: totalDuration + ' seconds',
+          work: `${timer.work}s × ${timer.sets} sets × ${timer.rounds} rounds = ${totalWorkTime}s`,
+          workRest: `${timer.workRest}s × ${timer.sets - 1} × ${timer.rounds} = ${totalWorkRestTime}s`,
+          roundRest: `${timer.roundRest}s × ${timer.rounds - 1} = ${totalRoundRestTime}s`,
+        });
+        
+        const session = {
+          id: `hiit-session-${Date.now()}`,
+          timerId: timer.id,
+          timerName: timer.name,
+          date: today,
+          completedAt: new Date().toISOString(),
+          totalDuration,
+        };
+        
+        addHIITTimerSession(session);
+        console.log('💾 Saved HIIT timer session:', session);
+        
         setCurrentPhase('complete');
         setIsRunning(false);
         isTransitioningRef.current = false;
