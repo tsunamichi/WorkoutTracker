@@ -216,10 +216,10 @@ export const TYPOGRAPHY = {
 };
 
 export const BORDER_RADIUS = {
-  sm: 8,
-  md: 12,
-  lg: 16,
-  xl: 20,
+  sm: 12,   // Squircle-friendly (increased from 8)
+  md: 16,   // Squircle-friendly (increased from 12)
+  lg: 20,   // Squircle-friendly (increased from 16)
+  xl: 24,   // Squircle-friendly (increased from 20)
   round: 999,
 };
 
@@ -250,7 +250,7 @@ export const SHADOW = {
 export const CARDS = {
   cardFlat: {
     backgroundColor: '#E3E3DE',
-    borderRadius: 12,
+    borderRadius: 16,  // Squircle-friendly
     borderCurve: 'continuous' as const,
     borderWidth: 1,
     borderColor: '#AEAEAB',
@@ -275,7 +275,7 @@ export const CARDS = {
     // Outer card container
     outer: {
       backgroundColor: '#E3E3DE',
-      borderRadius: 12,
+      borderRadius: 16,  // Squircle-friendly
       borderCurve: 'continuous' as const,
       borderWidth: 1,
       borderColor: '#AEAEAB',
@@ -284,7 +284,7 @@ export const CARDS = {
     // Inner card with borders for depth
     inner: {
       backgroundColor: '#E2E3DF',
-      borderRadius: 12,
+      borderRadius: 16,  // Squircle-friendly
       borderCurve: 'continuous' as const,
       borderTopWidth: 2,
       borderLeftWidth: 2,
@@ -314,7 +314,7 @@ export const CARDS = {
     },
     outer: {
       backgroundColor: '#E3E3DE',
-      borderRadius: 12,
+      borderRadius: 16,  // Squircle-friendly
       borderCurve: 'continuous' as const,
       borderWidth: 1,
       borderColor: '#AEAEAB',
@@ -323,7 +323,7 @@ export const CARDS = {
     // Inner card WITHOUT borders (dimmed state)
     inner: {
       backgroundColor: '#E2E3DF',
-      borderRadius: 12,
+      borderRadius: 16,  // Squircle-friendly
       borderCurve: 'continuous' as const,
       borderTopWidth: 2,
       borderLeftWidth: 2,
@@ -354,7 +354,7 @@ export const CARDS = {
     // Outer card with disabled border color
     outer: {
       backgroundColor: '#E3E3DE',
-      borderRadius: 12,
+      borderRadius: 16,  // Squircle-friendly
       borderCurve: 'continuous' as const,
       borderWidth: 1,
       borderColor: '#D2D2D2', // disabledBorder color
@@ -363,7 +363,7 @@ export const CARDS = {
     // Inner card WITHOUT borders (disabled state)
     inner: {
       backgroundColor: '#E2E3DF',
-      borderRadius: 12,
+      borderRadius: 16,  // Squircle-friendly
       borderCurve: 'continuous' as const,
       borderTopWidth: 2,
       borderLeftWidth: 2,
@@ -382,7 +382,8 @@ export const BUTTONS = {
   primaryButtonNoLabel: {
     width: 80,
     height: 80,
-    borderRadius: 12,
+    borderRadius: 20,  // Squircle-friendly (25% of 80 for true squircle proportion)
+    borderCurve: 'continuous' as const,
     backgroundColor: '#1B1B1B',
     alignItems: 'center' as const,
     justifyContent: 'center' as const,

@@ -440,7 +440,7 @@ export function TodayScreen({ onNavigateToWorkouts }: TodayScreenProps) {
                     <View style={styles.workoutCard}>
                       <View style={styles.workoutCardInner}>
                     {/* Workout Name */}
-                    <Text style={styles.workoutName}>{previousWorkoutData.workout.name}</Text>
+                      <Text style={styles.workoutName}>{previousWorkoutData.workout.name}</Text>
                     
                     {/* Exercises Count */}
                     <Text style={styles.workoutExercises}>
@@ -555,7 +555,7 @@ export function TodayScreen({ onNavigateToWorkouts }: TodayScreenProps) {
                         activeOpacity={1}
                       >
                     {/* Workout Name */}
-                    <Text style={styles.workoutName}>{selectedDay.workout.name}</Text>
+                      <Text style={styles.workoutName}>{selectedDay.workout.name}</Text>
                     
                     {/* Exercises Count */}
                     <Text style={styles.workoutExercises}>
@@ -723,7 +723,7 @@ export function TodayScreen({ onNavigateToWorkouts }: TodayScreenProps) {
               })()}
               
               </View>
-            </View>
+              </View>
             )}
         </SafeAreaView>
       </View>

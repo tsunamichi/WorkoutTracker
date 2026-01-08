@@ -693,7 +693,7 @@ export function ExerciseDetailScreen({ route, navigation }: ExerciseDetailScreen
                         <View style={styles.setCardBlackShadow}>
                           <View style={styles.setCardWhiteShadow}>
                             <View style={styles.setCard}>
-                              <View style={styles.setCardInner}>
+                          <View style={styles.setCardInner}>
                       {/* Expanded View */}
                       {isExpanded && (
                         <View style={styles.setCardExpanded}>
@@ -858,7 +858,7 @@ export function ExerciseDetailScreen({ route, navigation }: ExerciseDetailScreen
                       }}
                       disabled={!setsData.every(set => set.completed)}
                     >
-                      <View style={[
+                          <View style={[
                         isExpanded ? styles.setCardBlackShadow : styles.noShadow
                       ]}>
                         <View style={[

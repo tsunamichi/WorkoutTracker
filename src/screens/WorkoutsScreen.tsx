@@ -395,22 +395,22 @@ export function WorkoutsScreen() {
                 
                 {TEMPLATES.filter(t => t.id !== 'custom').map((template) => (
                   <View key={template.id} style={styles.templateCardBlackShadow}>
-                    <View style={styles.templateCardWhiteShadow}>
-                      <TouchableOpacity
-                        style={styles.templateCard}
-                        onPress={() => {
-                          setPrefs({ daysPerWeek: template.idealDays[0] || 3, sessionMinutes: 60 });
-                          startDraftFromTemplate(template.id);
-                          navigation.navigate('TemplateEditor', { templateId: template.id });
-                        }}
-                        activeOpacity={0.8}
-                      >
+                      <View style={styles.templateCardWhiteShadow}>
+                        <TouchableOpacity
+                          style={styles.templateCard}
+                          onPress={() => {
+                            setPrefs({ daysPerWeek: template.idealDays[0] || 3, sessionMinutes: 60 });
+                            startDraftFromTemplate(template.id);
+                            navigation.navigate('TemplateEditor', { templateId: template.id });
+                          }}
+                          activeOpacity={0.8}
+                        >
                         <View style={styles.templateCardContent}>
-                          <Text style={styles.templateName}>{template.name}</Text>
-                          <Text style={styles.templateDescription}>{template.description}</Text>
-                        </View>
+                            <Text style={styles.templateName}>{template.name}</Text>
+                            <Text style={styles.templateDescription}>{template.description}</Text>
+                          </View>
                         <View style={styles.triangle} />
-                      </TouchableOpacity>
+                        </TouchableOpacity>
                     </View>
                   </View>
                 ))}
@@ -421,20 +421,20 @@ export function WorkoutsScreen() {
               {/* Active Cycle */}
               {cycles.filter(c => c.isActive).map((cycle) => {
                 const completion = getCycleCompletion(cycle.id);
-                return (
+                  return (
                   <View key={cycle.id} style={styles.activeCycleSection}>
-                    <View style={styles.cycleCardBlackShadow}>
-                      <View style={styles.cycleCardWhiteShadow}>
-                        <View style={styles.cycleCard}>
-                          <TouchableOpacity
+                      <View style={styles.cycleCardBlackShadow}>
+                        <View style={styles.cycleCardWhiteShadow}>
+                          <View style={styles.cycleCard}>
+                            <TouchableOpacity
                             style={styles.cycleCardContent}
                             onPress={() => navigation.navigate('CycleDetail' as never, { cycleId: cycle.id } as never)}
                             activeOpacity={0.8}
-                          >
-                            <Text style={styles.cycleName}>Cycle {cycle.cycleNumber}</Text>
-                            <Text style={styles.cycleDate}>
+                            >
+                                  <Text style={styles.cycleName}>Cycle {cycle.cycleNumber}</Text>
+                                  <Text style={styles.cycleDate}>
                               {dayjs(cycle.startDate).format('MM.DD.YY')} — {cycle.isActive ? 'in progress' : dayjs(cycle.endDate).format('MM.DD.YY')}
-                            </Text>
+                                  </Text>
                             <View style={styles.cycleFooter}>
                               <View style={styles.progressIndicator}>
                                 <Svg height="16" width="16" viewBox="0 0 16 16" style={styles.progressCircle}>
@@ -453,19 +453,19 @@ export function WorkoutsScreen() {
                                   ) : null}
                                 </Svg>
                                 <Text style={styles.progressText}>{completion}%</Text>
-                              </View>
+                                </View>
                               <View style={styles.seeDetailsButton}>
                                 <Text style={styles.seeDetailsText}>See details</Text>
                                 <Text style={styles.seeDetailsArrow}>▶</Text>
                               </View>
                             </View>
-                          </TouchableOpacity>
+                            </TouchableOpacity>
+                          </View>
                         </View>
                       </View>
                     </View>
-                  </View>
-                );
-              })}
+                  );
+                })}
               
               {/* Past Cycles */}
               {cycles.filter(c => !c.isActive).length > 0 && (
@@ -485,7 +485,7 @@ export function WorkoutsScreen() {
                           </TouchableOpacity>
                         </View>
                       </View>
-                    </View>
+            </View>
                   ))}
                 </>
               )}

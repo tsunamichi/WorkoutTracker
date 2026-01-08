@@ -36,7 +36,8 @@ const LIGHT_COLORS = {
 const PHASE_COLORS = {
   countdown: '#FDB022', // Yellow
   work: '#5E9EFF', // Blue
-  rest: '#FF6B6B', // Red
+  restYellow: '#FDB022', // Yellow for rest
+  restRed: '#FF6B6B', // Red for last 5 seconds of rest
   complete: '#227132', // Green
 };
 
@@ -96,13 +97,19 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
   const currentRoundRef = useRef(currentRound);
   
   // Animated values
-  const sizeAnim = useRef(new Animated.Value(1)).current; // 1 = 100%, 0 = MIN_SIZE
+  const sizeAnim = useRef(new Animated.Value(1)).current; // 1 = 100%, 0 = MIN_SIZE (JS driver for width/height)
+  const textSizeAnim = useRef(new Animated.Value(1)).current; // Separate value for text scale (native driver)
   const colorAnim = useRef(new Animated.Value(0)).current; // For color transitions
   const borderRadiusAnim = useRef(new Animated.Value(CONTAINER_WIDTH / 2)).current; // Circle to rounded rect
   const sideButtonsAnim = useRef(new Animated.Value(0)).current;
+  const breathingAnim = useRef(new Animated.Value(1)).current; // For breathing main circle during rest
+  const textOpacityAnim = useRef(new Animated.Value(1)).current; // For countdown number fade transitions
+  const textShrinkAnim = useRef(new Animated.Value(1)).current; // For countdown number shrink (1 to 0.8 = 20% shrink)
+  const restColorAnim = useRef(new Animated.Value(0)).current; // For yellow to red transition during rest (0 = yellow, 1 = red)
 
-  // Track previous phase for color interpolation
+  // Track previous phase and seconds for animations
   const prevPhaseRef = useRef<TimerPhase>('countdown');
+  const prevSecondsRef = useRef<number>(secondsRemaining);
 
   // Update refs whenever state changes
   useEffect(() => {
@@ -127,33 +134,176 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
     }
   };
 
-  // Animate size based on time remaining
+  // Animate size based on time remaining (circle shrinks as time consumes)
   useEffect(() => {
     // Skip animation during transitions to prevent crashes
     if (isTransitioningRef.current) return;
     
+    // Stop any running animations first to prevent conflicts
+    sizeAnim.stopAnimation(() => {
+      textSizeAnim.stopAnimation(() => {
     if (currentPhase === 'complete') {
       // Don't shrink on complete
+          Animated.parallel([
       Animated.timing(sizeAnim, {
         toValue: 0.6, // Stay at medium size
-        duration: 600,
-        easing: Easing.inOut(Easing.ease),
-        useNativeDriver: true, // Use native driver for better performance
-      }).start();
+              duration: 300,
+              easing: Easing.bezier(0.4, 0.0, 0.2, 1),
+              useNativeDriver: false, // JS driver for width/height
+            }),
+            Animated.timing(textSizeAnim, {
+              toValue: 0.6,
+              duration: 300,
+              easing: Easing.bezier(0.4, 0.0, 0.2, 1),
+              useNativeDriver: true, // Native driver for transform
+            }),
+          ]).start();
+          return;
+        }
+
+        // Rest phases: Start shrinking at 1 second for smooth transition
+        if (currentPhase === 'workRest' || currentPhase === 'roundRest') {
+          if (secondsRemaining === 1) {
+            // Shrink with anticipation - accelerate fast, decelerate very slowly, rest, then expand
+            console.log('⏱️ Rest phase - 1 second left, anticipation bounce sequence');
+            Animated.parallel([
+              Animated.timing(sizeAnim, {
+                toValue: 0.5, // Shrink to 50%
+                duration: 350, // Shrink duration (leaving 80ms rest + 180ms expand)
+                easing: Easing.bezier(0.1, 0.8, 0.2, 1), // Start fast, decelerate very slowly (custom curve)
+                useNativeDriver: false,
+              }),
+              Animated.timing(textSizeAnim, {
+                toValue: 0.5,
+                duration: 350,
+                easing: Easing.bezier(0.1, 0.8, 0.2, 1), // Start fast, decelerate very slowly
+                useNativeDriver: true,
+              }),
+            ]).start();
+          } else {
+            // Stay at full size
+            Animated.parallel([
+              Animated.timing(sizeAnim, {
+                toValue: 1, // Stay at full size
+                duration: 100,
+                useNativeDriver: false,
+              }),
+              Animated.timing(textSizeAnim, {
+                toValue: 1,
+                duration: 100,
+                useNativeDriver: true,
+              }),
+            ]).start();
+          }
       return;
     }
 
     const totalSeconds = getTotalSeconds();
     const progress = totalSeconds > 0 ? secondsRemaining / totalSeconds : 0;
     
-    // Animate size smoothly based on progress
+        // Animate both size values in parallel (countdown and work phases)
+        Animated.parallel([
     Animated.timing(sizeAnim, {
       toValue: progress,
       duration: 1000,
       easing: Easing.linear,
-      useNativeDriver: true, // Use native driver for better performance
+            useNativeDriver: false, // JS driver for width/height
+          }),
+          Animated.timing(textSizeAnim, {
+            toValue: progress,
+            duration: 1000,
+            easing: Easing.linear,
+            useNativeDriver: true, // Native driver for transform
+          }),
+        ]).start();
+      });
+    });
+  }, [secondsRemaining, currentPhase, sizeAnim, textSizeAnim]);
+
+  // Countdown number fade and shrink animation (each number fades out and shrinks 20%)
+  useEffect(() => {
+    if (currentPhase === 'countdown' && secondsRemaining !== prevSecondsRef.current && !showGo) {
+      // Fade out and shrink, then fade back in at original size (but not for "Go!")
+      Animated.parallel([
+        Animated.timing(textOpacityAnim, {
+          toValue: 0,
+          duration: 300,
+          easing: Easing.out(Easing.ease),
+          useNativeDriver: true,
+        }),
+        Animated.timing(textShrinkAnim, {
+          toValue: 0.8, // Shrink to 80% (20% reduction)
+          duration: 300,
+          easing: Easing.out(Easing.ease),
+          useNativeDriver: true,
+        }),
+      ]).start(() => {
+        // Reset to original size and fade in
+        textShrinkAnim.setValue(1); // Reset to original size
+        Animated.timing(textOpacityAnim, {
+          toValue: 1,
+          duration: 150,
+          easing: Easing.in(Easing.ease),
+          useNativeDriver: true,
     }).start();
-  }, [secondsRemaining, currentPhase, sizeAnim]);
+      });
+    }
+    prevSecondsRef.current = secondsRemaining;
+  }, [secondsRemaining, currentPhase, showGo, textOpacityAnim, textShrinkAnim]);
+
+  // Breathing animation on main circle during rest (when timer is running)
+  useEffect(() => {
+    if (!isRunning && (currentPhase === 'workRest' || currentPhase === 'roundRest')) {
+      console.log('⏸️ Timer paused during rest - stopping breathing animation');
+      breathingAnim.stopAnimation(() => {
+        breathingAnim.setValue(1);
+      });
+    } else if (isRunning && (currentPhase === 'workRest' || currentPhase === 'roundRest')) {
+      console.log('▶️ Timer running during rest - starting breathing animation (breathe in)');
+      // Stop any existing animation first
+      breathingAnim.stopAnimation(() => {
+        breathingAnim.setValue(1);
+        // Start breathing animation - breathe IN (contract, never expand beyond 100%)
+        Animated.loop(
+          Animated.sequence([
+            Animated.timing(breathingAnim, {
+              toValue: 0.92, // Contract to 92% (breathe in)
+              duration: 2000,
+              easing: Easing.inOut(Easing.ease),
+              useNativeDriver: false, // Must match width/height (JS driver)
+            }),
+            Animated.timing(breathingAnim, {
+              toValue: 1, // Back to normal (100%)
+              duration: 2000,
+              easing: Easing.inOut(Easing.ease),
+              useNativeDriver: false, // Must match width/height (JS driver)
+            }),
+          ])
+        ).start();
+      });
+    } else {
+      // Stop breathing for non-rest phases
+      breathingAnim.stopAnimation(() => {
+        breathingAnim.setValue(1);
+      });
+    }
+  }, [isRunning, currentPhase, breathingAnim]);
+
+  // Yellow to red color transition during rest (when 5 seconds or less remain)
+  useEffect(() => {
+    if (currentPhase === 'workRest' || currentPhase === 'roundRest') {
+      const targetValue = secondsRemaining <= 5 ? 1 : 0; // 1 = red, 0 = yellow
+      Animated.timing(restColorAnim, {
+        toValue: targetValue,
+        duration: 600,
+        easing: Easing.inOut(Easing.ease),
+        useNativeDriver: false,
+      }).start();
+    } else {
+      // Reset to yellow for non-rest phases
+      restColorAnim.setValue(0);
+    }
+  }, [secondsRemaining, currentPhase, restColorAnim]);
 
   // Animate phase transitions (color and reset to 100%)
   useEffect(() => {
@@ -177,15 +327,58 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
       // Add a small delay to let React finish the current render cycle
       const timer = setTimeout(() => {
         try {
-          // Phase transition - animate back to 100% size (fast start, slow deceleration)
-          Animated.timing(sizeAnim, {
-            toValue: 1,
-            duration: 600,
-            easing: Easing.out(Easing.exp), // Fast start, slow deceleration
-            useNativeDriver: true, // Use native driver for better performance
-          }).start();
+          // Stop any running animations first to prevent driver conflicts
+          sizeAnim.stopAnimation();
+          textSizeAnim.stopAnimation();
           
-          // Animate color transition
+          // Morph shape based on phase
+          console.log('🔄 Phase transition to:', currentPhase);
+          
+          // Check if transitioning from rest to work (needs shrink→expand animation)
+          const isRestToWork = (prevPhase === 'workRest' || prevPhase === 'roundRest') && currentPhase === 'work';
+          
+          // Prepare animations array
+          const animations = [];
+          
+          // Size reset animation
+          if (isRestToWork) {
+            console.log('💥 Rest to Work - wait 80ms then QUICK explosive expand!');
+            // Already at 50% from rest phase, rest for 80ms, then explosive expand to 100%
+            setTimeout(() => {
+              Animated.parallel([
+                Animated.timing(sizeAnim, {
+                  toValue: 1, // Expand to 100%
+                  duration: 180, // Very quick expand
+                  easing: Easing.out(Easing.back(1.7)), // Strong overshoot for explosive bounce
+                  useNativeDriver: false,
+                }),
+                Animated.timing(textSizeAnim, {
+                  toValue: 1,
+                  duration: 180, // Very quick expand
+                  easing: Easing.out(Easing.back(1.7)),
+                  useNativeDriver: true,
+                }),
+              ]).start();
+            }, 80); // 80ms rest at 50% before expanding
+          } else {
+            // Normal size reset animation
+            animations.push(
+              Animated.timing(sizeAnim, {
+                toValue: 1,
+                duration: 300, // Fast transition
+                easing: Easing.bezier(0.4, 0.0, 0.2, 1),
+                useNativeDriver: false, // JS driver for width/height
+              }),
+              Animated.timing(textSizeAnim, {
+                toValue: 1,
+                duration: 300,
+                easing: Easing.bezier(0.4, 0.0, 0.2, 1),
+                useNativeDriver: true, // Native driver for transform
+              })
+            );
+          }
+          
+          // Color transition
           let colorValue = 0;
           switch (currentPhase) {
             case 'countdown':
@@ -203,31 +396,96 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
               break;
           }
           
+          const colorDuration = isRestToWork ? 300 : 300; // Same fast timing
+          animations.push(
           Animated.timing(colorAnim, {
             toValue: colorValue,
-            duration: 600,
-            easing: Easing.inOut(Easing.ease),
+              duration: colorDuration,
+              easing: Easing.bezier(0.4, 0.0, 0.2, 1),
             useNativeDriver: false,
-          }).start();
+            })
+          );
           
-          // Morph shape on complete
+          // Shape morph animation
           if (currentPhase === 'complete') {
-            try {
+            console.log('✅ Complete phase - rounded rectangle');
+            // Stop breathing animation if running
+            breathingAnim.stopAnimation(() => {
+              breathingAnim.setValue(1);
+            });
+            
+            animations.push(
               Animated.timing(borderRadiusAnim, {
                 toValue: 32, // Rounded rectangle
-                duration: 600,
-                easing: Easing.inOut(Easing.ease),
+                duration: 300, // Fast transition
+                easing: Easing.bezier(0.4, 0.0, 0.2, 1),
                 useNativeDriver: false,
-              }).start(() => {
+              })
+            );
+            
+            // Run all animations in parallel
+            Animated.parallel(animations).start(() => {
                 // Trigger confetti after shape morph
                 triggerConfetti();
               });
-            } catch (error) {
-              console.log('⚠️ Error morphing shape:', error);
-              triggerConfetti(); // Still trigger confetti even if morph fails
-            }
+          } else if (currentPhase === 'work') {
+            console.log('🟧 Work phase - morphing to SQUIRCLE');
+            // Squircle shape for work phase
+            breathingAnim.stopAnimation(() => {
+              breathingAnim.setValue(1);
+            });
+            
+            const squircleRadius = CONTAINER_WIDTH * 0.24;
+            console.log('   Border radius:', squircleRadius, 'Container width:', CONTAINER_WIDTH);
+            
+            const shapeDuration = 300; // Fast timing for all transitions
+            animations.push(
+              Animated.timing(borderRadiusAnim, {
+                toValue: squircleRadius, // Squircle (24% of width for smooth rounded square)
+                duration: shapeDuration,
+                easing: Easing.bezier(0.4, 0.0, 0.2, 1),
+                useNativeDriver: false,
+              })
+            );
+            
+            // Run all animations simultaneously
+            Animated.parallel(animations).start(() => {
+              console.log('🟧 Squircle transition complete');
+            });
+          } else if (currentPhase === 'workRest' || currentPhase === 'roundRest') {
+            console.log('🔵 Rest phase - morphing to CIRCLE with BREATHING');
+            // Circle with breathing for rest phases (breathing controlled by separate useEffect)
+            // Reset rest color to yellow when entering rest phase
+            restColorAnim.setValue(0);
+            
+            animations.push(
+              Animated.timing(borderRadiusAnim, {
+                toValue: CONTAINER_WIDTH / 2, // Full circle
+                duration: 300, // Fast transition
+                easing: Easing.bezier(0.4, 0.0, 0.2, 1),
+                useNativeDriver: false,
+              })
+            );
+            
+            // Run all animations simultaneously
+            Animated.parallel(animations).start();
           } else {
-            borderRadiusAnim.setValue(CONTAINER_WIDTH / 2); // Reset to circle
+            console.log('⏱️ Countdown/other phase - default circle');
+            // Countdown or other phases - circle, no breathing
+            breathingAnim.stopAnimation(() => {
+              breathingAnim.setValue(1);
+            });
+            borderRadiusAnim.setValue(CONTAINER_WIDTH / 2);
+            // Reset text animations for countdown
+            if (currentPhase === 'countdown') {
+              textOpacityAnim.setValue(1);
+              textShrinkAnim.setValue(1);
+            }
+            
+            // Run size/color animations
+            if (animations.length > 0) {
+              Animated.parallel(animations).start();
+            }
           }
         } catch (error) {
           console.log('⚠️ Error in phase transition animation:', error);
@@ -352,8 +610,19 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
     }
 
     if (phase === 'countdown') {
-      // Show "Go!" briefly before transitioning
+      // Show "Go!" for half a second, then transition fast
       setShowGo(true);
+      textOpacityAnim.setValue(1);
+      
+      // Wait 500ms, then fade out over 200ms
+      setTimeout(() => {
+        Animated.timing(textOpacityAnim, {
+          toValue: 0,
+          duration: 200,
+          easing: Easing.out(Easing.ease),
+          useNativeDriver: true,
+        }).start();
+      }, 500);
       
       // Use requestAnimationFrame to ensure smooth transition
       requestAnimationFrame(() => {
@@ -361,6 +630,7 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
           try {
             // Batch state updates to minimize re-renders
             setShowGo(false);
+            textOpacityAnim.setValue(1); // Reset for next phase
             
             // Use a second RAF to split the updates
             requestAnimationFrame(() => {
@@ -372,7 +642,7 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
             console.log('⚠️ Error transitioning from countdown:', error);
             isTransitioningRef.current = false;
           }
-        }, 400);
+        }, 600); // 500ms display + 100ms buffer (shape transition starts immediately)
       });
     } else if (phase === 'work') {
       const isLastSet = set === timer.sets;
@@ -532,6 +802,12 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
     borderRadiusAnim.stopAnimation(() => {
       borderRadiusAnim.setValue(CONTAINER_WIDTH / 2);
     });
+    breathingAnim.stopAnimation(() => {
+      breathingAnim.setValue(1);
+    });
+    restColorAnim.stopAnimation(() => {
+      restColorAnim.setValue(0);
+    });
     
     // Auto-start after a brief delay
     setTimeout(() => {
@@ -580,6 +856,8 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
               colorAnim.stopAnimation();
               borderRadiusAnim.stopAnimation();
               sideButtonsAnim.stopAnimation();
+              breathingAnim.stopAnimation();
+              restColorAnim.stopAnimation();
               
               // Delete and navigate back
               deleteHIITTimer(timerId);
@@ -605,6 +883,64 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
         setIsRunning(true);
       }
     }, 100);
+  };
+
+  const handleBack = () => {
+    // Check if timer has been started (not in initial state)
+    const timerHasStarted = currentPhase !== 'countdown' || currentSet !== 1 || currentRound !== 1 || secondsRemaining !== 5;
+    
+    if (timerHasStarted && currentPhase !== 'complete') {
+      // Store current running state in ref for alert callbacks
+      const wasRunningRef = { current: isRunning };
+      
+      // Pause the timer if it's running
+      if (isRunning) {
+        setIsRunning(false);
+      }
+      
+      // Show confirmation dialog
+      Alert.alert(
+        'Exit Interval',
+        'Are you sure you want to exit? Your progress will be lost.',
+        [
+          {
+            text: 'Resume',
+            style: 'cancel',
+            onPress: () => {
+              // Resume the timer if it was running before
+              if (wasRunningRef.current) {
+                setIsRunning(true);
+              }
+            },
+          },
+          {
+            text: 'Exit',
+            style: 'destructive',
+            onPress: () => {
+              // Stop all running operations
+              setIsRunning(false);
+              if (intervalRef.current) {
+                clearInterval(intervalRef.current);
+                intervalRef.current = null;
+              }
+              
+              // Stop all animations
+              sizeAnim.stopAnimation();
+              colorAnim.stopAnimation();
+              borderRadiusAnim.stopAnimation();
+              sideButtonsAnim.stopAnimation();
+              breathingAnim.stopAnimation();
+              restColorAnim.stopAnimation();
+              
+              navigation.goBack();
+            },
+          },
+        ]
+      );
+    } else {
+      // Timer hasn't started or is complete, just go back
+      navigation.goBack();
+    }
   };
 
   const formatTime = (seconds: number) => {
@@ -679,42 +1015,59 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
   };
 
   // Memoize interpolations to prevent recreation on every render
-  const animatedScale = useMemo(() => {
-    const minScale = MIN_SIZE / CONTAINER_WIDTH;
+  const animatedSize = useMemo(() => {
     return sizeAnim.interpolate({
       inputRange: [0, 1],
-      outputRange: [minScale, 1],
+      outputRange: [MIN_SIZE, CONTAINER_WIDTH],
     });
   }, [sizeAnim]);
 
-  // Inverse scale for text to keep it fixed size
+  // Border radius ratio (as a fraction of container width)
+  const borderRadiusRatio = useMemo(() => {
+    return borderRadiusAnim.interpolate({
+      inputRange: [32, CONTAINER_WIDTH * 0.24, CONTAINER_WIDTH / 2],
+      outputRange: [32 / CONTAINER_WIDTH, 0.24, 0.5],
+      extrapolate: 'clamp',
+    });
+  }, [borderRadiusAnim]);
+
+  // Scaled border radius that maintains shape proportions
+  const scaledBorderRadius = useMemo(() => {
+    return Animated.multiply(animatedSize, borderRadiusRatio);
+  }, [animatedSize, borderRadiusRatio]);
+
+  // Inverse scale for text to keep it fixed size (native driver)
   const textScale = useMemo(() => {
     const minScale = MIN_SIZE / CONTAINER_WIDTH;
-    return sizeAnim.interpolate({
+    return textSizeAnim.interpolate({
       inputRange: [0, 1],
       outputRange: [1 / minScale, 1], // Inverse of the circle scale
     });
-  }, [sizeAnim]);
+  }, [textSizeAnim]);
 
-  // Get background color based on current phase (direct approach for reliability)
-  const getBackgroundColor = () => {
+  // Get background color based on current phase
+  const currentBackgroundColor = useMemo(() => {
+    if (currentPhase === 'workRest' || currentPhase === 'roundRest') {
+      // Interpolate between yellow and red during rest
+      return restColorAnim.interpolate({
+        inputRange: [0, 1],
+        outputRange: [PHASE_COLORS.restYellow, PHASE_COLORS.restRed],
+      });
+    }
+    
     switch (currentPhase) {
       case 'countdown':
         return PHASE_COLORS.countdown;
       case 'work':
         return PHASE_COLORS.work;
-      case 'workRest':
-      case 'roundRest':
-        return PHASE_COLORS.rest;
       case 'complete':
         return PHASE_COLORS.complete;
       default:
         return PHASE_COLORS.countdown;
     }
-  };
+  }, [currentPhase, restColorAnim]);
 
-  const currentBackgroundColor = getBackgroundColor();
-  console.log(`🎨 Current phase: ${currentPhase}, color: ${currentBackgroundColor}`);
+  console.log(`🎨 Current phase: ${currentPhase}, seconds: ${secondsRemaining}`);
 
   // Memoize pie chart progress to prevent errors during phase transitions
   const pieChartProgress = useMemo(() => {
@@ -733,7 +1086,7 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
         {/* Header */}
         <View style={[styles.header, { paddingTop: insets.top }]}>
           <View style={styles.topBar}>
-            <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+            <TouchableOpacity onPress={handleBack} style={styles.backButton}>
               <IconArrowLeft size={24} color={LIGHT_COLORS.text} />
             </TouchableOpacity>
             <TouchableOpacity onPress={handleMenu} style={styles.menuButton}>
@@ -826,16 +1179,26 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
             />
           ))}
           
-          {/* Circle shape */}
+          {/* Main timer circle - using width/height, with breathing during rest */}
           <Animated.View
             style={[
               styles.circle,
               {
-                borderRadius: borderRadiusAnim,
+                width: Animated.multiply(animatedSize, breathingAnim), // Animate width with breathing
+                height: Animated.multiply(animatedSize, breathingAnim), // Animate height with breathing
+                borderRadius: Animated.multiply(scaledBorderRadius, breathingAnim), // Proportional border radius with breathing
                 backgroundColor: currentBackgroundColor,
-                transform: [{ scale: animatedScale }],
               },
             ]}
+          >
+            {/* Content container for text scaling */}
+            <View
+              style={{
+                width: '100%',
+                height: '100%',
+                justifyContent: 'center',
+                alignItems: 'center',
+              }}
           >
             {currentPhase === 'complete' ? (
               <Animated.View style={{ transform: [{ scale: textScale }] }}>
@@ -844,11 +1207,40 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
                   <Text style={styles.subtitleText}>{getSubtitleText()}</Text>
                 )}
               </Animated.View>
-            ) : (
-              <Animated.Text style={[styles.timerText, { transform: [{ scale: textScale }] }]}>
+              ) : currentPhase === 'countdown' ? (
+                showGo ? (
+                  // "Go!" - show for 500ms then fade out
+                  <Animated.Text 
+                    style={[
+                      styles.timerText,
+                      { 
+                        opacity: textOpacityAnim,
+                      }
+                    ]}
+                  >
+                    {getDisplayText()}
+                  </Animated.Text>
+                ) : (
+                  // Countdown numbers - fade and shrink
+                  <Animated.Text 
+                    style={[
+                      styles.timerText, 
+                      { 
+                        transform: [{ scale: textShrinkAnim }], // Shrink 20% as fading out
+                        opacity: textOpacityAnim, // Fade animation for countdown
+                      }
+                    ]}
+                  >
                 {getDisplayText()}
               </Animated.Text>
-            )}
+                )
+              ) : (
+                // Work and rest phases - text stays fixed size (no scale transform)
+                <Text style={styles.timerText}>
+                  {getDisplayText()}
+                </Text>
+              )}
+            </View>
           </Animated.View>
           </View>
 
@@ -1008,8 +1400,6 @@ const styles = StyleSheet.create({
     position: 'relative',
   },
   circle: {
-    width: CONTAINER_WIDTH,
-    height: CONTAINER_WIDTH,
     justifyContent: 'center',
     alignItems: 'center',
     borderCurve: 'continuous',

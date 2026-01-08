@@ -847,35 +847,35 @@ export function WorkoutExecutionScreen({ route, navigation }: WorkoutExecutionSc
                     {/* Exercise Card */}
                     <View style={styles.exerciseCardWrapper}>
                       <View style={isSkipped ? CARDS.cardDeepDisabled.outer : isFullyCompleted ? CARDS.cardDeepDimmed.outer : CARDS.cardDeep.outer}>
-                        <TouchableOpacity
+                            <TouchableOpacity
                           style={[
                             isSkipped ? { ...CARDS.cardDeepDisabled.inner, ...styles.exerciseCardInnerBase } : 
                             isFullyCompleted ? { ...CARDS.cardDeepDimmed.inner, ...styles.exerciseCardInnerBase } : 
                             { ...CARDS.cardDeep.inner, ...styles.exerciseCardInnerBase }
                           ]}
-                          onPress={handleExerciseTap}
-                          activeOpacity={1}
-                          disabled={isDisabled && !isSkipped}
-                        >
-                          <View style={styles.exerciseInfo}>
-                            <View>
+                              onPress={handleExerciseTap}
+                              activeOpacity={1}
+                              disabled={isDisabled && !isSkipped}
+                            >
+                              <View style={styles.exerciseInfo}>
+                                <View>
                               <Text style={[styles.exerciseName, isSkipped && styles.exerciseNameSkipped]}>
-                                {exerciseData?.name || 'Unknown Exercise'}
-                              </Text>
-                            </View>
-                          </View>
-                          {isSkipped ? (
-                            <View style={styles.exerciseCheckIcon}>
+                                    {exerciseData?.name || 'Unknown Exercise'}
+                                  </Text>
+                                </View>
+                              </View>
+                              {isSkipped ? (
+                                <View style={styles.exerciseCheckIcon}>
                               <IconRestart size={24} color={COLORS.text} />
-                            </View>
-                          ) : isFullyCompleted ? (
-                            <View style={styles.exerciseCheckIcon}>
-                              <IconCheck size={24} color="#227132" />
-                            </View>
-                          ) : (
-                            <View style={styles.exerciseTriangle} />
-                          )}
-                        </TouchableOpacity>
+                                </View>
+                              ) : isFullyCompleted ? (
+                                <View style={styles.exerciseCheckIcon}>
+                                  <IconCheck size={24} color="#227132" />
+                                </View>
+                              ) : (
+                                <View style={styles.exerciseTriangle} />
+                              )}
+                            </TouchableOpacity>
                       </View>
                     </View>
                   </React.Fragment>

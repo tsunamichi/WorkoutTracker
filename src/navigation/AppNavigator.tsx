@@ -169,7 +169,7 @@ function TabNavigator() {
               </Animated.View>
             </Animated.View>
           </TouchableOpacity>
-        </View>
+            </View>
         
         {/* Action Button - Changes based on active tab */}
         {activeTab === 'Schedule' ? (
@@ -191,7 +191,7 @@ function TabNavigator() {
             <Text style={styles.actionButtonLabel}>New</Text>
           </TouchableOpacity>
         ) : null}
-      </View>
+            </View>
     </View>
   );
 }
