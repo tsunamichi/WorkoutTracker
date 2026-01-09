@@ -1,5 +1,10 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
-import { View, StyleSheet, TouchableOpacity, ScrollView, ViewStyle, Animated, PanResponder, Dimensions } from 'react-native';
+import { View, StyleSheet, TouchableOpacity, ScrollView, ViewStyle, Animated, PanResponder, Dimensions, LayoutAnimation, Platform, UIManager } from 'react-native';
+
+// Enable LayoutAnimation on Android
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS } from '../../constants';
 
@@ -31,6 +36,7 @@ export function BottomDrawer({
   const insets = useSafeAreaInsets();
   const [isExpanded, setIsExpanded] = useState(false);
   const [contentHeight, setContentHeight] = useState(0);
+  const hasTriggeredExpansion = useRef(false);
   
   // Match device corner radius (iPhone rounded corners)
   const deviceCornerRadius = insets.bottom > 0 ? 40 : 24;
@@ -54,6 +60,7 @@ export function BottomDrawer({
     if (visible) {
       setIsExpanded(false);
       translateY.setValue(0);
+      hasTriggeredExpansion.current = false;
     } else {
       setContentHeight(0);
     }
@@ -61,7 +68,10 @@ export function BottomDrawer({
 
   const panResponder = useMemo(
     () => PanResponder.create({
-      onStartShouldSetPanResponder: () => needsExpansion,
+      onStartShouldSetPanResponder: () => {
+        hasTriggeredExpansion.current = false;
+        return needsExpansion;
+      },
       onMoveShouldSetPanResponder: (_, gestureState) => needsExpansion && Math.abs(gestureState.dy) > 5,
       onPanResponderMove: (_, gestureState) => {
         // Only allow dragging if content needs expansion
@@ -73,7 +83,15 @@ export function BottomDrawer({
             // When expanded, dragging down should start collapsing
             if (gestureState.dy > 0) {
               // Start collapsing if dragged down more than 20px
-              if (gestureState.dy > 20) {
+              if (gestureState.dy > 20 && !hasTriggeredExpansion.current) {
+                hasTriggeredExpansion.current = true;
+                LayoutAnimation.configureNext(
+                  LayoutAnimation.create(
+                    300,
+                    LayoutAnimation.Types.easeInEaseOut,
+                    LayoutAnimation.Properties.scaleXY
+                  )
+                );
                 setIsExpanded(false);
               }
               translateY.setValue(gestureState.dy);
@@ -82,7 +100,15 @@ export function BottomDrawer({
             // When collapsed, dragging up should start expanding
             if (gestureState.dy < 0) {
               // Start expanding if dragged up more than 20px
-              if (gestureState.dy < -20) {
+              if (gestureState.dy < -20 && !hasTriggeredExpansion.current) {
+                hasTriggeredExpansion.current = true;
+                LayoutAnimation.configureNext(
+                  LayoutAnimation.create(
+                    300,
+                    LayoutAnimation.Types.easeInEaseOut,
+                    LayoutAnimation.Properties.scaleXY
+                  )
+                );
                 setIsExpanded(true);
               }
             } else if (gestureState.dy > 100) {
@@ -93,6 +119,8 @@ export function BottomDrawer({
         }
       },
       onPanResponderRelease: (_, gestureState) => {
+        hasTriggeredExpansion.current = false;
+        
         if (gestureState.dy > 100 && !isExpanded) {
           // Dismiss: dragged down significantly from initial state
           Animated.timing(translateY, {
