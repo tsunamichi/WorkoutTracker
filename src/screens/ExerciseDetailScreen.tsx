@@ -1053,7 +1053,7 @@ export function ExerciseDetailScreen({ route, navigation }: ExerciseDetailScreen
                       
                       {/* Sets column on the right */}
                       <View style={styles.historySetsColumn}>
-                        {workout.sets.map((set, setIndex) => (
+                        {workout.sets.slice().reverse().map((set, setIndex) => (
                           <View key={`${workout.sessionId}-${setIndex}`} style={styles.historySetRow}>
                             <View style={styles.historyValueColumn}>
                               <Text style={styles.setCollapsedText}>{set.weight}</Text>

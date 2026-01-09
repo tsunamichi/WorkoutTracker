@@ -333,7 +333,7 @@ export function CycleDetailScreen({ route, navigation }: CycleDetailScreenProps)
                                 
                                 {/* Sets column on the right */}
                                 <View style={styles.historySetsColumn}>
-                                  {item.progress.sets.map((set, setIndex) => (
+                                  {item.progress.sets.slice().reverse().map((set, setIndex) => (
                                     <View key={setIndex} style={styles.historySetRow}>
                                       <View style={styles.historyValueColumn}>
                                         <Text style={styles.historyValueText}>{set.weight}</Text>
