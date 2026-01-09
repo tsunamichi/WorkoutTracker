@@ -252,8 +252,8 @@ export default function WorkoutEditScreen({ navigation, route }: Props) {
     if (exercise) {
       setSwappingExerciseId(exerciseId);
       setSwapWeight(exercise.targetWeight?.toString() || '');
-      setSwapReps(exercise.targetReps?.toString() || '');
-      setSwapSets(exercise.sets?.toString() || '');
+      setSwapReps(exercise.targetRepsMin?.toString() || '');
+      setSwapSets(exercise.targetSets?.toString() || '');
       setShowSwapDrawer(true);
     }
   };
@@ -262,12 +262,14 @@ export default function WorkoutEditScreen({ navigation, route }: Props) {
     if (swappingExerciseId && selectedNewExerciseId) {
       setWorkoutExercises(prev => prev.map(ex => {
         if (ex.id === swappingExerciseId) {
+          const reps = swapReps ? parseInt(swapReps, 10) : ex.targetRepsMin;
           return {
             ...ex,
             exerciseId: selectedNewExerciseId,
-            targetWeight: swapWeight ? parseInt(swapWeight, 10) : undefined,
-            targetReps: swapReps ? parseInt(swapReps, 10) : undefined,
-            sets: swapSets ? parseInt(swapSets, 10) : ex.sets,
+            targetWeight: swapWeight ? parseInt(swapWeight, 10) : ex.targetWeight,
+            targetRepsMin: reps,
+            targetRepsMax: reps, // Set max to same value as min
+            targetSets: swapSets ? parseInt(swapSets, 10) : ex.targetSets,
           };
         }
         return ex;
