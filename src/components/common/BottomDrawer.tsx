@@ -47,7 +47,8 @@ export function BottomDrawer({
   const maxHeightValue = SCREEN_HEIGHT * maxHeightPercent;
   const expandedHeight = SCREEN_HEIGHT * expandedHeightPercent;
 
-  const translateY = useRef(new Animated.Value(0)).current;
+  const translateY = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
+  const overlayOpacity = useRef(new Animated.Value(0)).current;
   
   // Check if content is tall enough to need expansion (add some buffer for handle and padding)
   const needsExpansion = expandable && contentHeight > maxHeightValue * 0.95;
@@ -55,16 +56,33 @@ export function BottomDrawer({
   // Calculate current max height based on expanded state
   const currentMaxHeight = isExpanded ? expandedHeight : maxHeightValue;
 
-  // Reset expanded state when drawer visibility changes
+  // Animate in/out when drawer visibility changes
   useEffect(() => {
     if (visible) {
       setIsExpanded(false);
-      translateY.setValue(0);
       hasTriggeredExpansion.current = false;
+      
+      // Animate drawer sliding up and overlay fading in
+      Animated.parallel([
+        Animated.spring(translateY, {
+          toValue: 0,
+          useNativeDriver: true,
+          tension: 65,
+          friction: 11,
+        }),
+        Animated.timing(overlayOpacity, {
+          toValue: 1,
+          duration: 300,
+          useNativeDriver: true,
+        }),
+      ]).start();
     } else {
       setContentHeight(0);
+      // Reset for next time
+      translateY.setValue(SCREEN_HEIGHT);
+      overlayOpacity.setValue(0);
     }
-  }, [visible]);
+  }, [visible, translateY, overlayOpacity]);
 
   const panResponder = useMemo(
     () => PanResponder.create({
@@ -123,13 +141,19 @@ export function BottomDrawer({
         
         if (gestureState.dy > 100 && !isExpanded) {
           // Dismiss: dragged down significantly from initial state
-          Animated.timing(translateY, {
-            toValue: SCREEN_HEIGHT,
-            duration: 250,
-            useNativeDriver: true,
-          }).start(() => {
+          Animated.parallel([
+            Animated.timing(translateY, {
+              toValue: SCREEN_HEIGHT,
+              duration: 250,
+              useNativeDriver: true,
+            }),
+            Animated.timing(overlayOpacity, {
+              toValue: 0,
+              duration: 250,
+              useNativeDriver: true,
+            }),
+          ]).start(() => {
             onClose();
-            translateY.setValue(0);
           });
         } else {
           // Snap back to current state
@@ -142,7 +166,7 @@ export function BottomDrawer({
         }
       },
     }),
-    [needsExpansion, isExpanded, translateY, onClose]
+    [needsExpansion, isExpanded, translateY, overlayOpacity, onClose]
   );
 
   if (!visible) return null;
@@ -155,11 +179,13 @@ export function BottomDrawer({
   return (
     <View style={styles.drawerOverlay} pointerEvents="box-none">
       {/* Backdrop overlay */}
-      <TouchableOpacity
-        style={styles.drawerBackdrop}
-        activeOpacity={1}
-        onPress={onClose}
-      />
+      <Animated.View style={[styles.drawerBackdrop, { opacity: overlayOpacity }]}>
+        <TouchableOpacity
+          style={StyleSheet.absoluteFill}
+          activeOpacity={1}
+          onPress={onClose}
+        />
+      </Animated.View>
 
       <Animated.View style={[
         styles.drawerContainer,
