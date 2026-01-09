@@ -88,12 +88,11 @@ export function BottomDrawer({
     () => PanResponder.create({
       onStartShouldSetPanResponder: () => {
         hasTriggeredExpansion.current = false;
-        return needsExpansion;
+        return expandable; // Always respond if expandable, not just when needsExpansion
       },
-      onMoveShouldSetPanResponder: (_, gestureState) => needsExpansion && Math.abs(gestureState.dy) > 5,
+      onMoveShouldSetPanResponder: (_, gestureState) => expandable && Math.abs(gestureState.dy) > 5,
       onPanResponderMove: (_, gestureState) => {
-        // Only allow dragging if content needs expansion
-        if (!needsExpansion) return;
+        if (!expandable) return;
         
         // Allow dragging in both directions
         if (Math.abs(gestureState.dy) > Math.abs(gestureState.dx)) {
@@ -101,7 +100,7 @@ export function BottomDrawer({
             // When expanded, dragging down should start collapsing
             if (gestureState.dy > 0) {
               // Start collapsing if dragged down more than 20px
-              if (gestureState.dy > 20 && !hasTriggeredExpansion.current) {
+              if (gestureState.dy > 20 && !hasTriggeredExpansion.current && needsExpansion) {
                 hasTriggeredExpansion.current = true;
                 LayoutAnimation.configureNext(
                   LayoutAnimation.create(
@@ -115,9 +114,9 @@ export function BottomDrawer({
               translateY.setValue(gestureState.dy);
             }
           } else {
-            // When collapsed, dragging up should start expanding
-            if (gestureState.dy < 0) {
-              // Start expanding if dragged up more than 20px
+            // When collapsed, dragging up should start expanding OR dragging down should dismiss
+            if (gestureState.dy < 0 && needsExpansion) {
+              // Start expanding if dragged up more than 20px (only if content is tall enough)
               if (gestureState.dy < -20 && !hasTriggeredExpansion.current) {
                 hasTriggeredExpansion.current = true;
                 LayoutAnimation.configureNext(
@@ -129,8 +128,8 @@ export function BottomDrawer({
                 );
                 setIsExpanded(true);
               }
-            } else if (gestureState.dy > 100) {
-              // Allow drag down for dismiss
+            } else if (gestureState.dy > 0) {
+              // Allow drag down for dismiss - show visual feedback immediately
               translateY.setValue(gestureState.dy);
             }
           }
@@ -166,7 +165,7 @@ export function BottomDrawer({
         }
       },
     }),
-    [needsExpansion, isExpanded, translateY, overlayOpacity, onClose]
+    [expandable, needsExpansion, isExpanded, translateY, overlayOpacity, onClose]
   );
 
   if (!visible) return null;
