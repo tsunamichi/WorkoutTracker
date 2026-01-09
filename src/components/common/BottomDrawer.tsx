@@ -205,11 +205,9 @@ export function BottomDrawer({
 
       <Animated.View style={[
         styles.drawerContainer,
-        expandable ? {
-          maxHeight: currentMaxHeight,
+        {
+          maxHeight: expandable ? currentMaxHeight : maxHeight,
           transform: [{ translateY }],
-        } : {
-          maxHeight: maxHeight,
         }
       ]}>
         <SafeAreaView
@@ -226,7 +224,7 @@ export function BottomDrawer({
           {showHandle && (
             <View 
               style={styles.handleContainer}
-              {...(needsExpansion ? panResponder.panHandlers : {})}
+              {...panResponder.panHandlers}
             >
               <View style={styles.sheetHandle} />
             </View>
