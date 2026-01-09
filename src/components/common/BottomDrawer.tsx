@@ -88,15 +88,13 @@ export function BottomDrawer({
     () => PanResponder.create({
       onStartShouldSetPanResponder: () => {
         hasTriggeredExpansion.current = false;
-        return expandable; // Always respond if expandable, not just when needsExpansion
+        return true; // Always respond to gestures for all drawers
       },
-      onMoveShouldSetPanResponder: (_, gestureState) => expandable && Math.abs(gestureState.dy) > 5,
+      onMoveShouldSetPanResponder: (_, gestureState) => Math.abs(gestureState.dy) > 5,
       onPanResponderMove: (_, gestureState) => {
-        if (!expandable) return;
-        
         // Allow dragging in both directions
         if (Math.abs(gestureState.dy) > Math.abs(gestureState.dx)) {
-          if (isExpanded) {
+          if (expandable && isExpanded) {
             // When expanded, dragging down should start collapsing
             if (gestureState.dy > 0) {
               // Start collapsing if dragged down more than 20px
@@ -114,9 +112,9 @@ export function BottomDrawer({
               translateY.setValue(gestureState.dy);
             }
           } else {
-            // When collapsed, dragging up should start expanding OR dragging down should dismiss
-            if (gestureState.dy < 0 && needsExpansion) {
-              // Start expanding if dragged up more than 20px (only if content is tall enough)
+            // When collapsed (or not expandable), handle expand OR dismiss
+            if (gestureState.dy < 0 && expandable && needsExpansion) {
+              // Start expanding if dragged up more than 20px (only if expandable and content is tall enough)
               if (gestureState.dy < -20 && !hasTriggeredExpansion.current) {
                 hasTriggeredExpansion.current = true;
                 LayoutAnimation.configureNext(
@@ -130,6 +128,7 @@ export function BottomDrawer({
               }
             } else if (gestureState.dy > 0) {
               // Allow drag down for dismiss - show visual feedback immediately
+              // This works for ALL drawers (expandable or not)
               translateY.setValue(gestureState.dy);
             }
           }
