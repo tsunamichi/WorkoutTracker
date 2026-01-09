@@ -171,8 +171,21 @@ export function BottomDrawer({
 
   const Content = scrollable ? ScrollView : View;
   const contentProps = scrollable 
-    ? { contentContainerStyle: contentStyle }
-    : { style: contentStyle };
+    ? { 
+        contentContainerStyle: [
+          contentStyle,
+          { paddingBottom: insets.bottom }
+        ],
+        style: { flex: 1 },
+        showsVerticalScrollIndicator: true,
+        bounces: true,
+      }
+    : { 
+        style: [
+          contentStyle,
+          { paddingBottom: insets.bottom }
+        ]
+      };
 
   const handleOverlayPress = () => {
     // Animate drawer sliding down and overlay fading out
@@ -210,7 +223,7 @@ export function BottomDrawer({
           transform: [{ translateY }],
         }
       ]}>
-        <SafeAreaView
+        <View
           style={[
             styles.drawerSheet,
             {
@@ -219,7 +232,6 @@ export function BottomDrawer({
               borderBottomRightRadius: deviceCornerRadius,
             },
           ]}
-          edges={['bottom']}
         >
           {showHandle && (
             <View 
@@ -242,7 +254,7 @@ export function BottomDrawer({
               {children}
             </View>
           </Content>
-        </SafeAreaView>
+        </View>
       </Animated.View>
     </View>
   );
@@ -267,10 +279,10 @@ const styles = StyleSheet.create({
     elevation: 10,
   },
   drawerSheet: {
-    flexShrink: 1,
+    flex: 1,
     paddingTop: 4,
     paddingHorizontal: 4,
-    paddingBottom: 0, // SafeAreaView handles bottom padding
+    paddingBottom: 0, // Bottom padding added to content for proper scrolling
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     borderBottomLeftRadius: 24,
