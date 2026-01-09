@@ -43,8 +43,8 @@ export function WorkoutsScreen() {
     if (!cycle) return 0;
     
     // Get all workout assignments for this cycle
-    const cycleAssignments = Object.entries(workoutAssignments).filter(
-      ([_, assignment]) => assignment.cycleId === cycleId
+    const cycleAssignments = workoutAssignments.filter(
+      assignment => assignment.cycleId === cycleId
     );
     
     if (cycleAssignments.length === 0) return 0;
@@ -52,11 +52,11 @@ export function WorkoutsScreen() {
     let totalSets = 0;
     let completedSets = 0;
     
-    cycleAssignments.forEach(([date, assignment]) => {
+    cycleAssignments.forEach(assignment => {
       const template = cycle.workoutTemplates.find(t => t.id === assignment.workoutTemplateId);
       if (!template) return;
       
-      const workoutKey = `${cycleId}-${date}`;
+      const workoutKey = `${assignment.workoutTemplateId}-${assignment.date}`;
       const progress = detailedWorkoutProgress[workoutKey];
       
       // Count total sets from template
