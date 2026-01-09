@@ -253,6 +253,7 @@ export function CycleDetailScreen({ route, navigation }: CycleDetailScreenProps)
         visible={!!selectedWorkout}
         onClose={() => setSelectedWorkout(null)}
         maxHeight="80%"
+        expandable={true}
       >
         <View style={styles.sheetContent}>
           <Text style={styles.sheetTitle}>{selectedWorkout?.name}</Text>
