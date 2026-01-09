@@ -173,8 +173,8 @@ export function BottomDrawer({
   const contentProps = scrollable 
     ? { 
         contentContainerStyle: [
+          { paddingBottom: insets.bottom },
           contentStyle,
-          { paddingBottom: insets.bottom }
         ],
         style: { flex: 1 },
         showsVerticalScrollIndicator: true,
@@ -182,8 +182,8 @@ export function BottomDrawer({
       }
     : { 
         style: [
+          { paddingBottom: insets.bottom },
           contentStyle,
-          { paddingBottom: insets.bottom }
         ]
       };
 
@@ -230,7 +230,6 @@ export function BottomDrawer({
               backgroundColor,
               borderBottomLeftRadius: deviceCornerRadius,
               borderBottomRightRadius: deviceCornerRadius,
-              maxHeight: '100%', // Constrain to parent's maxHeight
             },
           ]}
         >
@@ -280,7 +279,7 @@ const styles = StyleSheet.create({
     elevation: 10,
   },
   drawerSheet: {
-    flexDirection: 'column', // Explicit flex container
+    flex: 1, // Fill parent's maxHeight constraint
     paddingTop: 4,
     paddingHorizontal: 4,
     paddingBottom: 0, // Bottom padding added to content for proper scrolling
