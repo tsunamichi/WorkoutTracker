@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { View, StyleSheet, TouchableOpacity, ScrollView, ViewStyle, Animated, PanResponder, Dimensions } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS } from '../../constants';
@@ -58,13 +58,13 @@ export function BottomDrawer({
     }
   }, [visible, maxHeightValue]);
 
-  const panResponder = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => expandable && contentHeight > maxHeightValue,
-      onMoveShouldSetPanResponder: (_, gestureState) => expandable && contentHeight > maxHeightValue && Math.abs(gestureState.dy) > 5,
+  const panResponder = useMemo(
+    () => PanResponder.create({
+      onStartShouldSetPanResponder: () => needsExpansion,
+      onMoveShouldSetPanResponder: (_, gestureState) => needsExpansion && Math.abs(gestureState.dy) > 5,
       onPanResponderMove: (_, gestureState) => {
         // Only allow dragging if content needs expansion
-        if (contentHeight <= maxHeightValue) return;
+        if (!needsExpansion) return;
         
         // Allow dragging in both directions
         if (Math.abs(gestureState.dy) > Math.abs(gestureState.dx)) {
@@ -120,8 +120,9 @@ export function BottomDrawer({
           }).start();
         }
       },
-    })
-  ).current;
+    }),
+    [needsExpansion, isExpanded, translateY, maxHeightAnim, expandedHeight, maxHeightValue, onClose]
+  );
 
   if (!visible) return null;
 
@@ -158,12 +159,6 @@ export function BottomDrawer({
             },
           ]}
           edges={['bottom']}
-          onLayout={(event) => {
-            if (expandable) {
-              const { height } = event.nativeEvent.layout;
-              setContentHeight(height);
-            }
-          }}
         >
           {showHandle && (
             <View 
@@ -175,7 +170,17 @@ export function BottomDrawer({
           )}
           
           <Content {...contentProps}>
-            {children}
+            <View
+              onLayout={(event) => {
+                if (expandable) {
+                  const { height } = event.nativeEvent.layout;
+                  console.log('📏 Drawer content height:', height, 'maxHeight:', maxHeightValue, 'needsExpansion:', height > maxHeightValue * 0.95);
+                  setContentHeight(height);
+                }
+              }}
+            >
+              {children}
+            </View>
           </Content>
         </SafeAreaView>
       </Animated.View>
