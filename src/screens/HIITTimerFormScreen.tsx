@@ -33,7 +33,7 @@ type SheetType = 'work' | 'workRest' | 'sets' | 'rounds' | 'roundRest' | null;
 export default function HIITTimerFormScreen({ navigation, route }: Props) {
   const insets = useSafeAreaInsets();
   const { mode, timerId } = route.params;
-  const { hiitTimers, addHIITTimer, updateHIITTimer } = useStore();
+  const { hiitTimers, addHIITTimer, updateHIITTimer, isHIITTimerActive, setActiveHIITTimer } = useStore();
   
   const existingTimer = timerId ? hiitTimers.find(t => t.id === timerId) : undefined;
   
@@ -92,6 +92,8 @@ export default function HIITTimerFormScreen({ navigation, route }: Props) {
 
   // Save timer without navigating
   const handleSave = useCallback(async () => {
+    console.log('💾 handleSave called');
+    
     if (!name.trim()) {
       Alert.alert('Error', 'Please enter a name for the timer');
       return false;
@@ -111,6 +113,57 @@ export default function HIITTimerFormScreen({ navigation, route }: Props) {
       isTemplate: true,
     };
 
+    // Check if there are changes
+    if (mode === 'edit' && !hasChanges()) {
+      console.log('✅ No changes to save');
+      hasSavedRef.current = true;
+      return true; // No changes, just return
+    }
+    
+    // Check if timer is currently active in the store
+    const isTimerActive = mode === 'edit' && timerId ? isHIITTimerActive(timerId) : false;
+    
+    console.log('💾 Attempting to save timer:', { mode, timerId, isTimerActive, hasChanges: hasChanges() });
+    
+    if (isTimerActive) {
+      console.log('⚠️ Showing confirmation - timer is active');
+      console.log('⚠️ Timer object to save:', timer);
+      // Show confirmation that timer will be reset
+      return new Promise((resolve) => {
+        Alert.alert(
+          'Reset Active Timer?',
+          'This timer is currently in progress. Saving changes will reset the timer to the beginning.',
+          [
+            {
+              text: 'Cancel',
+              style: 'cancel',
+              onPress: () => {
+                console.log('❌ User cancelled save');
+                resolve(false);
+              },
+            },
+            {
+              text: 'Save & Reset',
+              style: 'destructive',
+              onPress: async () => {
+                console.log('✅ User confirmed save & reset');
+                console.log('✅ About to call updateHIITTimer with:', { timerId: timerId!, timer });
+                await updateHIITTimer(timerId!, timer);
+                console.log('✅ updateHIITTimer completed');
+                // Clear active timer after saving
+                console.log('🧹 Clearing active timer status after save');
+                setActiveHIITTimer(null);
+                hasSavedRef.current = true;
+                resolve(true);
+              },
+            },
+          ]
+        );
+      });
+    }
+    
+    console.log('✅ Saving timer without confirmation');
+
     // Save timer
     if (mode === 'create') {
       await addHIITTimer(timer);
@@ -120,62 +173,68 @@ export default function HIITTimerFormScreen({ navigation, route }: Props) {
     
     hasSavedRef.current = true;
     return true;
-  }, [name, work, workRest, sets, rounds, roundRest, mode, timerId, existingTimer, addHIITTimer, updateHIITTimer]);
+  }, [name, work, workRest, sets, rounds, roundRest, mode, timerId, existingTimer, addHIITTimer, updateHIITTimer, isHIITTimerActive, setActiveHIITTimer, hasChanges]);
 
-  // Auto-save when navigating back if there are changes
+  // Warn about unsaved changes when navigating back with back arrow
   useEffect(() => {
     const unsubscribe = navigation.addListener('beforeRemove', async (e) => {
-      // Only auto-save if there are changes AND we haven't already saved
+      console.log('🚪 beforeRemove triggered', { 
+        hasChanges: hasChanges(), 
+        hasSaved: hasSavedRef.current,
+        mode,
+        timerId 
+      });
+      
+      // Warn about unsaved changes if there are any AND we haven't already saved
       if (hasChanges() && !hasSavedRef.current) {
         // Prevent default navigation
         e.preventDefault();
         
-        // Save the timer
-        const saved = await handleSave();
-        if (saved) {
-          hasSavedRef.current = true;
-          // Allow navigation after saving
-          navigation.dispatch(e.data.action);
-        }
+        console.log('⚠️ Navigating back with unsaved changes, showing discard warning...');
+        
+        // Show warning that changes will be lost
+        Alert.alert(
+          'Discard Changes?',
+          'Your changes will be lost if you go back without saving.',
+          [
+            {
+              text: 'Cancel',
+              style: 'cancel',
+              onPress: () => {
+                console.log('❌ User cancelled navigation, staying on form');
+              },
+            },
+            {
+              text: 'Discard',
+              style: 'destructive',
+              onPress: () => {
+                console.log('✅ User confirmed discard, navigating back without saving');
+                
+                // Just navigate back without saving
+                navigation.dispatch(e.data.action);
+              },
+            },
+          ]
+        );
       }
     });
 
     return unsubscribe;
-  }, [navigation, name, work, workRest, sets, rounds, roundRest, mode, existingTimer, handleSave]);
+  }, [navigation, hasChanges, mode, timerId]);
 
-  const handleStartNow = async () => {
-    if (!name.trim()) {
-      Alert.alert('Error', 'Please enter a name for the timer');
-      return;
-    }
-
-    const newTimerId = mode === 'create' ? `hiit-${Date.now()}` : timerId!;
+  const handleSaveButtonPress = async () => {
+    console.log('💾 Save button pressed');
     
-    const timer: HIITTimer = {
-      id: newTimerId,
-      name: name.trim(),
-      work,
-      workRest,
-      sets,
-      rounds,
-      roundRest,
-      createdAt: mode === 'create' ? new Date().toISOString() : existingTimer!.createdAt,
-      isTemplate: true,
-    };
-
-    // Save timer
-    if (mode === 'create') {
-      await addHIITTimer(timer);
-      // Mark as saved to prevent duplicate save on back navigation
+    // Call handleSave which includes the confirmation logic
+    const saved = await handleSave();
+    
+    if (saved) {
       hasSavedRef.current = true;
-      // Navigate to execution for new timer
-      navigation.replace('HIITTimerExecution', { timerId: newTimerId });
-    } else {
-      await updateHIITTimer(timerId!, timer);
-      // Mark as saved to prevent duplicate save on back navigation
-      hasSavedRef.current = true;
-      // Just go back when editing - the execution screen will refresh
-      navigation.goBack();
+      // Just go back - the execution screen will refresh automatically
+      // Add small delay to ensure state propagates
+      setTimeout(() => {
+        navigation.goBack();
+      }, 50);
     }
   };
 
@@ -323,7 +382,7 @@ export default function HIITTimerFormScreen({ navigation, route }: Props) {
         <View style={styles.stickyButtonContainer}>
           <TouchableOpacity 
             style={styles.startButton} 
-            onPress={handleStartNow}
+            onPress={handleSaveButtonPress}
             activeOpacity={1}
           >
             <Text style={styles.startButtonText}>{timerId ? 'Save' : 'Create Timer'}</Text>

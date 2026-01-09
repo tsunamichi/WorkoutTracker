@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, Modal, TextInput, TouchableOpacity, ScrollView, ActivityIndicator, Alert, Dimensions } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useStore } from '../store';
 import { COLORS, SPACING, TYPOGRAPHY } from '../constants';
@@ -17,6 +17,7 @@ interface TrainerBottomSheetProps {
 }
 
 export function TrainerBottomSheet({ visible, onClose }: TrainerBottomSheetProps) {
+  const insets = useSafeAreaInsets();
   const { cycles, exercises, addCycle, addExercise, getNextCycleNumber, settings } = useStore();
   const [prompt, setPrompt] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
@@ -24,6 +25,9 @@ export function TrainerBottomSheet({ visible, onClose }: TrainerBottomSheetProps
   const [isInputFocused, setIsInputFocused] = useState(false);
   
   const cycleNumber = getNextCycleNumber();
+  
+  // Match device corner radius (iPhone rounded corners)
+  const deviceCornerRadius = insets.bottom > 0 ? 40 : 24;
   
   // Check if AI is configured
   const hasAI = settings.openaiApiKey && settings.openaiApiKey.startsWith('sk-');
@@ -741,7 +745,11 @@ Lower: Lower A
           activeOpacity={1}
           onPress={handleClose}
         />
-        <SafeAreaView style={styles.container}>
+        <View style={styles.containerWrapper}>
+          <SafeAreaView style={[styles.container, {
+            borderBottomLeftRadius: deviceCornerRadius,
+            borderBottomRightRadius: deviceCornerRadius,
+          }]} edges={['bottom']}>
           {/* Handle - Fixed Position */}
           <View style={styles.handleContainer}>
             <View style={styles.handle} />
@@ -853,6 +861,7 @@ Lower: Lower A
           </View>
         )}
         </SafeAreaView>
+        </View>
       </View>
     </Modal>
   );
@@ -871,11 +880,19 @@ const styles = StyleSheet.create({
     bottom: 0,
     backgroundColor: COLORS.overlay,
   },
-  container: {
+  containerWrapper: {
+    position: 'absolute',
+    bottom: 8,
+    left: 8,
+    right: 8,
     height: SCREEN_HEIGHT * 0.85,
+    elevation: 10,
+  },
+  container: {
+    flex: 1,
     backgroundColor: COLORS.background,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
+    borderRadius: 24,
+    borderCurve: 'continuous',
   },
   handleContainer: {
     alignItems: 'center',

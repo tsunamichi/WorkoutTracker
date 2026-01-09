@@ -14,6 +14,7 @@ import { COLORS, SPACING, TYPOGRAPHY, GRADIENTS, CARDS } from '../constants';
 import { IconArrowLeft, IconPlay, IconCheck, IconMenu } from '../components/icons';
 import { SetTimerSheet } from '../components/timer/SetTimerSheet';
 import { Toggle } from '../components/Toggle';
+import { BottomDrawer } from '../components/common/BottomDrawer';
 
 interface ExerciseDetailScreenProps {
   route?: {
@@ -641,6 +642,11 @@ export function ExerciseDetailScreen({ route, navigation }: ExerciseDetailScreen
               <Toggle
                 label="Barbell"
                 value={useBarbellMode}
+                disabled={
+                  expandedSetIndex !== -1 &&
+                  setsData[expandedSetIndex] &&
+                  setsData[expandedSetIndex].weight < 45
+                }
                 onValueChange={(value) => {
                   setUseBarbellMode(value);
                   if (exercise?.exerciseId) {
@@ -1017,69 +1023,63 @@ export function ExerciseDetailScreen({ route, navigation }: ExerciseDetailScreen
         </Modal>
         
         {/* Exercise History Bottom Sheet */}
-        {showHistory && (
-          <View style={styles.historySheetOverlay}>
-            <TouchableOpacity 
-              style={styles.historySheetBackdrop}
-              onPress={() => setShowHistory(false)}
-              activeOpacity={1}
-            />
-            <View style={styles.historySheet}>
-              <View style={styles.historySheetHandle} />
-              <Text style={styles.historySheetTitle}>History</Text>
-              <ScrollView style={styles.historySheetList}>
-                {exerciseHistory.length === 0 ? (
-                  <View style={styles.historySheetEmpty}>
-                    <Text style={styles.historySheetEmptyText}>
-                      No history recorded yet
-                    </Text>
-                  </View>
-                ) : (
-                  exerciseHistory.map((workout, workoutIndex) => {
-                    return (
-                      <View key={workout.sessionId}>
-                        <View style={styles.historyWorkoutGroup}>
-                          {/* Date column on the left */}
-                          <View style={styles.historyDateColumn}>
-                            <Text style={styles.historyDateText}>
-                              {dayjs(workout.date).format('MMMM')}
-                            </Text>
-                            <Text style={styles.historyDateText}>
-                              {dayjs(workout.date).date()}{getOrdinalSuffix(dayjs(workout.date).date())}
-                            </Text>
-                          </View>
-                          
-                          {/* Sets column on the right */}
-                          <View style={styles.historySetsColumn}>
-                            {workout.sets.map((set, setIndex) => (
-                              <View key={`${workout.sessionId}-${setIndex}`} style={styles.historySetRow}>
-                                <View style={styles.historyValueColumn}>
-                                  <Text style={styles.setCollapsedText}>{set.weight}</Text>
-                                  <Text style={styles.setCollapsedUnit}>lbs</Text>
-                                </View>
-                                <View style={styles.historyValueColumn}>
-                                  <Text style={styles.setCollapsedText}>{set.reps}</Text>
-                                  <Text style={styles.setCollapsedUnit}>reps</Text>
-                                </View>
-                              </View>
-                            ))}
-                          </View>
-                        </View>
-                        
-                        {workoutIndex < exerciseHistory.length - 1 && (
-                          <View style={styles.historyDividerContainer}>
-                            <View style={styles.historyDividerTop} />
-                            <View style={styles.historyDividerBottom} />
-                          </View>
-                        )}
+        <BottomDrawer
+          visible={showHistory}
+          onClose={() => setShowHistory(false)}
+          maxHeight="80%"
+        >
+          <View style={styles.historySheetContent}>
+            <Text style={styles.historySheetTitle}>History</Text>
+            {exerciseHistory.length === 0 ? (
+              <View style={styles.historySheetEmpty}>
+                <Text style={styles.historySheetEmptyText}>
+                  No history recorded yet
+                </Text>
+              </View>
+            ) : (
+              exerciseHistory.map((workout, workoutIndex) => {
+                return (
+                  <View key={workout.sessionId}>
+                    <View style={styles.historyWorkoutGroup}>
+                      {/* Date column on the left */}
+                      <View style={styles.historyDateColumn}>
+                        <Text style={styles.historyDateText}>
+                          {dayjs(workout.date).format('MMMM')}
+                        </Text>
+                        <Text style={styles.historyDateText}>
+                          {dayjs(workout.date).date()}{getOrdinalSuffix(dayjs(workout.date).date())}
+                        </Text>
                       </View>
-                    );
-                  })
-                )}
-              </ScrollView>
-            </View>
+                      
+                      {/* Sets column on the right */}
+                      <View style={styles.historySetsColumn}>
+                        {workout.sets.map((set, setIndex) => (
+                          <View key={`${workout.sessionId}-${setIndex}`} style={styles.historySetRow}>
+                            <View style={styles.historyValueColumn}>
+                              <Text style={styles.setCollapsedText}>{set.weight}</Text>
+                              <Text style={styles.setCollapsedUnit}>lbs</Text>
+                            </View>
+                            <View style={styles.historyValueColumn}>
+                              <Text style={styles.setCollapsedText}>{set.reps}</Text>
+                              <Text style={styles.setCollapsedUnit}>reps</Text>
+                            </View>
+                          </View>
+                        ))}
+                      </View>
+                    </View>
+                    
+                    {workoutIndex < exerciseHistory.length - 1 && (
+                      <View style={styles.historyDividerContainer}>
+                        <View style={styles.historyDividerTop} />
+                        <View style={styles.historyDividerBottom} />
+                      </View>
+                    )}
+                  </View>
+                );
+              })
+            )}
           </View>
-        )}
+        </BottomDrawer>
       </View>
     </View>
   );
@@ -1415,49 +1415,15 @@ const styles = StyleSheet.create({
     paddingBottom: 40,
   },
   
-  // History Bottom Sheet
-  historySheetOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    zIndex: 1000,
-  },
-  historySheetBackdrop: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: COLORS.overlay,
-  },
-  historySheet: {
-    position: 'absolute',
-    bottom: 0,
-    left: 8,
-    right: 8,
-    marginBottom: 8,
-    backgroundColor: COLORS.backgroundCanvas,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    paddingTop: SPACING.md,
+  // History Bottom Sheet Content
+  historySheetContent: {
+    paddingHorizontal: SPACING.xxl,
     paddingBottom: SPACING.xl,
-    maxHeight: '80%',
-  },
-  historySheetHandle: {
-    width: 40,
-    height: 4,
-    backgroundColor: LIGHT_COLORS.border,
-    borderRadius: 2,
-    alignSelf: 'center',
-    marginBottom: SPACING.lg,
   },
   historySheetTitle: {
     ...TYPOGRAPHY.h2,
     color: LIGHT_COLORS.secondary,
     marginBottom: SPACING.xl,
-    paddingHorizontal: SPACING.xxl,
-  },
-  historySheetList: {
-    flex: 1,
-    paddingHorizontal: SPACING.xxl,
   },
   historySheetEmpty: {
     paddingVertical: SPACING.xxxl,

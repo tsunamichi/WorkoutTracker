@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useStore } from '../store';
+import { BottomDrawer } from '../components/common/BottomDrawer';
 import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS, CARDS } from '../constants';
 import { IconArrowLeft, IconGripVertical, IconX, IconSwap, IconAdd } from '../components/icons';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -577,28 +578,27 @@ export default function WorkoutEditScreen({ navigation, route }: Props) {
       </View>
       
       {/* Swap Exercise Drawer */}
-      {showSwapDrawer && (
-        <View style={styles.drawerOverlay}>
-          <TouchableOpacity
-            style={styles.drawerBackdrop}
-            activeOpacity={1}
-            onPress={handleCloseSwapDrawer}
-          />
-          <View style={styles.drawerContainer}>
-            <SafeAreaView>
-              {/* Drawer Header */}
-              <View style={styles.drawerHeader}>
-                <Text style={[TYPOGRAPHY.h3, { color: COLORS.text }]}>
-                  Swap Exercise
-                </Text>
-                <TouchableOpacity
-                  onPress={handleCloseSwapDrawer}
-                  style={styles.closeButton}
-                  activeOpacity={0.7}
-                >
-                  <Text style={styles.closeButtonText}>✕</Text>
-                </TouchableOpacity>
-              </View>
+      <BottomDrawer
+        visible={showSwapDrawer}
+        onClose={handleCloseSwapDrawer}
+        maxHeight="90%"
+        scrollable={false}
+        showHandle={false}
+      >
+        <View style={styles.drawerContent}>
+          {/* Drawer Header */}
+          <View style={styles.drawerHeader}>
+            <Text style={[TYPOGRAPHY.h3, { color: COLORS.text }]}>
+              Swap Exercise
+            </Text>
+            <TouchableOpacity
+              onPress={handleCloseSwapDrawer}
+              style={styles.closeButton}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.closeButtonText}>✕</Text>
+            </TouchableOpacity>
+          </View>
 
               {/* Search Input */}
               <View style={styles.swapSearchContainer}>
@@ -705,10 +705,8 @@ export default function WorkoutEditScreen({ navigation, route }: Props) {
                   </Text>
                 </TouchableOpacity>
               </View>
-            </SafeAreaView>
-          </View>
         </View>
-      )}
+      </BottomDrawer>
       
       {/* Apply Changes Modal */}
       <Modal
@@ -999,22 +997,9 @@ const styles = StyleSheet.create({
     ...TYPOGRAPHY.meta,
     color: COLORS.textMeta,
   },
-  // Swap Drawer Styles
-  drawerOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'flex-end',
-    zIndex: 1000,
-  },
-  drawerBackdrop: {
-    ...StyleSheet.absoluteFillObject,
-  },
-  drawerContainer: {
-    backgroundColor: '#FFFFFF',
-    borderTopLeftRadius: BORDER_RADIUS.xl,
-    borderTopRightRadius: BORDER_RADIUS.xl,
-    maxHeight: '80%',
-    paddingBottom: 0,
+  // Swap Drawer Content
+  drawerContent: {
+    flex: 1,
   },
   drawerHeader: {
     flexDirection: 'row',

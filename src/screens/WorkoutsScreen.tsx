@@ -5,6 +5,7 @@ import { useNavigation } from '@react-navigation/native';
 import Svg, { Circle, Path } from 'react-native-svg';
 import * as Haptics from 'expo-haptics';
 import { ProfileAvatar } from '../components/ProfileAvatar';
+import { BottomDrawer } from '../components/common/BottomDrawer';
 import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS, CARDS } from '../constants';
 import { useStore } from '../store';
 import { useOnboardingStore } from '../store/useOnboardingStore';
@@ -509,50 +510,37 @@ export function WorkoutsScreen() {
         </ScrollView>
         
         {/* Bottom Sheet */}
-        <Modal
+        <BottomDrawer
           visible={showBottomSheet}
-          transparent
-          animationType="slide"
-          onRequestClose={() => setShowBottomSheet(false)}
+          onClose={() => setShowBottomSheet(false)}
+          scrollable={false}
+          backgroundColor="#FFFFFF"
         >
           <KeyboardAvoidingView 
             behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-            style={{ flex: 1 }}
+            style={styles.sheetContent}
           >
-            <View style={styles.bottomSheetOverlay}>
-              <TouchableOpacity 
-                style={styles.overlayTouchable} 
-                activeOpacity={1} 
-                onPress={() => setShowBottomSheet(false)}
-              />
-              <View style={styles.bottomSheet}>
-                <View style={styles.handle} />
-                
-                <View style={styles.sheetContent}>
-                  <Text style={styles.sheetTitle}>New Cycle</Text>
-                  
-                  <TextInput
-                    style={styles.textInput}
-                    placeholder={`⭐️ WEEK 1\n⸻\nDAY 1 — Push\n\t• Bench Press — 4×8-12 @ 135 lb\n\t• Overhead Press — 3×10 @ 95 lb\n\nDAY 2 — Pull\n\t• Deadlift — 4×5 @ 225 lb\n\t• Barbell Row — 4×10 @ 135 lb`}
-                    placeholderTextColor={LIGHT_COLORS.meta}
-                    value={workoutDetails}
-                    onChangeText={setWorkoutDetails}
-                    multiline
-                    textAlignVertical="top"
-                  />
-                  
-                  <TouchableOpacity
-                    style={styles.saveButton}
-                    onPress={handleCreateCycle}
-                    activeOpacity={1}
-                  >
-                    <Text style={styles.saveButtonText}>Save and Create</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-            </View>
+            <Text style={styles.sheetTitle}>New Cycle</Text>
+            
+            <TextInput
+              style={styles.textInput}
+              placeholder={`⭐️ WEEK 1\n⸻\nDAY 1 — Push\n\t• Bench Press — 4×8-12 @ 135 lb\n\t• Overhead Press — 3×10 @ 95 lb\n\nDAY 2 — Pull\n\t• Deadlift — 4×5 @ 225 lb\n\t• Barbell Row — 4×10 @ 135 lb`}
+              placeholderTextColor={LIGHT_COLORS.meta}
+              value={workoutDetails}
+              onChangeText={setWorkoutDetails}
+              multiline
+              textAlignVertical="top"
+            />
+            
+            <TouchableOpacity
+              style={styles.saveButton}
+              onPress={handleCreateCycle}
+              activeOpacity={1}
+            >
+              <Text style={styles.saveButtonText}>Save and Create</Text>
+            </TouchableOpacity>
           </KeyboardAvoidingView>
-        </Modal>
+        </BottomDrawer>
       </SafeAreaView>
     </View>
   );
@@ -786,33 +774,10 @@ const styles = StyleSheet.create({
     color: COLORS.text,
   },
   
-  // Bottom Sheet
-  bottomSheetOverlay: {
-    flex: 1,
-    backgroundColor: COLORS.overlay,
-    justifyContent: 'flex-end',
-  },
-  overlayTouchable: {
-    flex: 1,
-  },
-  bottomSheet: {
-    backgroundColor: '#FFFFFF',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    paddingBottom: SPACING.xxl,
-  },
-  handle: {
-    width: 40,
-    height: 4,
-    backgroundColor: LIGHT_COLORS.textMeta,
-    borderRadius: 2,
-    borderCurve: 'continuous',
-    alignSelf: 'center',
-    marginTop: 12,
-    marginBottom: 16,
-  },
+  // Bottom Sheet Content
   sheetContent: {
     paddingHorizontal: SPACING.xxl,
+    paddingBottom: SPACING.xxl,
   },
   sheetTitle: {
     fontSize: 28,

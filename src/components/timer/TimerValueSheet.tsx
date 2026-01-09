@@ -125,9 +125,12 @@ export function TimerValueSheet({
   }, [visible, slideAnim, backdropAnim]);
 
   const handleSave = () => {
-    onSave(selectedValue);
-    onClose();
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    onSave(selectedValue);
+    // Small delay to ensure onSave is processed before closing
+    setTimeout(() => {
+      onClose();
+    }, 0);
   };
 
   const handleTouchStart = (event: GestureResponderEvent) => {
@@ -285,6 +288,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     backgroundColor: LIGHT_COLORS.backgroundCanvas,
     borderRadius: 40,
+    borderCurve: 'continuous',
   },
   sheetInner: {
     paddingHorizontal: SPACING.xxl,

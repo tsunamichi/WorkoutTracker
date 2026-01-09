@@ -7,6 +7,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useNavigation } from '@react-navigation/native';
 import { useStore } from '../store';
 import { ProfileAvatar } from '../components/ProfileAvatar';
+import { BottomDrawer } from '../components/common/BottomDrawer';
 import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS, CARDS } from '../constants';
 import { IconCalendar, IconStopwatch, IconWorkouts } from '../components/icons';
 import dayjs from 'dayjs';
@@ -762,106 +763,74 @@ export function TodayScreen({ onNavigateToWorkouts, onDateChange }: TodayScreenP
       </View>
       
       {/* Swap Bottom Sheet Modal - Renders at root level above tab bar */}
-      <Modal
+      <BottomDrawer
         visible={isSwapSheetVisible}
-        transparent={true}
-        animationType="none"
-        onRequestClose={() => setShowSwapSheet(false)}
+        onClose={() => setShowSwapSheet(false)}
+        maxHeight="70%"
       >
-        <SafeAreaView style={[styles.swapSheetOverlay, {
-          borderBottomLeftRadius: deviceCornerRadius,
-          borderBottomRightRadius: deviceCornerRadius,
-        }]} edges={['bottom']}>
-          <TouchableOpacity 
-            style={StyleSheet.absoluteFillObject}
-            onPress={() => setShowSwapSheet(false)}
-            activeOpacity={1}
-          >
-            <Animated.View 
-              style={[
-                StyleSheet.absoluteFillObject,
-                { 
-                  backgroundColor: COLORS.overlay,
-                  opacity: swapSheetBackdropOpacity 
-                }
-              ]}
-              pointerEvents="none"
-            />
-          </TouchableOpacity>
-          <Animated.View 
-            style={[
-              styles.swapSheet,
-              { transform: [{ translateY: swapSheetTranslateY }] }
-            ]}
-          >
-              <View style={styles.swapSheetInner}>
-                <View style={styles.swapSheetHandle} />
-                <Text style={styles.swapSheetTitle}>Swap Workout</Text>
-                <ScrollView style={styles.swapSheetList}>
-                  {weekDays
-                    .filter(day => 
-                      !day.isCompleted && 
-                      day.date !== selectedDate
-                    )
-                    .map((day, index) => (
-                      <View key={index} style={styles.swapSheetItemWrapper}>
-                        <View style={styles.swapSheetItemBlackShadow}>
-                          <View style={styles.swapSheetItemWhiteShadow}>
-                            <View style={styles.swapSheetItem}>
-                              <TouchableOpacity
-                                style={styles.swapSheetItemInner}
-                                onPress={async () => {
-                                  await swapWorkoutAssignments(selectedDate, day.date);
-                                  setShowSwapSheet(false);
-                                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                                }}
-                                activeOpacity={0.7}
-                              >
-                                <View>
-                                  <Text style={styles.swapSheetItemTitle}>
-                                    {day.workout?.name || 'Rest Day'}
-                                  </Text>
-                                  <Text style={styles.swapSheetItemSubtitle}>
-                                    {day.dateObj.format('dddd, MMM D')}
-                                  </Text>
-                                </View>
-                                <Svg width={16} height={16} viewBox="0 0 24 24" fill="none">
-                                  <Path 
-                                    d="M7 16V4M7 4L3 8M7 4L11 8" 
-                                    stroke="#817B77" 
-                                    strokeWidth="2" 
-                                    strokeLinecap="round" 
-                                    strokeLinejoin="round"
-                                  />
-                                  <Path 
-                                    d="M17 8V20M17 20L21 16M17 20L13 16" 
-                                    stroke="#817B77" 
-                                    strokeWidth="2" 
-                                    strokeLinecap="round" 
-                                    strokeLinejoin="round"
-                                  />
-                                </Svg>
-                              </TouchableOpacity>
-                            </View>
-                          </View>
+        <View style={styles.swapSheetContent}>
+          <Text style={styles.swapSheetTitle}>Swap Workout</Text>
+          {weekDays
+            .filter(day => 
+              !day.isCompleted && 
+              day.date !== selectedDate
+            )
+            .map((day, index) => (
+              <View key={index} style={styles.swapSheetItemWrapper}>
+                <View style={styles.swapSheetItemBlackShadow}>
+                  <View style={styles.swapSheetItemWhiteShadow}>
+                    <View style={styles.swapSheetItem}>
+                      <TouchableOpacity
+                        style={styles.swapSheetItemInner}
+                        onPress={async () => {
+                          await swapWorkoutAssignments(selectedDate, day.date);
+                          setShowSwapSheet(false);
+                          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                        }}
+                        activeOpacity={0.7}
+                      >
+                        <View>
+                          <Text style={styles.swapSheetItemTitle}>
+                            {day.workout?.name || 'Rest Day'}
+                          </Text>
+                          <Text style={styles.swapSheetItemSubtitle}>
+                            {day.dateObj.format('dddd, MMM D')}
+                          </Text>
                         </View>
-                      </View>
-                    ))}
-                  {weekDays.filter(day => 
-                    !day.isCompleted && 
-                    day.date !== selectedDate
-                  ).length === 0 && (
-                    <View style={styles.swapSheetEmpty}>
-                      <Text style={styles.swapSheetEmptyText}>
-                        No other days this week to swap with
-                      </Text>
+                        <Svg width={16} height={16} viewBox="0 0 24 24" fill="none">
+                          <Path 
+                            d="M7 16V4M7 4L3 8M7 4L11 8" 
+                            stroke="#817B77" 
+                            strokeWidth="2" 
+                            strokeLinecap="round" 
+                            strokeLinejoin="round"
+                          />
+                          <Path 
+                            d="M17 8V20M17 20L21 16M17 20L13 16" 
+                            stroke="#817B77" 
+                            strokeWidth="2" 
+                            strokeLinecap="round" 
+                            strokeLinejoin="round"
+                          />
+                        </Svg>
+                      </TouchableOpacity>
                     </View>
-                  )}
-                </ScrollView>
+                  </View>
+                </View>
               </View>
-            </Animated.View>
-        </SafeAreaView>
-      </Modal>
+            ))}
+          {weekDays.filter(day => 
+            !day.isCompleted && 
+            day.date !== selectedDate
+          ).length === 0 && (
+            <View style={styles.swapSheetEmpty}>
+              <Text style={styles.swapSheetEmptyText}>
+                No other days this week to swap with
+              </Text>
+            </View>
+          )}
+        </View>
+      </BottomDrawer>
     </GestureHandlerRootView>
   );
 }
@@ -1252,41 +1221,14 @@ const styles = StyleSheet.create({
   },
   
   // Swap Bottom Sheet
-  swapSheetOverlay: {
-    flex: 1,
-  },
-  swapSheet: {
-    position: 'absolute',
-    bottom: 0,
-    left: 8,
-    right: 8,
-    marginBottom: 8,
-    backgroundColor: COLORS.backgroundCanvas,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    paddingTop: SPACING.md,
+  swapSheetContent: {
+    paddingHorizontal: SPACING.xl,
     paddingBottom: SPACING.xl,
-    paddingHorizontal: SPACING.sm,
-    maxHeight: '70%',
-  },
-  swapSheetInner: {
-    flex: 1,
-  },
-  swapSheetHandle: {
-    width: 40,
-    height: 4,
-    backgroundColor: LIGHT_COLORS.border,
-    borderRadius: 2,
-    alignSelf: 'center',
-    marginBottom: SPACING.lg,
   },
   swapSheetTitle: {
     ...TYPOGRAPHY.h2,
     color: LIGHT_COLORS.secondary,
     marginBottom: SPACING.xl,
-  },
-  swapSheetList: {
-    flex: 1,
   },
   swapSheetItemWrapper: {
     marginBottom: SPACING.md,

@@ -1,10 +1,11 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, Share, Animated } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, Share } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useStore } from '../store';
 import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS, CARDS } from '../constants';
 import { IconArrowLeft, IconMenu } from '../components/icons';
 import { DropdownMenu } from '../components/DropdownMenu';
+import { BottomDrawer } from '../components/common/BottomDrawer';
 import type { WorkoutTemplate } from '../types';
 import dayjs from 'dayjs';
 import isoWeek from 'dayjs/plugin/isoWeek';
@@ -40,48 +41,6 @@ export function CycleDetailScreen({ route, navigation }: CycleDetailScreenProps)
   const [selectedWorkout, setSelectedWorkout] = useState<WorkoutTemplate | null>(null);
   const [selectedWeekNumber, setSelectedWeekNumber] = useState<number>(1);
   const [menuVisible, setMenuVisible] = useState(false);
-  const [isDrawerVisible, setIsDrawerVisible] = useState(false);
-  
-  // Animation values for drawer
-  const overlayOpacity = useRef(new Animated.Value(0)).current;
-  const drawerTranslateY = useRef(new Animated.Value(1000)).current;
-  
-  // Animate drawer in/out
-  useEffect(() => {
-    if (selectedWorkout) {
-      setIsDrawerVisible(true);
-      // Animate in
-      Animated.parallel([
-        Animated.timing(overlayOpacity, {
-          toValue: 1,
-          duration: 200,
-          useNativeDriver: true,
-        }),
-        Animated.spring(drawerTranslateY, {
-          toValue: 0,
-          useNativeDriver: true,
-          tension: 65,
-          friction: 11,
-        }),
-      ]).start();
-    } else if (isDrawerVisible) {
-      // Animate out
-      Animated.parallel([
-        Animated.timing(overlayOpacity, {
-          toValue: 0,
-          duration: 200,
-          useNativeDriver: true,
-        }),
-        Animated.timing(drawerTranslateY, {
-          toValue: 1000,
-          duration: 250,
-          useNativeDriver: true,
-        }),
-      ]).start(() => {
-        setIsDrawerVisible(false);
-      });
-    }
-  }, [selectedWorkout]);
   
   // Helper function to get ordinal suffix
   const getOrdinalSuffix = (day: number) => {
@@ -290,22 +249,13 @@ export function CycleDetailScreen({ route, navigation }: CycleDetailScreenProps)
       </ScrollView>
       
       {/* Workout Details Bottom Sheet */}
-      {isDrawerVisible && (
-        <View style={styles.bottomSheetOverlay}>
-          <Animated.View 
-            style={[styles.overlayTouchable, { opacity: overlayOpacity }]}
-          >
-            <TouchableOpacity 
-              style={StyleSheet.absoluteFill}
-              activeOpacity={1} 
-              onPress={() => setSelectedWorkout(null)}
-            />
-          </Animated.View>
-          <Animated.View style={[styles.bottomSheet, { transform: [{ translateY: drawerTranslateY }] }]}>
-            <View style={styles.handle} />
-            
-            <View style={styles.sheetContent}>
-              <Text style={styles.sheetTitle}>{selectedWorkout?.name}</Text>
+      <BottomDrawer
+        visible={!!selectedWorkout}
+        onClose={() => setSelectedWorkout(null)}
+        maxHeight="80%"
+      >
+        <View style={styles.sheetContent}>
+          <Text style={styles.sheetTitle}>{selectedWorkout?.name}</Text>
               <Text style={styles.sheetSubtitle}>
                 Week {selectedWeekNumber} — {dayjs(cycle.startDate).add(selectedWeekNumber - 1, 'week').format('MMM D, YYYY')}
               </Text>
@@ -420,9 +370,7 @@ export function CycleDetailScreen({ route, navigation }: CycleDetailScreenProps)
                 </ScrollView>
               )}
             </View>
-          </Animated.View>
-        </View>
-      )}
+      </BottomDrawer>
       </View>
     </View>
   );
@@ -546,42 +494,9 @@ const styles = StyleSheet.create({
   
   
   // Bottom Sheet
-  bottomSheetOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-  },
-  overlayTouchable: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: COLORS.overlay,
-  },
-  bottomSheet: {
-    position: 'absolute',
-    bottom: 0,
-    left: 8,
-    right: 8,
-    marginBottom: 8,
-    backgroundColor: COLORS.backgroundCanvas,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    borderCurve: 'continuous',
-    maxHeight: '80%',
-    paddingBottom: SPACING.xxl,
-  },
-  handle: {
-    width: 40,
-    height: 4,
-    backgroundColor: LIGHT_COLORS.textMeta,
-    borderRadius: 2,
-    borderCurve: 'continuous',
-    alignSelf: 'center',
-    marginTop: 12,
-    marginBottom: 16,
-  },
   sheetContent: {
     paddingHorizontal: SPACING.xxl,
+    paddingBottom: SPACING.xxl,
   },
   sheetTitle: {
     fontSize: 28,

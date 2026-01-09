@@ -6,9 +6,10 @@ interface ToggleProps {
   label: string;
   value: boolean;
   onValueChange: (value: boolean) => void;
+  disabled?: boolean;
 }
 
-export function Toggle({ label, value, onValueChange }: ToggleProps) {
+export function Toggle({ label, value, onValueChange, disabled = false }: ToggleProps) {
   const animatedValue = React.useRef(new Animated.Value(value ? 1 : 0)).current;
 
   React.useEffect(() => {
@@ -21,7 +22,7 @@ export function Toggle({ label, value, onValueChange }: ToggleProps) {
 
   const trackColor = animatedValue.interpolate({
     inputRange: [0, 1],
-    outputRange: ['#D1D1D6', '#000000'], // Gray when off, black when on
+    outputRange: disabled ? ['#E5E5EA', '#E5E5EA'] : ['#D1D1D6', '#000000'], // Lighter gray when disabled
   });
 
   const thumbTranslateX = animatedValue.interpolate({
@@ -31,16 +32,17 @@ export function Toggle({ label, value, onValueChange }: ToggleProps) {
 
   const thumbColor = animatedValue.interpolate({
     inputRange: [0, 1],
-    outputRange: ['#000000', '#FFFFFF'], // Dark when off, white when on
+    outputRange: disabled ? ['#C7C7CC', '#C7C7CC'] : ['#000000', '#FFFFFF'], // Lighter gray when disabled
   });
 
   return (
     <TouchableOpacity
-      activeOpacity={0.8}
-      onPress={() => onValueChange(!value)}
+      activeOpacity={disabled ? 1 : 0.8}
+      onPress={() => !disabled && onValueChange(!value)}
       style={styles.container}
+      disabled={disabled}
     >
-      <Text style={styles.label}>{label}</Text>
+      <Text style={[styles.label, disabled && styles.labelDisabled]}>{label}</Text>
       <Animated.View style={[styles.track, { backgroundColor: trackColor }]}>
         <Animated.View
           style={[
@@ -66,6 +68,10 @@ const styles = StyleSheet.create({
   label: {
     ...TYPOGRAPHY.metaBold,
     color: COLORS.text,
+  },
+  labelDisabled: {
+    color: COLORS.textMeta, // Lighter color when disabled
+    opacity: 0.5,
   },
   track: {
     width: 32,

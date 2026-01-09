@@ -65,6 +65,11 @@ interface WorkoutStore {
   deleteHIITTimer: (timerId: string) => Promise<void>;
   getHIITTimerTemplates: () => HIITTimer[];
   
+  // Active HIIT Timer tracking
+  activeHIITTimerId: string | null;
+  setActiveHIITTimer: (timerId: string | null) => void;
+  isHIITTimerActive: (timerId: string) => boolean;
+  
   // HIIT Timer Sessions
   hiitTimerSessions: HIITTimerSession[];
   addHIITTimerSession: (session: HIITTimerSession) => Promise<void>;
@@ -113,6 +118,7 @@ export const useStore = create<WorkoutStore>((set, get) => ({
   exercisePRs: [],
   hiitTimers: [],
   hiitTimerSessions: [],
+  activeHIITTimerId: null,
   settings: DEFAULT_SETTINGS,
   isLoading: true,
   workoutProgress: {},
@@ -719,11 +725,14 @@ export const useStore = create<WorkoutStore>((set, get) => ({
   },
   
   updateHIITTimer: async (timerId, updates) => {
+    console.log('🏪 Store: updateHIITTimer called', { timerId, updates });
     const timers = get().hiitTimers.map(timer =>
       timer.id === timerId ? { ...timer, ...updates } : timer
     );
     set({ hiitTimers: timers });
+    console.log('🏪 Store: hiitTimers state updated, saving to storage...');
     await storage.saveHIITTimers(timers);
+    console.log('🏪 Store: saved to storage successfully');
   },
   
   deleteHIITTimer: async (timerId) => {
@@ -745,6 +754,20 @@ export const useStore = create<WorkoutStore>((set, get) => ({
   
   getHIITTimerSessionsForDate: (date) => {
     return get().hiitTimerSessions.filter(session => session.date === date);
+  },
+  
+  // Active HIIT Timer tracking
+  setActiveHIITTimer: (timerId) => {
+    console.log('🏪 Store: setActiveHIITTimer called with:', timerId);
+    set({ activeHIITTimerId: timerId });
+    console.log('🏪 Store: activeHIITTimerId set to:', timerId);
+  },
+  
+  isHIITTimerActive: (timerId) => {
+    const activeId = get().activeHIITTimerId;
+    const isActive = activeId === timerId;
+    console.log('🏪 Store: isHIITTimerActive check:', { timerId, activeId, isActive });
+    return isActive;
   },
 }));
 

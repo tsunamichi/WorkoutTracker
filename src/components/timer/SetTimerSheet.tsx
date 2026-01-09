@@ -538,6 +538,7 @@ const styles = StyleSheet.create({
   timerSheet: {
     backgroundColor: LIGHT_COLORS.backgroundCanvas,
     borderRadius: 40,
+    borderCurve: 'continuous',
     paddingTop: 32,
     paddingHorizontal: 48,
     alignItems: 'center',
