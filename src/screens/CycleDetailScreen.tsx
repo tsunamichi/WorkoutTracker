@@ -252,7 +252,7 @@ export function CycleDetailScreen({ route, navigation }: CycleDetailScreenProps)
       <BottomDrawer
         visible={!!selectedWorkout}
         onClose={() => setSelectedWorkout(null)}
-        maxHeight="80%"
+        maxHeight="40%"
         expandable={true}
       >
         <View style={styles.sheetContent}>

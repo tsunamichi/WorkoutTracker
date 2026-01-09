@@ -1026,7 +1026,7 @@ export function ExerciseDetailScreen({ route, navigation }: ExerciseDetailScreen
         <BottomDrawer
           visible={showHistory}
           onClose={() => setShowHistory(false)}
-          maxHeight="80%"
+          maxHeight="40%"
           expandable={true}
         >
           <View style={styles.historySheetContent}>
