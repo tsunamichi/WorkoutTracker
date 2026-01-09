@@ -30,6 +30,7 @@ export function BottomDrawer({
 }: BottomDrawerProps) {
   const insets = useSafeAreaInsets();
   const [isExpanded, setIsExpanded] = useState(false);
+  const [contentHeight, setContentHeight] = useState(0);
   
   // Match device corner radius (iPhone rounded corners)
   const deviceCornerRadius = insets.bottom > 0 ? 40 : 24;
@@ -42,6 +43,9 @@ export function BottomDrawer({
 
   const translateY = useRef(new Animated.Value(0)).current;
   const maxHeightAnim = useRef(new Animated.Value(maxHeightValue)).current;
+  
+  // Check if content is tall enough to need expansion (add some buffer for handle and padding)
+  const needsExpansion = expandable && contentHeight > maxHeightValue * 0.95;
 
   // Reset expanded state when drawer visibility changes
   useEffect(() => {
@@ -49,14 +53,19 @@ export function BottomDrawer({
       setIsExpanded(false);
       translateY.setValue(0);
       maxHeightAnim.setValue(maxHeightValue);
+    } else {
+      setContentHeight(0);
     }
   }, [visible, maxHeightValue]);
 
   const panResponder = useRef(
     PanResponder.create({
-      onStartShouldSetPanResponder: () => expandable,
-      onMoveShouldSetPanResponder: (_, gestureState) => expandable && Math.abs(gestureState.dy) > 5,
+      onStartShouldSetPanResponder: () => expandable && contentHeight > maxHeightValue,
+      onMoveShouldSetPanResponder: (_, gestureState) => expandable && contentHeight > maxHeightValue && Math.abs(gestureState.dy) > 5,
       onPanResponderMove: (_, gestureState) => {
+        // Only allow dragging if content needs expansion
+        if (contentHeight <= maxHeightValue) return;
+        
         // Allow dragging in both directions
         if (Math.abs(gestureState.dy) > Math.abs(gestureState.dx)) {
           if (isExpanded) {
@@ -149,11 +158,17 @@ export function BottomDrawer({
             },
           ]}
           edges={['bottom']}
+          onLayout={(event) => {
+            if (expandable) {
+              const { height } = event.nativeEvent.layout;
+              setContentHeight(height);
+            }
+          }}
         >
           {showHandle && (
             <View 
               style={styles.handleContainer}
-              {...(expandable ? panResponder.panHandlers : {})}
+              {...(needsExpansion ? panResponder.panHandlers : {})}
             >
               <View style={styles.sheetHandle} />
             </View>
