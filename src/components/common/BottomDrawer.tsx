@@ -74,37 +74,23 @@ export function BottomDrawer({
         if (gestureState.dy < -50 && !isExpanded) {
           // Expand: dragged up from initial state
           setIsExpanded(true);
-          Animated.parallel([
-            Animated.spring(translateY, {
-              toValue: 0,
-              useNativeDriver: true,
-              tension: 80,
-              friction: 12,
-            }),
-            Animated.spring(maxHeightAnim, {
-              toValue: expandedHeight,
-              useNativeDriver: false,
-              tension: 80,
-              friction: 12,
-            }),
-          ]).start();
+          translateY.setValue(0);
+          Animated.spring(maxHeightAnim, {
+            toValue: expandedHeight,
+            useNativeDriver: false,
+            tension: 80,
+            friction: 12,
+          }).start();
         } else if (gestureState.dy > 50 && isExpanded) {
           // Collapse: dragged down from expanded state
           setIsExpanded(false);
-          Animated.parallel([
-            Animated.spring(translateY, {
-              toValue: 0,
-              useNativeDriver: true,
-              tension: 80,
-              friction: 12,
-            }),
-            Animated.spring(maxHeightAnim, {
-              toValue: maxHeightValue,
-              useNativeDriver: false,
-              tension: 80,
-              friction: 12,
-            }),
-          ]).start();
+          translateY.setValue(0);
+          Animated.spring(maxHeightAnim, {
+            toValue: maxHeightValue,
+            useNativeDriver: false,
+            tension: 80,
+            friction: 12,
+          }).start();
         } else if (gestureState.dy > 100 && !isExpanded) {
           // Dismiss: dragged down significantly from initial state
           Animated.timing(translateY, {
