@@ -176,6 +176,24 @@ export function BottomDrawer({
     ? { contentContainerStyle: contentStyle }
     : { style: contentStyle };
 
+  const handleOverlayPress = () => {
+    // Animate drawer sliding down and overlay fading out
+    Animated.parallel([
+      Animated.timing(translateY, {
+        toValue: SCREEN_HEIGHT,
+        duration: 250,
+        useNativeDriver: true,
+      }),
+      Animated.timing(overlayOpacity, {
+        toValue: 0,
+        duration: 250,
+        useNativeDriver: true,
+      }),
+    ]).start(() => {
+      onClose();
+    });
+  };
+
   return (
     <View style={styles.drawerOverlay} pointerEvents="box-none">
       {/* Backdrop overlay */}
@@ -183,7 +201,7 @@ export function BottomDrawer({
         <TouchableOpacity
           style={StyleSheet.absoluteFill}
           activeOpacity={1}
-          onPress={onClose}
+          onPress={handleOverlayPress}
         />
       </Animated.View>
 
