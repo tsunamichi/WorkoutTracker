@@ -172,19 +172,13 @@ export function BottomDrawer({
   const Content = scrollable ? ScrollView : View;
   const contentProps = scrollable 
     ? { 
-        contentContainerStyle: [
-          { paddingBottom: insets.bottom },
-          contentStyle,
-        ],
+        contentContainerStyle: contentStyle,
         style: { flex: 1 },
         showsVerticalScrollIndicator: true,
         bounces: true,
       }
     : { 
-        style: [
-          { paddingBottom: insets.bottom },
-          contentStyle,
-        ]
+        style: contentStyle
       };
 
   const handleOverlayPress = () => {
@@ -244,6 +238,7 @@ export function BottomDrawer({
           
           <Content {...contentProps}>
             <View
+              style={{ paddingBottom: insets.bottom }}
               onLayout={(event) => {
                 if (expandable) {
                   const { height } = event.nativeEvent.layout;
