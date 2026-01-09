@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { View, StyleSheet, TouchableOpacity, ScrollView, ViewStyle, Animated, PanResponder, Dimensions } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS } from '../../constants';
@@ -35,54 +35,91 @@ export function BottomDrawer({
   const deviceCornerRadius = insets.bottom > 0 ? 40 : 24;
 
   // Calculate height percentages
-  const defaultHeightPercent = parseFloat(maxHeight.replace('%', '')) / 100;
+  const maxHeightPercent = parseFloat(maxHeight.replace('%', '')) / 100;
   const expandedHeightPercent = 0.9;
-  const defaultHeight = SCREEN_HEIGHT * defaultHeightPercent;
+  const maxHeightValue = SCREEN_HEIGHT * maxHeightPercent;
   const expandedHeight = SCREEN_HEIGHT * expandedHeightPercent;
 
-  const heightAnim = useRef(new Animated.Value(defaultHeight)).current;
+  const translateY = useRef(new Animated.Value(0)).current;
+  const maxHeightAnim = useRef(new Animated.Value(maxHeightValue)).current;
+
+  // Reset expanded state when drawer visibility changes
+  useEffect(() => {
+    if (visible) {
+      setIsExpanded(false);
+      translateY.setValue(0);
+      maxHeightAnim.setValue(maxHeightValue);
+    }
+  }, [visible, maxHeightValue]);
 
   const panResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => expandable,
       onMoveShouldSetPanResponder: (_, gestureState) => expandable && Math.abs(gestureState.dy) > 5,
       onPanResponderMove: (_, gestureState) => {
-        // Only respond to vertical movement on the handle
+        // Allow dragging in both directions
         if (Math.abs(gestureState.dy) > Math.abs(gestureState.dx)) {
-          const newHeight = isExpanded 
-            ? expandedHeight - gestureState.dy 
-            : defaultHeight - gestureState.dy;
-          
-          // Clamp between default and expanded height
-          const clampedHeight = Math.max(defaultHeight, Math.min(expandedHeight, newHeight));
-          heightAnim.setValue(clampedHeight);
+          if (isExpanded) {
+            // When expanded, allow dragging down to collapse (positive dy only)
+            if (gestureState.dy > 0) {
+              translateY.setValue(gestureState.dy);
+            }
+          } else {
+            // When collapsed, allow dragging up to expand (negative dy) or down to dismiss (positive dy)
+            translateY.setValue(gestureState.dy);
+          }
         }
       },
       onPanResponderRelease: (_, gestureState) => {
-        // If dragged up more than 50px, expand. If dragged down more than 50px, collapse
         if (gestureState.dy < -50 && !isExpanded) {
-          // Expand
+          // Expand: dragged up from initial state
           setIsExpanded(true);
-          Animated.spring(heightAnim, {
-            toValue: expandedHeight,
-            useNativeDriver: false,
-            tension: 80,
-            friction: 12,
-          }).start();
+          Animated.parallel([
+            Animated.spring(translateY, {
+              toValue: 0,
+              useNativeDriver: true,
+              tension: 80,
+              friction: 12,
+            }),
+            Animated.spring(maxHeightAnim, {
+              toValue: expandedHeight,
+              useNativeDriver: false,
+              tension: 80,
+              friction: 12,
+            }),
+          ]).start();
         } else if (gestureState.dy > 50 && isExpanded) {
-          // Collapse
+          // Collapse: dragged down from expanded state
           setIsExpanded(false);
-          Animated.spring(heightAnim, {
-            toValue: defaultHeight,
-            useNativeDriver: false,
-            tension: 80,
-            friction: 12,
-          }).start();
+          Animated.parallel([
+            Animated.spring(translateY, {
+              toValue: 0,
+              useNativeDriver: true,
+              tension: 80,
+              friction: 12,
+            }),
+            Animated.spring(maxHeightAnim, {
+              toValue: maxHeightValue,
+              useNativeDriver: false,
+              tension: 80,
+              friction: 12,
+            }),
+          ]).start();
+        } else if (gestureState.dy > 100 && !isExpanded) {
+          // Dismiss: dragged down significantly from initial state
+          Animated.timing(translateY, {
+            toValue: SCREEN_HEIGHT,
+            duration: 250,
+            useNativeDriver: true,
+          }).start(() => {
+            onClose();
+            translateY.setValue(0);
+          });
         } else {
           // Snap back to current state
-          Animated.spring(heightAnim, {
-            toValue: isExpanded ? expandedHeight : defaultHeight,
-            useNativeDriver: false,
+          Animated.spring(translateY, {
+            toValue: 0,
+            useNativeDriver: true,
             tension: 80,
             friction: 12,
           }).start();
@@ -108,8 +145,13 @@ export function BottomDrawer({
       />
 
       <Animated.View style={[
-        styles.drawerContainer, 
-        expandable ? { height: heightAnim } : { maxHeight }
+        styles.drawerContainer,
+        expandable ? {
+          maxHeight: maxHeightAnim,
+          transform: [{ translateY }],
+        } : {
+          maxHeight: maxHeight,
+        }
       ]}>
         <SafeAreaView
           style={[
@@ -159,7 +201,7 @@ const styles = StyleSheet.create({
     elevation: 10,
   },
   drawerSheet: {
-    flex: 1,
+    flexShrink: 1,
     paddingTop: 4,
     paddingHorizontal: 4,
     paddingBottom: 0, // SafeAreaView handles bottom padding
