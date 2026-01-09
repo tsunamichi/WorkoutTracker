@@ -70,36 +70,30 @@ export function BottomDrawer({
         // Allow dragging in both directions
         if (Math.abs(gestureState.dy) > Math.abs(gestureState.dx)) {
           if (isExpanded) {
-            // When expanded, allow dragging down to collapse (positive dy only)
+            // When expanded, dragging down should start collapsing
             if (gestureState.dy > 0) {
+              // Start collapsing if dragged down more than 20px
+              if (gestureState.dy > 20) {
+                setIsExpanded(false);
+              }
               translateY.setValue(gestureState.dy);
             }
           } else {
-            // When collapsed, allow dragging up to expand (negative dy) or down to dismiss (positive dy)
-            translateY.setValue(gestureState.dy);
+            // When collapsed, dragging up should start expanding
+            if (gestureState.dy < 0) {
+              // Start expanding if dragged up more than 20px
+              if (gestureState.dy < -20) {
+                setIsExpanded(true);
+              }
+            } else if (gestureState.dy > 100) {
+              // Allow drag down for dismiss
+              translateY.setValue(gestureState.dy);
+            }
           }
         }
       },
       onPanResponderRelease: (_, gestureState) => {
-        if (gestureState.dy < -50 && !isExpanded) {
-          // Expand: dragged up from initial state
-          setIsExpanded(true);
-          Animated.spring(translateY, {
-            toValue: 0,
-            useNativeDriver: true,
-            tension: 80,
-            friction: 12,
-          }).start();
-        } else if (gestureState.dy > 50 && isExpanded) {
-          // Collapse: dragged down from expanded state
-          setIsExpanded(false);
-          Animated.spring(translateY, {
-            toValue: 0,
-            useNativeDriver: true,
-            tension: 80,
-            friction: 12,
-          }).start();
-        } else if (gestureState.dy > 100 && !isExpanded) {
+        if (gestureState.dy > 100 && !isExpanded) {
           // Dismiss: dragged down significantly from initial state
           Animated.timing(translateY, {
             toValue: SCREEN_HEIGHT,
