@@ -230,6 +230,7 @@ export function BottomDrawer({
               backgroundColor,
               borderBottomLeftRadius: deviceCornerRadius,
               borderBottomRightRadius: deviceCornerRadius,
+              maxHeight: '100%', // Constrain to parent's maxHeight
             },
           ]}
         >
@@ -279,7 +280,7 @@ const styles = StyleSheet.create({
     elevation: 10,
   },
   drawerSheet: {
-    flex: 1,
+    flexDirection: 'column', // Explicit flex container
     paddingTop: 4,
     paddingHorizontal: 4,
     paddingBottom: 0, // Bottom padding added to content for proper scrolling
@@ -287,6 +288,7 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 24,
     borderBottomLeftRadius: 24,
     borderBottomRightRadius: 24,
+    overflow: 'hidden', // Ensure content doesn't overflow rounded corners
   },
   handleContainer: {
     paddingVertical: 12,
