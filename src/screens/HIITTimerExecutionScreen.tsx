@@ -144,18 +144,18 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
     sizeAnim.stopAnimation(() => {
       textSizeAnim.stopAnimation(() => {
     if (currentPhase === 'complete') {
-      // Don't shrink on complete
+      // Shrink quickly to disappear
           Animated.parallel([
       Animated.timing(sizeAnim, {
-        toValue: 0.6, // Stay at medium size
-              duration: 300,
-              easing: Easing.bezier(0.4, 0.0, 0.2, 1),
+        toValue: 0, // Shrink to 0
+              duration: 400, // Fast shrink
+              easing: Easing.out(Easing.cubic),
               useNativeDriver: false, // JS driver for width/height
             }),
             Animated.timing(textSizeAnim, {
-              toValue: 0.6,
-              duration: 300,
-              easing: Easing.bezier(0.4, 0.0, 0.2, 1),
+              toValue: 0,
+              duration: 400,
+              easing: Easing.out(Easing.cubic),
               useNativeDriver: true, // Native driver for transform
             }),
           ]).start();
@@ -1209,6 +1209,7 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
           ))}
           
           {/* Main timer circle - using width/height, with breathing during rest */}
+          {currentPhase !== 'complete' && (
           <Animated.View
             style={[
               styles.circle,
@@ -1229,14 +1230,7 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
                 alignItems: 'center',
               }}
           >
-            {currentPhase === 'complete' ? (
-              <Animated.View style={{ transform: [{ scale: textScale }] }}>
-                <Text style={styles.completeText}>{getDisplayText()}</Text>
-                {getSubtitleText() && (
-                  <Text style={styles.subtitleText}>{getSubtitleText()}</Text>
-                )}
-              </Animated.View>
-              ) : currentPhase === 'countdown' ? (
+            {currentPhase === 'countdown' ? (
                 showGo ? (
                   // "Go!" - show for 500ms then fade out
                   <Animated.Text 
@@ -1263,14 +1257,25 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
                 {getDisplayText()}
               </Animated.Text>
                 )
-              ) : (
+              ) : currentPhase !== 'complete' ? (
                 // Work and rest phases - text stays fixed size (no scale transform)
                 <Text style={styles.timerText}>
                   {getDisplayText()}
                 </Text>
-              )}
+              ) : null}
             </View>
           </Animated.View>
+          )}
+          
+          {/* Complete message on canvas (outside the circle) */}
+          {currentPhase === 'complete' && (
+            <View style={styles.completeMessageContainer}>
+              <Text style={styles.completeText}>{getDisplayText()}</Text>
+              {getSubtitleText() && (
+                <Text style={styles.subtitleText}>{getSubtitleText()}</Text>
+              )}
+            </View>
+          )}
           </View>
 
         {/* Controls */}
@@ -1439,14 +1444,21 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     textAlign: 'center',
   },
+  completeMessageContainer: {
+    position: 'absolute',
+    justifyContent: 'center',
+    alignItems: 'center',
+    width: '100%',
+    height: '100%',
+  },
   completeText: {
     ...TYPOGRAPHY.h2,
-    color: '#FFFFFF',
+    color: LIGHT_COLORS.text,
     textAlign: 'center',
   },
   subtitleText: {
     ...TYPOGRAPHY.h3,
-    color: '#FFFFFF',
+    color: LIGHT_COLORS.textSecondary,
     textAlign: 'center',
     marginTop: SPACING.md,
     opacity: 0.9,

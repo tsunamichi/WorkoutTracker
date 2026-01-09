@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity, Modal, TextInput, ScrollView,
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import Svg, { Circle, Path } from 'react-native-svg';
+import * as Haptics from 'expo-haptics';
 import { ProfileAvatar } from '../components/ProfileAvatar';
 import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS, CARDS } from '../constants';
 import { useStore } from '../store';
@@ -371,6 +372,7 @@ export function WorkoutsScreen() {
                 <TouchableOpacity
                   style={styles.manuallyButton}
                   onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                     navigation.navigate('CreateCycleBasics');
                   }}
                   activeOpacity={0.8}
@@ -381,6 +383,7 @@ export function WorkoutsScreen() {
                 <TouchableOpacity
                   style={styles.aiButton}
                   onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                     navigation.navigate('AIWorkoutCreation' as never);
                   }}
                   activeOpacity={0.8}
@@ -399,6 +402,7 @@ export function WorkoutsScreen() {
                         <TouchableOpacity
                           style={styles.templateCard}
                           onPress={() => {
+                            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                             setPrefs({ daysPerWeek: template.idealDays[0] || 3, sessionMinutes: 60 });
                             startDraftFromTemplate(template.id);
                             navigation.navigate('TemplateEditor', { templateId: template.id });
@@ -431,7 +435,10 @@ export function WorkoutsScreen() {
                             <View style={styles.cycleCard}>
                               <TouchableOpacity
                                 style={styles.cycleCardContent}
-                                onPress={() => navigation.navigate('CycleDetail' as never, { cycleId: cycle.id } as never)}
+                                onPress={() => {
+                                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                                  navigation.navigate('CycleDetail' as never, { cycleId: cycle.id } as never);
+                                }}
                                 activeOpacity={0.8}
                               >
                                 <Text style={styles.cycleName}>Cycle {cycle.cycleNumber}</Text>
@@ -482,7 +489,10 @@ export function WorkoutsScreen() {
                         <View style={styles.pastCycleCard}>
                           <TouchableOpacity
                             style={styles.pastCycleCardContent}
-                            onPress={() => navigation.navigate('CycleDetail' as never, { cycleId: cycle.id } as never)}
+                            onPress={() => {
+                              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                              navigation.navigate('CycleDetail' as never, { cycleId: cycle.id } as never);
+                            }}
                             activeOpacity={0.8}
                           >
                             <Text style={styles.pastCycleName}>{cycle.goal || `Cycle ${cycle.cycleNumber}`}</Text>
