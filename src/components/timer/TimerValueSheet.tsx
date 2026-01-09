@@ -4,14 +4,12 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
-  Modal,
   GestureResponderEvent,
   Animated,
-  Dimensions,
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import { COLORS, SPACING, TYPOGRAPHY } from '../../constants';
+import { BottomDrawer } from '../common/BottomDrawer';
 
 interface TimerValueSheetProps {
   visible: boolean;
@@ -35,7 +33,6 @@ const LIGHT_COLORS = {
 };
 
 const VISUAL_BAR_HEIGHT = 280;
-const SCREEN_HEIGHT = Dimensions.get('window').height;
 
 export function TimerValueSheet({
   visible,
@@ -49,9 +46,7 @@ export function TimerValueSheet({
   step,
   formatValue = (val) => `${val}s`,
 }: TimerValueSheetProps) {
-  const insets = useSafeAreaInsets();
   const [selectedValue, setSelectedValue] = useState(value);
-  const [isVisible, setIsVisible] = useState(false);
   
   // Use ref to track current value in touch handlers (avoid stale closures)
   const selectedValueRef = useRef(value);
@@ -61,8 +56,6 @@ export function TimerValueSheet({
   
   // Animated progress for smooth transitions
   const progressAnim = useRef(new Animated.Value((value - min) / (max - min))).current;
-  const slideAnim = useRef(new Animated.Value(0)).current;
-  const backdropAnim = useRef(new Animated.Value(0)).current;
   
   const progress = (selectedValue - min) / (max - min);
   
@@ -87,42 +80,6 @@ export function TimerValueSheet({
       progressAnim.setValue((value - min) / (max - min));
     }
   }, [visible, value, min, max, progressAnim]);
-
-  // Animate sheet in/out
-  useEffect(() => {
-    if (visible) {
-      setIsVisible(true);
-      Animated.parallel([
-        Animated.spring(slideAnim, {
-          toValue: 1,
-          useNativeDriver: true,
-          tension: 100,
-          friction: 20,
-          velocity: 2,
-        }),
-        Animated.timing(backdropAnim, {
-          toValue: 1,
-          duration: 250,
-          useNativeDriver: true,
-        }),
-      ]).start();
-    } else {
-      Animated.parallel([
-        Animated.timing(slideAnim, {
-          toValue: 0,
-          duration: 250,
-          useNativeDriver: true,
-        }),
-        Animated.timing(backdropAnim, {
-          toValue: 0,
-          duration: 250,
-          useNativeDriver: true,
-        }),
-      ]).start(() => {
-        setIsVisible(false);
-      });
-    }
-  }, [visible, slideAnim, backdropAnim]);
 
   const handleSave = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -171,60 +128,18 @@ export function TimerValueSheet({
     }
   };
 
-  const translateY = slideAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [SCREEN_HEIGHT, 0],
-  });
-
-  const backdropOpacity = backdropAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0, 1],
-  });
-
-  if (!isVisible && !visible) return null;
-
   return (
-    <Modal
-      visible={isVisible}
-      transparent={true}
-      animationType="none"
-      onRequestClose={onClose}
+    <BottomDrawer
+      visible={visible}
+      onClose={onClose}
+      maxHeight="75%"
     >
-      <View style={styles.overlay}>
-        <TouchableOpacity
-          style={StyleSheet.absoluteFillObject}
-          onPress={onClose}
-          activeOpacity={1}
-        >
-          <Animated.View
-            style={[
-              StyleSheet.absoluteFillObject,
-              {
-                backgroundColor: 'rgba(0, 0, 0, 0.4)',
-                opacity: backdropOpacity,
-              },
-            ]}
-            pointerEvents="none"
-          />
-        </TouchableOpacity>
-
-        <Animated.View
-          style={[
-            styles.sheet,
-            {
-              paddingBottom: insets.bottom + 8,
-              transform: [{ translateY }],
-            },
-          ]}
-        >
-          <View style={styles.sheetInner}>
-            <View style={styles.handle} />
-
-            <View style={styles.header}>
-              <Text style={styles.type}>{label}</Text>
-              <Text style={styles.label}>{title}</Text>
-              <Text style={styles.valueDisplay}>{formatValue(selectedValue)}</Text>
-            </View>
+      <View style={styles.container}>
+        <View style={styles.header}>
+          <Text style={styles.type}>{label}</Text>
+          <Text style={styles.label}>{title}</Text>
+          <Text style={styles.valueDisplay}>{formatValue(selectedValue)}</Text>
+        </View>
 
             <View style={styles.visualContainer}>
               <View
@@ -267,40 +182,17 @@ export function TimerValueSheet({
               </View>
             </View>
 
-            <TouchableOpacity style={styles.saveButton} onPress={handleSave} activeOpacity={0.8}>
-              <Text style={styles.saveButtonText}>Done</Text>
-            </TouchableOpacity>
-          </View>
-        </Animated.View>
+        <TouchableOpacity style={styles.saveButton} onPress={handleSave} activeOpacity={0.8}>
+          <Text style={styles.saveButtonText}>Done</Text>
+        </TouchableOpacity>
       </View>
-    </Modal>
+    </BottomDrawer>
   );
 }
 
 const styles = StyleSheet.create({
-  overlay: {
-    flex: 1,
-    justifyContent: 'flex-end',
-    backgroundColor: 'transparent',
-  },
-  sheet: {
-    marginHorizontal: 8,
-    marginBottom: 8,
-    backgroundColor: LIGHT_COLORS.backgroundCanvas,
-    borderRadius: 40,
-    borderCurve: 'continuous',
-  },
-  sheetInner: {
+  container: {
     paddingHorizontal: SPACING.xxl,
-  },
-  handle: {
-    width: 40,
-    height: 4,
-    backgroundColor: LIGHT_COLORS.border,
-    borderRadius: 2,
-    alignSelf: 'center',
-    marginTop: SPACING.md,
-    marginBottom: SPACING.lg,
   },
   header: {
     alignItems: 'center',
