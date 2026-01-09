@@ -42,21 +42,22 @@ export function BottomDrawer({
   const expandedHeight = SCREEN_HEIGHT * expandedHeightPercent;
 
   const translateY = useRef(new Animated.Value(0)).current;
-  const maxHeightAnim = useRef(new Animated.Value(maxHeightValue)).current;
   
   // Check if content is tall enough to need expansion (add some buffer for handle and padding)
   const needsExpansion = expandable && contentHeight > maxHeightValue * 0.95;
+  
+  // Calculate current max height based on expanded state
+  const currentMaxHeight = isExpanded ? expandedHeight : maxHeightValue;
 
   // Reset expanded state when drawer visibility changes
   useEffect(() => {
     if (visible) {
       setIsExpanded(false);
       translateY.setValue(0);
-      maxHeightAnim.setValue(maxHeightValue);
     } else {
       setContentHeight(0);
     }
-  }, [visible, maxHeightValue]);
+  }, [visible]);
 
   const panResponder = useMemo(
     () => PanResponder.create({
@@ -83,20 +84,18 @@ export function BottomDrawer({
         if (gestureState.dy < -50 && !isExpanded) {
           // Expand: dragged up from initial state
           setIsExpanded(true);
-          translateY.setValue(0);
-          Animated.spring(maxHeightAnim, {
-            toValue: expandedHeight,
-            useNativeDriver: false,
+          Animated.spring(translateY, {
+            toValue: 0,
+            useNativeDriver: true,
             tension: 80,
             friction: 12,
           }).start();
         } else if (gestureState.dy > 50 && isExpanded) {
           // Collapse: dragged down from expanded state
           setIsExpanded(false);
-          translateY.setValue(0);
-          Animated.spring(maxHeightAnim, {
-            toValue: maxHeightValue,
-            useNativeDriver: false,
+          Animated.spring(translateY, {
+            toValue: 0,
+            useNativeDriver: true,
             tension: 80,
             friction: 12,
           }).start();
@@ -121,7 +120,7 @@ export function BottomDrawer({
         }
       },
     }),
-    [needsExpansion, isExpanded, translateY, maxHeightAnim, expandedHeight, maxHeightValue, onClose]
+    [needsExpansion, isExpanded, translateY, onClose]
   );
 
   if (!visible) return null;
@@ -143,7 +142,7 @@ export function BottomDrawer({
       <Animated.View style={[
         styles.drawerContainer,
         expandable ? {
-          maxHeight: maxHeightAnim,
+          maxHeight: currentMaxHeight,
           transform: [{ translateY }],
         } : {
           maxHeight: maxHeight,
@@ -174,7 +173,6 @@ export function BottomDrawer({
               onLayout={(event) => {
                 if (expandable) {
                   const { height } = event.nativeEvent.layout;
-                  console.log('📏 Drawer content height:', height, 'maxHeight:', maxHeightValue, 'needsExpansion:', height > maxHeightValue * 0.95);
                   setContentHeight(height);
                 }
               }}
