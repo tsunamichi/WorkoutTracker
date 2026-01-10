@@ -41,21 +41,36 @@ export function BottomDrawer({
   // Match device corner radius (iPhone rounded corners)
   const deviceCornerRadius = insets.bottom > 0 ? 40 : 24;
 
-  // Calculate height percentages
-  const maxHeightPercent = parseFloat(maxHeight.replace('%', '')) / 100;
-  const expandedHeightPercent = 0.9;
+  // Calculate max drawer height (90% of screen minus bottom offset)
   const bottomOffset = 8; // drawer is positioned 8px from bottom
-  const maxHeightValue = SCREEN_HEIGHT * maxHeightPercent;
-  const expandedHeight = (SCREEN_HEIGHT - bottomOffset) * expandedHeightPercent;
+  const maxDrawerHeight = (SCREEN_HEIGHT - bottomOffset) * 0.9;
+  
+  // Handle height (if showHandle is true)
+  const handleHeight = showHandle ? 28 : 0; // ~12px padding top + 4px handle + 12px padding bottom
+  
+  // Calculate actual drawer height based on content
+  // If expandable, allow expansion; otherwise fit to content up to 90%
+  const calculateDrawerHeight = () => {
+    if (expandable && isExpanded) {
+      return maxDrawerHeight;
+    }
+    if (contentHeight > 0) {
+      // Content height + handle height, capped at maxDrawerHeight
+      const totalNeededHeight = contentHeight + handleHeight;
+      return Math.min(totalNeededHeight, maxDrawerHeight);
+    }
+    // Fallback to 80% if content height not measured yet
+    return SCREEN_HEIGHT * 0.8;
+  };
+  
+  const currentMaxHeight = calculateDrawerHeight();
+  
+  // Check if content needs scrolling (content is taller than available space)
+  const needsScrolling = contentHeight + handleHeight > maxDrawerHeight;
+  const needsExpansion = expandable && needsScrolling;
 
   const translateY = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
   const overlayOpacity = useRef(new Animated.Value(0)).current;
-  
-  // Check if content is tall enough to need expansion (add some buffer for handle and padding)
-  const needsExpansion = expandable && contentHeight > maxHeightValue * 0.95;
-  
-  // Calculate current max height based on expanded state
-  const currentMaxHeight = isExpanded ? expandedHeight : maxHeightValue;
 
   // Animate in/out when drawer visibility changes
   useEffect(() => {
@@ -170,8 +185,10 @@ export function BottomDrawer({
 
   if (!visible) return null;
 
-  const Content = scrollable ? ScrollView : View;
-  const contentProps = scrollable 
+  // Only use ScrollView if content needs scrolling
+  const shouldScroll = scrollable && needsScrolling;
+  const Content = shouldScroll ? ScrollView : View;
+  const contentProps = shouldScroll 
     ? { 
         contentContainerStyle: contentStyle,
         style: { flex: 1 },
@@ -214,7 +231,7 @@ export function BottomDrawer({
       <Animated.View style={[
         styles.drawerContainer,
         {
-          maxHeight: expandable ? currentMaxHeight : maxHeight,
+          maxHeight: currentMaxHeight,
           transform: [{ translateY }],
         }
       ]}>
@@ -240,10 +257,8 @@ export function BottomDrawer({
           <Content {...contentProps}>
             <View
               onLayout={(event) => {
-                if (expandable) {
-                  const { height } = event.nativeEvent.layout;
-                  setContentHeight(height);
-                }
+                const { height } = event.nativeEvent.layout;
+                setContentHeight(height);
               }}
             >
               {children}
