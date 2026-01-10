@@ -18,10 +18,9 @@ import { useStore } from '../store';
 import { COLORS, SPACING, TYPOGRAPHY, GRADIENTS, BUTTONS, BORDER_RADIUS } from '../constants';
 import { IconArrowLeft, IconPlay, IconPause, IconSpeaker, IconSkip, IconRestart, IconMenu } from '../components/icons';
 import { DropdownMenu } from '../components/DropdownMenu';
-import { useLiveActivity } from '../hooks/useLiveActivity';
-import type { Phase } from '../modules/LiveActivity';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/AppNavigator';
+import { AppState } from 'react-native';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'HIITTimerExecution'>;
 
@@ -150,9 +149,6 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
           intervalRef.current = null;
         }
         
-        // End Live Activity if active
-        endLiveActivity(`timer-${timerId}`);
-        
         // Clear active timer status (should already be cleared by form, but ensure it here)
         setActiveHIITTimer(null);
         
@@ -179,7 +175,7 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
     });
     
     return unsubscribe;
-  }, [navigation, timer, timerId, endLiveActivity, setActiveHIITTimer]);
+  }, [navigation, timer, timerId, setActiveHIITTimer]);
   
   // Mark timer as active when it starts (even if paused later)
   useEffect(() => {
@@ -219,15 +215,6 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
     }
   }, [currentPhase, setActiveHIITTimer]);
   
-  // Live Activity hook
-  const {
-    startLiveActivity,
-    updateLiveActivity,
-    pauseLiveActivity,
-    resumeLiveActivity,
-    endLiveActivity,
-  } = useLiveActivity();
-  
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const countdownSoundRef = useRef<Audio.Sound | null>(null);
   const completeSoundRef = useRef<Audio.Sound | null>(null);
@@ -238,24 +225,6 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
   const currentPhaseRef = useRef<TimerPhase>(currentPhase);
   const currentSetRef = useRef(currentSet);
   const currentRoundRef = useRef(currentRound);
-  
-  // Helper to map timer phase to Live Activity phase
-  const getLiveActivityPhase = (phase: TimerPhase): Phase => {
-    switch (phase) {
-      case 'work':
-        return 'EXERCISE';
-      case 'workRest':
-      case 'roundRest':
-        return 'REST';
-      default:
-        return 'EXERCISE';
-    }
-  };
-  
-  // Helper to get current exercise name for Live Activity
-  const getCurrentExerciseName = () => {
-    return `${timer.name} - Set ${currentSet}/${timer.sets}`;
-  };
   
   // Animated values
   const sizeAnim = useRef(new Animated.Value(1)).current; // 1 = 100%, 0 = MIN_SIZE (JS driver for width/height)
@@ -733,15 +702,6 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
       setCurrentPhase('work');
       setSecondsRemaining(timer.work);
         
-        // Update Live Activity for work phase
-        const workEndTimestamp = Date.now() + (timer.work * 1000);
-        updateLiveActivity({
-          id: `timer-${timerId}`,
-          exerciseName: getCurrentExerciseName(),
-          phase: 'EXERCISE',
-          endTimestampMs: workEndTimestamp,
-        });
-        
         isTransitioningRef.current = false;
             });
           } catch (error) {
@@ -791,9 +751,6 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
         addHIITTimerSession(session);
         console.log('💾 Saved HIIT timer session:', session);
         
-        // End Live Activity
-        endLiveActivity(`timer-${timerId}`);
-        
         setCurrentPhase('complete');
         setIsRunning(false);
         isTransitioningRef.current = false;
@@ -802,15 +759,6 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
         console.log('⏸️ Moving to work rest, duration:', timer.workRest, 'seconds');
       setCurrentPhase('workRest');
       setSecondsRemaining(timer.workRest);
-      
-      // Update Live Activity for rest phase
-      const restEndTimestamp = Date.now() + (timer.workRest * 1000);
-      updateLiveActivity({
-        id: `timer-${timerId}`,
-        exerciseName: getCurrentExerciseName(),
-        phase: 'REST',
-        endTimestampMs: restEndTimestamp,
-      });
       
       setTimeout(() => {
         isTransitioningRef.current = false;
@@ -824,29 +772,11 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
         setCurrentSet(prev => prev + 1);
         setCurrentPhase('work');
         setSecondsRemaining(timer.work);
-        
-        // Update Live Activity for next set
-        const nextSetEndTimestamp = Date.now() + (timer.work * 1000);
-        updateLiveActivity({
-          id: `timer-${timerId}`,
-          exerciseName: getCurrentExerciseName(),
-          phase: 'EXERCISE',
-          endTimestampMs: nextSetEndTimestamp,
-        });
       } else if (round < timer.rounds) {
         // Round rest - continue without stopping
         console.log('🔄 Moving to round rest');
         setCurrentPhase('roundRest');
         setSecondsRemaining(timer.roundRest);
-        
-        // Update Live Activity for round rest
-        const roundRestEndTimestamp = Date.now() + (timer.roundRest * 1000);
-        updateLiveActivity({
-          id: `timer-${timerId}`,
-          exerciseName: getCurrentExerciseName(),
-          phase: 'REST',
-          endTimestampMs: roundRestEndTimestamp,
-        });
       }
         setTimeout(() => {
           isTransitioningRef.current = false;
@@ -860,20 +790,11 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
       setCurrentPhase('work');
       setSecondsRemaining(timer.work);
       
-      // Update Live Activity for next round
-      const nextRoundEndTimestamp = Date.now() + (timer.work * 1000);
-      updateLiveActivity({
-        id: `timer-${timerId}`,
-        exerciseName: getCurrentExerciseName(),
-        phase: 'EXERCISE',
-        endTimestampMs: nextRoundEndTimestamp,
-      });
-      
       setTimeout(() => {
         isTransitioningRef.current = false;
       }, 50);
     }
-  }, [timer, soundEnabled, setCurrentPhase, setSecondsRemaining, setCurrentSet, setCurrentRound, setIsRunning, setShowGo, textOpacityAnim, updateLiveActivity, endLiveActivity, getCurrentExerciseName, addHIITTimerSession, timerId]);
+  }, [timer, soundEnabled, setCurrentPhase, setSecondsRemaining, setCurrentSet, setCurrentRound, setIsRunning, setShowGo, textOpacityAnim, addHIITTimerSession, timerId]);
 
   // Log when handlePhaseComplete recreates
   const handlePhaseCompleteIdRef = useRef(0);
@@ -924,6 +845,20 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
       }
     };
   }, [isRunning, soundEnabled, handlePhaseComplete]);
+
+  // Pause timer when app goes to background
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (nextAppState) => {
+      if (nextAppState === 'background' && isRunning) {
+        console.log('📱 App going to background - pausing HIIT timer');
+        setIsRunning(false);
+      }
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, [isRunning]);
 
   // Trigger confetti
   const triggerConfetti = useCallback(() => {
@@ -1003,31 +938,6 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
         // Starting/resuming
         lastPlayedSecondRef.current = null;
         isTransitioningRef.current = false;
-        
-        // Start or resume Live Activity
-        const endTimestampMs = Date.now() + (secondsRemaining * 1000);
-        
-        if (currentPhase === 'countdown' && !wasRunning) {
-          // First start - start Live Activity
-          startLiveActivity({
-            id: `timer-${timerId}`,
-            exerciseName: getCurrentExerciseName(),
-            phase: getLiveActivityPhase(currentPhase),
-            isRunning: true,
-            endTimestampMs,
-          });
-        } else {
-          // Resume from pause
-          resumeLiveActivity(
-            `timer-${timerId}`,
-            secondsRemaining * 1000,
-            getCurrentExerciseName()
-          );
-        }
-      } else {
-        // Pausing
-        const remainingMs = secondsRemaining * 1000;
-        pauseLiveActivity(`timer-${timerId}`, remainingMs);
       }
       return !prev;
     });
@@ -1118,9 +1028,6 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
               breathingAnim.stopAnimation();
               restColorAnim.stopAnimation();
               
-              // End Live Activity
-              endLiveActivity(`timer-${timerId}`);
-              
               // Delete and navigate back
               deleteHIITTimer(timerId);
               navigation.goBack();
@@ -1158,9 +1065,6 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
       // Pause the timer if it's running
       if (isRunning) {
         setIsRunning(false);
-        // Pause Live Activity
-        const remainingMs = secondsRemaining * 1000;
-        pauseLiveActivity(`timer-${timerId}`, remainingMs);
       }
       
       // Show confirmation dialog
@@ -1175,9 +1079,6 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
               // Resume the timer if it was running before
               if (wasRunningRef.current) {
                 setIsRunning(true);
-                // Resume Live Activity
-                const remainingMs = secondsRemaining * 1000;
-                resumeLiveActivity(`timer-${timerId}`, remainingMs, getCurrentExerciseName());
               }
             },
           },
@@ -1199,9 +1100,6 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
               sideButtonsAnim.stopAnimation();
               breathingAnim.stopAnimation();
               restColorAnim.stopAnimation();
-              
-              // End Live Activity
-              endLiveActivity(`timer-${timerId}`);
               
               navigation.goBack();
             },
