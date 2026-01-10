@@ -51,6 +51,7 @@ export function TodayScreen({ onNavigateToWorkouts, onDateChange }: TodayScreenP
   const [previousWorkoutData, setPreviousWorkoutData] = useState<any>(null);
   const [showSwapSheet, setShowSwapSheet] = useState(false);
   const [isSwapSheetVisible, setIsSwapSheetVisible] = useState(false);
+  const [pressedSwapItemDate, setPressedSwapItemDate] = useState<string | null>(null);
   
   // Animation values
   const oldCardTranslateX = useRef(new Animated.Value(0)).current;
@@ -776,7 +777,10 @@ export function TodayScreen({ onNavigateToWorkouts, onDateChange }: TodayScreenP
               <View key={index} style={styles.swapSheetItemWrapper}>
                 <View style={styles.swapSheetItemBlackShadow}>
                   <View style={styles.swapSheetItemWhiteShadow}>
-                    <View style={styles.swapSheetItem}>
+                    <View style={[
+                      styles.swapSheetItem,
+                      pressedSwapItemDate === day.date && styles.swapSheetItemPressed
+                    ]}>
                       <TouchableOpacity
                         style={styles.swapSheetItemInner}
                         onPress={async () => {
@@ -784,6 +788,8 @@ export function TodayScreen({ onNavigateToWorkouts, onDateChange }: TodayScreenP
                           setShowSwapSheet(false);
                           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
                         }}
+                        onPressIn={() => setPressedSwapItemDate(day.date)}
+                        onPressOut={() => setPressedSwapItemDate(null)}
                         activeOpacity={1}
                       >
                         <View>
@@ -1232,6 +1238,9 @@ const styles = StyleSheet.create({
   },
   swapSheetItem: {
     ...CARDS.cardDeep.outer,
+  },
+  swapSheetItemPressed: {
+    borderColor: LIGHT_COLORS.textMeta,
   },
   swapSheetItemInner: {
     ...CARDS.cardDeep.inner,

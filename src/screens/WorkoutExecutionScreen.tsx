@@ -476,6 +476,7 @@ export function WorkoutExecutionScreen({ route, navigation }: WorkoutExecutionSc
   const [showTimer, setShowTimer] = useState(false);
   const [currentExerciseIndex, setCurrentExerciseIndex] = useState(0);
   const [showMenu, setShowMenu] = useState(false);
+  const [pressedExerciseId, setPressedExerciseId] = useState<string | null>(null);
   
   // Force refresh when screen comes into focus OR when workout progress changes
   useFocusEffect(
@@ -858,7 +859,10 @@ export function WorkoutExecutionScreen({ route, navigation }: WorkoutExecutionSc
                     
                     {/* Exercise Card */}
                     <View style={styles.exerciseCardWrapper}>
-                      <View style={isSkipped ? CARDS.cardDeepDisabled.outer : isCurrentlyInProgress ? CARDS.cardDeep.outer : CARDS.cardDeepDimmed.outer}>
+                      <View style={[
+                        isSkipped ? CARDS.cardDeepDisabled.outer : isCurrentlyInProgress ? CARDS.cardDeep.outer : CARDS.cardDeepDimmed.outer,
+                        pressedExerciseId === exercise.id && styles.exerciseCardPressed
+                      ]}>
                             <TouchableOpacity
                           style={[
                             isSkipped ? { ...CARDS.cardDeepDisabled.inner, ...styles.exerciseCardInnerBase } : 
@@ -866,6 +870,8 @@ export function WorkoutExecutionScreen({ route, navigation }: WorkoutExecutionSc
                             { ...CARDS.cardDeepDimmed.inner, ...styles.exerciseCardInnerBase }
                           ]}
                               onPress={handleExerciseTap}
+                              onPressIn={() => setPressedExerciseId(exercise.id)}
+                              onPressOut={() => setPressedExerciseId(null)}
                               activeOpacity={1}
                               disabled={isDisabled && !isSkipped}
                             >
@@ -1053,6 +1059,9 @@ const styles = StyleSheet.create({
   // Exercise Card Shadows (matching Today screen workout card)
   exerciseCardWrapper: {
     width: '100%',
+  },
+  exerciseCardPressed: {
+    borderColor: '#817B77', // textMeta
   },
   exerciseCardInnerBase: {
     paddingHorizontal: 16,
