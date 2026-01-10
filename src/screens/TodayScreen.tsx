@@ -390,25 +390,20 @@ export function TodayScreen({ onNavigateToWorkouts, onDateChange }: TodayScreenP
                         transform: [{ scale: dayScales[index] }]
                       }}
                     >
-                      <View style={styles.dayButtonBlackShadow}>
-                        <View style={styles.dayButtonOuterShadow}>
-                          <View
-                            style={[
-                              styles.dayButton, 
-                              styles.dayButtonWithShadow,
-                              {
-                                backgroundColor: isSelected 
-                                  ? '#000000'
-                                  : COLORS.activeCard
-                              }
-                            ]}
-                          >
-                          <View style={[styles.dayButtonBorder, isSelected && styles.dayButtonBorderActive]}>
-                            <Text style={isSelected ? styles.dayNumberToday : styles.dayNumber}>
-                              {day.dayNumber}
-                            </Text>
-                          </View>
-                        </View>
+                      <View
+                        style={[
+                          styles.dayButton,
+                          {
+                            backgroundColor: isSelected 
+                              ? '#000000'
+                              : COLORS.activeCard
+                          }
+                        ]}
+                      >
+                        <View style={[styles.dayButtonBorder, isSelected && styles.dayButtonBorderActive]}>
+                          <Text style={isSelected ? styles.dayNumberToday : styles.dayNumber}>
+                            {day.dayNumber}
+                          </Text>
                         </View>
                       </View>
                     </Animated.View>
