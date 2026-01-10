@@ -497,7 +497,6 @@ const styles = StyleSheet.create({
   // Bottom Sheet
   sheetContent: {
     paddingHorizontal: SPACING.xxl,
-    paddingBottom: 24,
   },
   sheetTitle: {
     fontSize: 28,

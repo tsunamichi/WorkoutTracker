@@ -1030,27 +1030,27 @@ export function ExerciseDetailScreen({ route, navigation }: ExerciseDetailScreen
           expandable={true}
         >
           <View style={styles.historySheetContent}>
-            <Text style={styles.historySheetTitle}>History</Text>
-            {exerciseHistory.length === 0 ? (
-              <View style={styles.historySheetEmpty}>
-                <Text style={styles.historySheetEmptyText}>
-                  No history recorded yet
-                </Text>
-              </View>
-            ) : (
-              exerciseHistory.map((workout, workoutIndex) => {
-                return (
-                  <View key={workout.sessionId}>
+              <Text style={styles.historySheetTitle}>History</Text>
+                {exerciseHistory.length === 0 ? (
+                  <View style={styles.historySheetEmpty}>
+                    <Text style={styles.historySheetEmptyText}>
+                      No history recorded yet
+                    </Text>
+                  </View>
+                ) : (
+                  exerciseHistory.map((workout, workoutIndex) => {
+                    return (
+                      <View key={workout.sessionId}>
                     <View style={styles.historyWorkoutGroup}>
                       {/* Date column on the left */}
                       <View style={styles.historyDateColumn}>
                         <Text style={styles.historyDateText}>
                           {dayjs(workout.date).format('MMMM')}
-                        </Text>
+                          </Text>
                         <Text style={styles.historyDateText}>
                           {dayjs(workout.date).date()}{getOrdinalSuffix(dayjs(workout.date).date())}
-                        </Text>
-                      </View>
+                          </Text>
+                        </View>
                       
                       {/* Sets column on the right */}
                       <View style={styles.historySetsColumn}>
@@ -1069,20 +1069,20 @@ export function ExerciseDetailScreen({ route, navigation }: ExerciseDetailScreen
                       </View>
                     </View>
                     
-                    {workoutIndex < exerciseHistory.length - 1 && (
+                        {workoutIndex < exerciseHistory.length - 1 && (
                       <View style={styles.historyDividerContainer}>
                         <View style={styles.historyDividerTop} />
                         <View style={styles.historyDividerBottom} />
                       </View>
-                    )}
-                  </View>
-                );
-              })
-            )}
-          </View>
+                        )}
+                      </View>
+                    );
+                  })
+                )}
+            </View>
         </BottomDrawer>
+          </View>
       </View>
-    </View>
   );
 }
 
@@ -1419,7 +1419,6 @@ const styles = StyleSheet.create({
   // History Bottom Sheet Content
   historySheetContent: {
     paddingHorizontal: SPACING.xxl,
-    paddingBottom: 24,
   },
   historySheetTitle: {
     ...TYPOGRAPHY.h2,
