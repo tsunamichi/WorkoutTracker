@@ -59,8 +59,8 @@ export function BottomDrawer({
       const totalNeededHeight = contentHeight + handleHeight;
       return Math.min(totalNeededHeight, maxDrawerHeight);
     }
-    // Fallback to 80% if content height not measured yet
-    return SCREEN_HEIGHT * 0.8;
+    // Start with max height to allow proper content measurement
+    return maxDrawerHeight;
   };
   
   const currentMaxHeight = calculateDrawerHeight();
@@ -256,6 +256,7 @@ export function BottomDrawer({
           
           <Content {...contentProps}>
             <View
+              style={{ flexShrink: 0 }}
               onLayout={(event) => {
                 const { height } = event.nativeEvent.layout;
                 setContentHeight(height);
