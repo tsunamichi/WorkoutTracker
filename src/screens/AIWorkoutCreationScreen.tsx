@@ -529,7 +529,7 @@ const styles = StyleSheet.create({
   sheetTitle: {
     ...TYPOGRAPHY.h2,
     color: COLORS.text,
-    marginBottom: 8,
+    marginBottom: 4,
   },
   sheetSubtitle: {
     ...TYPOGRAPHY.meta,
