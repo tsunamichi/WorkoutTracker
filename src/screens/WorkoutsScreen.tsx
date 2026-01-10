@@ -654,7 +654,7 @@ const styles = StyleSheet.create({
     elevation: 1,
   },
   templateCard: {
-    backgroundColor: COLORS.backgroundCanvas,
+    backgroundColor: COLORS.activeCard,
     borderRadius: BORDER_RADIUS.md,
     borderWidth: 1,
     borderColor: COLORS.border,

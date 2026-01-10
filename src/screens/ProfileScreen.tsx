@@ -495,7 +495,7 @@ const styles = StyleSheet.create({
   },
   statCard: {
     flex: 1,
-    backgroundColor: '#E3E3DE',
+    backgroundColor: COLORS.activeCard,
     borderRadius: 12,
     borderCurve: 'continuous',
     borderWidth: 1,
@@ -528,7 +528,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   emptyState: {
-    backgroundColor: '#E3E3DE',
+    backgroundColor: COLORS.activeCard,
     borderRadius: 12,
     borderCurve: 'continuous',
     borderWidth: 1,
@@ -557,7 +557,7 @@ const styles = StyleSheet.create({
   weightList: {
   },
   weightEntry: {
-    backgroundColor: '#E3E3DE',
+    backgroundColor: COLORS.activeCard,
     borderRadius: 12,
     borderCurve: 'continuous',
     borderWidth: 1,
@@ -591,7 +591,7 @@ const styles = StyleSheet.create({
     color: LIGHT_COLORS.secondary,
   },
   settingRow: {
-    backgroundColor: '#E3E3DE',
+    backgroundColor: COLORS.activeCard,
     borderRadius: 12,
     borderCurve: 'continuous',
     borderWidth: 1,

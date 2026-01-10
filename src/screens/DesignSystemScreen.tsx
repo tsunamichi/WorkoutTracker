@@ -568,7 +568,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: SPACING.sm,
-    backgroundColor: '#E3E3DE',
+    backgroundColor: COLORS.activeCard,
     paddingVertical: SPACING.md,
     paddingHorizontal: SPACING.xl,
     borderRadius: BORDER_RADIUS.md,
@@ -638,7 +638,7 @@ const styles = StyleSheet.create({
     elevation: 1,
   },
   cardWithShadow: {
-    backgroundColor: '#E3E3DE',
+    backgroundColor: COLORS.activeCard,
     borderRadius: 12,
     borderCurve: 'continuous',
     borderWidth: 1,
