@@ -1043,7 +1043,7 @@ export function ExerciseDetailScreen({ route, navigation }: ExerciseDetailScreen
                     return (
                       <View 
                         key={workout.sessionId}
-                        style={isLastItem ? { paddingBottom: 24 } : undefined}
+                        style={isLastItem ? { paddingBottom: 16 } : undefined}
                       >
                     <View style={styles.historyWorkoutGroup}>
                       {/* Date column on the left */}

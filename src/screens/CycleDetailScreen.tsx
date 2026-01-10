@@ -324,7 +324,7 @@ export function CycleDetailScreen({ route, navigation }: CycleDetailScreenProps)
                       return (
                         <View 
                           key={assignment.date}
-                          style={isLastAssignment ? { paddingBottom: 24 } : undefined}
+                          style={isLastAssignment ? { paddingBottom: 16 } : undefined}
                         >
                           {exercisesWithProgress.map((item, exerciseIndex) => (
                             <View key={item.exercise.id}>
