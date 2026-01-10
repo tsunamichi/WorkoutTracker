@@ -239,9 +239,8 @@ export function BottomDrawer({
           <Content {...contentProps}>
             <View
               style={{ 
-                paddingBottom: insets.bottom,
                 borderWidth: 3,
-                borderColor: 'yellow', // DEBUG: Content wrapper (paddingBottom)
+                borderColor: 'yellow', // DEBUG: Content wrapper (no padding now)
               }}
               onLayout={(event) => {
                 if (expandable) {
