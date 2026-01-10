@@ -721,23 +721,15 @@ export function ExerciseDetailScreen({ route, navigation }: ExerciseDetailScreen
                                 activeOpacity={1}
                                 style={styles.adjustButtonTapTarget}
                               >
-                                <View style={styles.adjustButtonShadow1}>
-                                  <View style={styles.adjustButtonShadow2}>
-                                    <View style={styles.adjustButtonShadow3}>
-                                      <View style={styles.adjustButtonShadow4}>
-                                        <View style={styles.adjustButton}>
-                                          <LinearGradient
-                                            colors={['#212121', '#3F3D3D']}
-                                            start={{ x: 0.42, y: 0.42 }}
-                                            end={{ x: 1, y: 1 }}
-                                            style={styles.adjustButtonInner}
-                                          >
-                                            <Text style={styles.adjustButtonText}>−</Text>
-                                          </LinearGradient>
-                                        </View>
-                                      </View>
-                                    </View>
-                                  </View>
+                                <View style={styles.adjustButton}>
+                                  <LinearGradient
+                                    colors={['#212121', '#3F3D3D']}
+                                    start={{ x: 0.42, y: 0.42 }}
+                                    end={{ x: 1, y: 1 }}
+                                    style={styles.adjustButtonInner}
+                                  >
+                                    <Text style={styles.adjustButtonText}>−</Text>
+                                  </LinearGradient>
                                 </View>
                               </TouchableOpacity>
                               <TouchableOpacity 
@@ -745,23 +737,15 @@ export function ExerciseDetailScreen({ route, navigation }: ExerciseDetailScreen
                                 activeOpacity={1}
                                 style={styles.adjustButtonTapTarget}
                               >
-                                <View style={styles.adjustButtonShadow1}>
-                                  <View style={styles.adjustButtonShadow2}>
-                                    <View style={styles.adjustButtonShadow3}>
-                                      <View style={styles.adjustButtonShadow4}>
-                                        <View style={styles.adjustButton}>
-                                          <LinearGradient
-                                            colors={['#212121', '#3F3D3D']}
-                                            start={{ x: 0.42, y: 0.42 }}
-                                            end={{ x: 1, y: 1 }}
-                                            style={styles.adjustButtonInner}
-                                          >
-                                            <Text style={styles.adjustButtonText}>+</Text>
-                                          </LinearGradient>
-                                        </View>
-                                      </View>
-                                    </View>
-                                  </View>
+                                <View style={styles.adjustButton}>
+                                  <LinearGradient
+                                    colors={['#212121', '#3F3D3D']}
+                                    start={{ x: 0.42, y: 0.42 }}
+                                    end={{ x: 1, y: 1 }}
+                                    style={styles.adjustButtonInner}
+                                  >
+                                    <Text style={styles.adjustButtonText}>+</Text>
+                                  </LinearGradient>
                                 </View>
                               </TouchableOpacity>
                             </View>
@@ -787,23 +771,15 @@ export function ExerciseDetailScreen({ route, navigation }: ExerciseDetailScreen
                                 activeOpacity={1}
                                 style={styles.adjustButtonTapTarget}
                               >
-                                <View style={styles.adjustButtonShadow1}>
-                                  <View style={styles.adjustButtonShadow2}>
-                                    <View style={styles.adjustButtonShadow3}>
-                                      <View style={styles.adjustButtonShadow4}>
-                                        <View style={styles.adjustButton}>
-                                          <LinearGradient
-                                            colors={['#212121', '#3F3D3D']}
-                                            start={{ x: 0.42, y: 0.42 }}
-                                            end={{ x: 1, y: 1 }}
-                                            style={styles.adjustButtonInner}
-                                          >
-                                            <Text style={styles.adjustButtonText}>−</Text>
-                                          </LinearGradient>
-                                        </View>
-                                      </View>
-                                    </View>
-                                  </View>
+                                <View style={styles.adjustButton}>
+                                  <LinearGradient
+                                    colors={['#212121', '#3F3D3D']}
+                                    start={{ x: 0.42, y: 0.42 }}
+                                    end={{ x: 1, y: 1 }}
+                                    style={styles.adjustButtonInner}
+                                  >
+                                    <Text style={styles.adjustButtonText}>−</Text>
+                                  </LinearGradient>
                                 </View>
                               </TouchableOpacity>
                               <TouchableOpacity 
@@ -811,23 +787,15 @@ export function ExerciseDetailScreen({ route, navigation }: ExerciseDetailScreen
                                 activeOpacity={1}
                                 style={styles.adjustButtonTapTarget}
                               >
-                                <View style={styles.adjustButtonShadow1}>
-                                  <View style={styles.adjustButtonShadow2}>
-                                    <View style={styles.adjustButtonShadow3}>
-                                      <View style={styles.adjustButtonShadow4}>
-                                        <View style={styles.adjustButton}>
-                                          <LinearGradient
-                                            colors={['#212121', '#3F3D3D']}
-                                            start={{ x: 0.42, y: 0.42 }}
-                                            end={{ x: 1, y: 1 }}
-                                            style={styles.adjustButtonInner}
-                                          >
-                                            <Text style={styles.adjustButtonText}>+</Text>
-                                          </LinearGradient>
-                                        </View>
-                                      </View>
-                                    </View>
-                                  </View>
+                                <View style={styles.adjustButton}>
+                                  <LinearGradient
+                                    colors={['#212121', '#3F3D3D']}
+                                    start={{ x: 0.42, y: 0.42 }}
+                                    end={{ x: 1, y: 1 }}
+                                    style={styles.adjustButtonInner}
+                                  >
+                                    <Text style={styles.adjustButtonText}>+</Text>
+                                  </LinearGradient>
                                 </View>
                               </TouchableOpacity>
                             </View>
