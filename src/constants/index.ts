@@ -258,23 +258,7 @@ export const CARDS = {
     borderColor: '#AEAEAB',
   },
   cardDeep: {
-    // Outer card (black shadow layer)
-    blackShadow: {
-      shadowColor: '#000000',
-      shadowOffset: { width: -1, height: -1 },
-      shadowOpacity: 0.08,
-      shadowRadius: 1,
-      elevation: 2,
-    },
-    // Middle layer (white shadow)
-    whiteShadow: {
-      shadowColor: '#FFFFFF',
-      shadowOffset: { width: 1, height: 1 },
-      shadowOpacity: 1,
-      shadowRadius: 1,
-      elevation: 1,
-    },
-    // Outer card container
+    // Outer card container (no external shadows)
     outer: {
       backgroundColor: '#EDEEEB', // activeCard
       borderRadius: 16,  // Squircle-friendly
@@ -283,30 +267,23 @@ export const CARDS = {
       borderColor: '#AEAEAB',
       overflow: 'hidden' as const,
     },
-    // Inner card (flat, no depth borders)
+    // Inner card with borders for depth
     inner: {
       backgroundColor: '#EDEEEB', // activeCard
       borderRadius: 16,  // Squircle-friendly
       borderCurve: 'continuous' as const,
-      borderWidth: 0, // No borders for clean, flat appearance
+      borderTopWidth: 2,
+      borderLeftWidth: 2,
+      borderBottomWidth: 2,
+      borderRightWidth: 2,
+      borderTopColor: 'rgba(255, 255, 255, 0.75)',
+      borderLeftColor: 'rgba(255, 255, 255, 0.75)',
+      borderBottomColor: 'rgba(0, 0, 0, 0.08)',
+      borderRightColor: 'rgba(0, 0, 0, 0.08)',
     },
   },
   cardDeepDimmed: {
-    // Same shadows as default
-    blackShadow: {
-      shadowColor: '#000000',
-      shadowOffset: { width: -1, height: -1 },
-      shadowOpacity: 0.08,
-      shadowRadius: 1,
-      elevation: 2,
-    },
-    whiteShadow: {
-      shadowColor: '#FFFFFF',
-      shadowOffset: { width: 1, height: 1 },
-      shadowOpacity: 1,
-      shadowRadius: 1,
-      elevation: 1,
-    },
+    // No external shadows (dimmed state)
     outer: {
       backgroundColor: '#E3E3DE',
       borderRadius: 16,  // Squircle-friendly
@@ -315,30 +292,23 @@ export const CARDS = {
       borderColor: '#AEAEAB',
       overflow: 'hidden' as const,
     },
-    // Inner card (flat, no borders for dimmed state)
+    // Inner card WITHOUT borders (dimmed state)
     inner: {
       backgroundColor: '#E2E3DF',
       borderRadius: 16,  // Squircle-friendly
       borderCurve: 'continuous' as const,
-      borderWidth: 0, // No borders
+      borderTopWidth: 2,
+      borderLeftWidth: 2,
+      borderBottomWidth: 2,
+      borderRightWidth: 2,
+      borderTopColor: 'transparent',
+      borderLeftColor: 'transparent',
+      borderBottomColor: 'transparent',
+      borderRightColor: 'transparent',
     },
   },
   cardDeepDisabled: {
-    // Same shadows as default
-    blackShadow: {
-      shadowColor: '#000000',
-      shadowOffset: { width: -1, height: -1 },
-      shadowOpacity: 0.08,
-      shadowRadius: 1,
-      elevation: 2,
-    },
-    whiteShadow: {
-      shadowColor: '#FFFFFF',
-      shadowOffset: { width: 1, height: 1 },
-      shadowOpacity: 1,
-      shadowRadius: 1,
-      elevation: 1,
-    },
+    // No external shadows (disabled state)
     // Outer card with disabled border color
     outer: {
       backgroundColor: '#E3E3DE',
@@ -348,12 +318,19 @@ export const CARDS = {
       borderColor: '#D2D2D2', // disabledBorder color
       overflow: 'hidden' as const,
     },
-    // Inner card (flat, no borders for disabled state)
+    // Inner card WITHOUT borders (disabled state)
     inner: {
       backgroundColor: '#E2E3DF',
       borderRadius: 16,  // Squircle-friendly
       borderCurve: 'continuous' as const,
-      borderWidth: 0, // No borders
+      borderTopWidth: 2,
+      borderLeftWidth: 2,
+      borderBottomWidth: 2,
+      borderRightWidth: 2,
+      borderTopColor: 'transparent',
+      borderLeftColor: 'transparent',
+      borderBottomColor: 'transparent',
+      borderRightColor: 'transparent',
     },
   },
 };
