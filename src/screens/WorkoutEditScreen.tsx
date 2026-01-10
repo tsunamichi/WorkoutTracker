@@ -486,13 +486,11 @@ export default function WorkoutEditScreen({ navigation, route }: Props) {
                       },
                     ]}
                   >
-                    <View style={CARDS.cardDeep.blackShadow}>
-                      <View style={CARDS.cardDeep.whiteShadow}>
-                        <View style={[
-                          CARDS.cardDeep.outer,
-                          pressedCardId === exercise.id && styles.exerciseCardPressed
-                        ]}>
-                          <View style={[CARDS.cardDeep.inner, styles.exerciseCard]}>
+                    <View style={[
+                      CARDS.cardDeep.outer,
+                      pressedCardId === exercise.id && styles.exerciseCardPressed
+                    ]}>
+                      <View style={[CARDS.cardDeep.inner, styles.exerciseCard]}>
                             <TouchableOpacity
                               style={styles.exerciseCardContent}
                               onPress={() => setSelectedExerciseId(isSelected ? null : exercise.id)}
@@ -514,8 +512,6 @@ export default function WorkoutEditScreen({ navigation, route }: Props) {
                             >
                               <IconGripVertical size={20} color={isDragging ? COLORS.text : COLORS.textMeta} />
                             </View>
-                          </View>
-                        </View>
                       </View>
                     </View>
                   </Animated.View>

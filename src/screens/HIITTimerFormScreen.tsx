@@ -294,17 +294,14 @@ export default function HIITTimerFormScreen({ navigation, route }: Props) {
               onPressOut={() => setPressedCardId(null)}
               activeOpacity={1}
             >
-              <View style={[CARDS.cardDeep.blackShadow, styles.cardBlackShadow]}>
-                <View style={CARDS.cardDeep.whiteShadow}>
-                  <View style={[
-                    CARDS.cardDeep.outer,
-                    pressedCardId === 'work' && styles.cardPressed
-                  ]}>
-                    <View style={[CARDS.cardDeep.inner, styles.cardInner]}>
-                      <Text style={styles.cardLabel}>Move for</Text>
-                      <Text style={styles.cardValue}>{formatTime(work)}</Text>
-                    </View>
-                  </View>
+              <View style={[
+                CARDS.cardDeep.outer,
+                styles.card,
+                pressedCardId === 'work' && styles.cardPressed
+              ]}>
+                <View style={[CARDS.cardDeep.inner, styles.cardInner]}>
+                  <Text style={styles.cardLabel}>Move for</Text>
+                  <Text style={styles.cardValue}>{formatTime(work)}</Text>
                 </View>
               </View>
             </TouchableOpacity>
@@ -316,17 +313,14 @@ export default function HIITTimerFormScreen({ navigation, route }: Props) {
               onPressOut={() => setPressedCardId(null)}
               activeOpacity={1}
             >
-              <View style={[CARDS.cardDeep.blackShadow, styles.cardBlackShadow]}>
-                <View style={CARDS.cardDeep.whiteShadow}>
-                  <View style={[
-                    CARDS.cardDeep.outer,
-                    pressedCardId === 'workRest' && styles.cardPressed
-                  ]}>
-                    <View style={[CARDS.cardDeep.inner, styles.cardInner]}>
-                      <Text style={styles.cardLabel}>Rest after each exercise</Text>
-                      <Text style={styles.cardValue}>{formatTime(workRest)}</Text>
-                    </View>
-                  </View>
+              <View style={[
+                CARDS.cardDeep.outer,
+                styles.card,
+                pressedCardId === 'workRest' && styles.cardPressed
+              ]}>
+                <View style={[CARDS.cardDeep.inner, styles.cardInner]}>
+                  <Text style={styles.cardLabel}>Rest after each exercise</Text>
+                  <Text style={styles.cardValue}>{formatTime(workRest)}</Text>
                 </View>
               </View>
             </TouchableOpacity>
@@ -343,17 +337,14 @@ export default function HIITTimerFormScreen({ navigation, route }: Props) {
               onPressOut={() => setPressedCardId(null)}
               activeOpacity={1}
             >
-              <View style={[CARDS.cardDeep.blackShadow, styles.cardBlackShadow]}>
-                <View style={CARDS.cardDeep.whiteShadow}>
-                  <View style={[
-                    CARDS.cardDeep.outer,
-                    pressedCardId === 'sets' && styles.cardPressed
-                  ]}>
-                    <View style={[CARDS.cardDeep.inner, styles.cardInner]}>
-                      <Text style={styles.cardLabel}>Exercises in a round</Text>
-                      <Text style={styles.cardValue}>{sets}</Text>
-                    </View>
-                  </View>
+              <View style={[
+                CARDS.cardDeep.outer,
+                styles.card,
+                pressedCardId === 'sets' && styles.cardPressed
+              ]}>
+                <View style={[CARDS.cardDeep.inner, styles.cardInner]}>
+                  <Text style={styles.cardLabel}>Exercises in a round</Text>
+                  <Text style={styles.cardValue}>{sets}</Text>
                 </View>
               </View>
             </TouchableOpacity>
@@ -365,17 +356,14 @@ export default function HIITTimerFormScreen({ navigation, route }: Props) {
               onPressOut={() => setPressedCardId(null)}
               activeOpacity={1}
             >
-              <View style={[CARDS.cardDeep.blackShadow, styles.cardBlackShadow]}>
-                <View style={CARDS.cardDeep.whiteShadow}>
-                  <View style={[
-                    CARDS.cardDeep.outer,
-                    pressedCardId === 'rounds' && styles.cardPressed
-                  ]}>
-                    <View style={[CARDS.cardDeep.inner, styles.cardInner]}>
-                      <Text style={styles.cardLabel}>Rounds</Text>
-                      <Text style={styles.cardValue}>{rounds}</Text>
-                    </View>
-                  </View>
+              <View style={[
+                CARDS.cardDeep.outer,
+                styles.card,
+                pressedCardId === 'rounds' && styles.cardPressed
+              ]}>
+                <View style={[CARDS.cardDeep.inner, styles.cardInner]}>
+                  <Text style={styles.cardLabel}>Rounds</Text>
+                  <Text style={styles.cardValue}>{rounds}</Text>
                 </View>
               </View>
             </TouchableOpacity>
@@ -387,17 +375,14 @@ export default function HIITTimerFormScreen({ navigation, route }: Props) {
               onPressOut={() => setPressedCardId(null)}
               activeOpacity={1}
             >
-              <View style={[CARDS.cardDeep.blackShadow, styles.cardBlackShadow]}>
-                <View style={CARDS.cardDeep.whiteShadow}>
-                  <View style={[
-                    CARDS.cardDeep.outer,
-                    pressedCardId === 'roundRest' && styles.cardPressed
-                  ]}>
-                    <View style={[CARDS.cardDeep.inner, styles.cardInner]}>
-                      <Text style={styles.cardLabel}>Rest between rounds</Text>
-                      <Text style={styles.cardValue}>{formatTime(roundRest)}</Text>
-                    </View>
-                  </View>
+              <View style={[
+                CARDS.cardDeep.outer,
+                styles.card,
+                pressedCardId === 'roundRest' && styles.cardPressed
+              ]}>
+                <View style={[CARDS.cardDeep.inner, styles.cardInner]}>
+                  <Text style={styles.cardLabel}>Rest between rounds</Text>
+                  <Text style={styles.cardValue}>{formatTime(roundRest)}</Text>
                 </View>
               </View>
             </TouchableOpacity>
@@ -561,7 +546,7 @@ const styles = StyleSheet.create({
     color: LIGHT_COLORS.textMeta,
     marginBottom: SPACING.lg,
   },
-  cardBlackShadow: {
+  card: {
     marginBottom: 8,
   },
   cardPressed: {

@@ -70,12 +70,11 @@ export function WorkoutCreationOptionsScreen() {
           <Text style={styles.sectionTitle}>Start with a template</Text>
           
           {TEMPLATES.filter(t => t.id !== 'custom').map((template) => (
-            <View key={template.id} style={styles.templateCardBlackShadow}>
-              <View style={styles.templateCardWhiteShadow}>
-                <View style={[
-                  styles.templateCard,
-                  pressedCardId === `template-${template.id}` && styles.templateCardPressed
-                ]}>
+            <View key={template.id} style={styles.templateCardWrapper}>
+              <View style={[
+                styles.templateCard,
+                pressedCardId === `template-${template.id}` && styles.templateCardPressed
+              ]}>
                   <TouchableOpacity
                     style={styles.templateCardContent}
                     onPress={() => {
@@ -93,7 +92,6 @@ export function WorkoutCreationOptionsScreen() {
                     </View>
                     <View style={styles.triangle} />
                   </TouchableOpacity>
-                </View>
               </View>
             </View>
           ))}
@@ -195,11 +193,9 @@ const styles = StyleSheet.create({
     color: COLORS.textMeta,
     marginBottom: SPACING.sm,
   },
-  templateCardBlackShadow: {
-    ...CARDS.cardDeep.blackShadow,
+  templateCardWrapper: {
     marginBottom: SPACING.xs,
   },
-  templateCardWhiteShadow: CARDS.cardDeep.whiteShadow,
   templateCard: CARDS.cardDeep.outer,
   templateCardPressed: {
     borderColor: '#817B77', // textMeta
