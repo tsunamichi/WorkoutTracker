@@ -12,6 +12,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Audio } from 'expo-av';
+import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import Svg, { Circle, Path } from 'react-native-svg';
 import dayjs from 'dayjs';
 import { useStore } from '../store';
@@ -109,6 +110,20 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
       navigation.goBack();
     }
   }, [timer, navigation]);
+  
+  // Keep screen awake while timer is running
+  useEffect(() => {
+    if (isRunning) {
+      activateKeepAwakeAsync('timer-running');
+    } else {
+      deactivateKeepAwake('timer-running');
+    }
+    
+    // Cleanup on unmount
+    return () => {
+      deactivateKeepAwake('timer-running');
+    };
+  }, [isRunning]);
   
   // Reload timer values when returning from edit screen
   useEffect(() => {

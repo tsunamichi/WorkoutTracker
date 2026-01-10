@@ -12,6 +12,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Audio } from 'expo-av';
 import * as Haptics from 'expo-haptics';
+import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import { useStore } from '../../store';
 import { SPACING, TYPOGRAPHY } from '../../constants';
 import { TimerControls } from './TimerControls';
@@ -99,6 +100,20 @@ export function SetTimerSheet({
       callback();
     });
   }, [slideAnim]);
+
+  // Keep screen awake while timer is running
+  useEffect(() => {
+    if (visible && isRunning) {
+      activateKeepAwakeAsync('rest-timer-running');
+    } else {
+      deactivateKeepAwake('rest-timer-running');
+    }
+    
+    // Cleanup on unmount
+    return () => {
+      deactivateKeepAwake('rest-timer-running');
+    };
+  }, [visible, isRunning]);
 
   // Load audio files
   useEffect(() => {
