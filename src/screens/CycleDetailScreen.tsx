@@ -266,7 +266,7 @@ export function CycleDetailScreen({ route, navigation }: CycleDetailScreenProps)
                   <Text style={styles.emptyExercisesText}>No exercises added yet</Text>
                 </View>
               ) : (
-                <ScrollView style={styles.exercisesList}>
+                <View style={styles.exercisesList}>
                   {(() => {
                     if (!selectedWorkout) return null;
                     
@@ -373,7 +373,7 @@ export function CycleDetailScreen({ route, navigation }: CycleDetailScreenProps)
                       );
                     });
                   })()}
-                </ScrollView>
+                </View>
               )}
             </View>
       </BottomDrawer>
@@ -526,7 +526,6 @@ const styles = StyleSheet.create({
   
   // Exercises List
   exercisesList: {
-    maxHeight: 400,
     marginHorizontal: -SPACING.xxl, // Remove parent's horizontal padding
   },
   
