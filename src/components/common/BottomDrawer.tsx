@@ -173,12 +173,22 @@ export function BottomDrawer({
   const contentProps = scrollable 
     ? { 
         contentContainerStyle: contentStyle,
-        style: { flex: 1 },
+        style: { 
+          flex: 1,
+          borderWidth: 3,
+          borderColor: 'green', // DEBUG: ScrollView (flex: 1)
+        },
         showsVerticalScrollIndicator: true,
         bounces: true,
       }
     : { 
-        style: contentStyle
+        style: [
+          contentStyle,
+          { 
+            borderWidth: 3,
+            borderColor: 'green', // DEBUG: View (non-scrollable)
+          }
+        ]
       };
 
   const handleOverlayPress = () => {
@@ -215,6 +225,8 @@ export function BottomDrawer({
         {
           maxHeight: expandable ? currentMaxHeight : maxHeight,
           transform: [{ translateY }],
+          borderWidth: 3,
+          borderColor: 'red', // DEBUG: drawerContainer (Animated.View with maxHeight)
         }
       ]}>
         <View
@@ -224,6 +236,8 @@ export function BottomDrawer({
               backgroundColor,
               borderBottomLeftRadius: deviceCornerRadius,
               borderBottomRightRadius: deviceCornerRadius,
+              borderWidth: 3,
+              borderColor: 'blue', // DEBUG: drawerSheet (flex: 1)
             },
           ]}
         >
@@ -238,7 +252,11 @@ export function BottomDrawer({
           
           <Content {...contentProps}>
             <View
-              style={{ paddingBottom: insets.bottom }}
+              style={{ 
+                paddingBottom: insets.bottom,
+                borderWidth: 3,
+                borderColor: 'yellow', // DEBUG: Content wrapper (paddingBottom)
+              }}
               onLayout={(event) => {
                 if (expandable) {
                   const { height } = event.nativeEvent.layout;
@@ -288,6 +306,8 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 20,
     alignItems: 'center',
+    borderWidth: 3,
+    borderColor: 'orange', // DEBUG: Handle container
   },
   sheetHandle: {
     width: 40,
