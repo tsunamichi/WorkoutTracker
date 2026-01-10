@@ -536,11 +536,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     paddingVertical: SPACING.lg,
     paddingHorizontal: SPACING.xxl,
-    gap: SPACING.xl,
+    gap: 32,
   },
   historyDateColumn: {
-    width: 120,
-    flexShrink: 0,
+    flex: 1,
   },
   historyDateText: {
     ...TYPOGRAPHY.body,
@@ -558,7 +557,7 @@ const styles = StyleSheet.create({
   historySetRow: {
     flexDirection: 'row',
     alignItems: 'baseline',
-    gap: 24,
+    gap: 16,
     justifyContent: 'flex-end', // Right-align the row
   },
   historyValueColumn: {

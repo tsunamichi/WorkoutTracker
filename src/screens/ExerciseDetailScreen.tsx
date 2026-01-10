@@ -1441,11 +1441,10 @@ const styles = StyleSheet.create({
   historyWorkoutGroup: {
     flexDirection: 'row',
     paddingVertical: SPACING.lg,
-    gap: SPACING.xl,
+    gap: 32,
   },
   historyDateColumn: {
-    width: 80,
-    flexShrink: 0,
+    flex: 1,
   },
   historyDateText: {
     ...TYPOGRAPHY.body,
@@ -1459,7 +1458,7 @@ const styles = StyleSheet.create({
   historySetRow: {
     flexDirection: 'row',
     alignItems: 'baseline',
-    gap: 24,
+    gap: 16,
     justifyContent: 'flex-end', // Right-align the row
   },
   historyValueColumn: {
