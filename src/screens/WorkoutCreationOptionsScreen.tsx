@@ -11,6 +11,7 @@ export function WorkoutCreationOptionsScreen() {
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
   const { startDraftFromTemplate, setPrefs } = useOnboardingStore();
+  const [pressedCardId, setPressedCardId] = React.useState<string | null>(null);
 
   return (
     <View style={styles.container}>
@@ -71,7 +72,10 @@ export function WorkoutCreationOptionsScreen() {
           {TEMPLATES.filter(t => t.id !== 'custom').map((template) => (
             <View key={template.id} style={styles.templateCardBlackShadow}>
               <View style={styles.templateCardWhiteShadow}>
-                <View style={styles.templateCard}>
+                <View style={[
+                  styles.templateCard,
+                  pressedCardId === `template-${template.id}` && styles.templateCardPressed
+                ]}>
                   <TouchableOpacity
                     style={styles.templateCardContent}
                     onPress={() => {
@@ -79,6 +83,8 @@ export function WorkoutCreationOptionsScreen() {
                       startDraftFromTemplate(template.id);
                       navigation.navigate('TemplateEditor' as never, { templateId: template.id } as never);
                     }}
+                    onPressIn={() => setPressedCardId(`template-${template.id}`)}
+                    onPressOut={() => setPressedCardId(null)}
                     activeOpacity={1}
                   >
                     <View style={styles.templateCardInner}>
@@ -195,6 +201,9 @@ const styles = StyleSheet.create({
   },
   templateCardWhiteShadow: CARDS.cardDeep.whiteShadow,
   templateCard: CARDS.cardDeep.outer,
+  templateCardPressed: {
+    borderColor: '#817B77', // textMeta
+  },
   templateCardContent: {
     ...CARDS.cardDeep.inner,
     paddingHorizontal: 24,

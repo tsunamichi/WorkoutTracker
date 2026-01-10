@@ -58,6 +58,7 @@ export default function WorkoutEditScreen({ navigation, route }: Props) {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedNewExerciseId, setSelectedNewExerciseId] = useState<string | null>(null);
   const [swapWeight, setSwapWeight] = useState('');
+  const [pressedCardId, setPressedCardId] = useState<string | null>(null);
   const [swapReps, setSwapReps] = useState('');
   const [swapSets, setSwapSets] = useState('');
   const [draggingIndex, setDraggingIndex] = useState<number | null>(null);
@@ -487,11 +488,16 @@ export default function WorkoutEditScreen({ navigation, route }: Props) {
                   >
                     <View style={CARDS.cardDeep.blackShadow}>
                       <View style={CARDS.cardDeep.whiteShadow}>
-                        <View style={CARDS.cardDeep.outer}>
+                        <View style={[
+                          CARDS.cardDeep.outer,
+                          pressedCardId === exercise.id && styles.exerciseCardPressed
+                        ]}>
                           <View style={[CARDS.cardDeep.inner, styles.exerciseCard]}>
                             <TouchableOpacity
                               style={styles.exerciseCardContent}
                               onPress={() => setSelectedExerciseId(isSelected ? null : exercise.id)}
+                              onPressIn={() => setPressedCardId(exercise.id)}
+                              onPressOut={() => setPressedCardId(null)}
                               activeOpacity={1}
                             >
                               {/* Exercise Name */}
@@ -860,6 +866,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     minHeight: 56, // Fixed height matching other cards
+  },
+  exerciseCardPressed: {
+    borderColor: LIGHT_COLORS.textMeta,
   },
   exerciseCardContent: {
     flex: 1,
