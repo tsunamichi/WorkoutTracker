@@ -300,9 +300,10 @@ export function CycleDetailScreen({ route, navigation }: CycleDetailScreenProps)
                       );
                     }
                     
-                    return completedAssignments.map((assignment, assignmentIndex) => {
+                    const reversedAssignments = completedAssignments.slice().reverse();
+                    return reversedAssignments.map((assignment, assignmentIndex) => {
                       const workoutKey = `${selectedWorkout.id}-${assignment.date}`;
-                      const isLastAssignment = assignmentIndex === completedAssignments.length - 1;
+                      const isLastAssignment = assignmentIndex === reversedAssignments.length - 1;
                       
                       const exercisesWithProgress = selectedWorkout.exercises
                         .map((exercise) => {
@@ -362,7 +363,7 @@ export function CycleDetailScreen({ route, navigation }: CycleDetailScreenProps)
                             </View>
                           ))}
                           
-                          {assignmentIndex < completedAssignments.length - 1 && (
+                          {assignmentIndex < reversedAssignments.length - 1 && (
                             <View style={[styles.historyDividerContainer, { marginVertical: SPACING.lg }]}>
                               <View style={styles.historyDividerTop} />
                               <View style={styles.historyDividerBottom} />
@@ -557,7 +558,7 @@ const styles = StyleSheet.create({
   historySetRow: {
     flexDirection: 'row',
     alignItems: 'baseline',
-    gap: 40, // 40px gap between columns
+    gap: 24,
     justifyContent: 'flex-end', // Right-align the row
   },
   historyValueColumn: {

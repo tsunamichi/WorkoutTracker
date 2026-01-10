@@ -1459,7 +1459,7 @@ const styles = StyleSheet.create({
   historySetRow: {
     flexDirection: 'row',
     alignItems: 'baseline',
-    gap: 40, // 40px gap between columns
+    gap: 24,
     justifyContent: 'flex-end', // Right-align the row
   },
   historyValueColumn: {
