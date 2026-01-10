@@ -283,19 +283,12 @@ export const CARDS = {
       borderColor: '#AEAEAB',
       overflow: 'hidden' as const,
     },
-    // Inner card with borders for depth
+    // Inner card (flat, no depth borders)
     inner: {
       backgroundColor: '#EDEEEB', // activeCard
       borderRadius: 16,  // Squircle-friendly
       borderCurve: 'continuous' as const,
-      borderTopWidth: 2,
-      borderLeftWidth: 2,
-      borderBottomWidth: 2,
-      borderRightWidth: 2,
-      borderTopColor: 'rgba(255, 255, 255, 0.75)',
-      borderLeftColor: 'rgba(255, 255, 255, 0.75)',
-      borderBottomColor: 'rgba(0, 0, 0, 0.08)',
-      borderRightColor: 'rgba(0, 0, 0, 0.08)',
+      borderWidth: 0, // No borders for clean, flat appearance
     },
   },
   cardDeepDimmed: {
@@ -322,19 +315,12 @@ export const CARDS = {
       borderColor: '#AEAEAB',
       overflow: 'hidden' as const,
     },
-    // Inner card WITHOUT borders (dimmed state)
+    // Inner card (flat, no borders for dimmed state)
     inner: {
       backgroundColor: '#E2E3DF',
       borderRadius: 16,  // Squircle-friendly
       borderCurve: 'continuous' as const,
-      borderTopWidth: 2,
-      borderLeftWidth: 2,
-      borderBottomWidth: 2,
-      borderRightWidth: 2,
-      borderTopColor: 'transparent',
-      borderLeftColor: 'transparent',
-      borderBottomColor: 'transparent',
-      borderRightColor: 'transparent',
+      borderWidth: 0, // No borders
     },
   },
   cardDeepDisabled: {
@@ -362,19 +348,12 @@ export const CARDS = {
       borderColor: '#D2D2D2', // disabledBorder color
       overflow: 'hidden' as const,
     },
-    // Inner card WITHOUT borders (disabled state)
+    // Inner card (flat, no borders for disabled state)
     inner: {
       backgroundColor: '#E2E3DF',
       borderRadius: 16,  // Squircle-friendly
       borderCurve: 'continuous' as const,
-      borderTopWidth: 2,
-      borderLeftWidth: 2,
-      borderBottomWidth: 2,
-      borderRightWidth: 2,
-      borderTopColor: 'transparent',
-      borderLeftColor: 'transparent',
-      borderBottomColor: 'transparent',
-      borderRightColor: 'transparent',
+      borderWidth: 0, // No borders
     },
   },
 };
