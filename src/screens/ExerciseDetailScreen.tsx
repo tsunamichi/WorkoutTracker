@@ -930,7 +930,7 @@ export function ExerciseDetailScreen({ route, navigation }: ExerciseDetailScreen
                   handleRecord(expandedSetIndex);
                 }
               }}
-              activeOpacity={0.8}
+              activeOpacity={1}
               disabled={allSetsCompleted && !hasUnsavedChanges}
             >
               {allSetsCompleted ? (

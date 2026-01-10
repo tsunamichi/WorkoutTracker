@@ -405,7 +405,7 @@ export default function WorkoutEditScreen({ navigation, route }: Props) {
               <TouchableOpacity
                 onPress={() => setIsEditingName(true)}
                 style={styles.workoutNameButton}
-                activeOpacity={0.7}
+                activeOpacity={1}
               >
                 <Text style={styles.workoutName}>{workoutName}</Text>
               </TouchableOpacity>
@@ -492,7 +492,7 @@ export default function WorkoutEditScreen({ navigation, route }: Props) {
                             <TouchableOpacity
                               style={styles.exerciseCardContent}
                               onPress={() => setSelectedExerciseId(isSelected ? null : exercise.id)}
-                              activeOpacity={0.7}
+                              activeOpacity={1}
                             >
                               {/* Exercise Name */}
                               <Text style={styles.exerciseName}>
@@ -528,14 +528,14 @@ export default function WorkoutEditScreen({ navigation, route }: Props) {
                     <TouchableOpacity
                       onPress={() => handleSwapExercise(exercise.id)}
                       style={styles.actionButton}
-                      activeOpacity={0.7}
+                      activeOpacity={1}
                     >
                       <IconSwap size={20} color={COLORS.text} />
                     </TouchableOpacity>
                     <TouchableOpacity
                       onPress={() => handleDeleteExercise(exercise.id)}
                       style={styles.actionButton}
-                      activeOpacity={0.7}
+                      activeOpacity={1}
                     >
                       <IconX size={20} color={COLORS.error} />
                     </TouchableOpacity>
@@ -557,7 +557,7 @@ export default function WorkoutEditScreen({ navigation, route }: Props) {
           <TouchableOpacity
             style={styles.addExerciseButton}
             onPress={handleAddExercise}
-            activeOpacity={0.7}
+            activeOpacity={1}
           >
             <IconAdd size={24} color={COLORS.text} />
             <Text style={styles.addExerciseButtonText}>Add Exercise</Text>
@@ -596,7 +596,7 @@ export default function WorkoutEditScreen({ navigation, route }: Props) {
             <TouchableOpacity
               onPress={handleCloseSwapDrawer}
               style={styles.closeButton}
-              activeOpacity={0.7}
+              activeOpacity={1}
             >
               <Text style={styles.closeButtonText}>✕</Text>
             </TouchableOpacity>
@@ -615,7 +615,7 @@ export default function WorkoutEditScreen({ navigation, route }: Props) {
                 {searchQuery.length > 0 && (
                   <TouchableOpacity
                     onPress={() => setSearchQuery('')}
-                    activeOpacity={0.7}
+                    activeOpacity={1}
                   >
                     <Text style={styles.clearIcon}>✕</Text>
                   </TouchableOpacity>
@@ -634,7 +634,7 @@ export default function WorkoutEditScreen({ navigation, route }: Props) {
                         isSelected && styles.swapExerciseItemSelected,
                       ]}
                       onPress={() => setSelectedNewExerciseId(exercise.id)}
-                      activeOpacity={0.7}
+                      activeOpacity={1}
                     >
                       <Text style={styles.swapExerciseName}>{exercise.name}</Text>
                       {exercise.category && (
@@ -745,7 +745,7 @@ export default function WorkoutEditScreen({ navigation, route }: Props) {
             <TouchableOpacity
               style={styles.modalCancelButton}
               onPress={() => setShowApplyModal(false)}
-              activeOpacity={0.7}
+              activeOpacity={1}
             >
               <Text style={styles.modalCancelText}>Cancel</Text>
             </TouchableOpacity>

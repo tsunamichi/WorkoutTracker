@@ -82,11 +82,11 @@ export function WorkoutTemplateEditSheet({
       <SafeAreaView style={styles.container}>
         {/* Header */}
         <View style={styles.header}>
-          <TouchableOpacity onPress={onClose} activeOpacity={0.7}>
+          <TouchableOpacity onPress={onClose} activeOpacity={1}>
             <Text style={styles.cancelButton}>Cancel</Text>
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Edit Workout</Text>
-          <TouchableOpacity onPress={handleSave} activeOpacity={0.7}>
+          <TouchableOpacity onPress={handleSave} activeOpacity={1}>
             <Text style={styles.saveButton}>Save</Text>
           </TouchableOpacity>
         </View>
@@ -116,7 +116,7 @@ export function WorkoutTemplateEditSheet({
                     workoutType === type && styles.typeChipSelected
                   ]}
                   onPress={() => setWorkoutType(type)}
-                  activeOpacity={0.7}
+                  activeOpacity={1}
                 >
                   <Text style={[
                     styles.typeChipText,
@@ -141,7 +141,7 @@ export function WorkoutTemplateEditSheet({
                     dayOfWeek === idx + 1 && styles.dayChipSelected
                   ]}
                   onPress={() => setDayOfWeek(dayOfWeek === idx + 1 ? undefined : idx + 1)}
-                  activeOpacity={0.7}
+                  activeOpacity={1}
                 >
                   <Text style={[
                     styles.dayChipText,
@@ -161,7 +161,7 @@ export function WorkoutTemplateEditSheet({
               <Text style={styles.exerciseCount}>
                 {template.exercises.length} exercise{template.exercises.length !== 1 ? 's' : ''}
               </Text>
-              <TouchableOpacity onPress={onEditFull} activeOpacity={0.7}>
+              <TouchableOpacity onPress={onEditFull} activeOpacity={1}>
                 <Text style={styles.editExercisesButton}>Edit Exercises →</Text>
               </TouchableOpacity>
             </View>
@@ -172,7 +172,7 @@ export function WorkoutTemplateEditSheet({
             <TouchableOpacity
               style={styles.deleteButton}
               onPress={handleDelete}
-              activeOpacity={0.7}
+              activeOpacity={1}
             >
               <Text style={styles.deleteButtonText}>Delete Workout</Text>
             </TouchableOpacity>

@@ -1544,7 +1544,7 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
               <TouchableOpacity
                 onPress={handleToggleSound}
                 style={styles.sideButtonTouchable}
-                activeOpacity={0.7}
+                activeOpacity={1}
               >
                 <IconSpeaker size={24} color={LIGHT_COLORS.textSecondary} muted={!soundEnabled} />
               </TouchableOpacity>
@@ -1554,7 +1554,7 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
             <TouchableOpacity
             onPress={currentPhase === 'complete' ? handleRestart : handlePlayPause}
             style={[BUTTONS.primaryButtonNoLabel, styles.playPauseButton]}
-              activeOpacity={0.8}
+              activeOpacity={1}
             >
             {currentPhase === 'complete' ? (
               <IconRestart size={32} color={'#FFFFFF'} />
@@ -1587,7 +1587,7 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
               <TouchableOpacity
                 onPress={handleSkip}
                 style={styles.sideButtonTouchable}
-                activeOpacity={0.7}
+                activeOpacity={1}
               >
                 <IconSkip size={24} color={LIGHT_COLORS.textSecondary} />
               </TouchableOpacity>

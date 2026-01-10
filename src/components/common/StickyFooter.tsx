@@ -18,7 +18,7 @@ export function StickyFooter({ onPress, buttonText, disabled = false, style }: S
         style={[styles.button, disabled && styles.buttonDisabled]}
         onPress={onPress}
         disabled={disabled}
-        activeOpacity={0.8}
+        activeOpacity={1}
       >
         <Text style={[styles.buttonText, disabled && styles.buttonTextDisabled]}>
           {buttonText}

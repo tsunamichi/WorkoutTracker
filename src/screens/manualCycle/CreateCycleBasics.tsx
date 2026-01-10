@@ -56,7 +56,7 @@ export function CreateCycleBasics({ navigation }: CreateCycleBasicsProps) {
           <TouchableOpacity
             onPress={() => navigation.goBack()}
             style={styles.backButton}
-            activeOpacity={0.6}
+            activeOpacity={1}
           >
             <Text style={styles.backText}>←</Text>
           </TouchableOpacity>
@@ -80,7 +80,7 @@ export function CreateCycleBasics({ navigation }: CreateCycleBasicsProps) {
                     frequencyDays.includes(day) && styles.dayChipSelected,
                   ]}
                   onPress={() => toggleFrequencyDay(day)}
-                  activeOpacity={0.7}
+                  activeOpacity={1}
                 >
                   <Text
                     style={[
@@ -108,7 +108,7 @@ export function CreateCycleBasics({ navigation }: CreateCycleBasicsProps) {
                     workoutLength === length && styles.lengthChipSelected,
                   ]}
                   onPress={() => setWorkoutLength(length)}
-                  activeOpacity={0.7}
+                  activeOpacity={1}
                 >
                   <Text
                     style={[
@@ -132,7 +132,7 @@ export function CreateCycleBasics({ navigation }: CreateCycleBasicsProps) {
                 style={[styles.stepperButton, weeks <= 1 && styles.stepperButtonDisabled]}
                 onPress={() => handleWeeksChange(-1)}
                 disabled={weeks <= 1}
-                activeOpacity={0.7}
+                activeOpacity={1}
               >
                 <IconMinus size={20} color={weeks <= 1 ? LIGHT_COLORS.textMeta : LIGHT_COLORS.secondary} />
               </TouchableOpacity>
@@ -144,7 +144,7 @@ export function CreateCycleBasics({ navigation }: CreateCycleBasicsProps) {
                 style={[styles.stepperButton, weeks >= 12 && styles.stepperButtonDisabled]}
                 onPress={() => handleWeeksChange(1)}
                 disabled={weeks >= 12}
-                activeOpacity={0.7}
+                activeOpacity={1}
               >
                 <IconAdd size={20} color={weeks >= 12 ? LIGHT_COLORS.textMeta : LIGHT_COLORS.secondary} />
               </TouchableOpacity>
@@ -158,7 +158,7 @@ export function CreateCycleBasics({ navigation }: CreateCycleBasicsProps) {
             style={[styles.continueButton, !canContinue && styles.continueButtonDisabled]}
             onPress={handleContinue}
             disabled={!canContinue}
-            activeOpacity={0.8}
+            activeOpacity={1}
           >
             <Text
               style={[

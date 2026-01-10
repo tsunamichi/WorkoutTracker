@@ -29,6 +29,7 @@ const LIGHT_COLORS = {
 export default function HIITTimerListScreen({ navigation }: Props) {
   const insets = useSafeAreaInsets();
   const { hiitTimers, deleteHIITTimer } = useStore();
+  const [pressedCardId, setPressedCardId] = React.useState<string | null>(null);
   
   const templates = hiitTimers.filter(t => t.isTemplate);
   
@@ -128,11 +129,16 @@ export default function HIITTimerListScreen({ navigation }: Props) {
                   ]
                 );
               }}
-              activeOpacity={0.95}
+              onPressIn={() => setPressedCardId(timer.id)}
+              onPressOut={() => setPressedCardId(null)}
+              activeOpacity={1}
             >
               <View style={[CARDS.cardDeep.blackShadow, styles.timerCardBlackShadow]}>
                 <View style={CARDS.cardDeep.whiteShadow}>
-                  <View style={CARDS.cardDeep.outer}>
+                  <View style={[
+                    CARDS.cardDeep.outer,
+                    pressedCardId === timer.id && styles.timerCardPressed
+                  ]}>
                     <View style={[CARDS.cardDeep.inner, styles.timerCardInner]}>
                       <Text style={styles.timerName}>{timer.name}</Text>
                       
@@ -142,7 +148,7 @@ export default function HIITTimerListScreen({ navigation }: Props) {
                         <TouchableOpacity
                           onPress={() => handleSelectTemplate(timer)}
                           style={styles.startButton}
-                          activeOpacity={0.7}
+                          activeOpacity={1}
                         >
                           <Text style={styles.startButtonText}>Start</Text>
                           <View style={styles.playIcon} />
@@ -235,6 +241,9 @@ const styles = StyleSheet.create({
   },
   timerCardBlackShadow: {
     marginBottom: SPACING.lg,
+  },
+  timerCardPressed: {
+    borderColor: LIGHT_COLORS.textMeta,
   },
   timerCardInner: {
     paddingHorizontal: 23,

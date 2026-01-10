@@ -83,7 +83,7 @@ export const ExerciseEditorBottomSheet = forwardRef<
           <TouchableOpacity
             style={styles.doneButton}
             onPress={onClose}
-            activeOpacity={0.7}
+            activeOpacity={1}
           >
             <Text style={styles.doneButtonText}>Done</Text>
           </TouchableOpacity>
@@ -108,7 +108,7 @@ export const ExerciseEditorBottomSheet = forwardRef<
           <TouchableOpacity
             style={styles.copyButton}
             onPress={handleCopyToAllWeeks}
-            activeOpacity={0.7}
+            activeOpacity={1}
           >
             <Text style={styles.copyButtonText}>Copy current week to all weeks</Text>
           </TouchableOpacity>
@@ -130,7 +130,7 @@ export const ExerciseEditorBottomSheet = forwardRef<
                   index === activeWeekIndex && styles.weekTabActive,
                 ]}
                 onPress={() => setActiveWeekIndex(index)}
-                activeOpacity={0.7}
+                activeOpacity={1}
               >
                 <Text
                   style={[
@@ -154,7 +154,7 @@ export const ExerciseEditorBottomSheet = forwardRef<
               <TouchableOpacity
                 style={styles.stepperButton}
                 onPress={() => handleStepper('sets', -1)}
-                activeOpacity={0.7}
+                activeOpacity={1}
               >
                 <IconMinus size={18} color={LIGHT_COLORS.textPrimary} />
               </TouchableOpacity>
@@ -162,7 +162,7 @@ export const ExerciseEditorBottomSheet = forwardRef<
               <TouchableOpacity
                 style={styles.stepperButton}
                 onPress={() => handleStepper('sets', 1)}
-                activeOpacity={0.7}
+                activeOpacity={1}
               >
                 <IconAdd size={18} color={LIGHT_COLORS.textPrimary} />
               </TouchableOpacity>
@@ -203,7 +203,7 @@ export const ExerciseEditorBottomSheet = forwardRef<
                     currentWeek.unit === 'lb' && styles.unitButtonActive,
                   ]}
                   onPress={() => handleUpdateField('unit', 'lb')}
-                  activeOpacity={0.7}
+                  activeOpacity={1}
                 >
                   <Text
                     style={[
@@ -220,7 +220,7 @@ export const ExerciseEditorBottomSheet = forwardRef<
                     currentWeek.unit === 'kg' && styles.unitButtonActive,
                   ]}
                   onPress={() => handleUpdateField('unit', 'kg')}
-                  activeOpacity={0.7}
+                  activeOpacity={1}
                 >
                   <Text
                     style={[
@@ -242,7 +242,7 @@ export const ExerciseEditorBottomSheet = forwardRef<
               <TouchableOpacity
                 style={styles.stepperButton}
                 onPress={() => handleStepper('restSec', -15)}
-                activeOpacity={0.7}
+                activeOpacity={1}
               >
                 <IconMinus size={18} color={LIGHT_COLORS.textPrimary} />
               </TouchableOpacity>
@@ -250,7 +250,7 @@ export const ExerciseEditorBottomSheet = forwardRef<
               <TouchableOpacity
                 style={styles.stepperButton}
                 onPress={() => handleStepper('restSec', 15)}
-                activeOpacity={0.7}
+                activeOpacity={1}
               >
                 <IconAdd size={18} color={LIGHT_COLORS.textPrimary} />
               </TouchableOpacity>

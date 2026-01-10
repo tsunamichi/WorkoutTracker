@@ -36,6 +36,7 @@ export function WorkoutsScreen() {
   const { startDraftFromTemplate, startDraftFromCustomText, setPrefs } = useOnboardingStore();
   const [showBottomSheet, setShowBottomSheet] = useState(false);
   const [workoutDetails, setWorkoutDetails] = useState('');
+  const [pressedCardId, setPressedCardId] = useState<string | null>(null);
   
   // Calculate cycle completion percentage
   const getCycleCompletion = (cycleId: string) => {
@@ -376,7 +377,7 @@ export function WorkoutsScreen() {
                     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                     navigation.navigate('CreateCycleBasics');
                   }}
-                  activeOpacity={0.8}
+                  activeOpacity={1}
                 >
                   <Text style={styles.manuallyButtonText}>Manually</Text>
                 </TouchableOpacity>
@@ -387,7 +388,7 @@ export function WorkoutsScreen() {
                     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                     navigation.navigate('AIWorkoutCreation' as never);
                   }}
-                  activeOpacity={0.8}
+                  activeOpacity={1}
                 >
                   <Text style={styles.aiButtonText}>With AI help</Text>
                 </TouchableOpacity>
@@ -401,14 +402,19 @@ export function WorkoutsScreen() {
                   <View key={template.id} style={styles.templateCardBlackShadow}>
                       <View style={styles.templateCardWhiteShadow}>
                         <TouchableOpacity
-                          style={styles.templateCard}
+                          style={[
+                            styles.templateCard,
+                            pressedCardId === `template-${template.id}` && styles.templateCardPressed
+                          ]}
                           onPress={() => {
                             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                             setPrefs({ daysPerWeek: template.idealDays[0] || 3, sessionMinutes: 60 });
                             startDraftFromTemplate(template.id);
                             navigation.navigate('TemplateEditor', { templateId: template.id });
                           }}
-                          activeOpacity={0.8}
+                          onPressIn={() => setPressedCardId(`template-${template.id}`)}
+                          onPressOut={() => setPressedCardId(null)}
+                          activeOpacity={1}
                         >
                         <View style={styles.templateCardContent}>
                             <Text style={styles.templateName}>{template.name}</Text>
@@ -433,14 +439,19 @@ export function WorkoutsScreen() {
                       <View key={cycle.id} style={styles.activeCycleSection}>
                         <View style={styles.cycleCardBlackShadow}>
                           <View style={styles.cycleCardWhiteShadow}>
-                            <View style={styles.cycleCard}>
+                            <View style={[
+                              styles.cycleCard,
+                              pressedCardId === `cycle-${cycle.id}` && styles.cycleCardPressed
+                            ]}>
                               <TouchableOpacity
                                 style={styles.cycleCardContent}
                                 onPress={() => {
                                   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                                   navigation.navigate('CycleDetail' as never, { cycleId: cycle.id } as never);
                                 }}
-                                activeOpacity={0.8}
+                                onPressIn={() => setPressedCardId(`cycle-${cycle.id}`)}
+                                onPressOut={() => setPressedCardId(null)}
+                                activeOpacity={1}
                               >
                                 <Text style={styles.cycleName}>Cycle {cycle.cycleNumber}</Text>
                                 <Text style={styles.cycleDate}>
@@ -487,14 +498,19 @@ export function WorkoutsScreen() {
                   {cycles.filter(c => !c.isActive).sort((a, b) => b.cycleNumber - a.cycleNumber).map((cycle) => (
                     <View key={cycle.id} style={styles.pastCycleCardBlackShadow}>
                       <View style={styles.pastCycleCardWhiteShadow}>
-                        <View style={styles.pastCycleCard}>
+                        <View style={[
+                          styles.pastCycleCard,
+                          pressedCardId === `past-cycle-${cycle.id}` && styles.pastCycleCardPressed
+                        ]}>
                           <TouchableOpacity
                             style={styles.pastCycleCardContent}
                             onPress={() => {
                               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                               navigation.navigate('CycleDetail' as never, { cycleId: cycle.id } as never);
                             }}
-                            activeOpacity={0.8}
+                            onPressIn={() => setPressedCardId(`past-cycle-${cycle.id}`)}
+                            onPressOut={() => setPressedCardId(null)}
+                            activeOpacity={1}
                           >
                             <Text style={styles.pastCycleName}>{cycle.goal || `Cycle ${cycle.cycleNumber}`}</Text>
                             <View style={styles.triangle} />
@@ -664,6 +680,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
   },
+  templateCardPressed: {
+    borderColor: LIGHT_COLORS.textMeta,
+  },
   templateCardContent: {
     flex: 1,
   },
@@ -704,6 +723,9 @@ const styles = StyleSheet.create({
   cycleCardBlackShadow: CARDS.cardDeep.blackShadow,
   cycleCardWhiteShadow: CARDS.cardDeep.whiteShadow,
   cycleCard: CARDS.cardDeep.outer,
+  cycleCardPressed: {
+    borderColor: LIGHT_COLORS.textMeta,
+  },
   cycleCardContent: {
     ...CARDS.cardDeep.inner,
     padding: SPACING.xl,
@@ -761,6 +783,9 @@ const styles = StyleSheet.create({
   },
   pastCycleCardWhiteShadow: CARDS.cardDeep.whiteShadow,
   pastCycleCard: CARDS.cardDeep.outer,
+  pastCycleCardPressed: {
+    borderColor: LIGHT_COLORS.textMeta,
+  },
   pastCycleCardContent: {
     ...CARDS.cardDeep.inner,
     paddingHorizontal: SPACING.xl,

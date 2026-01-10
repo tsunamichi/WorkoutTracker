@@ -15,7 +15,7 @@ export function ExerciseRow({ exercise, onPress, onDelete, isDragging }: Exercis
       <TouchableOpacity
         style={styles.content}
         onPress={onPress}
-        activeOpacity={0.7}
+        activeOpacity={1}
         disabled={!onPress}
       >
         <View style={styles.leftContent}>

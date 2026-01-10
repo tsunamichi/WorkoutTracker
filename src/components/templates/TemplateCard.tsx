@@ -13,7 +13,7 @@ export function TemplateCard({ template, isSelected, onSelect }: TemplateCardPro
     <TouchableOpacity
       style={[styles.card, isSelected && styles.cardSelected]}
       onPress={onSelect}
-      activeOpacity={0.7}
+      activeOpacity={1}
     >
       <View style={styles.header}>
         <Text style={styles.name}>{template.name}</Text>

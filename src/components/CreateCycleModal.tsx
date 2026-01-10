@@ -95,7 +95,7 @@ export function CreateCycleModal({ visible, onClose, onSubmit, cycleNumber }: Cr
                         lengthInWeeks === weeks && styles.optionCardActive,
                       ]}
                       onPress={() => setLengthInWeeks(weeks)}
-                      activeOpacity={0.7}
+                      activeOpacity={1}
                     >
                       {lengthInWeeks === weeks && (
                         <View style={styles.checkmark}>
@@ -127,7 +127,7 @@ export function CreateCycleModal({ visible, onClose, onSubmit, cycleNumber }: Cr
                         workoutsPerWeek === days && styles.optionCardActive,
                       ]}
                       onPress={() => setWorkoutsPerWeek(days)}
-                      activeOpacity={0.7}
+                      activeOpacity={1}
                     >
                       {workoutsPerWeek === days && (
                         <View style={styles.checkmark}>
@@ -149,7 +149,7 @@ export function CreateCycleModal({ visible, onClose, onSubmit, cycleNumber }: Cr
               <TouchableOpacity
                 style={[styles.button, styles.buttonSecondary]}
                 onPress={() => setStep(step - 1)}
-                activeOpacity={0.7}
+                activeOpacity={1}
               >
                 <Text style={styles.buttonSecondaryText}>Back</Text>
               </TouchableOpacity>
@@ -157,7 +157,7 @@ export function CreateCycleModal({ visible, onClose, onSubmit, cycleNumber }: Cr
             <TouchableOpacity
               style={[styles.button, styles.buttonPrimary, { flex: 1 }]}
               onPress={step === 3 ? handleCreate : () => setStep(step + 1)}
-              activeOpacity={0.7}
+              activeOpacity={1}
             >
               <Text style={styles.buttonPrimaryText}>
                 {step === 3 ? 'Create Cycle' : 'Next'}
@@ -167,7 +167,7 @@ export function CreateCycleModal({ visible, onClose, onSubmit, cycleNumber }: Cr
               <TouchableOpacity
                 style={[styles.button, styles.buttonSecondary]}
                 onPress={handleCancel}
-                activeOpacity={0.7}
+                activeOpacity={1}
               >
                 <Text style={styles.buttonSecondaryText}>Cancel</Text>
               </TouchableOpacity>

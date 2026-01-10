@@ -48,7 +48,7 @@ export function WorkoutCreationOptionsScreen() {
             onPress={() => {
               navigation.navigate('CreateCycleBasics' as never);
             }}
-            activeOpacity={0.8}
+            activeOpacity={1}
           >
             <Text style={styles.manuallyButtonText}>Manually</Text>
           </TouchableOpacity>
@@ -58,7 +58,7 @@ export function WorkoutCreationOptionsScreen() {
             onPress={() => {
               navigation.navigate('AIWorkoutCreation' as never);
             }}
-            activeOpacity={0.8}
+            activeOpacity={1}
           >
             <Text style={styles.aiButtonText}>With AI help</Text>
           </TouchableOpacity>
@@ -79,7 +79,7 @@ export function WorkoutCreationOptionsScreen() {
                       startDraftFromTemplate(template.id);
                       navigation.navigate('TemplateEditor' as never, { templateId: template.id } as never);
                     }}
-                    activeOpacity={0.8}
+                    activeOpacity={1}
                   >
                     <View style={styles.templateCardInner}>
                       <Text style={styles.templateName}>{template.name}</Text>

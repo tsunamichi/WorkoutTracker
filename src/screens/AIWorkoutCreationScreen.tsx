@@ -320,7 +320,7 @@ export function AIWorkoutCreationScreen() {
             <TouchableOpacity
               style={styles.instructionsButton}
               onPress={() => setShowInstructionsSheet(true)}
-              activeOpacity={0.7}
+              activeOpacity={1}
             >
               <Text style={styles.instructionsText}>Instructions</Text>
               <Text style={styles.dropdownIcon}>▼</Text>
@@ -343,7 +343,7 @@ export function AIWorkoutCreationScreen() {
             <TouchableOpacity
               style={[styles.createButton, !workoutDetails.trim() && styles.createButtonDisabled]}
               onPress={handleCreateCycle}
-              activeOpacity={0.8}
+              activeOpacity={1}
               disabled={!workoutDetails.trim()}
             >
               <Text style={[styles.createButtonText, !workoutDetails.trim() && styles.createButtonTextDisabled]}>Create Cycle</Text>
@@ -383,7 +383,7 @@ export function AIWorkoutCreationScreen() {
                   <TouchableOpacity
                     style={styles.copyButton}
                     onPress={handleCopyTemplate}
-                    activeOpacity={0.8}
+                    activeOpacity={1}
                   >
                     <Text style={styles.copyButtonText}>Copy</Text>
                   </TouchableOpacity>

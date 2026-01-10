@@ -41,7 +41,7 @@ export function ExercisesView() {
         <TouchableOpacity
           style={[styles.categoryChip, selectedCategory === 'All' && styles.categoryChipActive]}
           onPress={() => setSelectedCategory('All')}
-          activeOpacity={0.7}
+          activeOpacity={1}
         >
           <Text style={[styles.categoryText, selectedCategory === 'All' && styles.categoryTextActive]}>
             All
@@ -52,7 +52,7 @@ export function ExercisesView() {
             key={category}
             style={[styles.categoryChip, selectedCategory === category && styles.categoryChipActive]}
             onPress={() => setSelectedCategory(category)}
-            activeOpacity={0.7}
+            activeOpacity={1}
           >
             <Text style={[styles.categoryText, selectedCategory === category && styles.categoryTextActive]}>
               {category}

@@ -29,7 +29,7 @@ export function ProfileAvatar({
         }
       ]} 
       onPress={onPress}
-      activeOpacity={0.7}
+      activeOpacity={1}
     >
       {showInitial ? (
         <Text style={[styles.initial, { color: textColor, fontSize: size * 0.5 }]}>U</Text>

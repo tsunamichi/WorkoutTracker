@@ -41,6 +41,7 @@ export function CycleDetailScreen({ route, navigation }: CycleDetailScreenProps)
   const [selectedWorkout, setSelectedWorkout] = useState<WorkoutTemplate | null>(null);
   const [selectedWeekNumber, setSelectedWeekNumber] = useState<number>(1);
   const [menuVisible, setMenuVisible] = useState(false);
+  const [pressedCardId, setPressedCardId] = useState<string | null>(null);
   
   // Helper function to get ordinal suffix
   const getOrdinalSuffix = (day: number) => {
@@ -226,13 +227,18 @@ export function CycleDetailScreen({ route, navigation }: CycleDetailScreenProps)
               /* Workouts as compact cards */
               ...weekWorkouts.map((workout) => (
                 <View key={workout.id} style={styles.workoutCardWrapper}>
-                  <View style={CARDS.cardDeep.outer}>
+                  <View style={[
+                    CARDS.cardDeep.outer,
+                    pressedCardId === `workout-${workout.id}` && styles.workoutCardPressed
+                  ]}>
                     <TouchableOpacity
                       style={{ ...CARDS.cardDeep.inner, ...styles.workoutCardInner }}
                       onPress={() => {
                         setSelectedWorkout(workout);
                         setSelectedWeekNumber(weekIndex + 1);
                       }}
+                      onPressIn={() => setPressedCardId(`workout-${workout.id}`)}
+                      onPressOut={() => setPressedCardId(null)}
                       activeOpacity={1}
                     >
                       <View style={styles.workoutInfo}>
@@ -461,6 +467,9 @@ const styles = StyleSheet.create({
   },
   workoutCardWrapper: {
     marginBottom: SPACING.md, // 12px
+  },
+  workoutCardPressed: {
+    borderColor: LIGHT_COLORS.textMeta,
   },
   workoutCardInner: {
     paddingHorizontal: 16,

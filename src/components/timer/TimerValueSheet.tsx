@@ -182,7 +182,7 @@ export function TimerValueSheet({
               </View>
             </View>
 
-        <TouchableOpacity style={styles.saveButton} onPress={handleSave} activeOpacity={0.8}>
+        <TouchableOpacity style={styles.saveButton} onPress={handleSave} activeOpacity={1}>
           <Text style={styles.saveButtonText}>Done</Text>
         </TouchableOpacity>
       </View>

@@ -491,14 +491,14 @@ export function SetTimerSheet({
             <TouchableOpacity
               onPress={handleToggleSound}
               style={styles.sideButtonTouchable}
-              activeOpacity={0.7}
+              activeOpacity={1}
             >
               <IconSpeaker size={28} color={LIGHT_COLORS.textSecondary} muted={!soundEnabled} />
             </TouchableOpacity>
 
             <TouchableOpacity
               onPress={handleTogglePause}
-              activeOpacity={0.8}
+              activeOpacity={1}
               style={styles.playPauseButton}
             >
               {isRunning ? (
@@ -511,7 +511,7 @@ export function SetTimerSheet({
             <TouchableOpacity
               onPress={handleSkip}
               style={styles.sideButtonTouchable}
-              activeOpacity={0.7}
+              activeOpacity={1}
             >
               <IconSkip size={28} color={LIGHT_COLORS.textSecondary} />
             </TouchableOpacity>

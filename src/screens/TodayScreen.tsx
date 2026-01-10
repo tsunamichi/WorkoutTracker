@@ -346,7 +346,7 @@ export function TodayScreen({ onNavigateToWorkouts, onDateChange }: TodayScreenP
                   <TouchableOpacity
                     style={styles.calendarButton}
                     onPress={handleBackToToday}
-                    activeOpacity={0.7}
+                    activeOpacity={1}
                   >
                     <IconCalendar size={24} color="#000000" />
                   </TouchableOpacity>
@@ -428,7 +428,7 @@ export function TodayScreen({ onNavigateToWorkouts, onDateChange }: TodayScreenP
                 <TouchableOpacity
                   style={styles.createButton}
                   onPress={onNavigateToWorkouts}
-                  activeOpacity={0.8}
+                  activeOpacity={1}
                 >
                   <IconWorkouts size={24} color="#FFFFFF" />
                   <Text style={styles.createButtonText}>Go to Workouts</Text>
@@ -555,10 +555,7 @@ export function TodayScreen({ onNavigateToWorkouts, onDateChange }: TodayScreenP
                       isCardPressed && styles.workoutCardPressed
                     ]}>
                       <TouchableOpacity
-                        style={[
-                          styles.workoutCardInner,
-                          isCardPressed && styles.workoutCardInnerPressed
-                        ]}
+                        style={styles.workoutCardInner}
                         onPress={handleWorkoutPress}
                         onPressIn={() => setIsCardPressed(true)}
                         onPressOut={() => setIsCardPressed(false)}
@@ -643,7 +640,7 @@ export function TodayScreen({ onNavigateToWorkouts, onDateChange }: TodayScreenP
                     <TouchableOpacity
                       style={styles.restDayCard}
                       onPress={() => setShowSwapSheet(true)}
-                      activeOpacity={0.7}
+                      activeOpacity={1}
                     >
                       <View style={styles.restDayInner}>
                         <Text style={styles.restDayText}>Rest Day</Text>
@@ -661,7 +658,7 @@ export function TodayScreen({ onNavigateToWorkouts, onDateChange }: TodayScreenP
                 <TouchableOpacity 
                   style={styles.swapButton}
                   onPress={() => setShowSwapSheet(true)}
-                  activeOpacity={0.7}
+                  activeOpacity={1}
                 >
                   <View style={styles.swapIconWrapper}>
                     <Svg width={16} height={16} viewBox="0 0 24 24" fill="none">
@@ -707,7 +704,7 @@ export function TodayScreen({ onNavigateToWorkouts, onDateChange }: TodayScreenP
                   <TouchableOpacity 
                     style={styles.swapButton}
                     onPress={() => setShowSwapSheet(true)}
-                    activeOpacity={0.7}
+                    activeOpacity={1}
                   >
                     <View style={styles.swapIconWrapper}>
                       <Svg width={16} height={16} viewBox="0 0 24 24" fill="none">
@@ -787,7 +784,7 @@ export function TodayScreen({ onNavigateToWorkouts, onDateChange }: TodayScreenP
                           setShowSwapSheet(false);
                           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
                         }}
-                        activeOpacity={0.7}
+                        activeOpacity={1}
                       >
                         <View>
                           <Text style={styles.swapSheetItemTitle}>
@@ -1036,19 +1033,13 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   workoutCardPressed: {
-    borderWidth: 2,
-    borderColor: '#000000',
+    borderColor: LIGHT_COLORS.textMeta,
   },
   workoutCardInner: {
     ...CARDS.cardDeep.inner,
     paddingHorizontal: 24,
     paddingTop: 16,
     paddingBottom: 20,
-  },
-  workoutCardInnerPressed: {
-    paddingHorizontal: 23,
-    paddingTop: 15,
-    paddingBottom: 19,
   },
   workoutName: {
     ...TYPOGRAPHY.h2,

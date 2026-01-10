@@ -58,7 +58,7 @@ export function CreateCycleDaysOverview({ navigation }: CreateCycleDaysOverviewP
           <TouchableOpacity
             onPress={handleBack}
             style={styles.backButton}
-            activeOpacity={0.6}
+            activeOpacity={1}
           >
             <Text style={styles.backText}>←</Text>
           </TouchableOpacity>
@@ -79,7 +79,7 @@ export function CreateCycleDaysOverview({ navigation }: CreateCycleDaysOverviewP
                 key={day}
                 style={styles.dayCard}
                 onPress={() => handleDayPress(day)}
-                activeOpacity={0.7}
+                activeOpacity={1}
               >
                 <View style={styles.dayCardContent}>
                   <View style={styles.dayInfo}>
@@ -123,7 +123,7 @@ export function CreateCycleDaysOverview({ navigation }: CreateCycleDaysOverviewP
           <TouchableOpacity
             style={styles.backFooterButton}
             onPress={handleBack}
-            activeOpacity={0.8}
+            activeOpacity={1}
           >
             <Text style={styles.backFooterButtonText}>Back</Text>
           </TouchableOpacity>
@@ -131,7 +131,7 @@ export function CreateCycleDaysOverview({ navigation }: CreateCycleDaysOverviewP
             style={[styles.continueButton, !canContinue && styles.continueButtonDisabled]}
             onPress={handleContinue}
             disabled={!canContinue}
-            activeOpacity={0.8}
+            activeOpacity={1}
           >
             <Text
               style={[

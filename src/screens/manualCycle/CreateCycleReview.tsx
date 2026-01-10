@@ -185,7 +185,7 @@ export function CreateCycleReview({ navigation }: CreateCycleReviewProps) {
           <TouchableOpacity
             onPress={() => navigation.goBack()}
             style={styles.backButton}
-            activeOpacity={0.6}
+            activeOpacity={1}
           >
             <Text style={styles.backText}>←</Text>
           </TouchableOpacity>
@@ -221,7 +221,7 @@ export function CreateCycleReview({ navigation }: CreateCycleReviewProps) {
             <TouchableOpacity
               style={styles.datePickerButton}
               onPress={() => setShowDatePicker(true)}
-              activeOpacity={0.7}
+              activeOpacity={1}
             >
               <Text style={styles.datePickerText}>
                 {startDate
@@ -259,7 +259,7 @@ export function CreateCycleReview({ navigation }: CreateCycleReviewProps) {
                         <Text style={styles.workoutName}>{workout.name}</Text>
                       )}
                     </View>
-                    <TouchableOpacity onPress={() => handleEditDay(day)} activeOpacity={0.7}>
+                    <TouchableOpacity onPress={() => handleEditDay(day)} activeOpacity={1}>
                       <Text style={styles.editLink}>Edit</Text>
                     </TouchableOpacity>
                   </View>
@@ -290,7 +290,7 @@ export function CreateCycleReview({ navigation }: CreateCycleReviewProps) {
             style={[styles.createButton, !canCreate && styles.createButtonDisabled]}
             onPress={handleCreateCycle}
             disabled={!canCreate}
-            activeOpacity={0.8}
+            activeOpacity={1}
           >
             <Text
               style={[

@@ -42,7 +42,7 @@ export function WelcomeScreen({ navigation }: WelcomeScreenProps) {
           <TouchableOpacity
             style={styles.primaryButton}
             onPress={handleContinueWithApple}
-            activeOpacity={0.8}
+            activeOpacity={1}
           >
             <Text style={styles.primaryButtonText}>Continue with Apple</Text>
           </TouchableOpacity>
@@ -50,7 +50,7 @@ export function WelcomeScreen({ navigation }: WelcomeScreenProps) {
           <TouchableOpacity
             style={styles.secondaryButton}
             onPress={handleContinueAsGuest}
-            activeOpacity={0.8}
+            activeOpacity={1}
           >
             <Text style={styles.secondaryButtonText}>Continue as guest</Text>
           </TouchableOpacity>

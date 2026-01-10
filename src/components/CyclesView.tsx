@@ -24,7 +24,7 @@ export function CyclesView({ onCreateCycle, onCyclePress }: CyclesViewProps) {
       <TouchableOpacity 
         style={styles.createButton} 
         onPress={onCreateCycle}
-        activeOpacity={0.7}
+        activeOpacity={1}
       >
         <View style={styles.createIconContainer}>
           <IconAdd size={24} color={COLORS.text} />
@@ -50,7 +50,7 @@ export function CyclesView({ onCreateCycle, onCyclePress }: CyclesViewProps) {
               key={cycle.id}
               style={[styles.cycleCard, cycle.isActive && styles.cycleCardActive]}
               onPress={() => onCyclePress(cycle.id)}
-              activeOpacity={0.7}
+              activeOpacity={1}
             >
               {/* Header */}
               <View style={styles.cycleHeader}>

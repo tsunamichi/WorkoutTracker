@@ -408,7 +408,7 @@ export function TrainerScreen() {
           <TouchableOpacity
             onPress={handleRecordPress}
             disabled={isProcessing || isSpeaking}
-            activeOpacity={0.8}
+            activeOpacity={1}
           >
             <Animated.View
               style={[

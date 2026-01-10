@@ -97,7 +97,7 @@ export function CreateCycleDayEditor({ navigation, route }: CreateCycleDayEditor
           <TouchableOpacity
             onPress={() => navigation.goBack()}
             style={styles.backButton}
-            activeOpacity={0.6}
+            activeOpacity={1}
           >
             <Text style={styles.backText}>←</Text>
           </TouchableOpacity>
@@ -127,7 +127,7 @@ export function CreateCycleDayEditor({ navigation, route }: CreateCycleDayEditor
               <TouchableOpacity
                 style={styles.addButton}
                 onPress={() => setShowExercisePicker(true)}
-                activeOpacity={0.7}
+                activeOpacity={1}
               >
                 <IconAdd size={20} color={LIGHT_COLORS.accent} />
                 <Text style={styles.addButtonText}>Add exercise</Text>
@@ -152,7 +152,7 @@ export function CreateCycleDayEditor({ navigation, route }: CreateCycleDayEditor
                   key={exercise.id}
                   style={styles.exerciseCard}
                   onPress={() => handleEditExercise(exercise)}
-                  activeOpacity={0.7}
+                  activeOpacity={1}
                 >
                   <View style={styles.exerciseCardContent}>
                     <Text style={styles.exerciseName}>
@@ -163,7 +163,7 @@ export function CreateCycleDayEditor({ navigation, route }: CreateCycleDayEditor
                   <TouchableOpacity
                     style={styles.deleteButton}
                     onPress={() => handleDeleteExercise(exercise.id)}
-                    activeOpacity={0.7}
+                    activeOpacity={1}
                   >
                     <IconTrash size={18} color={LIGHT_COLORS.textMeta} />
                   </TouchableOpacity>
@@ -178,7 +178,7 @@ export function CreateCycleDayEditor({ navigation, route }: CreateCycleDayEditor
           <TouchableOpacity
             style={styles.saveButton}
             onPress={handleSaveDay}
-            activeOpacity={0.8}
+            activeOpacity={1}
           >
             <Text style={styles.saveButtonText}>Save day</Text>
           </TouchableOpacity>

@@ -146,7 +146,7 @@ function TabNavigator() {
         <View style={styles.tabBar}>
           {/* Schedule Tab */}
           <TouchableOpacity
-            activeOpacity={0.7}
+            activeOpacity={1}
             onPress={() => switchTab('Schedule')}
           >
             <Animated.View style={[styles.tab, { width: scheduleWidth }]}>
@@ -164,7 +164,7 @@ function TabNavigator() {
           
           {/* Workouts Tab */}
           <TouchableOpacity
-            activeOpacity={0.7}
+            activeOpacity={1}
             onPress={() => switchTab('Workouts')}
           >
             <Animated.View style={[styles.tab, { width: workoutsWidth }]}>
@@ -185,7 +185,7 @@ function TabNavigator() {
         {activeTab === 'Schedule' && isViewingToday ? (
           <TouchableOpacity 
             style={styles.actionButton}
-            activeOpacity={0.7}
+            activeOpacity={1}
             onPress={() => navigation.navigate('HIITTimerList' as never)}
           >
             <IconStopwatch size={24} color={COLORS.text} />
@@ -194,7 +194,7 @@ function TabNavigator() {
         ) : activeTab === 'Workouts' && cycles.length > 0 ? (
           <TouchableOpacity 
             style={styles.actionButton}
-            activeOpacity={0.7}
+            activeOpacity={1}
             onPress={() => navigation.navigate('WorkoutCreationOptions' as never)}
           >
             <IconCalendar size={24} color={COLORS.text} />

@@ -71,7 +71,7 @@ export function ExercisePickerModal({
           <TouchableOpacity
             style={styles.closeButton}
             onPress={handleClose}
-            activeOpacity={0.7}
+            activeOpacity={1}
           >
             <Text style={styles.closeButtonText}>✕</Text>
           </TouchableOpacity>
@@ -91,7 +91,7 @@ export function ExercisePickerModal({
           {searchQuery.length > 0 && (
             <TouchableOpacity
               onPress={() => setSearchQuery('')}
-              activeOpacity={0.7}
+              activeOpacity={1}
             >
               <Text style={styles.clearIcon}>✕</Text>
             </TouchableOpacity>
@@ -106,7 +106,7 @@ export function ExercisePickerModal({
             <TouchableOpacity
               style={styles.exerciseItem}
               onPress={() => handleSelectExercise(item.id)}
-              activeOpacity={0.7}
+              activeOpacity={1}
             >
               <View style={styles.exerciseInfo}>
                 <Text style={styles.exerciseName}>{item.name}</Text>

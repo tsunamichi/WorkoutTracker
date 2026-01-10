@@ -169,7 +169,7 @@ export function DesignSystemScreen({ navigation }: DesignSystemScreenProps) {
               <Text style={styles.componentGroupTitle}>Buttons</Text>
               
               {/* Primary Button - No Icon */}
-              <TouchableOpacity style={styles.buttonPrimaryWrapper} activeOpacity={0.8}>
+              <TouchableOpacity style={styles.buttonPrimaryWrapper} activeOpacity={1}>
                 <LinearGradient
                   colors={GRADIENTS.accentPrimary.colors}
                   start={GRADIENTS.accentPrimary.start}
@@ -181,7 +181,7 @@ export function DesignSystemScreen({ navigation }: DesignSystemScreenProps) {
               </TouchableOpacity>
               
               {/* Primary Button - Icon Left */}
-              <TouchableOpacity style={styles.buttonPrimaryWrapper} activeOpacity={0.8}>
+              <TouchableOpacity style={styles.buttonPrimaryWrapper} activeOpacity={1}>
                 <LinearGradient
                   colors={GRADIENTS.accentPrimary.colors}
                   start={GRADIENTS.accentPrimary.start}
@@ -194,7 +194,7 @@ export function DesignSystemScreen({ navigation }: DesignSystemScreenProps) {
               </TouchableOpacity>
               
               {/* Primary Button - Icon Right */}
-              <TouchableOpacity style={styles.buttonPrimaryWrapper} activeOpacity={0.8}>
+              <TouchableOpacity style={styles.buttonPrimaryWrapper} activeOpacity={1}>
                 <LinearGradient
                   colors={GRADIENTS.accentPrimary.colors}
                   start={GRADIENTS.accentPrimary.start}
@@ -212,7 +212,7 @@ export function DesignSystemScreen({ navigation }: DesignSystemScreenProps) {
               
               {/* Primary Button No Label */}
               <View style={styles.buttonRowWithLabel}>
-                <TouchableOpacity style={BUTTONS.primaryButtonNoLabel} activeOpacity={0.8}>
+                <TouchableOpacity style={BUTTONS.primaryButtonNoLabel} activeOpacity={1}>
                   <IconPlay size={24} color="#FFFFFF" />
                 </TouchableOpacity>
                 <View style={styles.buttonInfo}>
@@ -224,35 +224,35 @@ export function DesignSystemScreen({ navigation }: DesignSystemScreenProps) {
               </View>
               
               {/* Secondary Button - No Icon */}
-              <TouchableOpacity style={styles.buttonSecondary} activeOpacity={0.8}>
+              <TouchableOpacity style={styles.buttonSecondary} activeOpacity={1}>
                 <Text style={styles.buttonSecondaryText}>Secondary Button</Text>
               </TouchableOpacity>
               
               {/* Secondary Button - Icon Left */}
-              <TouchableOpacity style={styles.buttonSecondary} activeOpacity={0.8}>
+              <TouchableOpacity style={styles.buttonSecondary} activeOpacity={1}>
                 <IconEdit size={16} color={LIGHT_COLORS.secondary} />
                 <Text style={styles.buttonSecondaryText}>With Icon Left</Text>
               </TouchableOpacity>
               
               {/* Secondary Button - Icon Right */}
-              <TouchableOpacity style={styles.buttonSecondary} activeOpacity={0.8}>
+              <TouchableOpacity style={styles.buttonSecondary} activeOpacity={1}>
                 <Text style={styles.buttonSecondaryText}>With Icon Right</Text>
                 <IconArrowLeft size={16} color={LIGHT_COLORS.secondary} />
               </TouchableOpacity>
               
               {/* Text Button - No Icon */}
-              <TouchableOpacity style={styles.buttonText} activeOpacity={0.7}>
+              <TouchableOpacity style={styles.buttonText} activeOpacity={1}>
                 <Text style={styles.buttonTextLabel}>Text Button</Text>
               </TouchableOpacity>
               
               {/* Text Button - Icon Left */}
-              <TouchableOpacity style={styles.buttonText} activeOpacity={0.7}>
+              <TouchableOpacity style={styles.buttonText} activeOpacity={1}>
                 <IconAdd size={16} color={LIGHT_COLORS.textMeta} />
                 <Text style={styles.buttonTextLabel}>With Icon Left</Text>
               </TouchableOpacity>
               
               {/* Text Button - Icon Right */}
-              <TouchableOpacity style={styles.buttonText} activeOpacity={0.7}>
+              <TouchableOpacity style={styles.buttonText} activeOpacity={1}>
                 <Text style={styles.buttonTextLabel}>With Icon Right</Text>
                 <IconCheck size={16} color={LIGHT_COLORS.textMeta} />
               </TouchableOpacity>

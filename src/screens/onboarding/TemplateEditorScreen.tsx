@@ -103,7 +103,7 @@ export function TemplateEditorScreen({ navigation }: TemplateEditorScreenProps) 
                 <TouchableOpacity
                   style={styles.dayHeader}
                   onPress={() => setExpandedDayIndex(isExpanded ? null : day.dayIndex)}
-                  activeOpacity={0.7}
+                  activeOpacity={1}
                 >
                   <View>
                     <Text style={styles.dayTitle}>{day.title}</Text>
