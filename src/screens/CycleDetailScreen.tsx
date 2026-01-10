@@ -302,6 +302,7 @@ export function CycleDetailScreen({ route, navigation }: CycleDetailScreenProps)
                     
                     return completedAssignments.map((assignment, assignmentIndex) => {
                       const workoutKey = `${selectedWorkout.id}-${assignment.date}`;
+                      const isLastAssignment = assignmentIndex === completedAssignments.length - 1;
                       
                       const exercisesWithProgress = selectedWorkout.exercises
                         .map((exercise) => {
@@ -321,7 +322,10 @@ export function CycleDetailScreen({ route, navigation }: CycleDetailScreenProps)
                         .filter(Boolean);
                       
                       return (
-                        <View key={assignment.date}>
+                        <View 
+                          key={assignment.date}
+                          style={isLastAssignment ? { paddingBottom: 24 } : undefined}
+                        >
                           {exercisesWithProgress.map((item, exerciseIndex) => (
                             <View key={item.exercise.id}>
                               <View style={styles.historyWorkoutGroup}>

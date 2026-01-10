@@ -1039,8 +1039,12 @@ export function ExerciseDetailScreen({ route, navigation }: ExerciseDetailScreen
                   </View>
                 ) : (
                   exerciseHistory.map((workout, workoutIndex) => {
+                    const isLastItem = workoutIndex === exerciseHistory.length - 1;
                     return (
-                      <View key={workout.sessionId}>
+                      <View 
+                        key={workout.sessionId}
+                        style={isLastItem ? { paddingBottom: 24 } : undefined}
+                      >
                     <View style={styles.historyWorkoutGroup}>
                       {/* Date column on the left */}
                       <View style={styles.historyDateColumn}>
