@@ -285,7 +285,7 @@ export const CARDS = {
     },
     // Inner card with borders for depth
     inner: {
-      backgroundColor: '#E2E3DF',
+      backgroundColor: '#FF0000', // activeCard (TEMPORARY RED FOR TESTING)
       borderRadius: 16,  // Squircle-friendly
       borderCurve: 'continuous' as const,
       borderTopWidth: 2,

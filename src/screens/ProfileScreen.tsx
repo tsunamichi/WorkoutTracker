@@ -503,7 +503,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   statCardInner: {
-    backgroundColor: '#E2E3DF',
+    backgroundColor: COLORS.activeCard,
     borderRadius: 12,
     borderCurve: 'continuous',
     padding: SPACING.lg,
@@ -536,7 +536,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   emptyStateInner: {
-    backgroundColor: '#E2E3DF',
+    backgroundColor: COLORS.activeCard,
     borderRadius: 12,
     borderCurve: 'continuous',
     padding: SPACING.xl,
@@ -566,7 +566,7 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.sm,
   },
   weightEntryInner: {
-    backgroundColor: '#E2E3DF',
+    backgroundColor: COLORS.activeCard,
     borderRadius: 12,
     borderCurve: 'continuous',
     padding: SPACING.lg,
@@ -600,7 +600,7 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.sm,
   },
   settingRowInner: {
-    backgroundColor: '#E2E3DF',
+    backgroundColor: COLORS.activeCard,
     borderRadius: 12,
     borderCurve: 'continuous',
     padding: SPACING.lg,
