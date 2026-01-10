@@ -256,7 +256,7 @@ export function BottomDrawer({
           
           <Content {...contentProps}>
             <View
-              style={{ flexShrink: 0 }}
+              style={{ flexShrink: 0, paddingTop: 16 }}
               onLayout={(event) => {
                 const { height } = event.nativeEvent.layout;
                 setContentHeight(height);

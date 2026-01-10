@@ -506,7 +506,7 @@ const styles = StyleSheet.create({
   sheetTitle: {
     ...TYPOGRAPHY.h2,
     color: LIGHT_COLORS.secondary,
-    marginBottom: SPACING.xl,
+    marginBottom: 8,
   },
   sheetSubtitle: {
     ...TYPOGRAPHY.meta,
