@@ -437,12 +437,10 @@ export function WorkoutsScreen() {
                     const completion = getCycleCompletion(cycle.id);
                     return (
                       <View key={cycle.id} style={styles.activeCycleSection}>
-                        <View style={styles.cycleCardBlackShadow}>
-                          <View style={styles.cycleCardWhiteShadow}>
-                            <View style={[
-                              styles.cycleCard,
-                              pressedCardId === `cycle-${cycle.id}` && styles.cycleCardPressed
-                            ]}>
+                        <View style={[
+                          styles.cycleCard,
+                          pressedCardId === `cycle-${cycle.id}` && styles.cycleCardPressed
+                        ]}>
                               <TouchableOpacity
                                 style={styles.cycleCardContent}
                                 onPress={() => {
@@ -482,8 +480,6 @@ export function WorkoutsScreen() {
                               </View>
                             </View>
                               </TouchableOpacity>
-                            </View>
-                          </View>
                         </View>
                       </View>
                     );
@@ -496,12 +492,11 @@ export function WorkoutsScreen() {
                 <>
                   <Text style={styles.pastCyclesTitle}>Past Cycles</Text>
                   {cycles.filter(c => !c.isActive).sort((a, b) => b.cycleNumber - a.cycleNumber).map((cycle) => (
-                    <View key={cycle.id} style={styles.pastCycleCardBlackShadow}>
-                      <View style={styles.pastCycleCardWhiteShadow}>
-                        <View style={[
-                          styles.pastCycleCard,
-                          pressedCardId === `past-cycle-${cycle.id}` && styles.pastCycleCardPressed
-                        ]}>
+                    <View key={cycle.id} style={styles.pastCycleCardWrapper}>
+                      <View style={[
+                        styles.pastCycleCard,
+                        pressedCardId === `past-cycle-${cycle.id}` && styles.pastCycleCardPressed
+                      ]}>
                           <TouchableOpacity
                             style={styles.pastCycleCardContent}
                             onPress={() => {
@@ -515,9 +510,8 @@ export function WorkoutsScreen() {
                             <Text style={styles.pastCycleName}>{cycle.goal || `Cycle ${cycle.cycleNumber}`}</Text>
                             <View style={styles.triangle} />
                           </TouchableOpacity>
-                        </View>
                       </View>
-            </View>
+                    </View>
                   ))}
                 </>
               )}
@@ -720,8 +714,6 @@ const styles = StyleSheet.create({
   activeCycleSection: {
     marginBottom: SPACING.xl,
   },
-  cycleCardBlackShadow: CARDS.cardDeep.blackShadow,
-  cycleCardWhiteShadow: CARDS.cardDeep.whiteShadow,
   cycleCard: CARDS.cardDeep.outer,
   cycleCardPressed: {
     borderColor: LIGHT_COLORS.textMeta,
@@ -777,11 +769,9 @@ const styles = StyleSheet.create({
     color: COLORS.textMeta,
     marginBottom: SPACING.lg,
   },
-  pastCycleCardBlackShadow: {
-    ...CARDS.cardDeep.blackShadow,
+  pastCycleCardWrapper: {
     marginBottom: SPACING.sm,
   },
-  pastCycleCardWhiteShadow: CARDS.cardDeep.whiteShadow,
   pastCycleCard: CARDS.cardDeep.outer,
   pastCycleCardPressed: {
     borderColor: LIGHT_COLORS.textMeta,

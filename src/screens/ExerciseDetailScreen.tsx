@@ -695,9 +695,7 @@ export function ExerciseDetailScreen({ route, navigation }: ExerciseDetailScreen
                         }}
                         disabled={!setsData.every(set => set.completed)}
                       >
-                        <View style={styles.setCardBlackShadow}>
-                          <View style={styles.setCardWhiteShadow}>
-                            <View style={styles.setCard}>
+                        <View style={styles.setCard}>
                           <View style={styles.setCardInner}>
                       {/* Expanded View */}
                       {isExpanded && (
@@ -802,8 +800,6 @@ export function ExerciseDetailScreen({ route, navigation }: ExerciseDetailScreen
                           </View>
                         </View>
                       )}
-                              </View>
-                            </View>
                           </View>
                         </View>
                       </TouchableOpacity>
@@ -831,20 +827,14 @@ export function ExerciseDetailScreen({ route, navigation }: ExerciseDetailScreen
                       }}
                       disabled={!setsData.every(set => set.completed)}
                     >
-                          <View style={[
-                        isExpanded ? styles.setCardBlackShadow : styles.noShadow
+                      <View style={[
+                        isExpanded ? styles.setCard : styles.setCardDimmed,
+                        styles.setCardCollapsedRadius
                       ]}>
                         <View style={[
-                          isExpanded ? styles.setCardWhiteShadow : styles.noShadow
+                          isExpanded ? styles.setCardInner : styles.setCardInnerDimmed,
+                          styles.setCardInnerCollapsedRadius
                         ]}>
-                          <View style={[
-                            isExpanded ? styles.setCard : styles.setCardDimmed,
-                            styles.setCardCollapsedRadius
-                          ]}>
-                            <View style={[
-                              isExpanded ? styles.setCardInner : styles.setCardInnerDimmed,
-                              styles.setCardInnerCollapsedRadius
-                            ]}>
                               <View style={styles.setCardCollapsed}>
                                 <View style={styles.setCollapsedLeft}>
                                   <View style={styles.collapsedValueRow}>
@@ -864,8 +854,6 @@ export function ExerciseDetailScreen({ route, navigation }: ExerciseDetailScreen
                                   </View>
                                 ) : null}
                               </View>
-                            </View>
-                          </View>
                         </View>
                       </View>
                     </TouchableOpacity>
@@ -1122,16 +1110,6 @@ const styles = StyleSheet.create({
   },
   activeSetWrapper: {
     width: '100%',
-  },
-  setCardBlackShadow: {
-    ...CARDS.cardDeep.blackShadow,
-  },
-  setCardWhiteShadow: {
-    ...CARDS.cardDeep.whiteShadow,
-  },
-  noShadow: {
-    shadowOpacity: 0,
-    elevation: 0,
   },
   setCard: {
     ...CARDS.cardDeep.outer,

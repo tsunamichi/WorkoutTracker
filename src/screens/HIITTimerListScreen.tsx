@@ -133,28 +133,25 @@ export default function HIITTimerListScreen({ navigation }: Props) {
               onPressOut={() => setPressedCardId(null)}
               activeOpacity={1}
             >
-              <View style={[CARDS.cardDeep.blackShadow, styles.timerCardBlackShadow]}>
-                <View style={CARDS.cardDeep.whiteShadow}>
-                  <View style={[
-                    CARDS.cardDeep.outer,
-                    pressedCardId === timer.id && styles.timerCardPressed
-                  ]}>
-                    <View style={[CARDS.cardDeep.inner, styles.timerCardInner]}>
-                      <Text style={styles.timerName}>{timer.name}</Text>
-                      
-                      {/* Bottom row with time and start button */}
-                      <View style={styles.timerBottom}>
-                        <Text style={styles.totalTime}>{calculateTotalTime(timer)}</Text>
-                        <TouchableOpacity
-                          onPress={() => handleSelectTemplate(timer)}
-                          style={styles.startButton}
-                          activeOpacity={1}
-                        >
-                          <Text style={styles.startButtonText}>Start</Text>
-                          <View style={styles.playIcon} />
-                        </TouchableOpacity>
-                      </View>
-                    </View>
+              <View style={[
+                CARDS.cardDeep.outer,
+                styles.timerCard,
+                pressedCardId === timer.id && styles.timerCardPressed
+              ]}>
+                <View style={[CARDS.cardDeep.inner, styles.timerCardInner]}>
+                  <Text style={styles.timerName}>{timer.name}</Text>
+                  
+                  {/* Bottom row with time and start button */}
+                  <View style={styles.timerBottom}>
+                    <Text style={styles.totalTime}>{calculateTotalTime(timer)}</Text>
+                    <TouchableOpacity
+                      onPress={() => handleSelectTemplate(timer)}
+                      style={styles.startButton}
+                      activeOpacity={1}
+                    >
+                      <Text style={styles.startButtonText}>Start</Text>
+                      <View style={styles.playIcon} />
+                    </TouchableOpacity>
                   </View>
                 </View>
               </View>
@@ -239,7 +236,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#FFFFFF',
   },
-  timerCardBlackShadow: {
+  timerCard: {
     marginBottom: SPACING.lg,
   },
   timerCardPressed: {

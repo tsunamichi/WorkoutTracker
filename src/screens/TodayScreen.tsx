@@ -437,13 +437,11 @@ export function TodayScreen({ onNavigateToWorkouts, onDateChange }: TodayScreenP
               {isTransitioning && previousWorkoutData?.workout && (
                 <Animated.View 
                   style={[
-                    styles.workoutCardBlackShadow,
+                    styles.workoutCard,
                     styles.absoluteCard,
                     { transform: [{ translateX: oldCardTranslateX }] }
                   ]}
                 >
-                  <View style={styles.workoutCardWhiteShadow}>
-                    <View style={styles.workoutCard}>
                       <View style={styles.workoutCardInner}>
                     {/* Workout Name */}
                       <Text style={styles.workoutName}>{previousWorkoutData.workout.name}</Text>
@@ -509,8 +507,6 @@ export function TodayScreen({ onNavigateToWorkouts, onDateChange }: TodayScreenP
                       })()}
                     </View>
                   </View>
-                </View>
-                  </View>
                 </Animated.View>
               )}
               
@@ -518,20 +514,16 @@ export function TodayScreen({ onNavigateToWorkouts, onDateChange }: TodayScreenP
               {isTransitioning && previousWorkoutData && !previousWorkoutData.workout && (
                 <Animated.View 
                   style={[
-                    styles.workoutCardBlackShadow,
+                    styles.restDayCard,
                     styles.absoluteCard,
                     { transform: [{ translateX: oldCardTranslateX }] }
                   ]}
                 >
-                  <View style={styles.workoutCardWhiteShadow}>
-                    <View style={styles.restDayCard}>
-                      <View style={styles.restDayInner}>
-                        <Text style={styles.restDayText}>Rest Day</Text>
-                        <Text style={styles.restDaySubtext}>
-                          No workout scheduled
-                        </Text>
-                      </View>
-                    </View>
+                  <View style={styles.restDayInner}>
+                    <Text style={styles.restDayText}>Rest Day</Text>
+                    <Text style={styles.restDaySubtext}>
+                      No workout scheduled
+                    </Text>
                   </View>
                 </Animated.View>
               )}
@@ -540,16 +532,12 @@ export function TodayScreen({ onNavigateToWorkouts, onDateChange }: TodayScreenP
               {selectedDay?.workout ? (
                 <Animated.View 
                   style={[
-                    styles.workoutCardBlackShadow,
+                    styles.workoutCard,
+                    isCardPressed && styles.workoutCardPressed,
                     isTransitioning && styles.absoluteCard,
                     isTransitioning && { transform: [{ translateX: newCardTranslateX }] }
                   ]}
                 >
-                  <View style={styles.workoutCardWhiteShadow}>
-                    <View style={[
-                      styles.workoutCard,
-                      isCardPressed && styles.workoutCardPressed
-                    ]}>
                       <TouchableOpacity
                         style={styles.workoutCardInner}
                         onPress={handleWorkoutPress}
@@ -621,23 +609,19 @@ export function TodayScreen({ onNavigateToWorkouts, onDateChange }: TodayScreenP
                       })()}
                     </View>
                   </TouchableOpacity>
-                </View>
-                  </View>
                 </Animated.View>
               ) : (
                 <Animated.View 
                   style={[
-                    styles.workoutCardBlackShadow,
                     isTransitioning && styles.absoluteCard,
                     isTransitioning && { transform: [{ translateX: newCardTranslateX }] }
                   ]}
                 >
-                  <View style={styles.workoutCardWhiteShadow}>
-                    <TouchableOpacity
-                      style={styles.restDayCard}
-                      onPress={() => setShowSwapSheet(true)}
-                      activeOpacity={1}
-                    >
+                  <TouchableOpacity
+                    style={styles.restDayCard}
+                    onPress={() => setShowSwapSheet(true)}
+                    activeOpacity={1}
+                  >
                       <View style={styles.restDayInner}>
                         <Text style={styles.restDayText}>Rest Day</Text>
                         <Text style={styles.restDaySubtext}>
@@ -645,7 +629,6 @@ export function TodayScreen({ onNavigateToWorkouts, onDateChange }: TodayScreenP
                         </Text>
                       </View>
                     </TouchableOpacity>
-                  </View>
                 </Animated.View>
               )}
               
@@ -770,12 +753,10 @@ export function TodayScreen({ onNavigateToWorkouts, onDateChange }: TodayScreenP
             )
             .map((day, index) => (
               <View key={index} style={styles.swapSheetItemWrapper}>
-                <View style={styles.swapSheetItemBlackShadow}>
-                  <View style={styles.swapSheetItemWhiteShadow}>
-                    <View style={[
-                      styles.swapSheetItem,
-                      pressedSwapItemDate === day.date && styles.swapSheetItemPressed
-                    ]}>
+                <View style={[
+                  styles.swapSheetItem,
+                  pressedSwapItemDate === day.date && styles.swapSheetItemPressed
+                ]}>
                       <TouchableOpacity
                         style={styles.swapSheetItemInner}
                         onPress={async () => {
@@ -812,8 +793,6 @@ export function TodayScreen({ onNavigateToWorkouts, onDateChange }: TodayScreenP
                           />
                         </Svg>
                       </TouchableOpacity>
-                    </View>
-                  </View>
                 </View>
               </View>
             ))}
@@ -1027,8 +1006,6 @@ const styles = StyleSheet.create({
   },
   
   // Workout Card
-  workoutCardBlackShadow: CARDS.cardDeep.blackShadow,
-  workoutCardWhiteShadow: CARDS.cardDeep.whiteShadow,
   workoutCard: {
     ...CARDS.cardDeep.outer,
     width: '100%',
@@ -1224,12 +1201,6 @@ const styles = StyleSheet.create({
   },
   swapSheetItemWrapper: {
     marginBottom: SPACING.md,
-  },
-  swapSheetItemBlackShadow: {
-    ...CARDS.cardDeep.blackShadow,
-  },
-  swapSheetItemWhiteShadow: {
-    ...CARDS.cardDeep.whiteShadow,
   },
   swapSheetItem: {
     ...CARDS.cardDeep.outer,
