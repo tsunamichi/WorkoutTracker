@@ -736,9 +736,30 @@ export const useStore = create<WorkoutStore>((set, get) => ({
   },
   
   deleteHIITTimer: async (timerId) => {
-    const timers = get().hiitTimers.filter(timer => timer.id !== timerId);
-    set({ hiitTimers: timers });
-    await storage.saveHIITTimers(timers);
+    const currentState = get();
+    const timers = currentState.hiitTimers.filter(timer => timer.id !== timerId);
+    
+    // Also delete associated sessions
+    const sessions = currentState.hiitTimerSessions.filter(session => session.timerId !== timerId);
+    
+    // If we're deleting the active timer, clear the active timer ID
+    const updates: { 
+      hiitTimers: HIITTimer[]; 
+      hiitTimerSessions: HIITTimerSession[];
+      activeHIITTimerId?: string | null;
+    } = { 
+      hiitTimers: timers,
+      hiitTimerSessions: sessions
+    };
+    if (currentState.activeHIITTimerId === timerId) {
+      updates.activeHIITTimerId = null;
+    }
+    
+    set(updates);
+    await Promise.all([
+      storage.saveHIITTimers(timers),
+      storage.saveHIITTimerSessions(sessions)
+    ]);
   },
   
   getHIITTimerTemplates: () => {

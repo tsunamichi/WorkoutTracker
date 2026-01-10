@@ -37,8 +37,8 @@ export default function HIITTimerFormScreen({ navigation, route }: Props) {
   
   const existingTimer = timerId ? hiitTimers.find(t => t.id === timerId) : undefined;
   
-  const [name, setName] = useState(existingTimer?.name || 'Timer name');
-  const [isEditingName, setIsEditingName] = useState(false);
+  const [name, setName] = useState(existingTimer?.name || '');
+  const [isEditingName, setIsEditingName] = useState(!existingTimer);
   const [work, setWork] = useState<number>(existingTimer?.work || 30);
   const [workRest, setWorkRest] = useState<number>(existingTimer?.workRest || 30);
   const [sets, setSets] = useState<number>(existingTimer?.sets || 3);
@@ -63,7 +63,7 @@ export default function HIITTimerFormScreen({ navigation, route }: Props) {
     if (mode === 'create') {
       // For new timers, check if anything differs from defaults
       return (
-        name !== 'Timer name' ||
+        name !== '' ||
         work !== 30 ||
         workRest !== 30 ||
         sets !== 3 ||
@@ -267,12 +267,14 @@ export default function HIITTimerFormScreen({ navigation, route }: Props) {
                 onChangeText={setName}
                 onBlur={() => setIsEditingName(false)}
                 autoFocus
-                placeholder="Timer Name"
+                placeholder="Timer name"
                 placeholderTextColor={LIGHT_COLORS.textMeta}
               />
             ) : (
               <View style={styles.pageTitleRow}>
-                <Text style={styles.pageTitle}>{name}</Text>
+                <Text style={[styles.pageTitle, !name && styles.pageTitlePlaceholder]}>
+                  {name || 'Timer name'}
+                </Text>
                 <IconEdit size={20} color={LIGHT_COLORS.textSecondary} />
               </View>
             )}
@@ -523,6 +525,9 @@ const styles = StyleSheet.create({
     ...TYPOGRAPHY.h2,
     color: LIGHT_COLORS.secondary,
   },
+  pageTitlePlaceholder: {
+    color: LIGHT_COLORS.textMeta,
+  },
   pageTitleInput: {
     ...TYPOGRAPHY.h2,
     color: LIGHT_COLORS.secondary,
@@ -542,14 +547,15 @@ const styles = StyleSheet.create({
     marginBottom: 56,
   },
   sectionTitle: {
-    ...TYPOGRAPHY.h3,
+    ...TYPOGRAPHY.body,
     color: LIGHT_COLORS.textMeta,
-    marginBottom: SPACING.lg,
+    marginBottom: 16,
   },
   card: {
     marginBottom: 8,
   },
   cardPressed: {
+    borderWidth: 1,
     borderColor: LIGHT_COLORS.textMeta,
   },
   cardInner: {

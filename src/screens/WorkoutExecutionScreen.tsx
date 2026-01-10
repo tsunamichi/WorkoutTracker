@@ -6,7 +6,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useStore } from '../store';
 import * as storage from '../storage';
 import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS, CARDS } from '../constants';
-import { IconArrowLeft, IconCheck, IconPlay, IconPause, IconMenu, IconRestart, IconAdd } from '../components/icons';
+import { IconArrowLeft, IconCheck, IconPlay, IconPause, IconMenu, IconRestart, IconAdd, IconTriangle } from '../components/icons';
 import dayjs from 'dayjs';
 import { startRestTimer, updateRestTimer, endRestTimer, markRestTimerCompleted } from '../modules/RestTimerLiveActivity';
 import * as Haptics from 'expo-haptics';
@@ -678,13 +678,23 @@ export function WorkoutExecutionScreen({ route, navigation }: WorkoutExecutionSc
               <IconArrowLeft size={24} color="#000000" />
             </TouchableOpacity>
             
-            <TouchableOpacity 
-              onPress={() => setShowMenu(true)} 
-              style={styles.menuButton}
-              activeOpacity={1}
-            >
-              <IconMenu size={24} color="#000000" />
-            </TouchableOpacity>
+            {completionPercentage === 100 ? (
+              <TouchableOpacity 
+                onPress={handleResetWorkout} 
+                style={styles.resetButton}
+                activeOpacity={1}
+              >
+                <Text style={styles.resetButtonText}>Reset</Text>
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity 
+                onPress={() => setShowMenu(true)} 
+                style={styles.menuButton}
+                activeOpacity={1}
+              >
+                <IconMenu size={24} color="#000000" />
+              </TouchableOpacity>
+            )}
           </View>
           
           {/* Title */}
@@ -692,9 +702,6 @@ export function WorkoutExecutionScreen({ route, navigation }: WorkoutExecutionSc
             <View style={styles.headerLeft}>
               <View style={styles.titleContainer}>
                 <Text style={styles.headerTitle}>{workout.name}</Text>
-                {completionPercentage > 0 && (
-                  <Text style={styles.completionText}>{completionPercentage}% complete</Text>
-                )}
               </View>
             </View>
           </View>
@@ -781,6 +788,7 @@ export function WorkoutExecutionScreen({ route, navigation }: WorkoutExecutionSc
                 const totalSets = exercise.targetSets;
                 const isFullyCompleted = (completedSets === totalSets && totalSets > 0) || isSkipped;
                 const isCurrentlyInProgress = exercise.id === inProgressExerciseId;
+                const exerciseCompletionPercentage = totalSets > 0 ? Math.round((completedSets / totalSets) * 100) : 0;
                 
                 // Check if any other exercise is in progress
                 const isAnyExerciseInProgress = workout.exercises.some((ex, idx) => {
@@ -891,7 +899,12 @@ export function WorkoutExecutionScreen({ route, navigation }: WorkoutExecutionSc
                                   <IconCheck size={24} color="#227132" />
                                 </View>
                               ) : (
-                                <View style={isCurrentlyInProgress ? styles.exerciseTriangle : styles.exerciseTriangleDimmed} />
+                                <View style={styles.exerciseStatusContainer}>
+                                  {isCurrentlyInProgress && exerciseCompletionPercentage > 0 && (
+                                    <Text style={styles.inProgressLabel}>{exerciseCompletionPercentage}%</Text>
+                                  )}
+                                  <IconTriangle size={16} color={isCurrentlyInProgress ? '#000000' : COLORS.textMeta} />
+                                </View>
                               )}
                             </TouchableOpacity>
                       </View>
@@ -1025,16 +1038,19 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
     marginRight: -4,
   },
+  resetButton: {
+    height: 48,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  resetButtonText: {
+    ...TYPOGRAPHY.metaBold,
+    color: '#DC3545',
+  },
   headerTitle: {
     ...TYPOGRAPHY.h2,
     color: LIGHT_COLORS.secondary,
     marginLeft: 0,
-  },
-  completionText: {
-    fontSize: 15,
-    fontWeight: '400',
-    color: LIGHT_COLORS.textMeta,
-    marginTop: 2,
   },
   content: {
     flex: 1,
@@ -1061,6 +1077,7 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   exerciseCardPressed: {
+    borderWidth: 1,
     borderColor: '#817B77', // textMeta
   },
   exerciseCardInnerBase: {
@@ -1087,33 +1104,16 @@ const styles = StyleSheet.create({
   exerciseCheckIcon: {
     margin: -4,
   },
-  exerciseTriangle: {
-    width: 0,
-    height: 0,
-    backgroundColor: 'transparent',
-    borderStyle: 'solid',
-    borderLeftWidth: 8,
-    borderRightWidth: 0,
-    borderTopWidth: 4.5,
-    borderBottomWidth: 4.5,
-    borderLeftColor: '#000000',
-    borderRightColor: 'transparent',
-    borderTopColor: 'transparent',
-    borderBottomColor: 'transparent',
+  exerciseStatusContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
-  exerciseTriangleDimmed: {
-    width: 0,
-    height: 0,
-    backgroundColor: 'transparent',
-    borderStyle: 'solid',
-    borderLeftWidth: 8,
-    borderRightWidth: 0,
-    borderTopWidth: 4.5,
-    borderBottomWidth: 4.5,
-    borderLeftColor: COLORS.textMeta,
-    borderRightColor: 'transparent',
-    borderTopColor: 'transparent',
-    borderBottomColor: 'transparent',
+  inProgressLabel: {
+    ...TYPOGRAPHY.meta,
+    color: LIGHT_COLORS.textMeta,
+    minWidth: 30,
+    textAlign: 'right',
   },
   errorText: {
     ...TYPOGRAPHY.body,

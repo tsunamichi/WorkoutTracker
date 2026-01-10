@@ -1,16 +1,16 @@
 import React from 'react';
 import Svg, { Path } from 'react-native-svg';
 
-interface IconUserProps {
+interface IconArrowRightProps {
   size?: number;
   color?: string;
 }
 
-export function IconUser({ size = 24, color = '#161616' }: IconUserProps) {
+export function IconArrowRight({ size = 24, color = '#161616' }: IconArrowRightProps) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" pointerEvents="none">
       <Path
-        d="M20 21C20 18.2386 16.4183 16 12 16C7.58172 16 4 18.2386 4 21M12 13C9.23858 13 7 10.7614 7 8C7 5.23858 9.23858 3 12 3C14.7614 3 17 5.23858 17 8C17 10.7614 14.7614 13 12 13Z"
+        d="M7 12H17M17 12L13 8M17 12L13 16"
         stroke={color}
         strokeWidth="2"
         strokeLinecap="round"
@@ -19,3 +19,4 @@ export function IconUser({ size = 24, color = '#161616' }: IconUserProps) {
     </Svg>
   );
 }
+

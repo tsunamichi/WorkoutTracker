@@ -9,7 +9,7 @@ import { useStore } from '../store';
 import { ProfileAvatar } from '../components/ProfileAvatar';
 import { BottomDrawer } from '../components/common/BottomDrawer';
 import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS, CARDS } from '../constants';
-import { IconCalendar, IconStopwatch, IconWorkouts } from '../components/icons';
+import { IconCalendar, IconStopwatch, IconWorkouts, IconCheck, IconTriangle, IconSwap } from '../components/icons';
 import dayjs from 'dayjs';
 import isoWeek from 'dayjs/plugin/isoWeek';
 
@@ -154,6 +154,16 @@ export function TodayScreen({ onNavigateToWorkouts, onDateChange }: TodayScreenP
   const selectedDay = weekDays.find(d => d.date === selectedDate);
   const selectedDayIndex = weekDays.findIndex(d => d.date === selectedDate);
   
+  // Reset card pressed state when day changes or when transitioning
+  useEffect(() => {
+    setIsCardPressed(false);
+  }, [selectedDate, isTransitioning]);
+  
+  // Also reset when selectedDay changes (especially when going from rest day to workout day)
+  useEffect(() => {
+    setIsCardPressed(false);
+  }, [selectedDay?.workout]);
+
   // Animate button press effect when day changes
   useEffect(() => {
     if (selectedDayIndex !== -1) {
@@ -235,6 +245,9 @@ export function TodayScreen({ onNavigateToWorkouts, onDateChange }: TodayScreenP
   }, [showSwapSheet]);
   
   const handleDayChange = (newDate: string) => {
+    // Reset pressed state immediately to prevent double border bug
+    setIsCardPressed(false);
+    
     const oldIndex = selectedDayIndex;
     const newIndex = weekDays.findIndex(d => d.date === newDate);
     
@@ -290,6 +303,8 @@ export function TodayScreen({ onNavigateToWorkouts, onDateChange }: TodayScreenP
   };
   
   const handleBackToToday = () => {
+    // Reset pressed state immediately
+    setIsCardPressed(false);
     setWeekOffset(0);
     setSelectedDate(today.format('YYYY-MM-DD'));
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -383,30 +398,35 @@ export function TodayScreen({ onNavigateToWorkouts, onDateChange }: TodayScreenP
                   >
                     <View style={styles.dayLabelContainer}>
                       <Text style={styles.dayLabel}>{day.dayLetter}</Text>
-                      <View style={[styles.todayUnderline, !isToday && styles.todayUnderlineHidden]} />
                     </View>
-                    <Animated.View
-                      style={{
-                        transform: [{ scale: dayScales[index] }]
-                      }}
-                    >
-                      <View
-                        style={[
-                          styles.dayButton,
-                          {
-                            backgroundColor: isSelected 
-                              ? '#000000'
-                              : COLORS.activeCard
-                          }
-                        ]}
+                    <View>
+                      <Animated.View
+                        style={{
+                          transform: [{ scale: dayScales[index] }]
+                        }}
                       >
-                        <View style={[styles.dayButtonBorder, isSelected && styles.dayButtonBorderActive]}>
-                          <Text style={isSelected ? styles.dayNumberToday : styles.dayNumber}>
-                            {day.dayNumber}
-                          </Text>
+                        <View
+                          style={[
+                            styles.dayButton,
+                            isSelected && styles.dayButtonSelected,
+                            {
+                              backgroundColor: isSelected 
+                                ? '#000000'
+                                : COLORS.activeCard
+                            }
+                          ]}
+                        >
+                          <View style={[styles.dayButtonBorder, isSelected && styles.dayButtonBorderActive]}>
+                            <Text style={isSelected ? styles.dayNumberToday : styles.dayNumber}>
+                              {day.dayNumber}
+                            </Text>
+                          </View>
                         </View>
-                      </View>
-                    </Animated.View>
+                      </Animated.View>
+                      {isToday && (
+                        <View style={styles.todayIndicator} />
+                      )}
+                    </View>
                   </TouchableOpacity>
                   </View>
                 );
@@ -474,33 +494,35 @@ export function TodayScreen({ onNavigateToWorkouts, onDateChange }: TodayScreenP
                           <>
                             {/* Left: Progress Indicator */}
                             <View style={styles.progressIndicator}>
-                              <Svg height="16" width="16" viewBox="0 0 16 16" style={styles.progressCircle}>
-                                <Circle cx="8" cy="8" r="8" fill={LIGHT_COLORS.border} />
-                                {progress >= 0.999 ? (
-                                  <Circle cx="8" cy="8" r="8" fill="#227132" />
-                                ) : progress > 0 ? (
-                                  <Path
-                                    d={`M 8 8 L 8 0 A 8 8 0 ${progress > 0.5 ? 1 : 0} 1 ${
-                                      8 + 8 * Math.sin(2 * Math.PI * progress)
-                                    } ${
-                                      8 - 8 * Math.cos(2 * Math.PI * progress)
-                                    } Z`}
-                                    fill={LIGHT_COLORS.text}
-                                  />
-                                ) : null}
-                              </Svg>
-                              <Text style={styles.progressText}>{completionPercentage}%</Text>
+                              {progress >= 0.999 ? (
+                                <IconCheck size={24} color="#227132" />
+                              ) : (
+                                <>
+                                  <Svg height="16" width="16" viewBox="0 0 16 16" style={styles.progressCircle}>
+                                    <Circle cx="8" cy="8" r="8" fill={LIGHT_COLORS.border} />
+                                    {progress > 0 ? (
+                                      <Path
+                                        d={`M 8 8 L 8 0 A 8 8 0 ${progress > 0.5 ? 1 : 0} 1 ${
+                                          8 + 8 * Math.sin(2 * Math.PI * progress)
+                                        } ${
+                                          8 - 8 * Math.cos(2 * Math.PI * progress)
+                                        } Z`}
+                                        fill={LIGHT_COLORS.text}
+                                      />
+                                    ) : null}
+                                  </Svg>
+                                  <Text style={styles.progressText}>{completionPercentage}%</Text>
+                                </>
+                              )}
                             </View>
                             
                             {/* Right: Action Button */}
                             <View style={styles.startButton}>
                               <Text style={styles.startButtonText}>{buttonState}</Text>
-                              <View style={styles.playTriangleWrapper}>
-                                <View style={[
-                                  styles.playTriangle,
-                                  isOrangeTriangle && styles.playTriangleOrange
-                                ]} />
-                              </View>
+                              <IconTriangle 
+                                size={16} 
+                                color={isOrangeTriangle ? COLORS.accentPrimary : '#000000'} 
+                              />
                             </View>
                           </>
                         );
@@ -510,20 +532,27 @@ export function TodayScreen({ onNavigateToWorkouts, onDateChange }: TodayScreenP
                 </Animated.View>
               )}
               
-              {/* Old rest day card during transition */}
+              {/* Old rest day view during transition */}
               {isTransitioning && previousWorkoutData && !previousWorkoutData.workout && (
                 <Animated.View 
                   style={[
-                    styles.restDayCard,
+                    styles.restDayContainer,
                     styles.absoluteCard,
                     { transform: [{ translateX: oldCardTranslateX }] }
                   ]}
                 >
-                  <View style={styles.restDayInner}>
-                    <Text style={styles.restDayText}>Rest Day</Text>
-                    <Text style={styles.restDaySubtext}>
-                      No workout scheduled
+                  <View style={styles.restDayContent}>
+                    <Text style={styles.restDayQuestion}>
+                      <Text style={styles.restDayQuestionGray}>This is your rest day{'\n'}</Text>
+                      <Text style={styles.restDayQuestionBlack}>No workouts scheduled</Text>
                     </Text>
+                    <TouchableOpacity
+                      style={styles.addWorkoutButton}
+                      onPress={() => setShowSwapSheet(true)}
+                      activeOpacity={1}
+                    >
+                      <Text style={styles.addWorkoutButtonText}>Add Workout</Text>
+                    </TouchableOpacity>
                   </View>
                 </Animated.View>
               )}
@@ -533,7 +562,7 @@ export function TodayScreen({ onNavigateToWorkouts, onDateChange }: TodayScreenP
                 <Animated.View 
                   style={[
                     styles.workoutCard,
-                    isCardPressed && styles.workoutCardPressed,
+                    !isTransitioning && isCardPressed && styles.workoutCardPressed,
                     isTransitioning && styles.absoluteCard,
                     isTransitioning && { transform: [{ translateX: newCardTranslateX }] }
                   ]}
@@ -576,89 +605,64 @@ export function TodayScreen({ onNavigateToWorkouts, onDateChange }: TodayScreenP
                           <>
                             {/* Left: Progress Indicator */}
                             <View style={styles.progressIndicator}>
-                              <Svg height="16" width="16" viewBox="0 0 16 16" style={styles.progressCircle}>
-                                <Circle cx="8" cy="8" r="8" fill={LIGHT_COLORS.border} />
-                                {progress >= 0.999 ? (
-                                  <Circle cx="8" cy="8" r="8" fill="#227132" />
-                                ) : progress > 0 ? (
-                                  <Path
-                                    d={`M 8 8 L 8 0 A 8 8 0 ${progress > 0.5 ? 1 : 0} 1 ${
-                                      8 + 8 * Math.sin(2 * Math.PI * progress)
-                                    } ${
-                                      8 - 8 * Math.cos(2 * Math.PI * progress)
-                                    } Z`}
-                                    fill={LIGHT_COLORS.text}
-                                  />
-                                ) : null}
-                              </Svg>
-                              <Text style={styles.progressText}>{completionPercentage}%</Text>
+                              {progress >= 0.999 ? (
+                                <IconCheck size={24} color="#227132" />
+                              ) : (
+                                <>
+                                  <Svg height="16" width="16" viewBox="0 0 16 16" style={styles.progressCircle}>
+                                    <Circle cx="8" cy="8" r="8" fill={LIGHT_COLORS.border} />
+                                    {progress > 0 ? (
+                                      <Path
+                                        d={`M 8 8 L 8 0 A 8 8 0 ${progress > 0.5 ? 1 : 0} 1 ${
+                                          8 + 8 * Math.sin(2 * Math.PI * progress)
+                                        } ${
+                                          8 - 8 * Math.cos(2 * Math.PI * progress)
+                                        } Z`}
+                                        fill={LIGHT_COLORS.text}
+                                      />
+                                    ) : null}
+                                  </Svg>
+                                  <Text style={styles.progressText}>{completionPercentage}%</Text>
+                                </>
+                              )}
                             </View>
                             
                             {/* Right: Action Button */}
                             <View style={styles.startButton}>
                               <Text style={styles.startButtonText}>{buttonState}</Text>
-                              <View style={styles.playTriangleWrapper}>
-                                <View style={[
-                                  styles.playTriangle,
-                                  isOrangeTriangle && styles.playTriangleOrange
-                                ]} />
-                              </View>
+                              <IconTriangle 
+                                size={16} 
+                                color={isOrangeTriangle ? COLORS.accentPrimary : '#000000'} 
+                              />
                             </View>
                           </>
                         );
                       })()}
                     </View>
-                  </TouchableOpacity>
+                      </TouchableOpacity>
                 </Animated.View>
               ) : (
                 <Animated.View 
                   style={[
+                    styles.restDayContainer,
                     isTransitioning && styles.absoluteCard,
                     isTransitioning && { transform: [{ translateX: newCardTranslateX }] }
                   ]}
                 >
-                  <TouchableOpacity
-                    style={styles.restDayCard}
-                    onPress={() => setShowSwapSheet(true)}
-                    activeOpacity={1}
-                  >
-                      <View style={styles.restDayInner}>
-                        <Text style={styles.restDayText}>Rest Day</Text>
-                        <Text style={styles.restDaySubtext}>
-                          No workout scheduled
-                        </Text>
-                      </View>
+                  <View style={styles.restDayContent}>
+                    <Text style={styles.restDayQuestion}>
+                      <Text style={styles.restDayQuestionGray}>This is your rest day{'\n'}</Text>
+                      <Text style={styles.restDayQuestionBlack}>No workouts scheduled</Text>
+                    </Text>
+                    <TouchableOpacity
+                      style={styles.addWorkoutButton}
+                      onPress={() => setShowSwapSheet(true)}
+                      activeOpacity={1}
+                    >
+                      <Text style={styles.addWorkoutButtonText}>Add Workout</Text>
                     </TouchableOpacity>
-                </Animated.View>
-              )}
-              
-              {/* Rest Day Swap Button */}
-              {!selectedDay?.workout && !isTransitioning && (
-                <TouchableOpacity 
-                  style={styles.swapButton}
-                  onPress={() => setShowSwapSheet(true)}
-                  activeOpacity={1}
-                >
-                  <View style={styles.swapIconWrapper}>
-                    <Svg width={16} height={16} viewBox="0 0 24 24" fill="none">
-                      <Path 
-                        d="M7 16V4M7 4L3 8M7 4L11 8" 
-                        stroke={COLORS.text}
-                        strokeWidth="2" 
-                        strokeLinecap="round" 
-                        strokeLinejoin="round"
-                      />
-                      <Path 
-                        d="M17 8V20M17 20L21 16M17 20L13 16" 
-                        stroke={COLORS.text}
-                        strokeWidth="2" 
-                        strokeLinecap="round" 
-                        strokeLinejoin="round"
-                      />
-                    </Svg>
                   </View>
-                  <Text style={styles.swapButtonText}>Swap</Text>
-                </TouchableOpacity>
+                </Animated.View>
               )}
               
               {/* Swap Button */}
@@ -685,24 +689,7 @@ export function TodayScreen({ onNavigateToWorkouts, onDateChange }: TodayScreenP
                     onPress={() => setShowSwapSheet(true)}
                     activeOpacity={1}
                   >
-                    <View style={styles.swapIconWrapper}>
-                      <Svg width={16} height={16} viewBox="0 0 24 24" fill="none">
-                        <Path 
-                          d="M7 16V4M7 4L3 8M7 4L11 8" 
-                          stroke={COLORS.text}
-                          strokeWidth="2" 
-                          strokeLinecap="round" 
-                          strokeLinejoin="round"
-                        />
-                        <Path 
-                          d="M17 8V20M17 20L21 16M17 20L13 16" 
-                          stroke={COLORS.text}
-                          strokeWidth="2" 
-                          strokeLinecap="round" 
-                          strokeLinejoin="round"
-                        />
-                      </Svg>
-                    </View>
+                    <IconSwap size={24} color={COLORS.text} />
                     <Text style={styles.swapButtonText}>Swap</Text>
                   </TouchableOpacity>
                 );
@@ -776,22 +763,7 @@ export function TodayScreen({ onNavigateToWorkouts, onDateChange }: TodayScreenP
                             {day.dateObj.format('dddd, MMM D')}
                           </Text>
                         </View>
-                        <Svg width={16} height={16} viewBox="0 0 24 24" fill="none">
-                          <Path 
-                            d="M7 16V4M7 4L3 8M7 4L11 8" 
-                            stroke="#817B77" 
-                            strokeWidth="2" 
-                            strokeLinecap="round" 
-                            strokeLinejoin="round"
-                          />
-                          <Path 
-                            d="M17 8V20M17 20L21 16M17 20L13 16" 
-                            stroke="#817B77" 
-                            strokeWidth="2" 
-                            strokeLinecap="round" 
-                            strokeLinejoin="round"
-                          />
-                        </Svg>
+                        <IconSwap size={24} color="#817B77" />
                       </TouchableOpacity>
                 </View>
               </View>
@@ -932,14 +904,15 @@ const styles = StyleSheet.create({
     ...TYPOGRAPHY.legal,
     color: '#1B1B1B',
   },
-  todayUnderline: {
-    width: 12,
-    height: 1,
-    backgroundColor: '#000000',
-    marginTop: 2,
-  },
-  todayUnderlineHidden: {
-    backgroundColor: 'transparent',
+  todayIndicator: {
+    position: 'absolute',
+    bottom: -14,
+    left: '50%',
+    marginLeft: -4,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: COLORS.accentPrimary,
   },
   dayButtonBlackShadow: {
     // Black shadow: -1, -1, 8% opacity, 1px blur
@@ -1007,7 +980,12 @@ const styles = StyleSheet.create({
   
   // Workout Card
   workoutCard: {
-    ...CARDS.cardDeep.outer,
+    backgroundColor: CARDS.cardDeep.outer.backgroundColor,
+    borderRadius: CARDS.cardDeep.outer.borderRadius,
+    borderCurve: CARDS.cardDeep.outer.borderCurve,
+    borderWidth: 1,
+    borderColor: CARDS.cardDeep.outer.borderColor,
+    overflow: CARDS.cardDeep.outer.overflow,
     width: '100%',
   },
   workoutCardPressed: {
@@ -1064,31 +1042,6 @@ const styles = StyleSheet.create({
     ...TYPOGRAPHY.metaBold,
     color: '#000000',
   },
-  playTriangleWrapper: {
-    position: 'relative',
-    width: 9,
-    height: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  playTriangle: {
-    position: 'absolute',
-    width: 0,
-    height: 0,
-    backgroundColor: 'transparent',
-    borderStyle: 'solid',
-    borderLeftWidth: 8,
-    borderRightWidth: 0,
-    borderTopWidth: 4.5,
-    borderBottomWidth: 4.5,
-    borderLeftColor: '#000000',
-    borderRightColor: 'transparent',
-    borderTopColor: 'transparent',
-    borderBottomColor: 'transparent',
-  },
-  playTriangleOrange: {
-    borderLeftColor: COLORS.accentPrimary,
-  },
   
   // Completed Badge
   completedBadge: {
@@ -1107,44 +1060,40 @@ const styles = StyleSheet.create({
   },
   
   // Rest Day Card
-  restDayCard: {
-    ...CARDS.cardDeep.outer,
+  // Rest Day View
+  restDayContainer: {
     width: '100%',
   },
-  restDayInner: {
-    ...CARDS.cardDeep.inner,
-    paddingHorizontal: 24,
-    paddingTop: 24,
-    paddingBottom: 28,
+  restDayContent: {
+    alignItems: 'flex-start',
+  },
+  restDayQuestion: {
+    ...TYPOGRAPHY.h3,
+    lineHeight: 28,
+    marginBottom: SPACING.xl,
+  },
+  restDayQuestionGray: {
+    color: COLORS.textMeta,
+  },
+  restDayQuestionBlack: {
+    color: COLORS.text,
+  },
+  addWorkoutButton: {
+    height: 56,
+    backgroundColor: '#1B1B1B',
+    borderRadius: BORDER_RADIUS.md,
     alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 24,
+    alignSelf: 'flex-start',
   },
-  restDayText: {
-    ...TYPOGRAPHY.h2,
-    color: LIGHT_COLORS.secondary,
-    marginBottom: 4,
-  },
-  restDaySubtext: {
-    ...TYPOGRAPHY.body,
-    color: LIGHT_COLORS.textMeta,
-    textAlign: 'center',
+  addWorkoutButtonText: {
+    ...TYPOGRAPHY.meta,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
   },
   
   // Swap Button
-  restDayActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: SPACING.xl,
-    marginTop: SPACING.lg,
-  },
-  restDayActionButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    paddingVertical: SPACING.md,
-    paddingHorizontal: SPACING.md,
-  },
   swapButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1203,7 +1152,12 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.md,
   },
   swapSheetItem: {
-    ...CARDS.cardDeep.outer,
+    backgroundColor: CARDS.cardDeep.outer.backgroundColor,
+    borderRadius: CARDS.cardDeep.outer.borderRadius,
+    borderCurve: CARDS.cardDeep.outer.borderCurve,
+    borderWidth: 1,
+    borderColor: CARDS.cardDeep.outer.borderColor,
+    overflow: CARDS.cardDeep.outer.overflow,
   },
   swapSheetItemPressed: {
     borderColor: LIGHT_COLORS.textMeta,

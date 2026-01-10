@@ -7,6 +7,7 @@ import * as Haptics from 'expo-haptics';
 import { ProfileAvatar } from '../components/ProfileAvatar';
 import { BottomDrawer } from '../components/common/BottomDrawer';
 import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS, CARDS } from '../constants';
+import { IconCheck, IconTriangle } from '../components/icons';
 import { useStore } from '../store';
 import { useOnboardingStore } from '../store/useOnboardingStore';
 import { TEMPLATES } from '../data/templates';
@@ -420,7 +421,7 @@ export function WorkoutsScreen() {
                             <Text style={styles.templateName}>{template.name}</Text>
                             <Text style={styles.templateDescription}>{template.description}</Text>
                           </View>
-                        <View style={styles.triangle} />
+                        <IconTriangle size={16} color="#000000" />
                         </TouchableOpacity>
                     </View>
                   </View>
@@ -457,26 +458,30 @@ export function WorkoutsScreen() {
                                 </Text>
                             <View style={styles.cycleFooter}>
                               <View style={styles.progressIndicator}>
-                                <Svg height="16" width="16" viewBox="0 0 16 16" style={styles.progressCircle}>
-                                  <Circle cx="8" cy="8" r="8" fill={LIGHT_COLORS.border} />
-                                  {completion >= 99.9 ? (
-                                    <Circle cx="8" cy="8" r="8" fill={LIGHT_COLORS.text} />
-                                  ) : completion > 0 ? (
-                                    <Path
-                                      d={`M 8 8 L 8 0 A 8 8 0 ${completion / 100 > 0.5 ? 1 : 0} 1 ${
-                                        8 + 8 * Math.sin(2 * Math.PI * (completion / 100))
-                                      } ${
-                                        8 - 8 * Math.cos(2 * Math.PI * (completion / 100))
-                                      } Z`}
-                                      fill={LIGHT_COLORS.text}
-                                    />
-                                  ) : null}
-                                </Svg>
-                                <Text style={styles.progressText}>{completion}%</Text>
+                                {completion >= 99.9 ? (
+                                  <IconCheck size={24} color="#227132" />
+                                ) : (
+                                  <>
+                                    <Svg height="16" width="16" viewBox="0 0 16 16" style={styles.progressCircle}>
+                                      <Circle cx="8" cy="8" r="8" fill={LIGHT_COLORS.border} />
+                                      {completion > 0 ? (
+                                        <Path
+                                          d={`M 8 8 L 8 0 A 8 8 0 ${completion / 100 > 0.5 ? 1 : 0} 1 ${
+                                            8 + 8 * Math.sin(2 * Math.PI * (completion / 100))
+                                          } ${
+                                            8 - 8 * Math.cos(2 * Math.PI * (completion / 100))
+                                          } Z`}
+                                          fill={LIGHT_COLORS.text}
+                                        />
+                                      ) : null}
+                                    </Svg>
+                                    <Text style={styles.progressText}>{completion}%</Text>
+                                  </>
+                                )}
                                 </View>
                               <View style={styles.seeDetailsButton}>
                                 <Text style={styles.seeDetailsText}>See details</Text>
-                                <Text style={styles.seeDetailsArrow}>▶</Text>
+                                <IconTriangle size={16} color={COLORS.accentPrimary} />
                               </View>
                             </View>
                               </TouchableOpacity>
@@ -508,7 +513,7 @@ export function WorkoutsScreen() {
                             activeOpacity={1}
                           >
                             <Text style={styles.pastCycleName}>{cycle.goal || `Cycle ${cycle.cycleNumber}`}</Text>
-                            <View style={styles.triangle} />
+                            <IconTriangle size={16} color="#000000" />
                           </TouchableOpacity>
                       </View>
                     </View>
@@ -639,10 +644,11 @@ const styles = StyleSheet.create({
   
   // Templates Section
   templatesSection: {
+    marginTop: 48,
     gap: SPACING.sm,
   },
   sectionTitle: {
-    ...TYPOGRAPHY.meta,
+    ...TYPOGRAPHY.h3,
     color: COLORS.textMeta,
     marginBottom: SPACING.sm,
   },
@@ -675,6 +681,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   templateCardPressed: {
+    borderWidth: 1,
     borderColor: LIGHT_COLORS.textMeta,
   },
   templateCardContent: {
@@ -683,7 +690,7 @@ const styles = StyleSheet.create({
   templateName: {
     ...TYPOGRAPHY.body,
     color: COLORS.text,
-    marginBottom: 4,
+    marginBottom: 2,
   },
   templateDescription: {
     ...TYPOGRAPHY.body,
@@ -716,6 +723,7 @@ const styles = StyleSheet.create({
   },
   cycleCard: CARDS.cardDeep.outer,
   cycleCardPressed: {
+    borderWidth: 1,
     borderColor: LIGHT_COLORS.textMeta,
   },
   cycleCardContent: {
@@ -758,10 +766,6 @@ const styles = StyleSheet.create({
     ...TYPOGRAPHY.metaBold,
     color: COLORS.text,
   },
-  seeDetailsArrow: {
-    fontSize: 12,
-    color: COLORS.accentPrimary,
-  },
   
   // Past Cycles
   pastCyclesTitle: {
@@ -774,6 +778,7 @@ const styles = StyleSheet.create({
   },
   pastCycleCard: CARDS.cardDeep.outer,
   pastCycleCardPressed: {
+    borderWidth: 1,
     borderColor: LIGHT_COLORS.textMeta,
   },
   pastCycleCardContent: {

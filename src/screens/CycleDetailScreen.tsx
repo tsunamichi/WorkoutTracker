@@ -1,9 +1,9 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, Share } from 'react-native';
+import React, { useState, useRef } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, Share, Animated } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useStore } from '../store';
 import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS, CARDS } from '../constants';
-import { IconArrowLeft, IconMenu } from '../components/icons';
+import { IconArrowLeft, IconMenu, IconChevronDown } from '../components/icons';
 import { DropdownMenu } from '../components/DropdownMenu';
 import { BottomDrawer } from '../components/common/BottomDrawer';
 import type { WorkoutTemplate } from '../types';
@@ -41,7 +41,8 @@ export function CycleDetailScreen({ route, navigation }: CycleDetailScreenProps)
   const [selectedWorkout, setSelectedWorkout] = useState<WorkoutTemplate | null>(null);
   const [selectedWeekNumber, setSelectedWeekNumber] = useState<number>(1);
   const [menuVisible, setMenuVisible] = useState(false);
-  const [pressedCardId, setPressedCardId] = useState<string | null>(null);
+  const [expandedWorkouts, setExpandedWorkouts] = useState<Set<string>>(new Set());
+  const animatedHeights = useRef<{ [key: string]: Animated.Value }>({});
   
   // Helper function to get ordinal suffix
   const getOrdinalSuffix = (day: number) => {
@@ -52,6 +53,33 @@ export function CycleDetailScreen({ route, navigation }: CycleDetailScreenProps)
       case 3: return 'rd';
       default: return 'th';
     }
+  };
+  
+  const toggleWorkout = (workoutId: string, weekNumber: number) => {
+    const key = `${workoutId}-week-${weekNumber}`;
+    const isCurrentlyExpanded = expandedWorkouts.has(key);
+    
+    // Initialize animated value if it doesn't exist
+    if (!animatedHeights.current[key]) {
+      animatedHeights.current[key] = new Animated.Value(isCurrentlyExpanded ? 1 : 0);
+    }
+    
+    // Animate
+    Animated.timing(animatedHeights.current[key], {
+      toValue: isCurrentlyExpanded ? 0 : 1,
+      duration: 250,
+      useNativeDriver: false,
+    }).start();
+    
+    setExpandedWorkouts(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(key)) {
+        newSet.delete(key);
+      } else {
+        newSet.add(key);
+      }
+      return newSet;
+    });
   };
   
   const handleDeleteCycle = () => {
@@ -220,35 +248,174 @@ export function CycleDetailScreen({ route, navigation }: CycleDetailScreenProps)
               /* Week Label */
               <View key={`week-header-${weekIndex}`} style={styles.weekHeader}>
                 <Text style={styles.weekHeaderText}>
-                  Week {weekIndex + 1} — {weekStartDate.format('MMM D, YYYY')}
+                  Week {weekIndex + 1}
                 </Text>
               </View>,
               
-              /* Workouts as compact cards */
-              ...weekWorkouts.map((workout) => (
-                <View key={workout.id} style={styles.workoutCardWrapper}>
-                  <View style={[
-                    CARDS.cardDeep.outer,
-                    pressedCardId === `workout-${workout.id}` && styles.workoutCardPressed
-                  ]}>
-                    <TouchableOpacity
-                      style={{ ...CARDS.cardDeep.inner, ...styles.workoutCardInner }}
-                      onPress={() => {
-                        setSelectedWorkout(workout);
-                        setSelectedWeekNumber(weekIndex + 1);
-                      }}
-                      onPressIn={() => setPressedCardId(`workout-${workout.id}`)}
-                      onPressOut={() => setPressedCardId(null)}
-                      activeOpacity={1}
-                    >
-                      <View style={styles.workoutInfo}>
-                        <Text style={styles.workoutName}>{workout.name}</Text>
+              /* Workouts as accordion list */
+              ...weekWorkouts.flatMap((workout, workoutIndex) => {
+                const weekNumber = weekIndex + 1;
+                const accordionKey = `${workout.id}-week-${weekNumber}`;
+                const isExpanded = expandedWorkouts.has(accordionKey);
+                const isLastWorkout = workoutIndex === weekWorkouts.length - 1;
+                
+                // Find workout assignments for this week
+                const weekEndDate = weekStartDate.add(6, 'day');
+                const weekAssignments = workoutAssignments.filter(a => {
+                  if (a.workoutTemplateId !== workout.id || a.cycleId !== cycleId) {
+                    return false;
+                  }
+                  const assignmentDate = dayjs(a.date);
+                  return (assignmentDate.isAfter(weekStartDate, 'day') || assignmentDate.isSame(weekStartDate, 'day')) &&
+                         (assignmentDate.isBefore(weekEndDate, 'day') || assignmentDate.isSame(weekEndDate, 'day'));
+                });
+                
+                // Get the most recent assignment date for display
+                const latestAssignment = weekAssignments.length > 0 
+                  ? weekAssignments.sort((a, b) => dayjs(b.date).diff(dayjs(a.date)))[0]
+                  : null;
+                
+                const dateDisplay = latestAssignment 
+                  ? dayjs(latestAssignment.date).format('ddd, MMM D')
+                  : weekStartDate.format('ddd, MMM D');
+                
+                return [
+                  <TouchableOpacity
+                    key={`workout-${accordionKey}`}
+                    onPress={() => toggleWorkout(workout.id, weekNumber)}
+                    activeOpacity={1}
+                    style={styles.workoutAccordionRow}
+                  >
+                    <View style={styles.workoutRowContent}>
+                      <View style={styles.workoutRowLeft}>
+                        <Text style={styles.workoutAccordionName}>{workout.name}</Text>
+                        <Text style={styles.workoutAccordionDate}>{dateDisplay}</Text>
                       </View>
-                      <View style={styles.workoutTriangle} />
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              ))
+                      <Animated.View 
+                        style={{
+                          transform: [{ 
+                            rotate: (animatedHeights.current[accordionKey] || new Animated.Value(0)).interpolate({
+                              inputRange: [0, 1],
+                              outputRange: ['0deg', '180deg']
+                            })
+                          }]
+                        }}
+                      >
+                        <IconChevronDown 
+                          size={20} 
+                          color={LIGHT_COLORS.textMeta}
+                        />
+                      </Animated.View>
+                    </View>
+                  </TouchableOpacity>,
+                  
+                  /* Expanded Content */
+                  <Animated.View
+                    key={`workout-expanded-${accordionKey}`}
+                    style={[
+                      styles.expandedContent,
+                      {
+                        maxHeight: (animatedHeights.current[accordionKey] || new Animated.Value(0)).interpolate({
+                          inputRange: [0, 1],
+                          outputRange: [0, 1000]
+                        }),
+                        opacity: animatedHeights.current[accordionKey] || new Animated.Value(0),
+                        overflow: 'hidden'
+                      }
+                    ]}
+                  >
+                    {isExpanded && (() => {
+                        // Filter assignments that have any completed exercises
+                        const completedAssignments = weekAssignments.filter(assignment => {
+                          const workoutKey = `${workout.id}-${assignment.date}`;
+                          return workout.exercises.some(exercise => {
+                            const progress = getExerciseProgress(workoutKey, exercise.id);
+                            return progress && progress.sets && progress.sets.length > 0;
+                          });
+                        });
+                        
+                        if (completedAssignments.length === 0) {
+                          return (
+                            <View style={styles.emptyExpandedState}>
+                              <Text style={styles.emptyExpandedText}>No logged data for this week</Text>
+                            </View>
+                          );
+                        }
+                        
+                        const reversedAssignments = completedAssignments.slice().reverse();
+                        return reversedAssignments.map((assignment, assignmentIndex) => {
+                          const workoutKey = `${workout.id}-${assignment.date}`;
+                          const isLastAssignment = assignmentIndex === reversedAssignments.length - 1;
+                          
+                          const exercisesWithProgress = workout.exercises
+                            .map((exercise) => {
+                              const exerciseData = exercises.find(e => e.id === exercise.exerciseId);
+                              const progress = getExerciseProgress(workoutKey, exercise.id);
+                              
+                              if (!progress || !progress.sets || progress.sets.length === 0) {
+                                return null;
+                              }
+                              
+                              return {
+                                exercise,
+                                exerciseData,
+                                progress,
+                              };
+                            })
+                            .filter(Boolean);
+                          
+                          return (
+                            <View key={assignment.date}>
+                              {exercisesWithProgress.map((item, exerciseIndex) => (
+                                <View key={item.exercise.id}>
+                                  <View style={styles.expandedExerciseRow}>
+                                    {/* Exercise name on the left */}
+                                    <View style={styles.expandedExerciseLeft}>
+                                      <Text style={styles.expandedExerciseName}>
+                                        {item.exerciseData?.name || 'Unknown Exercise'}
+                                      </Text>
+                                    </View>
+                                    
+                                    {/* Sets column on the right */}
+                                    <View style={styles.expandedSetsColumn}>
+                                      {item.progress.sets.slice().reverse().map((set, setIndex) => (
+                                        <View key={setIndex} style={styles.expandedSetRow}>
+                                          <View style={styles.expandedValueColumn}>
+                                            <Text style={styles.expandedValueText}>{set.weight}</Text>
+                                            <Text style={styles.expandedUnitText}>lbs</Text>
+                                          </View>
+                                          <View style={styles.expandedValueColumn}>
+                                            <Text style={styles.expandedValueText}>{set.reps}</Text>
+                                            <Text style={styles.expandedUnitText}>reps</Text>
+                                          </View>
+                                        </View>
+                                      ))}
+                                    </View>
+                                  </View>
+                                </View>
+                              ))}
+                              
+                              {!isLastAssignment && (
+                                <View style={[styles.expandedDividerContainer, { marginVertical: SPACING.lg }]}>
+                                  <View style={styles.expandedDividerTop} />
+                                  <View style={styles.expandedDividerBottom} />
+                                </View>
+                              )}
+                            </View>
+                          );
+                        });
+                      })()}
+                  </Animated.View>,
+                  
+                  /* Divider after each workout */
+                  !isLastWorkout && (
+                    <View key={`divider-${accordionKey}`} style={styles.workoutDividerContainer}>
+                      <View style={styles.workoutDividerTop} />
+                      <View style={styles.workoutDividerBottom} />
+                    </View>
+                  )
+                ];
+              })
             ];
           })
         )}
@@ -465,40 +632,89 @@ const styles = StyleSheet.create({
     ...TYPOGRAPHY.body,
     color: LIGHT_COLORS.textMeta,
   },
-  workoutCardWrapper: {
-    marginBottom: SPACING.md, // 12px
+  
+  // Accordion Styles
+  workoutAccordionRow: {
+    paddingVertical: SPACING.lg,
   },
-  workoutCardPressed: {
-    borderColor: LIGHT_COLORS.textMeta,
-  },
-  workoutCardInner: {
-    paddingHorizontal: 16,
-    paddingTop: 16,
-    paddingBottom: 18,
+  workoutRowContent: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
   },
-  workoutInfo: {
+  workoutRowLeft: {
     flex: 1,
   },
-  workoutName: {
+  workoutAccordionName: {
+    ...TYPOGRAPHY.h3,
+    color: LIGHT_COLORS.secondary,
+    marginBottom: 2,
+  },
+  workoutAccordionDate: {
+    ...TYPOGRAPHY.body,
+    color: LIGHT_COLORS.textMeta,
+  },
+  workoutDividerContainer: {
+    height: 2,
+  },
+  workoutDividerTop: {
+    height: 1,
+    backgroundColor: '#CBC8C7', // metaSoft
+  },
+  workoutDividerBottom: {
+    height: 1,
+    backgroundColor: '#FFFFFF',
+  },
+  
+  // Expanded Content Styles
+  expandedContent: {
+    paddingBottom: SPACING.lg,
+  },
+  emptyExpandedState: {
+    paddingVertical: SPACING.xl,
+    alignItems: 'center',
+  },
+  emptyExpandedText: {
+    ...TYPOGRAPHY.meta,
+    color: LIGHT_COLORS.textMeta,
+  },
+  expandedExerciseRow: {
+    flexDirection: 'row',
+    paddingVertical: SPACING.lg,
+    gap: 32,
+  },
+  expandedExerciseLeft: {
+    flex: 1,
+  },
+  expandedExerciseName: {
     ...TYPOGRAPHY.body,
     color: LIGHT_COLORS.secondary,
   },
-  workoutTriangle: {
-    width: 0,
-    height: 0,
-    backgroundColor: 'transparent',
-    borderStyle: 'solid',
-    borderLeftWidth: 4.5,
-    borderRightWidth: 4.5,
-    borderTopWidth: 8,
-    borderBottomWidth: 0,
-    borderLeftColor: 'transparent',
-    borderRightColor: 'transparent',
-    borderTopColor: '#000000',
-    borderBottomColor: 'transparent',
+  expandedSetsColumn: {
+    flex: 1,
+    gap: SPACING.md,
+    alignItems: 'flex-end',
+  },
+  expandedSetRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: 16,
+    justifyContent: 'flex-end',
+  },
+  expandedValueColumn: {
+    width: 64,
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    justifyContent: 'flex-end',
+    gap: 4,
+  },
+  expandedValueText: {
+    ...TYPOGRAPHY.body,
+    color: LIGHT_COLORS.secondary,
+  },
+  expandedUnitText: {
+    ...TYPOGRAPHY.meta,
+    color: LIGHT_COLORS.textMeta,
   },
   errorText: {
     ...TYPOGRAPHY.body,

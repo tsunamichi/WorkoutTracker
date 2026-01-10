@@ -81,15 +81,6 @@ export function TimerValueSheet({
     }
   }, [visible, value, min, max, progressAnim]);
 
-  const handleSave = () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    onSave(selectedValue);
-    // Small delay to ensure onSave is processed before closing
-    setTimeout(() => {
-      onClose();
-    }, 0);
-  };
-
   const handleTouchStart = (event: GestureResponderEvent) => {
     const touchY = event.nativeEvent.pageY;
     // Store the starting touch position and current value
@@ -134,58 +125,68 @@ export function TimerValueSheet({
       onClose={onClose}
       maxHeight="75%"
     >
-      <View style={styles.container}>
-        <View style={styles.header}>
-          <Text style={styles.type}>{label}</Text>
-          <Text style={styles.label}>{title}</Text>
-          <Text style={styles.valueDisplay}>{formatValue(selectedValue)}</Text>
-        </View>
+      {({ requestClose }) => (
+        <View style={styles.container}>
+          <View style={styles.header}>
+            <Text style={styles.type}>{label}</Text>
+            <Text style={styles.label}>{title}</Text>
+            <Text style={styles.valueDisplay}>{formatValue(selectedValue)}</Text>
+          </View>
 
-            <View style={styles.visualContainer}>
-              <View
-                ref={progressBarRef}
-                style={styles.progressBarTouchArea}
-                onTouchStart={handleTouchStart}
-                onTouchMove={handleTouchMove}
-                onStartShouldSetResponder={() => true}
-                onMoveShouldSetResponder={() => true}
-                onResponderTerminationRequest={() => false}
-                onLayout={(event) => {
-                  const { height } = event.nativeEvent.layout;
-                  barLayoutRef.current = { y: 0, height };
-                }}
-              >
-                <View style={styles.progressBarContainer}>
-                  <Animated.View 
-                    style={[
-                      styles.progressBarFilled, 
-                      { 
-                        height: progressAnim.interpolate({
-                          inputRange: [0, 1],
-                          outputRange: ['100%', '0%'],
-                        }),
-                      }
-                    ]} 
-                  />
-                  <Animated.View 
-                    style={[
-                      styles.progressBarUnfilled, 
-                      { 
-                        height: progressAnim.interpolate({
-                          inputRange: [0, 1],
-                          outputRange: ['0%', '100%'],
-                        }),
-                      }
-                    ]} 
-                  />
+              <View style={styles.visualContainer}>
+                <View
+                  ref={progressBarRef}
+                  style={styles.progressBarTouchArea}
+                  onTouchStart={handleTouchStart}
+                  onTouchMove={handleTouchMove}
+                  onStartShouldSetResponder={() => true}
+                  onMoveShouldSetResponder={() => true}
+                  onResponderTerminationRequest={() => false}
+                  onLayout={(event) => {
+                    const { height } = event.nativeEvent.layout;
+                    barLayoutRef.current = { y: 0, height };
+                  }}
+                >
+                  <View style={styles.progressBarContainer}>
+                    <Animated.View 
+                      style={[
+                        styles.progressBarFilled, 
+                        { 
+                          height: progressAnim.interpolate({
+                            inputRange: [0, 1],
+                            outputRange: ['100%', '0%'],
+                          }),
+                        }
+                      ]} 
+                    />
+                    <Animated.View 
+                      style={[
+                        styles.progressBarUnfilled, 
+                        { 
+                          height: progressAnim.interpolate({
+                            inputRange: [0, 1],
+                            outputRange: ['0%', '100%'],
+                          }),
+                        }
+                      ]} 
+                    />
+                  </View>
                 </View>
               </View>
-            </View>
 
-        <TouchableOpacity style={styles.saveButton} onPress={handleSave} activeOpacity={1}>
-          <Text style={styles.saveButtonText}>Done</Text>
-        </TouchableOpacity>
-      </View>
+          <TouchableOpacity 
+            style={styles.saveButton} 
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+              onSave(selectedValue);
+              requestClose();
+            }} 
+            activeOpacity={1}
+          >
+            <Text style={styles.saveButtonText}>Done</Text>
+          </TouchableOpacity>
+        </View>
+      )}
     </BottomDrawer>
   );
 }
@@ -248,7 +249,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     alignItems: 'center',
     marginTop: 56,
-    marginBottom: 0,
+    marginBottom: 24,
   },
   saveButtonText: {
     fontSize: 17,

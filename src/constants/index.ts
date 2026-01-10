@@ -80,7 +80,7 @@ function adjustLightness(hex: string, amount: number): string {
 }
 
 // Base accent color
-const ACCENT_PRIMARY = '#FC6B00';
+const ACCENT_PRIMARY = '#062FFF';
 
 export const COLORS = {
   // Core colors

@@ -11,7 +11,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useStore } from '../store';
 import { COLORS, SPACING, CARDS, TYPOGRAPHY, BORDER_RADIUS, GRADIENTS } from '../constants';
-import { IconArrowLeft } from '../components/icons';
+import { IconArrowLeft, IconTriangle } from '../components/icons';
 import type { HIITTimer } from '../types';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/AppNavigator';
@@ -150,7 +150,7 @@ export default function HIITTimerListScreen({ navigation }: Props) {
                       activeOpacity={1}
                     >
                       <Text style={styles.startButtonText}>Start</Text>
-                      <View style={styles.playIcon} />
+                      <IconTriangle size={16} color={COLORS.accentPrimary} />
                     </TouchableOpacity>
                   </View>
                 </View>
@@ -240,6 +240,7 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.lg,
   },
   timerCardPressed: {
+    borderWidth: 1,
     borderColor: LIGHT_COLORS.textMeta,
   },
   timerCardInner: {
@@ -269,16 +270,6 @@ const styles = StyleSheet.create({
   startButtonText: {
     ...TYPOGRAPHY.metaBold,
     color: LIGHT_COLORS.secondary,
-  },
-  playIcon: {
-    width: 0,
-    height: 0,
-    borderLeftWidth: 12,
-    borderTopWidth: 8,
-    borderBottomWidth: 8,
-    borderLeftColor: '#FD6B00',
-    borderTopColor: 'transparent',
-    borderBottomColor: 'transparent',
   },
 });
 

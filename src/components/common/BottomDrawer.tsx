@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useMemo } from 'react';
+import React, { useState, useRef, useEffect, useLayoutEffect, useMemo } from 'react';
 import { View, StyleSheet, TouchableOpacity, ScrollView, ViewStyle, Animated, PanResponder, Dimensions, LayoutAnimation, Platform, UIManager } from 'react-native';
 
 // Enable LayoutAnimation on Android
@@ -13,13 +13,14 @@ const SCREEN_HEIGHT = Dimensions.get('window').height;
 interface BottomDrawerProps {
   visible: boolean;
   onClose: () => void;
-  children: React.ReactNode;
+  children: React.ReactNode | ((props: { requestClose: () => void }) => React.ReactNode);
   maxHeight?: string;
   backgroundColor?: string;
   showHandle?: boolean;
   contentStyle?: ViewStyle;
   scrollable?: boolean;
   expandable?: boolean; // New prop to enable pull-to-expand
+  onRequestClose?: () => void; // Called when close is initiated (before animation)
 }
 
 export function BottomDrawer({
@@ -32,11 +33,15 @@ export function BottomDrawer({
   contentStyle,
   scrollable = true,
   expandable = false,
+  onRequestClose,
 }: BottomDrawerProps) {
   const insets = useSafeAreaInsets();
   const [isExpanded, setIsExpanded] = useState(false);
   const [contentHeight, setContentHeight] = useState(0);
+  const [isVisible, setIsVisible] = useState(false);
   const hasTriggeredExpansion = useRef(false);
+  const closeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const frozenMaxHeight = useRef<number>(0);
   
   // Match device corner radius (iPhone rounded corners)
   const deviceCornerRadius = insets.bottom > 0 ? 40 : 24;
@@ -72,33 +77,68 @@ export function BottomDrawer({
   const translateY = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
   const overlayOpacity = useRef(new Animated.Value(0)).current;
 
-  // Animate in/out when drawer visibility changes
+  // Single effect to handle all visibility changes
   useEffect(() => {
     if (visible) {
+      // Clear any pending close
+      if (closeTimeoutRef.current) {
+        clearTimeout(closeTimeoutRef.current);
+        closeTimeoutRef.current = null;
+      }
+      
+      // Show immediately
+      setIsVisible(true);
       setIsExpanded(false);
       hasTriggeredExpansion.current = false;
       
-      // Animate drawer sliding up and overlay fading in
+      // Reset position before animating
+      translateY.setValue(SCREEN_HEIGHT);
+      overlayOpacity.setValue(0);
+      
+      // Animate in
+      setTimeout(() => {
+        Animated.parallel([
+          Animated.spring(translateY, {
+            toValue: 0,
+            useNativeDriver: true,
+            tension: 65,
+            friction: 11,
+          }),
+          Animated.timing(overlayOpacity, {
+            toValue: 1,
+            duration: 300,
+            useNativeDriver: true,
+          }),
+        ]).start();
+      }, 10);
+    } else if (!visible && isVisible) {
+      // Start close animation
       Animated.parallel([
-        Animated.spring(translateY, {
-          toValue: 0,
+        Animated.timing(translateY, {
+          toValue: SCREEN_HEIGHT,
+          duration: 250,
           useNativeDriver: true,
-          tension: 65,
-          friction: 11,
         }),
         Animated.timing(overlayOpacity, {
-          toValue: 1,
-          duration: 300,
+          toValue: 0,
+          duration: 250,
           useNativeDriver: true,
         }),
       ]).start();
-    } else {
-      setContentHeight(0);
-      // Reset for next time
-      translateY.setValue(SCREEN_HEIGHT);
-      overlayOpacity.setValue(0);
+      
+      // Hide after animation completes
+      closeTimeoutRef.current = setTimeout(() => {
+        setIsVisible(false);
+        setContentHeight(0);
+      }, 260); // Slightly longer than animation duration
     }
-  }, [visible, translateY, overlayOpacity]);
+    
+    return () => {
+      if (closeTimeoutRef.current) {
+        clearTimeout(closeTimeoutRef.current);
+      }
+    };
+  }, [visible, isVisible, translateY, overlayOpacity]);
 
   const panResponder = useMemo(
     () => PanResponder.create({
@@ -155,20 +195,7 @@ export function BottomDrawer({
         
         if (gestureState.dy > 100 && !isExpanded) {
           // Dismiss: dragged down significantly from initial state
-          Animated.parallel([
-            Animated.timing(translateY, {
-              toValue: SCREEN_HEIGHT,
-              duration: 250,
-              useNativeDriver: true,
-            }),
-            Animated.timing(overlayOpacity, {
-              toValue: 0,
-              duration: 250,
-              useNativeDriver: true,
-            }),
-          ]).start(() => {
-            onClose();
-          });
+          onClose();
         } else {
           // Snap back to current state
           Animated.spring(translateY, {
@@ -199,8 +226,8 @@ export function BottomDrawer({
         style: contentStyle
       };
 
-  const handleOverlayPress = () => {
-    // Animate drawer sliding down and overlay fading out
+  const requestClose = () => {
+    // Animate first
     Animated.parallel([
       Animated.timing(translateY, {
         toValue: SCREEN_HEIGHT,
@@ -217,10 +244,22 @@ export function BottomDrawer({
     });
   };
 
+  const handleOverlayPress = () => {
+    requestClose();
+  };
+
+  // Render if visible OR if we're showing for animation
+  if (!visible && !isVisible) {
+    return null;
+  }
+
+  // During closing, keep showing the drawer in its open position
+  const shouldShowContent = visible || isVisible;
+
   return (
     <View style={styles.drawerOverlay} pointerEvents="box-none">
       {/* Backdrop overlay */}
-      <Animated.View style={[styles.drawerBackdrop, { opacity: overlayOpacity }]}>
+      <Animated.View style={[styles.drawerBackdrop, { opacity: overlayOpacity }]} pointerEvents={shouldShowContent ? 'auto' : 'none'}>
         <TouchableOpacity
           style={StyleSheet.absoluteFill}
           activeOpacity={1}
@@ -262,7 +301,7 @@ export function BottomDrawer({
                 setContentHeight(height);
               }}
             >
-              {children}
+              {typeof children === 'function' ? children({ requestClose }) : children}
             </View>
           </Content>
         </View>

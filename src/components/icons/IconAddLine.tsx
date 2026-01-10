@@ -1,25 +1,24 @@
 import React from 'react';
 import Svg, { Path, G, Defs, ClipPath, Rect } from 'react-native-svg';
 
-interface IconSkipProps {
+interface IconAddLineProps {
   size?: number;
   color?: string;
 }
 
-export function IconSkip({ size = 24, color = '#161616' }: IconSkipProps) {
+export function IconAddLine({ size = 24, color = '#161616' }: IconAddLineProps) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" pointerEvents="none">
-      <G clipPath="url(#clip0_265_4823)">
+      <G clipPath="url(#clip0_380_1785)">
         <Path
-          d="M4 5V19L16 12L4 5Z"
-          fill={color}
+          d="M12 5V19"
           stroke={color}
           strokeWidth="2"
           strokeLinecap="round"
           strokeLinejoin="round"
         />
         <Path
-          d="M20 5V19"
+          d="M5 12H19"
           stroke={color}
           strokeWidth="2"
           strokeLinecap="round"
@@ -27,10 +26,11 @@ export function IconSkip({ size = 24, color = '#161616' }: IconSkipProps) {
         />
       </G>
       <Defs>
-        <ClipPath id="clip0_265_4823">
-          <Rect width="24" height="24" fill="white" />
+        <ClipPath id="clip0_380_1785">
+          <Rect width="24" height="24" fill="white"/>
         </ClipPath>
       </Defs>
     </Svg>
   );
 }
+

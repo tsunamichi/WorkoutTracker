@@ -5,7 +5,7 @@ import { useNavigation } from '@react-navigation/native';
 import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS, CARDS } from '../constants';
 import { useOnboardingStore } from '../store/useOnboardingStore';
 import { TEMPLATES } from '../data/templates';
-import { IconArrowLeft } from '../components/icons';
+import { IconArrowLeft, IconTriangle } from '../components/icons';
 
 export function WorkoutCreationOptionsScreen() {
   const navigation = useNavigation();
@@ -90,7 +90,7 @@ export function WorkoutCreationOptionsScreen() {
                       <Text style={styles.templateName}>{template.name}</Text>
                       <Text style={styles.templateDescription}>{template.description}</Text>
                     </View>
-                    <View style={styles.triangle} />
+                    <IconTriangle size={16} color="#000000" />
                   </TouchableOpacity>
               </View>
             </View>
@@ -186,10 +186,11 @@ const styles = StyleSheet.create({
   
   // Templates Section
   templatesSection: {
+    marginTop: 48,
     gap: SPACING.sm,
   },
   sectionTitle: {
-    ...TYPOGRAPHY.meta,
+    ...TYPOGRAPHY.h3,
     color: COLORS.textMeta,
     marginBottom: SPACING.sm,
   },
@@ -198,6 +199,7 @@ const styles = StyleSheet.create({
   },
   templateCard: CARDS.cardDeep.outer,
   templateCardPressed: {
+    borderWidth: 1,
     borderColor: '#817B77', // textMeta
   },
   templateCardContent: {
@@ -214,26 +216,11 @@ const styles = StyleSheet.create({
   templateName: {
     ...TYPOGRAPHY.body,
     color: COLORS.text,
-    marginBottom: 4,
+    marginBottom: 2,
   },
   templateDescription: {
     ...TYPOGRAPHY.body,
     color: COLORS.textMeta,
-  },
-  triangle: {
-    width: 0,
-    height: 0,
-    backgroundColor: 'transparent',
-    borderStyle: 'solid',
-    borderLeftWidth: 8,
-    borderRightWidth: 0,
-    borderTopWidth: 4.5,
-    borderBottomWidth: 4.5,
-    borderLeftColor: '#000000',
-    borderRightColor: 'transparent',
-    borderTopColor: 'transparent',
-    borderBottomColor: 'transparent',
-    marginLeft: SPACING.md,
   },
 });
 

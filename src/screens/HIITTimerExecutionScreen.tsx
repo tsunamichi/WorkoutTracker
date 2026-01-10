@@ -16,8 +16,9 @@ import Svg, { Circle, Path } from 'react-native-svg';
 import dayjs from 'dayjs';
 import { useStore } from '../store';
 import { COLORS, SPACING, TYPOGRAPHY, GRADIENTS, BUTTONS, BORDER_RADIUS } from '../constants';
-import { IconArrowLeft, IconPlay, IconPause, IconSpeaker, IconSkip, IconRestart, IconMenu } from '../components/icons';
+import { IconArrowLeft, IconMenu } from '../components/icons';
 import { DropdownMenu } from '../components/DropdownMenu';
+import { TimerControls } from '../components/timer/TimerControls';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/AppNavigator';
 import { AppState } from 'react-native';
@@ -79,19 +80,6 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
     return foundTimer;
   }, [hiitTimers, timerId]);
   
-  if (!timer) {
-    return (
-      <View style={styles.container}>
-        <View style={styles.innerContainer}>
-          <Text style={styles.errorText}>Timer not found</Text>
-          <TouchableOpacity onPress={() => navigation.goBack()}>
-            <Text style={styles.errorText}>Go Back</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-    );
-  }
-  
   const [isRunning, setIsRunning] = useState(false);
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [currentPhase, setCurrentPhase] = useState<TimerPhase>('countdown');
@@ -106,18 +94,32 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
   const hasStartedRef = useRef(false);
   
   // Store initial timer values to detect changes
-  const initialTimerRef = useRef({
+  const initialTimerRef = useRef(timer ? {
     work: timer.work,
     workRest: timer.workRest,
     sets: timer.sets,
     rounds: timer.rounds,
     roundRest: timer.roundRest,
-  });
+  } : null);
+  
+  // Navigate back if timer is deleted
+  useEffect(() => {
+    if (!timer) {
+      console.log('⚠️ Timer not found, navigating back');
+      navigation.goBack();
+    }
+  }, [timer, navigation]);
   
   // Reload timer values when returning from edit screen
   useEffect(() => {
     const unsubscribe = navigation.addListener('focus', () => {
       console.log('👁️ Timer screen focused, checking for changes...');
+      
+      // If timer or initial ref is null, skip change detection
+      if (!timer || !initialTimerRef.current) {
+        return;
+      }
+      
       // Check if timer values have changed
       const hasChanged = 
         initialTimerRef.current.work !== timer.work ||
@@ -230,8 +232,7 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
   const sizeAnim = useRef(new Animated.Value(1)).current; // 1 = 100%, 0 = MIN_SIZE (JS driver for width/height)
   const textSizeAnim = useRef(new Animated.Value(1)).current; // Separate value for text scale (native driver)
   const colorAnim = useRef(new Animated.Value(0)).current; // For color transitions
-  const borderRadiusAnim = useRef(new Animated.Value(CONTAINER_WIDTH / 2)).current; // Circle to rounded rect
-  const sideButtonsAnim = useRef(new Animated.Value(0)).current;
+  const borderRadiusAnim = useRef(new Animated.Value(CONTAINER_WIDTH / 2)).current;
   const breathingAnim = useRef(new Animated.Value(1)).current; // For breathing main circle during rest
   const textOpacityAnim = useRef(new Animated.Value(1)).current; // For countdown number fade transitions
   const textShrinkAnim = useRef(new Animated.Value(1)).current; // For countdown number shrink (1 to 0.8 = 20% shrink)
@@ -288,8 +289,8 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
               useNativeDriver: true, // Native driver for transform
             }),
           ]).start();
-          return;
-        }
+      return;
+    }
 
         // All phases (countdown, work, rest): shrink continuously as time passes
     const totalSeconds = getTotalSeconds();
@@ -634,15 +635,6 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
     };
   }, []);
 
-  // Show side buttons after first start (hide on complete)
-  useEffect(() => {
-    Animated.spring(sideButtonsAnim, {
-      toValue: (isRunning && currentPhase !== 'complete') ? 1 : 0,
-      useNativeDriver: true,
-      tension: 100,
-      friction: 10,
-    }).start();
-  }, [isRunning, currentPhase, sideButtonsAnim]);
 
   // Handle phase completion - MUST be defined before effects that use it
   const handlePhaseComplete = useCallback(() => {
@@ -1024,7 +1016,6 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
               sizeAnim.stopAnimation();
               colorAnim.stopAnimation();
               borderRadiusAnim.stopAnimation();
-              sideButtonsAnim.stopAnimation();
               breathingAnim.stopAnimation();
               restColorAnim.stopAnimation();
               
@@ -1097,7 +1088,6 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
               sizeAnim.stopAnimation();
               colorAnim.stopAnimation();
               borderRadiusAnim.stopAnimation();
-              sideButtonsAnim.stopAnimation();
               breathingAnim.stopAnimation();
               restColorAnim.stopAnimation();
               
@@ -1248,6 +1238,15 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
     // Ensure progress is between 0 and 1
     return Math.max(0, Math.min(1, progress));
   }, [timer, currentPhase, currentSet, currentRound, secondsRemaining]);
+
+  // Show empty state if timer is not found (will navigate back via useEffect)
+  if (!timer) {
+    return (
+      <View style={styles.container}>
+        <View style={styles.innerContainer} />
+      </View>
+    );
+  }
 
     return (
       <View style={styles.container}>
@@ -1419,78 +1418,16 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
           </View>
 
         {/* Controls */}
-        <View style={styles.controls}>
-            {/* Left button: Sound toggle */}
-            <Animated.View
-              style={[
-                styles.sideButton,
-                {
-                  opacity: sideButtonsAnim,
-                  transform: [
-                    {
-                      translateX: sideButtonsAnim.interpolate({
-                        inputRange: [0, 1],
-                      outputRange: [50, 0],
-                      }),
-                    },
-                  { scale: sideButtonsAnim },
-                  ],
-                },
-              ]}
-              pointerEvents={(isRunning && currentPhase !== 'complete') ? 'auto' : 'none'}
-            >
-              <TouchableOpacity
-                onPress={handleToggleSound}
-                style={styles.sideButtonTouchable}
-                activeOpacity={1}
-              >
-                <IconSpeaker size={24} color={LIGHT_COLORS.textSecondary} muted={!soundEnabled} />
-              </TouchableOpacity>
-            </Animated.View>
-
-          {/* Play/Pause/Restart Button */}
-            <TouchableOpacity
-            onPress={currentPhase === 'complete' ? handleRestart : handlePlayPause}
-            style={[BUTTONS.primaryButtonNoLabel, styles.playPauseButton]}
-              activeOpacity={1}
-            >
-            {currentPhase === 'complete' ? (
-              <IconRestart size={32} color={'#FFFFFF'} />
-                ) : isRunning ? (
-              <IconPause size={32} color={'#FFFFFF'} />
-                ) : (
-              <IconPlay size={32} color={'#FFFFFF'} />
-                )}
-            </TouchableOpacity>
-
-            {/* Right button: Skip */}
-            <Animated.View
-              style={[
-                styles.sideButton,
-                {
-                  opacity: sideButtonsAnim,
-                  transform: [
-                    {
-                      translateX: sideButtonsAnim.interpolate({
-                        inputRange: [0, 1],
-                      outputRange: [-50, 0],
-                      }),
-                    },
-                  { scale: sideButtonsAnim },
-                  ],
-                },
-              ]}
-              pointerEvents={(isRunning && currentPhase !== 'complete') ? 'auto' : 'none'}
-            >
-              <TouchableOpacity
-                onPress={handleSkip}
-                style={styles.sideButtonTouchable}
-                activeOpacity={1}
-              >
-                <IconSkip size={24} color={LIGHT_COLORS.textSecondary} />
-              </TouchableOpacity>
-            </Animated.View>
-        </View>
+        <TimerControls
+          isRunning={isRunning && currentPhase !== 'complete'}
+          soundEnabled={soundEnabled}
+          onTogglePause={handlePlayPause}
+          onToggleSound={handleToggleSound}
+          onSkip={handleSkip}
+          showRestart={currentPhase === 'complete'}
+          onRestart={handleRestart}
+          hideControlsWhenPaused={true}
+        />
       </View>
     </View>
   );
@@ -1605,31 +1542,6 @@ const styles = StyleSheet.create({
   },
   particle: {
     position: 'absolute',
-  },
-  controls: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 20,
-    paddingHorizontal: SPACING.xxl,
-    paddingBottom: 48,
-  },
-  playPauseButton: {
-    backgroundColor: LIGHT_COLORS.secondary,
-  },
-  sideButton: {
-    width: 48,
-    height: 48,
-    borderRadius: 12,
-    backgroundColor: LIGHT_COLORS.backgroundCanvas,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  sideButtonTouchable: {
-    width: '100%',
-    height: '100%',
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   errorText: {
     ...TYPOGRAPHY.body,

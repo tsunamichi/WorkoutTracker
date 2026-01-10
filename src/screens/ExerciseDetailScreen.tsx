@@ -11,7 +11,7 @@ import dayjs from 'dayjs';
 import type { WorkoutTemplateExercise } from '../types';
 import { useStore } from '../store';
 import { COLORS, SPACING, TYPOGRAPHY, GRADIENTS, CARDS } from '../constants';
-import { IconArrowLeft, IconPlay, IconCheck, IconMenu } from '../components/icons';
+import { IconArrowLeft, IconPlay, IconCheck, IconMenu, IconMinusLine, IconAddLine } from '../components/icons';
 import { SetTimerSheet } from '../components/timer/SetTimerSheet';
 import { Toggle } from '../components/Toggle';
 import { BottomDrawer } from '../components/common/BottomDrawer';
@@ -360,7 +360,7 @@ export function ExerciseDetailScreen({ route, navigation }: ExerciseDetailScreen
         {
           text: 'Complete',
           style: 'default',
-          onPress: () => {
+          onPress: async () => {
             const completedSets = setsData.map(set => ({
               ...set,
               completed: true,
@@ -370,10 +370,13 @@ export function ExerciseDetailScreen({ route, navigation }: ExerciseDetailScreen
             
             // Save progress
             if (workoutKey && exercise) {
-              saveExerciseProgress(workoutKey, exercise.id, {
+              await saveExerciseProgress(workoutKey, exercise.id, {
                 exerciseId: exercise.id,
                 sets: completedSets,
               });
+              
+              // Navigate back to workout page
+              navigation?.goBack();
             }
           },
         },
@@ -726,7 +729,7 @@ export function ExerciseDetailScreen({ route, navigation }: ExerciseDetailScreen
                                     end={{ x: 1, y: 1 }}
                                     style={styles.adjustButtonInner}
                                   >
-                                    <Text style={styles.adjustButtonText}>−</Text>
+                                    <IconMinusLine size={24} color="#DEDEDE" />
                                   </LinearGradient>
                                 </View>
                               </TouchableOpacity>
@@ -742,7 +745,7 @@ export function ExerciseDetailScreen({ route, navigation }: ExerciseDetailScreen
                                     end={{ x: 1, y: 1 }}
                                     style={styles.adjustButtonInner}
                                   >
-                                    <Text style={styles.adjustButtonText}>+</Text>
+                                    <IconAddLine size={24} color="#DEDEDE" />
                                   </LinearGradient>
                                 </View>
                               </TouchableOpacity>
@@ -776,7 +779,7 @@ export function ExerciseDetailScreen({ route, navigation }: ExerciseDetailScreen
                                     end={{ x: 1, y: 1 }}
                                     style={styles.adjustButtonInner}
                                   >
-                                    <Text style={styles.adjustButtonText}>−</Text>
+                                    <IconMinusLine size={24} color="#DEDEDE" />
                                   </LinearGradient>
                                 </View>
                               </TouchableOpacity>
@@ -792,7 +795,7 @@ export function ExerciseDetailScreen({ route, navigation }: ExerciseDetailScreen
                                     end={{ x: 1, y: 1 }}
                                     style={styles.adjustButtonInner}
                                   >
-                                    <Text style={styles.adjustButtonText}>+</Text>
+                                    <IconAddLine size={24} color="#DEDEDE" />
                                   </LinearGradient>
                                 </View>
                               </TouchableOpacity>
@@ -850,7 +853,7 @@ export function ExerciseDetailScreen({ route, navigation }: ExerciseDetailScreen
                                   <PulsatingCircle />
                                 ) : isCompleted ? (
                                   <View style={styles.setCheckIcon}>
-                                    <IconCheck size={20} color="#227132" />
+                                    <IconCheck size={24} color="#227132" />
                                   </View>
                                 ) : null}
                               </View>
@@ -892,20 +895,13 @@ export function ExerciseDetailScreen({ route, navigation }: ExerciseDetailScreen
               {allSetsCompleted ? (
                 // Save Changes button (black background)
                 <View style={[styles.markAsDoneButtonInner, styles.saveChangesButtonBackground, (!hasUnsavedChanges) && styles.buttonDisabled]}>
-                  <IconCheck size={24} color="#FFFFFF" />
                   <Text style={styles.markAsDoneButtonText}>Save changes</Text>
                 </View>
               ) : (
-                // Mark as Done button (gradient background)
-                <LinearGradient
-                  colors={GRADIENTS.accentPrimary.colors}
-                  start={GRADIENTS.accentPrimary.start}
-                  end={GRADIENTS.accentPrimary.end}
-                  style={styles.markAsDoneButtonInner}
-                >
-                  <IconCheck size={24} color="#FFFFFF" />
+                // Mark as Done button (solid background)
+                <View style={[styles.markAsDoneButtonInner, styles.markAsDoneButtonBackground]}>
                   <Text style={styles.markAsDoneButtonText}>Mark as Done</Text>
-                </LinearGradient>
+                </View>
               )}
             </TouchableOpacity>
           </View>
@@ -1209,14 +1205,14 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   adjustButtonTapTarget: {
-    width: 56,
-    height: 56,
+    width: 48,
+    height: 48,
     alignItems: 'center',
     justifyContent: 'center',
   },
   adjustButtonShadow1: {
-    width: 56,
-    height: 56,
+    width: 48,
+    height: 48,
     // Shadow 1: white, opacity 0.35, no blur, offset -1, -1
     shadowColor: '#FFFFFF',
     shadowOffset: { width: -1, height: -1 },
@@ -1225,8 +1221,8 @@ const styles = StyleSheet.create({
     elevation: 1,
   },
   adjustButtonShadow2: {
-    width: 56,
-    height: 56,
+    width: 48,
+    height: 48,
     // Shadow 2: black, opacity 0.16, blur 3, offset -2, -2
     shadowColor: '#000000',
     shadowOffset: { width: -2, height: -2 },
@@ -1235,8 +1231,8 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   adjustButtonShadow3: {
-    width: 56,
-    height: 56,
+    width: 48,
+    height: 48,
     // Shadow 3: white, opacity 0.8, blur 5, offset 2, 2
     shadowColor: '#FFFFFF',
     shadowOffset: { width: 2, height: 2 },
@@ -1245,8 +1241,8 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   adjustButtonShadow4: {
-    width: 56,
-    height: 56,
+    width: 48,
+    height: 48,
     // Shadow 4: white, opacity 1.0, no blur, offset 1, 1
     shadowColor: '#FFFFFF',
     shadowOffset: { width: 1, height: 1 },
@@ -1255,15 +1251,15 @@ const styles = StyleSheet.create({
     elevation: 4,
   },
   adjustButton: {
-    width: 56,
-    height: 56,
+    width: 48,
+    height: 48,
     borderRadius: 12,
     borderCurve: 'continuous',
     overflow: 'hidden',
   },
   adjustButtonInner: {
-    width: 56,
-    height: 56,
+    width: 48,
+    height: 48,
     borderRadius: 12,
     borderCurve: 'continuous',
     alignItems: 'center',
@@ -1333,31 +1329,6 @@ const styles = StyleSheet.create({
   },
   recordButtonTextDisabled: {
     color: LIGHT_COLORS.textMeta,
-  },
-  playTriangleWrapper: {
-    position: 'relative',
-    width: 9,
-    height: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  playTriangle: {
-    position: 'absolute',
-    width: 0,
-    height: 0,
-    backgroundColor: 'transparent',
-    borderStyle: 'solid',
-    borderLeftWidth: 8,
-    borderRightWidth: 0,
-    borderTopWidth: 4.5,
-    borderBottomWidth: 4.5,
-    borderLeftColor: '#ffffff',
-    borderRightColor: 'transparent',
-    borderTopColor: 'transparent',
-    borderBottomColor: 'transparent',
-  },
-  playTriangleDisabled: {
-    borderLeftColor: LIGHT_COLORS.textMeta,
   },
   
   // Barbell Toggle
@@ -1485,7 +1456,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 16,
-    gap: 8,
   },
   markAsDoneButtonText: {
     ...TYPOGRAPHY.bodyBold,
@@ -1494,6 +1464,9 @@ const styles = StyleSheet.create({
   },
   saveChangesButtonBackground: {
     backgroundColor: '#1B1B1B',
+  },
+  markAsDoneButtonBackground: {
+    backgroundColor: COLORS.accentPrimary,
   },
   buttonDisabled: {
     opacity: 0.4,

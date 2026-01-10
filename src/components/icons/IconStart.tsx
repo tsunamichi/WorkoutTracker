@@ -26,4 +26,3 @@ export function IconStart({ size = 24, color = '#161616' }: IconStartProps) {
     </Svg>
   );
 }
-

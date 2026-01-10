@@ -16,7 +16,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useStore } from '../store';
 import { BottomDrawer } from '../components/common/BottomDrawer';
 import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS, CARDS } from '../constants';
-import { IconArrowLeft, IconGripVertical, IconX, IconSwap, IconAdd } from '../components/icons';
+import { IconArrowLeft, IconGripVertical, IconTrash, IconSwap, IconAdd } from '../components/icons';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/AppNavigator';
 import type { WorkoutTemplateExercise } from '../types';
@@ -539,7 +539,7 @@ export default function WorkoutEditScreen({ navigation, route }: Props) {
                       style={styles.actionButton}
                       activeOpacity={1}
                     >
-                      <IconX size={20} color={COLORS.error} />
+                      <IconTrash size={20} color={COLORS.error} />
                     </TouchableOpacity>
                   </Animated.View>
                 </View>
@@ -864,6 +864,7 @@ const styles = StyleSheet.create({
     minHeight: 56, // Fixed height matching other cards
   },
   exerciseCardPressed: {
+    borderWidth: 1,
     borderColor: LIGHT_COLORS.textMeta,
   },
   exerciseCardContent: {

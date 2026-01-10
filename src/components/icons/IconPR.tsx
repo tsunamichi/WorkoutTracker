@@ -19,4 +19,3 @@ export function IconPR({ size = 24, color = '#161616' }: IconPRProps) {
     </Svg>
   );
 }
-

@@ -14,7 +14,7 @@ import { Audio } from 'expo-av';
 import * as Haptics from 'expo-haptics';
 import { useStore } from '../../store';
 import { SPACING, TYPOGRAPHY } from '../../constants';
-import { IconPlay, IconPause, IconSpeaker, IconSkip } from '../icons';
+import { TimerControls } from './TimerControls';
 import { startRestTimer, endRestTimer, markRestTimerCompleted } from '../../modules/RestTimerLiveActivity';
 
 interface SetTimerSheetProps {
@@ -487,35 +487,14 @@ export function SetTimerSheet({
           </View>
 
           {/* Controls */}
-          <View style={styles.stickyButtonContainer}>
-            <TouchableOpacity
-              onPress={handleToggleSound}
-              style={styles.sideButtonTouchable}
-              activeOpacity={1}
-            >
-              <IconSpeaker size={28} color={LIGHT_COLORS.textSecondary} muted={!soundEnabled} />
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              onPress={handleTogglePause}
-              activeOpacity={1}
-              style={styles.playPauseButton}
-            >
-              {isRunning ? (
-                <IconPause size={32} color="#FFFFFF" />
-              ) : (
-                <IconPlay size={32} color="#FFFFFF" />
-              )}
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              onPress={handleSkip}
-              style={styles.sideButtonTouchable}
-              activeOpacity={1}
-            >
-              <IconSkip size={28} color={LIGHT_COLORS.textSecondary} />
-            </TouchableOpacity>
-          </View>
+          <TimerControls
+            isRunning={isRunning}
+            soundEnabled={soundEnabled}
+            onTogglePause={handleTogglePause}
+            onToggleSound={handleToggleSound}
+            onSkip={handleSkip}
+            hideControlsWhenPaused={true}
+          />
         </View>
       </Animated.View>
     </View>
@@ -584,28 +563,6 @@ const styles = StyleSheet.create({
     fontWeight: '300',
     fontFamily: 'System',
     textAlign: 'center',
-  },
-  stickyButtonContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 32,
-    width: '100%',
-  },
-  playPauseButton: {
-    backgroundColor: '#1B1B1B',
-    width: 80,
-    height: 80,
-    borderRadius: 16,
-    borderCurve: 'continuous',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  sideButtonTouchable: {
-    width: 56,
-    height: 56,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
 });
 
