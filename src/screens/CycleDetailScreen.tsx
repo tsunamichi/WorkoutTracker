@@ -498,6 +498,8 @@ const styles = StyleSheet.create({
   sheetContent: {
     paddingHorizontal: SPACING.xxl,
     paddingBottom: SPACING.xxl,
+    borderWidth: 3,
+    borderColor: 'purple', // DEBUG: sheetContent
   },
   sheetTitle: {
     fontSize: 28,
