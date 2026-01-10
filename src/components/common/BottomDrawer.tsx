@@ -275,8 +275,8 @@ const styles = StyleSheet.create({
   },
   drawerSheet: {
     flex: 1, // Fill parent's maxHeight constraint
-    paddingTop: 4,
-    paddingHorizontal: 4,
+    paddingTop: 0,
+    paddingHorizontal: 0,
     paddingBottom: 0, // Bottom padding added to content for proper scrolling
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
