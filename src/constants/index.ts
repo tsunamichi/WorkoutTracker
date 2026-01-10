@@ -90,7 +90,7 @@ export const COLORS = {
   canvas: '#1C1C1E',        // Card/container background (dark mode)
   container: '#2C2C2E',     // Secondary container
   cardBackground: '#E3E3DE', // Card background (light)
-  activeCard: '#EDEEEB',    // Active/default card state
+  activeCard: '#FF0000',    // Active/default card state (TEMPORARY RED FOR TESTING)
   
   // Primary actions
   primary: '#227132',       // Green for actions
@@ -251,7 +251,7 @@ export const SHADOW = {
 
 export const CARDS = {
   cardFlat: {
-    backgroundColor: '#EDEEEB', // activeCard
+    backgroundColor: '#FF0000', // activeCard (TEMPORARY RED FOR TESTING)
     borderRadius: 16,  // Squircle-friendly
     borderCurve: 'continuous' as const,
     borderWidth: 1,
@@ -276,7 +276,7 @@ export const CARDS = {
     },
     // Outer card container
     outer: {
-      backgroundColor: '#EDEEEB', // activeCard
+      backgroundColor: '#FF0000', // activeCard (TEMPORARY RED FOR TESTING)
       borderRadius: 16,  // Squircle-friendly
       borderCurve: 'continuous' as const,
       borderWidth: 1,
