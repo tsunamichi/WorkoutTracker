@@ -497,8 +497,7 @@ const styles = StyleSheet.create({
   // Bottom Sheet
   sheetContent: {
     paddingHorizontal: SPACING.xxl,
-    borderWidth: 3,
-    borderColor: 'purple', // DEBUG: sheetContent
+    paddingBottom: 24,
   },
   sheetTitle: {
     fontSize: 28,
@@ -516,8 +515,6 @@ const styles = StyleSheet.create({
   emptyExercises: {
     paddingVertical: SPACING.xxxl,
     alignItems: 'center',
-    borderWidth: 3,
-    borderColor: 'cyan', // DEBUG: emptyExercises
   },
   emptyExercisesText: {
     fontSize: 16,
@@ -528,8 +525,6 @@ const styles = StyleSheet.create({
   exercisesList: {
     maxHeight: 400,
     marginHorizontal: -SPACING.xxl, // Remove parent's horizontal padding
-    borderWidth: 3,
-    borderColor: 'cyan', // DEBUG: exercisesList
   },
   
   // History Layout (same as exercise history drawer)

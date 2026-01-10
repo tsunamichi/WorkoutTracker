@@ -1419,8 +1419,7 @@ const styles = StyleSheet.create({
   // History Bottom Sheet Content
   historySheetContent: {
     paddingHorizontal: SPACING.xxl,
-    borderWidth: 3,
-    borderColor: 'purple', // DEBUG: historySheetContent
+    paddingBottom: 24,
   },
   historySheetTitle: {
     ...TYPOGRAPHY.h2,
@@ -1430,8 +1429,6 @@ const styles = StyleSheet.create({
   historySheetEmpty: {
     paddingVertical: SPACING.xxxl,
     alignItems: 'center',
-    borderWidth: 3,
-    borderColor: 'cyan', // DEBUG: historySheetEmpty
   },
   historySheetEmptyText: {
     ...TYPOGRAPHY.body,
@@ -1442,8 +1439,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     paddingVertical: SPACING.lg,
     gap: SPACING.xl,
-    borderWidth: 3,
-    borderColor: 'cyan', // DEBUG: historyWorkoutGroup
   },
   historyDateColumn: {
     width: 80,
