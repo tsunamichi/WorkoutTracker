@@ -399,7 +399,7 @@ export function TodayScreen({ onNavigateToWorkouts, onDateChange }: TodayScreenP
                               {
                                 backgroundColor: isSelected 
                                   ? '#000000'
-                                  : '#E3E3DE'
+                                  : COLORS.activeCard
                               }
                             ]}
                           >
