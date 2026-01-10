@@ -112,7 +112,7 @@ export const COLORS = {
   textDisabled: '#C7C7CC',      // Disabled text
   
   // Borders & dividers
-  border: '#AEAEAB',        // Subtle borders
+  border: '#C2C3C0',        // Subtle borders
   disabledBorder: '#D2D2D2', // Disabled button border
   divider: '#48484A',       // Dividers
   overlay: 'rgba(0, 0, 0, 0.2)', // Bottom sheet overlays
@@ -255,7 +255,7 @@ export const CARDS = {
     borderRadius: 16,  // Squircle-friendly
     borderCurve: 'continuous' as const,
     borderWidth: 1,
-    borderColor: '#AEAEAB',
+    borderColor: '#C2C3C0',
   },
   cardDeep: {
     // Outer card container (no external shadows)
@@ -264,7 +264,7 @@ export const CARDS = {
       borderRadius: 16,  // Squircle-friendly
       borderCurve: 'continuous' as const,
       borderWidth: 1,
-      borderColor: '#AEAEAB',
+      borderColor: '#C2C3C0',
       overflow: 'hidden' as const,
     },
     // Inner card with borders for depth
@@ -289,7 +289,7 @@ export const CARDS = {
       borderRadius: 16,  // Squircle-friendly
       borderCurve: 'continuous' as const,
       borderWidth: 1,
-      borderColor: '#AEAEAB',
+      borderColor: '#C2C3C0',
       overflow: 'hidden' as const,
     },
     // Inner card WITHOUT borders (dimmed state)
