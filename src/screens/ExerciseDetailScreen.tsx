@@ -1431,6 +1431,8 @@ const styles = StyleSheet.create({
   historySheetEmpty: {
     paddingVertical: SPACING.xxxl,
     alignItems: 'center',
+    borderWidth: 3,
+    borderColor: 'cyan', // DEBUG: historySheetEmpty
   },
   historySheetEmptyText: {
     ...TYPOGRAPHY.body,
@@ -1441,6 +1443,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     paddingVertical: SPACING.lg,
     gap: SPACING.xl,
+    borderWidth: 3,
+    borderColor: 'cyan', // DEBUG: historyWorkoutGroup
   },
   historyDateColumn: {
     width: 80,

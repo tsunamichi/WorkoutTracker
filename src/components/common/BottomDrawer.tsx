@@ -238,10 +238,6 @@ export function BottomDrawer({
           
           <Content {...contentProps}>
             <View
-              style={{ 
-                borderWidth: 3,
-                borderColor: 'yellow', // DEBUG: Content wrapper (no padding now)
-              }}
               onLayout={(event) => {
                 if (expandable) {
                   const { height } = event.nativeEvent.layout;
