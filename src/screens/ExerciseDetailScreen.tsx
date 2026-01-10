@@ -1419,7 +1419,6 @@ const styles = StyleSheet.create({
   // History Bottom Sheet Content
   historySheetContent: {
     paddingHorizontal: SPACING.xxl,
-    paddingBottom: SPACING.xl,
     borderWidth: 3,
     borderColor: 'purple', // DEBUG: historySheetContent
   },

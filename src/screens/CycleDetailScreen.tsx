@@ -497,7 +497,6 @@ const styles = StyleSheet.create({
   // Bottom Sheet
   sheetContent: {
     paddingHorizontal: SPACING.xxl,
-    paddingBottom: SPACING.xxl,
     borderWidth: 3,
     borderColor: 'purple', // DEBUG: sheetContent
   },
