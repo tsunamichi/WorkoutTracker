@@ -504,10 +504,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.xxl,
   },
   sheetTitle: {
-    fontSize: 28,
-    fontWeight: '600',
+    ...TYPOGRAPHY.h2,
     color: LIGHT_COLORS.secondary,
-    marginBottom: SPACING.xs,
+    marginBottom: SPACING.xl,
   },
   sheetSubtitle: {
     ...TYPOGRAPHY.meta,

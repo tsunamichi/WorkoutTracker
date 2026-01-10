@@ -780,8 +780,7 @@ const styles = StyleSheet.create({
     paddingBottom: SPACING.xxl,
   },
   sheetTitle: {
-    fontSize: 28,
-    fontWeight: '600',
+    ...TYPOGRAPHY.h2,
     color: LIGHT_COLORS.secondary,
     marginBottom: SPACING.xl,
   },

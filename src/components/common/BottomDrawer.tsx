@@ -44,8 +44,9 @@ export function BottomDrawer({
   // Calculate height percentages
   const maxHeightPercent = parseFloat(maxHeight.replace('%', '')) / 100;
   const expandedHeightPercent = 0.9;
+  const bottomOffset = 8; // drawer is positioned 8px from bottom
   const maxHeightValue = SCREEN_HEIGHT * maxHeightPercent;
-  const expandedHeight = SCREEN_HEIGHT * expandedHeightPercent;
+  const expandedHeight = (SCREEN_HEIGHT - bottomOffset) * expandedHeightPercent;
 
   const translateY = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
   const overlayOpacity = useRef(new Animated.Value(0)).current;

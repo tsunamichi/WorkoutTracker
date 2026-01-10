@@ -527,9 +527,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
   },
   sheetTitle: {
-    ...TYPOGRAPHY.h3,
+    ...TYPOGRAPHY.h2,
     color: COLORS.text,
-    marginBottom: 4,
+    marginBottom: SPACING.xl,
   },
   sheetSubtitle: {
     ...TYPOGRAPHY.meta,
