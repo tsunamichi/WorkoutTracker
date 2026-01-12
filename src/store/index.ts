@@ -74,17 +74,6 @@ interface WorkoutStore {
   hiitTimerSessions: HIITTimerSession[];
   addHIITTimerSession: (session: HIITTimerSession) => Promise<void>;
   getHIITTimerSessionsForDate: (date: string) => HIITTimerSession[];
-  
-  // Rest Timer Mini State
-  restTimerMinimized: boolean;
-  restTimerTimeLeft: number;
-  restTimerTotalTime: number;
-  restTimerOnComplete: (() => void) | null;
-  restTimerExerciseId: string | null;
-  restTimerWorkoutKey: string | null;
-  setRestTimerMinimized: (minimized: boolean) => void;
-  setRestTimerData: (timeLeft: number, totalTime: number, onComplete: (() => void) | null, exerciseId?: string, workoutKey?: string) => void;
-  clearRestTimerData: () => void;
 }
 
 const DEFAULT_SETTINGS: AppSettings = {
@@ -134,12 +123,6 @@ export const useStore = create<WorkoutStore>((set, get) => ({
   isLoading: true,
   workoutProgress: {},
   detailedWorkoutProgress: {},
-  restTimerMinimized: false,
-  restTimerTimeLeft: 0,
-  restTimerTotalTime: 0,
-  restTimerOnComplete: null,
-  restTimerExerciseId: null,
-  restTimerWorkoutKey: null,
   
   initialize: async () => {
     try {
@@ -799,32 +782,6 @@ export const useStore = create<WorkoutStore>((set, get) => ({
     console.log('🏪 Store: setActiveHIITTimer called with:', timerId);
     set({ activeHIITTimerId: timerId });
     console.log('🏪 Store: activeHIITTimerId set to:', timerId);
-  },
-  
-  // Rest Timer Mini State actions
-  setRestTimerMinimized: (minimized) => {
-    set({ restTimerMinimized: minimized });
-  },
-  
-  setRestTimerData: (timeLeft, totalTime, onComplete, exerciseId, workoutKey) => {
-    set({ 
-      restTimerTimeLeft: timeLeft,
-      restTimerTotalTime: totalTime,
-      restTimerOnComplete: onComplete,
-      restTimerExerciseId: exerciseId || null,
-      restTimerWorkoutKey: workoutKey || null
-    });
-  },
-  
-  clearRestTimerData: () => {
-    set({ 
-      restTimerMinimized: false,
-      restTimerTimeLeft: 0,
-      restTimerTotalTime: 0,
-      restTimerOnComplete: null,
-      restTimerExerciseId: null,
-      restTimerWorkoutKey: null
-    });
   },
   
   isHIITTimerActive: (timerId) => {

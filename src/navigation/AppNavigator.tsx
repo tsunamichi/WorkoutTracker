@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Animated } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { TodayScreen } from '../screens/TodayScreen';
 import { WorkoutsScreen } from '../screens/WorkoutsScreen';
@@ -22,13 +23,15 @@ import { CreateCycleDayEditor } from '../screens/manualCycle/CreateCycleDayEdito
 import { CreateCycleReview } from '../screens/manualCycle/CreateCycleReview';
 import { AIWorkoutCreationScreen } from '../screens/AIWorkoutCreationScreen';
 import { WorkoutCreationOptionsScreen } from '../screens/WorkoutCreationOptionsScreen';
-import { IconCalendar, IconWorkouts } from '../components/icons';
-import { COLORS, TYPOGRAPHY } from '../constants';
+import { IconCalendar, IconWorkouts, IconSwap } from '../components/icons';
+import { COLORS, TYPOGRAPHY, SPACING, CARDS } from '../constants';
 import { useStore } from '../store';
 import { CycleTemplateId } from '../types/workout';
 import { Weekday } from '../types/manualCycle';
-import { MiniTimer } from '../components/timer/MiniTimer';
 import { navigate } from './navigationService';
+import { BottomDrawer } from '../components/common/BottomDrawer';
+import * as Haptics from 'expo-haptics';
+import dayjs from 'dayjs';
 
 export type RootStackParamList = {
   Tabs: undefined;
@@ -54,140 +57,228 @@ export type RootStackParamList = {
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
+// Light theme colors for swap drawer
+const LIGHT_COLORS = {
+  secondary: '#1B1B1B',
+  textMeta: '#817B77',
+  border: '#C2C3C0',
+};
+
 function TabNavigator() {
   const navigation = useNavigation();
-  const { cycles } = useStore();
-  const restTimerMinimized = useStore((state) => state.restTimerMinimized);
+  const insets = useSafeAreaInsets();
+  const { cycles, swapWorkoutAssignments } = useStore();
   const [activeTab, setActiveTab] = React.useState<'Schedule' | 'Workouts'>('Schedule');
   const [isViewingToday, setIsViewingToday] = React.useState(true);
+  const [swapDrawerVisible, setSwapDrawerVisible] = React.useState(false);
+  const [swapDrawerData, setSwapDrawerData] = React.useState<{ selectedDate: string; weekDays: any[] } | null>(null);
+  const [pressedSwapItemDate, setPressedSwapItemDate] = React.useState<string | null>(null);
   
-  // Animated values for tab widths
-  const scheduleWidth = React.useRef(new Animated.Value(140)).current;
-  const workoutsWidth = React.useRef(new Animated.Value(100)).current;
-  
-  // Animated values for label widths (collapse to 0 when inactive)
-  const scheduleLabelWidth = React.useRef(new Animated.Value(100)).current;
-  const workoutsLabelWidth = React.useRef(new Animated.Value(0)).current;
+  // Animated value for tab indicator position (0 = Schedule, 1 = Workouts)
+  const indicatorPosition = React.useRef(new Animated.Value(0)).current;
+  const [tabBarWidth, setTabBarWidth] = React.useState(0);
   
   const switchTab = (tab: 'Schedule' | 'Workouts') => {
     setActiveTab(tab);
     
-    if (tab === 'Schedule') {
-      // Animate Schedule to active, Workouts to inactive
-      Animated.parallel([
-        Animated.spring(scheduleWidth, {
-          toValue: 140,
-          useNativeDriver: false,
-          tension: 80,
-          friction: 10,
-        }),
-        Animated.spring(workoutsWidth, {
-          toValue: 100,
-          useNativeDriver: false,
-          tension: 80,
-          friction: 10,
-        }),
-        Animated.spring(scheduleLabelWidth, {
-          toValue: 100,
-          useNativeDriver: false,
-          tension: 80,
-          friction: 10,
-        }),
-        Animated.spring(workoutsLabelWidth, {
-          toValue: 0,
-          useNativeDriver: false,
-          tension: 80,
-          friction: 10,
-        }),
-      ]).start();
-    } else {
-      // Animate Workouts to active, Schedule to inactive
-      Animated.parallel([
-        Animated.spring(scheduleWidth, {
-          toValue: 100,
-          useNativeDriver: false,
-          tension: 80,
-          friction: 10,
-        }),
-        Animated.spring(workoutsWidth, {
-          toValue: 140,
-          useNativeDriver: false,
-          tension: 80,
-          friction: 10,
-        }),
-        Animated.spring(scheduleLabelWidth, {
-          toValue: 0,
-          useNativeDriver: false,
-          tension: 80,
-          friction: 10,
-        }),
-        Animated.spring(workoutsLabelWidth, {
-          toValue: 100,
-          useNativeDriver: false,
-          tension: 80,
-          friction: 10,
-        }),
-      ]).start();
-    }
+    // Animate indicator position with spring
+    Animated.spring(indicatorPosition, {
+      toValue: tab === 'Schedule' ? 0 : 1,
+      useNativeDriver: false,
+      tension: 80,
+      friction: 12,
+    }).start();
   };
   
-  // Calculate bottom padding when mini timer is visible
-  // Mini timer height: 32px (circle) + 32px (padding) + 1px (border) + safe area bottom = ~80px typical
-  const miniTimerHeight = restTimerMinimized ? 80 : 0;
+  const handleTabBarLayout = (event: any) => {
+    const { width } = event.nativeEvent.layout;
+    setTabBarWidth(width);
+  };
+  
+  const handleOpenSwapDrawer = (selectedDate: string, weekDays: any[]) => {
+    setSwapDrawerData({ selectedDate, weekDays });
+    setSwapDrawerVisible(true);
+  };
   
   return (
-    <View style={{ flex: 1, backgroundColor: COLORS.backgroundCanvas, paddingBottom: miniTimerHeight }}>
+    <View style={{ flex: 1, backgroundColor: COLORS.backgroundCanvas }}>
       {/* Screen Content */}
       {activeTab === 'Schedule' ? (
         <TodayScreen 
           onNavigateToWorkouts={() => switchTab('Workouts')} 
           onDateChange={(isToday) => setIsViewingToday(isToday)}
+          onOpenSwapDrawer={handleOpenSwapDrawer}
         />
       ) : (
         <WorkoutsScreen />
       )}
       
       {/* Custom Bottom Navigation */}
-      <View style={styles.bottomNavContainer}>
-        {/* Tab Bar - 240px wide */}
-        <View style={styles.tabBar}>
+      <View style={[styles.bottomNavContainer, { paddingBottom: insets.bottom || 32 }]}>
+        {/* Tab Bar - Full width */}
+        <View style={styles.tabBar} onLayout={handleTabBarLayout}>
+          {/* Animated Active Tab Indicator */}
+          {tabBarWidth > 0 && (
+            <Animated.View 
+              style={[
+                styles.tabIndicator,
+                {
+                  transform: [
+                    {
+                      translateX: indicatorPosition.interpolate({
+                        inputRange: [0, 1],
+                        outputRange: [0, tabBarWidth / 2],
+                      })
+                    },
+                    {
+                      scaleX: indicatorPosition.interpolate({
+                        inputRange: [0, 0.25, 0.5, 0.75, 1],
+                        outputRange: [1, 1.3, 1.4, 1.3, 1],
+                      })
+                    }
+                  ]
+                }
+              ]}
+            />
+          )}
+          
           {/* Schedule Tab */}
           <TouchableOpacity
+            style={styles.tab}
             activeOpacity={1}
             onPress={() => switchTab('Schedule')}
           >
-            <Animated.View style={[styles.tab, { width: scheduleWidth }]}>
-              <IconCalendar 
-                size={24} 
-                color={activeTab === 'Schedule' ? '#000000' : COLORS.textMeta} 
-              />
-              <Animated.View style={styles.labelContainer}>
-                <Animated.View style={{ maxWidth: scheduleLabelWidth, overflow: 'hidden' }}>
-                  <Text style={styles.tabLabel} numberOfLines={1}>Schedule</Text>
-                </Animated.View>
-              </Animated.View>
-            </Animated.View>
+            <IconCalendar 
+              size={24} 
+              color={activeTab === 'Schedule' ? '#FFFFFF' : COLORS.textMeta} 
+            />
+            <Text 
+              style={[
+                styles.tabLabel,
+                { color: activeTab === 'Schedule' ? '#FFFFFF' : COLORS.textMeta }
+              ]} 
+              numberOfLines={1}
+            >
+              Schedule
+            </Text>
           </TouchableOpacity>
           
           {/* Workouts Tab */}
           <TouchableOpacity
+            style={styles.tab}
             activeOpacity={1}
             onPress={() => switchTab('Workouts')}
           >
-            <Animated.View style={[styles.tab, { width: workoutsWidth }]}>
-              <IconWorkouts 
-                size={24} 
-                color={activeTab === 'Workouts' ? '#000000' : COLORS.textMeta} 
-              />
-              <Animated.View style={styles.labelContainer}>
-                <Animated.View style={{ maxWidth: workoutsLabelWidth, overflow: 'hidden' }}>
-                  <Text style={styles.tabLabel} numberOfLines={1}>Workouts</Text>
-                </Animated.View>
-              </Animated.View>
-            </Animated.View>
+            <IconWorkouts 
+              size={24} 
+              color={activeTab === 'Workouts' ? '#FFFFFF' : COLORS.textMeta} 
+            />
+            <Text 
+              style={[
+                styles.tabLabel,
+                { color: activeTab === 'Workouts' ? '#FFFFFF' : COLORS.textMeta }
+              ]} 
+              numberOfLines={1}
+            >
+              Workouts
+            </Text>
           </TouchableOpacity>
             </View>
             </View>
+      
+      {/* Swap Workout Drawer - Renders at TabNavigator level, above bottom nav */}
+      <BottomDrawer
+        visible={swapDrawerVisible}
+        onClose={() => setSwapDrawerVisible(false)}
+        maxHeight="70%"
+      >
+        <View style={styles.swapSheetContent}>
+          <Text style={styles.swapSheetTitle}>Swap Workout</Text>
+          {swapDrawerData && (() => {
+            const { selectedDate, weekDays } = swapDrawerData;
+            
+            // Check if the selected day is a rest day
+            const selectedDay = weekDays.find((day: any) => day.date === selectedDate);
+            const isSelectedDayRestDay = !selectedDay?.workout;
+            
+            // Filter eligible days (not completed and not the selected date)
+            const eligibleDays = weekDays.filter((day: any) => 
+              !day.isCompleted && 
+              day.date !== selectedDate
+            );
+            
+            // Filter workouts that haven't been started
+            const workoutDays = eligibleDays.filter((day: any) => {
+              if (!day.workout) return false;
+              
+              // Check if workout has been started
+              const workoutKey = `${day.workout.id}-${day.date}`;
+              const hasStarted = day.completionPercentage > 0;
+              
+              return !hasStarted;
+            });
+            
+            const restDays = eligibleDays.filter((day: any) => !day.workout);
+            
+            // If selected day is a rest day, don't show any rest days (only workouts)
+            // Otherwise, show up to 1 rest day
+            const limitedRestDays = isSelectedDayRestDay ? [] : restDays.slice(0, 1);
+            
+            // Combine: workouts first, then rest day (if any and if allowed)
+            const allDays = [...workoutDays, ...limitedRestDays];
+            
+            if (allDays.length === 0) {
+              return (
+                <View style={styles.swapSheetEmpty}>
+                  <Text style={styles.swapSheetEmptyText}>
+                    No other days this week to swap with
+                  </Text>
+                </View>
+              );
+            }
+            
+            return allDays.map((day: any, index: number) => {
+              const isLastItem = index === allDays.length - 1;
+              return (
+                <View 
+                  key={index} 
+                  style={[
+                    styles.swapSheetItemWrapper,
+                    isLastItem && { paddingBottom: 16 }
+                  ]}
+                >
+                  <View style={[
+                    styles.swapSheetItem,
+                    pressedSwapItemDate === day.date && styles.swapSheetItemPressed
+                  ]}>
+                    <TouchableOpacity
+                      style={styles.swapSheetItemInner}
+                      onPress={async () => {
+                        await swapWorkoutAssignments(selectedDate, day.date);
+                        setSwapDrawerVisible(false);
+                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                      }}
+                      onPressIn={() => setPressedSwapItemDate(day.date)}
+                      onPressOut={() => setPressedSwapItemDate(null)}
+                      activeOpacity={1}
+                    >
+                      <View>
+                        <Text style={styles.swapSheetItemTitle}>
+                          {day.workout?.name || 'Rest Day'}
+                        </Text>
+                        <Text style={styles.swapSheetItemSubtitle}>
+                          {day.dateObj.format('dddd, MMM D')}
+                        </Text>
+                      </View>
+                      <IconSwap size={24} color="#817B77" />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              );
+            });
+          })()}
+        </View>
+      </BottomDrawer>
     </View>
   );
 }
@@ -195,110 +286,105 @@ function TabNavigator() {
 const styles = StyleSheet.create({
   bottomNavContainer: {
     position: 'absolute',
-    bottom: 32,
+    bottom: 0,
     left: 24,
     right: 24,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    zIndex: 100,
   },
   tabBar: {
-    width: 240,
+    flex: 1,
     height: 56,
-    backgroundColor: COLORS.backgroundContainer,
-    borderRadius: 16,
+    backgroundColor: COLORS.activeCard,
+    borderRadius: 28,
     flexDirection: 'row',
-    overflow: 'hidden',
+    position: 'relative',
+  },
+  tabIndicator: {
+    position: 'absolute',
+    top: 4,
+    bottom: 4,
+    left: 4,
+    right: '50%',
+    marginRight: 4,
+    backgroundColor: '#000000',
+    borderRadius: 24,
+    zIndex: 0,
   },
   tab: {
+    flex: 1,
     height: '100%',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 4,
-  },
-  labelContainer: {
-    overflow: 'hidden',
+    zIndex: 1,
   },
   tabLabel: {
     ...TYPOGRAPHY.metaBold,
-    color: COLORS.text,
+  },
+  
+  // Swap Drawer Styles
+  swapSheetContent: {
+    paddingHorizontal: SPACING.xxl,
+  },
+  swapSheetTitle: {
+    ...TYPOGRAPHY.h2,
+    color: LIGHT_COLORS.secondary,
+    marginBottom: SPACING.xl,
+  },
+  swapSheetItemWrapper: {
+    marginBottom: SPACING.md,
+  },
+  swapSheetItem: {
+    backgroundColor: CARDS.cardDeepDimmed.outer.backgroundColor,
+    borderRadius: CARDS.cardDeepDimmed.outer.borderRadius,
+    borderCurve: CARDS.cardDeepDimmed.outer.borderCurve,
+    borderWidth: CARDS.cardDeepDimmed.outer.borderWidth,
+    borderColor: CARDS.cardDeepDimmed.outer.borderColor,
+    overflow: CARDS.cardDeepDimmed.outer.overflow,
+  },
+  swapSheetItemPressed: {
+    borderColor: LIGHT_COLORS.textMeta,
+  },
+  swapSheetItemInner: {
+    ...CARDS.cardDeepDimmed.inner,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: SPACING.lg,
+    paddingHorizontal: SPACING.xxl,
+  },
+  swapSheetItemTitle: {
+    ...TYPOGRAPHY.h3,
+    color: LIGHT_COLORS.secondary,
+    marginBottom: SPACING.xs,
+  },
+  swapSheetItemSubtitle: {
+    ...TYPOGRAPHY.meta,
+    color: LIGHT_COLORS.textMeta,
+  },
+  swapSheetEmpty: {
+    paddingVertical: SPACING.xxxl,
+    alignItems: 'center',
+  },
+  swapSheetEmptyText: {
+    ...TYPOGRAPHY.body,
+    color: LIGHT_COLORS.textMeta,
+    textAlign: 'center',
   },
 });
 
 // Note: NavigationContainer moved to RootNavigator.tsx for onboarding flow integration
 export default function AppNavigator() {
-  const setRestTimerMinimized = useStore((state) => state.setRestTimerMinimized);
-  const restTimerMinimized = useStore((state) => state.restTimerMinimized);
-  const restTimerExerciseId = useStore((state) => state.restTimerExerciseId);
-  const restTimerWorkoutKey = useStore((state) => state.restTimerWorkoutKey);
-  const { cycles, exercises } = useStore();
-  
-  const handleExpandMiniTimer = () => {
-    // Navigate back to the exercise detail screen
-    if (restTimerExerciseId && restTimerWorkoutKey) {
-      // workoutKey format: "workout-cycle-{cycleId}-w{week}-d{day}-{date}"
-      // We need to extract cycleId and workoutTemplateId from it
-      // The date is always the last part (YYYY-MM-DD = 3 parts after last split)
-      const parts = restTimerWorkoutKey.split('-');
-      const date = parts.slice(-3).join('-'); // Last 3 parts are the date "2026-01-10"
-      const workoutTemplateId = parts.slice(0, -3).join('-'); // Everything before date is the workout template ID
-      
-      // Extract cycle ID from workout template ID
-      // workoutTemplateId format: "workout-cycle-{cycleId}-w{week}-d{day}"
-      // We want to extract: "cycle-{cycleId}"
-      const cycleIdMatch = workoutTemplateId.match(/cycle-\d+/);
-      const cycleId = cycleIdMatch ? cycleIdMatch[0] : null;
-      
-      if (!cycleId) {
-        console.warn('⚠️ Could not parse cycleId from workoutKey');
-        return;
-      }
-      
-      // Find the cycle and get the workout template
-      const cycle = cycles.find(c => c.id === cycleId);
-      const workoutTemplate = cycle?.workoutTemplates.find(w => w.id === workoutTemplateId);
-      
-      if (workoutTemplate) {
-        const templateExercise = workoutTemplate.exercises.find(e => e.id === restTimerExerciseId);
-        const exerciseData = exercises.find(e => e.id === templateExercise?.exerciseId);
-        
-        if (templateExercise && exerciseData) {
-          navigate('ExerciseDetail', {
-            exerciseId: restTimerExerciseId,
-            workoutKey: restTimerWorkoutKey,
-            exercise: templateExercise,
-            exerciseName: exerciseData.name,
-            workoutName: workoutTemplate.name,
-            cycleId: cycleId,
-            workoutTemplateId: workoutTemplateId,
-          });
-          
-          // Wait for navigation to complete, then expand the timer
-          setTimeout(() => {
-            setRestTimerMinimized(false);
-          }, 100);
-        } else {
-          console.warn('⚠️ Could not find exercise or exercise data');
-        }
-      } else {
-        console.warn('⚠️ Could not find workout template');
-      }
-    } else {
-      // If we're already on the exercise page, just expand
-      setRestTimerMinimized(false);
-    }
-  };
-  
-  // Calculate bottom padding when mini timer is visible
-  const miniTimerHeight = restTimerMinimized ? 80 : 0;
-  
   return (
     <View style={{ flex: 1 }}>
       <Stack.Navigator
         screenOptions={{
           headerShown: false,
-          contentStyle: { backgroundColor: 'transparent', paddingBottom: miniTimerHeight },
+          contentStyle: { backgroundColor: 'transparent' },
         }}
       >
         <Stack.Screen name="Tabs" component={TabNavigator} />
@@ -321,9 +407,6 @@ export default function AppNavigator() {
         <Stack.Screen name="AIWorkoutCreation" component={AIWorkoutCreationScreen} />
         <Stack.Screen name="WorkoutCreationOptions" component={WorkoutCreationOptionsScreen} />
       </Stack.Navigator>
-      
-      {/* Mini Timer - visible across all screens when minimized */}
-      <MiniTimer onExpand={handleExpandMiniTimer} />
     </View>
   );
 }

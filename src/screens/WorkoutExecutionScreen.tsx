@@ -6,7 +6,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useStore } from '../store';
 import * as storage from '../storage';
 import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS, CARDS } from '../constants';
-import { IconArrowLeft, IconCheck, IconPlay, IconPause, IconMenu, IconRestart, IconAdd, IconTriangle } from '../components/icons';
+import { IconArrowLeft, IconCheck, IconPlay, IconPause, IconMenu, IconRestart, IconAdd, IconTriangle, IconEdit } from '../components/icons';
+import { ActionSheet } from '../components/common/ActionSheet';
 import dayjs from 'dayjs';
 import { startRestTimer, updateRestTimer, endRestTimer, markRestTimerCompleted } from '../modules/RestTimerLiveActivity';
 import * as Haptics from 'expo-haptics';
@@ -926,58 +927,36 @@ export function WorkoutExecutionScreen({ route, navigation }: WorkoutExecutionSc
         onClose={() => setShowTimer(false)}
       />
       
-      {/* Overflow Menu Modal */}
-      <Modal
+      {/* Action Sheet Menu */}
+      <ActionSheet
         visible={showMenu}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setShowMenu(false)}
-      >
-        <TouchableOpacity 
-          style={styles.menuOverlay}
-          activeOpacity={1}
-          onPress={() => setShowMenu(false)}
-        >
-          <View style={[styles.menuContainer, { paddingTop: insets.top + 48 }]}>
-            <View style={styles.menu}>
-              <TouchableOpacity 
-                style={styles.menuItem}
-                onPress={() => {
-                  setShowMenu(false);
-                  navigation.navigate('WorkoutEdit', {
-                    cycleId,
-                    workoutTemplateId,
-                    date,
-                  });
-                }}
-                activeOpacity={1}
-              >
-                <Text style={styles.menuItemText}>Edit</Text>
-              </TouchableOpacity>
-              
-              <View style={styles.menuDivider} />
-              
-              <TouchableOpacity 
-                style={styles.menuItem}
-                onPress={handleCompleteWorkout}
-                activeOpacity={1}
-              >
-                <Text style={styles.menuItemText}>Mark as complete</Text>
-              </TouchableOpacity>
-              
-              <View style={styles.menuDivider} />
-              
-              <TouchableOpacity 
-                style={styles.menuItem}
-                onPress={handleResetWorkout}
-                activeOpacity={1}
-              >
-                <Text style={[styles.menuItemText, styles.menuItemTextDestructive]}>Reset</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </TouchableOpacity>
-      </Modal>
+        onClose={() => setShowMenu(false)}
+        items={[
+          { 
+            icon: <IconEdit size={24} color="#000000" />,
+            label: 'Edit', 
+            onPress: () => {
+              navigation.navigate('WorkoutEdit', {
+                cycleId,
+                workoutTemplateId,
+                date,
+              });
+            },
+            featured: true
+          },
+          { 
+            icon: <IconCheck size={24} color="#000000" />,
+            label: 'Complete', 
+            onPress: handleCompleteWorkout
+          },
+          { 
+            icon: <IconRestart size={24} color="#FF3B30" />,
+            label: 'Reset', 
+            onPress: handleResetWorkout,
+            destructive: true 
+          },
+        ]}
+      />
       </View>
     </View>
   );
@@ -1243,43 +1222,6 @@ const styles = StyleSheet.create({
     ...TYPOGRAPHY.body,
     color: '#FFFFFF',
     fontSize: 18,
-  },
-  menuOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.3)',
-  },
-  menuContainer: {
-    alignItems: 'flex-end',
-    paddingRight: 18,
-  },
-  menu: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    borderCurve: 'continuous',
-    minWidth: 200,
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
-    elevation: 8,
-    overflow: 'hidden',
-  },
-  menuItem: {
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-  },
-  menuItemText: {
-    fontSize: 17,
-    fontWeight: '400',
-    color: LIGHT_COLORS.secondary,
-  },
-  menuItemTextDestructive: {
-    color: '#FF3B30',
-  },
-  menuDivider: {
-    height: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.1)',
-    marginHorizontal: 12,
   },
 });
 

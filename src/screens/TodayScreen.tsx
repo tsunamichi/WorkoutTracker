@@ -7,7 +7,6 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useNavigation } from '@react-navigation/native';
 import { useStore } from '../store';
 import { ProfileAvatar } from '../components/ProfileAvatar';
-import { BottomDrawer } from '../components/common/BottomDrawer';
 import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS, CARDS } from '../constants';
 import { IconCalendar, IconStopwatch, IconWorkouts, IconCheck, IconTriangle, IconSwap, IconAdd } from '../components/icons';
 import dayjs from 'dayjs';
@@ -35,9 +34,10 @@ const LIGHT_COLORS = {
 interface TodayScreenProps {
   onNavigateToWorkouts?: () => void;
   onDateChange?: (isToday: boolean) => void;
+  onOpenSwapDrawer?: (selectedDate: string, weekDays: any[]) => void;
 }
 
-export function TodayScreen({ onNavigateToWorkouts, onDateChange }: TodayScreenProps) {
+export function TodayScreen({ onNavigateToWorkouts, onDateChange, onOpenSwapDrawer }: TodayScreenProps) {
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
   const { cycles, workoutAssignments, getWorkoutCompletionPercentage, getExerciseProgress, swapWorkoutAssignments, getHIITTimerSessionsForDate } = useStore();
@@ -49,9 +49,6 @@ export function TodayScreen({ onNavigateToWorkouts, onDateChange }: TodayScreenP
   const [isCardPressed, setIsCardPressed] = useState(false);
   const [isTransitioning, setIsTransitioning] = useState(false);
   const [previousWorkoutData, setPreviousWorkoutData] = useState<any>(null);
-  const [showSwapSheet, setShowSwapSheet] = useState(false);
-  const [isSwapSheetVisible, setIsSwapSheetVisible] = useState(false);
-  const [pressedSwapItemDate, setPressedSwapItemDate] = useState<string | null>(null);
   
   // Animation values
   const oldCardTranslateX = useRef(new Animated.Value(0)).current;
@@ -59,8 +56,6 @@ export function TodayScreen({ onNavigateToWorkouts, onDateChange }: TodayScreenP
   const dayScales = useRef(DAYS_SHORT.map(() => new Animated.Value(1))).current;
   const [dayPositions, setDayPositions] = useState<number[]>([]);
   const previousDayIndex = useRef<number>(-1);
-  const swapSheetTranslateY = useRef(new Animated.Value(1000)).current;
-  const swapSheetBackdropOpacity = useRef(new Animated.Value(0)).current;
   
   // Find active cycle
   const activeCycle = cycles.find(c => c.isActive);
@@ -147,6 +142,7 @@ export function TodayScreen({ onNavigateToWorkouts, onDateChange }: TodayScreenP
       workout,
       assignment,
       isCompleted,
+      completionPercentage,
     };
   });
   
@@ -209,40 +205,42 @@ export function TodayScreen({ onNavigateToWorkouts, onDateChange }: TodayScreenP
     }
   }, [selectedDayIndex]);
   
-  // Swap sheet animation
-  useEffect(() => {
-    if (showSwapSheet) {
-      setIsSwapSheetVisible(true);
-      Animated.parallel([
-        Animated.spring(swapSheetTranslateY, {
-          toValue: 0,
-          useNativeDriver: true,
-          tension: 65,
-          friction: 11,
-        }),
-        Animated.timing(swapSheetBackdropOpacity, {
-          toValue: 1,
-          duration: 250,
-          useNativeDriver: true,
-        }),
-      ]).start();
+  // Check if there are eligible workouts to swap with
+  const hasEligibleWorkoutsToSwap = (currentDate: string) => {
+    const currentDay = weekDays.find(d => d.date === currentDate);
+    const isCurrentDayRestDay = !currentDay?.workout;
+    
+    // Filter eligible days (not completed, not selected date)
+    const eligibleDays = weekDays.filter(day => 
+      !day.isCompleted && 
+      day.date !== currentDate
+    );
+    
+    // Filter workouts that haven't been started
+    const unStartedWorkouts = eligibleDays.filter(day => {
+      if (!day.workout) return false;
+      return day.completionPercentage === 0;
+    });
+    
+    // If current day is rest day, we need at least one workout to swap
+    // Otherwise, we need workouts OR rest days
+    if (isCurrentDayRestDay) {
+      return unStartedWorkouts.length > 0;
     } else {
-      Animated.parallel([
-        Animated.timing(swapSheetTranslateY, {
-          toValue: 1000,
-          duration: 250,
-          useNativeDriver: true,
-        }),
-        Animated.timing(swapSheetBackdropOpacity, {
-          toValue: 0,
-          duration: 250,
-          useNativeDriver: true,
-        }),
-      ]).start(() => {
-        setIsSwapSheetVisible(false);
-      });
+      const restDays = eligibleDays.filter(day => !day.workout);
+      return unStartedWorkouts.length > 0 || restDays.length > 0;
     }
-  }, [showSwapSheet]);
+  };
+  
+  const handleAddOrCreateWorkout = (currentDate: string) => {
+    if (hasEligibleWorkoutsToSwap(currentDate)) {
+      // Open swap drawer
+      onOpenSwapDrawer?.(currentDate, weekDays);
+    } else {
+      // Navigate to workout creation
+      navigation.navigate('WorkoutCreationOptions');
+    }
+  };
   
   const handleDayChange = (newDate: string) => {
     // Reset pressed state immediately to prevent double border bug
@@ -557,10 +555,12 @@ export function TodayScreen({ onNavigateToWorkouts, onDateChange }: TodayScreenP
                     </Text>
                     <TouchableOpacity
                       style={styles.addWorkoutButton}
-                      onPress={() => setShowSwapSheet(true)}
+                      onPress={() => handleAddOrCreateWorkout(previousWorkoutData.date)}
                       activeOpacity={1}
                     >
-                      <Text style={styles.addWorkoutButtonText}>Add Workout</Text>
+                      <Text style={styles.addWorkoutButtonText}>
+                        {hasEligibleWorkoutsToSwap(previousWorkoutData.date) ? 'Add Workout' : 'Create Workout'}
+                      </Text>
                     </TouchableOpacity>
                   </View>
                 </Animated.View>
@@ -665,10 +665,12 @@ export function TodayScreen({ onNavigateToWorkouts, onDateChange }: TodayScreenP
                     </Text>
                     <TouchableOpacity
                       style={styles.addWorkoutButton}
-                      onPress={() => setShowSwapSheet(true)}
+                      onPress={() => handleAddOrCreateWorkout(selectedDate)}
                       activeOpacity={1}
                     >
-                      <Text style={styles.addWorkoutButtonText}>Add Workout</Text>
+                      <Text style={styles.addWorkoutButtonText}>
+                        {hasEligibleWorkoutsToSwap(selectedDate) ? 'Add Workout' : 'Create Workout'}
+                      </Text>
                     </TouchableOpacity>
                   </View>
                 </Animated.View>
@@ -696,11 +698,13 @@ export function TodayScreen({ onNavigateToWorkouts, onDateChange }: TodayScreenP
                   return (
                     <TouchableOpacity 
                       style={styles.swapButton}
-                      onPress={() => setShowSwapSheet(true)}
+                      onPress={() => handleAddOrCreateWorkout(selectedDate)}
                       activeOpacity={1}
                     >
                       <IconSwap size={24} color={COLORS.text} />
-                      <Text style={styles.swapButtonText}>Swap</Text>
+                      <Text style={styles.swapButtonText}>
+                        {hasEligibleWorkoutsToSwap(selectedDate) ? 'Swap' : 'Create Workout'}
+                      </Text>
                     </TouchableOpacity>
                   );
                 })()}
@@ -769,62 +773,6 @@ export function TodayScreen({ onNavigateToWorkouts, onDateChange }: TodayScreenP
             )}
         </SafeAreaView>
       </View>
-      
-      {/* Swap Bottom Sheet Modal - Renders at root level above tab bar */}
-      <BottomDrawer
-        visible={isSwapSheetVisible}
-        onClose={() => setShowSwapSheet(false)}
-        maxHeight="70%"
-      >
-        <View style={styles.swapSheetContent}>
-          <Text style={styles.swapSheetTitle}>Swap Workout</Text>
-          {weekDays
-            .filter(day => 
-              !day.isCompleted && 
-              day.date !== selectedDate
-            )
-            .map((day, index) => (
-              <View key={index} style={styles.swapSheetItemWrapper}>
-                <View style={[
-                  styles.swapSheetItem,
-                  pressedSwapItemDate === day.date && styles.swapSheetItemPressed
-                ]}>
-                      <TouchableOpacity
-                        style={styles.swapSheetItemInner}
-                        onPress={async () => {
-                          await swapWorkoutAssignments(selectedDate, day.date);
-                          setShowSwapSheet(false);
-                          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                        }}
-                        onPressIn={() => setPressedSwapItemDate(day.date)}
-                        onPressOut={() => setPressedSwapItemDate(null)}
-                        activeOpacity={1}
-                      >
-                        <View>
-                          <Text style={styles.swapSheetItemTitle}>
-                            {day.workout?.name || 'Rest Day'}
-                          </Text>
-                          <Text style={styles.swapSheetItemSubtitle}>
-                            {day.dateObj.format('dddd, MMM D')}
-                          </Text>
-                        </View>
-                        <IconSwap size={24} color="#817B77" />
-                      </TouchableOpacity>
-                </View>
-              </View>
-            ))}
-          {weekDays.filter(day => 
-            !day.isCompleted && 
-            day.date !== selectedDate
-          ).length === 0 && (
-            <View style={styles.swapSheetEmpty}>
-              <Text style={styles.swapSheetEmptyText}>
-                No other days this week to swap with
-              </Text>
-            </View>
-          )}
-        </View>
-      </BottomDrawer>
     </GestureHandlerRootView>
   );
 }
@@ -1222,57 +1170,6 @@ const styles = StyleSheet.create({
     ...TYPOGRAPHY.body,
     color: COLORS.textMeta,
     marginTop: SPACING.sm,
-  },
-  
-  // Swap Bottom Sheet
-  swapSheetContent: {
-    paddingHorizontal: SPACING.xl,
-    paddingBottom: SPACING.xl,
-  },
-  swapSheetTitle: {
-    ...TYPOGRAPHY.h2,
-    color: LIGHT_COLORS.secondary,
-    marginBottom: SPACING.xl,
-  },
-  swapSheetItemWrapper: {
-    marginBottom: SPACING.md,
-  },
-  swapSheetItem: {
-    backgroundColor: CARDS.cardDeep.outer.backgroundColor,
-    borderRadius: CARDS.cardDeep.outer.borderRadius,
-    borderCurve: CARDS.cardDeep.outer.borderCurve,
-    borderWidth: 1,
-    borderColor: CARDS.cardDeep.outer.borderColor,
-    overflow: CARDS.cardDeep.outer.overflow,
-  },
-  swapSheetItemPressed: {
-    borderColor: LIGHT_COLORS.textMeta,
-  },
-  swapSheetItemInner: {
-    ...CARDS.cardDeep.inner,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: SPACING.lg,
-    paddingHorizontal: SPACING.xxl,
-  },
-  swapSheetItemTitle: {
-    ...TYPOGRAPHY.h3,
-    color: LIGHT_COLORS.secondary,
-    marginBottom: SPACING.xs,
-  },
-  swapSheetItemSubtitle: {
-    ...TYPOGRAPHY.meta,
-    color: LIGHT_COLORS.textMeta,
-  },
-  swapSheetEmpty: {
-    paddingVertical: SPACING.xxxl,
-    alignItems: 'center',
-  },
-  swapSheetEmptyText: {
-    ...TYPOGRAPHY.body,
-    color: LIGHT_COLORS.textMeta,
-    textAlign: 'center',
   },
 });
 

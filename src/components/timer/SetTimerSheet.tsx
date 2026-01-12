@@ -57,8 +57,6 @@ export function SetTimerSheet({
 }: SetTimerSheetProps) {
   const insets = useSafeAreaInsets();
   const { settings } = useStore();
-  const restTimerTimeLeft = useStore((state) => state.restTimerTimeLeft);
-  const restTimerMinimized = useStore((state) => state.restTimerMinimized);
   const restTime = settings.restTimerDefaultSeconds;
   
   // Determine initial time based on timer phase
@@ -66,8 +64,7 @@ export function SetTimerSheet({
     if (isExerciseTimerPhase) {
       return exerciseDuration; // Use exercise duration for exercise timer
     }
-    // For rest timer, check if reopening from mini timer
-    return restTimerTimeLeft > 0 && restTimerMinimized ? restTimerTimeLeft : restTime;
+    return restTime;
   };
   
   const [timeLeft, setTimeLeft] = useState(getInitialTime);
@@ -81,11 +78,6 @@ export function SetTimerSheet({
   const breathingAnim = useRef(new Animated.Value(1)).current; // For breathing animation (1 = 100%, 0.92 = 92%)
   const restColorAnim = useRef(new Animated.Value(0)).current; // For yellow to red transition (0 = yellow, 1 = red)
   const borderRadiusAnim = useRef(new Animated.Value(CONTAINER_WIDTH * 0.24)).current; // Squircle for exercise, circle for rest
-  
-  // Store actions for mini timer
-  const setRestTimerMinimized = useStore((state) => state.setRestTimerMinimized);
-  const setRestTimerData = useStore((state) => state.setRestTimerData);
-  const clearRestTimerData = useStore((state) => state.clearRestTimerData);
   const endTimeRef = useRef<number | null>(null);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const liveActivityIdRef = useRef<string | null>(null);
@@ -275,15 +267,13 @@ export function SetTimerSheet({
       
       // Determine the initial time based on phase
       let initialTime;
-      let isRestoringFromMini = false;
       
       if (isExerciseTimerPhase) {
         // Exercise timer: use exercise duration
         initialTime = exerciseDuration;
       } else {
-        // Rest timer: check if reopening from minimized state
-        isRestoringFromMini = restTimerTimeLeft > 0 && !restTimerMinimized;
-        initialTime = isRestoringFromMini ? restTimerTimeLeft : restTime;
+        // Rest timer: use default rest time
+        initialTime = restTime;
       }
       
       setTimeLeft(initialTime);
@@ -293,8 +283,7 @@ export function SetTimerSheet({
       
       // Only start Live Activity for rest timer, not exercise timer
       if (!isExerciseTimerPhase) {
-        const timerDuration = isRestoringFromMini ? restTimerTimeLeft : restTime;
-        startRestTimer(workoutName || 'Workout', exerciseName || 'Exercise', timerDuration, currentSet, totalSets).then((activityId) => {
+        startRestTimer(workoutName || 'Workout', exerciseName || 'Exercise', restTime, currentSet, totalSets).then((activityId) => {
           if (activityId) {
             liveActivityIdRef.current = activityId;
           }
@@ -345,7 +334,7 @@ export function SetTimerSheet({
         liveActivityIdRef.current = null;
       }
     };
-  }, [visible, isExerciseTimerPhase, exerciseDuration, restTime, restTimerTimeLeft, restTimerMinimized, slideAnim, sizeAnim, breathingAnim, restColorAnim, workoutName, exerciseName, currentSet, totalSets]);
+  }, [visible, isExerciseTimerPhase, exerciseDuration, restTime, slideAnim, sizeAnim, breathingAnim, restColorAnim, workoutName, exerciseName, currentSet, totalSets]);
 
   // Timer logic
   useEffect(() => {
@@ -425,9 +414,6 @@ export function SetTimerSheet({
             liveActivityIdRef.current = null;
           }
           
-          // Clear mini timer state on completion
-          clearRestTimerData();
-          
           animateOutAndClose(onComplete);
         }
       }
@@ -497,9 +483,6 @@ export function SetTimerSheet({
               liveActivityIdRef.current = null;
             }
             
-            // Clear mini timer state on completion
-            clearRestTimerData();
-            
             animateOutAndClose(onComplete);
           }
         }
@@ -528,27 +511,31 @@ export function SetTimerSheet({
       liveActivityIdRef.current = null;
     }
     
-    // Clear mini timer state
-    clearRestTimerData();
-    
-    animateOutAndClose(onComplete);
-  };
-  
-  const handleMinimize = () => {
-    // Save current timer state to store
-    setRestTimerData(timeLeft, settings.restTimerDefaultSeconds, onComplete, exerciseId, workoutKey);
-    setRestTimerMinimized(true);
-    
-    // Animate out the drawer
-    Animated.timing(slideAnim, {
-      toValue: 0,
-      duration: 250,
-      easing: Easing.bezier(0.25, 0.1, 0.25, 1),
-      useNativeDriver: true,
-    }).start(() => {
-      // Close the full drawer after animation
-      onClose();
-    });
+    // Handle skip differently based on current phase
+    if (currentPhase === 'exercise') {
+      // Exercise phase: mark set complete and transition to rest
+      if (onExerciseTimerComplete) {
+        onExerciseTimerComplete();
+      }
+      
+      // Transition to rest phase
+      setCurrentPhase('rest');
+      const newTime = restTime;
+      setTimeLeft(newTime);
+      endTimeRef.current = Date.now() + newTime * 1000;
+      setIsRunning(true);
+      lastPlayedSecondRef.current = null;
+      
+      // Start Live Activity for rest phase
+      startRestTimer(workoutName || 'Workout', exerciseName || 'Exercise', newTime, currentSet, totalSets).then((activityId) => {
+        if (activityId) {
+          liveActivityIdRef.current = activityId;
+        }
+      });
+    } else {
+      // Rest phase: close the timer
+      animateOutAndClose(onComplete);
+    }
   };
 
   const formatTime = () => {
@@ -602,34 +589,18 @@ export function SetTimerSheet({
         ]}
       >
         <View style={[styles.timerSheet, { paddingBottom: 8 + insets.bottom }]}>
-          {/* Next set indicator with minimize button */}
-          <TouchableOpacity 
-            style={styles.setIndicator}
-            onPress={handleMinimize}
-            activeOpacity={0.7}
-          >
-            <View 
-              style={styles.labelWrapper}
-              onLayout={(e) => setLabelWidth(e.nativeEvent.layout.width)}
-            >
-              {currentSet < totalSets ? (
-                <Text style={styles.nextSetText}>
-                  Next set <Text style={styles.nextSetNumber}>{currentSet + 1} out of {totalSets}</Text>
-                </Text>
-              ) : (
-                <Text style={styles.nextSetText}>
-                  Set <Text style={styles.nextSetNumber}>{currentSet} of {totalSets}</Text>
-                </Text>
-              )}
-            </View>
-            <View style={[styles.chevronWrapper, { 
-              left: '50%',
-              marginLeft: labelWidth > 0 ? (labelWidth / 2) + 16 : 0,
-              top: -2
-            }]}>
-              <IconChevronDown size={24} color={COLORS.textMeta} />
-            </View>
-          </TouchableOpacity>
+          {/* Next set indicator */}
+          <View style={styles.setIndicator}>
+            {currentSet < totalSets ? (
+              <Text style={styles.nextSetText}>
+                Next set <Text style={styles.nextSetNumber}>{currentSet + 1} out of {totalSets}</Text>
+              </Text>
+            ) : (
+              <Text style={styles.nextSetText}>
+                Set <Text style={styles.nextSetNumber}>{currentSet} of {totalSets}</Text>
+              </Text>
+            )}
+          </View>
 
           {/* Animated Circle Timer */}
           <View style={styles.timerContainer}>

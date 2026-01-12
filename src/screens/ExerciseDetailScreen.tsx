@@ -12,10 +12,11 @@ import dayjs from 'dayjs';
 import type { WorkoutTemplateExercise } from '../types';
 import { useStore } from '../store';
 import { COLORS, SPACING, TYPOGRAPHY, GRADIENTS, CARDS, BORDER_RADIUS } from '../constants';
-import { IconArrowLeft, IconPlay, IconCheck, IconMenu, IconMinusLine, IconAddLine } from '../components/icons';
+import { IconArrowLeft, IconPlay, IconCheck, IconMenu, IconMinusLine, IconAddLine, IconStopwatch, IconSkip, IconRestart } from '../components/icons';
 import { SetTimerSheet } from '../components/timer/SetTimerSheet';
 import { Toggle } from '../components/Toggle';
 import { BottomDrawer } from '../components/common/BottomDrawer';
+import { ActionSheet } from '../components/common/ActionSheet';
 
 interface ExerciseDetailScreenProps {
   route?: {
@@ -82,14 +83,8 @@ export function ExerciseDetailScreen({ route, navigation }: ExerciseDetailScreen
   const insets = useSafeAreaInsets();
   const { exercise, exerciseName, workoutName, workoutKey, cycleId, workoutTemplateId } = route?.params || {};
   const { exercises, updateCycle, cycles, saveExerciseProgress, getExerciseProgress, skipExercise, getBarbellMode, setBarbellMode, sessions, detailedWorkoutProgress } = useStore();
-  const restTimerMinimized = useStore((state) => state.restTimerMinimized);
-  const restTimerTimeLeft = useStore((state) => state.restTimerTimeLeft);
-  const restTimerExerciseId = useStore((state) => state.restTimerExerciseId);
-  const restTimerWorkoutKey = useStore((state) => state.restTimerWorkoutKey);
   const [showTimer, setShowTimer] = useState(false);
   const [isExerciseTimerPhase, setIsExerciseTimerPhase] = useState(false); // Track if showing exercise timer or rest timer
-  const prevRestTimerMinimizedRef = useRef(restTimerMinimized);
-  const isMountedRef = useRef(false);
   
   // Store exercise and workout names in state to prevent them from disappearing during navigation
   const [displayExerciseName, setDisplayExerciseName] = useState(exerciseName || '');
@@ -154,27 +149,6 @@ export function ExerciseDetailScreen({ route, navigation }: ExerciseDetailScreen
       // Don't auto-expand, leave them collapsed after completion
     }
   }, [allSetsCompleted]);
-  
-  // Watch for mini timer expansion
-  useEffect(() => {
-    // Check if this exercise has an active timer that should be shown
-    const isThisExerciseTimer = restTimerExerciseId === exercise?.id && restTimerWorkoutKey === workoutKey;
-    const hasTimerData = restTimerTimeLeft > 0;
-    const timerJustExpanded = prevRestTimerMinimizedRef.current && !restTimerMinimized;
-    const isFirstRenderWithTimer = !isMountedRef.current && !restTimerMinimized;
-    
-    // Show timer if:
-    // Case 1: First render after mount, timer is not minimized and belongs to this exercise
-    // Case 2: Timer just changed from minimized to expanded (user tapped mini timer)
-    // And: Timer sheet is not already showing
-    if (isThisExerciseTimer && hasTimerData && (isFirstRenderWithTimer || timerJustExpanded) && !showTimer) {
-      setShowTimer(true);
-    }
-    
-    // Mark as mounted and update previous value
-    isMountedRef.current = true;
-    prevRestTimerMinimizedRef.current = restTimerMinimized;
-  }, [restTimerMinimized, showTimer, restTimerTimeLeft, restTimerExerciseId, restTimerWorkoutKey, exercise?.id, workoutKey]);
   
   if (!exercise) return null;
   
@@ -1034,61 +1008,35 @@ export function ExerciseDetailScreen({ route, navigation }: ExerciseDetailScreen
           onExerciseTimerComplete={handleExerciseTimerComplete}
         />
         
-        {/* Overflow Menu Modal */}
-        <Modal
+        {/* Action Sheet Menu */}
+        <ActionSheet
           visible={showMenu}
-          transparent
-          animationType="fade"
-          onRequestClose={() => setShowMenu(false)}
-        >
-          <TouchableOpacity 
-            style={styles.menuOverlay}
-            activeOpacity={1}
-            onPress={() => setShowMenu(false)}
-          >
-            <View style={[styles.menuContainer, { paddingTop: insets.top + 48 }]}>
-              <View style={styles.menu}>
-                <TouchableOpacity 
-                  style={styles.menuItem}
-                  onPress={handleHistory}
-                  activeOpacity={1}
-                >
-                  <Text style={styles.menuItemText}>History</Text>
-                </TouchableOpacity>
-                
-                <View style={styles.menuDivider} />
-                
-                <TouchableOpacity 
-                  style={styles.menuItem}
-                  onPress={handleCompleteExercise}
-                  activeOpacity={1}
-                >
-                  <Text style={styles.menuItemText}>Mark as complete</Text>
-                </TouchableOpacity>
-                
-                <View style={styles.menuDivider} />
-                
-                <TouchableOpacity 
-                  style={styles.menuItem}
-                  onPress={handleSkipExercise}
-                  activeOpacity={1}
-                >
-                  <Text style={styles.menuItemText}>Skip exercise</Text>
-                </TouchableOpacity>
-                
-                <View style={styles.menuDivider} />
-                
-                <TouchableOpacity 
-                  style={styles.menuItem}
-                  onPress={handleResetExercise}
-                  activeOpacity={1}
-                >
-                  <Text style={[styles.menuItemText, styles.menuItemTextDestructive]}>Reset</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          </TouchableOpacity>
-        </Modal>
+          onClose={() => setShowMenu(false)}
+          items={[
+            { 
+              icon: <IconStopwatch size={24} color="#000000" />,
+              label: 'History', 
+              onPress: handleHistory,
+              featured: true
+            },
+            { 
+              icon: <IconCheck size={24} color="#000000" />,
+              label: 'Complete', 
+              onPress: handleCompleteExercise
+            },
+            { 
+              icon: <IconSkip size={24} color="#000000" />,
+              label: 'Skip', 
+              onPress: handleSkipExercise 
+            },
+            { 
+              icon: <IconRestart size={24} color="#FF3B30" />,
+              label: 'Reset', 
+              onPress: handleResetExercise,
+              destructive: true 
+            },
+          ]}
+        />
         
         {/* Exercise History Bottom Sheet */}
         <BottomDrawer
@@ -1509,45 +1457,6 @@ const styles = StyleSheet.create({
     height: 1,
     backgroundColor: '#FFFFFF',
     marginTop: 1, // 1px gap between lines
-  },
-  
-  // Overflow Menu
-  menuOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.3)',
-  },
-  menuContainer: {
-    alignItems: 'flex-end',
-    paddingRight: 18,
-  },
-  menu: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    borderCurve: 'continuous',
-    minWidth: 200,
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
-    elevation: 8,
-    overflow: 'hidden',
-  },
-  menuItem: {
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-  },
-  menuItemText: {
-    fontSize: 17,
-    fontWeight: '400',
-    color: LIGHT_COLORS.secondary,
-  },
-  menuItemTextDestructive: {
-    color: '#FF3B30',
-  },
-  menuDivider: {
-    height: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.1)',
-    marginHorizontal: 12,
   },
   
   // Mark as Done Button

@@ -295,7 +295,7 @@ export function BottomDrawer({
           
           <Content {...contentProps}>
             <View
-              style={{ flexShrink: 0, paddingTop: 16 }}
+              style={{ flexShrink: 0, paddingTop: showHandle ? 16 : 0 }}
               onLayout={(event) => {
                 const { height } = event.nativeEvent.layout;
                 setContentHeight(height);
@@ -314,7 +314,7 @@ const styles = StyleSheet.create({
   // Drawer & Overlay (matching AI screen)
   drawerOverlay: {
     ...StyleSheet.absoluteFillObject,
-    zIndex: 1000,
+    zIndex: 9999,
     pointerEvents: 'box-none',
   },
   drawerBackdrop: {

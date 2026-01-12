@@ -3,8 +3,8 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, Share, Ani
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useStore } from '../store';
 import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS, CARDS } from '../constants';
-import { IconArrowLeft, IconMenu, IconChevronDown } from '../components/icons';
-import { DropdownMenu } from '../components/DropdownMenu';
+import { IconArrowLeft, IconMenu, IconChevronDown, IconShare, IconTrash } from '../components/icons';
+import { ActionSheet } from '../components/common/ActionSheet';
 import { BottomDrawer } from '../components/common/BottomDrawer';
 import type { WorkoutTemplate } from '../types';
 import dayjs from 'dayjs';
@@ -214,15 +214,23 @@ export function CycleDetailScreen({ route, navigation }: CycleDetailScreenProps)
           </View>
         </View>
 
-        {/* Dropdown Menu */}
-        <DropdownMenu
+        {/* Action Sheet Menu */}
+        <ActionSheet
           visible={menuVisible}
           onClose={() => setMenuVisible(false)}
-          top={insets.top + 48}
-          right={18}
           items={[
-            { label: 'Export Data', onPress: handleExportData },
-            { label: 'Delete Cycle', onPress: handleDeleteCycle, destructive: true },
+            { 
+              icon: <IconShare size={24} color={LIGHT_COLORS.secondary} />,
+              label: 'Export Data', 
+              onPress: handleExportData,
+              featured: true
+            },
+            { 
+              icon: <IconTrash size={24} color={LIGHT_COLORS.error} />,
+              label: 'Delete Cycle', 
+              onPress: handleDeleteCycle, 
+              destructive: true 
+            },
           ]}
         />
       

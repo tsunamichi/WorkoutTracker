@@ -17,8 +17,8 @@ import Svg, { Circle, Path } from 'react-native-svg';
 import dayjs from 'dayjs';
 import { useStore } from '../store';
 import { COLORS, SPACING, TYPOGRAPHY, GRADIENTS, BUTTONS, BORDER_RADIUS } from '../constants';
-import { IconArrowLeft, IconMenu } from '../components/icons';
-import { DropdownMenu } from '../components/DropdownMenu';
+import { IconArrowLeft, IconMenu, IconEdit, IconTrash } from '../components/icons';
+import { ActionSheet } from '../components/common/ActionSheet';
 import { TimerControls } from '../components/timer/TimerControls';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/AppNavigator';
@@ -1323,15 +1323,23 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
             </View>
           </View>
 
-        {/* Dropdown Menu */}
-        <DropdownMenu
+        {/* Action Sheet Menu */}
+        <ActionSheet
           visible={menuVisible}
           onClose={() => setMenuVisible(false)}
-          top={insets.top + 48}
-          right={18}
           items={[
-            { label: 'Edit', onPress: handleEdit },
-            { label: 'Delete', onPress: handleDelete, destructive: true },
+            { 
+              icon: <IconEdit size={24} color={LIGHT_COLORS.text} />,
+              label: 'Edit', 
+              onPress: handleEdit,
+              featured: true
+            },
+            { 
+              icon: <IconTrash size={24} color={LIGHT_COLORS.error} />,
+              label: 'Delete', 
+              onPress: handleDelete, 
+              destructive: true 
+            },
           ]}
         />
 
