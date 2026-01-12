@@ -74,6 +74,7 @@ export function SetTimerSheet({
   const [isRunning, setIsRunning] = useState(false);
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [labelWidth, setLabelWidth] = useState(0);
+  const [currentPhase, setCurrentPhase] = useState<'exercise' | 'rest'>(isExerciseTimerPhase ? 'exercise' : 'rest'); // Track phase internally
   
   const slideAnim = useRef(new Animated.Value(0)).current;
   const sizeAnim = useRef(new Animated.Value(1)).current; // 1 = 100%, 0 = MIN_SIZE
@@ -184,7 +185,7 @@ export function SetTimerSheet({
 
   // Animate size based on time remaining
   useEffect(() => {
-    const totalTime = isExerciseTimerPhase ? exerciseDuration : restTime;
+    const totalTime = currentPhase === 'exercise' ? exerciseDuration : restTime;
     const progress = totalTime > 0 ? timeLeft / totalTime : 0;
     
     // Animate size smoothly based on progress
@@ -194,11 +195,11 @@ export function SetTimerSheet({
       easing: Easing.linear,
       useNativeDriver: false, // Changed to false for compatibility with breathing
     }).start();
-  }, [timeLeft, isExerciseTimerPhase, exerciseDuration, restTime, sizeAnim]);
+  }, [timeLeft, currentPhase, exerciseDuration, restTime, sizeAnim]);
 
   // Breathing animation for rest phase only (not exercise phase)
   useEffect(() => {
-    if (!isRunning || isExerciseTimerPhase) {
+    if (!isRunning || currentPhase === 'exercise') {
       breathingAnim.stopAnimation(() => {
         breathingAnim.setValue(1);
       });
@@ -228,11 +229,11 @@ export function SetTimerSheet({
         breathingAnim.setValue(1);
       });
     };
-  }, [isRunning, isExerciseTimerPhase, breathingAnim]);
+  }, [isRunning, currentPhase, breathingAnim]);
 
   // Yellow to red color transition when 5 seconds or less remain (rest phase only)
   useEffect(() => {
-    if (!isExerciseTimerPhase && timeLeft <= 5 && timeLeft > 0) {
+    if (currentPhase === 'rest' && timeLeft <= 5 && timeLeft > 0) {
       // Transition from yellow (0) to red (1)
       Animated.timing(restColorAnim, {
         toValue: 1,
@@ -244,22 +245,26 @@ export function SetTimerSheet({
       // Reset to yellow when more than 5 seconds
       restColorAnim.setValue(0);
     }
-  }, [timeLeft, isExerciseTimerPhase, restColorAnim]);
+  }, [timeLeft, currentPhase, restColorAnim]);
 
   // Border radius animation: squircle for exercise, circle for rest
   useEffect(() => {
-    const targetRadius = isExerciseTimerPhase ? CONTAINER_WIDTH * 0.24 : CONTAINER_WIDTH / 2;
+    const targetRadius = currentPhase === 'exercise' ? CONTAINER_WIDTH * 0.24 : CONTAINER_WIDTH / 2;
     Animated.timing(borderRadiusAnim, {
       toValue: targetRadius,
       duration: 300,
       easing: Easing.bezier(0.4, 0.0, 0.2, 1),
       useNativeDriver: false,
     }).start();
-  }, [isExerciseTimerPhase, borderRadiusAnim]);
+  }, [currentPhase, borderRadiusAnim]);
 
-  // Handle visibility changes and phase transitions
+  // Handle visibility changes - initialize on open
   useEffect(() => {
     if (visible) {
+      // Set initial phase
+      const initialPhase = isExerciseTimerPhase ? 'exercise' : 'rest';
+      setCurrentPhase(initialPhase);
+      
       // Determine the initial time based on phase
       let initialTime;
       let isRestoringFromMini = false;
@@ -304,6 +309,7 @@ export function SetTimerSheet({
       setTimeLeft(restTime);
       setIsRunning(false);
       endTimeRef.current = null;
+      setCurrentPhase('rest'); // Reset phase
       
       // Stop animations
       breathingAnim.stopAnimation(() => {
@@ -364,22 +370,37 @@ export function SetTimerSheet({
           intervalRef.current = null;
         }
         
-        // Stop breathing and keep circle red/blue at completion
+        // Stop breathing and keep circle at completion color
         breathingAnim.stopAnimation(() => {
           breathingAnim.setValue(1);
         });
-        restColorAnim.setValue(1);
         
         playCompletionAlert();
         
-        if (isExerciseTimerPhase) {
-          // Exercise timer completed - transition to rest timer (stay in same drawer)
+        if (currentPhase === 'exercise') {
+          // Exercise phase completed - transition to rest phase (same drawer)
           if (onExerciseTimerComplete) {
-            onExerciseTimerComplete(); // This will update parent state to switch to rest phase
+            onExerciseTimerComplete(); // Notify parent that set is complete
           }
-          // Reset timer for rest phase - parent will update isExerciseTimerPhase which triggers useEffect
+          
+          // Transition to rest phase internally
+          setCurrentPhase('rest');
+          const newTime = restTime;
+          setTimeLeft(newTime);
+          endTimeRef.current = Date.now() + newTime * 1000;
+          setIsRunning(true);
+          lastPlayedSecondRef.current = null;
+          
+          // Start Live Activity for rest phase
+          startRestTimer(workoutName || 'Workout', exerciseName || 'Exercise', newTime, currentSet, totalSets).then((activityId) => {
+            if (activityId) {
+              liveActivityIdRef.current = activityId;
+            }
+          });
         } else {
-          // Rest timer completed - close drawer
+          // Rest phase completed - close drawer
+          restColorAnim.setValue(1);
+          
           if (liveActivityIdRef.current) {
             markRestTimerCompleted();
           }
@@ -407,7 +428,7 @@ export function SetTimerSheet({
         intervalRef.current = null;
       }
     };
-  }, [isRunning, visible, isExerciseTimerPhase, onComplete, onExerciseTimerComplete, soundEnabled, animateOutAndClose, playCompletionAlert]);
+  }, [isRunning, visible, currentPhase, restTime, onComplete, onExerciseTimerComplete, soundEnabled, animateOutAndClose, playCompletionAlert, workoutName, exerciseName, currentSet, totalSets]);
 
   // AppState listener
   useEffect(() => {
@@ -421,21 +442,37 @@ export function SetTimerSheet({
           setIsRunning(false);
           endTimeRef.current = null;
           
-          // Stop breathing and keep circle red/blue at completion
+          // Stop breathing and keep circle at completion color
           breathingAnim.stopAnimation(() => {
             breathingAnim.setValue(1);
           });
-          restColorAnim.setValue(1);
           
           playCompletionAlert();
           
-          if (isExerciseTimerPhase) {
-            // Exercise timer completed - transition to rest timer
+          if (currentPhase === 'exercise') {
+            // Exercise phase completed - transition to rest phase (same drawer)
             if (onExerciseTimerComplete) {
-              onExerciseTimerComplete(); // This will update parent state and trigger rest timer
+              onExerciseTimerComplete(); // Notify parent that set is complete
             }
+            
+            // Transition to rest phase internally
+            setCurrentPhase('rest');
+            const newTime = restTime;
+            setTimeLeft(newTime);
+            endTimeRef.current = Date.now() + newTime * 1000;
+            setIsRunning(true);
+            lastPlayedSecondRef.current = null;
+            
+            // Start Live Activity for rest phase
+            startRestTimer(workoutName || 'Workout', exerciseName || 'Exercise', newTime, currentSet, totalSets).then((activityId) => {
+              if (activityId) {
+                liveActivityIdRef.current = activityId;
+              }
+            });
           } else {
-            // Rest timer completed - close drawer
+            // Rest phase completed - close drawer
+            restColorAnim.setValue(1);
+            
             if (liveActivityIdRef.current) {
               markRestTimerCompleted();
             }
@@ -458,7 +495,7 @@ export function SetTimerSheet({
     return () => {
       subscription.remove();
     };
-  }, [isRunning, isExerciseTimerPhase, onComplete, onExerciseTimerComplete, animateOutAndClose, playCompletionAlert]);
+  }, [isRunning, currentPhase, restTime, onComplete, onExerciseTimerComplete, animateOutAndClose, playCompletionAlert, workoutName, exerciseName, currentSet, totalSets]);
 
   const handleTogglePause = () => {
     setIsRunning(prev => !prev);
@@ -524,7 +561,7 @@ export function SetTimerSheet({
   });
 
   // Interpolate color: blue for exercise timer, yellow to red for rest timer
-  const backgroundColor = isExerciseTimerPhase
+  const backgroundColor = currentPhase === 'exercise'
     ? EXERCISE_COLOR_BLUE // Solid blue for exercise timer
     : restColorAnim.interpolate({
         inputRange: [0, 1],
