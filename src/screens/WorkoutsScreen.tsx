@@ -727,7 +727,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: SPACING.lg,
+    marginBottom: 4,
   },
   inProgressTitle: {
     ...TYPOGRAPHY.body,
