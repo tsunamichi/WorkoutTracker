@@ -709,22 +709,41 @@ export function TodayScreen({ onNavigateToWorkouts, onDateChange }: TodayScreenP
               
               {/* Intervals Section */}
               {!isTransitioning && (() => {
+                // Determine if selected date is today, past, or future
+                const todayDate = today.format('YYYY-MM-DD');
+                const selectedDayjs = dayjs(selectedDate);
+                const isToday = selectedDate === todayDate;
+                const isPastDay = selectedDayjs.isBefore(today, 'day');
+                const isFutureDay = selectedDayjs.isAfter(today, 'day');
+                
+                // Hide intervals section for future days
+                if (isFutureDay) return null;
+                
                 const completedIntervals = getHIITTimerSessionsForDate(selectedDate);
                 
                 return (
                   <View style={styles.intervalsSection}>
                     <View style={styles.intervalsHeader}>
                       <Text style={styles.intervalsTitle}>Intervals</Text>
-                      <TouchableOpacity
-                        style={styles.addTimerButton}
-                        onPress={() => navigation.navigate('HIITTimerList' as never)}
-                        activeOpacity={0.7}
-                      >
-                        <IconAdd size={24} color={COLORS.text} />
-                        <Text style={styles.addTimerButtonText}>Add timer</Text>
-                      </TouchableOpacity>
+                      {/* Only show Add timer button on current day */}
+                      {isToday && (
+                        <TouchableOpacity
+                          style={styles.addTimerButton}
+                          onPress={() => navigation.navigate('HIITTimerList' as never)}
+                          activeOpacity={0.7}
+                        >
+                          <IconAdd size={24} color={COLORS.text} />
+                          <Text style={styles.addTimerButtonText}>Add timer</Text>
+                        </TouchableOpacity>
+                      )}
                     </View>
                     
+                    {/* Show explanatory text for past days with no intervals */}
+                    {isPastDay && completedIntervals.length === 0 && (
+                      <Text style={styles.noIntervalsText}>No intervals completed on this day</Text>
+                    )}
+                    
+                    {/* Show completed intervals */}
                     {completedIntervals.length > 0 && completedIntervals.map((session) => {
                       const minutes = Math.floor(session.totalDuration / 60);
                       const seconds = session.totalDuration % 60;
@@ -1198,6 +1217,11 @@ const styles = StyleSheet.create({
   intervalTime: {
     ...TYPOGRAPHY.body,
     color: COLORS.textMeta,
+  },
+  noIntervalsText: {
+    ...TYPOGRAPHY.body,
+    color: COLORS.textMeta,
+    marginTop: SPACING.sm,
   },
   
   // Swap Bottom Sheet
