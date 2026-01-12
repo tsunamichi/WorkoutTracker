@@ -79,6 +79,7 @@ export function SetTimerSheet({
   const sizeAnim = useRef(new Animated.Value(1)).current; // 1 = 100%, 0 = MIN_SIZE
   const breathingAnim = useRef(new Animated.Value(1)).current; // For breathing animation (1 = 100%, 0.92 = 92%)
   const restColorAnim = useRef(new Animated.Value(0)).current; // For yellow to red transition (0 = yellow, 1 = red)
+  const borderRadiusAnim = useRef(new Animated.Value(CONTAINER_WIDTH * 0.24)).current; // Squircle for exercise, circle for rest
   
   // Store actions for mini timer
   const setRestTimerMinimized = useStore((state) => state.setRestTimerMinimized);
@@ -195,16 +196,16 @@ export function SetTimerSheet({
     }).start();
   }, [timeLeft, isExerciseTimerPhase, exerciseDuration, restTime, sizeAnim]);
 
-  // Breathing animation for rest phase
+  // Breathing animation for rest phase only (not exercise phase)
   useEffect(() => {
-    if (!isRunning) {
+    if (!isRunning || isExerciseTimerPhase) {
       breathingAnim.stopAnimation(() => {
         breathingAnim.setValue(1);
       });
       return;
     }
 
-    // Start breathing animation - breathe IN (contract, never expand beyond 100%)
+    // Start breathing animation during rest timer - breathe IN (contract, never expand beyond 100%)
     Animated.loop(
       Animated.sequence([
         Animated.timing(breathingAnim, {
@@ -227,11 +228,11 @@ export function SetTimerSheet({
         breathingAnim.setValue(1);
       });
     };
-  }, [isRunning, breathingAnim]);
+  }, [isRunning, isExerciseTimerPhase, breathingAnim]);
 
-  // Yellow to red color transition when 5 seconds or less remain
+  // Yellow to red color transition when 5 seconds or less remain (rest phase only)
   useEffect(() => {
-    if (timeLeft <= 5 && timeLeft > 0) {
+    if (!isExerciseTimerPhase && timeLeft <= 5 && timeLeft > 0) {
       // Transition from yellow (0) to red (1)
       Animated.timing(restColorAnim, {
         toValue: 1,
@@ -243,7 +244,18 @@ export function SetTimerSheet({
       // Reset to yellow when more than 5 seconds
       restColorAnim.setValue(0);
     }
-  }, [timeLeft, restColorAnim]);
+  }, [timeLeft, isExerciseTimerPhase, restColorAnim]);
+
+  // Border radius animation: squircle for exercise, circle for rest
+  useEffect(() => {
+    const targetRadius = isExerciseTimerPhase ? CONTAINER_WIDTH * 0.24 : CONTAINER_WIDTH / 2;
+    Animated.timing(borderRadiusAnim, {
+      toValue: targetRadius,
+      duration: 300,
+      easing: Easing.bezier(0.4, 0.0, 0.2, 1),
+      useNativeDriver: false,
+    }).start();
+  }, [isExerciseTimerPhase, borderRadiusAnim]);
 
   // Handle visibility changes and phase transitions
   useEffect(() => {
@@ -361,10 +373,11 @@ export function SetTimerSheet({
         playCompletionAlert();
         
         if (isExerciseTimerPhase) {
-          // Exercise timer completed - transition to rest timer
+          // Exercise timer completed - transition to rest timer (stay in same drawer)
           if (onExerciseTimerComplete) {
-            onExerciseTimerComplete(); // This will update parent state and trigger rest timer
+            onExerciseTimerComplete(); // This will update parent state to switch to rest phase
           }
+          // Reset timer for rest phase - parent will update isExerciseTimerPhase which triggers useEffect
         } else {
           // Rest timer completed - close drawer
           if (liveActivityIdRef.current) {
@@ -577,12 +590,13 @@ export function SetTimerSheet({
                 },
               ]}
             >
-              {/* Circle background with breathing */}
+              {/* Circle/Squircle background with breathing (only during rest) */}
               <Animated.View 
                 style={[
                   styles.circle, 
                   { 
                     backgroundColor,
+                    borderRadius: borderRadiusAnim,
                     transform: [{ scale: breathingAnim }],
                   }
                 ]} 
@@ -676,7 +690,7 @@ const styles = StyleSheet.create({
   },
   circle: {
     ...StyleSheet.absoluteFillObject,
-    borderRadius: CONTAINER_WIDTH / 2,
+    // borderRadius is animated, set in inline style
     borderCurve: 'continuous',
   },
   textContainer: {
