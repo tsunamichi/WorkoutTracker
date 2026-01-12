@@ -22,7 +22,7 @@ import { CreateCycleDayEditor } from '../screens/manualCycle/CreateCycleDayEdito
 import { CreateCycleReview } from '../screens/manualCycle/CreateCycleReview';
 import { AIWorkoutCreationScreen } from '../screens/AIWorkoutCreationScreen';
 import { WorkoutCreationOptionsScreen } from '../screens/WorkoutCreationOptionsScreen';
-import { IconCalendar, IconWorkouts, IconStopwatch } from '../components/icons';
+import { IconCalendar, IconWorkouts } from '../components/icons';
 import { COLORS, TYPOGRAPHY } from '../constants';
 import { useStore } from '../store';
 import { CycleTemplateId } from '../types/workout';
@@ -187,18 +187,6 @@ function TabNavigator() {
             </Animated.View>
           </TouchableOpacity>
             </View>
-        
-        {/* Action Button - Only show Timer on Schedule tab */}
-        {activeTab === 'Schedule' && isViewingToday ? (
-          <TouchableOpacity 
-            style={styles.actionButton}
-            activeOpacity={1}
-            onPress={() => navigation.navigate('HIITTimerList' as never)}
-          >
-            <IconStopwatch size={24} color={COLORS.text} />
-            <Text style={styles.actionButtonLabel}>Timer</Text>
-          </TouchableOpacity>
-        ) : null}
             </View>
     </View>
   );
@@ -233,18 +221,6 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   tabLabel: {
-    ...TYPOGRAPHY.metaBold,
-    color: COLORS.text,
-  },
-  actionButton: {
-    height: 56,
-    minWidth: 56,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 4,
-  },
-  actionButtonLabel: {
     ...TYPOGRAPHY.metaBold,
     color: COLORS.text,
   },
