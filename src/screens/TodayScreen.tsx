@@ -9,7 +9,7 @@ import { useStore } from '../store';
 import { ProfileAvatar } from '../components/ProfileAvatar';
 import { BottomDrawer } from '../components/common/BottomDrawer';
 import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS, CARDS } from '../constants';
-import { IconCalendar, IconStopwatch, IconWorkouts, IconCheck, IconTriangle, IconSwap } from '../components/icons';
+import { IconCalendar, IconStopwatch, IconWorkouts, IconCheck, IconTriangle, IconSwap, IconAdd } from '../components/icons';
 import dayjs from 'dayjs';
 import isoWeek from 'dayjs/plugin/isoWeek';
 
@@ -452,6 +452,11 @@ export function TodayScreen({ onNavigateToWorkouts, onDateChange }: TodayScreenP
               </View>
             ) : (
               <View style={styles.content}>
+                {/* WOD Label */}
+                {(selectedDay?.workout || (isTransitioning && previousWorkoutData?.workout)) && (
+                  <Text style={styles.wodLabel}>WOD</Text>
+                )}
+                
                 <View style={styles.cardsContainer}>
               {/* Old workout card during transition */}
               {isTransitioning && previousWorkoutData?.workout && (
@@ -695,23 +700,37 @@ export function TodayScreen({ onNavigateToWorkouts, onDateChange }: TodayScreenP
                 );
               })()}
               
-              {/* Completed Intervals Section */}
+              {/* Intervals Section */}
               {!isTransitioning && (() => {
                 const completedIntervals = getHIITTimerSessionsForDate(selectedDate);
-                if (completedIntervals.length === 0) return null;
                 
                 return (
-                  <View style={styles.completedIntervalsSection}>
-                    <Text style={styles.completedIntervalsTitle}>Completed intervals</Text>
-                    {completedIntervals.map((session) => {
+                  <View style={styles.intervalsSection}>
+                    <View style={styles.intervalsHeader}>
+                      <Text style={styles.intervalsTitle}>Intervals</Text>
+                      <TouchableOpacity
+                        style={styles.addTimerButton}
+                        onPress={() => navigation.navigate('HIITTimerList' as never)}
+                        activeOpacity={0.7}
+                      >
+                        <IconAdd size={24} color={COLORS.text} />
+                        <Text style={styles.addTimerButtonText}>Add timer</Text>
+                      </TouchableOpacity>
+                    </View>
+                    
+                    {completedIntervals.length > 0 && completedIntervals.map((session) => {
                       const minutes = Math.floor(session.totalDuration / 60);
                       const seconds = session.totalDuration % 60;
                       const timeDisplay = `${minutes}:${seconds.toString().padStart(2, '0')}`;
                       
                       return (
-                        <View key={session.id} style={styles.intervalItem}>
-                          <Text style={styles.intervalName}>{session.timerName}</Text>
-                          <Text style={styles.intervalTime}>{timeDisplay}</Text>
+                        <View key={session.id} style={styles.intervalCardWrapper}>
+                          <View style={styles.intervalCard}>
+                            <View style={styles.intervalCardInner}>
+                              <Text style={styles.intervalName}>{session.timerName}</Text>
+                              <Text style={styles.intervalTime}>{timeDisplay}</Text>
+                            </View>
+                          </View>
                         </View>
                       );
                     })}
@@ -1113,21 +1132,48 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   
-  // Completed Intervals
-  completedIntervalsSection: {
-    marginTop: 80,
-    marginLeft: 0,
-  },
-  completedIntervalsTitle: {
+  // WOD Label
+  wodLabel: {
     ...TYPOGRAPHY.body,
     color: COLORS.textMeta,
-    marginBottom: SPACING.md,
+    marginBottom: 4,
   },
-  intervalItem: {
+  
+  // Intervals Section
+  intervalsSection: {
+    marginTop: 56, // 56px gap from workout card
+  },
+  intervalsHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    marginBottom: 4,
+  },
+  intervalsTitle: {
+    ...TYPOGRAPHY.body,
+    color: COLORS.textMeta,
+  },
+  addTimerButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingVertical: 8,
+  },
+  addTimerButtonText: {
+    ...TYPOGRAPHY.metaBold,
+    color: COLORS.text,
+  },
+  intervalCardWrapper: {
     marginBottom: SPACING.sm,
+  },
+  intervalCard: CARDS.cardDeepDimmed.outer,
+  intervalCardInner: {
+    ...CARDS.cardDeepDimmed.inner,
+    paddingHorizontal: SPACING.xl,
+    paddingVertical: SPACING.lg,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
   intervalName: {
     ...TYPOGRAPHY.body,
