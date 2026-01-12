@@ -674,35 +674,37 @@ export function TodayScreen({ onNavigateToWorkouts, onDateChange }: TodayScreenP
                 </Animated.View>
               )}
               
-              {/* Swap Button */}
-              {selectedDay?.workout && !selectedDay.isCompleted && !isTransitioning && (() => {
-                // Check if workout has any progress
-                const workoutKey = `${selectedDay.workout.id}-${selectedDay.date}`;
-                // Calculate totalSets excluding skipped exercises
-                let totalSets = 0;
-                selectedDay.workout.exercises.forEach((ex: any) => {
-                  const progress = getExerciseProgress(workoutKey, ex.id);
-                  if (!progress?.skipped) {
-                    totalSets += ex.targetSets || 0;
-                  }
-                });
-                const completionPercentage = getWorkoutCompletionPercentage(workoutKey, totalSets);
-                const hasStarted = completionPercentage > 0;
-                
-                // Hide swap button if workout has been started
-                if (hasStarted) return null;
-                
-                return (
-                  <TouchableOpacity 
-                    style={styles.swapButton}
-                    onPress={() => setShowSwapSheet(true)}
-                    activeOpacity={1}
-                  >
-                    <IconSwap size={24} color={COLORS.text} />
-                    <Text style={styles.swapButtonText}>Swap</Text>
-                  </TouchableOpacity>
-                );
-              })()}
+              {/* Swap Button Area - Always reserve space for consistent positioning */}
+              <View style={styles.swapButtonContainer}>
+                {selectedDay?.workout && !selectedDay.isCompleted && !isTransitioning && (() => {
+                  // Check if workout has any progress
+                  const workoutKey = `${selectedDay.workout.id}-${selectedDay.date}`;
+                  // Calculate totalSets excluding skipped exercises
+                  let totalSets = 0;
+                  selectedDay.workout.exercises.forEach((ex: any) => {
+                    const progress = getExerciseProgress(workoutKey, ex.id);
+                    if (!progress?.skipped) {
+                      totalSets += ex.targetSets || 0;
+                    }
+                  });
+                  const completionPercentage = getWorkoutCompletionPercentage(workoutKey, totalSets);
+                  const hasStarted = completionPercentage > 0;
+                  
+                  // Hide swap button if workout has been started
+                  if (hasStarted) return null;
+                  
+                  return (
+                    <TouchableOpacity 
+                      style={styles.swapButton}
+                      onPress={() => setShowSwapSheet(true)}
+                      activeOpacity={1}
+                    >
+                      <IconSwap size={24} color={COLORS.text} />
+                      <Text style={styles.swapButtonText}>Swap</Text>
+                    </TouchableOpacity>
+                  );
+                })()}
+              </View>
               </View>
               
               {/* Intervals Section */}
@@ -822,7 +824,7 @@ const styles = StyleSheet.create({
     padding: SPACING.xxl,
   },
   workoutContentWrapper: {
-    minHeight: 280, // Fixed height to keep Intervals section at consistent position
+    minHeight: 300, // Fixed height to keep Intervals section at consistent position
   },
   cardsContainer: {
     position: 'relative',
@@ -1093,6 +1095,7 @@ const styles = StyleSheet.create({
   },
   restDayContent: {
     alignItems: 'flex-start',
+    minHeight: 200, // Match approximate workout card height for consistent positioning
   },
   restDayQuestion: {
     ...TYPOGRAPHY.h3,
@@ -1121,6 +1124,9 @@ const styles = StyleSheet.create({
   },
   
   // Swap Button
+  swapButtonContainer: {
+    minHeight: 56, // Reserve space for swap button even when not visible (16px margin + 40px button)
+  },
   swapButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1142,12 +1148,11 @@ const styles = StyleSheet.create({
   
   // WOD Label
   wodLabelContainer: {
-    minHeight: 32, // Reserve space for label even when not visible (body font height + margin)
+    height: 40, // Fixed height for label area (body font ~20px rendered height + 16px spacing + 4px buffer)
   },
   wodLabel: {
     ...TYPOGRAPHY.body,
     color: COLORS.textMeta,
-    marginBottom: SPACING.lg, // 16px to match Past Cycles spacing
   },
   
   // Intervals Section
