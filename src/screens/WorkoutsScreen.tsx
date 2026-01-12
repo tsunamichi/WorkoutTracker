@@ -7,7 +7,7 @@ import * as Haptics from 'expo-haptics';
 import { ProfileAvatar } from '../components/ProfileAvatar';
 import { BottomDrawer } from '../components/common/BottomDrawer';
 import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS, CARDS } from '../constants';
-import { IconCheck, IconTriangle } from '../components/icons';
+import { IconCheck, IconTriangle, IconAdd } from '../components/icons';
 import { useStore } from '../store';
 import { useOnboardingStore } from '../store/useOnboardingStore';
 import { TEMPLATES } from '../data/templates';
@@ -440,6 +440,7 @@ export function WorkoutsScreen() {
                       onPress={() => navigation.navigate('WorkoutCreationOptions' as never)}
                       activeOpacity={0.7}
                     >
+                      <IconAdd size={24} color={COLORS.text} />
                       <Text style={styles.newButtonText}>New</Text>
                     </TouchableOpacity>
                   </View>
@@ -733,7 +734,9 @@ const styles = StyleSheet.create({
     color: COLORS.textMeta,
   },
   newButton: {
-    paddingHorizontal: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
     paddingVertical: 8,
   },
   newButtonText: {
@@ -804,7 +807,7 @@ const styles = StyleSheet.create({
     borderColor: LIGHT_COLORS.textMeta,
   },
   pastCycleCardContent: {
-    ...CARDS.cardDeep.inner,
+    ...CARDS.cardDeepDimmed.inner,
     paddingHorizontal: SPACING.xl,
     paddingVertical: SPACING.lg,
     flexDirection: 'row',
