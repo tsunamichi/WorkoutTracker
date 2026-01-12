@@ -203,22 +203,23 @@ export default function WorkoutEditScreen({ navigation, route }: Props) {
       } else {
         // For "This Workout Only", we would need to implement workout-specific overrides
         // This requires a different data structure to store per-date workout modifications
-        // For now, show an alert
-        Alert.alert(
-          'Feature Coming Soon',
-          'Editing individual workout instances is not yet implemented. Changes will apply to all future workouts.',
-          [
-            { text: 'Cancel', style: 'cancel' },
-            {
-              text: 'Apply to All',
-              onPress: async () => {
-                await handleApplyChanges(true);
-              },
-            },
-          ]
+        // For now, just apply to the template
+        const updatedTemplates = cycle.workoutTemplates.map(template => 
+          template.id === workoutTemplateId
+            ? {
+                ...template,
+                name: workoutName,
+                exercises: workoutExercises.map((ex, idx) => ({
+                  ...ex,
+                  orderIndex: idx,
+                })),
+              }
+            : template
         );
-        setShowApplyModal(false);
-        return;
+        
+        await updateCycle(cycleId, {
+          workoutTemplates: updatedTemplates,
+        });
       }
       
       setShowApplyModal(false);
@@ -414,7 +415,16 @@ export default function WorkoutEditScreen({ navigation, route }: Props) {
           </View>
           
           {/* Exercises Section */}
-          <Text style={styles.sectionLabel}>Exercises</Text>
+          <View style={styles.exercisesSectionHeader}>
+            <Text style={styles.sectionLabel}>Exercises</Text>
+            <TouchableOpacity
+              style={styles.addExerciseHeaderButton}
+              onPress={handleAddExercise}
+              activeOpacity={1}
+            >
+              <IconAdd size={24} color={COLORS.text} />
+            </TouchableOpacity>
+          </View>
           {workoutExercises.map((exercise, index) => {
             const exerciseData = exercises.find(e => e.id === exercise.exerciseId);
             const isSelected = selectedExerciseId === exercise.id;
@@ -487,10 +497,13 @@ export default function WorkoutEditScreen({ navigation, route }: Props) {
                     ]}
                   >
                     <View style={[
-                      CARDS.cardDeep.outer,
+                      (isSelected || isDragging) ? CARDS.cardDeep.outer : CARDS.cardDeepDimmed.outer,
                       pressedCardId === exercise.id && styles.exerciseCardPressed
                     ]}>
-                      <View style={[CARDS.cardDeep.inner, styles.exerciseCard]}>
+                      <View style={[
+                        (isSelected || isDragging) ? CARDS.cardDeep.inner : CARDS.cardDeepDimmed.inner,
+                        styles.exerciseCard
+                      ]}>
                             <TouchableOpacity
                               style={styles.exerciseCardContent}
                               onPress={() => setSelectedExerciseId(isSelected ? null : exercise.id)}
@@ -554,16 +567,6 @@ export default function WorkoutEditScreen({ navigation, route }: Props) {
               <View style={styles.dropIndicatorLine} />
             </View>
           )}
-          
-          {/* Add Exercise Button */}
-          <TouchableOpacity
-            style={styles.addExerciseButton}
-            onPress={handleAddExercise}
-            activeOpacity={1}
-          >
-            <IconAdd size={24} color={COLORS.text} />
-            <Text style={styles.addExerciseButtonText}>Add Exercise</Text>
-          </TouchableOpacity>
         </ScrollView>
         
         {/* Save Button */}
@@ -791,6 +794,19 @@ const styles = StyleSheet.create({
     ...TYPOGRAPHY.h2,
     color: LIGHT_COLORS.secondary,
   },
+  exercisesSectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: SPACING.md,
+  },
+  addExerciseHeaderButton: {
+    width: 48,
+    height: 48,
+    justifyContent: 'center',
+    alignItems: 'flex-end',
+    marginRight: -4,
+  },
   workoutNameSection: {
     marginBottom: SPACING.xl,
   },
@@ -897,18 +913,6 @@ const styles = StyleSheet.create({
   actionButton: {
     padding: SPACING.xs,
   },
-  addExerciseButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: SPACING.xs,
-    paddingVertical: SPACING.md,
-    marginTop: SPACING.lg,
-  },
-  addExerciseButtonText: {
-    ...TYPOGRAPHY.metaBold,
-    color: COLORS.text,
-  },
   saveButtonContainer: {
     position: 'absolute',
     bottom: 0,
@@ -937,12 +941,6 @@ const styles = StyleSheet.create({
   },
   saveButtonTextDisabled: {
     color: COLORS.textMeta,
-  },
-  errorText: {
-    ...TYPOGRAPHY.body,
-    color: COLORS.error,
-    textAlign: 'center',
-    padding: SPACING.xl,
   },
   modalOverlay: {
     flex: 1,
@@ -976,10 +974,11 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.lg,
   },
   modalButton: {
-    paddingVertical: SPACING.lg,
+    height: 56,
     borderRadius: BORDER_RADIUS.md,
     borderCurve: 'continuous',
     alignItems: 'center',
+    justifyContent: 'center',
   },
   modalButtonPrimary: {
     backgroundColor: '#000000',
@@ -1004,6 +1003,12 @@ const styles = StyleSheet.create({
   modalCancelText: {
     ...TYPOGRAPHY.meta,
     color: COLORS.textMeta,
+  },
+  errorText: {
+    ...TYPOGRAPHY.body,
+    color: COLORS.error,
+    textAlign: 'center',
+    padding: SPACING.xl,
   },
   // Swap Drawer Content
   drawerContent: {

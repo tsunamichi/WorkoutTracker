@@ -13,13 +13,13 @@ dayjs.extend(isoWeek);
 
 const TEMPLATE_FORMAT = `WEEK [number]
 DAY [number] — [Workout name]
-[Exercise] — [Sets]×[Reps] @ [weight],
-[Sets]×[Reps] @ [weight]`;
+[Exercise] — [Sets]×[Reps] @ [weight] lb
+[Exercise] — [Sets]×[Time] sec @ [weight] lb (optional)`;
 
 export function AIWorkoutCreationScreen() {
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
-  const { cycles, addCycle, getNextCycleNumber, assignWorkout, exercises, addExercise, updateCycle, clearWorkoutAssignmentsForDateRange } = useStore();
+  const { cycles, addCycle, getNextCycleNumber, assignWorkout, exercises, addExercise, updateExercise, updateCycle, clearWorkoutAssignmentsForDateRange } = useStore();
   const [workoutDetails, setWorkoutDetails] = useState('');
   const [showInstructionsSheet, setShowInstructionsSheet] = useState(false);
   
@@ -52,6 +52,8 @@ export function AIWorkoutCreationScreen() {
       // ⸻
       // DAY 1 — Pull
       // • Rear Delt Row — 3×10 @ 100 lb
+      // • Spanish Squat ISO — 4×30 sec @ 25 lb (time-based with weight)
+      // • Wall Sit — 4×45 sec (time-based without weight)
       // • Barbell Row — 3×10 @ 100 lb
       
       const lines = workoutDetails.split('\n');
@@ -116,7 +118,7 @@ export function AIWorkoutCreationScreen() {
           // Remove bullet point, tabs, and clean
           let exerciseLine = trimmedLine.replace(/^[•\t\s\-]+/, '').trim();
           
-          // Parse format: "Exercise Name — Sets×Reps @ Weight lb"
+          // Parse format: "Exercise Name — Sets×Reps @ Weight lb" or "Exercise Name — Sets×Time sec"
           // Try to split by em dash first, then regular dash
           let exerciseName = '';
           let detailsPart = '';
@@ -135,8 +137,8 @@ export function AIWorkoutCreationScreen() {
           }
           
           if (exerciseName && detailsPart) {
-            // Parse sets×reps (e.g., "3×10" or "4×8-12")
-            const setsRepsMatch = detailsPart.match(/(\d+)\s*[×x]\s*(\d+)(?:[-–](\d+))?/i);
+            // Parse sets×reps/time (e.g., "3×10 @ 60 lb", "4×8-12 @ 100 lb", or "4×30 sec" for time-based)
+            const setsRepsMatch = detailsPart.match(/(\d+)\s*[×x]\s*(\d+)(?:[-–](\d+))?\s*(sec|lb)?/i);
             
             // Parse weight (e.g., "@ 100 lb" or "@ 25 lb")
             const weightMatch = detailsPart.match(/@\s*(\d+(?:\.\d+)?)/);
@@ -145,6 +147,8 @@ export function AIWorkoutCreationScreen() {
               const sets = parseInt(setsRepsMatch[1]);
               const repsMin = parseInt(setsRepsMatch[2]);
               const repsMax = setsRepsMatch[3] ? parseInt(setsRepsMatch[3]) : repsMin;
+              const unit = setsRepsMatch[4]?.toLowerCase();
+              const isTimeBased = unit === 'sec'; // Check if unit is 'sec'
               const weight = weightMatch ? parseFloat(weightMatch[1]) : 0;
               
               // Find or create exercise in database
@@ -164,10 +168,14 @@ export function AIWorkoutCreationScreen() {
                   category: 'Other' as any,
                   equipment: 'Dumbbell',
                   isCustom: true,
+                  measurementType: isTimeBased ? 'time' as any : 'reps' as any,
                 };
                 await addExercise(newExercise);
                 // Small delay to prevent ID collisions
                 await new Promise(resolve => setTimeout(resolve, 10));
+              } else if (exerciseData && isTimeBased && exerciseData.measurementType !== 'time') {
+                // Update existing exercise to be time-based if it's detected as time-based
+                await updateExercise(exerciseData.id, { measurementType: 'time' as any });
               }
               
               const exTimestamp = Date.now();

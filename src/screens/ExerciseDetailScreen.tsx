@@ -7,10 +7,11 @@ if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental
 }
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
+import * as Haptics from 'expo-haptics';
 import dayjs from 'dayjs';
 import type { WorkoutTemplateExercise } from '../types';
 import { useStore } from '../store';
-import { COLORS, SPACING, TYPOGRAPHY, GRADIENTS, CARDS } from '../constants';
+import { COLORS, SPACING, TYPOGRAPHY, GRADIENTS, CARDS, BORDER_RADIUS } from '../constants';
 import { IconArrowLeft, IconPlay, IconCheck, IconMenu, IconMinusLine, IconAddLine } from '../components/icons';
 import { SetTimerSheet } from '../components/timer/SetTimerSheet';
 import { Toggle } from '../components/Toggle';
@@ -81,7 +82,34 @@ export function ExerciseDetailScreen({ route, navigation }: ExerciseDetailScreen
   const insets = useSafeAreaInsets();
   const { exercise, exerciseName, workoutName, workoutKey, cycleId, workoutTemplateId } = route?.params || {};
   const { exercises, updateCycle, cycles, saveExerciseProgress, getExerciseProgress, skipExercise, getBarbellMode, setBarbellMode, sessions, detailedWorkoutProgress } = useStore();
+  const restTimerMinimized = useStore((state) => state.restTimerMinimized);
+  const restTimerTimeLeft = useStore((state) => state.restTimerTimeLeft);
+  const restTimerExerciseId = useStore((state) => state.restTimerExerciseId);
+  const restTimerWorkoutKey = useStore((state) => state.restTimerWorkoutKey);
   const [showTimer, setShowTimer] = useState(false);
+  const prevRestTimerMinimizedRef = useRef(restTimerMinimized);
+  const isMountedRef = useRef(false);
+  
+  // Store exercise and workout names in state to prevent them from disappearing during navigation
+  const [displayExerciseName, setDisplayExerciseName] = useState(exerciseName || '');
+  const [displayWorkoutName, setDisplayWorkoutName] = useState(workoutName || '');
+  
+  // Update display names when params change
+  useEffect(() => {
+    if (exerciseName) {
+      setDisplayExerciseName(exerciseName);
+    } else if (exercise) {
+      // Fallback: Look up exercise name from the exercises store
+      const exerciseData = exercises.find(e => e.id === exercise.exerciseId);
+      if (exerciseData?.name) {
+        setDisplayExerciseName(exerciseData.name);
+      }
+    }
+    
+    if (workoutName) {
+      setDisplayWorkoutName(workoutName);
+    }
+  }, [exerciseName, workoutName, exercise, exercises]);
   const [showHistory, setShowHistory] = useState(false);
   const [useBarbellMode, setUseBarbellMode] = useState(() => {
     // Load barbell mode preference from store for this exercise
@@ -126,12 +154,37 @@ export function ExerciseDetailScreen({ route, navigation }: ExerciseDetailScreen
     }
   }, [allSetsCompleted]);
   
+  // Watch for mini timer expansion
+  useEffect(() => {
+    // Check if this exercise has an active timer that should be shown
+    const isThisExerciseTimer = restTimerExerciseId === exercise?.id && restTimerWorkoutKey === workoutKey;
+    const hasTimerData = restTimerTimeLeft > 0;
+    const timerJustExpanded = prevRestTimerMinimizedRef.current && !restTimerMinimized;
+    const isFirstRenderWithTimer = !isMountedRef.current && !restTimerMinimized;
+    
+    // Show timer if:
+    // Case 1: First render after mount, timer is not minimized and belongs to this exercise
+    // Case 2: Timer just changed from minimized to expanded (user tapped mini timer)
+    // And: Timer sheet is not already showing
+    if (isThisExerciseTimer && hasTimerData && (isFirstRenderWithTimer || timerJustExpanded) && !showTimer) {
+      setShowTimer(true);
+    }
+    
+    // Mark as mounted and update previous value
+    isMountedRef.current = true;
+    prevRestTimerMinimizedRef.current = restTimerMinimized;
+  }, [restTimerMinimized, showTimer, restTimerTimeLeft, restTimerExerciseId, restTimerWorkoutKey, exercise?.id, workoutKey]);
+  
   if (!exercise) return null;
   
   const exerciseData = exercises.find(e => e.id === exercise.exerciseId);
+  const isTimeBased = exerciseData?.measurementType === 'time';
+  const weightUnit = 'lbs'; // Weight is always in lbs (for added weight during exercise)
+  const repsUnit = isTimeBased ? 'sec' : 'reps'; // Time-based uses 'sec', rep-based uses 'reps'
   const BARBELL_WEIGHT = 45;
   
   const handleWeightIncrement = (setIndex: number) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     const newSets = [...setsData];
     newSets[setIndex] = {
       ...newSets[setIndex],
@@ -150,6 +203,7 @@ export function ExerciseDetailScreen({ route, navigation }: ExerciseDetailScreen
   };
   
   const handleWeightDecrement = (setIndex: number) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     const newSets = [...setsData];
     newSets[setIndex] = {
       ...newSets[setIndex],
@@ -168,10 +222,12 @@ export function ExerciseDetailScreen({ route, navigation }: ExerciseDetailScreen
   };
   
   const handleRepsIncrement = (setIndex: number) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    const increment = isTimeBased ? 5 : 1; // 5 seconds for time-based, 1 rep for rep-based
     const newSets = [...setsData];
     newSets[setIndex] = {
       ...newSets[setIndex],
-      reps: newSets[setIndex].reps + 1,
+      reps: newSets[setIndex].reps + increment,
     };
     setSetsData(newSets);
     setHasUnsavedChanges(true);
@@ -186,10 +242,13 @@ export function ExerciseDetailScreen({ route, navigation }: ExerciseDetailScreen
   };
   
   const handleRepsDecrement = (setIndex: number) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    const decrement = isTimeBased ? 5 : 1; // 5 seconds for time-based, 1 rep for rep-based
+    const minimum = isTimeBased ? 5 : 1; // Minimum 5 seconds or 1 rep
     const newSets = [...setsData];
     newSets[setIndex] = {
       ...newSets[setIndex],
-      reps: Math.max(1, newSets[setIndex].reps - 1),
+      reps: Math.max(minimum, newSets[setIndex].reps - decrement),
     };
     setSetsData(newSets);
     setHasUnsavedChanges(true);
@@ -637,7 +696,7 @@ export function ExerciseDetailScreen({ route, navigation }: ExerciseDetailScreen
           {/* Title */}
           <View style={styles.headerContent}>
             <View style={styles.headerTop}>
-              <Text style={styles.headerTitle}>{exerciseName}</Text>
+              <Text style={styles.headerTitle}>{displayExerciseName}</Text>
             </View>
             
             {/* Barbell Mode Toggle */}
@@ -708,7 +767,7 @@ export function ExerciseDetailScreen({ route, navigation }: ExerciseDetailScreen
                             <View style={styles.valueContainer}>
                               <View style={styles.valueRow}>
                                 <Text style={styles.largeValue}>{weight}</Text>
-                                <Text style={styles.unit}>lbs</Text>
+                                <Text style={styles.unit}>{weightUnit}</Text>
                                 {useBarbellMode && perSideWeight > 0 && (
                                   <Text style={styles.perSideText}>
                                     {perSideWeight % 1 === 0 ? perSideWeight : perSideWeight.toFixed(1)} per side
@@ -763,7 +822,7 @@ export function ExerciseDetailScreen({ route, navigation }: ExerciseDetailScreen
                             <View style={styles.valueContainer}>
                               <View style={styles.valueRow}>
                                 <Text style={styles.largeValue}>{reps}</Text>
-                                <Text style={styles.unit}>reps</Text>
+                                <Text style={styles.unit}>{repsUnit}</Text>
                               </View>
                             </View>
                             <View style={styles.buttonsContainer}>
@@ -842,11 +901,11 @@ export function ExerciseDetailScreen({ route, navigation }: ExerciseDetailScreen
                                 <View style={styles.setCollapsedLeft}>
                                   <View style={styles.collapsedValueRow}>
                                     <Text style={styles.setCollapsedText}>{weight}</Text>
-                                    <Text style={styles.setCollapsedUnit}>lbs</Text>
+                                    <Text style={styles.setCollapsedUnit}>{weightUnit}</Text>
                                   </View>
                                   <View style={styles.collapsedValueRow}>
                                     <Text style={styles.setCollapsedText}>{reps}</Text>
-                                    <Text style={styles.setCollapsedUnit}>reps</Text>
+                                    <Text style={styles.setCollapsedUnit}>{repsUnit}</Text>
                                   </View>
                                 </View>
                                 {recordingSetIndex === index && showTimer ? (
@@ -910,10 +969,12 @@ export function ExerciseDetailScreen({ route, navigation }: ExerciseDetailScreen
         {/* Timer Bottom Sheet */}
         <SetTimerSheet
           visible={showTimer}
-          workoutName={workoutName}
-          exerciseName={exerciseName}
+          workoutName={displayWorkoutName}
+          exerciseName={displayExerciseName}
           currentSet={recordingSetIndex !== null ? recordingSetIndex + 1 : 1}
           totalSets={numberOfSets}
+          exerciseId={exercise?.id}
+          workoutKey={workoutKey}
           onComplete={handleTimerComplete}
           onClose={() => setShowTimer(false)}
         />
@@ -1014,11 +1075,11 @@ export function ExerciseDetailScreen({ route, navigation }: ExerciseDetailScreen
                           <View key={`${workout.sessionId}-${setIndex}`} style={styles.historySetRow}>
                             <View style={styles.historyValueColumn}>
                               <Text style={styles.setCollapsedText}>{set.weight}</Text>
-                              <Text style={styles.setCollapsedUnit}>lbs</Text>
+                              <Text style={styles.setCollapsedUnit}>{weightUnit}</Text>
                             </View>
                             <View style={styles.historyValueColumn}>
                               <Text style={styles.setCollapsedText}>{set.reps}</Text>
-                              <Text style={styles.setCollapsedUnit}>reps</Text>
+                              <Text style={styles.setCollapsedUnit}>{repsUnit}</Text>
                             </View>
                           </View>
                         ))}
@@ -1109,38 +1170,35 @@ const styles = StyleSheet.create({
   },
   setCard: {
     ...CARDS.cardDeep.outer,
-    borderRadius: 12,
   },
   setCardInner: {
     ...CARDS.cardDeep.inner,
-    borderRadius: 12,
   },
   setCardDimmed: {
     ...CARDS.cardDeepDimmed.outer,
-    borderRadius: 12,
   },
   setCardInnerDimmed: {
     ...CARDS.cardDeepDimmed.inner,
-    borderRadius: 12,
   },
   setCardInactive: {
     shadowOpacity: 0,
     elevation: 0,
   },
   setCardCollapsedRadius: {
-    borderBottomLeftRadius: 12,
-    borderBottomRightRadius: 12,
+    borderBottomLeftRadius: 16,
+    borderBottomRightRadius: 16,
   },
   setCardInnerCollapsedRadius: {
-    borderBottomLeftRadius: 12,
-    borderBottomRightRadius: 12,
+    borderBottomLeftRadius: 16,
+    borderBottomRightRadius: 16,
   },
   setCardCollapsed: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 24,
-    paddingVertical: 20,
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 18,
   },
   setCollapsedLeft: {
     flexDirection: 'row',
@@ -1165,7 +1223,7 @@ const styles = StyleSheet.create({
   },
   setCardExpanded: {
     paddingTop: 24,
-    paddingHorizontal: 24,
+    paddingHorizontal: 16,
     paddingBottom: 24,
   },
   adjustmentRow: {
@@ -1447,15 +1505,15 @@ const styles = StyleSheet.create({
     paddingTop: 16,
   },
   markAsDoneButton: {
-    borderRadius: 12,
+    borderRadius: BORDER_RADIUS.md,
     borderCurve: 'continuous',
     overflow: 'hidden',
   },
   markAsDoneButtonInner: {
+    height: 56,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 16,
   },
   markAsDoneButtonText: {
     ...TYPOGRAPHY.bodyBold,

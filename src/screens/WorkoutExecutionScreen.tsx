@@ -757,13 +757,13 @@ export function WorkoutExecutionScreen({ route, navigation }: WorkoutExecutionSc
                   return a.originalIndex - b.originalIndex;
                 });
               
-              // Find the first in-progress exercise (first non-completed, non-skipped)
+              // Find the first in-progress exercise (has started but not completed)
               const inProgressExerciseId = sortedExercises.find(({ exercise, group }) => {
                 if (group === 'skipped') return false;
                 const savedProgress = getExerciseProgress(workoutKey, exercise.id);
                 const completedSets = savedProgress?.sets.filter(set => set.completed).length || 0;
                 const totalSets = exercise.targetSets;
-                return completedSets < totalSets;
+                return completedSets > 0 && completedSets < totalSets;
               })?.exercise.id;
               
               return sortedExercises.map(({ exercise, originalIndex: index, group }, arrayIndex, array) => {
@@ -1039,7 +1039,7 @@ const styles = StyleSheet.create({
     marginRight: -4,
   },
   resetButton: {
-    height: 48,
+    height: 56,
     justifyContent: 'center',
     alignItems: 'center',
   },

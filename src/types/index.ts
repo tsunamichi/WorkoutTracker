@@ -78,12 +78,15 @@ export interface WorkoutTemplateExercise {
   };
 }
 
+export type ExerciseMeasurementType = 'reps' | 'time';
+
 export interface Exercise {
   id: string;
   name: string;
   category: ExerciseCategory;
   equipment?: string;
   isCustom: boolean;
+  measurementType?: ExerciseMeasurementType; // 'reps' (default) or 'time' (for isometric/time-based exercises)
   notes?: string;
 }
 

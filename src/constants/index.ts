@@ -346,6 +346,15 @@ export const BUTTONS = {
     alignItems: 'center' as const,
     justifyContent: 'center' as const,
   },
+  primaryButtonLabeled: {
+    height: 56,
+    borderRadius: 16,  // md (16px)
+    borderCurve: 'continuous' as const,
+    backgroundColor: '#1B1B1B',
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+    paddingHorizontal: 24,
+  },
 };
 
 // Seed exercises for initial app state

@@ -14,8 +14,9 @@ import { Audio } from 'expo-av';
 import * as Haptics from 'expo-haptics';
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import { useStore } from '../../store';
-import { SPACING, TYPOGRAPHY } from '../../constants';
+import { SPACING, TYPOGRAPHY, COLORS } from '../../constants';
 import { TimerControls } from './TimerControls';
+import { IconChevronDown } from '../icons';
 import { startRestTimer, endRestTimer, markRestTimerCompleted } from '../../modules/RestTimerLiveActivity';
 
 interface SetTimerSheetProps {
@@ -26,14 +27,9 @@ interface SetTimerSheetProps {
   exerciseName?: string;
   currentSet?: number;
   totalSets?: number;
+  exerciseId?: string;
+  workoutKey?: string;
 }
-
-const LIGHT_COLORS = {
-  backgroundCanvas: '#E3E6E0',
-  textPrimary: '#000000',
-  textSecondary: '#3C3C43',
-  textMeta: '#817B77',
-};
 
 const REST_COLOR_YELLOW = '#FFCC00'; // Yellow for rest
 const REST_COLOR_RED = '#FF6B6B'; // Red for rest (under 5 seconds)
@@ -48,20 +44,33 @@ export function SetTimerSheet({
   workoutName, 
   exerciseName, 
   currentSet = 1, 
-  totalSets = 1 
+  totalSets = 1,
+  exerciseId,
+  workoutKey
 }: SetTimerSheetProps) {
   const insets = useSafeAreaInsets();
   const { settings } = useStore();
+  const restTimerTimeLeft = useStore((state) => state.restTimerTimeLeft);
+  const restTimerMinimized = useStore((state) => state.restTimerMinimized);
   const restTime = settings.restTimerDefaultSeconds;
   
-  const [timeLeft, setTimeLeft] = useState(restTime);
+  // Initialize time from store if reopening from mini timer, otherwise use default
+  const [timeLeft, setTimeLeft] = useState(() => {
+    return restTimerTimeLeft > 0 && restTimerMinimized ? restTimerTimeLeft : restTime;
+  });
   const [isRunning, setIsRunning] = useState(false);
   const [soundEnabled, setSoundEnabled] = useState(true);
+  const [labelWidth, setLabelWidth] = useState(0);
   
   const slideAnim = useRef(new Animated.Value(0)).current;
   const sizeAnim = useRef(new Animated.Value(1)).current; // 1 = 100%, 0 = MIN_SIZE
   const breathingAnim = useRef(new Animated.Value(1)).current; // For breathing animation (1 = 100%, 0.92 = 92%)
   const restColorAnim = useRef(new Animated.Value(0)).current; // For yellow to red transition (0 = yellow, 1 = red)
+  
+  // Store actions for mini timer
+  const setRestTimerMinimized = useStore((state) => state.setRestTimerMinimized);
+  const setRestTimerData = useStore((state) => state.setRestTimerData);
+  const clearRestTimerData = useStore((state) => state.clearRestTimerData);
   const endTimeRef = useRef<number | null>(null);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const liveActivityIdRef = useRef<string | null>(null);
@@ -225,13 +234,24 @@ export function SetTimerSheet({
   // Handle visibility changes
   useEffect(() => {
     if (visible) {
-      setTimeLeft(restTime);
+      // Check if reopening from minimized state
+      const isRestoringFromMini = restTimerTimeLeft > 0 && !restTimerMinimized;
+      
+      if (isRestoringFromMini) {
+        // Restore from mini timer
+        setTimeLeft(restTimerTimeLeft);
+        endTimeRef.current = Date.now() + restTimerTimeLeft * 1000;
+      } else {
+        // Start fresh timer
+        setTimeLeft(restTime);
+        endTimeRef.current = Date.now() + restTime * 1000;
+      }
+      
       setIsRunning(true);
       lastPlayedSecondRef.current = null;
       
-      endTimeRef.current = Date.now() + restTime * 1000;
-      
-      startRestTimer(workoutName || 'Workout', exerciseName || 'Exercise', restTime, currentSet, totalSets).then((activityId) => {
+      const timerDuration = isRestoringFromMini ? restTimerTimeLeft : restTime;
+      startRestTimer(workoutName || 'Workout', exerciseName || 'Exercise', timerDuration, currentSet, totalSets).then((activityId) => {
         if (activityId) {
           liveActivityIdRef.current = activityId;
         }
@@ -274,7 +294,7 @@ export function SetTimerSheet({
         liveActivityIdRef.current = null;
       }
     };
-  }, [visible, restTime, slideAnim, sizeAnim, breathingAnim, restColorAnim, workoutName, exerciseName, currentSet, totalSets]);
+  }, [visible, restTime, restTimerTimeLeft, restTimerMinimized, slideAnim, sizeAnim, breathingAnim, restColorAnim, workoutName, exerciseName, currentSet, totalSets]);
 
   // Timer logic
   useEffect(() => {
@@ -330,6 +350,10 @@ export function SetTimerSheet({
           endRestTimer();
           liveActivityIdRef.current = null;
         }
+        
+        // Clear mini timer state on completion
+        clearRestTimerData();
+        
         animateOutAndClose(onComplete);
       }
     };
@@ -374,6 +398,10 @@ export function SetTimerSheet({
             endRestTimer();
             liveActivityIdRef.current = null;
           }
+          
+          // Clear mini timer state on completion
+          clearRestTimerData();
+          
           animateOutAndClose(onComplete);
         }
       }
@@ -401,7 +429,27 @@ export function SetTimerSheet({
       liveActivityIdRef.current = null;
     }
     
+    // Clear mini timer state
+    clearRestTimerData();
+    
     animateOutAndClose(onComplete);
+  };
+  
+  const handleMinimize = () => {
+    // Save current timer state to store
+    setRestTimerData(timeLeft, settings.restTimerDefaultSeconds, onComplete, exerciseId, workoutKey);
+    setRestTimerMinimized(true);
+    
+    // Animate out the drawer
+    Animated.timing(slideAnim, {
+      toValue: 0,
+      duration: 250,
+      easing: Easing.bezier(0.25, 0.1, 0.25, 1),
+      useNativeDriver: true,
+    }).start(() => {
+      // Close the full drawer after animation
+      onClose();
+    });
   };
 
   const formatTime = () => {
@@ -453,18 +501,34 @@ export function SetTimerSheet({
         ]}
       >
         <View style={[styles.timerSheet, { paddingBottom: 8 + insets.bottom }]}>
-          {/* Next set indicator */}
-          <View style={styles.setIndicator}>
-            {currentSet < totalSets ? (
-              <Text style={styles.nextSetText}>
-                Next set <Text style={styles.nextSetNumber}>{currentSet + 1} out of {totalSets}</Text>
-              </Text>
-            ) : (
-              <Text style={styles.nextSetText}>
-                Set <Text style={styles.nextSetNumber}>{currentSet} of {totalSets}</Text>
-              </Text>
-            )}
-          </View>
+          {/* Next set indicator with minimize button */}
+          <TouchableOpacity 
+            style={styles.setIndicator}
+            onPress={handleMinimize}
+            activeOpacity={0.7}
+          >
+            <View 
+              style={styles.labelWrapper}
+              onLayout={(e) => setLabelWidth(e.nativeEvent.layout.width)}
+            >
+              {currentSet < totalSets ? (
+                <Text style={styles.nextSetText}>
+                  Next set <Text style={styles.nextSetNumber}>{currentSet + 1} out of {totalSets}</Text>
+                </Text>
+              ) : (
+                <Text style={styles.nextSetText}>
+                  Set <Text style={styles.nextSetNumber}>{currentSet} of {totalSets}</Text>
+                </Text>
+              )}
+            </View>
+            <View style={[styles.chevronWrapper, { 
+              left: '50%',
+              marginLeft: labelWidth > 0 ? (labelWidth / 2) + 16 : 0,
+              top: -2
+            }]}>
+              <IconChevronDown size={24} color={COLORS.textMeta} />
+            </View>
+          </TouchableOpacity>
 
           {/* Animated Circle Timer */}
           <View style={styles.timerContainer}>
@@ -530,7 +594,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
   },
   timerSheet: {
-    backgroundColor: LIGHT_COLORS.backgroundCanvas,
+    backgroundColor: COLORS.backgroundCanvas,
     borderRadius: 40,
     borderCurve: 'continuous',
     paddingTop: 32,
@@ -538,16 +602,27 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   setIndicator: {
-    alignItems: 'center',
+    position: 'relative',
+    width: '100%',
     marginBottom: 40,
+    paddingHorizontal: SPACING.lg,
+    alignItems: 'center',
+  },
+  labelWrapper: {
+    alignSelf: 'center',
+  },
+  chevronWrapper: {
+    position: 'absolute',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   nextSetText: {
     ...TYPOGRAPHY.body,
-    color: LIGHT_COLORS.textMeta,
+    color: COLORS.textMeta,
   },
   nextSetNumber: {
     ...TYPOGRAPHY.body,
-    color: LIGHT_COLORS.textPrimary,
+    color: COLORS.text,
   },
   timerContainer: {
     width: CONTAINER_WIDTH,
