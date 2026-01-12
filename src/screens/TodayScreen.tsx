@@ -452,10 +452,12 @@ export function TodayScreen({ onNavigateToWorkouts, onDateChange }: TodayScreenP
               </View>
             ) : (
               <View style={styles.content}>
-                {/* WOD Label */}
-                {(selectedDay?.workout || (isTransitioning && previousWorkoutData?.workout)) && (
-                  <Text style={styles.wodLabel}>WOD</Text>
-                )}
+                {/* WOD Label - Always reserve space for consistent positioning */}
+                <View style={styles.wodLabelContainer}>
+                  {(selectedDay?.workout || (isTransitioning && previousWorkoutData?.workout)) && (
+                    <Text style={styles.wodLabel}>WOD</Text>
+                  )}
+                </View>
                 
                 {/* Workout Content Wrapper - Fixed height for consistent Intervals positioning */}
                 <View style={styles.workoutContentWrapper}>
@@ -1139,6 +1141,9 @@ const styles = StyleSheet.create({
   },
   
   // WOD Label
+  wodLabelContainer: {
+    minHeight: 32, // Reserve space for label even when not visible (body font height + margin)
+  },
   wodLabel: {
     ...TYPOGRAPHY.body,
     color: COLORS.textMeta,
