@@ -1136,7 +1136,7 @@ const styles = StyleSheet.create({
   wodLabel: {
     ...TYPOGRAPHY.body,
     color: COLORS.textMeta,
-    marginBottom: SPACING.lg,
+    marginBottom: SPACING.lg, // 16px to match Past Cycles spacing
   },
   
   // Intervals Section
@@ -1147,7 +1147,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: SPACING.lg,
+    marginBottom: 4,
   },
   intervalsTitle: {
     ...TYPOGRAPHY.body,
