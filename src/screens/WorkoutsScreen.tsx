@@ -433,7 +433,16 @@ export function WorkoutsScreen() {
               {/* Active Cycle */}
               {cycles.filter(c => c.isActive).length > 0 && (
                 <>
-                  <Text style={styles.inProgressTitle}>In progress</Text>
+                  <View style={styles.inProgressHeader}>
+                    <Text style={styles.inProgressTitle}>In progress</Text>
+                    <TouchableOpacity
+                      style={styles.newButton}
+                      onPress={() => navigation.navigate('WorkoutCreationOptions' as never)}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={styles.newButtonText}>New</Text>
+                    </TouchableOpacity>
+                  </View>
                   {cycles.filter(c => c.isActive).map((cycle) => {
                     const completion = getCycleCompletion(cycle.id);
                     return (
@@ -713,13 +722,26 @@ const styles = StyleSheet.create({
   },
   
   // Cycles List
+  inProgressHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: SPACING.lg,
+  },
   inProgressTitle: {
     ...TYPOGRAPHY.body,
     color: COLORS.textMeta,
-    marginBottom: SPACING.lg,
+  },
+  newButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+  },
+  newButtonText: {
+    ...TYPOGRAPHY.metaBold,
+    color: COLORS.text,
   },
   activeCycleSection: {
-    marginBottom: SPACING.xl,
+    marginBottom: 56, // 56px spacing before Past Cycles
   },
   cycleCard: CARDS.cardDeep.outer,
   cycleCardPressed: {
@@ -776,7 +798,7 @@ const styles = StyleSheet.create({
   pastCycleCardWrapper: {
     marginBottom: SPACING.sm,
   },
-  pastCycleCard: CARDS.cardDeep.outer,
+  pastCycleCard: CARDS.cardDeepDimmed.outer,
   pastCycleCardPressed: {
     borderWidth: 1,
     borderColor: LIGHT_COLORS.textMeta,

@@ -188,7 +188,7 @@ function TabNavigator() {
           </TouchableOpacity>
             </View>
         
-        {/* Action Button - Changes based on active tab */}
+        {/* Action Button - Only show Timer on Schedule tab */}
         {activeTab === 'Schedule' && isViewingToday ? (
           <TouchableOpacity 
             style={styles.actionButton}
@@ -197,15 +197,6 @@ function TabNavigator() {
           >
             <IconStopwatch size={24} color={COLORS.text} />
             <Text style={styles.actionButtonLabel}>Timer</Text>
-          </TouchableOpacity>
-        ) : activeTab === 'Workouts' && cycles.length > 0 ? (
-          <TouchableOpacity 
-            style={styles.actionButton}
-            activeOpacity={1}
-            onPress={() => navigation.navigate('WorkoutCreationOptions' as never)}
-          >
-            <IconCalendar size={24} color={COLORS.text} />
-            <Text style={styles.actionButtonLabel}>New</Text>
           </TouchableOpacity>
         ) : null}
             </View>
