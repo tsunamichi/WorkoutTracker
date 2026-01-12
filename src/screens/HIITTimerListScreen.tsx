@@ -106,7 +106,7 @@ export default function HIITTimerListScreen({ navigation }: Props) {
               activeOpacity={0.7}
             >
               <IconAdd size={24} color={COLORS.text} />
-              <Text style={styles.addTimerButtonText}>Add timer</Text>
+              <Text style={styles.addTimerButtonText}>New timer</Text>
             </TouchableOpacity>
           </View>
         </View>
