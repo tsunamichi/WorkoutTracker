@@ -1136,7 +1136,7 @@ const styles = StyleSheet.create({
   wodLabel: {
     ...TYPOGRAPHY.body,
     color: COLORS.textMeta,
-    marginBottom: 4,
+    marginBottom: SPACING.lg,
   },
   
   // Intervals Section
@@ -1147,7 +1147,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 4,
+    marginBottom: SPACING.lg,
   },
   intervalsTitle: {
     ...TYPOGRAPHY.body,
