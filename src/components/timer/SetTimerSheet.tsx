@@ -92,6 +92,8 @@ export function SetTimerSheet({
   const countdownSoundRef = useRef<Audio.Sound | null>(null);
   const completeSoundRef = useRef<Audio.Sound | null>(null);
   const lastPlayedSecondRef = useRef<number | null>(null);
+  const prevVisibleRef = useRef(visible);
+  const isInitializedRef = useRef(false);
 
   const playCompletionAlert = useCallback(async () => {
     if (!soundEnabled) return;
@@ -258,9 +260,15 @@ export function SetTimerSheet({
     }).start();
   }, [currentPhase, borderRadiusAnim]);
 
-  // Handle visibility changes - initialize on open
+  // Handle visibility changes - ONLY initialize when drawer opens (visible goes from false to true)
   useEffect(() => {
-    if (visible) {
+    const isOpening = visible && !prevVisibleRef.current;
+    const isClosing = !visible && prevVisibleRef.current;
+    
+    if (isOpening) {
+      // Drawer is opening - initialize timer
+      isInitializedRef.current = true;
+      
       // Set initial phase
       const initialPhase = isExerciseTimerPhase ? 'exercise' : 'rest';
       setCurrentPhase(initialPhase);
@@ -305,7 +313,10 @@ export function SetTimerSheet({
         friction: 20,
         velocity: 2,
       }).start();
-    } else {
+    } else if (isClosing) {
+      // Drawer is closing - cleanup
+      isInitializedRef.current = false;
+      
       setTimeLeft(restTime);
       setIsRunning(false);
       endTimeRef.current = null;
@@ -324,6 +335,9 @@ export function SetTimerSheet({
         liveActivityIdRef.current = null;
       }
     }
+    
+    // Update previous visible ref
+    prevVisibleRef.current = visible;
     
     return () => {
       if (liveActivityIdRef.current) {
