@@ -11,7 +11,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useStore } from '../store';
 import { COLORS, SPACING, CARDS, TYPOGRAPHY, BORDER_RADIUS, GRADIENTS } from '../constants';
-import { IconArrowLeft, IconTriangle } from '../components/icons';
+import { IconArrowLeft, IconTriangle, IconAdd } from '../components/icons';
 import type { HIITTimer } from '../types';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/AppNavigator';
@@ -100,6 +100,14 @@ export default function HIITTimerListScreen({ navigation }: Props) {
           
           <View style={styles.pageTitleContainer}>
             <Text style={styles.pageTitle}>Saved timers</Text>
+            <TouchableOpacity
+              style={styles.addTimerButton}
+              onPress={handleCreateNew}
+              activeOpacity={0.7}
+            >
+              <IconAdd size={24} color={COLORS.text} />
+              <Text style={styles.addTimerButtonText}>Add timer</Text>
+            </TouchableOpacity>
           </View>
         </View>
 
@@ -158,17 +166,6 @@ export default function HIITTimerListScreen({ navigation }: Props) {
             </TouchableOpacity>
           ))}
         </ScrollView>
-
-        {/* Create Button - Fixed Bottom */}
-        <View style={styles.stickyButtonContainer}>
-          <TouchableOpacity 
-            style={styles.createButton} 
-            onPress={handleCreateNew}
-            activeOpacity={1}
-          >
-            <Text style={styles.createButtonText}>Create New Timer</Text>
-          </TouchableOpacity>
-        </View>
       </View>
     </View>
   );
@@ -200,6 +197,9 @@ const styles = StyleSheet.create({
     marginLeft: -4,
   },
   pageTitleContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     paddingHorizontal: SPACING.xxl,
     paddingTop: SPACING.md,
   },
@@ -207,34 +207,22 @@ const styles = StyleSheet.create({
     ...TYPOGRAPHY.h2,
     color: LIGHT_COLORS.secondary,
   },
+  addTimerButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingVertical: 8,
+  },
+  addTimerButtonText: {
+    ...TYPOGRAPHY.metaBold,
+    color: COLORS.text,
+  },
   scrollView: {
     flex: 1,
   },
   scrollContent: {
     padding: SPACING.xxl,
     paddingBottom: 140, // Space for fixed button + 40px
-  },
-  stickyButtonContainer: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    paddingHorizontal: SPACING.xxl,
-    paddingBottom: 40, // 40px spacing below button
-    paddingTop: SPACING.md,
-    backgroundColor: 'transparent',
-  },
-  createButton: {
-    backgroundColor: '#FD6B00',
-    paddingVertical: SPACING.lg,
-    borderRadius: 12,
-    alignItems: 'center',
-  },
-  createButtonText: {
-    ...TYPOGRAPHY.meta,
-    fontWeight: 'bold',
-    fontWeight: '600',
-    color: '#FFFFFF',
   },
   timerCard: {
     marginBottom: SPACING.lg,

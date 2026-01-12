@@ -97,7 +97,7 @@ export default function HIITTimerFormScreen({ navigation, route }: Props) {
     
     if (!name.trim()) {
       Alert.alert('Error', 'Please enter a name for the timer');
-      return false;
+      return { success: false, timerId: null };
     }
 
     const newTimerId = mode === 'create' ? `hiit-${Date.now()}` : timerId!;
@@ -118,7 +118,7 @@ export default function HIITTimerFormScreen({ navigation, route }: Props) {
     if (mode === 'edit' && !hasChanges()) {
       console.log('✅ No changes to save');
       hasSavedRef.current = true;
-      return true; // No changes, just return
+      return { success: true, timerId: newTimerId }; // No changes, just return
     }
     
     // Check if timer is currently active in the store
@@ -140,7 +140,7 @@ export default function HIITTimerFormScreen({ navigation, route }: Props) {
               style: 'cancel',
               onPress: () => {
                 console.log('❌ User cancelled save');
-                resolve(false);
+                resolve({ success: false, timerId: null });
               },
             },
             {
@@ -155,7 +155,7 @@ export default function HIITTimerFormScreen({ navigation, route }: Props) {
                 console.log('🧹 Clearing active timer status after save');
                 setActiveHIITTimer(null);
                 hasSavedRef.current = true;
-                resolve(true);
+                resolve({ success: true, timerId: newTimerId });
               },
             },
           ]
@@ -173,7 +173,7 @@ export default function HIITTimerFormScreen({ navigation, route }: Props) {
     }
     
     hasSavedRef.current = true;
-    return true;
+    return { success: true, timerId: newTimerId };
   }, [name, work, workRest, sets, rounds, roundRest, mode, timerId, existingTimer, addHIITTimer, updateHIITTimer, isHIITTimerActive, setActiveHIITTimer, hasChanges]);
 
   // Warn about unsaved changes when navigating back with back arrow
@@ -227,14 +227,19 @@ export default function HIITTimerFormScreen({ navigation, route }: Props) {
     console.log('💾 Save button pressed');
     
     // Call handleSave which includes the confirmation logic
-    const saved = await handleSave();
+    const result = await handleSave();
     
-    if (saved) {
+    if (result.success && result.timerId) {
       hasSavedRef.current = true;
-      // Just go back - the execution screen will refresh automatically
       // Add small delay to ensure state propagates
       setTimeout(() => {
-        navigation.goBack();
+        if (mode === 'create') {
+          // For new timers, navigate to execution screen
+          navigation.replace('HIITTimerExecution', { timerId: result.timerId! });
+        } else {
+          // For edits, just go back
+          navigation.goBack();
+        }
       }, 50);
     }
   };
