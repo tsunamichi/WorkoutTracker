@@ -457,6 +457,8 @@ export function TodayScreen({ onNavigateToWorkouts, onDateChange }: TodayScreenP
                   <Text style={styles.wodLabel}>WOD</Text>
                 )}
                 
+                {/* Workout Content Wrapper - Fixed height for consistent Intervals positioning */}
+                <View style={styles.workoutContentWrapper}>
                 <View style={styles.cardsContainer}>
               {/* Old workout card during transition */}
               {isTransitioning && previousWorkoutData?.workout && (
@@ -699,6 +701,7 @@ export function TodayScreen({ onNavigateToWorkouts, onDateChange }: TodayScreenP
                   </TouchableOpacity>
                 );
               })()}
+              </View>
               
               {/* Intervals Section */}
               {!isTransitioning && (() => {
@@ -815,6 +818,9 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
     padding: SPACING.xxl,
+  },
+  workoutContentWrapper: {
+    minHeight: 280, // Fixed height to keep Intervals section at consistent position
   },
   cardsContainer: {
     position: 'relative',
