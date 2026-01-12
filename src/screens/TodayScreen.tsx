@@ -824,11 +824,12 @@ const styles = StyleSheet.create({
     padding: SPACING.xxl,
   },
   workoutContentWrapper: {
-    minHeight: 300, // Fixed height to keep Intervals section at consistent position
+    // Wrapper contains cardsContainer + swapButtonContainer
   },
   cardsContainer: {
     position: 'relative',
     width: '100%',
+    minHeight: 160, // Fixed height to keep content consistent between workout and rest days
   },
   absoluteCard: {
     position: 'absolute',
@@ -1095,7 +1096,6 @@ const styles = StyleSheet.create({
   },
   restDayContent: {
     alignItems: 'flex-start',
-    minHeight: 200, // Match approximate workout card height for consistent positioning
   },
   restDayQuestion: {
     ...TYPOGRAPHY.h3,
@@ -1125,7 +1125,7 @@ const styles = StyleSheet.create({
   
   // Swap Button
   swapButtonContainer: {
-    minHeight: 56, // Reserve space for swap button even when not visible (16px margin + 40px button)
+    height: 56, // Fixed height to reserve space for swap button even when not visible
   },
   swapButton: {
     flexDirection: 'row',
