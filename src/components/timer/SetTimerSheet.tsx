@@ -29,10 +29,14 @@ interface SetTimerSheetProps {
   totalSets?: number;
   exerciseId?: string;
   workoutKey?: string;
+  isExerciseTimerPhase?: boolean; // If true, show exercise timer; if false, show rest timer
+  exerciseDuration?: number; // Duration in seconds for exercise timer
+  onExerciseTimerComplete?: () => void; // Callback when exercise timer completes
 }
 
 const REST_COLOR_YELLOW = '#FFCC00'; // Yellow for rest
 const REST_COLOR_RED = '#FF6B6B'; // Red for rest (under 5 seconds)
+const EXERCISE_COLOR_BLUE = '#062FFF'; // Blue for exercise timer
 const MIN_SIZE = 180;
 const SCREEN_WIDTH = Dimensions.get('window').width;
 const CONTAINER_WIDTH = SCREEN_WIDTH - 96; // 48px padding on each side
@@ -46,7 +50,10 @@ export function SetTimerSheet({
   currentSet = 1, 
   totalSets = 1,
   exerciseId,
-  workoutKey
+  workoutKey,
+  isExerciseTimerPhase = false,
+  exerciseDuration = 0,
+  onExerciseTimerComplete
 }: SetTimerSheetProps) {
   const insets = useSafeAreaInsets();
   const { settings } = useStore();
@@ -54,10 +61,16 @@ export function SetTimerSheet({
   const restTimerMinimized = useStore((state) => state.restTimerMinimized);
   const restTime = settings.restTimerDefaultSeconds;
   
-  // Initialize time from store if reopening from mini timer, otherwise use default
-  const [timeLeft, setTimeLeft] = useState(() => {
+  // Determine initial time based on timer phase
+  const getInitialTime = () => {
+    if (isExerciseTimerPhase) {
+      return exerciseDuration; // Use exercise duration for exercise timer
+    }
+    // For rest timer, check if reopening from mini timer
     return restTimerTimeLeft > 0 && restTimerMinimized ? restTimerTimeLeft : restTime;
-  });
+  };
+  
+  const [timeLeft, setTimeLeft] = useState(getInitialTime);
   const [isRunning, setIsRunning] = useState(false);
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [labelWidth, setLabelWidth] = useState(0);
@@ -170,7 +183,8 @@ export function SetTimerSheet({
 
   // Animate size based on time remaining
   useEffect(() => {
-    const progress = restTime > 0 ? timeLeft / restTime : 0;
+    const totalTime = isExerciseTimerPhase ? exerciseDuration : restTime;
+    const progress = totalTime > 0 ? timeLeft / totalTime : 0;
     
     // Animate size smoothly based on progress
     Animated.timing(sizeAnim, {
@@ -179,7 +193,7 @@ export function SetTimerSheet({
       easing: Easing.linear,
       useNativeDriver: false, // Changed to false for compatibility with breathing
     }).start();
-  }, [timeLeft, restTime, sizeAnim]);
+  }, [timeLeft, isExerciseTimerPhase, exerciseDuration, restTime, sizeAnim]);
 
   // Breathing animation for rest phase
   useEffect(() => {
@@ -231,37 +245,42 @@ export function SetTimerSheet({
     }
   }, [timeLeft, restColorAnim]);
 
-  // Handle visibility changes
+  // Handle visibility changes and phase transitions
   useEffect(() => {
     if (visible) {
-      // Check if reopening from minimized state
-      const isRestoringFromMini = restTimerTimeLeft > 0 && !restTimerMinimized;
+      // Determine the initial time based on phase
+      let initialTime;
+      let isRestoringFromMini = false;
       
-      if (isRestoringFromMini) {
-        // Restore from mini timer
-        setTimeLeft(restTimerTimeLeft);
-        endTimeRef.current = Date.now() + restTimerTimeLeft * 1000;
+      if (isExerciseTimerPhase) {
+        // Exercise timer: use exercise duration
+        initialTime = exerciseDuration;
       } else {
-        // Start fresh timer
-        setTimeLeft(restTime);
-        endTimeRef.current = Date.now() + restTime * 1000;
+        // Rest timer: check if reopening from minimized state
+        isRestoringFromMini = restTimerTimeLeft > 0 && !restTimerMinimized;
+        initialTime = isRestoringFromMini ? restTimerTimeLeft : restTime;
       }
       
+      setTimeLeft(initialTime);
+      endTimeRef.current = Date.now() + initialTime * 1000;
       setIsRunning(true);
       lastPlayedSecondRef.current = null;
       
-      const timerDuration = isRestoringFromMini ? restTimerTimeLeft : restTime;
-      startRestTimer(workoutName || 'Workout', exerciseName || 'Exercise', timerDuration, currentSet, totalSets).then((activityId) => {
-        if (activityId) {
-          liveActivityIdRef.current = activityId;
-        }
-      });
+      // Only start Live Activity for rest timer, not exercise timer
+      if (!isExerciseTimerPhase) {
+        const timerDuration = isRestoringFromMini ? restTimerTimeLeft : restTime;
+        startRestTimer(workoutName || 'Workout', exerciseName || 'Exercise', timerDuration, currentSet, totalSets).then((activityId) => {
+          if (activityId) {
+            liveActivityIdRef.current = activityId;
+          }
+        });
+      }
       
       // Reset and animate in
       slideAnim.setValue(0);
       sizeAnim.setValue(1); // Start at 100%
       breathingAnim.setValue(1);
-      restColorAnim.setValue(0); // Start with yellow
+      restColorAnim.setValue(0); // Start with yellow (or will be blue for exercise)
       Animated.spring(slideAnim, {
         toValue: 1,
         useNativeDriver: true,
@@ -294,7 +313,7 @@ export function SetTimerSheet({
         liveActivityIdRef.current = null;
       }
     };
-  }, [visible, restTime, restTimerTimeLeft, restTimerMinimized, slideAnim, sizeAnim, breathingAnim, restColorAnim, workoutName, exerciseName, currentSet, totalSets]);
+  }, [visible, isExerciseTimerPhase, exerciseDuration, restTime, restTimerTimeLeft, restTimerMinimized, slideAnim, sizeAnim, breathingAnim, restColorAnim, workoutName, exerciseName, currentSet, totalSets]);
 
   // Timer logic
   useEffect(() => {
@@ -333,7 +352,7 @@ export function SetTimerSheet({
           intervalRef.current = null;
         }
         
-        // Stop breathing and keep circle red at completion
+        // Stop breathing and keep circle red/blue at completion
         breathingAnim.stopAnimation(() => {
           breathingAnim.setValue(1);
         });
@@ -341,54 +360,13 @@ export function SetTimerSheet({
         
         playCompletionAlert();
         
-        if (liveActivityIdRef.current) {
-          markRestTimerCompleted();
-        }
-        
-        // Dismiss immediately without delay
-        if (liveActivityIdRef.current) {
-          endRestTimer();
-          liveActivityIdRef.current = null;
-        }
-        
-        // Clear mini timer state on completion
-        clearRestTimerData();
-        
-        animateOutAndClose(onComplete);
-      }
-    };
-    
-    updateTimer();
-    intervalRef.current = setInterval(updateTimer, 1000);
-    
-    return () => {
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
-        intervalRef.current = null;
-      }
-    };
-  }, [isRunning, visible, onComplete, soundEnabled, animateOutAndClose, playCompletionAlert]);
-
-  // AppState listener
-  useEffect(() => {
-    const subscription = AppState.addEventListener('change', (nextAppState) => {
-      if (nextAppState === 'active' && isRunning && endTimeRef.current) {
-        const now = Date.now();
-        const remaining = Math.max(0, Math.ceil((endTimeRef.current - now) / 1000));
-        setTimeLeft(remaining);
-        
-        if (remaining <= 0) {
-          setIsRunning(false);
-          endTimeRef.current = null;
-          
-          // Stop breathing and keep circle red at completion
-          breathingAnim.stopAnimation(() => {
-            breathingAnim.setValue(1);
-          });
-          restColorAnim.setValue(1);
-          
-          playCompletionAlert();
-          
+        if (isExerciseTimerPhase) {
+          // Exercise timer completed - transition to rest timer
+          if (onExerciseTimerComplete) {
+            onExerciseTimerComplete(); // This will update parent state and trigger rest timer
+          }
+        } else {
+          // Rest timer completed - close drawer
           if (liveActivityIdRef.current) {
             markRestTimerCompleted();
           }
@@ -405,12 +383,69 @@ export function SetTimerSheet({
           animateOutAndClose(onComplete);
         }
       }
+    };
+    
+    updateTimer();
+    intervalRef.current = setInterval(updateTimer, 1000);
+    
+    return () => {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
+    };
+  }, [isRunning, visible, isExerciseTimerPhase, onComplete, onExerciseTimerComplete, soundEnabled, animateOutAndClose, playCompletionAlert]);
+
+  // AppState listener
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (nextAppState) => {
+      if (nextAppState === 'active' && isRunning && endTimeRef.current) {
+        const now = Date.now();
+        const remaining = Math.max(0, Math.ceil((endTimeRef.current - now) / 1000));
+        setTimeLeft(remaining);
+        
+        if (remaining <= 0) {
+          setIsRunning(false);
+          endTimeRef.current = null;
+          
+          // Stop breathing and keep circle red/blue at completion
+          breathingAnim.stopAnimation(() => {
+            breathingAnim.setValue(1);
+          });
+          restColorAnim.setValue(1);
+          
+          playCompletionAlert();
+          
+          if (isExerciseTimerPhase) {
+            // Exercise timer completed - transition to rest timer
+            if (onExerciseTimerComplete) {
+              onExerciseTimerComplete(); // This will update parent state and trigger rest timer
+            }
+          } else {
+            // Rest timer completed - close drawer
+            if (liveActivityIdRef.current) {
+              markRestTimerCompleted();
+            }
+            
+            // Dismiss immediately without delay
+            if (liveActivityIdRef.current) {
+              endRestTimer();
+              liveActivityIdRef.current = null;
+            }
+            
+            // Clear mini timer state on completion
+            clearRestTimerData();
+            
+            animateOutAndClose(onComplete);
+          }
+        }
+      }
     });
     
     return () => {
       subscription.remove();
     };
-  }, [isRunning, onComplete, animateOutAndClose, playCompletionAlert]);
+  }, [isRunning, isExerciseTimerPhase, onComplete, onExerciseTimerComplete, animateOutAndClose, playCompletionAlert]);
 
   const handleTogglePause = () => {
     setIsRunning(prev => !prev);
@@ -475,11 +510,13 @@ export function SetTimerSheet({
     outputRange: [CONTAINER_WIDTH / MIN_SIZE, 1],
   });
 
-  // Interpolate color from yellow to red
-  const backgroundColor = restColorAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [REST_COLOR_YELLOW, REST_COLOR_RED],
-  });
+  // Interpolate color: blue for exercise timer, yellow to red for rest timer
+  const backgroundColor = isExerciseTimerPhase
+    ? EXERCISE_COLOR_BLUE // Solid blue for exercise timer
+    : restColorAnim.interpolate({
+        inputRange: [0, 1],
+        outputRange: [REST_COLOR_YELLOW, REST_COLOR_RED],
+      });
 
   if (!visible) return null;
 

@@ -87,6 +87,7 @@ export function ExerciseDetailScreen({ route, navigation }: ExerciseDetailScreen
   const restTimerExerciseId = useStore((state) => state.restTimerExerciseId);
   const restTimerWorkoutKey = useStore((state) => state.restTimerWorkoutKey);
   const [showTimer, setShowTimer] = useState(false);
+  const [isExerciseTimerPhase, setIsExerciseTimerPhase] = useState(false); // Track if showing exercise timer or rest timer
   const prevRestTimerMinimizedRef = useRef(restTimerMinimized);
   const isMountedRef = useRef(false);
   
@@ -263,18 +264,77 @@ export function ExerciseDetailScreen({ route, navigation }: ExerciseDetailScreen
   };
   
   const handleRecord = (setIndex: number) => {
-    // Mark set as completed and collapse it
+    if (isTimeBased) {
+      // For time-based exercises: Start exercise timer first
+      setRecordingSetIndex(setIndex);
+      setExpandedSetIndex(-1); // Collapse all
+      setIsExerciseTimerPhase(true); // Start with exercise timer
+      setShowTimer(true);
+    } else {
+      // For rep-based exercises: Mark as complete immediately, then show rest timer
+      // Mark set as completed and collapse it
+      const updatedSets = [...setsData];
+      const completedSet = updatedSets[setIndex];
+      
+      // Mark current set as complete
+      updatedSets[setIndex] = {
+        ...completedSet,
+        completed: true,
+      };
+      
+      // Update all subsequent incomplete sets with the current set's weight and reps
+      for (let i = setIndex + 1; i < updatedSets.length; i++) {
+        if (!updatedSets[i].completed) {
+          updatedSets[i] = {
+            ...updatedSets[i],
+            weight: completedSet.weight,
+            reps: completedSet.reps,
+          };
+        }
+      }
+      
+      setSetsData(updatedSets);
+      
+      // Save progress immediately with updated data
+      if (workoutKey && exercise) {
+        saveExerciseProgress(workoutKey, exercise.id, {
+          exerciseId: exercise.id,
+          sets: updatedSets,
+        });
+      }
+      
+      // Animate collapse
+      LayoutAnimation.configureNext(
+        LayoutAnimation.create(
+          250,
+          LayoutAnimation.Types.easeInEaseOut,
+          LayoutAnimation.Properties.opacity
+        )
+      );
+      
+      // Collapse current set and show rest timer
+      setRecordingSetIndex(setIndex);
+      setExpandedSetIndex(-1); // Collapse all
+      setIsExerciseTimerPhase(false); // Go directly to rest timer
+      setShowTimer(true);
+    }
+  };
+  
+  const handleExerciseTimerComplete = () => {
+    // Exercise timer completed - mark set as done and transition to rest timer
+    if (recordingSetIndex === null) return;
+    
     const updatedSets = [...setsData];
-    const completedSet = updatedSets[setIndex];
+    const completedSet = updatedSets[recordingSetIndex];
     
     // Mark current set as complete
-    updatedSets[setIndex] = {
+    updatedSets[recordingSetIndex] = {
       ...completedSet,
       completed: true,
     };
     
     // Update all subsequent incomplete sets with the current set's weight and reps
-    for (let i = setIndex + 1; i < updatedSets.length; i++) {
+    for (let i = recordingSetIndex + 1; i < updatedSets.length; i++) {
       if (!updatedSets[i].completed) {
         updatedSets[i] = {
           ...updatedSets[i],
@@ -294,23 +354,15 @@ export function ExerciseDetailScreen({ route, navigation }: ExerciseDetailScreen
       });
     }
     
-    // Animate collapse
-    LayoutAnimation.configureNext(
-      LayoutAnimation.create(
-        250,
-        LayoutAnimation.Types.easeInEaseOut,
-        LayoutAnimation.Properties.opacity
-      )
-    );
-    
-    // Collapse current set and show timer
-    setRecordingSetIndex(setIndex);
-    setExpandedSetIndex(-1); // Collapse all
-    setShowTimer(true);
+    // Transition to rest timer phase (keep drawer open)
+    setIsExerciseTimerPhase(false);
+    // Timer stays visible, just switches to rest phase
   };
   
   const handleTimerComplete = () => {
+    // This is called when the rest timer completes
     setShowTimer(false);
+    setIsExerciseTimerPhase(false);
     
     // Check if this was the last set
     const isLastSet = recordingSetIndex !== null && recordingSetIndex === numberOfSets - 1;
@@ -957,9 +1009,9 @@ export function ExerciseDetailScreen({ route, navigation }: ExerciseDetailScreen
                   <Text style={styles.markAsDoneButtonText}>Save changes</Text>
                 </View>
               ) : (
-                // Mark as Done button (solid background)
+                // Mark as Done / Start button (solid background)
                 <View style={[styles.markAsDoneButtonInner, styles.markAsDoneButtonBackground]}>
-                  <Text style={styles.markAsDoneButtonText}>Mark as Done</Text>
+                  <Text style={styles.markAsDoneButtonText}>{isTimeBased ? 'Start' : 'Mark as Done'}</Text>
                 </View>
               )}
             </TouchableOpacity>
@@ -977,6 +1029,9 @@ export function ExerciseDetailScreen({ route, navigation }: ExerciseDetailScreen
           workoutKey={workoutKey}
           onComplete={handleTimerComplete}
           onClose={() => setShowTimer(false)}
+          isExerciseTimerPhase={isExerciseTimerPhase}
+          exerciseDuration={recordingSetIndex !== null ? setsData[recordingSetIndex]?.reps || 0 : 0}
+          onExerciseTimerComplete={handleExerciseTimerComplete}
         />
         
         {/* Overflow Menu Modal */}
