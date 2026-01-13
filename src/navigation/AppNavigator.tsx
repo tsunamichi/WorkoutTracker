@@ -61,7 +61,7 @@ const Stack = createNativeStackNavigator<RootStackParamList>();
 const LIGHT_COLORS = {
   secondary: '#1B1B1B',
   textMeta: '#817B77',
-  border: '#C2C3C0',
+  border: '#D2D3CF',
 };
 
 function TabNavigator() {
@@ -150,12 +150,12 @@ function TabNavigator() {
           >
             <IconCalendar 
               size={24} 
-              color={activeTab === 'Schedule' ? '#FFFFFF' : COLORS.textMeta} 
+              color={activeTab === 'Schedule' ? COLORS.backgroundCanvas : COLORS.textMeta} 
             />
             <Text 
               style={[
                 styles.tabLabel,
-                { color: activeTab === 'Schedule' ? '#FFFFFF' : COLORS.textMeta }
+                { color: activeTab === 'Schedule' ? COLORS.backgroundCanvas : COLORS.textMeta }
               ]} 
               numberOfLines={1}
             >
@@ -171,12 +171,12 @@ function TabNavigator() {
           >
             <IconWorkouts 
               size={24} 
-              color={activeTab === 'Workouts' ? '#FFFFFF' : COLORS.textMeta} 
+              color={activeTab === 'Workouts' ? COLORS.backgroundCanvas : COLORS.textMeta} 
             />
             <Text 
               style={[
                 styles.tabLabel,
-                { color: activeTab === 'Workouts' ? '#FFFFFF' : COLORS.textMeta }
+                { color: activeTab === 'Workouts' ? COLORS.backgroundCanvas : COLORS.textMeta }
               ]} 
               numberOfLines={1}
             >
@@ -309,8 +309,10 @@ const styles = StyleSheet.create({
     left: 4,
     right: '50%',
     marginRight: 4,
-    backgroundColor: '#000000',
+    backgroundColor: COLORS.text,
     borderRadius: 24,
+    borderWidth: 1,
+    borderColor: COLORS.text,
     zIndex: 0,
   },
   tab: {

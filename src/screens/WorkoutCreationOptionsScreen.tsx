@@ -5,7 +5,7 @@ import { useNavigation } from '@react-navigation/native';
 import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS, CARDS } from '../constants';
 import { useOnboardingStore } from '../store/useOnboardingStore';
 import { TEMPLATES } from '../data/templates';
-import { IconArrowLeft, IconTriangle } from '../components/icons';
+import { IconArrowLeft, IconPlay } from '../components/icons';
 
 export function WorkoutCreationOptionsScreen() {
   const navigation = useNavigation();
@@ -90,7 +90,7 @@ export function WorkoutCreationOptionsScreen() {
                       <Text style={styles.templateName}>{template.name}</Text>
                       <Text style={styles.templateDescription}>{template.description}</Text>
                     </View>
-                    <IconTriangle size={16} color="#000000" />
+                    <IconPlay size={10} color="#000000" />
                   </TouchableOpacity>
               </View>
             </View>

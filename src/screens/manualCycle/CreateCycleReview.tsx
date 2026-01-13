@@ -78,11 +78,12 @@ export function CreateCycleReview({ navigation }: CreateCycleReviewProps) {
     // Convert draft to main store format
     const endDate = calculateEndDate(startDate, weeks);
     const cycleId = generateId();
+    const cycleNumber = mainStore.getNextCycleNumber();
 
     // Create the cycle
     const newCycle = {
       id: cycleId,
-      name: 'Custom Cycle',
+      name: `Cycle ${cycleNumber}`,
       startDate,
       endDate,
       status: hasActiveCycle ? 'scheduled' : 'active',

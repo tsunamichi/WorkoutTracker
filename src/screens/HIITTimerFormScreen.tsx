@@ -302,11 +302,11 @@ export default function HIITTimerFormScreen({ navigation, route }: Props) {
               activeOpacity={1}
             >
               <View style={[
-                CARDS.cardDeep.outer,
+                CARDS.cardDeepDimmed.outer,
                 styles.card,
                 pressedCardId === 'work' && styles.cardPressed
               ]}>
-                <View style={[CARDS.cardDeep.inner, styles.cardInner]}>
+                <View style={[CARDS.cardDeepDimmed.inner, styles.cardInner]}>
                   <Text style={styles.cardLabel}>Move for</Text>
                   <Text style={styles.cardValue}>{formatTime(work)}</Text>
                 </View>
@@ -321,11 +321,11 @@ export default function HIITTimerFormScreen({ navigation, route }: Props) {
               activeOpacity={1}
             >
               <View style={[
-                CARDS.cardDeep.outer,
+                CARDS.cardDeepDimmed.outer,
                 styles.card,
                 pressedCardId === 'workRest' && styles.cardPressed
               ]}>
-                <View style={[CARDS.cardDeep.inner, styles.cardInner]}>
+                <View style={[CARDS.cardDeepDimmed.inner, styles.cardInner]}>
                   <Text style={styles.cardLabel}>Rest after each exercise</Text>
                   <Text style={styles.cardValue}>{formatTime(workRest)}</Text>
                 </View>
@@ -345,11 +345,11 @@ export default function HIITTimerFormScreen({ navigation, route }: Props) {
               activeOpacity={1}
             >
               <View style={[
-                CARDS.cardDeep.outer,
+                CARDS.cardDeepDimmed.outer,
                 styles.card,
                 pressedCardId === 'sets' && styles.cardPressed
               ]}>
-                <View style={[CARDS.cardDeep.inner, styles.cardInner]}>
+                <View style={[CARDS.cardDeepDimmed.inner, styles.cardInner]}>
                   <Text style={styles.cardLabel}>Exercises in a round</Text>
                   <Text style={styles.cardValue}>{sets}</Text>
                 </View>
@@ -364,11 +364,11 @@ export default function HIITTimerFormScreen({ navigation, route }: Props) {
               activeOpacity={1}
             >
               <View style={[
-                CARDS.cardDeep.outer,
+                CARDS.cardDeepDimmed.outer,
                 styles.card,
                 pressedCardId === 'rounds' && styles.cardPressed
               ]}>
-                <View style={[CARDS.cardDeep.inner, styles.cardInner]}>
+                <View style={[CARDS.cardDeepDimmed.inner, styles.cardInner]}>
                   <Text style={styles.cardLabel}>Rounds</Text>
                   <Text style={styles.cardValue}>{rounds}</Text>
                 </View>
@@ -383,11 +383,11 @@ export default function HIITTimerFormScreen({ navigation, route }: Props) {
               activeOpacity={1}
             >
               <View style={[
-                CARDS.cardDeep.outer,
+                CARDS.cardDeepDimmed.outer,
                 styles.card,
                 pressedCardId === 'roundRest' && styles.cardPressed
               ]}>
-                <View style={[CARDS.cardDeep.inner, styles.cardInner]}>
+                <View style={[CARDS.cardDeepDimmed.inner, styles.cardInner]}>
                   <Text style={styles.cardLabel}>Rest between rounds</Text>
                   <Text style={styles.cardValue}>{formatTime(roundRest)}</Text>
                 </View>

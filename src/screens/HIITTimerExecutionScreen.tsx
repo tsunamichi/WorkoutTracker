@@ -1329,16 +1329,15 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
           onClose={() => setMenuVisible(false)}
           items={[
             { 
-              icon: <IconEdit size={24} color={LIGHT_COLORS.text} />,
-              label: 'Edit', 
-              onPress: handleEdit,
-              featured: true
-            },
-            { 
-              icon: <IconTrash size={24} color={LIGHT_COLORS.error} />,
+              icon: <IconTrash size={24} color="#FF3B30" />,
               label: 'Delete', 
               onPress: handleDelete, 
               destructive: true 
+            },
+            { 
+              icon: <IconEdit size={24} color={LIGHT_COLORS.text} />,
+              label: 'Edit', 
+              onPress: handleEdit
             },
           ]}
         />

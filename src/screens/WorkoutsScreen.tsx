@@ -7,7 +7,7 @@ import * as Haptics from 'expo-haptics';
 import { ProfileAvatar } from '../components/ProfileAvatar';
 import { BottomDrawer } from '../components/common/BottomDrawer';
 import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS, CARDS } from '../constants';
-import { IconCheck, IconTriangle, IconAdd } from '../components/icons';
+import { IconCheck, IconPlay, IconAdd } from '../components/icons';
 import { useStore } from '../store';
 import { useOnboardingStore } from '../store/useOnboardingStore';
 import { TEMPLATES } from '../data/templates';
@@ -296,7 +296,7 @@ export function WorkoutsScreen() {
         lengthInWeeks: numberOfWeeks,
         endDate: weekStart.add(numberOfWeeks, 'week').format('YYYY-MM-DD'),
         workoutsPerWeek,
-        goal: 'Custom workout cycle',
+        goal: `Cycle ${cycleNumber}`,
         isActive: true,
         workoutTemplates: allWorkoutTemplates,
         createdAt: new Date().toISOString(),
@@ -421,7 +421,7 @@ export function WorkoutsScreen() {
                             <Text style={styles.templateName}>{template.name}</Text>
                             <Text style={styles.templateDescription}>{template.description}</Text>
                           </View>
-                        <IconTriangle size={16} color="#000000" />
+                        <IconPlay size={10} color="#000000" />
                         </TouchableOpacity>
                     </View>
                   </View>
@@ -440,7 +440,7 @@ export function WorkoutsScreen() {
                       onPress={() => navigation.navigate('WorkoutCreationOptions' as never)}
                       activeOpacity={0.7}
                     >
-                      <IconAdd size={24} color={COLORS.text} />
+                      <IconAdd size={24} color={COLORS.accentPrimary} />
                       <Text style={styles.newButtonText}>New</Text>
                     </TouchableOpacity>
                   </View>
@@ -491,7 +491,7 @@ export function WorkoutsScreen() {
                                 </View>
                               <View style={styles.seeDetailsButton}>
                                 <Text style={styles.seeDetailsText}>See details</Text>
-                                <IconTriangle size={16} color={COLORS.accentPrimary} />
+                                <IconPlay size={10} color={COLORS.accentPrimary} />
                               </View>
                             </View>
                               </TouchableOpacity>
@@ -522,8 +522,8 @@ export function WorkoutsScreen() {
                             onPressOut={() => setPressedCardId(null)}
                             activeOpacity={1}
                           >
-                            <Text style={styles.pastCycleName}>{cycle.goal || `Cycle ${cycle.cycleNumber}`}</Text>
-                            <IconTriangle size={16} color="#000000" />
+                            <Text style={styles.pastCycleName}>Cycle {cycle.cycleNumber}</Text>
+                            <IconPlay size={10} color="#000000" />
                           </TouchableOpacity>
                       </View>
                     </View>
@@ -727,10 +727,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 4,
+    marginBottom: SPACING.sm,
   },
   inProgressTitle: {
-    ...TYPOGRAPHY.body,
+    ...TYPOGRAPHY.h3,
+    lineHeight: 28,
     color: COLORS.textMeta,
   },
   newButton: {
@@ -741,7 +742,7 @@ const styles = StyleSheet.create({
   },
   newButtonText: {
     ...TYPOGRAPHY.metaBold,
-    color: COLORS.text,
+    color: COLORS.accentPrimary,
   },
   activeCycleSection: {
     marginBottom: 56, // 56px spacing before Past Cycles
@@ -789,12 +790,12 @@ const styles = StyleSheet.create({
   },
   seeDetailsText: {
     ...TYPOGRAPHY.metaBold,
-    color: COLORS.text,
+    color: COLORS.accentPrimary,
   },
   
   // Past Cycles
   pastCyclesTitle: {
-    ...TYPOGRAPHY.body,
+    ...TYPOGRAPHY.meta,
     color: COLORS.textMeta,
     marginBottom: SPACING.lg,
   },

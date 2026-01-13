@@ -6,7 +6,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useStore } from '../store';
 import * as storage from '../storage';
 import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS, CARDS } from '../constants';
-import { IconArrowLeft, IconCheck, IconPlay, IconPause, IconMenu, IconRestart, IconAdd, IconTriangle, IconEdit } from '../components/icons';
+import { IconArrowLeft, IconCheck, IconPlay, IconPause, IconMenu, IconRestart, IconAdd, IconEdit } from '../components/icons';
 import { ActionSheet } from '../components/common/ActionSheet';
 import dayjs from 'dayjs';
 import { startRestTimer, updateRestTimer, endRestTimer, markRestTimerCompleted } from '../modules/RestTimerLiveActivity';
@@ -904,7 +904,7 @@ export function WorkoutExecutionScreen({ route, navigation }: WorkoutExecutionSc
                                   {isCurrentlyInProgress && exerciseCompletionPercentage > 0 && (
                                     <Text style={styles.inProgressLabel}>{exerciseCompletionPercentage}%</Text>
                                   )}
-                                  <IconTriangle size={16} color={isCurrentlyInProgress ? '#000000' : COLORS.textMeta} />
+                                  <IconPlay size={10} color={isCurrentlyInProgress ? COLORS.accentPrimary : COLORS.textMeta} />
                                 </View>
                               )}
                             </TouchableOpacity>
@@ -945,15 +945,15 @@ export function WorkoutExecutionScreen({ route, navigation }: WorkoutExecutionSc
             featured: true
           },
           { 
-            icon: <IconCheck size={24} color="#000000" />,
-            label: 'Complete', 
-            onPress: handleCompleteWorkout
-          },
-          { 
             icon: <IconRestart size={24} color="#FF3B30" />,
             label: 'Reset', 
             onPress: handleResetWorkout,
             destructive: true 
+          },
+          { 
+            icon: <IconCheck size={24} color="#000000" />,
+            label: 'Complete', 
+            onPress: handleCompleteWorkout
           },
         ]}
       />
@@ -1048,7 +1048,7 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   sectionHeaderText: {
-    ...TYPOGRAPHY.body,
+    ...TYPOGRAPHY.meta,
     color: LIGHT_COLORS.textMeta,
   },
   // Exercise Card Shadows (matching Today screen workout card)
@@ -1089,8 +1089,8 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   inProgressLabel: {
-    ...TYPOGRAPHY.meta,
-    color: LIGHT_COLORS.textMeta,
+    ...TYPOGRAPHY.metaBold,
+    color: COLORS.accentPrimary,
     minWidth: 30,
     textAlign: 'right',
   },

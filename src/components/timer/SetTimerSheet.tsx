@@ -36,7 +36,7 @@ interface SetTimerSheetProps {
 
 const REST_COLOR_YELLOW = '#FFCC00'; // Yellow for rest
 const REST_COLOR_RED = '#FF6B6B'; // Red for rest (under 5 seconds)
-const EXERCISE_COLOR_BLUE = '#062FFF'; // Blue for exercise timer
+const EXERCISE_COLOR_BLUE = '#227132'; // Green for exercise timer (same as checkmarks)
 const MIN_SIZE = 180;
 const SCREEN_WIDTH = Dimensions.get('window').width;
 const CONTAINER_WIDTH = SCREEN_WIDTH - 96; // 48px padding on each side

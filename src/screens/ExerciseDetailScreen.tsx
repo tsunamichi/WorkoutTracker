@@ -6,13 +6,12 @@ if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import dayjs from 'dayjs';
 import type { WorkoutTemplateExercise } from '../types';
 import { useStore } from '../store';
 import { COLORS, SPACING, TYPOGRAPHY, GRADIENTS, CARDS, BORDER_RADIUS } from '../constants';
-import { IconArrowLeft, IconPlay, IconCheck, IconMenu, IconMinusLine, IconAddLine, IconStopwatch, IconSkip, IconRestart } from '../components/icons';
+import { IconArrowLeft, IconPlay, IconCheck, IconMenu, IconMinusLine, IconAddLine, IconHistory, IconSkip, IconRestart } from '../components/icons';
 import { SetTimerSheet } from '../components/timer/SetTimerSheet';
 import { Toggle } from '../components/Toggle';
 import { BottomDrawer } from '../components/common/BottomDrawer';
@@ -808,14 +807,9 @@ export function ExerciseDetailScreen({ route, navigation }: ExerciseDetailScreen
                                 style={styles.adjustButtonTapTarget}
                               >
                                 <View style={styles.adjustButton}>
-                                  <LinearGradient
-                                    colors={['#212121', '#3F3D3D']}
-                                    start={{ x: 0.42, y: 0.42 }}
-                                    end={{ x: 1, y: 1 }}
-                                    style={styles.adjustButtonInner}
-                                  >
-                                    <IconMinusLine size={24} color="#DEDEDE" />
-                                  </LinearGradient>
+                                  <View style={styles.adjustButtonInner}>
+                                    <IconMinusLine size={24} color={COLORS.accentPrimary} />
+                                  </View>
                                 </View>
                               </TouchableOpacity>
                               <TouchableOpacity 
@@ -824,14 +818,9 @@ export function ExerciseDetailScreen({ route, navigation }: ExerciseDetailScreen
                                 style={styles.adjustButtonTapTarget}
                               >
                                 <View style={styles.adjustButton}>
-                                  <LinearGradient
-                                    colors={['#212121', '#3F3D3D']}
-                                    start={{ x: 0.42, y: 0.42 }}
-                                    end={{ x: 1, y: 1 }}
-                                    style={styles.adjustButtonInner}
-                                  >
-                                    <IconAddLine size={24} color="#DEDEDE" />
-                                  </LinearGradient>
+                                  <View style={styles.adjustButtonInner}>
+                                    <IconAddLine size={24} color={COLORS.accentPrimary} />
+                                  </View>
                                 </View>
                               </TouchableOpacity>
                             </View>
@@ -858,14 +847,9 @@ export function ExerciseDetailScreen({ route, navigation }: ExerciseDetailScreen
                                 style={styles.adjustButtonTapTarget}
                               >
                                 <View style={styles.adjustButton}>
-                                  <LinearGradient
-                                    colors={['#212121', '#3F3D3D']}
-                                    start={{ x: 0.42, y: 0.42 }}
-                                    end={{ x: 1, y: 1 }}
-                                    style={styles.adjustButtonInner}
-                                  >
-                                    <IconMinusLine size={24} color="#DEDEDE" />
-                                  </LinearGradient>
+                                  <View style={styles.adjustButtonInner}>
+                                    <IconMinusLine size={24} color={COLORS.accentPrimary} />
+                                  </View>
                                 </View>
                               </TouchableOpacity>
                               <TouchableOpacity 
@@ -874,14 +858,9 @@ export function ExerciseDetailScreen({ route, navigation }: ExerciseDetailScreen
                                 style={styles.adjustButtonTapTarget}
                               >
                                 <View style={styles.adjustButton}>
-                                  <LinearGradient
-                                    colors={['#212121', '#3F3D3D']}
-                                    start={{ x: 0.42, y: 0.42 }}
-                                    end={{ x: 1, y: 1 }}
-                                    style={styles.adjustButtonInner}
-                                  >
-                                    <IconAddLine size={24} color="#DEDEDE" />
-                                  </LinearGradient>
+                                  <View style={styles.adjustButtonInner}>
+                                    <IconAddLine size={24} color={COLORS.accentPrimary} />
+                                  </View>
                                 </View>
                               </TouchableOpacity>
                             </View>
@@ -1014,10 +993,16 @@ export function ExerciseDetailScreen({ route, navigation }: ExerciseDetailScreen
           onClose={() => setShowMenu(false)}
           items={[
             { 
-              icon: <IconStopwatch size={24} color="#000000" />,
+              icon: <IconHistory size={24} color="#000000" />,
               label: 'History', 
               onPress: handleHistory,
               featured: true
+            },
+            { 
+              icon: <IconRestart size={24} color="#FF3B30" />,
+              label: 'Reset', 
+              onPress: handleResetExercise,
+              destructive: true 
             },
             { 
               icon: <IconCheck size={24} color="#000000" />,
@@ -1028,12 +1013,6 @@ export function ExerciseDetailScreen({ route, navigation }: ExerciseDetailScreen
               icon: <IconSkip size={24} color="#000000" />,
               label: 'Skip', 
               onPress: handleSkipExercise 
-            },
-            { 
-              icon: <IconRestart size={24} color="#FF3B30" />,
-              label: 'Reset', 
-              onPress: handleResetExercise,
-              destructive: true 
             },
           ]}
         />
@@ -1325,6 +1304,9 @@ const styles = StyleSheet.create({
     borderCurve: 'continuous',
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: COLORS.accentPrimaryDimmed,
+    borderWidth: 1,
+    borderColor: COLORS.accentPrimary,
   },
   adjustButtonText: {
     ...TYPOGRAPHY.body,

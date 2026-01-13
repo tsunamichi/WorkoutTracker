@@ -67,9 +67,6 @@ export function CyclesView({ onCreateCycle, onCyclePress }: CyclesViewProps) {
                     </View>
                   )}
                 </View>
-                {cycle.goal && (
-                  <Text style={styles.cycleGoal} numberOfLines={2}>{cycle.goal}</Text>
-                )}
               </View>
               
               {/* Week Progress */}

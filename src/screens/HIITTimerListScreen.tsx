@@ -11,7 +11,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useStore } from '../store';
 import { COLORS, SPACING, CARDS, TYPOGRAPHY, BORDER_RADIUS, GRADIENTS } from '../constants';
-import { IconArrowLeft, IconTriangle, IconAdd } from '../components/icons';
+import { IconArrowLeft, IconPlay, IconAdd } from '../components/icons';
 import type { HIITTimer } from '../types';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/AppNavigator';
@@ -105,8 +105,8 @@ export default function HIITTimerListScreen({ navigation }: Props) {
               onPress={handleCreateNew}
               activeOpacity={0.7}
             >
-              <IconAdd size={24} color={COLORS.text} />
-              <Text style={styles.addTimerButtonText}>New timer</Text>
+              <IconAdd size={24} color={COLORS.accentPrimary} />
+              <Text style={styles.addTimerButtonText}>New</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -142,11 +142,11 @@ export default function HIITTimerListScreen({ navigation }: Props) {
               activeOpacity={1}
             >
               <View style={[
-                CARDS.cardDeep.outer,
+                CARDS.cardDeepDimmed.outer,
                 styles.timerCard,
                 pressedCardId === timer.id && styles.timerCardPressed
               ]}>
-                <View style={[CARDS.cardDeep.inner, styles.timerCardInner]}>
+                <View style={[CARDS.cardDeepDimmed.inner, styles.timerCardInner]}>
                   <Text style={styles.timerName}>{timer.name}</Text>
                   
                   {/* Bottom row with time and start button */}
@@ -158,7 +158,7 @@ export default function HIITTimerListScreen({ navigation }: Props) {
                       activeOpacity={1}
                     >
                       <Text style={styles.startButtonText}>Start</Text>
-                      <IconTriangle size={16} color={COLORS.accentPrimary} />
+                      <IconPlay size={10} color={COLORS.accentPrimary} />
                     </TouchableOpacity>
                   </View>
                 </View>
@@ -215,7 +215,7 @@ const styles = StyleSheet.create({
   },
   addTimerButtonText: {
     ...TYPOGRAPHY.metaBold,
-    color: COLORS.text,
+    color: COLORS.accentPrimary,
   },
   scrollView: {
     flex: 1,
@@ -225,21 +225,20 @@ const styles = StyleSheet.create({
     paddingBottom: 140, // Space for fixed button + 40px
   },
   timerCard: {
-    marginBottom: SPACING.lg,
+    marginBottom: 8,
   },
   timerCardPressed: {
     borderWidth: 1,
     borderColor: LIGHT_COLORS.textMeta,
   },
   timerCardInner: {
-    paddingHorizontal: 23,
-    paddingTop: 15,
-    paddingBottom: 19,
+    paddingVertical: SPACING.lg,
+    paddingHorizontal: 24,
   },
   timerName: {
-    ...TYPOGRAPHY.h2,
-    color: LIGHT_COLORS.secondary,
-    marginBottom: SPACING.md,
+    ...TYPOGRAPHY.body,
+    color: COLORS.text,
+    marginBottom: 2,
   },
   timerBottom: {
     flexDirection: 'row',
@@ -248,7 +247,7 @@ const styles = StyleSheet.create({
   },
   totalTime: {
     ...TYPOGRAPHY.meta,
-    color: LIGHT_COLORS.textMeta,
+    color: COLORS.textMeta,
   },
   startButton: {
     flexDirection: 'row',

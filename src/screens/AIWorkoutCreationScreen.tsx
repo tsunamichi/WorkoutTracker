@@ -256,7 +256,7 @@ export function AIWorkoutCreationScreen() {
         lengthInWeeks: numberOfWeeks,
         endDate: weekStart.add(numberOfWeeks, 'week').format('YYYY-MM-DD'),
         workoutsPerWeek,
-        goal: 'Custom workout cycle',
+        goal: `Cycle ${cycleNumber}`,
         isActive: true,
         workoutTemplates: allWorkoutTemplates,
         createdAt: new Date().toISOString(),

@@ -1,6 +1,7 @@
 import React, { useRef, useEffect } from 'react';
 import { View, TouchableOpacity, StyleSheet, Animated } from 'react-native';
 import { IconPlay, IconPause, IconSoundOn, IconSoundOff, IconSkip, IconRestart } from '../icons';
+import { COLORS } from '../../constants';
 
 const LIGHT_COLORS = {
   backgroundCanvas: '#E3E6E0',
@@ -145,7 +146,7 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   playPauseButton: {
-    backgroundColor: LIGHT_COLORS.secondary,
+    backgroundColor: COLORS.accentPrimary,
     width: 64,
     height: 64,
     borderRadius: 16,

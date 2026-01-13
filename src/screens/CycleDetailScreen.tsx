@@ -220,16 +220,15 @@ export function CycleDetailScreen({ route, navigation }: CycleDetailScreenProps)
           onClose={() => setMenuVisible(false)}
           items={[
             { 
-              icon: <IconShare size={24} color={LIGHT_COLORS.secondary} />,
-              label: 'Export Data', 
-              onPress: handleExportData,
-              featured: true
-            },
-            { 
-              icon: <IconTrash size={24} color={LIGHT_COLORS.error} />,
+              icon: <IconTrash size={24} color="#FF3B30" />,
               label: 'Delete Cycle', 
               onPress: handleDeleteCycle, 
               destructive: true 
+            },
+            { 
+              icon: <IconShare size={24} color={LIGHT_COLORS.secondary} />,
+              label: 'Export Data', 
+              onPress: handleExportData
             },
           ]}
         />

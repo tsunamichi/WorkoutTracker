@@ -102,6 +102,7 @@ export const COLORS = {
   accentPrimary: ACCENT_PRIMARY,        // Orange for highlights (gradient start)
   accentPrimaryLight: adjustLightness(ACCENT_PRIMARY, 30), // 30% lighter
   accentPrimaryDark: adjustLightness(ACCENT_PRIMARY, -8),  // 8% darker
+  accentPrimaryDimmed: '#E3E8FF',       // Light blue background for selected states
   
   // Text
   text: '#1B1B1B',              // Default text color (dark)
@@ -112,7 +113,7 @@ export const COLORS = {
   textDisabled: '#C7C7CC',      // Disabled text
   
   // Borders & dividers
-  border: '#C2C3C0',        // Subtle borders
+  border: '#D2D3CF',        // Subtle borders
   disabledBorder: '#D2D2D2', // Disabled button border
   divider: '#48484A',       // Dividers
   overlay: 'rgba(0, 0, 0, 0.2)', // Bottom sheet overlays
@@ -255,7 +256,7 @@ export const CARDS = {
     borderRadius: 16,  // Squircle-friendly
     borderCurve: 'continuous' as const,
     borderWidth: 1,
-    borderColor: '#C2C3C0',
+    borderColor: '#D2D3CF',
   },
   cardDeep: {
     // Outer card container (no external shadows)
@@ -264,7 +265,7 @@ export const CARDS = {
       borderRadius: 16,  // Squircle-friendly
       borderCurve: 'continuous' as const,
       borderWidth: 1,
-      borderColor: '#C2C3C0',
+      borderColor: '#D2D3CF',
       overflow: 'hidden' as const,
     },
     // Inner card with borders for depth
@@ -285,26 +286,18 @@ export const CARDS = {
   cardDeepDimmed: {
     // No external shadows (dimmed state)
     outer: {
-      backgroundColor: '#E3E3DE',
+      backgroundColor: '#E9E9E9', // activeCard
       borderRadius: 16,  // Squircle-friendly
       borderCurve: 'continuous' as const,
       borderWidth: 1,
-      borderColor: '#C2C3C0',
+      borderColor: '#D2D3CF',
       overflow: 'hidden' as const,
     },
     // Inner card WITHOUT borders (dimmed state)
     inner: {
-      backgroundColor: '#E2E3DF',
+      backgroundColor: '#E9E9E9', // activeCard
       borderRadius: 16,  // Squircle-friendly
       borderCurve: 'continuous' as const,
-      borderTopWidth: 2,
-      borderLeftWidth: 2,
-      borderBottomWidth: 2,
-      borderRightWidth: 2,
-      borderTopColor: 'transparent',
-      borderLeftColor: 'transparent',
-      borderBottomColor: 'transparent',
-      borderRightColor: 'transparent',
     },
   },
   cardDeepDisabled: {
