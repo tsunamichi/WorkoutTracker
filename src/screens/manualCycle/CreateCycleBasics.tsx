@@ -66,7 +66,7 @@ export function CreateCycleBasics({ navigation }: CreateCycleBasicsProps) {
           </View>
         </View>
 
-        <ScrollView style={styles.content} contentContainerStyle={styles.scrollContent}>
+        <ScrollView style={styles.content} contentContainerStyle={styles.scrollContent} bounces={false}>
           {/* Frequency Days */}
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Training days</Text>

@@ -84,9 +84,9 @@ export function TimerControls({
           activeOpacity={1}
         >
           {soundEnabled ? (
-            <IconSoundOn size={28} color={LIGHT_COLORS.textSecondary} />
+            <IconSoundOn size={28} color={COLORS.accentPrimary} />
           ) : (
-            <IconSoundOff size={28} color={LIGHT_COLORS.textSecondary} />
+            <IconSoundOff size={28} color={COLORS.accentPrimary} />
           )}
         </TouchableOpacity>
       </Animated.View>
@@ -98,11 +98,11 @@ export function TimerControls({
         style={styles.playPauseButton}
       >
         {showRestart ? (
-          <IconRestart size={24} color="#FFFFFF" />
+          <IconRestart size={24} color={COLORS.accentPrimary} />
         ) : isRunning ? (
-          <IconPause size={24} color="#FFFFFF" />
+          <IconPause size={24} color={COLORS.accentPrimary} />
         ) : (
-          <IconPlay size={24} color="#FFFFFF" />
+          <IconPlay size={24} color={COLORS.accentPrimary} />
         )}
       </TouchableOpacity>
 
@@ -130,7 +130,7 @@ export function TimerControls({
           style={styles.sideButtonTouchable}
           activeOpacity={1}
         >
-          <IconSkip size={28} color={LIGHT_COLORS.textSecondary} />
+          <IconSkip size={28} color={COLORS.accentPrimary} />
         </TouchableOpacity>
       </Animated.View>
     </View>
@@ -146,7 +146,9 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   playPauseButton: {
-    backgroundColor: COLORS.accentPrimary,
+    backgroundColor: COLORS.accentPrimaryDimmed,
+    borderWidth: 1,
+    borderColor: COLORS.accentPrimary,
     width: 64,
     height: 64,
     borderRadius: 16,

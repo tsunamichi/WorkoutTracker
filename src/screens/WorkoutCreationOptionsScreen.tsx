@@ -33,6 +33,7 @@ export function WorkoutCreationOptionsScreen() {
       <ScrollView 
         style={styles.content}
         contentContainerStyle={styles.scrollContent}
+        bounces={false}
       >
         {/* Question Text */}
         <View style={styles.questionSection}>

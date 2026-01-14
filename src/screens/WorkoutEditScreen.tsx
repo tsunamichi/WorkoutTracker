@@ -389,6 +389,7 @@ export default function WorkoutEditScreen({ navigation, route }: Props) {
           style={styles.scrollView} 
           contentContainerStyle={styles.scrollContent}
           scrollEnabled={scrollEnabled}
+          bounces={false}
         >
           {/* Workout Name Editor */}
           <View style={styles.workoutNameSection}>
@@ -628,7 +629,7 @@ export default function WorkoutEditScreen({ navigation, route }: Props) {
               </View>
 
               {/* Exercise List */}
-              <ScrollView style={styles.swapExerciseList}>
+              <ScrollView style={styles.swapExerciseList} bounces={false}>
                 {filteredExercises.map(exercise => {
                   const isSelected = selectedNewExerciseId === exercise.id;
                   return (

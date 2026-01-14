@@ -51,7 +51,7 @@ export function DesignSystemScreen({ navigation }: DesignSystemScreenProps) {
           <View style={{ width: 24 }} />
         </View>
 
-        <ScrollView style={styles.scrollView}>
+        <ScrollView style={styles.scrollView} bounces={false}>
           {/* Colors Section */}
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Colors</Text>

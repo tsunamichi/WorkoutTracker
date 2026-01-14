@@ -29,7 +29,7 @@ export function ScheduleSetupScreen({ navigation }: ScheduleSetupScreenProps) {
 
   return (
     <SafeAreaView style={styles.container}>
-      <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
+      <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent} bounces={false}>
         <ProgressHeader
           stepLabel="Step 1 of 4"
           title="Set your schedule"

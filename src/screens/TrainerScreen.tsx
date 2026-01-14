@@ -316,7 +316,7 @@ export function TrainerScreen() {
       <View style={styles.content}>
         {step === 'complete' ? (
           // Show transcript when conversation is complete
-          <ScrollView style={styles.transcriptContainer} contentContainerStyle={styles.transcriptContent}>
+          <ScrollView style={styles.transcriptContainer} contentContainerStyle={styles.transcriptContent} bounces={false}>
             <Text style={styles.transcriptTitle}>Conversation Summary</Text>
             {messages.map((message, index) => (
               <View 

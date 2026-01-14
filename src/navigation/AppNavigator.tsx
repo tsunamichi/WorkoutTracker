@@ -79,6 +79,7 @@ function TabNavigator() {
   const [tabBarWidth, setTabBarWidth] = React.useState(0);
   
   const switchTab = (tab: 'Schedule' | 'Workouts') => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setActiveTab(tab);
     
     // Animate indicator position with spring
@@ -167,7 +168,10 @@ function TabNavigator() {
           <TouchableOpacity
             style={styles.tab}
             activeOpacity={1}
-            onPress={() => switchTab('Workouts')}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              switchTab('Workouts');
+            }}
           >
             <IconWorkouts 
               size={24} 

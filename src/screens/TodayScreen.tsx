@@ -3,12 +3,11 @@ import { View, Text, StyleSheet, TouchableOpacity, Animated, Modal, ScrollView }
 import Svg, { Circle, Path } from 'react-native-svg';
 import * as Haptics from 'expo-haptics';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useNavigation } from '@react-navigation/native';
 import { useStore } from '../store';
 import { ProfileAvatar } from '../components/ProfileAvatar';
 import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS, CARDS } from '../constants';
-import { IconCalendar, IconStopwatch, IconWorkouts, IconCheck, IconSwap, IconAdd } from '../components/icons';
+import { IconCalendar, IconStopwatch, IconWorkouts, IconCheck, IconSwap, IconAdd, IconStart } from '../components/icons';
 import dayjs from 'dayjs';
 import isoWeek from 'dayjs/plugin/isoWeek';
 
@@ -47,12 +46,8 @@ export function TodayScreen({ onNavigateToWorkouts, onDateChange, onOpenSwapDraw
   const [selectedDate, setSelectedDate] = useState(today.format('YYYY-MM-DD'));
   const [weekOffset, setWeekOffset] = useState(0); // 0 = current week, -1 = last week, 1 = next week, etc.
   const [isCardPressed, setIsCardPressed] = useState(false);
-  const [isTransitioning, setIsTransitioning] = useState(false);
-  const [previousWorkoutData, setPreviousWorkoutData] = useState<any>(null);
   
   // Animation values
-  const oldCardTranslateX = useRef(new Animated.Value(0)).current;
-  const newCardTranslateX = useRef(new Animated.Value(0)).current;
   const dayScales = useRef(DAYS_SHORT.map(() => new Animated.Value(1))).current;
   const [dayPositions, setDayPositions] = useState<number[]>([]);
   const previousDayIndex = useRef<number>(-1);
@@ -150,10 +145,10 @@ export function TodayScreen({ onNavigateToWorkouts, onDateChange, onOpenSwapDraw
   const selectedDay = weekDays.find(d => d.date === selectedDate);
   const selectedDayIndex = weekDays.findIndex(d => d.date === selectedDate);
   
-  // Reset card pressed state when day changes or when transitioning
+  // Reset card pressed state when day changes
   useEffect(() => {
     setIsCardPressed(false);
-  }, [selectedDate, isTransitioning]);
+  }, [selectedDate]);
   
   // Also reset when selectedDay changes (especially when going from rest day to workout day)
   useEffect(() => {
@@ -243,50 +238,6 @@ export function TodayScreen({ onNavigateToWorkouts, onDateChange, onOpenSwapDraw
   };
   
   const handleDayChange = (newDate: string) => {
-    // Reset pressed state immediately to prevent double border bug
-    setIsCardPressed(false);
-    
-    const oldIndex = selectedDayIndex;
-    const newIndex = weekDays.findIndex(d => d.date === newDate);
-    
-    if (newIndex !== -1 && oldIndex !== -1) {
-      // Store previous workout data
-      setPreviousWorkoutData(selectedDay);
-      
-      // Start transition
-      setIsTransitioning(true);
-      
-      // Determine direction
-      const direction = newIndex > oldIndex ? 1 : -1;
-      const distance = 400;
-      
-      // Reset positions
-      oldCardTranslateX.setValue(0);
-      newCardTranslateX.setValue(distance * direction);
-      
-      // Animate both cards
-      Animated.parallel([
-        // Old card slides out
-        Animated.timing(oldCardTranslateX, {
-          toValue: -distance * direction,
-          duration: 300,
-          useNativeDriver: true,
-        }),
-        // New card slides in
-        Animated.timing(newCardTranslateX, {
-          toValue: 0,
-          duration: 300,
-          useNativeDriver: true,
-        }),
-      ]).start(() => {
-        // Reset and clean up after animation
-        setIsTransitioning(false);
-        setPreviousWorkoutData(null);
-        oldCardTranslateX.setValue(0);
-        newCardTranslateX.setValue(0);
-      });
-    }
-    
     setSelectedDate(newDate);
   };
   
@@ -308,45 +259,10 @@ export function TodayScreen({ onNavigateToWorkouts, onDateChange, onOpenSwapDraw
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
   };
   
-  // Handler for swipe gestures (runs on JS thread)
-  const handleSwipe = (velocityX: number, translationX: number) => {
-    // Only process swipes if not currently transitioning
-    if (isTransitioning) return;
-    
-    const selectedDay = dayjs(selectedDate);
-    const isSwipeRight = velocityX > 500 || translationX > 100;
-    const isSwipeLeft = velocityX < -500 || translationX < -100;
-    
-    if (isSwipeRight) {
-      // Swipe right - go to previous day
-      const prevDay = selectedDay.subtract(1, 'day');
-      
-      // Check if we're moving to a different week
-      if (prevDay.isoWeek() !== selectedDay.isoWeek() || prevDay.year() !== selectedDay.year()) {
-        setWeekOffset(weekOffset - 1);
-      }
-      
-      handleDayChange(prevDay.format('YYYY-MM-DD'));
-    } else if (isSwipeLeft) {
-      // Swipe left - go to next day
-      const nextDay = selectedDay.add(1, 'day');
-      
-      // Check if we're moving to a different week
-      if (nextDay.isoWeek() !== selectedDay.isoWeek() || nextDay.year() !== selectedDay.year()) {
-        setWeekOffset(weekOffset + 1);
-      }
-      
-      handleDayChange(nextDay.format('YYYY-MM-DD'));
-    }
-  };
-
-  // Swipe gesture disabled (requires react-native-reanimated)
-  
   // Match device corner radius (iPhone rounded corners)
   const deviceCornerRadius = insets.bottom > 0 ? 40 : 24;
   
   return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
       <View style={styles.gradient}>
         <SafeAreaView style={[styles.container, { paddingBottom: 88 }]} edges={[]}>
           {/* Header with Cycle Info and Avatar - Fixed - Always shown */}
@@ -455,12 +371,13 @@ export function TodayScreen({ onNavigateToWorkouts, onDateChange, onOpenSwapDraw
               <View style={styles.content}>
                 {/* Workout of the Day Label with Swap Button - Always reserve space for consistent positioning */}
                 <View style={styles.wodLabelContainer}>
-                  {(selectedDay?.workout || (isTransitioning && previousWorkoutData?.workout)) && (
+                  {selectedDay?.workout && (
                     <Text style={styles.wodLabel}>Workout of the Day</Text>
                   )}
                   
                   {/* Swap Button */}
-                  {selectedDay?.workout && !selectedDay.isCompleted && !isTransitioning && (() => {
+                  {selectedDay?.workout && !selectedDay.isCompleted && (() => {
+                    
                     // Check if workout has any progress
                     const workoutKey = `${selectedDay.workout.id}-${selectedDay.date}`;
                     // Calculate totalSets excluding skipped exercises
@@ -483,10 +400,10 @@ export function TodayScreen({ onNavigateToWorkouts, onDateChange, onOpenSwapDraw
                         onPress={() => handleAddOrCreateWorkout(selectedDate)}
                         activeOpacity={1}
                       >
-                        <IconSwap size={24} color={COLORS.text} />
                         <Text style={styles.swapButtonText}>
                           {hasEligibleWorkoutsToSwap(selectedDate) ? 'Swap' : 'Create Workout'}
                         </Text>
+                        <IconSwap size={24} color={COLORS.text} />
                       </TouchableOpacity>
                     );
                   })()}
@@ -495,124 +412,9 @@ export function TodayScreen({ onNavigateToWorkouts, onDateChange, onOpenSwapDraw
                 {/* Workout Content Wrapper - Fixed height for consistent Intervals positioning */}
                 <View style={styles.workoutContentWrapper}>
                 <View style={styles.cardsContainer}>
-              {/* Old workout card during transition */}
-              {isTransitioning && previousWorkoutData?.workout && (
-                <Animated.View 
-                  style={[
-                    styles.workoutCard,
-                    styles.absoluteCard,
-                    { transform: [{ translateX: oldCardTranslateX }] }
-                  ]}
-                >
-                      <View style={styles.workoutCardInner}>
-                    {/* Workout Name */}
-                      <Text style={styles.workoutName}>{previousWorkoutData.workout.name}</Text>
-                    
-                    {/* Exercises Count */}
-                    <Text style={styles.workoutExercises}>
-                      {previousWorkoutData.workout.exercises.length} exercises
-                    </Text>
-                    
-                    {/* Footer */}
-                    <View style={styles.workoutCardFooter}>
-                      {(() => {
-                        const workoutKey = `${previousWorkoutData.workout.id}-${previousWorkoutData.date}`;
-                        let totalSets = 0;
-                        previousWorkoutData.workout.exercises.forEach((ex: any) => {
-                          const progress = getExerciseProgress(workoutKey, ex.id);
-                          if (!progress?.skipped) {
-                            totalSets += ex.targetSets || 0;
-                          }
-                        });
-                        const completionPercentage = getWorkoutCompletionPercentage(workoutKey, totalSets);
-                        const progress = completionPercentage / 100;
-                        
-                        const buttonState = completionPercentage === 100 ? 'Edit' 
-                          : completionPercentage > 0 ? 'Resume' 
-                          : 'Start';
-                        const isOrangeTriangle = buttonState === 'Start';
-                        
-                        return (
-                          <>
-                            {/* Left: Progress Indicator */}
-                            <View style={styles.progressIndicator}>
-                              {progress >= 0.999 ? (
-                                <IconCheck size={24} color="#227132" />
-                              ) : (
-                                <>
-                                  <Svg height="16" width="16" viewBox="0 0 16 16" style={styles.progressCircle}>
-                                    <Circle cx="8" cy="8" r="8" fill={LIGHT_COLORS.border} />
-                                    {progress > 0 ? (
-                                      <Path
-                                        d={`M 8 8 L 8 0 A 8 8 0 ${progress > 0.5 ? 1 : 0} 1 ${
-                                          8 + 8 * Math.sin(2 * Math.PI * progress)
-                                        } ${
-                                          8 - 8 * Math.cos(2 * Math.PI * progress)
-                                        } Z`}
-                                        fill={LIGHT_COLORS.text}
-                                      />
-                                    ) : null}
-                                  </Svg>
-                                  <Text style={styles.progressText}>{completionPercentage}%</Text>
-                                </>
-                              )}
-                            </View>
-                            
-                            {/* Right: Action Button */}
-                            <View style={[
-                              styles.startButton,
-                              buttonState === 'Start' && styles.startButtonSecondary
-                            ]}>
-                              <Text style={[
-                                styles.startButtonText,
-                                buttonState !== 'Edit' && { color: COLORS.accentPrimary }
-                              ]}>{buttonState}</Text>
-                            </View>
-                          </>
-                        );
-                      })()}
-                    </View>
-                  </View>
-                </Animated.View>
-              )}
-              
-              {/* Old rest day view during transition */}
-              {isTransitioning && previousWorkoutData && !previousWorkoutData.workout && (
-                <Animated.View 
-                  style={[
-                    styles.restDayContainer,
-                    styles.absoluteCard,
-                    { transform: [{ translateX: oldCardTranslateX }] }
-                  ]}
-                >
-                  <View style={styles.restDayContent}>
-                    <Text style={styles.restDayQuestion}>
-                      <Text style={styles.restDayQuestionGray}>This is your rest day{'\n'}</Text>
-                      <Text style={styles.restDayQuestionBlack}>No workouts scheduled</Text>
-                    </Text>
-                    <TouchableOpacity
-                      style={styles.addWorkoutButton}
-                      onPress={() => handleAddOrCreateWorkout(previousWorkoutData.date)}
-                      activeOpacity={1}
-                    >
-                      <Text style={styles.addWorkoutButtonText}>
-                        {hasEligibleWorkoutsToSwap(previousWorkoutData.date) ? 'Add Workout' : 'Create Workout'}
-                      </Text>
-                    </TouchableOpacity>
-                  </View>
-                </Animated.View>
-              )}
-              
-              {/* New/current card */}
+              {/* Workout card or Rest Day */}
               {selectedDay?.workout ? (
-                <Animated.View 
-                  style={[
-                    styles.workoutCard,
-                    !isTransitioning && isCardPressed && styles.workoutCardPressed,
-                    isTransitioning && styles.absoluteCard,
-                    isTransitioning && { transform: [{ translateX: newCardTranslateX }] }
-                  ]}
-                >
+                <View style={styles.workoutCard}>
                       <TouchableOpacity
                         style={styles.workoutCardInner}
                         onPress={handleWorkoutPress}
@@ -640,12 +442,10 @@ export function TodayScreen({ onNavigateToWorkouts, onDateChange, onOpenSwapDraw
                           }
                         });
                         const completionPercentage = getWorkoutCompletionPercentage(workoutKey, totalSets);
-                        const progress = completionPercentage / 100;
-                        
                         const buttonState = completionPercentage === 100 ? 'Edit' 
                           : completionPercentage > 0 ? 'Resume' 
                           : 'Start';
-                        const isOrangeTriangle = buttonState === 'Start';
+                        const progress = completionPercentage / 100;
                         
                         return (
                           <>
@@ -674,29 +474,18 @@ export function TodayScreen({ onNavigateToWorkouts, onDateChange, onOpenSwapDraw
                             </View>
                             
                             {/* Right: Action Button */}
-                            <View style={[
-                              styles.startButton,
-                              buttonState === 'Start' && styles.startButtonSecondary
-                            ]}>
-                              <Text style={[
-                                styles.startButtonText,
-                                buttonState !== 'Edit' && { color: COLORS.accentPrimary }
-                              ]}>{buttonState}</Text>
+                            <View style={styles.startButton}>
+                              <Text style={styles.startButtonText}>{buttonState}</Text>
+                              <IconStart size={24} color={COLORS.accentPrimary} />
                             </View>
                           </>
                         );
                       })()}
                     </View>
                       </TouchableOpacity>
-                </Animated.View>
+                </View>
               ) : (
-                <Animated.View 
-                  style={[
-                    styles.restDayContainer,
-                    isTransitioning && styles.absoluteCard,
-                    isTransitioning && { transform: [{ translateX: newCardTranslateX }] }
-                  ]}
-                >
+                <View style={styles.restDayContainer}>
                   <View style={styles.restDayContent}>
                     <Text style={styles.restDayQuestion}>
                       <Text style={styles.restDayQuestionGray}>This is your rest day{'\n'}</Text>
@@ -712,12 +501,12 @@ export function TodayScreen({ onNavigateToWorkouts, onDateChange, onOpenSwapDraw
                       </Text>
                     </TouchableOpacity>
                   </View>
-                </Animated.View>
+                </View>
               )}
               </View>
               
               {/* Intervals Section */}
-              {!isTransitioning && (() => {
+              {(() => {
                 // Determine if selected date is today, past, or future
                 const todayDate = today.format('YYYY-MM-DD');
                 const selectedDayjs = dayjs(selectedDate);
@@ -741,15 +530,17 @@ export function TodayScreen({ onNavigateToWorkouts, onDateChange, onOpenSwapDraw
                           onPress={() => navigation.navigate('HIITTimerList' as never)}
                           activeOpacity={0.7}
                         >
-                          <IconAdd size={24} color={COLORS.accentPrimary} />
                           <Text style={styles.addTimerButtonText}>Add</Text>
+                          <IconAdd size={24} color={COLORS.text} />
                         </TouchableOpacity>
                       )}
                     </View>
                     
-                    {/* Show explanatory text for past days with no intervals */}
-                    {isPastDay && completedIntervals.length === 0 && (
-                      <Text style={styles.noIntervalsText}>No intervals completed on this day</Text>
+                    {/* Show explanatory text when no intervals */}
+                    {completedIntervals.length === 0 && (
+                      <Text style={styles.noIntervalsText}>
+                        {isToday ? 'No intervals logged yet' : 'No intervals completed on this day'}
+                      </Text>
                     )}
                     
                     {/* Show completed intervals */}
@@ -778,7 +569,6 @@ export function TodayScreen({ onNavigateToWorkouts, onDateChange, onOpenSwapDraw
             )}
         </SafeAreaView>
       </View>
-    </GestureHandlerRootView>
   );
 }
 
@@ -996,7 +786,7 @@ const styles = StyleSheet.create({
   workoutExercises: {
     ...TYPOGRAPHY.meta,
     color: LIGHT_COLORS.textMeta,
-    marginBottom: 12,
+    marginBottom: 20,
   },
   
   // Footer
@@ -1027,21 +817,12 @@ const styles = StyleSheet.create({
   startButton: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'flex-start',
     gap: 4,
-    marginRight: -12,
-    marginBottom: -6,
-  },
-  startButtonSecondary: {
-    backgroundColor: COLORS.accentPrimaryDimmed,
-    borderWidth: 1,
-    borderColor: COLORS.accentPrimary,
-    borderRadius: 12,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
   },
   startButtonText: {
     ...TYPOGRAPHY.metaBold,
-    color: '#000000',
+    color: COLORS.accentPrimary,
   },
   
   // Completed Badge
@@ -1136,7 +917,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 4,
+    marginBottom: 12,
+    minHeight: 24,
   },
   intervalsTitle: {
     ...TYPOGRAPHY.meta,
@@ -1146,11 +928,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    paddingVertical: 8,
   },
   addTimerButtonText: {
     ...TYPOGRAPHY.metaBold,
-    color: COLORS.accentPrimary,
+    color: COLORS.text,
   },
   intervalCardWrapper: {
     marginBottom: SPACING.sm,

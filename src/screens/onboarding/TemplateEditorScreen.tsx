@@ -81,7 +81,7 @@ export function TemplateEditorScreen({ navigation }: TemplateEditorScreenProps) 
   return (
     <GestureHandlerRootView style={styles.container}>
       <SafeAreaView style={styles.container}>
-        <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
+        <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent} bounces={false}>
           <ProgressHeader
             stepLabel="Step 3 of 4"
             title="Customize your plan"

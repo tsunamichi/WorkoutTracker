@@ -253,11 +253,6 @@ export default function HIITTimerFormScreen({ navigation, route }: Props) {
             <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
               <IconArrowLeft size={24} color={LIGHT_COLORS.text} />
             </TouchableOpacity>
-            <View style={styles.menuButton}>
-              <View style={styles.menuDot} />
-              <View style={styles.menuDot} />
-              <View style={styles.menuDot} />
-            </View>
           </View>
           
           <TouchableOpacity 
@@ -289,6 +284,7 @@ export default function HIITTimerFormScreen({ navigation, route }: Props) {
         <ScrollView 
           style={styles.scrollView} 
           contentContainerStyle={styles.scrollContent}
+          bounces={false}
         >
           {/* Exercise Section */}
           <View style={styles.section}>
@@ -501,21 +497,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'flex-start',
     marginLeft: -4,
-  },
-  menuButton: {
-    width: 48,
-    height: 48,
-    justifyContent: 'center',
-    alignItems: 'center',
-    flexDirection: 'row',
-    gap: 4,
-    marginRight: -4,
-  },
-  menuDot: {
-    width: 4,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: LIGHT_COLORS.secondary,
   },
   pageTitleContainer: {
     paddingHorizontal: SPACING.xxl,

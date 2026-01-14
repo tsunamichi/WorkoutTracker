@@ -105,8 +105,8 @@ export default function HIITTimerListScreen({ navigation }: Props) {
               onPress={handleCreateNew}
               activeOpacity={0.7}
             >
-              <IconAdd size={24} color={COLORS.accentPrimary} />
               <Text style={styles.addTimerButtonText}>New</Text>
+              <IconAdd size={24} color={COLORS.accentPrimary} />
             </TouchableOpacity>
           </View>
         </View>
@@ -114,6 +114,7 @@ export default function HIITTimerListScreen({ navigation }: Props) {
         <ScrollView 
           style={styles.scrollView} 
           contentContainerStyle={styles.scrollContent}
+          bounces={false}
         >
           {templates.map(timer => (
             <TouchableOpacity
@@ -157,8 +158,8 @@ export default function HIITTimerListScreen({ navigation }: Props) {
                       style={styles.startButton}
                       activeOpacity={1}
                     >
-                      <Text style={styles.startButtonText}>Start</Text>
                       <IconPlay size={10} color={COLORS.accentPrimary} />
+                      <Text style={styles.startButtonText}>Start</Text>
                     </TouchableOpacity>
                   </View>
                 </View>

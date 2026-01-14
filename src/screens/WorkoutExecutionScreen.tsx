@@ -708,7 +708,7 @@ export function WorkoutExecutionScreen({ route, navigation }: WorkoutExecutionSc
           </View>
         </View>
         
-        <ScrollView style={styles.content} contentContainerStyle={styles.scrollContent}>
+        <ScrollView style={styles.content} contentContainerStyle={styles.scrollContent} bounces={false}>
           {/* Exercises List */}
           <View style={styles.exercisesList}>
             {(() => {

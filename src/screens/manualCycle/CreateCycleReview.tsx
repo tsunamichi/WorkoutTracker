@@ -196,7 +196,7 @@ export function CreateCycleReview({ navigation }: CreateCycleReviewProps) {
           </View>
         </View>
 
-        <ScrollView style={styles.content} contentContainerStyle={styles.scrollContent}>
+        <ScrollView style={styles.content} contentContainerStyle={styles.scrollContent} bounces={false}>
           {/* Summary Card */}
           <View style={styles.summaryCard}>
             <Text style={styles.summaryTitle}>Cycle Summary</Text>

@@ -68,7 +68,7 @@ export function CreateCycleDaysOverview({ navigation }: CreateCycleDaysOverviewP
           </View>
         </View>
 
-        <ScrollView style={styles.content} contentContainerStyle={styles.scrollContent}>
+        <ScrollView style={styles.content} contentContainerStyle={styles.scrollContent} bounces={false}>
           {sortedDays.map((day) => {
             const workout = workouts.find((w) => w.weekday === day);
             const exerciseCount = workout?.exercises.length || 0;

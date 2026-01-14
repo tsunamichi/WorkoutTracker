@@ -748,6 +748,7 @@ export function ExerciseDetailScreen({ route, navigation }: ExerciseDetailScreen
         <ScrollView 
           style={styles.content} 
           contentContainerStyle={styles.scrollContent}
+          bounces={false}
         >
           {/* Accordion Sets */}
           <View style={styles.setsAccordion}>

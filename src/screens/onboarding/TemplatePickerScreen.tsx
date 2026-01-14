@@ -38,7 +38,7 @@ export function TemplatePickerScreen({ navigation }: TemplatePickerScreenProps) 
 
   return (
     <SafeAreaView style={styles.container}>
-      <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
+      <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent} bounces={false}>
         <ProgressHeader
           stepLabel="Step 2 of 4"
           title="Choose a template"

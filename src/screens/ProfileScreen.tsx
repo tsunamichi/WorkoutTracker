@@ -94,7 +94,7 @@ export function ProfileScreen({ navigation }: ProfileScreenProps) {
           </TouchableOpacity>
         </View>
         
-        <ScrollView style={styles.content} contentContainerStyle={styles.scrollContent}>
+        <ScrollView style={styles.content} contentContainerStyle={styles.scrollContent} bounces={false}>
           {activeTab === 'progress' ? (
             /* Progress Tab */
             <>

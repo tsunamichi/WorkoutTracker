@@ -62,7 +62,7 @@ export function CustomTemplateInputScreen({ navigation }: CustomTemplateInputScr
 
   return (
     <SafeAreaView style={styles.container}>
-      <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
+      <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent} bounces={false}>
         <ProgressHeader
           stepLabel="Step 3 of 4"
           title="Paste your workout plan"

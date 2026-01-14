@@ -322,6 +322,7 @@ export function AIWorkoutCreationScreen() {
             style={styles.content}
             contentContainerStyle={styles.scrollContent}
             keyboardShouldPersistTaps="handled"
+            bounces={false}
           >
 
             {/* Instructions Button */}

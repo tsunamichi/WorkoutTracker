@@ -107,7 +107,7 @@ export function CreateCycleDayEditor({ navigation, route }: CreateCycleDayEditor
           </View>
         </View>
 
-        <ScrollView style={styles.content} contentContainerStyle={styles.scrollContent}>
+        <ScrollView style={styles.content} contentContainerStyle={styles.scrollContent} bounces={false}>
           {/* Workout Name */}
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Workout name (optional)</Text>

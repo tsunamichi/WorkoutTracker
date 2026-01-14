@@ -359,7 +359,7 @@ export function WorkoutsScreen() {
           </View>
         </View>
         
-        <ScrollView style={styles.content} contentContainerStyle={styles.scrollContent}>
+        <ScrollView style={styles.content} contentContainerStyle={styles.scrollContent} bounces={false}>
           {cycles.length === 0 ? (
             <>
               {/* Question Text */}
@@ -430,20 +430,24 @@ export function WorkoutsScreen() {
             </>
           ) : (
             <>
+              {/* New Button - Always show when there are cycles */}
+              <View style={styles.inProgressHeader}>
+                {cycles.filter(c => c.isActive).length > 0 && (
+                  <Text style={styles.inProgressTitle}>In progress</Text>
+                )}
+                <TouchableOpacity
+                  style={styles.newButton}
+                  onPress={() => navigation.navigate('WorkoutCreationOptions' as never)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.newButtonText}>New</Text>
+                  <IconAdd size={24} color={COLORS.text} />
+                </TouchableOpacity>
+              </View>
+              
               {/* Active Cycle */}
               {cycles.filter(c => c.isActive).length > 0 && (
                 <>
-                  <View style={styles.inProgressHeader}>
-                    <Text style={styles.inProgressTitle}>In progress</Text>
-                    <TouchableOpacity
-                      style={styles.newButton}
-                      onPress={() => navigation.navigate('WorkoutCreationOptions' as never)}
-                      activeOpacity={0.7}
-                    >
-                      <IconAdd size={24} color={COLORS.accentPrimary} />
-                      <Text style={styles.newButtonText}>New</Text>
-                    </TouchableOpacity>
-                  </View>
                   {cycles.filter(c => c.isActive).map((cycle) => {
                     const completion = getCycleCompletion(cycle.id);
                     return (
@@ -726,7 +730,6 @@ const styles = StyleSheet.create({
   inProgressHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
     marginBottom: SPACING.sm,
   },
   inProgressTitle: {
@@ -739,10 +742,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 4,
     paddingVertical: 8,
+    marginLeft: 'auto',
   },
   newButtonText: {
     ...TYPOGRAPHY.metaBold,
-    color: COLORS.accentPrimary,
+    color: COLORS.text,
   },
   activeCycleSection: {
     marginBottom: 56, // 56px spacing before Past Cycles

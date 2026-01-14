@@ -39,7 +39,7 @@ const LIGHT_COLORS = {
 
 const PHASE_COLORS = {
   countdown: '#FDB022', // Yellow
-  work: '#5E9EFF', // Blue
+  work: '#1B1B1B', // Black
   restYellow: '#FDB022', // Yellow for rest
   restRed: '#FF6B6B', // Red for last 5 seconds of rest
   complete: '#227132', // Green
