@@ -749,13 +749,10 @@ const styles = StyleSheet.create({
     backgroundColor: CARDS.cardDeep.outer.backgroundColor,
     borderRadius: CARDS.cardDeep.outer.borderRadius,
     borderCurve: CARDS.cardDeep.outer.borderCurve,
-    borderWidth: 1,
-    borderColor: CARDS.cardDeep.outer.borderColor,
     overflow: CARDS.cardDeep.outer.overflow,
     width: '100%',
   },
   workoutCardPressed: {
-    borderColor: LIGHT_COLORS.textMeta,
   },
   workoutCardInner: {
     ...CARDS.cardDeep.inner,

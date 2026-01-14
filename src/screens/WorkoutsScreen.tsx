@@ -752,8 +752,6 @@ const styles = StyleSheet.create({
   },
   cycleCard: CARDS.cardDeep.outer,
   cycleCardPressed: {
-    borderWidth: 1,
-    borderColor: LIGHT_COLORS.textMeta,
   },
   cycleCardContent: {
     ...CARDS.cardDeep.inner,
@@ -811,8 +809,6 @@ const styles = StyleSheet.create({
   },
   pastCycleCard: CARDS.cardDeepDimmed.outer,
   pastCycleCardPressed: {
-    borderWidth: 1,
-    borderColor: LIGHT_COLORS.textMeta,
   },
   pastCycleCardContent: {
     ...CARDS.cardDeepDimmed.inner,
