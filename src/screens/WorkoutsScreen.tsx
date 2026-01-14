@@ -755,9 +755,9 @@ const styles = StyleSheet.create({
   },
   cycleCardContent: {
     ...CARDS.cardDeep.inner,
-    paddingHorizontal: 4,
-    paddingTop: SPACING.xl,
-    paddingBottom: 4,
+    paddingHorizontal: 24,
+    paddingTop: 16,
+    paddingBottom: 20,
   },
   cycleName: {
     ...TYPOGRAPHY.h2,
@@ -814,9 +814,9 @@ const styles = StyleSheet.create({
   },
   pastCycleCardContent: {
     ...CARDS.cardDeepDimmed.inner,
-    paddingHorizontal: 4,
-    paddingTop: SPACING.lg,
-    paddingBottom: 4,
+    paddingHorizontal: 24,
+    paddingTop: 16,
+    paddingBottom: 20,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
