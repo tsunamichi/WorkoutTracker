@@ -76,6 +76,8 @@ function TabNavigator() {
   
   // Animated value for tab indicator position (0 = Schedule, 1 = Workouts)
   const indicatorPosition = React.useRef(new Animated.Value(0)).current;
+  const scheduleIconOpacity = React.useRef(new Animated.Value(1)).current;
+  const workoutsIconOpacity = React.useRef(new Animated.Value(0)).current;
   const [tabBarWidth, setTabBarWidth] = React.useState(0);
   
   const switchTab = (tab: 'Schedule' | 'Workouts') => {
@@ -89,6 +91,22 @@ function TabNavigator() {
       tension: 80,
       friction: 12,
     }).start();
+    
+    // Animate icon opacity with spring
+    Animated.parallel([
+      Animated.spring(scheduleIconOpacity, {
+        toValue: tab === 'Schedule' ? 1 : 0,
+        useNativeDriver: true,
+        tension: 80,
+        friction: 12,
+      }),
+      Animated.spring(workoutsIconOpacity, {
+        toValue: tab === 'Workouts' ? 1 : 0,
+        useNativeDriver: true,
+        tension: 80,
+        friction: 12,
+      })
+    ]).start();
   };
   
   const handleTabBarLayout = (event: any) => {
@@ -149,10 +167,12 @@ function TabNavigator() {
             activeOpacity={1}
             onPress={() => switchTab('Schedule')}
           >
-            <IconCalendar 
-              size={24} 
-              color={activeTab === 'Schedule' ? COLORS.backgroundCanvas : COLORS.textMeta} 
-            />
+            <Animated.View style={{ opacity: scheduleIconOpacity }}>
+              <IconCalendar 
+                size={24} 
+                color={activeTab === 'Schedule' ? COLORS.backgroundCanvas : COLORS.textMeta} 
+              />
+            </Animated.View>
             <Text 
               style={[
                 styles.tabLabel,
@@ -173,10 +193,12 @@ function TabNavigator() {
               switchTab('Workouts');
             }}
           >
-            <IconWorkouts 
-              size={24} 
-              color={activeTab === 'Workouts' ? COLORS.backgroundCanvas : COLORS.textMeta} 
-            />
+            <Animated.View style={{ opacity: workoutsIconOpacity }}>
+              <IconWorkouts 
+                size={24} 
+                color={activeTab === 'Workouts' ? COLORS.backgroundCanvas : COLORS.textMeta} 
+              />
+            </Animated.View>
             <Text 
               style={[
                 styles.tabLabel,

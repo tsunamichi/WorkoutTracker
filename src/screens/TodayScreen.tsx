@@ -311,7 +311,7 @@ export function TodayScreen({ onNavigateToWorkouts, onDateChange, onOpenSwapDraw
                     disabled={!activeCycle}
                   >
                     <View style={styles.dayLabelContainer}>
-                      <Text style={styles.dayLabel}>{day.dayLetter}</Text>
+                      {isToday && <Text style={styles.dayLabel}>{day.dayLetter}</Text>}
                     </View>
                     <View>
                       <Animated.View
@@ -369,12 +369,8 @@ export function TodayScreen({ onNavigateToWorkouts, onDateChange, onOpenSwapDraw
               </View>
             ) : (
               <View style={styles.content}>
-                {/* Workout of the Day Label with Swap Button - Always reserve space for consistent positioning */}
+                {/* Swap Button Container */}
                 <View style={styles.wodLabelContainer}>
-                  {selectedDay?.workout && (
-                    <Text style={styles.wodLabel}>Workout of the Day</Text>
-                  )}
-                  
                   {/* Swap Button */}
                   {selectedDay?.workout && !selectedDay.isCompleted && (() => {
                     
@@ -693,7 +689,7 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   dayLabel: {
-    ...TYPOGRAPHY.legal,
+    ...TYPOGRAPHY.note,
     color: '#1B1B1B',
   },
   todayIndicator: {

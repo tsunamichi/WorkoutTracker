@@ -85,12 +85,12 @@ const ACCENT_PRIMARY = '#062FFF';
 export const COLORS = {
   // Core colors
   background: '#E3E6E0',    // Default background
-  backgroundCanvas: '#E2E3DF',  // Page background (like Today tab)
+  backgroundCanvas: '#EFEAEA',  // Page background (like Today tab)
   backgroundContainer: '#D0D1CD', // Bottom nav background
   canvas: '#1C1C1E',        // Card/container background (dark mode)
   container: '#2C2C2E',     // Secondary container
   cardBackground: '#E3E3DE', // Card background (light)
-  activeCard: '#E9E9E9',    // Active/default card state
+  activeCard: '#FBF7F7',    // Active/default card state
   
   // Primary actions
   primary: '#227132',       // Green for actions
@@ -195,6 +195,11 @@ export const TYPOGRAPHY = {
     fontSize: 12,
     fontWeight: '400' as const,
   },
+  note: {
+    fontSize: 12,
+    fontWeight: '400' as const,
+    textTransform: 'uppercase' as const,
+  },
   
   // Buttons
   button: {
@@ -252,25 +257,21 @@ export const SHADOW = {
 
 export const CARDS = {
   cardFlat: {
-    backgroundColor: '#E9E9E9', // activeCard
+    backgroundColor: '#FBF7F7', // activeCard
     borderRadius: 16,  // Squircle-friendly
     borderCurve: 'continuous' as const,
-    borderWidth: 1,
-    borderColor: '#D2D3CF',
   },
   cardDeep: {
     // Outer card container (no external shadows)
     outer: {
-      backgroundColor: '#E9E9E9', // activeCard
+      backgroundColor: '#FBF7F7', // activeCard
       borderRadius: 16,  // Squircle-friendly
       borderCurve: 'continuous' as const,
-      borderWidth: 1,
-      borderColor: '#D2D3CF',
       overflow: 'hidden' as const,
     },
     // Inner card with borders for depth
     inner: {
-      backgroundColor: '#E9E9E9', // activeCard
+      backgroundColor: '#FBF7F7', // activeCard
       borderRadius: 16,  // Squircle-friendly
       borderCurve: 'continuous' as const,
       borderTopWidth: 2,
@@ -286,16 +287,14 @@ export const CARDS = {
   cardDeepDimmed: {
     // No external shadows (dimmed state)
     outer: {
-      backgroundColor: '#E9E9E9', // activeCard
+      backgroundColor: '#FBF7F7', // activeCard
       borderRadius: 16,  // Squircle-friendly
       borderCurve: 'continuous' as const,
-      borderWidth: 1,
-      borderColor: '#D2D3CF',
       overflow: 'hidden' as const,
     },
     // Inner card WITHOUT borders (dimmed state)
     inner: {
-      backgroundColor: '#E9E9E9', // activeCard
+      backgroundColor: '#FBF7F7', // activeCard
       borderRadius: 16,  // Squircle-friendly
       borderCurve: 'continuous' as const,
     },
@@ -307,8 +306,6 @@ export const CARDS = {
       backgroundColor: '#E3E3DE',
       borderRadius: 16,  // Squircle-friendly
       borderCurve: 'continuous' as const,
-      borderWidth: 1,
-      borderColor: '#D2D2D2', // disabledBorder color
       overflow: 'hidden' as const,
     },
     // Inner card WITHOUT borders (disabled state)
