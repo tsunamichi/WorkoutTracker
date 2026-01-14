@@ -756,9 +756,9 @@ const styles = StyleSheet.create({
   },
   workoutCardInner: {
     ...CARDS.cardDeep.inner,
-    paddingHorizontal: 24,
+    paddingHorizontal: 4,
     paddingTop: 16,
-    paddingBottom: 20,
+    paddingBottom: 4,
   },
   workoutCardHeader: {
     flexDirection: 'row',
