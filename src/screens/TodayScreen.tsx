@@ -310,10 +310,12 @@ export function TodayScreen({ onNavigateToWorkouts, onDateChange, onOpenSwapDraw
                     activeOpacity={1}
                     disabled={!activeCycle}
                   >
-                    <View style={styles.dayLabelContainer}>
-                      {isToday && <Text style={styles.dayLabel}>{day.dayLetter}</Text>}
-                    </View>
-                    <View>
+                    <View style={styles.dayButtonWrapper}>
+                      {isToday && (
+                        <View style={styles.dayLabelContainer}>
+                          <Text style={styles.dayLabel}>{day.dayLetter}</Text>
+                        </View>
+                      )}
                       <Animated.View
                         style={{
                           transform: [{ scale: dayScales[index] }]
@@ -322,14 +324,10 @@ export function TodayScreen({ onNavigateToWorkouts, onDateChange, onOpenSwapDraw
                         <View
                           style={[
                             styles.dayButton,
-                            isSelected && styles.dayButtonSelected,
-                            {
-                              backgroundColor: isSelected 
-                                ? COLORS.text
-                                : COLORS.activeCard,
-                              borderColor: isSelected
-                                ? COLORS.text
-                                : COLORS.border
+                            isSelected && {
+                              backgroundColor: COLORS.text,
+                              borderWidth: 1,
+                              borderColor: COLORS.text,
                             }
                           ]}
                         >
@@ -678,10 +676,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     zIndex: 1,
   },
+  dayButtonWrapper: {
+    position: 'relative',
+    alignItems: 'center',
+  },
   dayLabelContainer: {
+    position: 'absolute',
+    top: 4,
+    left: 0,
+    right: 0,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 4,
+    zIndex: 2,
   },
   dayLabel: {
     ...TYPOGRAPHY.note,
@@ -711,8 +717,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: COLORS.border,
   },
   dayButtonWithShadow: {
     // Dark shadow (inset appearance)
