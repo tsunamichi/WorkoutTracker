@@ -783,7 +783,7 @@ const styles = StyleSheet.create({
   },
   progressIndicator: {
     flexDirection: 'row',
-    alignItems: 'baseline',
+    alignItems: 'center',
     gap: 6,
   },
   progressCircle: {
