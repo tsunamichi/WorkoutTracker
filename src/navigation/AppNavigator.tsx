@@ -167,21 +167,40 @@ function TabNavigator() {
             activeOpacity={1}
             onPress={() => switchTab('Schedule')}
           >
-            <Animated.View style={{ opacity: scheduleIconOpacity }}>
+            <Animated.View 
+              style={{ 
+                opacity: scheduleIconOpacity,
+                width: scheduleIconOpacity.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [0, 24]
+                }),
+                overflow: 'hidden'
+              }}
+            >
               <IconCalendar 
                 size={24} 
                 color={activeTab === 'Schedule' ? COLORS.backgroundCanvas : COLORS.text} 
               />
             </Animated.View>
-            <Text 
-              style={[
-                styles.tabLabel,
-                { color: activeTab === 'Schedule' ? COLORS.backgroundCanvas : COLORS.text }
-              ]} 
-              numberOfLines={1}
+            <Animated.View
+              style={{
+                flex: 1,
+                marginLeft: scheduleIconOpacity.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [0, 4]
+                })
+              }}
             >
-              Schedule
-            </Text>
+              <Text 
+                style={[
+                  styles.tabLabel,
+                  { color: activeTab === 'Schedule' ? COLORS.backgroundCanvas : COLORS.text }
+                ]} 
+                numberOfLines={1}
+              >
+                Schedule
+              </Text>
+            </Animated.View>
           </TouchableOpacity>
           
           {/* Workouts Tab */}
@@ -193,21 +212,40 @@ function TabNavigator() {
               switchTab('Workouts');
             }}
           >
-            <Animated.View style={{ opacity: workoutsIconOpacity }}>
+            <Animated.View 
+              style={{ 
+                opacity: workoutsIconOpacity,
+                width: workoutsIconOpacity.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [0, 24]
+                }),
+                overflow: 'hidden'
+              }}
+            >
               <IconWorkouts 
                 size={24} 
                 color={activeTab === 'Workouts' ? COLORS.backgroundCanvas : COLORS.text} 
               />
             </Animated.View>
-            <Text 
-              style={[
-                styles.tabLabel,
-                { color: activeTab === 'Workouts' ? COLORS.backgroundCanvas : COLORS.text }
-              ]} 
-              numberOfLines={1}
+            <Animated.View
+              style={{
+                flex: 1,
+                marginLeft: workoutsIconOpacity.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [0, 4]
+                })
+              }}
             >
-              Workouts
-            </Text>
+              <Text 
+                style={[
+                  styles.tabLabel,
+                  { color: activeTab === 'Workouts' ? COLORS.backgroundCanvas : COLORS.text }
+                ]} 
+                numberOfLines={1}
+              >
+                Workouts
+              </Text>
+            </Animated.View>
           </TouchableOpacity>
             </View>
             </View>
@@ -347,7 +385,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 4,
     zIndex: 1,
   },
   tabLabel: {
