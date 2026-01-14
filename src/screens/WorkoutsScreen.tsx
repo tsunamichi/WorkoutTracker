@@ -788,11 +788,16 @@ const styles = StyleSheet.create({
   },
   seeDetailsButton: {
     width: '100%',
+    height: 48,
     backgroundColor: COLORS.accentSecondary,
     paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: 12,
+    borderTopLeftRadius: 0,
+    borderTopRightRadius: 0,
+    borderBottomLeftRadius: 12,
+    borderBottomRightRadius: 12,
     borderCurve: 'continuous',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   seeDetailsText: {
     ...TYPOGRAPHY.metaBold,

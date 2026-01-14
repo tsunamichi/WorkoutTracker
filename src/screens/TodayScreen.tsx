@@ -756,9 +756,9 @@ const styles = StyleSheet.create({
   },
   workoutCardInner: {
     ...CARDS.cardDeep.inner,
-    paddingHorizontal: 4,
+    paddingHorizontal: 24,
     paddingTop: 16,
-    paddingBottom: 4,
+    paddingBottom: 20,
   },
   workoutCardHeader: {
     flexDirection: 'row',
@@ -801,11 +801,16 @@ const styles = StyleSheet.create({
   // Start Button
   startButton: {
     width: '100%',
+    height: 48,
     backgroundColor: COLORS.accentSecondary,
     paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: 12,
+    borderTopLeftRadius: 0,
+    borderTopRightRadius: 0,
+    borderBottomLeftRadius: 12,
+    borderBottomRightRadius: 12,
     borderCurve: 'continuous',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   startButtonText: {
     ...TYPOGRAPHY.metaBold,
