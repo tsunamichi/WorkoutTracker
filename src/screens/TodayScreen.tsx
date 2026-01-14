@@ -340,9 +340,6 @@ export function TodayScreen({ onNavigateToWorkouts, onDateChange, onOpenSwapDraw
                           </View>
                         </View>
                       </Animated.View>
-                      {isToday && (
-                        <View style={styles.todayIndicator} />
-                      )}
                     </View>
                   </TouchableOpacity>
                   </View>
@@ -691,16 +688,6 @@ const styles = StyleSheet.create({
   dayLabel: {
     ...TYPOGRAPHY.note,
     color: '#1B1B1B',
-  },
-  todayIndicator: {
-    position: 'absolute',
-    bottom: -14,
-    left: '50%',
-    marginLeft: -4,
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: COLORS.text,
   },
   dayButtonBlackShadow: {
     // Black shadow: -1, -1, 8% opacity, 1px blur
