@@ -415,39 +415,32 @@ export function TodayScreen({ onNavigateToWorkouts, onDateChange, onOpenSwapDraw
                         onPressOut={() => setIsCardPressed(false)}
                         activeOpacity={1}
                       >
-                    {/* Workout Name */}
-                      <Text style={styles.workoutName}>{selectedDay.workout.name}</Text>
-                    
-                    {/* Exercises Count */}
-                    <Text style={styles.workoutExercises}>
-                      {selectedDay.workout.exercises.length} exercises
-                    </Text>
-                    
-                    {/* Footer */}
-                    <View style={styles.workoutCardFooter}>
-                      {(() => {
-                        const workoutKey = `${selectedDay.workout.id}-${selectedDay.date}`;
-                        let totalSets = 0;
-                        selectedDay.workout.exercises.forEach((ex: any) => {
-                          const progress = getExerciseProgress(workoutKey, ex.id);
-                          if (!progress?.skipped) {
-                            totalSets += ex.targetSets || 0;
-                          }
-                        });
-                        const completionPercentage = getWorkoutCompletionPercentage(workoutKey, totalSets);
-                        const buttonState = completionPercentage === 100 ? 'Edit' 
-                          : completionPercentage > 0 ? 'Resume' 
-                          : 'Start';
-                        const progress = completionPercentage / 100;
-                        
-                        return (
-                          <>
-                            {/* Left: Progress Indicator */}
+                    {(() => {
+                      const workoutKey = `${selectedDay.workout.id}-${selectedDay.date}`;
+                      let totalSets = 0;
+                      selectedDay.workout.exercises.forEach((ex: any) => {
+                        const progress = getExerciseProgress(workoutKey, ex.id);
+                        if (!progress?.skipped) {
+                          totalSets += ex.targetSets || 0;
+                        }
+                      });
+                      const completionPercentage = getWorkoutCompletionPercentage(workoutKey, totalSets);
+                      const buttonState = completionPercentage === 100 ? 'Edit' 
+                        : completionPercentage > 0 ? 'Resume' 
+                        : 'Start';
+                      const progress = completionPercentage / 100;
+                      
+                      return (
+                        <>
+                          {/* Top Row: Workout Name + Progress */}
+                          <View style={styles.workoutCardHeader}>
+                            <Text style={styles.workoutName}>{selectedDay.workout.name}</Text>
                             <View style={styles.progressIndicator}>
                               {progress >= 0.999 ? (
                                 <IconCheck size={24} color="#227132" />
                               ) : (
                                 <>
+                                  <Text style={styles.progressText}>{completionPercentage}%</Text>
                                   <Svg height="16" width="16" viewBox="0 0 16 16" style={styles.progressCircle}>
                                     <Circle cx="8" cy="8" r="8" fill={LIGHT_COLORS.border} />
                                     {progress > 0 ? (
@@ -461,20 +454,26 @@ export function TodayScreen({ onNavigateToWorkouts, onDateChange, onOpenSwapDraw
                                       />
                                     ) : null}
                                   </Svg>
-                                  <Text style={styles.progressText}>{completionPercentage}%</Text>
                                 </>
                               )}
                             </View>
-                            
-                            {/* Right: Action Button */}
+                          </View>
+                          
+                          {/* Exercises Count */}
+                          <Text style={styles.workoutExercises}>
+                            {selectedDay.workout.exercises.length} exercises
+                          </Text>
+                          
+                          {/* Footer: Action Button */}
+                          <View style={styles.workoutCardFooter}>
                             <View style={styles.startButton}>
                               <Text style={styles.startButtonText}>{buttonState}</Text>
                               <IconStart size={24} color={COLORS.accentPrimary} />
                             </View>
-                          </>
-                        );
-                      })()}
-                    </View>
+                          </View>
+                        </>
+                      );
+                    })()}
                       </TouchableOpacity>
                 </View>
               ) : (
@@ -761,10 +760,16 @@ const styles = StyleSheet.create({
     paddingTop: 16,
     paddingBottom: 20,
   },
+  workoutCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'baseline',
+    marginBottom: 2,
+  },
   workoutName: {
     ...TYPOGRAPHY.h2,
     color: LIGHT_COLORS.secondary,
-    marginBottom: 2,
+    flex: 1,
   },
   workoutExercises: {
     ...TYPOGRAPHY.meta,
@@ -775,13 +780,13 @@ const styles = StyleSheet.create({
   // Footer
   workoutCardFooter: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    justifyContent: 'flex-end',
     alignItems: 'center',
     marginTop: 'auto',
   },
   progressIndicator: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'baseline',
     gap: 6,
   },
   progressCircle: {
