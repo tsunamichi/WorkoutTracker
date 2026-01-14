@@ -493,10 +493,9 @@ export function WorkoutsScreen() {
                                   </>
                                 )}
                                 </View>
-                              <View style={styles.seeDetailsButton}>
+                              <TouchableOpacity style={styles.seeDetailsButton}>
                                 <Text style={styles.seeDetailsText}>See details</Text>
-                                <IconPlay size={10} color={COLORS.accentPrimary} />
-                              </View>
+                              </TouchableOpacity>
                             </View>
                               </TouchableOpacity>
                         </View>
@@ -788,13 +787,17 @@ const styles = StyleSheet.create({
     color: COLORS.textMeta,
   },
   seeDetailsButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
+    width: '100%',
+    backgroundColor: COLORS.accentSecondary,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 12,
+    borderCurve: 'continuous',
   },
   seeDetailsText: {
     ...TYPOGRAPHY.metaBold,
-    color: COLORS.accentPrimary,
+    color: COLORS.text,
+    textAlign: 'left',
   },
   
   // Past Cycles

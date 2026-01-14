@@ -7,7 +7,7 @@ import { useNavigation } from '@react-navigation/native';
 import { useStore } from '../store';
 import { ProfileAvatar } from '../components/ProfileAvatar';
 import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS, CARDS } from '../constants';
-import { IconCalendar, IconStopwatch, IconWorkouts, IconCheck, IconSwap, IconAdd, IconStart } from '../components/icons';
+import { IconCalendar, IconStopwatch, IconWorkouts, IconCheck, IconSwap, IconAdd } from '../components/icons';
 import dayjs from 'dayjs';
 import isoWeek from 'dayjs/plugin/isoWeek';
 
@@ -466,10 +466,9 @@ export function TodayScreen({ onNavigateToWorkouts, onDateChange, onOpenSwapDraw
                           
                           {/* Footer: Action Button */}
                           <View style={styles.workoutCardFooter}>
-                            <View style={styles.startButton}>
+                            <TouchableOpacity style={styles.startButton}>
                               <Text style={styles.startButtonText}>{buttonState}</Text>
-                              <IconStart size={24} color={COLORS.accentPrimary} />
-                            </View>
+                            </TouchableOpacity>
                           </View>
                         </>
                       );
@@ -779,9 +778,6 @@ const styles = StyleSheet.create({
   
   // Footer
   workoutCardFooter: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    alignItems: 'center',
     marginTop: 'auto',
   },
   progressIndicator: {
@@ -803,14 +799,17 @@ const styles = StyleSheet.create({
   
   // Start Button
   startButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'flex-start',
-    gap: 4,
+    width: '100%',
+    backgroundColor: COLORS.accentSecondary,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 12,
+    borderCurve: 'continuous',
   },
   startButtonText: {
     ...TYPOGRAPHY.metaBold,
-    color: COLORS.accentPrimary,
+    color: COLORS.text,
+    textAlign: 'left',
   },
   
   // Completed Badge

@@ -103,6 +103,7 @@ export const COLORS = {
   accentPrimaryLight: adjustLightness(ACCENT_PRIMARY, 30), // 30% lighter
   accentPrimaryDark: adjustLightness(ACCENT_PRIMARY, -8),  // 8% darker
   accentPrimaryDimmed: '#E3E8FF',       // Light blue background for selected states
+  accentSecondary: '#E3E3E3',           // Secondary accent color for buttons
   
   // Text
   text: '#1B1B1B',              // Default text color (dark)
