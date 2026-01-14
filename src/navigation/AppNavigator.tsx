@@ -170,13 +170,13 @@ function TabNavigator() {
             <Animated.View style={{ opacity: scheduleIconOpacity }}>
               <IconCalendar 
                 size={24} 
-                color={activeTab === 'Schedule' ? COLORS.backgroundCanvas : COLORS.textMeta} 
+                color={activeTab === 'Schedule' ? COLORS.backgroundCanvas : COLORS.text} 
               />
             </Animated.View>
             <Text 
               style={[
                 styles.tabLabel,
-                { color: activeTab === 'Schedule' ? COLORS.backgroundCanvas : COLORS.textMeta }
+                { color: activeTab === 'Schedule' ? COLORS.backgroundCanvas : COLORS.text }
               ]} 
               numberOfLines={1}
             >
@@ -196,13 +196,13 @@ function TabNavigator() {
             <Animated.View style={{ opacity: workoutsIconOpacity }}>
               <IconWorkouts 
                 size={24} 
-                color={activeTab === 'Workouts' ? COLORS.backgroundCanvas : COLORS.textMeta} 
+                color={activeTab === 'Workouts' ? COLORS.backgroundCanvas : COLORS.text} 
               />
             </Animated.View>
             <Text 
               style={[
                 styles.tabLabel,
-                { color: activeTab === 'Workouts' ? COLORS.backgroundCanvas : COLORS.textMeta }
+                { color: activeTab === 'Workouts' ? COLORS.backgroundCanvas : COLORS.text }
               ]} 
               numberOfLines={1}
             >
