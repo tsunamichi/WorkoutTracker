@@ -14,7 +14,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useCreateCycleDraftStore } from '../../store/useCreateCycleDraftStore';
 import { formatWeekdayFull, getExerciseSummary } from '../../utils/manualCycleUtils';
 import { Weekday, ExerciseBlock } from '../../types/manualCycle';
-import { SPACING, TYPOGRAPHY } from '../../constants';
+import { COLORS, SPACING, TYPOGRAPHY } from '../../constants';
 import { IconAdd, IconTrash } from '../../components/icons';
 import { ExercisePickerModal } from '../../components/manualCycle/ExercisePickerModal';
 import { ExerciseEditorBottomSheet } from '../../components/manualCycle/ExerciseEditorBottomSheet';
@@ -210,7 +210,7 @@ export function CreateCycleDayEditor({ navigation, route }: CreateCycleDayEditor
 const styles = StyleSheet.create({
   gradient: {
     flex: 1,
-    backgroundColor: '#E2E3DF',
+    backgroundColor: COLORS.backgroundCanvas,
   },
   container: {
     flex: 1,

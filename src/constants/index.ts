@@ -80,7 +80,10 @@ function adjustLightness(hex: string, amount: number): string {
 }
 
 // Base accent color
-const ACCENT_PRIMARY = '#062FFF';
+const ACCENT_PRIMARY = '#2F06FF';
+const SIGNAL_NEGATIVE = '#FF0651';
+const SIGNAL_POSITIVE = '#1CAA00';
+const SIGNAL_WARNING = '#FFBD06';
 
 export const COLORS = {
   // Core colors
@@ -93,8 +96,8 @@ export const COLORS = {
   activeCard: '#FBF7F7',    // Active/default card state
   
   // Primary actions
-  primary: '#227132',       // Green for actions
-  primarySoft: '#1E3A24',   // Soft green background
+  primary: SIGNAL_POSITIVE,       // Green for actions
+  primarySoft: adjustLightness(SIGNAL_POSITIVE, -35),   // Soft green background
   
   // Secondary/accent
   secondary: '#007AFF',     // Blue
@@ -102,7 +105,7 @@ export const COLORS = {
   accentPrimary: ACCENT_PRIMARY,        // Orange for highlights (gradient start)
   accentPrimaryLight: adjustLightness(ACCENT_PRIMARY, 30), // 30% lighter
   accentPrimaryDark: adjustLightness(ACCENT_PRIMARY, -8),  // 8% darker
-  accentPrimaryDimmed: '#E3E8FF',       // Light blue background for selected states
+  accentPrimaryDimmed: '#CDD5FF',       // Light blue background for selected states
   accentSecondary: '#E3E3E3',           // Secondary accent color for buttons
   
   // Text
@@ -120,15 +123,17 @@ export const COLORS = {
   overlay: 'rgba(0, 0, 0, 0.2)', // Bottom sheet overlays
   
   // Status colors
-  signalPositive: '#227132',
-  success: '#227132',
-  warning: '#FF9500',
-  error: '#FF3B30',
+  signalNegative: SIGNAL_NEGATIVE,
+  signalPositive: SIGNAL_POSITIVE,
+  signalWarning: SIGNAL_WARNING,
+  success: SIGNAL_POSITIVE,
+  warning: SIGNAL_WARNING,
+  error: SIGNAL_NEGATIVE,
   
   // Exercise categories
-  chest: '#FF6B6B',
+  chest: SIGNAL_NEGATIVE,
   back: '#4ECDC4',
-  legs: '#FFD93D',
+  legs: SIGNAL_WARNING,
   shoulders: '#A8E6CF',
   arms: '#FF8B94',
   core: '#C7CEEA',
@@ -197,7 +202,7 @@ export const TYPOGRAPHY = {
     fontWeight: '400' as const,
   },
   note: {
-    fontSize: 12,
+    fontSize: 10,
     fontWeight: '400' as const,
     textTransform: 'uppercase' as const,
   },
@@ -261,6 +266,8 @@ export const CARDS = {
     backgroundColor: '#FBF7F7', // activeCard
     borderRadius: 16,  // Squircle-friendly
     borderCurve: 'continuous' as const,
+    borderWidth: 0,
+    borderColor: 'transparent',
   },
   cardDeep: {
     // Outer card container (no external shadows)
@@ -269,20 +276,14 @@ export const CARDS = {
       borderRadius: 16,  // Squircle-friendly
       borderCurve: 'continuous' as const,
       overflow: 'hidden' as const,
+      borderWidth: 0,
+      borderColor: 'transparent',
     },
-    // Inner card with borders for depth
+    // Inner card without borders (flat)
     inner: {
       backgroundColor: '#FBF7F7', // activeCard
       borderRadius: 16,  // Squircle-friendly
       borderCurve: 'continuous' as const,
-      borderTopWidth: 2,
-      borderLeftWidth: 2,
-      borderBottomWidth: 2,
-      borderRightWidth: 2,
-      borderTopColor: 'rgba(255, 255, 255, 0.75)',
-      borderLeftColor: 'rgba(255, 255, 255, 0.75)',
-      borderBottomColor: 'rgba(0, 0, 0, 0.08)',
-      borderRightColor: 'rgba(0, 0, 0, 0.08)',
     },
   },
   cardDeepDimmed: {
@@ -292,6 +293,8 @@ export const CARDS = {
       borderRadius: 16,  // Squircle-friendly
       borderCurve: 'continuous' as const,
       overflow: 'hidden' as const,
+      borderWidth: 0,
+      borderColor: 'transparent',
     },
     // Inner card WITHOUT borders (dimmed state)
     inner: {
@@ -308,20 +311,14 @@ export const CARDS = {
       borderRadius: 16,  // Squircle-friendly
       borderCurve: 'continuous' as const,
       overflow: 'hidden' as const,
+      borderWidth: 0,
+      borderColor: 'transparent',
     },
-    // Inner card WITHOUT borders (disabled state)
+    // Inner card without borders (disabled state)
     inner: {
       backgroundColor: '#E2E3DF',
       borderRadius: 16,  // Squircle-friendly
       borderCurve: 'continuous' as const,
-      borderTopWidth: 2,
-      borderLeftWidth: 2,
-      borderBottomWidth: 2,
-      borderRightWidth: 2,
-      borderTopColor: 'transparent',
-      borderLeftColor: 'transparent',
-      borderBottomColor: 'transparent',
-      borderRightColor: 'transparent',
     },
   },
 };

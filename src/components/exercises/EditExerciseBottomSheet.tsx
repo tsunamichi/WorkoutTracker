@@ -300,7 +300,7 @@ const styles = StyleSheet.create({
   deleteButtonText: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#FF3B30',
+    color: COLORS.signalNegative,
   },
   rightActions: {
     flexDirection: 'row',

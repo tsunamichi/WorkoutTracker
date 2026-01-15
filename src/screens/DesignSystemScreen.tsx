@@ -343,7 +343,7 @@ export function DesignSystemScreen({ navigation }: DesignSystemScreenProps) {
 const styles = StyleSheet.create({
   gradient: {
     flex: 1,
-    backgroundColor: '#E2E3DF',
+    backgroundColor: COLORS.backgroundCanvas,
   },
   container: {
     flex: 1,
@@ -622,20 +622,8 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.lg,
   },
   cardShadowBlack: {
-    // Black shadow: -1, -1, 8% opacity, 1px blur
-    shadowColor: '#000000',
-    shadowOffset: { width: -1, height: -1 },
-    shadowOpacity: 0.08,
-    shadowRadius: 1,
-    elevation: 2,
   },
   cardShadowWhite: {
-    // Bottom-right shadow: 1, 1, 100% opacity, 1px blur
-    shadowColor: '#FFFFFF',
-    shadowOffset: { width: 1, height: 1 },
-    shadowOpacity: 1,
-    shadowRadius: 1,
-    elevation: 1,
   },
   cardWithShadow: {
     backgroundColor: COLORS.activeCard,

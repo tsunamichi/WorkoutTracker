@@ -45,7 +45,6 @@ export default function HIITTimerFormScreen({ navigation, route }: Props) {
   const [rounds, setRounds] = useState<number>(existingTimer?.rounds || 1);
   const [roundRest, setRoundRest] = useState<number>(existingTimer?.roundRest || 30);
   const [activeSheet, setActiveSheet] = useState<SheetType>(null);
-  const [pressedCardId, setPressedCardId] = useState<string | null>(null);
   
   // Track if timer was already saved to prevent duplicates
   const hasSavedRef = useRef(false);
@@ -293,14 +292,11 @@ export default function HIITTimerFormScreen({ navigation, route }: Props) {
             {/* Move for card */}
             <TouchableOpacity
               onPress={() => setActiveSheet('work')}
-              onPressIn={() => setPressedCardId('work')}
-              onPressOut={() => setPressedCardId(null)}
               activeOpacity={1}
             >
               <View style={[
                 CARDS.cardDeepDimmed.outer,
                 styles.card,
-                pressedCardId === 'work' && styles.cardPressed
               ]}>
                 <View style={[CARDS.cardDeepDimmed.inner, styles.cardInner]}>
                   <Text style={styles.cardLabel}>Move for</Text>
@@ -312,14 +308,11 @@ export default function HIITTimerFormScreen({ navigation, route }: Props) {
             {/* Rest after each exercise card */}
             <TouchableOpacity
               onPress={() => setActiveSheet('workRest')}
-              onPressIn={() => setPressedCardId('workRest')}
-              onPressOut={() => setPressedCardId(null)}
               activeOpacity={1}
             >
               <View style={[
                 CARDS.cardDeepDimmed.outer,
                 styles.card,
-                pressedCardId === 'workRest' && styles.cardPressed
               ]}>
                 <View style={[CARDS.cardDeepDimmed.inner, styles.cardInner]}>
                   <Text style={styles.cardLabel}>Rest after each exercise</Text>
@@ -336,14 +329,11 @@ export default function HIITTimerFormScreen({ navigation, route }: Props) {
             {/* Exercises in a round card */}
             <TouchableOpacity
               onPress={() => setActiveSheet('sets')}
-              onPressIn={() => setPressedCardId('sets')}
-              onPressOut={() => setPressedCardId(null)}
               activeOpacity={1}
             >
               <View style={[
                 CARDS.cardDeepDimmed.outer,
                 styles.card,
-                pressedCardId === 'sets' && styles.cardPressed
               ]}>
                 <View style={[CARDS.cardDeepDimmed.inner, styles.cardInner]}>
                   <Text style={styles.cardLabel}>Exercises in a round</Text>
@@ -355,14 +345,11 @@ export default function HIITTimerFormScreen({ navigation, route }: Props) {
             {/* Rounds card */}
             <TouchableOpacity
               onPress={() => setActiveSheet('rounds')}
-              onPressIn={() => setPressedCardId('rounds')}
-              onPressOut={() => setPressedCardId(null)}
               activeOpacity={1}
             >
               <View style={[
                 CARDS.cardDeepDimmed.outer,
                 styles.card,
-                pressedCardId === 'rounds' && styles.cardPressed
               ]}>
                 <View style={[CARDS.cardDeepDimmed.inner, styles.cardInner]}>
                   <Text style={styles.cardLabel}>Rounds</Text>
@@ -374,14 +361,11 @@ export default function HIITTimerFormScreen({ navigation, route }: Props) {
             {/* Rest between rounds card */}
             <TouchableOpacity
               onPress={() => setActiveSheet('roundRest')}
-              onPressIn={() => setPressedCardId('roundRest')}
-              onPressOut={() => setPressedCardId(null)}
               activeOpacity={1}
             >
               <View style={[
                 CARDS.cardDeepDimmed.outer,
                 styles.card,
-                pressedCardId === 'roundRest' && styles.cardPressed
               ]}>
                 <View style={[CARDS.cardDeepDimmed.inner, styles.cardInner]}>
                   <Text style={styles.cardLabel}>Rest between rounds</Text>
@@ -539,10 +523,6 @@ const styles = StyleSheet.create({
   },
   card: {
     marginBottom: 8,
-  },
-  cardPressed: {
-    borderWidth: 1,
-    borderColor: LIGHT_COLORS.textMeta,
   },
   cardInner: {
     paddingVertical: SPACING.lg,

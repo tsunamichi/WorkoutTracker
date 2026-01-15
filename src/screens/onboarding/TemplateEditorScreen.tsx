@@ -13,6 +13,7 @@ import { ExerciseRow } from '../../components/exercises/ExerciseRow';
 import { AddExerciseBottomSheet } from '../../components/exercises/AddExerciseBottomSheet';
 import { EditExerciseBottomSheet } from '../../components/exercises/EditExerciseBottomSheet';
 import { Exercise } from '../../types/workout';
+import { COLORS } from '../../constants';
 
 type OnboardingStackParamList = {
   TemplateEditor: undefined;
@@ -173,7 +174,7 @@ export function TemplateEditorScreen({ navigation }: TemplateEditorScreenProps) 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8F8F8',
+    backgroundColor: COLORS.backgroundCanvas,
   },
   scrollView: {
     flex: 1,

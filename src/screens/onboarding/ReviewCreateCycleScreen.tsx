@@ -7,6 +7,7 @@ import { ProgressHeader } from '../../components/common/ProgressHeader';
 import { StickyFooter } from '../../components/common/StickyFooter';
 import { convertOnboardingCycleToAppCycle } from '../../utils/convertOnboardingCycle';
 import { generateRandomWorkoutAssignments } from '../../utils/assignCycleWorkouts';
+import { COLORS } from '../../constants';
 
 type OnboardingStackParamList = {
   ReviewCreateCycle: undefined;
@@ -209,7 +210,7 @@ export function ReviewCreateCycleScreen({ navigation }: ReviewCreateCycleScreenP
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8F8F8',
+    backgroundColor: COLORS.backgroundCanvas,
   },
   scrollView: {
     flex: 1,

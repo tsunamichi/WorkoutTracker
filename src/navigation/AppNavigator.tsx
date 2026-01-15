@@ -35,7 +35,7 @@ import dayjs from 'dayjs';
 
 export type RootStackParamList = {
   Tabs: undefined;
-  Profile: undefined;
+  Profile: { mode?: 'settings' } | undefined;
   DesignSystem: undefined;
   CycleDetail: { cycleId: string };
   WorkoutExecution: { workoutTemplateId: string; date: string };
@@ -56,6 +56,10 @@ export type RootStackParamList = {
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
+
+const TAB_ICON_SIZE = 24;
+const TAB_ICON_GAP = 4;
+const LABEL_CENTER_OFFSET = (TAB_ICON_SIZE + TAB_ICON_GAP) / 2;
 
 // Light theme colors for swap drawer
 const LIGHT_COLORS = {
@@ -79,6 +83,16 @@ function TabNavigator() {
   const scheduleIconOpacity = React.useRef(new Animated.Value(1)).current;
   const workoutsIconOpacity = React.useRef(new Animated.Value(0)).current;
   const [tabBarWidth, setTabBarWidth] = React.useState(0);
+
+  // Animate label colors to avoid flicker while the pill transitions
+  const scheduleLabelColor = indicatorPosition.interpolate({
+    inputRange: [0, 1],
+    outputRange: [COLORS.backgroundCanvas, COLORS.text],
+  });
+  const workoutsLabelColor = indicatorPosition.interpolate({
+    inputRange: [0, 1],
+    outputRange: [COLORS.text, COLORS.backgroundCanvas],
+  });
   
   const switchTab = (tab: 'Schedule' | 'Workouts') => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -168,14 +182,20 @@ function TabNavigator() {
             onPress={() => switchTab('Schedule')}
           >
             <Animated.View 
-              style={{ 
-                opacity: scheduleIconOpacity,
-                width: scheduleIconOpacity.interpolate({
-                  inputRange: [0, 1],
-                  outputRange: [0, 24]
-                }),
-                overflow: 'hidden'
-              }}
+              style={[
+                styles.tabIcon,
+                { 
+                  opacity: scheduleIconOpacity,
+                  transform: [
+                    {
+                      scale: scheduleIconOpacity.interpolate({
+                        inputRange: [0, 1],
+                        outputRange: [0.85, 1],
+                      }),
+                    },
+                  ],
+                }
+              ]}
             >
               <IconCalendar 
                 size={24} 
@@ -184,22 +204,26 @@ function TabNavigator() {
             </Animated.View>
             <Animated.View
               style={{
-                flex: 1,
-                marginLeft: scheduleIconOpacity.interpolate({
-                  inputRange: [0, 1],
-                  outputRange: [0, 4]
-                })
+                marginLeft: TAB_ICON_GAP,
+                transform: [
+                  {
+                    translateX: scheduleIconOpacity.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [-LABEL_CENTER_OFFSET, 0],
+                    }),
+                  },
+                ],
               }}
             >
-              <Text 
+              <Animated.Text 
                 style={[
                   styles.tabLabel,
-                  { color: activeTab === 'Schedule' ? COLORS.backgroundCanvas : COLORS.text }
+                  { color: scheduleLabelColor }
                 ]} 
                 numberOfLines={1}
               >
                 Schedule
-              </Text>
+              </Animated.Text>
             </Animated.View>
           </TouchableOpacity>
           
@@ -213,14 +237,20 @@ function TabNavigator() {
             }}
           >
             <Animated.View 
-              style={{ 
-                opacity: workoutsIconOpacity,
-                width: workoutsIconOpacity.interpolate({
-                  inputRange: [0, 1],
-                  outputRange: [0, 24]
-                }),
-                overflow: 'hidden'
-              }}
+              style={[
+                styles.tabIcon,
+                { 
+                  opacity: workoutsIconOpacity,
+                  transform: [
+                    {
+                      scale: workoutsIconOpacity.interpolate({
+                        inputRange: [0, 1],
+                        outputRange: [0.85, 1],
+                      }),
+                    },
+                  ],
+                }
+              ]}
             >
               <IconWorkouts 
                 size={24} 
@@ -229,22 +259,26 @@ function TabNavigator() {
             </Animated.View>
             <Animated.View
               style={{
-                flex: 1,
-                marginLeft: workoutsIconOpacity.interpolate({
-                  inputRange: [0, 1],
-                  outputRange: [0, 4]
-                })
+                marginLeft: TAB_ICON_GAP,
+                transform: [
+                  {
+                    translateX: workoutsIconOpacity.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [-LABEL_CENTER_OFFSET, 0],
+                    }),
+                  },
+                ],
               }}
             >
-              <Text 
+              <Animated.Text 
                 style={[
                   styles.tabLabel,
-                  { color: activeTab === 'Workouts' ? COLORS.backgroundCanvas : COLORS.text }
+                  { color: workoutsLabelColor }
                 ]} 
                 numberOfLines={1}
               >
                 Workouts
-              </Text>
+              </Animated.Text>
             </Animated.View>
           </TouchableOpacity>
             </View>
@@ -386,6 +420,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     zIndex: 1,
+  },
+  tabIcon: {
+    width: TAB_ICON_SIZE,
+    height: TAB_ICON_SIZE,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   tabLabel: {
     ...TYPOGRAPHY.metaBold,

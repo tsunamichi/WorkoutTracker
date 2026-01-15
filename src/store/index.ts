@@ -77,7 +77,7 @@ interface WorkoutStore {
 }
 
 const DEFAULT_SETTINGS: AppSettings = {
-  useKg: true,
+  useKg: false,
   monthlyProgressReminderEnabled: true,
   monthlyProgressReminderDay: 1,
   restTimerDefaultSeconds: 120,
@@ -642,7 +642,10 @@ export const useStore = create<WorkoutStore>((set, get) => ({
   getExerciseProgress: (workoutKey, exerciseId) => {
     const workoutProgress = get().detailedWorkoutProgress[workoutKey];
     const exerciseProgress = workoutProgress?.exercises[exerciseId];
-    console.log(`🔎 getExerciseProgress(${exerciseId}):`, JSON.stringify(exerciseProgress, null, 2));
+    // Only log if there's actual progress (reduces console noise)
+    if (exerciseProgress) {
+      console.log(`🔎 getExerciseProgress(${exerciseId}):`, JSON.stringify(exerciseProgress, null, 2));
+    }
     return exerciseProgress;
   },
   

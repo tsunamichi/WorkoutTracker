@@ -29,7 +29,6 @@ const LIGHT_COLORS = {
 export default function HIITTimerListScreen({ navigation }: Props) {
   const insets = useSafeAreaInsets();
   const { hiitTimers, deleteHIITTimer } = useStore();
-  const [pressedCardId, setPressedCardId] = React.useState<string | null>(null);
   
   const templates = hiitTimers.filter(t => t.isTemplate);
   
@@ -138,14 +137,11 @@ export default function HIITTimerListScreen({ navigation }: Props) {
                   ]
                 );
               }}
-              onPressIn={() => setPressedCardId(timer.id)}
-              onPressOut={() => setPressedCardId(null)}
               activeOpacity={1}
             >
               <View style={[
                 CARDS.cardDeepDimmed.outer,
                 styles.timerCard,
-                pressedCardId === timer.id && styles.timerCardPressed
               ]}>
                 <View style={[CARDS.cardDeepDimmed.inner, styles.timerCardInner]}>
                   <Text style={styles.timerName}>{timer.name}</Text>
@@ -175,7 +171,7 @@ export default function HIITTimerListScreen({ navigation }: Props) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#E2E3DF',
+    backgroundColor: COLORS.backgroundCanvas,
   },
   innerContainer: {
     flex: 1,
@@ -227,10 +223,6 @@ const styles = StyleSheet.create({
   },
   timerCard: {
     marginBottom: 8,
-  },
-  timerCardPressed: {
-    borderWidth: 1,
-    borderColor: LIGHT_COLORS.textMeta,
   },
   timerCardInner: {
     paddingVertical: SPACING.lg,

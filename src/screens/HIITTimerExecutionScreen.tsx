@@ -38,11 +38,11 @@ const LIGHT_COLORS = {
 };
 
 const PHASE_COLORS = {
-  countdown: '#FDB022', // Yellow
+  countdown: COLORS.signalWarning,
   work: '#1B1B1B', // Black
-  restYellow: '#FDB022', // Yellow for rest
-  restRed: '#FF6B6B', // Red for last 5 seconds of rest
-  complete: '#227132', // Green
+  restYellow: COLORS.signalWarning,
+  restRed: COLORS.signalNegative,
+  complete: COLORS.signalPositive,
 };
 
 const MIN_SIZE = 180;
@@ -877,7 +877,7 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
     
     try {
       const particleCount = 50; // More particles!
-      const colors = ['#227132', '#5E9EFF', '#FDB022', '#FF6B6B']; // Green, Blue, Yellow, Red
+      const colors = [COLORS.signalPositive, '#5E9EFF', COLORS.signalWarning, COLORS.signalNegative];
       
       const newParticles: Particle[] = [];
       
@@ -1329,7 +1329,7 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
           onClose={() => setMenuVisible(false)}
           items={[
             { 
-              icon: <IconTrash size={24} color="#FF3B30" />,
+              icon: <IconTrash size={24} color={COLORS.signalNegative} />,
               label: 'Delete', 
               onPress: handleDelete, 
               destructive: true 
@@ -1458,7 +1458,7 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#E2E3DF',
+    backgroundColor: COLORS.backgroundCanvas,
   },
   innerContainer: {
     flex: 1,

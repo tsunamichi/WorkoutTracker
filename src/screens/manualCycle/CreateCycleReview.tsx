@@ -20,7 +20,7 @@ import {
   formatDateRange,
   generateId,
 } from '../../utils/manualCycleUtils';
-import { SPACING, TYPOGRAPHY } from '../../constants';
+import { COLORS, SPACING, TYPOGRAPHY } from '../../constants';
 import { Weekday } from '../../types/manualCycle';
 
 interface CreateCycleReviewProps {
@@ -322,7 +322,7 @@ export function CreateCycleReview({ navigation }: CreateCycleReviewProps) {
 const styles = StyleSheet.create({
   gradient: {
     flex: 1,
-    backgroundColor: '#E2E3DF',
+    backgroundColor: COLORS.backgroundCanvas,
   },
   container: {
     flex: 1,

@@ -45,7 +45,6 @@ export function TodayScreen({ onNavigateToWorkouts, onDateChange, onOpenSwapDraw
   // State for selected date (defaults to today)
   const [selectedDate, setSelectedDate] = useState(today.format('YYYY-MM-DD'));
   const [weekOffset, setWeekOffset] = useState(0); // 0 = current week, -1 = last week, 1 = next week, etc.
-  const [isCardPressed, setIsCardPressed] = useState(false);
   
   // Animation values
   const dayScales = useRef(DAYS_SHORT.map(() => new Animated.Value(1))).current;
@@ -145,15 +144,6 @@ export function TodayScreen({ onNavigateToWorkouts, onDateChange, onOpenSwapDraw
   const selectedDay = weekDays.find(d => d.date === selectedDate);
   const selectedDayIndex = weekDays.findIndex(d => d.date === selectedDate);
   
-  // Reset card pressed state when day changes
-  useEffect(() => {
-    setIsCardPressed(false);
-  }, [selectedDate]);
-  
-  // Also reset when selectedDay changes (especially when going from rest day to workout day)
-  useEffect(() => {
-    setIsCardPressed(false);
-  }, [selectedDay?.workout]);
 
   // Animate button press effect when day changes
   useEffect(() => {
@@ -252,8 +242,6 @@ export function TodayScreen({ onNavigateToWorkouts, onDateChange, onOpenSwapDraw
   };
   
   const handleBackToToday = () => {
-    // Reset pressed state immediately
-    setIsCardPressed(false);
     setWeekOffset(0);
     setSelectedDate(today.format('YYYY-MM-DD'));
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -313,7 +301,7 @@ export function TodayScreen({ onNavigateToWorkouts, onDateChange, onOpenSwapDraw
                     <View style={styles.dayButtonWrapper}>
                       {isToday && (
                         <View style={styles.dayLabelContainer}>
-                          <Text style={styles.dayLabel}>{day.dayLetter}</Text>
+                          <Text style={styles.dayLabel}>{day.dateObj.format('ddd')}</Text>
                         </View>
                       )}
                       <Animated.View
@@ -324,6 +312,9 @@ export function TodayScreen({ onNavigateToWorkouts, onDateChange, onOpenSwapDraw
                         <View
                           style={[
                             styles.dayButton,
+                            isToday && !isSelected && {
+                              backgroundColor: COLORS.activeCard,
+                            },
                             isSelected && {
                               backgroundColor: COLORS.text,
                               borderWidth: 1,
@@ -364,42 +355,6 @@ export function TodayScreen({ onNavigateToWorkouts, onDateChange, onOpenSwapDraw
               </View>
             ) : (
               <View style={styles.content}>
-                {/* Swap Button Container */}
-                <View style={styles.wodLabelContainer}>
-                  {/* Swap Button */}
-                  {selectedDay?.workout && !selectedDay.isCompleted && (() => {
-                    
-                    // Check if workout has any progress
-                    const workoutKey = `${selectedDay.workout.id}-${selectedDay.date}`;
-                    // Calculate totalSets excluding skipped exercises
-                    let totalSets = 0;
-                    selectedDay.workout.exercises.forEach((ex: any) => {
-                      const progress = getExerciseProgress(workoutKey, ex.id);
-                      if (!progress?.skipped) {
-                        totalSets += ex.targetSets || 0;
-                      }
-                    });
-                    const completionPercentage = getWorkoutCompletionPercentage(workoutKey, totalSets);
-                    const hasStarted = completionPercentage > 0;
-                    
-                    // Hide swap button if workout has been started
-                    if (hasStarted) return null;
-                    
-                    return (
-                      <TouchableOpacity 
-                        style={styles.swapButton}
-                        onPress={() => handleAddOrCreateWorkout(selectedDate)}
-                        activeOpacity={1}
-                      >
-                        <Text style={styles.swapButtonText}>
-                          {hasEligibleWorkoutsToSwap(selectedDate) ? 'Swap' : 'Create Workout'}
-                        </Text>
-                        <IconSwap size={24} color={COLORS.text} />
-                      </TouchableOpacity>
-                    );
-                  })()}
-                </View>
-                
                 {/* Workout Content Wrapper - Fixed height for consistent Intervals positioning */}
                 <View style={styles.workoutContentWrapper}>
                 <View style={styles.cardsContainer}>
@@ -409,8 +364,6 @@ export function TodayScreen({ onNavigateToWorkouts, onDateChange, onOpenSwapDraw
                       <TouchableOpacity
                         style={styles.workoutCardInner}
                         onPress={handleWorkoutPress}
-                        onPressIn={() => setIsCardPressed(true)}
-                        onPressOut={() => setIsCardPressed(false)}
                         activeOpacity={1}
                       >
                     {(() => {
@@ -430,43 +383,47 @@ export function TodayScreen({ onNavigateToWorkouts, onDateChange, onOpenSwapDraw
                       
                       return (
                         <>
-                          {/* Top Row: Workout Name + Progress */}
-                          <View style={styles.workoutCardHeader}>
-                            <Text style={styles.workoutName}>{selectedDay.workout.name}</Text>
-                            <View style={styles.progressIndicator}>
-                              {progress >= 0.999 ? (
-                                <IconCheck size={24} color="#227132" />
-                              ) : (
-                                <>
-                                  <Text style={styles.progressText}>{completionPercentage}%</Text>
-                                  <Svg height="16" width="16" viewBox="0 0 16 16" style={styles.progressCircle}>
-                                    <Circle cx="8" cy="8" r="8" fill={LIGHT_COLORS.border} />
-                                    {progress > 0 ? (
-                                      <Path
-                                        d={`M 8 8 L 8 0 A 8 8 0 ${progress > 0.5 ? 1 : 0} 1 ${
-                                          8 + 8 * Math.sin(2 * Math.PI * progress)
-                                        } ${
-                                          8 - 8 * Math.cos(2 * Math.PI * progress)
-                                        } Z`}
-                                        fill={LIGHT_COLORS.text}
-                                      />
-                                    ) : null}
-                                  </Svg>
-                                </>
-                              )}
+                          <View style={styles.workoutCardContent}>
+                            {/* Top Row: Workout Name + Progress */}
+                            <View style={styles.workoutCardHeader}>
+                              <Text style={styles.workoutName}>{selectedDay.workout.name}</Text>
+                              <View style={styles.progressIndicator}>
+                                {progress >= 0.999 ? (
+                                  <View style={styles.progressCheckCircle}>
+                                  <IconCheck size={24} color={COLORS.signalPositive} />
+                                  </View>
+                                ) : (
+                                  <>
+                                    <Text style={styles.progressText}>{completionPercentage}%</Text>
+                                    <Svg height="16" width="16" viewBox="0 0 16 16" style={styles.progressCircle}>
+                                      <Circle cx="8" cy="8" r="8" fill={LIGHT_COLORS.border} />
+                                      {progress > 0 ? (
+                                        <Path
+                                          d={`M 8 8 L 8 0 A 8 8 0 ${progress > 0.5 ? 1 : 0} 1 ${
+                                            8 + 8 * Math.sin(2 * Math.PI * progress)
+                                          } ${
+                                            8 - 8 * Math.cos(2 * Math.PI * progress)
+                                          } Z`}
+                                          fill={LIGHT_COLORS.text}
+                                        />
+                                      ) : null}
+                                    </Svg>
+                                  </>
+                                )}
+                              </View>
                             </View>
+                            
+                            {/* Exercises Count */}
+                            <Text style={styles.workoutExercises}>
+                              {selectedDay.workout.exercises.length} exercises
+                            </Text>
                           </View>
                           
-                          {/* Exercises Count */}
-                          <Text style={styles.workoutExercises}>
-                            {selectedDay.workout.exercises.length} exercises
-                          </Text>
-                          
                           {/* Footer: Action Button */}
-                          <View style={styles.workoutCardFooter}>
-                            <TouchableOpacity style={styles.startButton}>
+                          <View style={styles.workoutCardFooter} pointerEvents="none">
+                            <View style={styles.startButton}>
                               <Text style={styles.startButtonText}>{buttonState}</Text>
-                            </TouchableOpacity>
+                            </View>
                           </View>
                         </>
                       );
@@ -480,18 +437,55 @@ export function TodayScreen({ onNavigateToWorkouts, onDateChange, onOpenSwapDraw
                       <Text style={styles.restDayQuestionGray}>This is your rest day{'\n'}</Text>
                       <Text style={styles.restDayQuestionBlack}>No workouts scheduled</Text>
                     </Text>
-                    <TouchableOpacity
-                      style={styles.addWorkoutButton}
-                      onPress={() => handleAddOrCreateWorkout(selectedDate)}
-                      activeOpacity={1}
-                    >
-                      <Text style={styles.addWorkoutButtonText}>
-                        {hasEligibleWorkoutsToSwap(selectedDate) ? 'Add Workout' : 'Create Workout'}
-                      </Text>
-                    </TouchableOpacity>
                   </View>
                 </View>
               )}
+
+              <View style={styles.cardActionsContainer}>
+                {selectedDay?.workout && !selectedDay.isCompleted && (() => {
+                  // Check if workout has any progress
+                  const workoutKey = `${selectedDay.workout.id}-${selectedDay.date}`;
+                  // Calculate totalSets excluding skipped exercises
+                  let totalSets = 0;
+                  selectedDay.workout.exercises.forEach((ex: any) => {
+                    const progress = getExerciseProgress(workoutKey, ex.id);
+                    if (!progress?.skipped) {
+                      totalSets += ex.targetSets || 0;
+                    }
+                  });
+                  const completionPercentage = getWorkoutCompletionPercentage(workoutKey, totalSets);
+                  const hasStarted = completionPercentage > 0;
+
+                  // Hide swap button if workout has been started
+                  if (hasStarted) return null;
+
+                  return (
+                    <TouchableOpacity 
+                      style={styles.swapButton}
+                      onPress={() => handleAddOrCreateWorkout(selectedDate)}
+                      activeOpacity={1}
+                    >
+                      <IconSwap size={24} color={COLORS.text} />
+                      <Text style={styles.swapButtonText}>
+                        {hasEligibleWorkoutsToSwap(selectedDate) ? 'Swap' : 'Create Workout'}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })()}
+
+                {!selectedDay?.workout && (
+                  <TouchableOpacity
+                    style={styles.addWorkoutButton}
+                    onPress={() => handleAddOrCreateWorkout(selectedDate)}
+                    activeOpacity={1}
+                  >
+                    <IconAdd size={24} color={COLORS.accentPrimary} />
+                    <Text style={styles.addWorkoutButtonText}>
+                      {hasEligibleWorkoutsToSwap(selectedDate) ? 'Add Workout' : 'Create Workout'}
+                    </Text>
+                  </TouchableOpacity>
+                )}
+              </View>
               </View>
               
               {/* Intervals Section */}
@@ -510,26 +504,16 @@ export function TodayScreen({ onNavigateToWorkouts, onDateChange, onOpenSwapDraw
                 
                 return (
                   <View style={styles.intervalsSection}>
-                    <View style={styles.intervalsHeader}>
-                      <Text style={styles.intervalsTitle}>Intervals</Text>
-                      {/* Only show Add timer button on current day */}
-                      {isToday && (
-                        <TouchableOpacity
-                          style={styles.addTimerButton}
-                          onPress={() => navigation.navigate('HIITTimerList' as never)}
-                          activeOpacity={0.7}
-                        >
-                          <Text style={styles.addTimerButtonText}>Add</Text>
-                          <IconAdd size={24} color={COLORS.text} />
-                        </TouchableOpacity>
-                      )}
-                    </View>
-                    
                     {/* Show explanatory text when no intervals */}
-                    {completedIntervals.length === 0 && (
-                      <Text style={styles.noIntervalsText}>
-                        {isToday ? 'No intervals logged yet' : 'No intervals completed on this day'}
-                      </Text>
+                    {completedIntervals.length === 0 && isToday && (
+                      <TouchableOpacity
+                        style={styles.addIntervalCardButton}
+                        onPress={() => navigation.navigate('HIITTimerList' as never)}
+                        activeOpacity={0.7}
+                      >
+                        <IconAdd size={24} color={COLORS.text} />
+                        <Text style={styles.addIntervalCardText}>Add interval timer</Text>
+                      </TouchableOpacity>
                     )}
                     
                     {/* Show completed intervals */}
@@ -549,6 +533,16 @@ export function TodayScreen({ onNavigateToWorkouts, onDateChange, onOpenSwapDraw
                         </View>
                       );
                     })}
+                    {completedIntervals.length > 0 && isToday && (
+                      <TouchableOpacity
+                        style={styles.addIntervalButton}
+                        onPress={() => navigation.navigate('HIITTimerList' as never)}
+                        activeOpacity={0.7}
+                      >
+                        <IconAdd size={24} color={COLORS.text} />
+                        <Text style={styles.addIntervalButtonText}>Add</Text>
+                      </TouchableOpacity>
+                    )}
                   </View>
                 );
               })()}
@@ -682,7 +676,7 @@ const styles = StyleSheet.create({
   },
   dayLabelContainer: {
     position: 'absolute',
-    top: 4,
+    top: 48,
     left: 0,
     right: 0,
     alignItems: 'center',
@@ -752,13 +746,14 @@ const styles = StyleSheet.create({
     overflow: CARDS.cardDeep.outer.overflow,
     width: '100%',
   },
-  workoutCardPressed: {
-  },
   workoutCardInner: {
     ...CARDS.cardDeep.inner,
-    paddingHorizontal: 24,
+    paddingHorizontal: 4,
     paddingTop: 16,
-    paddingBottom: 20,
+    paddingBottom: 4,
+  },
+  workoutCardContent: {
+    paddingHorizontal: 20,
   },
   workoutCardHeader: {
     flexDirection: 'row',
@@ -789,32 +784,38 @@ const styles = StyleSheet.create({
   progressCircle: {
     // No additional styling needed
   },
+  progressCheckCircle: {
+    width: 24,
+    height: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   progressText: {
     ...TYPOGRAPHY.meta,
     color: COLORS.textMeta,
   },
   workoutProgress: {
     ...TYPOGRAPHY.body,
-    color: '#227132',
+    color: COLORS.signalPositive,
   },
   
   // Start Button
   startButton: {
     width: '100%',
     height: 48,
-    backgroundColor: COLORS.accentSecondary,
+    backgroundColor: COLORS.accentPrimaryDimmed,
     paddingHorizontal: 20,
     borderTopLeftRadius: 0,
     borderTopRightRadius: 0,
     borderBottomLeftRadius: 12,
     borderBottomRightRadius: 12,
     borderCurve: 'continuous',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     justifyContent: 'center',
   },
   startButtonText: {
     ...TYPOGRAPHY.metaBold,
-    color: COLORS.text,
+    color: COLORS.accentPrimary,
     textAlign: 'left',
   },
   
@@ -824,7 +825,7 @@ const styles = StyleSheet.create({
     height: 32,
     borderRadius: 16,
     borderCurve: 'continuous',
-    backgroundColor: '#227132',
+    backgroundColor: COLORS.signalPositive,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -854,6 +855,7 @@ const styles = StyleSheet.create({
     color: COLORS.text,
   },
   addWorkoutButton: {
+    flexDirection: 'row',
     height: 56,
     backgroundColor: COLORS.accentPrimaryDimmed,
     borderRadius: BORDER_RADIUS.md,
@@ -862,7 +864,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 24,
-    alignSelf: 'flex-start',
+    gap: 8,
   },
   addWorkoutButtonText: {
     ...TYPOGRAPHY.meta,
@@ -874,8 +876,8 @@ const styles = StyleSheet.create({
   swapButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'flex-start',
-    gap: 4,
+    justifyContent: 'center',
+    gap: 8,
   },
   swapButtonText: {
     ...TYPOGRAPHY.metaBold,
@@ -888,18 +890,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   
-  // Workout of the Day Label
-  wodLabelContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+  cardActionsContainer: {
     alignItems: 'center',
-    minHeight: 40, // Minimum height for label area
-    marginBottom: SPACING.sm,
-  },
-  wodLabel: {
-    ...TYPOGRAPHY.h3,
-    lineHeight: 28,
-    color: COLORS.textMeta,
+    marginTop: SPACING.lg,
   },
   
   // Intervals Section
@@ -917,12 +910,33 @@ const styles = StyleSheet.create({
     ...TYPOGRAPHY.meta,
     color: COLORS.textMeta,
   },
-  addTimerButton: {
+  addIntervalCardButton: {
+    width: '100%',
+    height: 56,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: COLORS.textMeta,
+    borderStyle: 'dashed',
+    backgroundColor: 'transparent',
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    justifyContent: 'center',
+    gap: 8,
+    marginTop: SPACING.sm,
   },
-  addTimerButtonText: {
+  addIntervalCardText: {
+    ...TYPOGRAPHY.metaBold,
+    color: COLORS.text,
+  },
+  addIntervalButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 8,
+    marginTop: SPACING.sm,
+  },
+  addIntervalButtonText: {
     ...TYPOGRAPHY.metaBold,
     color: COLORS.text,
   },

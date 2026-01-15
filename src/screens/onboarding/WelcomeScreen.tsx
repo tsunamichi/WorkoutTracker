@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView } from 'react-native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useOnboardingStore } from '../../store/useOnboardingStore';
+import { COLORS } from '../../constants';
 
 type OnboardingStackParamList = {
   Welcome: undefined;
@@ -63,7 +64,7 @@ export function WelcomeScreen({ navigation }: WelcomeScreenProps) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: COLORS.backgroundCanvas,
   },
   content: {
     flex: 1,

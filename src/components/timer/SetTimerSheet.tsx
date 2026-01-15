@@ -34,8 +34,8 @@ interface SetTimerSheetProps {
   onExerciseTimerComplete?: () => void; // Callback when exercise timer completes
 }
 
-const REST_COLOR_YELLOW = '#FFCC00'; // Yellow for rest
-const REST_COLOR_RED = '#FF6B6B'; // Red for rest (under 5 seconds)
+const REST_COLOR_YELLOW = COLORS.signalWarning;
+const REST_COLOR_RED = COLORS.signalNegative;
 const EXERCISE_COLOR_BLUE = '#1B1B1B'; // Black for exercise timer
 const MIN_SIZE = 180;
 const SCREEN_WIDTH = Dimensions.get('window').width;
@@ -591,16 +591,16 @@ export function SetTimerSheet({
         <View style={[styles.timerSheet, { paddingBottom: 8 + insets.bottom }]}>
           {/* Next set indicator */}
           <View style={styles.setIndicator}>
-            {currentSet < totalSets ? (
-              <Text style={styles.nextSetText}>
-                Next set <Text style={styles.nextSetNumber}>{currentSet + 1} out of {totalSets}</Text>
-              </Text>
-            ) : (
-              <Text style={styles.nextSetText}>
-                Set <Text style={styles.nextSetNumber}>{currentSet} of {totalSets}</Text>
-              </Text>
-            )}
-          </View>
+              {currentSet < totalSets ? (
+                <Text style={styles.nextSetText}>
+                  Next set <Text style={styles.nextSetNumber}>{currentSet + 1} out of {totalSets}</Text>
+                </Text>
+              ) : (
+                <Text style={styles.nextSetText}>
+                  Set <Text style={styles.nextSetNumber}>{currentSet} of {totalSets}</Text>
+                </Text>
+              )}
+            </View>
 
           {/* Animated Circle Timer */}
           <View style={styles.timerContainer}>

@@ -546,27 +546,13 @@ const styles = StyleSheet.create({
     marginBottom: 32,
   },
   templateBoxBlackShadow: {
-    // Black shadow: -1, -1, 8% opacity, 1px blur
-    shadowColor: '#000000',
-    shadowOffset: { width: -1, height: -1 },
-    shadowOpacity: 0.08,
-    shadowRadius: 1,
-    elevation: 2,
     marginBottom: 32,
   },
   templateBoxWhiteShadow: {
-    // Bottom-right shadow: 1, 1, 100% opacity, 1px blur
-    shadowColor: '#FFFFFF',
-    shadowOffset: { width: 1, height: 1 },
-    shadowOpacity: 1,
-    shadowRadius: 1,
-    elevation: 1,
   },
   templateBox: {
-    backgroundColor: COLORS.backgroundCanvas,
+    backgroundColor: COLORS.activeCard,
     borderRadius: BORDER_RADIUS.md,
-    borderWidth: 1,
-    borderColor: COLORS.border,
     padding: SPACING.lg,
   },
   templateText: {

@@ -37,7 +37,16 @@ export function WorkoutsScreen() {
   const { startDraftFromTemplate, startDraftFromCustomText, setPrefs } = useOnboardingStore();
   const [showBottomSheet, setShowBottomSheet] = useState(false);
   const [workoutDetails, setWorkoutDetails] = useState('');
-  const [pressedCardId, setPressedCardId] = useState<string | null>(null);
+
+  const formatOrdinalDate = (dateStr: string) => {
+    const date = dayjs(dateStr);
+    const day = date.date();
+    const suffix =
+      day % 10 === 1 && day % 100 !== 11 ? 'st' :
+      day % 10 === 2 && day % 100 !== 12 ? 'nd' :
+      day % 10 === 3 && day % 100 !== 13 ? 'rd' : 'th';
+    return `${date.format('MMM')} ${day}${suffix}`;
+  };
   
   // Calculate cycle completion percentage
   const getCycleCompletion = (cycleId: string) => {
@@ -403,18 +412,13 @@ export function WorkoutsScreen() {
                   <View key={template.id} style={styles.templateCardBlackShadow}>
                       <View style={styles.templateCardWhiteShadow}>
                         <TouchableOpacity
-                          style={[
-                            styles.templateCard,
-                            pressedCardId === `template-${template.id}` && styles.templateCardPressed
-                          ]}
+                          style={styles.templateCard}
                           onPress={() => {
                             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                             setPrefs({ daysPerWeek: template.idealDays[0] || 3, sessionMinutes: 60 });
                             startDraftFromTemplate(template.id);
                             navigation.navigate('TemplateEditor', { templateId: template.id });
                           }}
-                          onPressIn={() => setPressedCardId(`template-${template.id}`)}
-                          onPressOut={() => setPressedCardId(null)}
                           activeOpacity={1}
                         >
                         <View style={styles.templateCardContent}>
@@ -430,21 +434,6 @@ export function WorkoutsScreen() {
             </>
           ) : (
             <>
-              {/* New Button - Always show when there are cycles */}
-              <View style={styles.inProgressHeader}>
-                {cycles.filter(c => c.isActive).length > 0 && (
-                  <Text style={styles.inProgressTitle}>In progress</Text>
-                )}
-                <TouchableOpacity
-                  style={styles.newButton}
-                  onPress={() => navigation.navigate('WorkoutCreationOptions' as never)}
-                  activeOpacity={0.7}
-                >
-                  <Text style={styles.newButtonText}>New</Text>
-                  <IconAdd size={24} color={COLORS.text} />
-                </TouchableOpacity>
-              </View>
-              
               {/* Active Cycle */}
               {cycles.filter(c => c.isActive).length > 0 && (
                 <>
@@ -452,51 +441,63 @@ export function WorkoutsScreen() {
                     const completion = getCycleCompletion(cycle.id);
                     return (
                       <View key={cycle.id} style={styles.activeCycleSection}>
-                        <View style={[
-                          styles.cycleCard,
-                          pressedCardId === `cycle-${cycle.id}` && styles.cycleCardPressed
-                        ]}>
+                        <View style={styles.cycleCard}>
                               <TouchableOpacity
                                 style={styles.cycleCardContent}
                                 onPress={() => {
                                   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                                   navigation.navigate('CycleDetail' as never, { cycleId: cycle.id } as never);
                                 }}
-                                onPressIn={() => setPressedCardId(`cycle-${cycle.id}`)}
-                                onPressOut={() => setPressedCardId(null)}
                                 activeOpacity={1}
                               >
-                                <Text style={styles.cycleName}>Cycle {cycle.cycleNumber}</Text>
-                                <Text style={styles.cycleDate}>
-                                  {dayjs(cycle.startDate).format('MM.DD.YY')} — {dayjs(cycle.endDate).format('MM.DD.YY')}
-                                </Text>
-                            <View style={styles.cycleFooter}>
-                              <View style={styles.progressIndicator}>
-                                {completion >= 99.9 ? (
-                                  <IconCheck size={24} color="#227132" />
-                                ) : (
-                                  <>
-                                    <Svg height="16" width="16" viewBox="0 0 16 16" style={styles.progressCircle}>
-                                      <Circle cx="8" cy="8" r="8" fill={LIGHT_COLORS.border} />
-                                      {completion > 0 ? (
-                                        <Path
-                                          d={`M 8 8 L 8 0 A 8 8 0 ${completion / 100 > 0.5 ? 1 : 0} 1 ${
-                                            8 + 8 * Math.sin(2 * Math.PI * (completion / 100))
-                                          } ${
-                                            8 - 8 * Math.cos(2 * Math.PI * (completion / 100))
-                                          } Z`}
-                                          fill={LIGHT_COLORS.text}
-                                        />
-                                      ) : null}
-                                    </Svg>
-                                    <Text style={styles.progressText}>{completion}%</Text>
-                                  </>
-                                )}
+                                <View style={styles.cycleCardContentBody}>
+                                  <View style={styles.cycleCardHeader}>
+                                    <Text style={styles.cycleDuration}>
+                                      {(() => {
+                                        const weeks = Math.max(
+                                          1,
+                                          dayjs(cycle.endDate).diff(dayjs(cycle.startDate), 'week') + 1
+                                        );
+                                        return weeks === 1 ? '1-week Cycle' : `${weeks}-weeks Cycle`;
+                                      })()}
+                                    </Text>
+                                    <View style={styles.progressIndicator}>
+                                      {completion >= 99.9 ? (
+                                        <IconCheck size={24} color={COLORS.signalPositive} />
+                                      ) : (
+                                        <>
+                                          <Text style={styles.progressText}>{completion}%</Text>
+                                          <Svg height="16" width="16" viewBox="0 0 16 16" style={styles.progressCircle}>
+                                            <Circle cx="8" cy="8" r="8" fill={LIGHT_COLORS.border} />
+                                            {completion > 0 ? (
+                                              <Path
+                                                d={`M 8 8 L 8 0 A 8 8 0 ${completion / 100 > 0.5 ? 1 : 0} 1 ${
+                                                  8 + 8 * Math.sin(2 * Math.PI * (completion / 100))
+                                                } ${
+                                                  8 - 8 * Math.cos(2 * Math.PI * (completion / 100))
+                                                } Z`}
+                                                fill={LIGHT_COLORS.text}
+                                              />
+                                            ) : null}
+                                          </Svg>
+                                        </>
+                                      )}
+                                    </View>
+                                  </View>
+                                  <Text style={styles.cycleDateLine}>
+                                    <Text style={styles.cycleDateLabel}>from </Text>
+                                    {formatOrdinalDate(cycle.startDate)}
+                                  </Text>
+                                  <Text style={styles.cycleDateLine}>
+                                    <Text style={styles.cycleDateLabel}>to </Text>
+                                    {formatOrdinalDate(cycle.endDate)}
+                                  </Text>
                                 </View>
-                              <TouchableOpacity style={styles.seeDetailsButton}>
-                                <Text style={styles.seeDetailsText}>See details</Text>
-                              </TouchableOpacity>
-                            </View>
+                                <View style={styles.cycleFooter} pointerEvents="none">
+                                  <View style={styles.seeDetailsButton}>
+                                    <Text style={styles.seeDetailsText}>See details</Text>
+                                  </View>
+                                </View>
                               </TouchableOpacity>
                         </View>
                       </View>
@@ -504,6 +505,17 @@ export function WorkoutsScreen() {
                   })}
                 </>
               )}
+
+              <View style={styles.newButtonContainer}>
+                <TouchableOpacity
+                  style={styles.newButton}
+                  onPress={() => navigation.navigate('WorkoutCreationOptions' as never)}
+                  activeOpacity={0.7}
+                >
+                  <IconAdd size={24} color={COLORS.text} />
+                  <Text style={styles.newButtonText}>New</Text>
+                </TouchableOpacity>
+              </View>
               
               {/* Past Cycles */}
               {cycles.filter(c => !c.isActive).length > 0 && (
@@ -511,18 +523,13 @@ export function WorkoutsScreen() {
                   <Text style={styles.pastCyclesTitle}>Past Cycles</Text>
                   {cycles.filter(c => !c.isActive).sort((a, b) => b.cycleNumber - a.cycleNumber).map((cycle) => (
                     <View key={cycle.id} style={styles.pastCycleCardWrapper}>
-                      <View style={[
-                        styles.pastCycleCard,
-                        pressedCardId === `past-cycle-${cycle.id}` && styles.pastCycleCardPressed
-                      ]}>
+                      <View style={styles.pastCycleCard}>
                           <TouchableOpacity
                             style={styles.pastCycleCardContent}
                             onPress={() => {
                               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                               navigation.navigate('CycleDetail' as never, { cycleId: cycle.id } as never);
                             }}
-                            onPressIn={() => setPressedCardId(`past-cycle-${cycle.id}`)}
-                            onPressOut={() => setPressedCardId(null)}
                             activeOpacity={1}
                           >
                             <Text style={styles.pastCycleName}>Cycle {cycle.cycleNumber}</Text>
@@ -666,36 +673,18 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.sm,
   },
   templateCardBlackShadow: {
-    // Black shadow: -1, -1, 8% opacity, 1px blur
-    shadowColor: '#000000',
-    shadowOffset: { width: -1, height: -1 },
-    shadowOpacity: 0.08,
-    shadowRadius: 1,
-    elevation: 2,
     marginBottom: SPACING.xs,
   },
   templateCardWhiteShadow: {
-    // Bottom-right shadow: 1, 1, 100% opacity, 1px blur
-    shadowColor: '#FFFFFF',
-    shadowOffset: { width: 1, height: 1 },
-    shadowOpacity: 1,
-    shadowRadius: 1,
-    elevation: 1,
   },
   templateCard: {
     backgroundColor: COLORS.activeCard,
     borderRadius: BORDER_RADIUS.md,
-    borderWidth: 1,
-    borderColor: COLORS.border,
     paddingHorizontal: 24,
     paddingVertical: 16,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-  },
-  templateCardPressed: {
-    borderWidth: 1,
-    borderColor: LIGHT_COLORS.textMeta,
   },
   templateCardContent: {
     flex: 1,
@@ -726,53 +715,57 @@ const styles = StyleSheet.create({
   },
   
   // Cycles List
-  inProgressHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: SPACING.sm,
-  },
-  inProgressTitle: {
-    ...TYPOGRAPHY.h3,
-    lineHeight: 28,
-    color: COLORS.textMeta,
-  },
   newButton: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
     paddingVertical: 8,
-    marginLeft: 'auto',
+  },
+  newButtonContainer: {
+    alignItems: 'center',
+    marginTop: 0,
+    marginBottom: 48,
   },
   newButtonText: {
     ...TYPOGRAPHY.metaBold,
     color: COLORS.text,
   },
   activeCycleSection: {
-    marginBottom: 56, // 56px spacing before Past Cycles
+    marginBottom: SPACING.sm,
   },
   cycleCard: CARDS.cardDeep.outer,
-  cycleCardPressed: {
-  },
   cycleCardContent: {
     ...CARDS.cardDeep.inner,
-    paddingHorizontal: 24,
-    paddingTop: 16,
-    paddingBottom: 20,
+    paddingHorizontal: 4,
+    paddingTop: 20,
+    paddingBottom: 4,
   },
-  cycleName: {
-    ...TYPOGRAPHY.h2,
-    color: COLORS.text,
-    marginBottom: 4,
+  cycleCardContentBody: {
+    paddingHorizontal: 20,
   },
-  cycleDate: {
+  cycleCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'baseline',
+    marginBottom: 2,
+  },
+  cycleDuration: {
     ...TYPOGRAPHY.meta,
     color: COLORS.textMeta,
-    marginBottom: 20,
+    flex: 1,
+    marginBottom: 4,
+  },
+  cycleDateLine: {
+    ...TYPOGRAPHY.h2,
+    color: COLORS.text,
+    marginBottom: 2,
+  },
+  cycleDateLabel: {
+    ...TYPOGRAPHY.h2,
+    color: COLORS.textMeta,
   },
   cycleFooter: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    marginTop: 20,
   },
   progressIndicator: {
     flexDirection: 'row',
@@ -789,19 +782,19 @@ const styles = StyleSheet.create({
   seeDetailsButton: {
     width: '100%',
     height: 48,
-    backgroundColor: COLORS.accentSecondary,
+    backgroundColor: COLORS.accentPrimaryDimmed,
     paddingHorizontal: 20,
     borderTopLeftRadius: 0,
     borderTopRightRadius: 0,
     borderBottomLeftRadius: 12,
     borderBottomRightRadius: 12,
     borderCurve: 'continuous',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     justifyContent: 'center',
   },
   seeDetailsText: {
     ...TYPOGRAPHY.metaBold,
-    color: COLORS.text,
+    color: COLORS.accentPrimary,
     textAlign: 'left',
   },
   
@@ -815,13 +808,10 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.sm,
   },
   pastCycleCard: CARDS.cardDeepDimmed.outer,
-  pastCycleCardPressed: {
-  },
   pastCycleCardContent: {
     ...CARDS.cardDeepDimmed.inner,
     paddingHorizontal: 24,
-    paddingTop: 16,
-    paddingBottom: 20,
+    paddingVertical: 16,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',

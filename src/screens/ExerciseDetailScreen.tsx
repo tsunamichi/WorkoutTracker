@@ -918,7 +918,7 @@ export function ExerciseDetailScreen({ route, navigation }: ExerciseDetailScreen
                                   <PulsatingCircle />
                                 ) : isCompleted ? (
                                   <View style={styles.setCheckIcon}>
-                                    <IconCheck size={24} color="#227132" />
+                                    <IconCheck size={24} color={COLORS.signalPositive} />
                                   </View>
                                 ) : null}
                               </View>
@@ -1000,7 +1000,7 @@ export function ExerciseDetailScreen({ route, navigation }: ExerciseDetailScreen
               featured: true
             },
             { 
-              icon: <IconRestart size={24} color="#FF3B30" />,
+              icon: <IconRestart size={24} color={COLORS.signalNegative} />,
               label: 'Reset', 
               onPress: handleResetExercise,
               destructive: true 
@@ -1306,8 +1306,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: COLORS.accentPrimaryDimmed,
-    borderWidth: 1,
-    borderColor: COLORS.accentPrimary,
   },
   adjustButtonText: {
     ...TYPOGRAPHY.body,
@@ -1320,11 +1318,11 @@ const styles = StyleSheet.create({
   },
   dividerTop: {
     height: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.25)',
+    backgroundColor: 'rgba(0, 0, 0, 0.16)',
   },
   dividerBottom: {
     height: 1,
-    backgroundColor: 'rgba(255, 255, 255, 1)',
+    backgroundColor: 'transparent',
   },
   recordRowWrapper: {
     marginTop: 0,

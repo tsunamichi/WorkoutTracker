@@ -477,7 +477,6 @@ export function WorkoutExecutionScreen({ route, navigation }: WorkoutExecutionSc
   const [showTimer, setShowTimer] = useState(false);
   const [currentExerciseIndex, setCurrentExerciseIndex] = useState(0);
   const [showMenu, setShowMenu] = useState(false);
-  const [pressedExerciseId, setPressedExerciseId] = useState<string | null>(null);
   
   // Force refresh when screen comes into focus OR when workout progress changes
   useFocusEffect(
@@ -868,10 +867,9 @@ export function WorkoutExecutionScreen({ route, navigation }: WorkoutExecutionSc
                     
                     {/* Exercise Card */}
                     <View style={styles.exerciseCardWrapper}>
-                      <View style={[
-                        isSkipped ? CARDS.cardDeepDisabled.outer : isCurrentlyInProgress ? CARDS.cardDeep.outer : CARDS.cardDeepDimmed.outer,
-                        pressedExerciseId === exercise.id && styles.exerciseCardPressed
-                      ]}>
+                      <View style={
+                        isSkipped ? CARDS.cardDeepDisabled.outer : isCurrentlyInProgress ? CARDS.cardDeep.outer : CARDS.cardDeepDimmed.outer
+                      }>
                             <TouchableOpacity
                           style={[
                             isSkipped ? { ...CARDS.cardDeepDisabled.inner, ...styles.exerciseCardInnerBase } : 
@@ -879,8 +877,6 @@ export function WorkoutExecutionScreen({ route, navigation }: WorkoutExecutionSc
                             { ...CARDS.cardDeepDimmed.inner, ...styles.exerciseCardInnerBase }
                           ]}
                               onPress={handleExerciseTap}
-                              onPressIn={() => setPressedExerciseId(exercise.id)}
-                              onPressOut={() => setPressedExerciseId(null)}
                               activeOpacity={1}
                               disabled={isDisabled && !isSkipped}
                             >
@@ -897,7 +893,7 @@ export function WorkoutExecutionScreen({ route, navigation }: WorkoutExecutionSc
                                 </View>
                               ) : isFullyCompleted ? (
                                 <View style={styles.exerciseCheckIcon}>
-                                  <IconCheck size={24} color="#227132" />
+                                  <IconCheck size={24} color={COLORS.signalPositive} />
                                 </View>
                               ) : (
                                 <View style={styles.exerciseStatusContainer}>
@@ -936,16 +932,16 @@ export function WorkoutExecutionScreen({ route, navigation }: WorkoutExecutionSc
             icon: <IconEdit size={24} color="#000000" />,
             label: 'Edit', 
             onPress: () => {
-              navigation.navigate('WorkoutEdit', {
-                cycleId,
-                workoutTemplateId,
-                date,
-              });
+                  navigation.navigate('WorkoutEdit', {
+                    cycleId,
+                    workoutTemplateId,
+                    date,
+                  });
             },
             featured: true
           },
           { 
-            icon: <IconRestart size={24} color="#FF3B30" />,
+            icon: <IconRestart size={24} color={COLORS.signalNegative} />,
             label: 'Reset', 
             onPress: handleResetWorkout,
             destructive: true 
@@ -1054,10 +1050,6 @@ const styles = StyleSheet.create({
   // Exercise Card Shadows (matching Today screen workout card)
   exerciseCardWrapper: {
     width: '100%',
-  },
-  exerciseCardPressed: {
-    borderWidth: 1,
-    borderColor: '#817B77', // textMeta
   },
   exerciseCardInnerBase: {
     paddingHorizontal: 16,

@@ -326,7 +326,6 @@ const styles = StyleSheet.create({
     bottom: 8,
     left: 8,
     right: 8,
-    elevation: 10,
   },
   drawerSheet: {
     flex: 1, // Fill parent's maxHeight constraint

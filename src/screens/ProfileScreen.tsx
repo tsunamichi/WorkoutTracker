@@ -5,30 +5,31 @@ import { LinearGradient } from 'expo-linear-gradient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useStore } from '../store';
 import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS } from '../constants';
-import { IconArrowLeft, IconAdd } from '../components/icons';
+import { IconArrowLeft, IconAdd, IconMenu } from '../components/icons';
+import { TimerValueSheet } from '../components/timer/TimerValueSheet';
 import dayjs from 'dayjs';
 
 interface ProfileScreenProps {
   navigation: any;
+  route?: {
+    params?: {
+      mode?: 'settings';
+    };
+  };
 }
-
-type TabType = 'progress' | 'settings';
 
 const LIGHT_COLORS = {
   secondary: '#1B1B1B',
   textMeta: '#817B77',
 };
 
-export function ProfileScreen({ navigation }: ProfileScreenProps) {
+export function ProfileScreen({ navigation, route }: ProfileScreenProps) {
   const insets = useSafeAreaInsets();
   const { settings, updateSettings, bodyWeightEntries, addBodyWeightEntry, sessions, clearAllHistory } = useStore();
-  const [activeTab, setActiveTab] = useState<TabType>('progress');
+  const isSettingsMode = route?.params?.mode === 'settings';
   const [showAddWeight, setShowAddWeight] = useState(false);
   const [newWeight, setNewWeight] = useState('');
   const [showRestTimePicker, setShowRestTimePicker] = useState(false);
-  
-  // Common rest time options (in seconds)
-  const restTimeOptions = [30, 60, 90, 120, 150, 180, 210, 240, 300];
   
   const handleAddWeight = async () => {
     if (newWeight.trim()) {
@@ -60,42 +61,28 @@ export function ProfileScreen({ navigation }: ProfileScreenProps) {
             <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
               <IconArrowLeft size={24} color="#000000" />
             </TouchableOpacity>
+            {!isSettingsMode && (
+              <TouchableOpacity
+                onPress={() => navigation.navigate('Profile', { mode: 'settings' })}
+                style={styles.menuButton}
+              >
+                <IconMenu size={24} color="#000000" />
+              </TouchableOpacity>
+            )}
           </View>
             
           {/* Title */}
           <View style={styles.headerContent}>
             <View style={styles.headerLeft}>
               <View style={styles.titleContainer}>
-                <Text style={styles.headerTitle}>Profile</Text>
+                <Text style={styles.headerTitle}>{isSettingsMode ? 'Settings' : 'Profile'}</Text>
               </View>
             </View>
           </View>
         </View>
         
-        {/* Segmented Control */}
-        <View style={styles.segmentedControl}>
-          <TouchableOpacity
-            style={[styles.segment, activeTab === 'progress' && styles.segmentActive]}
-            onPress={() => setActiveTab('progress')}
-            activeOpacity={1}
-          >
-            <Text style={[styles.segmentText, activeTab === 'progress' && styles.segmentTextActive]}>
-              Progress
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.segment, activeTab === 'settings' && styles.segmentActive]}
-            onPress={() => setActiveTab('settings')}
-            activeOpacity={1}
-          >
-            <Text style={[styles.segmentText, activeTab === 'settings' && styles.segmentTextActive]}>
-              Settings
-            </Text>
-          </TouchableOpacity>
-        </View>
-        
         <ScrollView style={styles.content} contentContainerStyle={styles.scrollContent} bounces={false}>
-          {activeTab === 'progress' ? (
+          {!isSettingsMode ? (
             /* Progress Tab */
             <>
               {/* Workout Stats */}
@@ -265,7 +252,7 @@ export function ProfileScreen({ navigation }: ProfileScreenProps) {
                 activeOpacity={1}
               >
                 <View style={styles.settingInfo}>
-                  <Text style={[styles.settingLabel, { color: '#FF3B30' }]}>Clear All History</Text>
+                  <Text style={[styles.settingLabel, { color: COLORS.signalNegative }]}>Clear All History</Text>
                   <Text style={styles.settingDescription}>
                     Delete all workout records and progress
                   </Text>
@@ -303,7 +290,7 @@ export function ProfileScreen({ navigation }: ProfileScreenProps) {
                 activeOpacity={1}
               >
                 <View style={styles.settingInfo}>
-                  <Text style={[styles.settingLabel, { color: '#FF9500' }]}>Reset Onboarding</Text>
+                  <Text style={[styles.settingLabel, { color: COLORS.signalWarning }]}>Reset Onboarding</Text>
                   <Text style={styles.settingDescription}>
                     Return to welcome screen for testing
                   </Text>
@@ -347,55 +334,23 @@ export function ProfileScreen({ navigation }: ProfileScreenProps) {
           </View>
         </Modal>
         
-        {/* Rest Time Picker Modal */}
-        <Modal visible={showRestTimePicker} transparent animationType="fade">
-          <View style={styles.modalOverlay}>
-            <View style={styles.modal}>
-              <Text style={styles.modalTitle}>Default Rest Time</Text>
-              <View style={styles.restTimeOptions}>
-                {restTimeOptions.map((seconds) => {
-                  const minutes = Math.floor(seconds / 60);
-                  const remainingSeconds = seconds % 60;
-                  const timeLabel = remainingSeconds > 0 
-                    ? `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`
-                    : `${minutes}:00`;
-                  const isSelected = settings.restTimerDefaultSeconds === seconds;
-                  
-                  return (
-                    <TouchableOpacity
-                      key={seconds}
-                      style={[
-                        styles.restTimeOption,
-                        isSelected && styles.restTimeOptionSelected
-                      ]}
-                      onPress={() => {
-                        updateSettings({ restTimerDefaultSeconds: seconds });
-                        setShowRestTimePicker(false);
-                      }}
-                      activeOpacity={1}
-                    >
-                      <Text style={[
-                        styles.restTimeOptionText,
-                        isSelected && styles.restTimeOptionTextSelected
-                      ]}>
-                        {timeLabel}
-                      </Text>
-                      {isSelected && (
-                        <Text style={styles.restTimeCheckmark}>✓</Text>
-                      )}
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.modalButtonSecondary, { marginTop: SPACING.lg }]}
-                onPress={() => setShowRestTimePicker(false)}
-              >
-                <Text style={styles.modalButtonSecondaryText}>Cancel</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </Modal>
+        {/* Rest Time Picker Drawer */}
+        <TimerValueSheet
+          visible={showRestTimePicker}
+          onClose={() => setShowRestTimePicker(false)}
+          onSave={(value) => updateSettings({ restTimerDefaultSeconds: value })}
+          title="Rest time"
+          label=""
+          value={settings.restTimerDefaultSeconds}
+          min={30}
+          max={300}
+          step={30}
+          formatValue={(val) => {
+            const minutes = Math.floor(val / 60);
+            const seconds = val % 60;
+            return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+          }}
+        />
       </View>
     </View>
   );
@@ -404,13 +359,16 @@ export function ProfileScreen({ navigation }: ProfileScreenProps) {
 const styles = StyleSheet.create({
   gradient: {
     flex: 1,
-    backgroundColor: '#E2E3DF',
+    backgroundColor: COLORS.backgroundCanvas,
   },
   container: {
     flex: 1,
     backgroundColor: 'transparent',
   },
   topBar: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     minHeight: 48,
     paddingHorizontal: SPACING.xxl,
   },
@@ -427,6 +385,13 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     marginLeft: -4,
   },
+  menuButton: {
+    width: 48,
+    height: 48,
+    justifyContent: 'center',
+    alignItems: 'flex-end',
+    marginRight: -4,
+  },
   header: {
     paddingBottom: SPACING.md,
   },
@@ -441,30 +406,6 @@ const styles = StyleSheet.create({
     ...TYPOGRAPHY.h2,
     color: LIGHT_COLORS.secondary,
     marginLeft: 0,
-  },
-  segmentedControl: {
-    flexDirection: 'row',
-    marginHorizontal: SPACING.xxl,
-    marginVertical: SPACING.lg,
-    backgroundColor: COLORS.backgroundCanvas,
-    borderRadius: BORDER_RADIUS.md,
-    padding: 4,
-  },
-  segment: {
-    flex: 1,
-    paddingVertical: SPACING.md,
-    alignItems: 'center',
-    borderRadius: BORDER_RADIUS.sm,
-  },
-  segmentActive: {
-    backgroundColor: LIGHT_COLORS.secondary,
-  },
-  segmentText: {
-    ...TYPOGRAPHY.bodyBold,
-    color: LIGHT_COLORS.secondary,
-  },
-  segmentTextActive: {
-    color: COLORS.backgroundCanvas,
   },
   content: {
     flex: 1,
@@ -650,32 +591,6 @@ const styles = StyleSheet.create({
     height: 1,
     backgroundColor: COLORS.border,
   },
-  restTimeOptions: {
-    gap: SPACING.sm,
-  },
-  restTimeOption: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: COLORS.backgroundCanvas,
-    padding: SPACING.lg,
-    borderRadius: BORDER_RADIUS.md,
-  },
-  restTimeOptionSelected: {
-    backgroundColor: COLORS.primary,
-  },
-  restTimeOptionText: {
-    ...TYPOGRAPHY.bodyBold,
-    color: LIGHT_COLORS.secondary,
-  },
-  restTimeOptionTextSelected: {
-    color: LIGHT_COLORS.secondary,
-  },
-  restTimeCheckmark: {
-    fontSize: 20,
-    fontWeight: '600',
-    color: LIGHT_COLORS.secondary,
-  },
   modalOverlay: {
     flex: 1,
     backgroundColor: COLORS.overlay,
@@ -689,12 +604,6 @@ const styles = StyleSheet.create({
     padding: SPACING.xl,
     width: '100%',
     maxWidth: 400,
-  },
-  modalTitle: {
-    ...TYPOGRAPHY.h2,
-    color: LIGHT_COLORS.secondary,
-    marginBottom: SPACING.lg,
-    textAlign: 'center',
   },
   weightInput: {
     backgroundColor: COLORS.backgroundCanvas,
@@ -738,18 +647,8 @@ const styles = StyleSheet.create({
   },
   // Dual shadow styles
   cardBlackShadow: {
-    shadowColor: '#000000',
-    shadowOffset: { width: -1, height: -1 },
-    shadowOpacity: 0.08,
-    shadowRadius: 1,
-    elevation: 2,
   },
   cardWhiteShadow: {
-    shadowColor: '#FFFFFF',
-    shadowOffset: { width: 1, height: 1 },
-    shadowOpacity: 1,
-    shadowRadius: 1,
-    elevation: 1,
   },
 });
 

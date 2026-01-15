@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Modal } from 'react-native';
-import { SPACING, TYPOGRAPHY } from '../constants';
+import { COLORS, SPACING, TYPOGRAPHY } from '../constants';
 
 export interface DropdownMenuItem {
   label: string;
@@ -64,15 +64,10 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
   },
   menu: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: COLORS.backgroundCanvas,
     borderRadius: 12,
     borderCurve: 'continuous',
     minWidth: 160,
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
-    elevation: 8,
     overflow: 'hidden',
   },
   item: {
@@ -81,14 +76,14 @@ const styles = StyleSheet.create({
   },
   itemText: {
     ...TYPOGRAPHY.body,
-    color: '#000000',
+    color: COLORS.text,
   },
   itemTextDestructive: {
-    color: '#FF3B30',
+    color: COLORS.signalNegative,
   },
   divider: {
     height: 1,
-    backgroundColor: '#E5E5EA',
+    backgroundColor: COLORS.border,
   },
 });
 

@@ -165,11 +165,6 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     borderCurve: 'continuous' as const,
     overflow: 'hidden' as const,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
-    elevation: 8,
   },
   container: {
     paddingHorizontal: SPACING.xxl,
@@ -182,8 +177,6 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.activeCard,
     borderRadius: 16,
     borderCurve: 'continuous' as const,
-    borderWidth: 1,
-    borderColor: COLORS.border,
     paddingVertical: SPACING.lg,
     paddingHorizontal: SPACING.lg,
     alignItems: 'center' as const,
@@ -198,7 +191,7 @@ const styles = StyleSheet.create({
     color: COLORS.text,
   },
   featuredLabelDestructive: {
-    color: '#FF3B30',
+    color: COLORS.signalNegative,
   },
   actionsRow: {
     flexDirection: 'row' as const,
@@ -209,8 +202,6 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.activeCard,
     borderRadius: 16,
     borderCurve: 'continuous' as const,
-    borderWidth: 1,
-    borderColor: COLORS.border,
     paddingVertical: SPACING.lg,
     paddingHorizontal: SPACING.md,
     alignItems: 'center' as const,
@@ -230,6 +221,6 @@ const styles = StyleSheet.create({
     textAlign: 'center' as const,
   },
   labelDestructive: {
-    color: '#FF3B30',
+    color: COLORS.signalNegative,
   },
 });

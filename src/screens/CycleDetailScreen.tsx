@@ -30,8 +30,8 @@ const LIGHT_COLORS = {
   textMeta: '#817B77',
   border: '#C7C7CC',
   accentPrimary: '#FF6B35',
-  success: '#227132',
-  error: '#FF3B30',
+  success: COLORS.signalPositive,
+  error: COLORS.signalNegative,
 };
 
 export function CycleDetailScreen({ route, navigation }: CycleDetailScreenProps) {
@@ -185,7 +185,7 @@ export function CycleDetailScreen({ route, navigation }: CycleDetailScreenProps)
           onClose={() => setMenuVisible(false)}
           items={[
             { 
-              icon: <IconTrash size={24} color="#FF3B30" />,
+              icon: <IconTrash size={24} color={COLORS.signalNegative} />,
               label: 'Delete Cycle', 
               onPress: handleDeleteCycle, 
               destructive: true 
@@ -408,7 +408,7 @@ export function CycleDetailScreen({ route, navigation }: CycleDetailScreenProps)
 const styles = StyleSheet.create({
   gradient: {
     flex: 1,
-    backgroundColor: '#E2E3DF',
+    backgroundColor: COLORS.backgroundCanvas,
   },
   container: {
     flex: 1,
@@ -459,11 +459,6 @@ const styles = StyleSheet.create({
     padding: SPACING.xl,
     borderRadius: BORDER_RADIUS.md,
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 3,
   },
   emptyText: {
     ...TYPOGRAPHY.bodyBold,

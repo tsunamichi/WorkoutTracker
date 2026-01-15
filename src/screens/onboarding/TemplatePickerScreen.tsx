@@ -7,6 +7,7 @@ import { StickyFooter } from '../../components/common/StickyFooter';
 import { TemplateCard } from '../../components/templates/TemplateCard';
 import { getTemplates } from '../../data/templates';
 import { CycleTemplateId } from '../../types/workout';
+import { COLORS } from '../../constants';
 
 type OnboardingStackParamList = {
   TemplatePicker: undefined;
@@ -68,7 +69,7 @@ export function TemplatePickerScreen({ navigation }: TemplatePickerScreenProps) 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8F8F8',
+    backgroundColor: COLORS.backgroundCanvas,
   },
   scrollView: {
     flex: 1,
