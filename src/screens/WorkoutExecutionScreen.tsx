@@ -1053,8 +1053,7 @@ const styles = StyleSheet.create({
   },
   exerciseCardInnerBase: {
     paddingHorizontal: 16,
-    paddingTop: 16,
-    paddingBottom: 18,
+    paddingVertical: SPACING.lg,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',

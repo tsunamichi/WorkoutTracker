@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -9,6 +9,7 @@ import {
   Dimensions,
   AppState,
 } from 'react-native';
+import Svg, { Path } from 'react-native-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Audio } from 'expo-av';
 import * as Haptics from 'expo-haptics';
@@ -37,6 +38,8 @@ interface SetTimerSheetProps {
 const REST_COLOR_YELLOW = COLORS.signalWarning;
 const REST_COLOR_RED = COLORS.signalNegative;
 const EXERCISE_COLOR_BLUE = '#1B1B1B'; // Black for exercise timer
+const PRE_EXERCISE_COUNTDOWN = 5;
+  const COUNTDOWN_COLORS = [COLORS.text, COLORS.text, COLORS.text, COLORS.text, COLORS.text];
 const MIN_SIZE = 180;
 const SCREEN_WIDTH = Dimensions.get('window').width;
 const CONTAINER_WIDTH = SCREEN_WIDTH - 96; // 48px padding on each side
@@ -72,6 +75,7 @@ export function SetTimerSheet({
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [labelWidth, setLabelWidth] = useState(0);
   const [currentPhase, setCurrentPhase] = useState<'exercise' | 'rest'>(isExerciseTimerPhase ? 'exercise' : 'rest'); // Track phase internally
+  const [preCountdown, setPreCountdown] = useState(0);
   
   const slideAnim = useRef(new Animated.Value(0)).current;
   const sizeAnim = useRef(new Animated.Value(1)).current; // 1 = 100%, 0 = MIN_SIZE
@@ -80,8 +84,15 @@ export function SetTimerSheet({
   const borderRadiusAnim = useRef(new Animated.Value(CONTAINER_WIDTH * 0.24)).current; // Squircle for exercise, circle for rest
   const endTimeRef = useRef<number | null>(null);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
+  const preCountdownIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const liveActivityIdRef = useRef<string | null>(null);
   const countdownSoundRef = useRef<Audio.Sound | null>(null);
+  const [wedgeAnimKey, setWedgeAnimKey] = useState(0);
+  const countdownWedgeColors = useMemo(
+    () => COUNTDOWN_COLORS.map(() => new Animated.Value(0)),
+    [wedgeAnimKey]
+  );
+  const AnimatedPath = useRef(Animated.createAnimatedComponent(Path)).current;
   const completeSoundRef = useRef<Audio.Sound | null>(null);
   const lastPlayedSecondRef = useRef<number | null>(null);
   const prevVisibleRef = useRef(visible);
@@ -111,7 +122,7 @@ export function SetTimerSheet({
   const animateOutAndClose = useCallback((callback: () => void) => {
     Animated.timing(slideAnim, {
       toValue: 0,
-      duration: 300,
+      duration: 450,
       useNativeDriver: true,
       easing: Easing.bezier(0.25, 0.1, 0.25, 1),
     }).start(() => {
@@ -252,6 +263,29 @@ export function SetTimerSheet({
     }).start();
   }, [currentPhase, borderRadiusAnim]);
 
+  const startExerciseTimer = useCallback(() => {
+    const duration = exerciseDuration;
+    setPreCountdown(-1);
+    setTimeLeft(duration);
+    endTimeRef.current = Date.now() + duration * 1000;
+    setIsRunning(true);
+    lastPlayedSecondRef.current = null;
+  }, [exerciseDuration]);
+
+  const playCountdownTick = useCallback((remaining: number) => {
+    if (!soundEnabled) return;
+    if ((remaining === 3 || remaining === 2 || remaining === 1) && lastPlayedSecondRef.current !== remaining) {
+      lastPlayedSecondRef.current = remaining;
+      if (countdownSoundRef.current) {
+        countdownSoundRef.current.setPositionAsync(0).then(() => {
+          return countdownSoundRef.current?.playAsync();
+        }).catch((error) => {
+          console.log('⚠️ Error playing countdown sound:', error);
+        });
+      }
+    }
+  }, [soundEnabled]);
+
   // Handle visibility changes - ONLY initialize when drawer opens (visible goes from false to true)
   useEffect(() => {
     const isOpening = visible && !prevVisibleRef.current;
@@ -269,7 +303,7 @@ export function SetTimerSheet({
       let initialTime;
       
       if (isExerciseTimerPhase) {
-        // Exercise timer: use exercise duration
+        // Exercise timer: use exercise duration after pre-countdown
         initialTime = exerciseDuration;
       } else {
         // Rest timer: use default rest time
@@ -277,17 +311,41 @@ export function SetTimerSheet({
       }
       
       setTimeLeft(initialTime);
-      endTimeRef.current = Date.now() + initialTime * 1000;
-      setIsRunning(true);
+      endTimeRef.current = null;
+      setIsRunning(false);
       lastPlayedSecondRef.current = null;
       
       // Only start Live Activity for rest timer, not exercise timer
       if (!isExerciseTimerPhase) {
+        endTimeRef.current = Date.now() + initialTime * 1000;
+        setIsRunning(true);
         startRestTimer(workoutName || 'Workout', exerciseName || 'Exercise', restTime, currentSet, totalSets).then((activityId) => {
           if (activityId) {
             liveActivityIdRef.current = activityId;
           }
         });
+      } else {
+        // Start 5-second pre-countdown before exercise timer
+        if (preCountdownIntervalRef.current) {
+          clearInterval(preCountdownIntervalRef.current);
+        }
+        setPreCountdown(PRE_EXERCISE_COUNTDOWN);
+        preCountdownIntervalRef.current = setInterval(() => {
+          setPreCountdown(prev => {
+            const next = prev - 1;
+            if (next < 0) {
+              if (preCountdownIntervalRef.current) {
+                clearInterval(preCountdownIntervalRef.current);
+                preCountdownIntervalRef.current = null;
+              }
+              setPreCountdown(-1);
+              startExerciseTimer();
+              return -1;
+            }
+            playCountdownTick(next);
+            return next;
+          });
+        }, 1000);
       }
       
       // Reset and animate in
@@ -308,6 +366,7 @@ export function SetTimerSheet({
       
       setTimeLeft(restTime);
       setIsRunning(false);
+      setPreCountdown(0);
       endTimeRef.current = null;
       setCurrentPhase('rest'); // Reset phase
       
@@ -329,12 +388,16 @@ export function SetTimerSheet({
     prevVisibleRef.current = visible;
     
     return () => {
+      if (preCountdownIntervalRef.current) {
+        clearInterval(preCountdownIntervalRef.current);
+        preCountdownIntervalRef.current = null;
+      }
       if (liveActivityIdRef.current) {
         endRestTimer();
         liveActivityIdRef.current = null;
       }
     };
-  }, [visible, isExerciseTimerPhase, exerciseDuration, restTime, slideAnim, sizeAnim, breathingAnim, restColorAnim, workoutName, exerciseName, currentSet, totalSets]);
+  }, [visible, isExerciseTimerPhase, exerciseDuration, restTime, slideAnim, sizeAnim, breathingAnim, restColorAnim, workoutName, exerciseName, currentSet, totalSets, playCountdownTick, startExerciseTimer]);
 
   // Timer logic
   useEffect(() => {
@@ -354,16 +417,7 @@ export function SetTimerSheet({
       
       setTimeLeft(remaining);
       
-      if (soundEnabled && (remaining === 3 || remaining === 2 || remaining === 1) && lastPlayedSecondRef.current !== remaining) {
-        lastPlayedSecondRef.current = remaining;
-        if (countdownSoundRef.current) {
-          countdownSoundRef.current.setPositionAsync(0).then(() => {
-            return countdownSoundRef.current?.playAsync();
-          }).catch((error) => {
-            console.log('⚠️ Error playing countdown sound:', error);
-          });
-        }
-      }
+      playCountdownTick(remaining);
       
       if (remaining <= 0) {
         setIsRunning(false);
@@ -569,6 +623,35 @@ export function SetTimerSheet({
         outputRange: [REST_COLOR_YELLOW, REST_COLOR_RED],
       });
 
+  const isPreCountdownActive = preCountdown >= 0 && currentPhase === 'exercise';
+
+  useEffect(() => {
+    if (isPreCountdownActive && preCountdown === PRE_EXERCISE_COUNTDOWN) {
+      setWedgeAnimKey(prev => prev + 1);
+    }
+  }, [isPreCountdownActive, preCountdown]);
+
+  useEffect(() => {
+    if (!isPreCountdownActive) {
+      countdownWedgeColors.forEach(color => color.setValue(0));
+      return;
+    }
+
+    const visibleCount = Math.max(0, Math.min(PRE_EXERCISE_COUNTDOWN, preCountdown));
+    const startIndex = Math.max(0, COUNTDOWN_COLORS.length - visibleCount);
+
+    Animated.parallel(
+      countdownWedgeColors.map((color, index) =>
+        Animated.timing(color, {
+          toValue: index >= startIndex ? 0 : 1,
+          duration: 200,
+          easing: Easing.out(Easing.quad),
+          useNativeDriver: false,
+        })
+      )
+    ).start();
+  }, [preCountdown, isPreCountdownActive, countdownWedgeColors]);
+
   if (!visible) return null;
 
   return (
@@ -612,29 +695,57 @@ export function SetTimerSheet({
                 },
               ]}
             >
-              {/* Circle/Squircle background with breathing (only during rest) */}
-              <Animated.View 
-                style={[
-                  styles.circle, 
-                  { 
-                    backgroundColor,
-                    borderRadius: borderRadiusAnim,
-                    transform: [{ scale: breathingAnim }],
-                  }
-                ]} 
-              />
+              {/* Circle/Squircle background */}
+              {isPreCountdownActive ? (
+                <Svg width={100} height={100} viewBox="0 0 203 195">
+                  {(() => {
+                    // Order: top-left first, top-right last.
+                    const paths = [
+                      'M98.9364 102.129L1.78409 70.5625C2.16584 69.7229 2.60513 68.9077 3.10245 68.124C5.14672 64.9028 8.52616 62.4465 15.286 57.5352L82.2841 8.8584C89.0441 3.94698 92.4247 1.49079 96.12 0.541992C97.0483 0.303667 97.9897 0.134931 98.9364 0.0322266V102.129Z',
+                      'M97.6991 105.934L37.4228 188.897C36.7597 188.287 36.1356 187.631 35.5575 186.933C33.1258 183.993 31.8348 180.02 29.2528 172.073L3.66202 93.3125C1.07994 85.3657 -0.211326 81.3917 0.0282325 77.584C0.0969806 76.4916 0.255943 75.4108 0.499912 74.3516L97.6991 105.934Z',
+                      'M161.345 191.43C160.462 191.948 159.539 192.401 158.581 192.78C155.034 194.185 150.856 194.185 142.501 194.185H59.6864C51.3307 194.185 47.1527 194.185 43.6054 192.78C42.5678 192.369 41.5713 191.872 40.623 191.299L100.936 108.285L161.345 191.43Z',
+                      'M201.663 74.2568C201.92 75.3465 202.088 76.4588 202.159 77.584C202.399 81.3917 201.107 85.3657 198.525 93.3125L172.934 172.073C170.352 180.02 169.061 183.993 166.629 186.933C165.996 187.698 165.307 188.411 164.573 189.069L104.173 105.934L201.663 74.2568Z',
+                      'M102.936 0C103.989 0.0974266 105.036 0.277265 106.067 0.541992C109.763 1.49079 113.142 3.94705 119.902 8.8584L186.9 57.5352C193.66 62.4466 197.041 64.9027 199.085 68.124C199.565 68.8799 199.99 69.6655 200.362 70.4736L102.936 102.129V0Z',
+                    ];
+                    return paths.map((d, index) => (
+                      <AnimatedPath
+                        key={`pentagon-segment-${index}`}
+                        d={d}
+                        fill={countdownWedgeColors[index].interpolate({
+                          inputRange: [0, 1],
+                          outputRange: [COLORS.text, COLORS.activeCard],
+                        })}
+                      />
+                    ));
+                  })()}
+                </Svg>
+              ) : (
+                <Animated.View
+                  style={[
+                    styles.circle,
+                    {
+                      backgroundColor,
+                      borderRadius: borderRadiusAnim,
+                      transform: [{ scale: breathingAnim }],
+                    },
+                  ]}
+                />
+              )}
               
               {/* Text stays constant size, positioned absolutely on top */}
-              <Animated.View
-                style={[
-                  styles.textContainer,
-                  {
-                    transform: [{ scale: textScale }],
-                  },
-                ]}
-              >
-                <Text style={styles.timerText}>{formatTime()}</Text>
-              </Animated.View>
+              {!isPreCountdownActive && (
+                <Animated.View
+                  style={[
+                    styles.textContainer,
+                    {
+                      transform: [{ scale: textScale }],
+                      zIndex: 10,
+                    },
+                  ]}
+                >
+                  <Text style={styles.timerText}>{formatTime()}</Text>
+                </Animated.View>
+              )}
             </Animated.View>
           </View>
 

@@ -468,7 +468,7 @@ export function WorkoutsScreen() {
                                         <>
                                           <Text style={styles.progressText}>{completion}%</Text>
                                           <Svg height="16" width="16" viewBox="0 0 16 16" style={styles.progressCircle}>
-                                            <Circle cx="8" cy="8" r="8" fill={LIGHT_COLORS.border} />
+                                            <Circle cx="8" cy="8" r="8" fill={COLORS.backgroundCanvas} />
                                             {completion > 0 ? (
                                               <Path
                                                 d={`M 8 8 L 8 0 A 8 8 0 ${completion / 100 > 0.5 ? 1 : 0} 1 ${
@@ -476,7 +476,7 @@ export function WorkoutsScreen() {
                                                 } ${
                                                   8 - 8 * Math.cos(2 * Math.PI * (completion / 100))
                                                 } Z`}
-                                                fill={LIGHT_COLORS.text}
+                                                fill={COLORS.signalWarning}
                                               />
                                             ) : null}
                                           </Svg>

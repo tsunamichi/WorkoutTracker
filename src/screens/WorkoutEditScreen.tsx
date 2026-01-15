@@ -11,12 +11,15 @@ import {
   Animated,
   PanResponder,
   SafeAreaView,
+  Dimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useStore } from '../store';
 import { BottomDrawer } from '../components/common/BottomDrawer';
 import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS, CARDS } from '../constants';
-import { IconArrowLeft, IconGripVertical, IconTrash, IconSwap, IconAdd } from '../components/icons';
+import { IconArrowLeft, IconGripVertical, IconTrash, IconSwap, IconAdd, IconEdit, IconChevronDown, IconMinusLine, IconAddLine } from '../components/icons';
+import { generateId } from '../utils/manualCycleUtils';
+import { Toggle } from '../components/Toggle';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/AppNavigator';
 import type { WorkoutTemplateExercise } from '../types';
@@ -34,7 +37,7 @@ const LIGHT_COLORS = {
 export default function WorkoutEditScreen({ navigation, route }: Props) {
   const insets = useSafeAreaInsets();
   const { cycleId, workoutTemplateId, date } = route.params;
-  const { cycles, exercises, updateCycle } = useStore();
+  const { cycles, exercises, updateCycle, updateExercise } = useStore();
   
   const cycle = cycles.find(c => c.id === cycleId);
   const workout = cycle?.workoutTemplates.find(w => w.id === workoutTemplateId);
@@ -56,11 +59,13 @@ export default function WorkoutEditScreen({ navigation, route }: Props) {
   const [showSwapDrawer, setShowSwapDrawer] = useState(false);
   const [swappingExerciseId, setSwappingExerciseId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [showSearch, setShowSearch] = useState(false);
   const [selectedNewExerciseId, setSelectedNewExerciseId] = useState<string | null>(null);
   const [swapWeight, setSwapWeight] = useState('');
-  const [pressedCardId, setPressedCardId] = useState<string | null>(null);
   const [swapReps, setSwapReps] = useState('');
   const [swapSets, setSwapSets] = useState('');
+  const [isTimeBasedSwap, setIsTimeBasedSwap] = useState(false);
+  const [swapStep, setSwapStep] = useState<'list' | 'settings'>('list');
   const [draggingIndex, setDraggingIndex] = useState<number | null>(null);
   const [dropTargetIndex, setDropTargetIndex] = useState<number | null>(null);
   const [scrollEnabled, setScrollEnabled] = useState(true);
@@ -68,6 +73,7 @@ export default function WorkoutEditScreen({ navigation, route }: Props) {
   const dragOffsetY = useRef(new Animated.Value(0)).current;
   const draggingIndexRef = useRef<number | null>(null);
   const dropTargetIndexRef = useRef<number | null>(null);
+  const searchInputRef = useRef<TextInput>(null);
   
   // Animation values for card width and icon reveal per exercise
   const animValuesRef = useRef<Record<string, {
@@ -97,6 +103,20 @@ export default function WorkoutEditScreen({ navigation, route }: Props) {
       exercise.name.toLowerCase().includes(query)
     );
   }, [exercises, searchQuery]);
+
+  const groupedExercises = React.useMemo(() => {
+    const groups: Record<string, typeof filteredExercises> = {};
+    filteredExercises.forEach(exercise => {
+      const muscle = exercise.category || 'Other';
+      if (!groups[muscle]) {
+        groups[muscle] = [];
+      }
+      groups[muscle].push(exercise);
+    });
+    return Object.entries(groups).sort(([a], [b]) => a.localeCompare(b));
+  }, [filteredExercises]);
+
+  const [expandedMuscles, setExpandedMuscles] = useState<Record<string, boolean>>({});
   
   // Check for changes
   useEffect(() => {
@@ -256,12 +276,39 @@ export default function WorkoutEditScreen({ navigation, route }: Props) {
       setSwapWeight(exercise.targetWeight?.toString() || '');
       setSwapReps(exercise.targetRepsMin?.toString() || '');
       setSwapSets(exercise.targetSets?.toString() || '');
+      const exerciseData = exercises.find(e => e.id === exercise.exerciseId);
+      const muscle = exerciseData?.category || 'Other';
+      setExpandedMuscles({ [muscle]: true });
+      setSwapStep('list');
       setShowSwapDrawer(true);
     }
   };
 
   const handleConfirmSwap = () => {
+    if (selectedNewExerciseId && !swappingExerciseId) {
+      const reps = swapReps ? parseInt(swapReps, 10) : 8;
+      const sets = swapSets ? parseInt(swapSets, 10) : 3;
+      const weight = swapWeight ? parseInt(swapWeight, 10) : 0;
+      updateExercise(selectedNewExerciseId, { measurementType: isTimeBasedSwap ? 'time' as any : 'reps' as any });
+      const newExercise: WorkoutTemplateExercise = {
+        id: generateId(),
+        exerciseId: selectedNewExerciseId,
+        orderIndex: workoutExercises.length,
+        targetSets: sets,
+        targetRepsMin: reps,
+        targetRepsMax: reps,
+        targetWeight: weight,
+        progressionType: 'double',
+        repRangeMin: reps,
+        repRangeMax: reps,
+      };
+      setWorkoutExercises(prev => [...prev, newExercise]);
+      handleCloseSwapDrawer();
+      return;
+    }
+
     if (swappingExerciseId && selectedNewExerciseId) {
+      updateExercise(selectedNewExerciseId, { measurementType: isTimeBasedSwap ? 'time' as any : 'reps' as any });
       setWorkoutExercises(prev => prev.map(ex => {
         if (ex.id === swappingExerciseId) {
           const reps = swapReps ? parseInt(swapReps, 10) : ex.targetRepsMin;
@@ -285,9 +332,12 @@ export default function WorkoutEditScreen({ navigation, route }: Props) {
     setSwappingExerciseId(null);
     setSelectedNewExerciseId(null);
     setSearchQuery('');
+    setShowSearch(false);
     setSwapWeight('');
     setSwapReps('');
     setSwapSets('');
+    setIsTimeBasedSwap(false);
+    setSwapStep('list');
   };
 
   const handleDragStart = React.useCallback((index: number) => {
@@ -360,9 +410,20 @@ export default function WorkoutEditScreen({ navigation, route }: Props) {
   }, []);
   
   const handleAddExercise = () => {
-    // TODO: Open exercise selection drawer
+    setSwappingExerciseId(null);
+    setSelectedNewExerciseId(null);
+    setSearchQuery('');
+    setSwapWeight('0');
+    setSwapReps('8');
+    setSwapSets('3');
+    setIsTimeBasedSwap(false);
+    setShowSwapDrawer(true);
   };
   
+  const isAddMode = showSwapDrawer && !swappingExerciseId;
+
+  const swapDrawerMinHeight = Math.round(Dimensions.get('window').height * 0.9);
+
   return (
     <View style={styles.container}>
       <View style={styles.innerContainer}>
@@ -379,9 +440,31 @@ export default function WorkoutEditScreen({ navigation, route }: Props) {
             <View style={{ width: 48 }} />
           </View>
           
-          <View style={styles.pageTitleContainer}>
-            <Text style={styles.pageTitle}>Edit Workout</Text>
-          </View>
+          <TouchableOpacity 
+            style={styles.pageTitleContainer}
+            onPress={() => setIsEditingName(true)}
+            activeOpacity={1}
+          >
+            {isEditingName ? (
+              <TextInput
+                ref={nameInputRef}
+                style={styles.pageTitleInput}
+                value={workoutName}
+                onChangeText={setWorkoutName}
+                onBlur={() => setIsEditingName(false)}
+                autoFocus
+                placeholder="Workout name"
+                placeholderTextColor={COLORS.textMeta}
+              />
+            ) : (
+              <View style={styles.pageTitleRow}>
+                <Text style={[styles.pageTitle, !workoutName && styles.pageTitlePlaceholder]}>
+                  {workoutName || 'Workout name'}
+                </Text>
+                <IconEdit size={20} color={COLORS.textMeta} />
+              </View>
+            )}
+          </TouchableOpacity>
         </View>
         
         {/* Exercises List */}
@@ -391,40 +474,9 @@ export default function WorkoutEditScreen({ navigation, route }: Props) {
           scrollEnabled={scrollEnabled}
           bounces={false}
         >
-          {/* Workout Name Editor */}
-          <View style={styles.workoutNameSection}>
-            <Text style={styles.sectionLabel}>Workout Name</Text>
-            {isEditingName ? (
-              <TextInput
-                ref={nameInputRef}
-                style={styles.workoutNameInput}
-                value={workoutName}
-                onChangeText={setWorkoutName}
-                onBlur={() => setIsEditingName(false)}
-                autoFocus
-                placeholder="Workout name"
-              />
-            ) : (
-              <TouchableOpacity
-                onPress={() => setIsEditingName(true)}
-                style={styles.workoutNameButton}
-                activeOpacity={1}
-              >
-                <Text style={styles.workoutName}>{workoutName}</Text>
-              </TouchableOpacity>
-            )}
-          </View>
-          
           {/* Exercises Section */}
           <View style={styles.exercisesSectionHeader}>
             <Text style={styles.sectionLabel}>Exercises</Text>
-            <TouchableOpacity
-              style={styles.addExerciseHeaderButton}
-              onPress={handleAddExercise}
-              activeOpacity={1}
-            >
-              <IconAdd size={24} color={COLORS.text} />
-            </TouchableOpacity>
           </View>
           {workoutExercises.map((exercise, index) => {
             const exerciseData = exercises.find(e => e.id === exercise.exerciseId);
@@ -498,8 +550,7 @@ export default function WorkoutEditScreen({ navigation, route }: Props) {
                     ]}
                   >
                     <View style={[
-                      (isSelected || isDragging) ? CARDS.cardDeep.outer : CARDS.cardDeepDimmed.outer,
-                      pressedCardId === exercise.id && styles.exerciseCardPressed
+                      (isSelected || isDragging) ? CARDS.cardDeep.outer : CARDS.cardDeepDimmed.outer
                     ]}>
                       <View style={[
                         (isSelected || isDragging) ? CARDS.cardDeep.inner : CARDS.cardDeepDimmed.inner,
@@ -508,8 +559,6 @@ export default function WorkoutEditScreen({ navigation, route }: Props) {
                             <TouchableOpacity
                               style={styles.exerciseCardContent}
                               onPress={() => setSelectedExerciseId(isSelected ? null : exercise.id)}
-                              onPressIn={() => setPressedCardId(exercise.id)}
-                              onPressOut={() => setPressedCardId(null)}
                               activeOpacity={1}
                             >
                               {/* Exercise Name */}
@@ -568,6 +617,15 @@ export default function WorkoutEditScreen({ navigation, route }: Props) {
               <View style={styles.dropIndicatorLine} />
             </View>
           )}
+
+          <TouchableOpacity
+            style={styles.addExerciseCardButton}
+            onPress={handleAddExercise}
+            activeOpacity={1}
+          >
+            <IconAdd size={20} color={COLORS.text} />
+            <Text style={styles.addExerciseCardText}>Add exercise</Text>
+          </TouchableOpacity>
         </ScrollView>
         
         {/* Save Button */}
@@ -590,129 +648,274 @@ export default function WorkoutEditScreen({ navigation, route }: Props) {
         visible={showSwapDrawer}
         onClose={handleCloseSwapDrawer}
         maxHeight="90%"
-        scrollable={false}
+        scrollable={true}
         showHandle={false}
+        contentStyle={styles.drawerContent}
       >
-        <View style={styles.drawerContent}>
+        <View style={[styles.drawerContent, { minHeight: swapDrawerMinHeight }]}>
           {/* Drawer Header */}
           <View style={styles.drawerHeader}>
-            <Text style={[TYPOGRAPHY.h3, { color: COLORS.text }]}>
-              Swap Exercise
-            </Text>
-            <TouchableOpacity
-              onPress={handleCloseSwapDrawer}
-              style={styles.closeButton}
-              activeOpacity={1}
-            >
-              <Text style={styles.closeButtonText}>✕</Text>
-            </TouchableOpacity>
+            <View style={styles.drawerHeaderRow}>
+              {swapStep === 'settings' ? (
+                <TouchableOpacity
+                  onPress={() => setSwapStep('list')}
+                  style={styles.drawerBackButton}
+                  activeOpacity={1}
+                >
+                  <IconArrowLeft size={20} color={COLORS.text} />
+                </TouchableOpacity>
+              ) : (
+                <View style={styles.drawerBackSpacer} />
+              )}
+              <Text style={[TYPOGRAPHY.h3, { color: COLORS.text }]}>
+                {swapStep === 'settings' ? 'Exercise Settings' : isAddMode ? 'Add Exercise' : 'Swap Exercise'}
+              </Text>
+            </View>
+            {swapStep === 'list' && (
+              <TouchableOpacity
+                onPress={() => {
+                  setShowSearch(true);
+                  setTimeout(() => searchInputRef.current?.focus(), 0);
+                }}
+                style={styles.searchButton}
+                activeOpacity={1}
+              >
+                <Text style={styles.searchButtonText}>🔍</Text>
+              </TouchableOpacity>
+            )}
           </View>
 
-              {/* Search Input */}
-              <View style={styles.swapSearchContainer}>
-                <Text style={styles.searchIcon}>🔍</Text>
-                <TextInput
-                  style={styles.swapSearchInput}
-                  value={searchQuery}
-                  onChangeText={setSearchQuery}
-                  placeholder="Search exercises..."
-                  placeholderTextColor={COLORS.textMeta}
-                />
-                {searchQuery.length > 0 && (
-                  <TouchableOpacity
-                    onPress={() => setSearchQuery('')}
-                    activeOpacity={1}
-                  >
-                    <Text style={styles.clearIcon}>✕</Text>
-                  </TouchableOpacity>
-                )}
-              </View>
+          {/* Search Input */}
+          {showSearch && swapStep === 'list' && (
+            <View style={styles.swapSearchContainer}>
+              <Text style={styles.searchIcon}>🔍</Text>
+              <TextInput
+                ref={searchInputRef}
+                style={styles.swapSearchInput}
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+                placeholder="Search exercises..."
+                placeholderTextColor={COLORS.textMeta}
+              />
+              {searchQuery.length > 0 && (
+                <TouchableOpacity
+                  onPress={() => {
+                    setSearchQuery('');
+                    setShowSearch(false);
+                    searchInputRef.current?.blur();
+                  }}
+                  activeOpacity={1}
+                >
+                  <Text style={styles.clearIcon}>✕</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          )}
 
-              {/* Exercise List */}
-              <ScrollView style={styles.swapExerciseList} bounces={false}>
-                {filteredExercises.map(exercise => {
-                  const isSelected = selectedNewExerciseId === exercise.id;
-                  return (
+          {/* Exercise List */}
+          {swapStep === 'list' && (
+            <View style={styles.swapExerciseListContent}>
+              {groupedExercises.map(([muscle, muscleExercises]) => {
+                const isExpanded = !!expandedMuscles[muscle];
+                return (
+                  <View key={muscle} style={styles.muscleSection}>
                     <TouchableOpacity
-                      key={exercise.id}
-                      style={[
-                        styles.swapExerciseItem,
-                        isSelected && styles.swapExerciseItemSelected,
-                      ]}
-                      onPress={() => setSelectedNewExerciseId(exercise.id)}
+                      style={styles.muscleHeader}
+                      onPress={() =>
+                        setExpandedMuscles(prev => ({ ...prev, [muscle]: !isExpanded }))
+                      }
                       activeOpacity={1}
                     >
-                      <Text style={styles.swapExerciseName}>{exercise.name}</Text>
-                      {exercise.category && (
-                        <Text style={styles.swapExerciseMeta}>{exercise.category}</Text>
-                      )}
+                      <Text style={styles.muscleTitle}>{muscle}</Text>
+                      <IconChevronDown
+                        size={20}
+                        color={COLORS.textMeta}
+                        style={{
+                          transform: [{ rotate: isExpanded ? '180deg' : '0deg' }],
+                        }}
+                      />
                     </TouchableOpacity>
-                  );
-                })}
-              </ScrollView>
-
-              {/* Weight, Reps, Sets Configuration */}
-              {selectedNewExerciseId && (
-                <View style={styles.swapConfigSection}>
-                  <View style={styles.swapConfigRow}>
-                    <View style={styles.swapConfigField}>
-                      <Text style={styles.swapConfigLabel}>Weight</Text>
-                      <TextInput
-                        style={styles.swapConfigInput}
-                        value={swapWeight}
-                        onChangeText={setSwapWeight}
-                        keyboardType="numeric"
-                        placeholder="0"
-                        placeholderTextColor={COLORS.textMeta}
-                      />
-                    </View>
-                    <View style={styles.swapConfigField}>
-                      <Text style={styles.swapConfigLabel}>Reps</Text>
-                      <TextInput
-                        style={styles.swapConfigInput}
-                        value={swapReps}
-                        onChangeText={setSwapReps}
-                        keyboardType="numeric"
-                        placeholder="0"
-                        placeholderTextColor={COLORS.textMeta}
-                      />
-                    </View>
-                    <View style={styles.swapConfigField}>
-                      <Text style={styles.swapConfigLabel}>Sets</Text>
-                      <TextInput
-                        style={styles.swapConfigInput}
-                        value={swapSets}
-                        onChangeText={setSwapSets}
-                        keyboardType="numeric"
-                        placeholder="0"
-                        placeholderTextColor={COLORS.textMeta}
-                      />
-                    </View>
+                    {isExpanded && (
+                      <View style={styles.muscleContent}>
+                        {muscleExercises.map(exercise => {
+                          const isSelected = selectedNewExerciseId === exercise.id;
+                          return (
+                            <TouchableOpacity
+                              key={exercise.id}
+                              style={[
+                                styles.swapExerciseItem,
+                                isSelected && styles.swapExerciseItemSelected,
+                              ]}
+                              onPress={() => {
+                                setSelectedNewExerciseId(exercise.id);
+                                setIsTimeBasedSwap(exercise.measurementType === 'time');
+                                setSwapStep('settings');
+                              }}
+                              activeOpacity={1}
+                            >
+                              <Text style={styles.swapExerciseName}>{exercise.name}</Text>
+                            </TouchableOpacity>
+                          );
+                        })}
+                      </View>
+                    )}
                   </View>
+                );
+              })}
+            </View>
+          )}
+
+          {/* Weight, Reps, Sets Configuration */}
+          {swapStep === 'settings' && selectedNewExerciseId && (
+            <View style={styles.swapConfigSection}>
+              <Toggle
+                label="Time-based"
+                value={isTimeBasedSwap}
+                onValueChange={setIsTimeBasedSwap}
+              />
+
+              <View style={styles.swapAdjustRow}>
+                <View style={styles.swapAdjustControls}>
+                  <View style={styles.swapAdjustValue}>
+                    <Text style={styles.swapAdjustValueText}>{swapWeight || '0'}</Text>
+                    <Text style={styles.swapAdjustUnit}>lb</Text>
+                  </View>
+                  <View style={styles.swapAdjustButtons}>
+                    <TouchableOpacity
+                      onPress={() => {
+                        const current = parseInt(swapWeight || '0', 10) || 0;
+                        const next = Math.max(0, current - 5);
+                        setSwapWeight(next.toString());
+                      }}
+                      activeOpacity={1}
+                      style={styles.adjustButtonTapTarget}
+                    >
+                      <View style={styles.adjustButton}>
+                        <View style={styles.adjustButtonInner}>
+                          <IconMinusLine size={24} color={COLORS.accentPrimary} />
+                        </View>
+                      </View>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      onPress={() => {
+                        const current = parseInt(swapWeight || '0', 10) || 0;
+                        const next = current + 5;
+                        setSwapWeight(next.toString());
+                      }}
+                      activeOpacity={1}
+                      style={styles.adjustButtonTapTarget}
+                    >
+                      <View style={styles.adjustButton}>
+                        <View style={styles.adjustButtonInner}>
+                          <IconAddLine size={24} color={COLORS.accentPrimary} />
+                        </View>
+                      </View>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              </View>
+
+              <View style={styles.swapAdjustRow}>
+                <View style={styles.swapAdjustControls}>
+                  <View style={styles.swapAdjustValue}>
+                    <Text style={styles.swapAdjustValueText}>{swapReps || (isTimeBasedSwap ? '5' : '8')}</Text>
+                    <Text style={styles.swapAdjustUnit}>{isTimeBasedSwap ? 'sec' : 'reps'}</Text>
+                  </View>
+                  <View style={styles.swapAdjustButtons}>
+                    <TouchableOpacity
+                      onPress={() => {
+                        const current = parseInt(swapReps || (isTimeBasedSwap ? '5' : '8'), 10) || (isTimeBasedSwap ? 5 : 8);
+                        const step = isTimeBasedSwap ? 5 : 1;
+                        const min = isTimeBasedSwap ? 5 : 1;
+                        const next = Math.max(min, current - step);
+                        setSwapReps(next.toString());
+                      }}
+                      activeOpacity={1}
+                      style={styles.adjustButtonTapTarget}
+                    >
+                      <View style={styles.adjustButton}>
+                        <View style={styles.adjustButtonInner}>
+                          <IconMinusLine size={24} color={COLORS.accentPrimary} />
+                        </View>
+                      </View>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      onPress={() => {
+                        const current = parseInt(swapReps || (isTimeBasedSwap ? '5' : '8'), 10) || (isTimeBasedSwap ? 5 : 8);
+                        const step = isTimeBasedSwap ? 5 : 1;
+                        const next = current + step;
+                        setSwapReps(next.toString());
+                      }}
+                      activeOpacity={1}
+                      style={styles.adjustButtonTapTarget}
+                    >
+                      <View style={styles.adjustButton}>
+                        <View style={styles.adjustButtonInner}>
+                          <IconAddLine size={24} color={COLORS.accentPrimary} />
+                        </View>
+                      </View>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              </View>
+
+              <View style={styles.swapAdjustRow}>
+                <View style={styles.swapAdjustControls}>
+                  <View style={styles.swapAdjustValue}>
+                    <Text style={styles.swapAdjustValueText}>{swapSets || '3'}</Text>
+                    <Text style={styles.swapAdjustUnit}>sets</Text>
+                  </View>
+                  <View style={styles.swapAdjustButtons}>
+                    <TouchableOpacity
+                      onPress={() => {
+                        const current = parseInt(swapSets || '3', 10) || 3;
+                        const next = Math.max(1, current - 1);
+                        setSwapSets(next.toString());
+                      }}
+                      activeOpacity={1}
+                      style={styles.adjustButtonTapTarget}
+                    >
+                      <View style={styles.adjustButton}>
+                        <View style={styles.adjustButtonInner}>
+                          <IconMinusLine size={24} color={COLORS.accentPrimary} />
+                        </View>
+                      </View>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      onPress={() => {
+                        const current = parseInt(swapSets || '3', 10) || 3;
+                        const next = current + 1;
+                        setSwapSets(next.toString());
+                      }}
+                      activeOpacity={1}
+                      style={styles.adjustButtonTapTarget}
+                    >
+                      <View style={styles.adjustButton}>
+                        <View style={styles.adjustButtonInner}>
+                          <IconAddLine size={24} color={COLORS.accentPrimary} />
+                        </View>
+                      </View>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              </View>
                 </View>
               )}
 
               {/* Confirm Button */}
-              <View style={styles.swapButtonContainer}>
-                <TouchableOpacity
-                  style={[
-                    styles.swapConfirmButton,
-                    !selectedNewExerciseId && styles.swapConfirmButtonDisabled,
-                  ]}
-                  onPress={handleConfirmSwap}
-                  disabled={!selectedNewExerciseId}
-                  activeOpacity={1}
-                >
-                  <Text
-                    style={[
-                      styles.swapConfirmButtonText,
-                      !selectedNewExerciseId && styles.swapConfirmButtonTextDisabled,
-                    ]}
-                  >
-                    Confirm Swap
-                  </Text>
-                </TouchableOpacity>
-              </View>
+          {swapStep === 'settings' && selectedNewExerciseId && (
+            <View style={styles.swapButtonContainerPinned}>
+              <TouchableOpacity
+                style={styles.swapConfirmButton}
+                onPress={handleConfirmSwap}
+                activeOpacity={1}
+              >
+                <Text style={styles.swapConfirmButtonText}>
+                  {isAddMode ? 'Add Exercise' : 'Confirm Swap'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          )}
         </View>
       </BottomDrawer>
       
@@ -791,9 +994,21 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.xxl,
     paddingTop: SPACING.md,
   },
+  pageTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
   pageTitle: {
     ...TYPOGRAPHY.h2,
     color: LIGHT_COLORS.secondary,
+  },
+  pageTitlePlaceholder: {
+    color: COLORS.textMeta,
+  },
+  pageTitleInput: {
+    ...TYPOGRAPHY.h2,
+    color: COLORS.text,
   },
   exercisesSectionHeader: {
     flexDirection: 'row',
@@ -801,42 +1016,28 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginBottom: SPACING.md,
   },
-  addExerciseHeaderButton: {
-    width: 48,
-    height: 48,
-    justifyContent: 'center',
-    alignItems: 'flex-end',
-    marginRight: -4,
-  },
-  workoutNameSection: {
-    marginBottom: SPACING.xl,
-  },
   sectionLabel: {
     ...TYPOGRAPHY.meta,
     color: COLORS.textMeta,
     marginBottom: SPACING.md,
   },
-  workoutNameButton: {
-    padding: SPACING.md,
-    backgroundColor: COLORS.backgroundCanvas,
-    borderRadius: BORDER_RADIUS.md,
-    borderCurve: 'continuous',
+  addExerciseCardButton: {
+    width: '100%',
+    height: 56,
+    borderRadius: 16,
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: COLORS.textMeta,
+    borderStyle: 'dashed',
+    backgroundColor: 'transparent',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginTop: SPACING.sm,
   },
-  workoutName: {
-    ...TYPOGRAPHY.body,
-    color: LIGHT_COLORS.text,
-  },
-  workoutNameInput: {
-    ...TYPOGRAPHY.body,
-    color: LIGHT_COLORS.text,
-    padding: SPACING.md,
-    backgroundColor: COLORS.backgroundCanvas,
-    borderRadius: BORDER_RADIUS.md,
-    borderCurve: 'continuous',
-    borderWidth: 1,
-    borderColor: COLORS.border,
+  addExerciseCardText: {
+    ...TYPOGRAPHY.metaBold,
+    color: COLORS.text,
   },
   scrollView: {
     flex: 1,
@@ -878,28 +1079,22 @@ const styles = StyleSheet.create({
     position: 'relative',
     flexDirection: 'row',
     alignItems: 'center',
-    minHeight: 56, // Fixed height matching other cards
-  },
-  exerciseCardPressed: {
-    borderWidth: 1,
-    borderColor: LIGHT_COLORS.textMeta,
+    paddingVertical: SPACING.lg,
+    paddingLeft: 16,
+    paddingRight: 48, // Make room for grip handle
   },
   exerciseCardContent: {
     flex: 1,
-    paddingHorizontal: 16,
-    paddingTop: 16,
-    paddingBottom: 18,
-    paddingRight: 48, // Make room for grip handle
+    justifyContent: 'center',
   },
   gripHandle: {
     position: 'absolute',
     right: 16, // 24px from right side - adjusted for padding
-    top: 0,
-    bottom: 0,
+    top: SPACING.lg,
+    bottom: SPACING.lg,
     justifyContent: 'center',
     alignItems: 'center',
     width: 40,
-    height: '100%',
   },
   exerciseName: {
     ...TYPOGRAPHY.body,
@@ -1022,13 +1217,26 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.xxl,
     paddingTop: SPACING.lg,
     paddingBottom: SPACING.md,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
   },
-  closeButton: {
+  drawerHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.sm,
+  },
+  drawerBackButton: {
+    width: 24,
+    height: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  drawerBackSpacer: {
+    width: 24,
+    height: 24,
+  },
+  searchButton: {
     padding: SPACING.xs,
   },
-  closeButtonText: {
+  searchButtonText: {
     fontSize: 20,
     color: COLORS.text,
   },
@@ -1040,7 +1248,9 @@ const styles = StyleSheet.create({
     borderCurve: 'continuous',
     paddingHorizontal: SPACING.lg,
     paddingVertical: SPACING.md,
-    margin: SPACING.xxl,
+    marginHorizontal: SPACING.xxl,
+    marginTop: SPACING.lg,
+    marginBottom: SPACING.md,
     borderWidth: 1,
     borderColor: COLORS.border,
     gap: SPACING.md,
@@ -1058,9 +1268,72 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: COLORS.textMeta,
   },
-  swapExerciseList: {
-    maxHeight: 300,
+  swapExerciseListContent: {
     paddingHorizontal: SPACING.xxl,
+    paddingBottom: SPACING.xl,
+  },
+  swapAdjustRow: {
+    marginTop: SPACING.lg,
+  },
+  swapAdjustControls: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  swapAdjustValue: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: 6,
+  },
+  swapAdjustValueText: {
+    ...TYPOGRAPHY.h1,
+    color: COLORS.text,
+  },
+  swapAdjustUnit: {
+    ...TYPOGRAPHY.h1,
+    color: COLORS.textMeta,
+  },
+  swapAdjustButtons: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  adjustButtonTapTarget: {
+    width: 48,
+    height: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  adjustButton: {
+    width: 48,
+    height: 48,
+    borderRadius: 12,
+    borderCurve: 'continuous',
+    overflow: 'hidden',
+  },
+  adjustButtonInner: {
+    width: 48,
+    height: 48,
+    borderRadius: 12,
+    borderCurve: 'continuous',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: COLORS.accentPrimaryDimmed,
+  },
+  muscleSection: {
+    marginBottom: SPACING.sm,
+  },
+  muscleHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: SPACING.sm,
+  },
+  muscleTitle: {
+    ...TYPOGRAPHY.metaBold,
+    color: COLORS.text,
+  },
+  muscleContent: {
+    gap: SPACING.xs,
   },
   swapExerciseItem: {
     padding: SPACING.lg,
@@ -1081,17 +1354,10 @@ const styles = StyleSheet.create({
     color: COLORS.text,
     fontWeight: '600',
   },
-  swapExerciseMeta: {
-    ...TYPOGRAPHY.meta,
-    color: COLORS.textMeta,
-    marginTop: 4,
-  },
   swapConfigSection: {
     paddingHorizontal: SPACING.xxl,
     paddingTop: SPACING.xl,
     paddingBottom: SPACING.md,
-    borderTopWidth: 1,
-    borderTopColor: COLORS.border,
   },
   swapConfigRow: {
     flexDirection: 'row',
@@ -1117,10 +1383,15 @@ const styles = StyleSheet.create({
     paddingVertical: SPACING.md,
     textAlign: 'center',
   },
-  swapButtonContainer: {
+  swapButtonContainerPinned: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
     paddingHorizontal: SPACING.xxl,
-    paddingVertical: SPACING.xl,
     paddingBottom: 40,
+    paddingTop: SPACING.md,
+    backgroundColor: COLORS.backgroundCanvas,
   },
   swapConfirmButton: {
     backgroundColor: '#000000',

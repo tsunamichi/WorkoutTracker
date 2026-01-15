@@ -3,24 +3,12 @@ import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-nati
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useCreateCycleDraftStore } from '../../store/useCreateCycleDraftStore';
 import { formatWeekdayFull } from '../../utils/manualCycleUtils';
-import { COLORS, SPACING, TYPOGRAPHY } from '../../constants';
-import { WorkoutDay } from '../../types/manualCycle';
+import { COLORS, SPACING, TYPOGRAPHY, CARDS } from '../../constants';
+import { IconArrowLeft } from '../../components/icons';
 
 interface CreateCycleDaysOverviewProps {
   navigation: any;
 }
-
-const LIGHT_COLORS = {
-  backgroundCanvas: '#E3E6E0',
-  backgroundContainer: '#FFFFFF',
-  secondary: '#1B1B1B',
-  textSecondary: '#3C3C43',
-  textMeta: '#817B77',
-  accent: '#FD6B00',
-  success: '#34C759',
-  chipBg: '#FFFFFF',
-  chipBorder: '#C7C7CC',
-};
 
 export function CreateCycleDaysOverview({ navigation }: CreateCycleDaysOverviewProps) {
   const insets = useSafeAreaInsets();
@@ -60,7 +48,7 @@ export function CreateCycleDaysOverview({ navigation }: CreateCycleDaysOverviewP
             style={styles.backButton}
             activeOpacity={1}
           >
-            <Text style={styles.backText}>←</Text>
+            <IconArrowLeft size={24} color={COLORS.text} />
           </TouchableOpacity>
           <View style={styles.headerTitleContainer}>
             <Text style={styles.stepIndicator}>2/4</Text>
@@ -167,21 +155,17 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.md,
     marginLeft: -4,
   },
-  backText: {
-    fontSize: 28,
-    color: LIGHT_COLORS.secondary,
-  },
   headerTitleContainer: {
     gap: 4,
   },
   stepIndicator: {
     fontSize: 14,
-    color: LIGHT_COLORS.textMeta,
+    color: COLORS.textMeta,
     fontWeight: '500',
   },
   headerTitle: {
     ...TYPOGRAPHY.h2,
-    color: LIGHT_COLORS.secondary,
+    color: COLORS.text,
   },
   content: {
     flex: 1,
@@ -191,16 +175,15 @@ const styles = StyleSheet.create({
     paddingBottom: 120,
   },
   dayCard: {
-    backgroundColor: LIGHT_COLORS.backgroundContainer,
-    borderRadius: 12,
-    padding: SPACING.lg,
+    ...CARDS.cardDeep.outer,
     marginBottom: SPACING.md,
+  },
+  dayCardContent: {
+    ...CARDS.cardDeep.inner,
+    padding: SPACING.lg,
     flexDirection: 'row',
     alignItems: 'center',
     gap: SPACING.md,
-  },
-  dayCardContent: {
-    flex: 1,
   },
   dayInfo: {
     marginBottom: 8,
@@ -208,12 +191,12 @@ const styles = StyleSheet.create({
   dayLabel: {
     fontSize: 18,
     fontWeight: '600',
-    color: LIGHT_COLORS.secondary,
+    color: COLORS.text,
     marginBottom: 2,
   },
   dayName: {
     fontSize: 14,
-    color: LIGHT_COLORS.textMeta,
+    color: COLORS.textMeta,
   },
   dayMeta: {
     flexDirection: 'row',
@@ -222,43 +205,43 @@ const styles = StyleSheet.create({
   },
   exerciseCount: {
     fontSize: 14,
-    color: LIGHT_COLORS.textSecondary,
+    color: COLORS.textMeta,
   },
   statusPill: {
-    backgroundColor: LIGHT_COLORS.chipBg,
+    backgroundColor: COLORS.backgroundCanvas,
     borderWidth: 1,
-    borderColor: LIGHT_COLORS.chipBorder,
+    borderColor: COLORS.border,
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 8,
   },
   statusPillComplete: {
-    backgroundColor: LIGHT_COLORS.success + '20',
-    borderColor: LIGHT_COLORS.success,
+    backgroundColor: `${COLORS.signalPositive}20`,
+    borderColor: COLORS.signalPositive,
   },
   statusPillText: {
     fontSize: 12,
     fontWeight: '600',
-    color: LIGHT_COLORS.textMeta,
+    color: COLORS.textMeta,
   },
   statusPillTextComplete: {
-    color: LIGHT_COLORS.success,
+    color: COLORS.signalPositive,
   },
   chevron: {
     fontSize: 24,
-    color: LIGHT_COLORS.textMeta,
+    color: COLORS.textMeta,
   },
   warningBox: {
-    backgroundColor: '#FFF9E6',
+    backgroundColor: `${COLORS.signalWarning}20`,
     borderWidth: 1,
-    borderColor: '#FFD60A',
+    borderColor: COLORS.signalWarning,
     borderRadius: 12,
     padding: SPACING.lg,
     marginTop: SPACING.md,
   },
   warningText: {
     fontSize: 14,
-    color: LIGHT_COLORS.textSecondary,
+    color: COLORS.text,
     textAlign: 'center',
   },
   stickyFooter: {
@@ -274,9 +257,9 @@ const styles = StyleSheet.create({
   },
   backFooterButton: {
     flex: 1,
-    backgroundColor: LIGHT_COLORS.backgroundContainer,
+    backgroundColor: COLORS.activeCard,
     borderWidth: 1,
-    borderColor: LIGHT_COLORS.chipBorder,
+    borderColor: COLORS.border,
     paddingVertical: 16,
     borderRadius: 12,
     alignItems: 'center',
@@ -285,28 +268,28 @@ const styles = StyleSheet.create({
     ...TYPOGRAPHY.meta,
     fontWeight: 'bold',
     fontWeight: '600',
-    color: LIGHT_COLORS.secondary,
+    color: COLORS.text,
   },
   continueButton: {
     flex: 2,
-    backgroundColor: LIGHT_COLORS.accent,
+    backgroundColor: COLORS.accentPrimary,
     paddingVertical: 16,
     borderRadius: 12,
     alignItems: 'center',
   },
   continueButtonDisabled: {
-    backgroundColor: LIGHT_COLORS.chipBg,
+    backgroundColor: COLORS.backgroundCanvas,
     borderWidth: 1,
-    borderColor: LIGHT_COLORS.chipBorder,
+    borderColor: COLORS.border,
   },
   continueButtonText: {
     ...TYPOGRAPHY.meta,
     fontWeight: 'bold',
     fontWeight: '600',
-    color: '#FFFFFF',
+    color: COLORS.backgroundCanvas,
   },
   continueButtonTextDisabled: {
-    color: LIGHT_COLORS.textMeta,
+    color: COLORS.textMeta,
   },
 });
 

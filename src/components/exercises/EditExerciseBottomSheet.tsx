@@ -2,6 +2,7 @@ import React, { useCallback, useMemo, useRef, useState, useEffect } from 'react'
 import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView } from 'react-native';
 // import BottomSheet, { BottomSheetBackdrop } from '@gorhom/bottom-sheet';
 import { Exercise } from '../../types/workout';
+import { COLORS } from '../../constants';
 
 interface EditExerciseBottomSheetProps {
   isVisible: boolean;

@@ -11,8 +11,6 @@ export function WorkoutCreationOptionsScreen() {
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
   const { startDraftFromTemplate, setPrefs } = useOnboardingStore();
-  const [pressedCardId, setPressedCardId] = React.useState<string | null>(null);
-
   return (
     <View style={styles.container}>
       {/* Header */}
@@ -72,10 +70,7 @@ export function WorkoutCreationOptionsScreen() {
           
           {TEMPLATES.filter(t => t.id !== 'custom').map((template) => (
             <View key={template.id} style={styles.templateCardWrapper}>
-              <View style={[
-                styles.templateCard,
-                pressedCardId === `template-${template.id}` && styles.templateCardPressed
-              ]}>
+            <View style={styles.templateCard}>
                   <TouchableOpacity
                     style={styles.templateCardContent}
                     onPress={() => {
@@ -83,15 +78,13 @@ export function WorkoutCreationOptionsScreen() {
                       startDraftFromTemplate(template.id);
                       navigation.navigate('TemplateEditor' as never, { templateId: template.id } as never);
                     }}
-                    onPressIn={() => setPressedCardId(`template-${template.id}`)}
-                    onPressOut={() => setPressedCardId(null)}
                     activeOpacity={1}
                   >
                     <View style={styles.templateCardInner}>
                       <Text style={styles.templateName}>{template.name}</Text>
                       <Text style={styles.templateDescription}>{template.description}</Text>
                     </View>
-                    <IconPlay size={10} color="#000000" />
+                    <IconPlay size={10} color={COLORS.text} />
                   </TouchableOpacity>
               </View>
             </View>
@@ -161,7 +154,7 @@ const styles = StyleSheet.create({
   manuallyButton: {
     flex: 1,
     height: 56,
-    backgroundColor: '#1B1B1B',
+    backgroundColor: COLORS.text,
     borderRadius: BORDER_RADIUS.md,
     alignItems: 'center',
     justifyContent: 'center',
@@ -169,7 +162,7 @@ const styles = StyleSheet.create({
   manuallyButtonText: {
     ...TYPOGRAPHY.meta,
     fontWeight: 'bold',
-    color: '#FFFFFF',
+    color: COLORS.backgroundCanvas,
   },
   aiButton: {
     flex: 1,
@@ -182,7 +175,7 @@ const styles = StyleSheet.create({
   aiButtonText: {
     ...TYPOGRAPHY.meta,
     fontWeight: 'bold',
-    color: '#FFFFFF',
+    color: COLORS.backgroundCanvas,
   },
   
   // Templates Section
@@ -199,14 +192,10 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.xs,
   },
   templateCard: CARDS.cardDeep.outer,
-  templateCardPressed: {
-    borderWidth: 1,
-    borderColor: '#817B77', // textMeta
-  },
   templateCardContent: {
     ...CARDS.cardDeep.inner,
     paddingHorizontal: 24,
-    paddingVertical: 16,
+    paddingVertical: SPACING.lg,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',

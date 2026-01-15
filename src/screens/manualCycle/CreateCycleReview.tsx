@@ -9,7 +9,6 @@ import {
   Alert,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { LinearGradient } from 'expo-linear-gradient';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import dayjs from 'dayjs';
 import { useCreateCycleDraftStore } from '../../store/useCreateCycleDraftStore';
@@ -20,23 +19,13 @@ import {
   formatDateRange,
   generateId,
 } from '../../utils/manualCycleUtils';
-import { COLORS, SPACING, TYPOGRAPHY } from '../../constants';
+import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS } from '../../constants';
+import { IconArrowLeft } from '../../components/icons';
 import { Weekday } from '../../types/manualCycle';
 
 interface CreateCycleReviewProps {
   navigation: any;
 }
-
-const LIGHT_COLORS = {
-  backgroundCanvas: '#E3E6E0',
-  backgroundContainer: '#FFFFFF',
-  secondary: '#1B1B1B',
-  textSecondary: '#3C3C43',
-  textMeta: '#817B77',
-  accent: '#FD6B00',
-  border: '#C7C7CC',
-  warning: '#FFD60A',
-};
 
 export function CreateCycleReview({ navigation }: CreateCycleReviewProps) {
   const insets = useSafeAreaInsets();
@@ -188,7 +177,7 @@ export function CreateCycleReview({ navigation }: CreateCycleReviewProps) {
             style={styles.backButton}
             activeOpacity={1}
           >
-            <Text style={styles.backText}>←</Text>
+            <IconArrowLeft size={24} color={COLORS.text} />
           </TouchableOpacity>
           <View style={styles.headerTitleContainer}>
             <Text style={styles.stepIndicator}>4/4</Text>
@@ -338,21 +327,17 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.md,
     marginLeft: -4,
   },
-  backText: {
-    fontSize: 28,
-    color: LIGHT_COLORS.secondary,
-  },
   headerTitleContainer: {
     gap: 4,
   },
   stepIndicator: {
     fontSize: 14,
-    color: LIGHT_COLORS.textMeta,
+    color: COLORS.textMeta,
     fontWeight: '500',
   },
   headerTitle: {
     ...TYPOGRAPHY.h2,
-    color: LIGHT_COLORS.secondary,
+    color: COLORS.text,
   },
   content: {
     flex: 1,
@@ -367,19 +352,19 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 20,
     fontWeight: '600',
-    color: LIGHT_COLORS.secondary,
+    color: COLORS.text,
     marginBottom: SPACING.lg,
   },
   summaryCard: {
-    backgroundColor: LIGHT_COLORS.backgroundContainer,
-    borderRadius: 12,
+    backgroundColor: COLORS.activeCard,
+    borderRadius: BORDER_RADIUS.md,
     padding: SPACING.lg,
     marginBottom: SPACING.xxxl,
   },
   summaryTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: LIGHT_COLORS.secondary,
+    color: COLORS.text,
     marginBottom: SPACING.md,
   },
   summaryRow: {
@@ -390,47 +375,47 @@ const styles = StyleSheet.create({
   },
   summaryLabel: {
     fontSize: 15,
-    color: LIGHT_COLORS.textSecondary,
+    color: COLORS.textMeta,
   },
   summaryValue: {
     fontSize: 15,
     fontWeight: '600',
-    color: LIGHT_COLORS.secondary,
+    color: COLORS.text,
   },
   datePickerButton: {
-    backgroundColor: LIGHT_COLORS.backgroundContainer,
+    backgroundColor: COLORS.activeCard,
     borderWidth: 1,
-    borderColor: LIGHT_COLORS.border,
-    borderRadius: 12,
+    borderColor: COLORS.border,
+    borderRadius: BORDER_RADIUS.md,
     padding: SPACING.lg,
   },
   datePickerText: {
     fontSize: 16,
-    color: LIGHT_COLORS.secondary,
+    color: COLORS.text,
     fontWeight: '500',
   },
   dateRangeText: {
     fontSize: 14,
-    color: LIGHT_COLORS.textMeta,
+    color: COLORS.textMeta,
     marginTop: 8,
     textAlign: 'center',
   },
   warningBox: {
-    backgroundColor: '#FFF9E6',
+    backgroundColor: `${COLORS.signalWarning}20`,
     borderWidth: 1,
-    borderColor: LIGHT_COLORS.warning,
-    borderRadius: 12,
+    borderColor: COLORS.signalWarning,
+    borderRadius: BORDER_RADIUS.md,
     padding: SPACING.lg,
     marginBottom: SPACING.xxxl,
   },
   warningText: {
     fontSize: 14,
-    color: LIGHT_COLORS.textSecondary,
+    color: COLORS.text,
     textAlign: 'center',
   },
   workoutCard: {
-    backgroundColor: LIGHT_COLORS.backgroundContainer,
-    borderRadius: 12,
+    backgroundColor: COLORS.activeCard,
+    borderRadius: BORDER_RADIUS.md,
     padding: SPACING.lg,
     marginBottom: SPACING.md,
   },
@@ -443,21 +428,21 @@ const styles = StyleSheet.create({
   workoutDay: {
     fontSize: 18,
     fontWeight: '600',
-    color: LIGHT_COLORS.secondary,
+    color: COLORS.text,
   },
   workoutName: {
     fontSize: 14,
-    color: LIGHT_COLORS.textMeta,
+    color: COLORS.textMeta,
     marginTop: 2,
   },
   editLink: {
     fontSize: 16,
     fontWeight: '600',
-    color: LIGHT_COLORS.accent,
+    color: COLORS.accentPrimary,
   },
   workoutExerciseCount: {
     fontSize: 14,
-    color: LIGHT_COLORS.textSecondary,
+    color: COLORS.textMeta,
     marginBottom: 12,
   },
   exerciseList: {
@@ -465,7 +450,7 @@ const styles = StyleSheet.create({
   },
   exerciseListItem: {
     fontSize: 15,
-    color: LIGHT_COLORS.textSecondary,
+    color: COLORS.text,
   },
   stickyFooter: {
     position: 'absolute',
@@ -477,24 +462,24 @@ const styles = StyleSheet.create({
     paddingTop: SPACING.md,
   },
   createButton: {
-    backgroundColor: LIGHT_COLORS.accent,
+    backgroundColor: COLORS.accentPrimary,
     paddingVertical: 16,
-    borderRadius: 12,
+    borderRadius: BORDER_RADIUS.md,
     alignItems: 'center',
   },
   createButtonDisabled: {
-    backgroundColor: LIGHT_COLORS.backgroundContainer,
+    backgroundColor: COLORS.backgroundCanvas,
     borderWidth: 1,
-    borderColor: LIGHT_COLORS.border,
+    borderColor: COLORS.border,
   },
   createButtonText: {
     ...TYPOGRAPHY.meta,
     fontWeight: 'bold',
     fontWeight: '600',
-    color: '#FFFFFF',
+    color: COLORS.backgroundCanvas,
   },
   createButtonTextDisabled: {
-    color: LIGHT_COLORS.textMeta,
+    color: COLORS.textMeta,
   },
 });
 

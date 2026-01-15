@@ -761,15 +761,22 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
         setCurrentPhase('complete');
         setIsRunning(false);
         isTransitioningRef.current = false;
+      } else if (isLastSet && !isLastRound) {
+        // Skip work rest when the next phase is round rest
+        console.log('🔄 Skipping work rest, moving to round rest');
+        setCurrentPhase('roundRest');
+        setSecondsRemaining(timer.roundRest);
+        setTimeout(() => {
+          isTransitioningRef.current = false;
+        }, 50);
       } else {
         // Move to work rest - continue without stopping
         console.log('⏸️ Moving to work rest, duration:', timer.workRest, 'seconds');
-      setCurrentPhase('workRest');
-      setSecondsRemaining(timer.workRest);
-      
-      setTimeout(() => {
-        isTransitioningRef.current = false;
-      }, 50);
+        setCurrentPhase('workRest');
+        setSecondsRemaining(timer.workRest);
+        setTimeout(() => {
+          isTransitioningRef.current = false;
+        }, 50);
       }
     } else if (phase === 'workRest') {
       console.log('⏸️ Work rest complete');
@@ -1051,6 +1058,26 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
   const handleSkip = () => {
     if (!timer) return;
     
+    const phase = currentPhaseRef.current;
+    const set = currentSetRef.current;
+    const round = currentRoundRef.current;
+
+    // If we're on the last set of a round, skip work rest and jump to round rest.
+    if (phase === 'work' && set === timer.sets && round < timer.rounds) {
+      setIsRunning(false);
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
+      setCurrentPhase('roundRest');
+      setSecondsRemaining(timer.roundRest);
+      setTimeout(() => {
+        isTransitioningRef.current = false;
+        setIsRunning(true);
+      }, 50);
+      return;
+    }
+
     setIsRunning(false);
     setTimeout(() => {
       handlePhaseComplete();

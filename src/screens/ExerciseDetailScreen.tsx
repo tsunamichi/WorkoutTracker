@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, LayoutAnimation, Platform, UIManager, Animated, Modal, Alert } from 'react-native';
 
 // Enable LayoutAnimation on Android
@@ -116,6 +116,45 @@ export function ExerciseDetailScreen({ route, navigation }: ExerciseDetailScreen
   
   // Get number of sets from exercise
   const numberOfSets = exercise?.targetSets || 3;
+  const workoutTemplate = useMemo(() => {
+    return cycles.find(c => c.id === cycleId)?.workoutTemplates?.find(t => t.id === workoutTemplateId);
+  }, [cycles, cycleId, workoutTemplateId]);
+
+  const isWorkoutCompleteAfterSet = useCallback((updatedSetsForCurrent: typeof setsData) => {
+    if (!workoutKey || !exercise) return false;
+
+    if (workoutTemplate) {
+      return workoutTemplate.exercises.every(templateExercise => {
+        if (templateExercise.id === exercise.id) {
+          const completed = updatedSetsForCurrent.filter(s => s.completed).length;
+          const target = templateExercise.targetSets || updatedSetsForCurrent.length || 0;
+          return target > 0 && completed >= target;
+        }
+
+        const progress = getExerciseProgress(workoutKey, templateExercise.id);
+        if (progress?.skipped) return true;
+        const completed = progress?.sets?.filter(set => set.completed).length || 0;
+        const target = templateExercise.targetSets || progress?.sets?.length || 0;
+        return target > 0 && completed >= target;
+      });
+    }
+
+    // Fallback: use saved progress only when template is unavailable.
+    const workoutProgress = detailedWorkoutProgress[workoutKey];
+    if (!workoutProgress) return false;
+
+    return Object.entries(workoutProgress.exercises).every(([exerciseId, progress]) => {
+      if (progress.skipped) return true;
+      if (exerciseId === exercise.id) {
+        const completed = updatedSetsForCurrent.filter(s => s.completed).length;
+        const target = updatedSetsForCurrent.length;
+        return target > 0 && completed >= target;
+      }
+      const completed = progress.sets?.filter(set => set.completed).length || 0;
+      const target = progress.sets?.length || 0;
+      return target > 0 && completed >= target;
+    });
+  }, [workoutKey, exercise, workoutTemplate, getExerciseProgress, detailedWorkoutProgress]);
   const [setsData, setSetsData] = useState(() => {
     // Try to load saved progress first
     if (workoutKey && exercise) {
@@ -236,7 +275,7 @@ export function ExerciseDetailScreen({ route, navigation }: ExerciseDetailScreen
     }
   };
   
-  const handleRecord = (setIndex: number) => {
+  const handleRecord = async (setIndex: number) => {
     if (isTimeBased) {
       // For time-based exercises: Start exercise timer first
       setRecordingSetIndex(setIndex);
@@ -270,7 +309,7 @@ export function ExerciseDetailScreen({ route, navigation }: ExerciseDetailScreen
       
       // Save progress immediately with updated data
       if (workoutKey && exercise) {
-        saveExerciseProgress(workoutKey, exercise.id, {
+        await saveExerciseProgress(workoutKey, exercise.id, {
           exerciseId: exercise.id,
           sets: updatedSets,
         });
@@ -285,15 +324,31 @@ export function ExerciseDetailScreen({ route, navigation }: ExerciseDetailScreen
         )
       );
       
-      // Collapse current set and show rest timer
+      const isLastSet = setIndex === numberOfSets - 1;
+      const allNowCompleted =
+        updatedSets.filter((s, idx) => idx <= setIndex || s.completed).length === numberOfSets;
+      const isWorkoutComplete = isWorkoutCompleteAfterSet(updatedSets);
+
+      // Collapse current set
       setRecordingSetIndex(setIndex);
       setExpandedSetIndex(-1); // Collapse all
+
+      if (isLastSet && allNowCompleted && isWorkoutComplete) {
+        // Skip rest timer on the final set
+        setIsExerciseTimerPhase(false);
+        setShowTimer(false);
+        setRecordingSetIndex(null);
+        navigation?.goBack();
+        return;
+      }
+
+      // Show rest timer for non-final sets
       setIsExerciseTimerPhase(false); // Go directly to rest timer
       setShowTimer(true);
     }
   };
   
-  const handleExerciseTimerComplete = () => {
+  const handleExerciseTimerComplete = async () => {
     // Exercise timer completed - mark set as done and transition to rest timer
     if (recordingSetIndex === null) return;
     
@@ -321,12 +376,26 @@ export function ExerciseDetailScreen({ route, navigation }: ExerciseDetailScreen
     
     // Save progress immediately with updated data
     if (workoutKey && exercise) {
-      saveExerciseProgress(workoutKey, exercise.id, {
+      await saveExerciseProgress(workoutKey, exercise.id, {
         exerciseId: exercise.id,
         sets: updatedSets,
       });
     }
     
+    const isLastSet = recordingSetIndex === numberOfSets - 1;
+    const allNowCompleted =
+      updatedSets.filter((s, idx) => idx <= recordingSetIndex || s.completed).length === numberOfSets;
+    const isWorkoutComplete = isWorkoutCompleteAfterSet(updatedSets);
+
+    if (isLastSet && allNowCompleted && isWorkoutComplete) {
+      // Skip rest timer on final set
+      setShowTimer(false);
+      setIsExerciseTimerPhase(false);
+      setRecordingSetIndex(null);
+      navigation?.goBack();
+      return;
+    }
+
     // Transition to rest timer phase (keep drawer open)
     setIsExerciseTimerPhase(false);
     // Timer stays visible, just switches to rest phase
@@ -1180,8 +1249,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingTop: 16,
-    paddingBottom: 18,
+    paddingVertical: SPACING.lg,
   },
   setCollapsedLeft: {
     flexDirection: 'row',
@@ -1428,16 +1496,16 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   historyDividerContainer: {
+    height: 2,
     marginVertical: SPACING.md,
   },
   historyDividerTop: {
     height: 1,
-    backgroundColor: '#CBC8C7', // metaSoft color
+    backgroundColor: COLORS.textDisabled,
   },
   historyDividerBottom: {
     height: 1,
-    backgroundColor: '#FFFFFF',
-    marginTop: 1, // 1px gap between lines
+    backgroundColor: 'transparent',
   },
   
   // Mark as Done Button

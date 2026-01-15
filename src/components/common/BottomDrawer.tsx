@@ -27,7 +27,7 @@ export function BottomDrawer({
   visible,
   onClose,
   children,
-  maxHeight = '80%',
+  maxHeight = '90%',
   backgroundColor = COLORS.backgroundCanvas,
   showHandle = true,
   contentStyle,
@@ -46,9 +46,19 @@ export function BottomDrawer({
   // Match device corner radius (iPhone rounded corners)
   const deviceCornerRadius = insets.bottom > 0 ? 40 : 24;
 
-  // Calculate max drawer height (90% of screen minus bottom offset)
+  // Calculate max drawer height (percentage of screen minus bottom offset)
   const bottomOffset = 8; // drawer is positioned 8px from bottom
-  const maxDrawerHeight = (SCREEN_HEIGHT - bottomOffset) * 0.9;
+  const maxHeightRatio = (() => {
+    const trimmed = maxHeight.trim();
+    if (trimmed.endsWith('%')) {
+      const value = parseFloat(trimmed.replace('%', ''));
+      if (!Number.isNaN(value)) {
+        return Math.max(0, Math.min(1, value / 100));
+      }
+    }
+    return 0.9;
+  })();
+  const maxDrawerHeight = (SCREEN_HEIGHT - bottomOffset) * maxHeightRatio;
   
   // Handle height (if showHandle is true)
   const handleHeight = showHandle ? 28 : 0; // ~12px padding top + 4px handle + 12px padding bottom

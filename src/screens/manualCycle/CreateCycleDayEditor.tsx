@@ -1,4 +1,4 @@
-import React, { useState, useRef, useMemo } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   View,
   Text,
@@ -9,13 +9,11 @@ import {
   Alert,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { LinearGradient } from 'expo-linear-gradient';
-// import BottomSheet from '@gorhom/bottom-sheet';
 import { useCreateCycleDraftStore } from '../../store/useCreateCycleDraftStore';
 import { formatWeekdayFull, getExerciseSummary } from '../../utils/manualCycleUtils';
 import { Weekday, ExerciseBlock } from '../../types/manualCycle';
-import { COLORS, SPACING, TYPOGRAPHY } from '../../constants';
-import { IconAdd, IconTrash } from '../../components/icons';
+import { COLORS, SPACING, TYPOGRAPHY, CARDS, BORDER_RADIUS } from '../../constants';
+import { IconAdd, IconTrash, IconArrowLeft } from '../../components/icons';
 import { ExercisePickerModal } from '../../components/manualCycle/ExercisePickerModal';
 import { ExerciseEditorBottomSheet } from '../../components/manualCycle/ExerciseEditorBottomSheet';
 import { useStore } from '../../store';
@@ -28,16 +26,6 @@ interface CreateCycleDayEditorProps {
     };
   };
 }
-
-const LIGHT_COLORS = {
-  backgroundCanvas: '#E3E6E0',
-  backgroundContainer: '#FFFFFF',
-  secondary: '#1B1B1B',
-  textSecondary: '#3C3C43',
-  textMeta: '#817B77',
-  accent: '#FD6B00',
-  border: '#C7C7CC',
-};
 
 export function CreateCycleDayEditor({ navigation, route }: CreateCycleDayEditorProps) {
   const insets = useSafeAreaInsets();
@@ -99,7 +87,7 @@ export function CreateCycleDayEditor({ navigation, route }: CreateCycleDayEditor
             style={styles.backButton}
             activeOpacity={1}
           >
-            <Text style={styles.backText}>←</Text>
+            <IconArrowLeft size={24} color={COLORS.text} />
           </TouchableOpacity>
           <View style={styles.headerTitleContainer}>
             <Text style={styles.stepIndicator}>3/4</Text>
@@ -111,13 +99,13 @@ export function CreateCycleDayEditor({ navigation, route }: CreateCycleDayEditor
           {/* Workout Name */}
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Workout name (optional)</Text>
-            <TextInput
-              style={styles.input}
-              value={workoutName}
-              onChangeText={setWorkoutName}
-              placeholder="e.g., Upper Body, Push Day"
-              placeholderTextColor={LIGHT_COLORS.textMeta}
-            />
+              <TextInput
+                style={styles.input}
+                value={workoutName}
+                onChangeText={setWorkoutName}
+                placeholder="e.g., Upper Body, Push Day"
+                placeholderTextColor={COLORS.textMeta}
+              />
           </View>
 
           {/* Exercises */}
@@ -129,7 +117,7 @@ export function CreateCycleDayEditor({ navigation, route }: CreateCycleDayEditor
                 onPress={() => setShowExercisePicker(true)}
                 activeOpacity={1}
               >
-                <IconAdd size={20} color={LIGHT_COLORS.accent} />
+                <IconAdd size={20} color={COLORS.accentPrimary} />
                 <Text style={styles.addButtonText}>Add exercise</Text>
               </TouchableOpacity>
             </View>
@@ -165,7 +153,7 @@ export function CreateCycleDayEditor({ navigation, route }: CreateCycleDayEditor
                     onPress={() => handleDeleteExercise(exercise.id)}
                     activeOpacity={1}
                   >
-                    <IconTrash size={18} color={LIGHT_COLORS.textMeta} />
+                    <IconTrash size={18} color={COLORS.textMeta} />
                   </TouchableOpacity>
                 </TouchableOpacity>
               );
@@ -226,21 +214,17 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.md,
     marginLeft: -4,
   },
-  backText: {
-    fontSize: 28,
-    color: LIGHT_COLORS.secondary,
-  },
   headerTitleContainer: {
     gap: 4,
   },
   stepIndicator: {
     fontSize: 14,
-    color: LIGHT_COLORS.textMeta,
+    color: COLORS.textMeta,
     fontWeight: '500',
   },
   headerTitle: {
     ...TYPOGRAPHY.h2,
-    color: LIGHT_COLORS.secondary,
+    color: COLORS.text,
   },
   content: {
     flex: 1,
@@ -261,16 +245,16 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 20,
     fontWeight: '600',
-    color: LIGHT_COLORS.secondary,
+    color: COLORS.text,
   },
   input: {
-    backgroundColor: LIGHT_COLORS.backgroundContainer,
+    backgroundColor: COLORS.activeCard,
     borderWidth: 1,
-    borderColor: LIGHT_COLORS.border,
-    borderRadius: 12,
+    borderColor: COLORS.border,
+    borderRadius: BORDER_RADIUS.md,
     padding: SPACING.lg,
     fontSize: 16,
-    color: LIGHT_COLORS.secondary,
+    color: COLORS.text,
   },
   addButton: {
     flexDirection: 'row',
@@ -282,28 +266,27 @@ const styles = StyleSheet.create({
   addButtonText: {
     fontSize: 16,
     fontWeight: '600',
-    color: LIGHT_COLORS.accent,
+    color: COLORS.accentPrimary,
   },
   emptyState: {
-    backgroundColor: LIGHT_COLORS.backgroundContainer,
-    borderRadius: 12,
+    backgroundColor: COLORS.activeCard,
+    borderRadius: BORDER_RADIUS.md,
     padding: SPACING.xxxl,
     alignItems: 'center',
   },
   emptyStateText: {
     fontSize: 16,
     fontWeight: '600',
-    color: LIGHT_COLORS.textSecondary,
+    color: COLORS.text,
     marginBottom: 4,
   },
   emptyStateSubtext: {
     fontSize: 14,
-    color: LIGHT_COLORS.textMeta,
+    color: COLORS.textMeta,
     textAlign: 'center',
   },
   exerciseCard: {
-    backgroundColor: LIGHT_COLORS.backgroundContainer,
-    borderRadius: 12,
+    ...CARDS.cardDeep.outer,
     padding: SPACING.lg,
     marginBottom: SPACING.md,
     flexDirection: 'row',
@@ -316,12 +299,12 @@ const styles = StyleSheet.create({
   exerciseName: {
     fontSize: 16,
     fontWeight: '600',
-    color: LIGHT_COLORS.secondary,
+    color: COLORS.text,
     marginBottom: 4,
   },
   exerciseSummary: {
     fontSize: 13,
-    color: LIGHT_COLORS.textMeta,
+    color: COLORS.textMeta,
   },
   deleteButton: {
     padding: 8,
@@ -336,16 +319,16 @@ const styles = StyleSheet.create({
     paddingTop: SPACING.md,
   },
   saveButton: {
-    backgroundColor: LIGHT_COLORS.accent,
+    backgroundColor: COLORS.accentPrimary,
     paddingVertical: 16,
-    borderRadius: 12,
+    borderRadius: BORDER_RADIUS.md,
     alignItems: 'center',
   },
   saveButtonText: {
     ...TYPOGRAPHY.meta,
     fontWeight: 'bold',
     fontWeight: '600',
-    color: '#FFFFFF',
+    color: COLORS.backgroundCanvas,
   },
 });
 

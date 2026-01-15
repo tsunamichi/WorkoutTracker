@@ -1,27 +1,15 @@
-import React, { useEffect } from 'react';
+import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useCreateCycleDraftStore } from '../../store/useCreateCycleDraftStore';
 import { DAY_ORDER, WORKOUT_LENGTHS, Weekday, WorkoutLength } from '../../types/manualCycle';
 import { formatWeekday } from '../../utils/manualCycleUtils';
-import { IconAdd, IconMinus } from '../../components/icons';
-import { COLORS, SPACING, TYPOGRAPHY } from '../../constants';
+import { IconAdd, IconMinus, IconArrowLeft } from '../../components/icons';
+import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS } from '../../constants';
 
 interface CreateCycleBasicsProps {
   navigation: any;
 }
-
-const LIGHT_COLORS = {
-  backgroundCanvas: '#E3E6E0',
-  secondary: '#1B1B1B',
-  textSecondary: '#3C3C43',
-  textMeta: '#817B77',
-  accent: '#FD6B00',
-  chipBg: '#FFFFFF',
-  chipSelectedBg: '#FD6B00',
-  chipBorder: '#C7C7CC',
-};
 
 export function CreateCycleBasics({ navigation }: CreateCycleBasicsProps) {
   const insets = useSafeAreaInsets();
@@ -58,7 +46,7 @@ export function CreateCycleBasics({ navigation }: CreateCycleBasicsProps) {
             style={styles.backButton}
             activeOpacity={1}
           >
-            <Text style={styles.backText}>←</Text>
+            <IconArrowLeft size={24} color={COLORS.text} />
           </TouchableOpacity>
           <View style={styles.headerTitleContainer}>
             <Text style={styles.stepIndicator}>1/4</Text>
@@ -134,7 +122,7 @@ export function CreateCycleBasics({ navigation }: CreateCycleBasicsProps) {
                 disabled={weeks <= 1}
                 activeOpacity={1}
               >
-                <IconMinus size={20} color={weeks <= 1 ? LIGHT_COLORS.textMeta : LIGHT_COLORS.secondary} />
+                <IconMinus size={20} color={weeks <= 1 ? COLORS.textDisabled : COLORS.text} />
               </TouchableOpacity>
               <View style={styles.stepperValue}>
                 <Text style={styles.stepperNumber}>{weeks}</Text>
@@ -146,7 +134,7 @@ export function CreateCycleBasics({ navigation }: CreateCycleBasicsProps) {
                 disabled={weeks >= 12}
                 activeOpacity={1}
               >
-                <IconAdd size={20} color={weeks >= 12 ? LIGHT_COLORS.textMeta : LIGHT_COLORS.secondary} />
+                <IconAdd size={20} color={weeks >= 12 ? COLORS.textDisabled : COLORS.text} />
               </TouchableOpacity>
             </View>
           </View>
@@ -194,21 +182,17 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.md,
     marginLeft: -4,
   },
-  backText: {
-    fontSize: 28,
-    color: LIGHT_COLORS.secondary,
-  },
   headerTitleContainer: {
     gap: 4,
   },
   stepIndicator: {
     fontSize: 14,
-    color: LIGHT_COLORS.textMeta,
+    color: COLORS.textMeta,
     fontWeight: '500',
   },
   headerTitle: {
     ...TYPOGRAPHY.h2,
-    color: LIGHT_COLORS.secondary,
+    color: COLORS.text,
   },
   content: {
     flex: 1,
@@ -223,12 +207,12 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 20,
     fontWeight: '600',
-    color: LIGHT_COLORS.secondary,
+    color: COLORS.text,
     marginBottom: 4,
   },
   sectionSubtitle: {
     fontSize: 14,
-    color: LIGHT_COLORS.textMeta,
+    color: COLORS.textMeta,
     marginBottom: SPACING.lg,
   },
   chipGrid: {
@@ -237,48 +221,48 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   dayChip: {
-    backgroundColor: LIGHT_COLORS.chipBg,
+    backgroundColor: COLORS.activeCard,
     borderWidth: 1,
-    borderColor: LIGHT_COLORS.chipBorder,
-    borderRadius: 12,
+    borderColor: COLORS.border,
+    borderRadius: BORDER_RADIUS.md,
     paddingHorizontal: 16,
     paddingVertical: 12,
     minWidth: 60,
     alignItems: 'center',
   },
   dayChipSelected: {
-    backgroundColor: LIGHT_COLORS.chipSelectedBg,
-    borderColor: LIGHT_COLORS.chipSelectedBg,
+    backgroundColor: COLORS.accentPrimary,
+    borderColor: COLORS.accentPrimary,
   },
   dayChipText: {
     fontSize: 15,
     fontWeight: '600',
-    color: LIGHT_COLORS.secondary,
+    color: COLORS.text,
   },
   dayChipTextSelected: {
-    color: '#FFFFFF',
+    color: COLORS.backgroundCanvas,
   },
   lengthChip: {
-    backgroundColor: LIGHT_COLORS.chipBg,
+    backgroundColor: COLORS.activeCard,
     borderWidth: 1,
-    borderColor: LIGHT_COLORS.chipBorder,
-    borderRadius: 12,
+    borderColor: COLORS.border,
+    borderRadius: BORDER_RADIUS.md,
     paddingHorizontal: 20,
     paddingVertical: 12,
     minWidth: 80,
     alignItems: 'center',
   },
   lengthChipSelected: {
-    backgroundColor: LIGHT_COLORS.chipSelectedBg,
-    borderColor: LIGHT_COLORS.chipSelectedBg,
+    backgroundColor: COLORS.accentPrimary,
+    borderColor: COLORS.accentPrimary,
   },
   lengthChipText: {
     fontSize: 15,
     fontWeight: '600',
-    color: LIGHT_COLORS.secondary,
+    color: COLORS.text,
   },
   lengthChipTextSelected: {
-    color: '#FFFFFF',
+    color: COLORS.backgroundCanvas,
   },
   stepper: {
     flexDirection: 'row',
@@ -289,11 +273,11 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: LIGHT_COLORS.chipBg,
+    backgroundColor: COLORS.activeCard,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: LIGHT_COLORS.chipBorder,
+    borderColor: COLORS.border,
   },
   stepperButtonDisabled: {
     opacity: 0.3,
@@ -305,11 +289,11 @@ const styles = StyleSheet.create({
   stepperNumber: {
     fontSize: 36,
     fontWeight: '700',
-    color: LIGHT_COLORS.secondary,
+    color: COLORS.text,
   },
   stepperLabel: {
     fontSize: 14,
-    color: LIGHT_COLORS.textMeta,
+    color: COLORS.textMeta,
   },
   stickyFooter: {
     position: 'absolute',
@@ -321,24 +305,24 @@ const styles = StyleSheet.create({
     paddingTop: SPACING.md,
   },
   continueButton: {
-    backgroundColor: LIGHT_COLORS.accent,
+    backgroundColor: COLORS.accentPrimary,
     paddingVertical: 16,
-    borderRadius: 12,
+    borderRadius: BORDER_RADIUS.md,
     alignItems: 'center',
   },
   continueButtonDisabled: {
-    backgroundColor: LIGHT_COLORS.chipBg,
+    backgroundColor: COLORS.backgroundCanvas,
     borderWidth: 1,
-    borderColor: LIGHT_COLORS.chipBorder,
+    borderColor: COLORS.border,
   },
   continueButtonText: {
     ...TYPOGRAPHY.meta,
     fontWeight: 'bold',
     fontWeight: '600',
-    color: '#FFFFFF',
+    color: COLORS.backgroundCanvas,
   },
   continueButtonTextDisabled: {
-    color: LIGHT_COLORS.textMeta,
+    color: COLORS.textMeta,
   },
 });
 

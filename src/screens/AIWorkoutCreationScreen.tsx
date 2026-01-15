@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, Alert, KeyboardAvoidingView, Platform } from 'react-native';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import * as Clipboard from 'expo-clipboard';
-import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS } from '../constants';
+import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS, CARDS } from '../constants';
 import { useStore } from '../store';
-import { IconArrowLeft } from '../components/icons';
+import { IconArrowLeft, IconChevronDown, IconMenu } from '../components/icons';
+import { BottomDrawer } from '../components/common/BottomDrawer';
 import dayjs from 'dayjs';
 import isoWeek from 'dayjs/plugin/isoWeek';
 
@@ -23,9 +24,6 @@ export function AIWorkoutCreationScreen() {
   const [workoutDetails, setWorkoutDetails] = useState('');
   const [showInstructionsSheet, setShowInstructionsSheet] = useState(false);
   
-  // Match device corner radius (iPhone rounded corners)
-  const deviceCornerRadius = insets.bottom > 0 ? 40 : 24;
-
   const handleCopyTemplate = async () => {
     await Clipboard.setStringAsync(TEMPLATE_FORMAT);
     Alert.alert('Copied', 'Template copied to clipboard');
@@ -307,8 +305,8 @@ export function AIWorkoutCreationScreen() {
                 <IconArrowLeft size={24} color={COLORS.text} />
               </TouchableOpacity>
               
-              <TouchableOpacity style={styles.menuButton}>
-                <Text style={styles.menuButtonText}>⋯</Text>
+              <TouchableOpacity style={styles.menuButton} activeOpacity={1}>
+                <IconMenu size={24} color={COLORS.text} />
               </TouchableOpacity>
             </View>
             
@@ -332,7 +330,7 @@ export function AIWorkoutCreationScreen() {
               activeOpacity={1}
             >
               <Text style={styles.instructionsText}>Instructions</Text>
-              <Text style={styles.dropdownIcon}>▼</Text>
+              <IconChevronDown size={16} color={COLORS.text} />
             </TouchableOpacity>
 
             {/* Text Input */}
@@ -360,47 +358,29 @@ export function AIWorkoutCreationScreen() {
           </View>
         </KeyboardAvoidingView>
 
-        {/* Instructions Bottom Sheet */}
-        {showInstructionsSheet && (
-          <View style={styles.drawerOverlay} pointerEvents="box-none">
-            {/* Backdrop overlay */}
-            <TouchableOpacity 
-              style={styles.drawerBackdrop} 
-              activeOpacity={1}
-              onPress={() => setShowInstructionsSheet(false)}
-            />
-            
-            <View style={styles.drawerContainer}>
-              <SafeAreaView style={[styles.drawerSheet, {
-                borderBottomLeftRadius: deviceCornerRadius,
-                borderBottomRightRadius: deviceCornerRadius,
-              }]} edges={['bottom']}>
-                <View style={styles.sheetHandle} />
-                
-                <View style={styles.sheetContent}>
-                  <Text style={styles.sheetTitle}>Instructions</Text>
-                  <Text style={styles.sheetSubtitle}>Ask your agent to use the following template:</Text>
-                  
-                  <View style={styles.templateBoxBlackShadow}>
-                    <View style={styles.templateBoxWhiteShadow}>
-                      <View style={styles.templateBox}>
-                        <Text style={styles.templateText}>{TEMPLATE_FORMAT}</Text>
-                      </View>
-                    </View>
-                  </View>
-                  
-                  <TouchableOpacity
-                    style={styles.copyButton}
-                    onPress={handleCopyTemplate}
-                    activeOpacity={1}
-                  >
-                    <Text style={styles.copyButtonText}>Copy</Text>
-                  </TouchableOpacity>
-                </View>
-              </SafeAreaView>
+        {/* Instructions Bottom Drawer */}
+        <BottomDrawer
+          visible={showInstructionsSheet}
+          onClose={() => setShowInstructionsSheet(false)}
+          maxHeight="80%"
+          scrollable={false}
+          showHandle={false}
+        >
+          <View style={styles.sheetContent}>
+            <Text style={styles.sheetTitle}>Instructions</Text>
+            <Text style={styles.sheetSubtitle}>Ask your agent to use the following template:</Text>
+            <View style={styles.templateBox}>
+              <Text style={styles.templateText}>{TEMPLATE_FORMAT}</Text>
             </View>
+            <TouchableOpacity
+              style={styles.copyButton}
+              onPress={handleCopyTemplate}
+              activeOpacity={1}
+            >
+              <Text style={styles.copyButtonText}>Copy</Text>
+            </TouchableOpacity>
           </View>
-        )}
+        </BottomDrawer>
     </View>
   );
 }
@@ -426,11 +406,6 @@ const styles = StyleSheet.create({
   menuButton: {
     // No additional styles needed
   },
-  menuButtonText: {
-    fontSize: 24,
-    color: COLORS.text,
-    fontWeight: '600',
-  },
   pageTitleContainer: {
     paddingHorizontal: SPACING.xxl,
     paddingTop: SPACING.md,
@@ -451,7 +426,10 @@ const styles = StyleSheet.create({
   instructionsButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: 6,
+    backgroundColor: COLORS.activeCard,
+    borderRadius: BORDER_RADIUS.md,
+    paddingHorizontal: SPACING.lg,
     paddingVertical: SPACING.md,
     marginBottom: SPACING.lg,
   },
@@ -460,19 +438,14 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: COLORS.text,
   },
-  dropdownIcon: {
-    fontSize: 12,
-    color: COLORS.text,
-  },
   textInput: {
-    backgroundColor: COLORS.backgroundContainer,
+    backgroundColor: COLORS.activeCard,
     borderRadius: BORDER_RADIUS.md,
     padding: SPACING.lg,
     fontSize: 16,
     color: COLORS.text,
     minHeight: 400,
-    borderWidth: 1,
-    borderColor: COLORS.border,
+    borderWidth: 0,
   },
   bottomContainer: {
     paddingHorizontal: SPACING.xxl,
@@ -480,60 +453,28 @@ const styles = StyleSheet.create({
     paddingBottom: SPACING.xl,
   },
   createButton: {
-    backgroundColor: '#1B1B1B',
+    backgroundColor: COLORS.text,
     height: 56,
     borderRadius: BORDER_RADIUS.md,
     alignItems: 'center',
     justifyContent: 'center',
   },
   createButtonDisabled: {
-    backgroundColor: 'transparent',
+    backgroundColor: COLORS.backgroundCanvas,
     borderWidth: 1,
-    borderColor: COLORS.disabledBorder,
+    borderColor: COLORS.border,
   },
   createButtonText: {
     ...TYPOGRAPHY.meta,
     fontWeight: 'bold',
-    color: '#FFFFFF',
+    color: COLORS.backgroundCanvas,
   },
   createButtonTextDisabled: {
     color: COLORS.textMeta,
   },
-  // Drawer & Overlay (matching rest timer)
-  drawerOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    zIndex: 1000,
-    pointerEvents: 'box-none',
-  },
-  drawerBackdrop: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: COLORS.overlay,
-  },
-  drawerContainer: {
-    position: 'absolute',
-    bottom: 8,
-    left: 8,
-    right: 8,
-    elevation: 10,
-  },
-  drawerSheet: {
-    backgroundColor: '#E3E6E0', // backgroundCanvas
-    paddingTop: 4,
-    paddingHorizontal: 4,
-    paddingBottom: 0, // SafeAreaView handles bottom padding
-    borderRadius: 24,
-  },
-  sheetHandle: {
-    width: 40,
-    height: 4,
-    backgroundColor: COLORS.textMeta,
-    borderRadius: 2,
-    alignSelf: 'center',
-    marginTop: 12,
-    marginBottom: 16,
-  },
   sheetContent: {
-    paddingHorizontal: 20,
+    paddingHorizontal: SPACING.xxl,
+    paddingBottom: SPACING.xl,
   },
   sheetTitle: {
     ...TYPOGRAPHY.h2,
@@ -543,17 +484,12 @@ const styles = StyleSheet.create({
   sheetSubtitle: {
     ...TYPOGRAPHY.meta,
     color: COLORS.textMeta,
-    marginBottom: 32,
-  },
-  templateBoxBlackShadow: {
-    marginBottom: 32,
-  },
-  templateBoxWhiteShadow: {
+    marginBottom: SPACING.lg,
   },
   templateBox: {
-    backgroundColor: COLORS.activeCard,
-    borderRadius: BORDER_RADIUS.md,
+    ...CARDS.cardDeep.outer,
     padding: SPACING.lg,
+    marginBottom: SPACING.lg,
   },
   templateText: {
     ...TYPOGRAPHY.body,
@@ -561,7 +497,7 @@ const styles = StyleSheet.create({
     lineHeight: 24,
   },
   copyButton: {
-    backgroundColor: '#1B1B1B',
+    backgroundColor: COLORS.accentPrimary,
     height: 56,
     borderRadius: BORDER_RADIUS.md,
     alignItems: 'center',
@@ -570,7 +506,7 @@ const styles = StyleSheet.create({
   copyButtonText: {
     ...TYPOGRAPHY.meta,
     fontWeight: 'bold',
-    color: '#FFFFFF',
+    color: COLORS.backgroundCanvas,
   },
 });
 

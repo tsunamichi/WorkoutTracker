@@ -585,11 +585,11 @@ const styles = StyleSheet.create({
   },
   historyDividerTop: {
     height: 1,
-    backgroundColor: '#CBC8C7', // metaSoft
+    backgroundColor: COLORS.textDisabled,
   },
   historyDividerBottom: {
     height: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: 'transparent',
   },
 });
 
