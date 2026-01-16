@@ -589,7 +589,7 @@ const styles = StyleSheet.create({
   },
   settingsDivider: {
     height: 1,
-    backgroundColor: COLORS.border,
+    backgroundColor: COLORS.borderDimmed,
   },
   modalOverlay: {
     flex: 1,

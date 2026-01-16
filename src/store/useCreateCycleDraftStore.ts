@@ -25,7 +25,7 @@ interface CreateCycleDraftStore {
   setWorkoutLength: (length: WorkoutLength) => void;
   ensureWorkoutsForSelectedDays: () => void;
   setWorkoutDayName: (weekday: Weekday, name: string) => void;
-  addExerciseToDay: (weekday: Weekday, exerciseId: string) => void;
+  addExerciseToDay: (weekday: Weekday, exerciseId: string) => ExerciseBlock;
   removeExerciseFromDay: (weekday: Weekday, exerciseBlockId: string) => void;
   reorderExercises: (weekday: Weekday, fromIndex: number, toIndex: number) => void;
   updateExerciseWeekPlan: (
@@ -143,13 +143,14 @@ export const useCreateCycleDraftStore = create<CreateCycleDraftStore>((set, get)
   },
 
   addExerciseToDay: (weekday: Weekday, exerciseId: string) => {
+    let newExercise: ExerciseBlock | null = null;
     set((state) => {
       const weeks: ExerciseWeekPlan[] = [];
       for (let i = 0; i < state.weeks; i++) {
         weeks.push({ weekIndex: i });
       }
 
-      const newExercise: ExerciseBlock = {
+      newExercise = {
         id: generateId(),
         exerciseId,
         weeks,
@@ -163,6 +164,7 @@ export const useCreateCycleDraftStore = create<CreateCycleDraftStore>((set, get)
         ),
       };
     });
+    return newExercise!;
   },
 
   removeExerciseFromDay: (weekday: Weekday, exerciseBlockId: string) => {
@@ -270,7 +272,6 @@ export const useCreateCycleDraftStore = create<CreateCycleDraftStore>((set, get)
     const state = get();
     return (
       state.frequencyDays.length > 0 &&
-      state.workoutLength !== null &&
       state.weeks >= 1 &&
       state.weeks <= 12
     );

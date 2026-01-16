@@ -10,7 +10,6 @@ import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS, CARDS } from '../constants'
 import { IconCheck, IconPlay, IconAdd } from '../components/icons';
 import { useStore } from '../store';
 import { useOnboardingStore } from '../store/useOnboardingStore';
-import { TEMPLATES } from '../data/templates';
 import dayjs from 'dayjs';
 import isoWeek from 'dayjs/plugin/isoWeek';
 
@@ -34,7 +33,7 @@ export function WorkoutsScreen() {
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
   const { cycles, addCycle, getNextCycleNumber, assignWorkout, exercises, addExercise, updateCycle, clearWorkoutAssignmentsForDateRange, workoutAssignments, detailedWorkoutProgress } = useStore();
-  const { startDraftFromTemplate, startDraftFromCustomText, setPrefs } = useOnboardingStore();
+  const { startDraftFromCustomText } = useOnboardingStore();
   const [showBottomSheet, setShowBottomSheet] = useState(false);
   const [workoutDetails, setWorkoutDetails] = useState('');
 
@@ -404,33 +403,6 @@ export function WorkoutsScreen() {
                 </TouchableOpacity>
               </View>
               
-              {/* Templates Section */}
-              <View style={styles.templatesSection}>
-                <Text style={styles.sectionTitle}>Start with a template</Text>
-                
-                {TEMPLATES.filter(t => t.id !== 'custom').map((template) => (
-                  <View key={template.id} style={styles.templateCardBlackShadow}>
-                      <View style={styles.templateCardWhiteShadow}>
-                        <TouchableOpacity
-                          style={styles.templateCard}
-                          onPress={() => {
-                            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                            setPrefs({ daysPerWeek: template.idealDays[0] || 3, sessionMinutes: 60 });
-                            startDraftFromTemplate(template.id);
-                            navigation.navigate('TemplateEditor', { templateId: template.id });
-                          }}
-                          activeOpacity={1}
-                        >
-                        <View style={styles.templateCardContent}>
-                            <Text style={styles.templateName}>{template.name}</Text>
-                            <Text style={styles.templateDescription}>{template.description}</Text>
-                          </View>
-                        <IconPlay size={10} color="#000000" />
-                        </TouchableOpacity>
-                    </View>
-                  </View>
-                ))}
-              </View>
             </>
           ) : (
             <>
@@ -663,56 +635,7 @@ const styles = StyleSheet.create({
   },
   
   // Templates Section
-  templatesSection: {
-    marginTop: 48,
-    gap: SPACING.sm,
-  },
-  sectionTitle: {
-    ...TYPOGRAPHY.h3,
-    color: COLORS.textMeta,
-    marginBottom: SPACING.sm,
-  },
-  templateCardBlackShadow: {
-    marginBottom: SPACING.xs,
-  },
-  templateCardWhiteShadow: {
-  },
-  templateCard: {
-    backgroundColor: COLORS.activeCard,
-    borderRadius: BORDER_RADIUS.md,
-    paddingHorizontal: 24,
-    paddingVertical: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  templateCardContent: {
-    flex: 1,
-  },
-  templateName: {
-    ...TYPOGRAPHY.body,
-    color: COLORS.text,
-    marginBottom: 2,
-  },
-  templateDescription: {
-    ...TYPOGRAPHY.body,
-    color: COLORS.textMeta,
-  },
-  triangle: {
-    width: 0,
-    height: 0,
-    backgroundColor: 'transparent',
-    borderStyle: 'solid',
-    borderLeftWidth: 8,
-    borderRightWidth: 0,
-    borderTopWidth: 4.5,
-    borderBottomWidth: 4.5,
-    borderLeftColor: '#000000',
-    borderRightColor: 'transparent',
-    borderTopColor: 'transparent',
-    borderBottomColor: 'transparent',
-    marginLeft: SPACING.md,
-  },
+  // Templates section removed
   
   // Cycles List
   newButton: {

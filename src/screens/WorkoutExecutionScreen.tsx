@@ -965,7 +965,7 @@ const LIGHT_COLORS = {
   textSecondary: '#3C3C43',
   textMeta: '#817B77',
   border: '#C7C7CC',
-  divider: 'rgba(0, 0, 0, 0.1)',
+  divider: COLORS.borderDimmed,
 };
 
 const styles = StyleSheet.create({

@@ -84,6 +84,7 @@ const ACCENT_PRIMARY = '#2F06FF';
 const SIGNAL_NEGATIVE = '#FF0651';
 const SIGNAL_POSITIVE = '#1CAA00';
 const SIGNAL_WARNING = '#FFBD06';
+const BORDER_DIMMED = 'rgba(0, 0, 0, 0.08)';
 
 export const COLORS = {
   // Core colors
@@ -119,7 +120,8 @@ export const COLORS = {
   // Borders & dividers
   border: '#D2D3CF',        // Subtle borders
   disabledBorder: '#D2D2D2', // Disabled button border
-  divider: '#48484A',       // Dividers
+  borderDimmed: BORDER_DIMMED, // Dimmed dividers
+  divider: BORDER_DIMMED,       // Dividers
   overlay: 'rgba(0, 0, 0, 0.2)', // Bottom sheet overlays
   
   // Status colors
@@ -348,48 +350,158 @@ export const BUTTONS = {
 // Seed exercises for initial app state
 export const SEED_EXERCISES = [
   // Chest
-  { name: 'Bench Press', category: 'Chest', equipment: 'Barbell' },
-  { name: 'Incline Dumbbell Press', category: 'Chest', equipment: 'Dumbbell' },
-  { name: 'Chest Fly', category: 'Chest', equipment: 'Dumbbell' },
-  { name: 'Push-ups', category: 'Chest', equipment: 'Bodyweight' },
-  { name: 'Dips', category: 'Chest', equipment: 'Bodyweight' },
-  
-  // Back
-  { name: 'Deadlift', category: 'Back', equipment: 'Barbell' },
-  { name: 'Pull-ups', category: 'Back', equipment: 'Bodyweight' },
-  { name: 'Barbell Row', category: 'Back', equipment: 'Barbell' },
-  { name: 'Lat Pulldown', category: 'Back', equipment: 'Machine' },
-  { name: 'Dumbbell Row', category: 'Back', equipment: 'Dumbbell' },
-  { name: 'Face Pulls', category: 'Back', equipment: 'Cable' },
-  
-  // Legs
-  { name: 'Squat', category: 'Legs', equipment: 'Barbell' },
-  { name: 'Romanian Deadlift', category: 'Legs', equipment: 'Barbell' },
-  { name: 'Leg Press', category: 'Legs', equipment: 'Machine' },
-  { name: 'Leg Curl', category: 'Legs', equipment: 'Machine' },
-  { name: 'Leg Extension', category: 'Legs', equipment: 'Machine' },
-  { name: 'Lunges', category: 'Legs', equipment: 'Dumbbell' },
-  { name: 'Calf Raises', category: 'Legs', equipment: 'Machine' },
-  
-  // Shoulders
-  { name: 'Overhead Press', category: 'Shoulders', equipment: 'Barbell' },
-  { name: 'Dumbbell Shoulder Press', category: 'Shoulders', equipment: 'Dumbbell' },
-  { name: 'Lateral Raises', category: 'Shoulders', equipment: 'Dumbbell' },
-  { name: 'Front Raises', category: 'Shoulders', equipment: 'Dumbbell' },
-  { name: 'Rear Delt Fly', category: 'Shoulders', equipment: 'Dumbbell' },
-  
-  // Arms
-  { name: 'Barbell Curl', category: 'Arms', equipment: 'Barbell' },
-  { name: 'Hammer Curl', category: 'Arms', equipment: 'Dumbbell' },
-  { name: 'Tricep Pushdown', category: 'Arms', equipment: 'Cable' },
-  { name: 'Overhead Tricep Extension', category: 'Arms', equipment: 'Dumbbell' },
-  { name: 'Close-Grip Bench Press', category: 'Arms', equipment: 'Barbell' },
-  
-  // Core
-  { name: 'Plank', category: 'Core', equipment: 'Bodyweight' },
-  { name: 'Russian Twists', category: 'Core', equipment: 'Bodyweight' },
-  { name: 'Cable Crunch', category: 'Core', equipment: 'Cable' },
-  { name: 'Hanging Leg Raises', category: 'Core', equipment: 'Bodyweight' },
+  { name: 'Barbell Bench Press', category: 'Chest', equipment: 'Other' },
+  { name: 'Incline Barbell Bench Press', category: 'Chest', equipment: 'Other' },
+  { name: 'Dumbbell Bench Press', category: 'Chest', equipment: 'Other' },
+  { name: 'Incline Dumbbell Press', category: 'Chest', equipment: 'Other' },
+  { name: 'Decline Bench Press', category: 'Chest', equipment: 'Other' },
+  { name: 'Chest Press Machine', category: 'Chest', equipment: 'Other' },
+  { name: 'Dumbbell Fly (Flat)', category: 'Chest', equipment: 'Other' },
+  { name: 'Incline Dumbbell Fly', category: 'Chest', equipment: 'Other' },
+  { name: 'Cable Fly (High to Low)', category: 'Chest', equipment: 'Other' },
+  { name: 'Cable Fly (Low to High)', category: 'Chest', equipment: 'Other' },
+  { name: 'Pec Deck', category: 'Chest', equipment: 'Other' },
+  { name: 'Push-Ups', category: 'Chest', equipment: 'Other' },
+  { name: 'Chest Dips', category: 'Chest', equipment: 'Other' },
+
+  // Back (Lats & Mid-Back)
+  { name: 'Pull-Ups', category: 'Back (Lats & Mid-Back)', equipment: 'Other' },
+  { name: 'Chin-Ups', category: 'Back (Lats & Mid-Back)', equipment: 'Other' },
+  { name: 'Lat Pulldown (Wide)', category: 'Back (Lats & Mid-Back)', equipment: 'Other' },
+  { name: 'Lat Pulldown (Neutral)', category: 'Back (Lats & Mid-Back)', equipment: 'Other' },
+  { name: 'Single-Arm Lat Pulldown', category: 'Back (Lats & Mid-Back)', equipment: 'Other' },
+  { name: 'Seated Cable Row', category: 'Back (Lats & Mid-Back)', equipment: 'Other' },
+  { name: 'Chest-Supported Row (Machine)', category: 'Back (Lats & Mid-Back)', equipment: 'Other' },
+  { name: 'Chest-Supported Dumbbell Row', category: 'Back (Lats & Mid-Back)', equipment: 'Other' },
+  { name: 'Barbell Row', category: 'Back (Lats & Mid-Back)', equipment: 'Other' },
+  { name: 'Pendlay Row', category: 'Back (Lats & Mid-Back)', equipment: 'Other' },
+  { name: 'Single-Arm Dumbbell Row', category: 'Back (Lats & Mid-Back)', equipment: 'Other' },
+  { name: 'T-Bar Row', category: 'Back (Lats & Mid-Back)', equipment: 'Other' },
+  { name: 'Inverted Row', category: 'Back (Lats & Mid-Back)', equipment: 'Other' },
+
+  // Back (Upper / Scapular)
+  { name: 'Face Pull', category: 'Back (Upper / Scapular)', equipment: 'Other' },
+  { name: 'Rear Delt Row (Cable or Dumbbell)', category: 'Back (Upper / Scapular)', equipment: 'Other' },
+  { name: 'High Cable Row', category: 'Back (Upper / Scapular)', equipment: 'Other' },
+  { name: 'Band Pull-Apart', category: 'Back (Upper / Scapular)', equipment: 'Other' },
+  { name: 'Prone Y Raise', category: 'Back (Upper / Scapular)', equipment: 'Other' },
+  { name: 'Prone T Raise', category: 'Back (Upper / Scapular)', equipment: 'Other' },
+  { name: 'Reverse Pec Deck', category: 'Back (Upper / Scapular)', equipment: 'Other' },
+  { name: 'Scapular Pull-Ups', category: 'Back (Upper / Scapular)', equipment: 'Other' },
+
+  // Shoulders (Delts)
+  { name: 'Overhead Barbell Press', category: 'Shoulders (Delts)', equipment: 'Other' },
+  { name: 'Seated Dumbbell Shoulder Press', category: 'Shoulders (Delts)', equipment: 'Other' },
+  { name: 'Arnold Press', category: 'Shoulders (Delts)', equipment: 'Other' },
+  { name: 'Machine Shoulder Press', category: 'Shoulders (Delts)', equipment: 'Other' },
+  { name: 'Lateral Raise (Dumbbell)', category: 'Shoulders (Delts)', equipment: 'Other' },
+  { name: 'Cable Lateral Raise', category: 'Shoulders (Delts)', equipment: 'Other' },
+  { name: 'Front Raise (Dumbbell or Plate)', category: 'Shoulders (Delts)', equipment: 'Other' },
+  { name: 'Upright Row (EZ Bar or Cable)', category: 'Shoulders (Delts)', equipment: 'Other' },
+  { name: 'Rear Delt Fly (Dumbbell)', category: 'Shoulders (Delts)', equipment: 'Other' },
+
+  // Biceps
+  { name: 'Barbell Curl', category: 'Biceps', equipment: 'Other' },
+  { name: 'EZ-Bar Curl', category: 'Biceps', equipment: 'Other' },
+  { name: 'Dumbbell Curl', category: 'Biceps', equipment: 'Other' },
+  { name: 'Alternating Dumbbell Curl', category: 'Biceps', equipment: 'Other' },
+  { name: 'Incline Dumbbell Curl', category: 'Biceps', equipment: 'Other' },
+  { name: 'Preacher Curl (Machine or EZ)', category: 'Biceps', equipment: 'Other' },
+  { name: 'Cable Curl', category: 'Biceps', equipment: 'Other' },
+  { name: 'Hammer Curl', category: 'Biceps', equipment: 'Other' },
+  { name: 'Cross-Body Hammer Curl', category: 'Biceps', equipment: 'Other' },
+  { name: 'Concentration Curl', category: 'Biceps', equipment: 'Other' },
+
+  // Triceps
+  { name: 'Close-Grip Bench Press', category: 'Triceps', equipment: 'Other' },
+  { name: 'Triceps Pushdown (Rope)', category: 'Triceps', equipment: 'Other' },
+  { name: 'Triceps Pushdown (Bar)', category: 'Triceps', equipment: 'Other' },
+  { name: 'Overhead Triceps Extension (Cable)', category: 'Triceps', equipment: 'Other' },
+  { name: 'Dumbbell Overhead Extension', category: 'Triceps', equipment: 'Other' },
+  { name: 'Skullcrushers (EZ Bar)', category: 'Triceps', equipment: 'Other' },
+  { name: 'Bench Dips', category: 'Triceps', equipment: 'Other' },
+  { name: 'Assisted Dips', category: 'Triceps', equipment: 'Other' },
+  { name: 'Single-Arm Cable Kickback', category: 'Triceps', equipment: 'Other' },
+
+  // Legs (Quads)
+  { name: 'Back Squat', category: 'Legs (Quads)', equipment: 'Other' },
+  { name: 'Front Squat', category: 'Legs (Quads)', equipment: 'Other' },
+  { name: 'Goblet Squat', category: 'Legs (Quads)', equipment: 'Other' },
+  { name: 'Hack Squat', category: 'Legs (Quads)', equipment: 'Other' },
+  { name: 'Leg Press', category: 'Legs (Quads)', equipment: 'Other' },
+  { name: 'Bulgarian Split Squat', category: 'Legs (Quads)', equipment: 'Other' },
+  { name: 'Step-Ups', category: 'Legs (Quads)', equipment: 'Other' },
+  { name: 'Spanish Squat', category: 'Legs (Quads)', equipment: 'Other' },
+  { name: 'Wall Sit', category: 'Legs (Quads)', equipment: 'Other' },
+  { name: 'Sissy Squat (Assisted)', category: 'Legs (Quads)', equipment: 'Other' },
+
+  // Legs (Hamstrings)
+  { name: 'Romanian Deadlift', category: 'Legs (Hamstrings)', equipment: 'Other' },
+  { name: 'Stiff-Leg Deadlift', category: 'Legs (Hamstrings)', equipment: 'Other' },
+  { name: 'Seated Hamstring Curl', category: 'Legs (Hamstrings)', equipment: 'Other' },
+  { name: 'Lying Hamstring Curl', category: 'Legs (Hamstrings)', equipment: 'Other' },
+  { name: 'Nordic Hamstring Curl (Assisted)', category: 'Legs (Hamstrings)', equipment: 'Other' },
+  { name: 'Single-Leg Romanian Deadlift', category: 'Legs (Hamstrings)', equipment: 'Other' },
+  { name: 'Hip Hinge Machine', category: 'Legs (Hamstrings)', equipment: 'Other' },
+
+  // Glutes
+  { name: 'Hip Thrust (Barbell)', category: 'Glutes', equipment: 'Other' },
+  { name: 'Hip Thrust (Machine)', category: 'Glutes', equipment: 'Other' },
+  { name: 'Glute Bridge', category: 'Glutes', equipment: 'Other' },
+  { name: 'Cable Kickback', category: 'Glutes', equipment: 'Other' },
+  { name: 'Reverse Lunge', category: 'Glutes', equipment: 'Other' },
+  { name: 'Walking Lunge', category: 'Glutes', equipment: 'Other' },
+  { name: 'Step-Back Lunge', category: 'Glutes', equipment: 'Other' },
+  { name: 'Curtsy Lunge', category: 'Glutes', equipment: 'Other' },
+
+  // Adductors / Abductors
+  { name: 'Adductor Machine', category: 'Adductors / Abductors', equipment: 'Other' },
+  { name: 'Abductor Machine', category: 'Adductors / Abductors', equipment: 'Other' },
+  { name: 'Copenhagen Plank', category: 'Adductors / Abductors', equipment: 'Other' },
+  { name: 'Lateral Lunge', category: 'Adductors / Abductors', equipment: 'Other' },
+  { name: 'Cable Hip Adduction', category: 'Adductors / Abductors', equipment: 'Other' },
+  { name: 'Cable Hip Abduction', category: 'Adductors / Abductors', equipment: 'Other' },
+
+  // Calves
+  { name: 'Standing Calf Raise', category: 'Calves', equipment: 'Other' },
+  { name: 'Seated Calf Raise', category: 'Calves', equipment: 'Other' },
+  { name: 'Single-Leg Calf Raise', category: 'Calves', equipment: 'Other' },
+  { name: 'Donkey Calf Raise', category: 'Calves', equipment: 'Other' },
+  { name: 'Calf Press (Leg Press Machine)', category: 'Calves', equipment: 'Other' },
+
+  // Core (Anti-Extension / Stability)
+  { name: 'Plank', category: 'Core (Anti-Extension / Stability)', equipment: 'Other' },
+  { name: 'Side Plank', category: 'Core (Anti-Extension / Stability)', equipment: 'Other' },
+  { name: 'Dead Bug', category: 'Core (Anti-Extension / Stability)', equipment: 'Other' },
+  { name: 'Bird Dog', category: 'Core (Anti-Extension / Stability)', equipment: 'Other' },
+  { name: 'Pallof Press', category: 'Core (Anti-Extension / Stability)', equipment: 'Other' },
+  { name: 'Stability Ball Rollout', category: 'Core (Anti-Extension / Stability)', equipment: 'Other' },
+  { name: 'Ab Wheel Rollout', category: 'Core (Anti-Extension / Stability)', equipment: 'Other' },
+
+  // Core (Flexion / Rotation)
+  { name: 'Hanging Knee Raise', category: 'Core (Flexion / Rotation)', equipment: 'Other' },
+  { name: 'Hanging Leg Raise', category: 'Core (Flexion / Rotation)', equipment: 'Other' },
+  { name: "Captain's Chair Leg Raise", category: 'Core (Flexion / Rotation)', equipment: 'Other' },
+  { name: 'Cable Crunch', category: 'Core (Flexion / Rotation)', equipment: 'Other' },
+  { name: 'Decline Sit-Up', category: 'Core (Flexion / Rotation)', equipment: 'Other' },
+  { name: 'Russian Twist (Controlled)', category: 'Core (Flexion / Rotation)', equipment: 'Other' },
+  { name: 'Cable Woodchop', category: 'Core (Flexion / Rotation)', equipment: 'Other' },
+  { name: 'Cable Lift', category: 'Core (Flexion / Rotation)', equipment: 'Other' },
+
+  // Carry / Athletic
+  { name: "Farmer's Carry", category: 'Carry / Athletic', equipment: 'Other' },
+  { name: 'Suitcase Carry', category: 'Carry / Athletic', equipment: 'Other' },
+  { name: 'Front Rack Carry', category: 'Carry / Athletic', equipment: 'Other' },
+  { name: 'Overhead Carry', category: 'Carry / Athletic', equipment: 'Other' },
+  { name: 'Sled Push', category: 'Carry / Athletic', equipment: 'Other' },
+  { name: 'Sled Pull', category: 'Carry / Athletic', equipment: 'Other' },
+
+  // Conditioning (Low-Impact)
+  { name: 'Assault Bike', category: 'Conditioning (Low-Impact)', equipment: 'Other' },
+  { name: 'Row Erg', category: 'Conditioning (Low-Impact)', equipment: 'Other' },
+  { name: 'Ski Erg', category: 'Conditioning (Low-Impact)', equipment: 'Other' },
+  { name: 'Incline Treadmill Walk', category: 'Conditioning (Low-Impact)', equipment: 'Other' },
+  { name: 'Stair Climber', category: 'Conditioning (Low-Impact)', equipment: 'Other' },
 ];
 
 

@@ -200,7 +200,7 @@ const styles = StyleSheet.create({
   },
   metaDivider: {
     ...TYPOGRAPHY.meta,
-    color: COLORS.textMeta,
+    color: COLORS.borderDimmed,
     marginHorizontal: SPACING.sm,
   },
 });

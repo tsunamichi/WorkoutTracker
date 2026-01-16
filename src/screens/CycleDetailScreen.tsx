@@ -585,7 +585,7 @@ const styles = StyleSheet.create({
   },
   historyDividerTop: {
     height: 1,
-    backgroundColor: COLORS.textDisabled,
+    backgroundColor: COLORS.borderDimmed,
   },
   historyDividerBottom: {
     height: 1,

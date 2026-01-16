@@ -38,7 +38,7 @@ const LIGHT_COLORS = {
   textSecondary: '#3C3C43',
   textMeta: '#817B77',
   border: '#C7C7CC',
-  divider: 'rgba(0, 0, 0, 0.1)',
+  divider: COLORS.borderDimmed,
   buttonBg: '#1C1C1C',
 };
 
@@ -1386,7 +1386,7 @@ const styles = StyleSheet.create({
   },
   dividerTop: {
     height: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.16)',
+    backgroundColor: COLORS.borderDimmed,
   },
   dividerBottom: {
     height: 1,
@@ -1501,7 +1501,7 @@ const styles = StyleSheet.create({
   },
   historyDividerTop: {
     height: 1,
-    backgroundColor: COLORS.textDisabled,
+    backgroundColor: COLORS.borderDimmed,
   },
   historyDividerBottom: {
     height: 1,

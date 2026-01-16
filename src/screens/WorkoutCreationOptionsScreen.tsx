@@ -2,15 +2,12 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
-import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS, CARDS } from '../constants';
-import { useOnboardingStore } from '../store/useOnboardingStore';
-import { TEMPLATES } from '../data/templates';
-import { IconArrowLeft, IconPlay } from '../components/icons';
+import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS } from '../constants';
+import { IconArrowLeft } from '../components/icons';
 
 export function WorkoutCreationOptionsScreen() {
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
-  const { startDraftFromTemplate, setPrefs } = useOnboardingStore();
   return (
     <View style={styles.container}>
       {/* Header */}
@@ -64,32 +61,6 @@ export function WorkoutCreationOptionsScreen() {
           </TouchableOpacity>
         </View>
         
-        {/* Templates Section */}
-        <View style={styles.templatesSection}>
-          <Text style={styles.sectionTitle}>Start with a template</Text>
-          
-          {TEMPLATES.filter(t => t.id !== 'custom').map((template) => (
-            <View key={template.id} style={styles.templateCardWrapper}>
-            <View style={styles.templateCard}>
-                  <TouchableOpacity
-                    style={styles.templateCardContent}
-                    onPress={() => {
-                      setPrefs({ daysPerWeek: template.idealDays[0] || 3, sessionMinutes: 60 });
-                      startDraftFromTemplate(template.id);
-                      navigation.navigate('TemplateEditor' as never, { templateId: template.id } as never);
-                    }}
-                    activeOpacity={1}
-                  >
-                    <View style={styles.templateCardInner}>
-                      <Text style={styles.templateName}>{template.name}</Text>
-                      <Text style={styles.templateDescription}>{template.description}</Text>
-                    </View>
-                    <IconPlay size={10} color={COLORS.text} />
-                  </TouchableOpacity>
-              </View>
-            </View>
-          ))}
-        </View>
       </ScrollView>
     </View>
   );
@@ -178,39 +149,6 @@ const styles = StyleSheet.create({
     color: COLORS.backgroundCanvas,
   },
   
-  // Templates Section
-  templatesSection: {
-    marginTop: 48,
-    gap: SPACING.sm,
-  },
-  sectionTitle: {
-    ...TYPOGRAPHY.h3,
-    color: COLORS.textMeta,
-    marginBottom: SPACING.sm,
-  },
-  templateCardWrapper: {
-    marginBottom: SPACING.xs,
-  },
-  templateCard: CARDS.cardDeep.outer,
-  templateCardContent: {
-    ...CARDS.cardDeep.inner,
-    paddingHorizontal: 24,
-    paddingVertical: SPACING.lg,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  templateCardInner: {
-    flex: 1,
-  },
-  templateName: {
-    ...TYPOGRAPHY.body,
-    color: COLORS.text,
-    marginBottom: 2,
-  },
-  templateDescription: {
-    ...TYPOGRAPHY.body,
-    color: COLORS.textMeta,
-  },
+  // Templates section removed
 });
 

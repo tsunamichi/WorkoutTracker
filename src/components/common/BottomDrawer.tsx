@@ -20,6 +20,8 @@ interface BottomDrawerProps {
   contentStyle?: ViewStyle;
   scrollable?: boolean;
   expandable?: boolean; // New prop to enable pull-to-expand
+  fixedHeight?: boolean; // Force drawer to maxHeight
+  bottomOffset?: number; // Override bottom margin
   onRequestClose?: () => void; // Called when close is initiated (before animation)
 }
 
@@ -33,6 +35,8 @@ export function BottomDrawer({
   contentStyle,
   scrollable = true,
   expandable = false,
+  fixedHeight = false,
+  bottomOffset = 8,
   onRequestClose,
 }: BottomDrawerProps) {
   const insets = useSafeAreaInsets();
@@ -47,7 +51,6 @@ export function BottomDrawer({
   const deviceCornerRadius = insets.bottom > 0 ? 40 : 24;
 
   // Calculate max drawer height (percentage of screen minus bottom offset)
-  const bottomOffset = 8; // drawer is positioned 8px from bottom
   const maxHeightRatio = (() => {
     const trimmed = maxHeight.trim();
     if (trimmed.endsWith('%')) {
@@ -66,6 +69,9 @@ export function BottomDrawer({
   // Calculate actual drawer height based on content
   // If expandable, allow expansion; otherwise fit to content up to 90%
   const calculateDrawerHeight = () => {
+    if (fixedHeight) {
+      return maxDrawerHeight;
+    }
     if (expandable && isExpanded) {
       return maxDrawerHeight;
     }
@@ -220,8 +226,6 @@ export function BottomDrawer({
     [expandable, needsExpansion, isExpanded, translateY, overlayOpacity, onClose]
   );
 
-  if (!visible) return null;
-
   // Only use ScrollView if content needs scrolling
   const shouldScroll = scrollable && needsScrolling;
   const Content = shouldScroll ? ScrollView : View;
@@ -280,7 +284,9 @@ export function BottomDrawer({
       <Animated.View style={[
         styles.drawerContainer,
         {
-          maxHeight: currentMaxHeight,
+          maxHeight: fixedHeight ? undefined : currentMaxHeight,
+          height: fixedHeight ? currentMaxHeight : undefined,
+          bottom: bottomOffset,
           transform: [{ translateY }],
         }
       ]}>
@@ -305,7 +311,10 @@ export function BottomDrawer({
           
           <Content {...contentProps}>
             <View
-              style={{ flexShrink: 0, paddingTop: showHandle ? 16 : 0 }}
+              style={{
+                ...(fixedHeight ? { flex: 1 } : { flexShrink: 0 }),
+                paddingTop: showHandle ? 16 : 0,
+              }}
               onLayout={(event) => {
                 const { height } = event.nativeEvent.layout;
                 setContentHeight(height);

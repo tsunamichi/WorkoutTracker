@@ -12,6 +12,7 @@ export type ExerciseWeekPlan = {
   reps?: string; // allow "8-10", "AMRAP"
   weight?: number;
   unit?: 'lb' | 'kg';
+  isTimeBased?: boolean;
   restSec?: number;
   tempo?: string;
   notes?: string;

@@ -83,7 +83,7 @@ const styles = StyleSheet.create({
   },
   divider: {
     height: 1,
-    backgroundColor: COLORS.border,
+    backgroundColor: COLORS.borderDimmed,
   },
 });
 

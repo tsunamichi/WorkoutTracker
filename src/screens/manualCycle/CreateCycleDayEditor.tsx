@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -13,10 +13,10 @@ import { useCreateCycleDraftStore } from '../../store/useCreateCycleDraftStore';
 import { formatWeekdayFull, getExerciseSummary } from '../../utils/manualCycleUtils';
 import { Weekday, ExerciseBlock } from '../../types/manualCycle';
 import { COLORS, SPACING, TYPOGRAPHY, CARDS, BORDER_RADIUS } from '../../constants';
-import { IconAdd, IconTrash, IconArrowLeft } from '../../components/icons';
-import { ExercisePickerModal } from '../../components/manualCycle/ExercisePickerModal';
+import { IconAdd, IconTrash, IconArrowLeft, IconChevronDown, IconEdit } from '../../components/icons';
 import { ExerciseEditorBottomSheet } from '../../components/manualCycle/ExerciseEditorBottomSheet';
 import { useStore } from '../../store';
+import { BottomDrawer } from '../../components/common/BottomDrawer';
 
 interface CreateCycleDayEditorProps {
   navigation: any;
@@ -38,11 +38,15 @@ export function CreateCycleDayEditor({ navigation, route }: CreateCycleDayEditor
 
   const workout = workouts.find((w) => w.weekday === weekday);
 
-  const [workoutName, setWorkoutName] = useState(workout?.name || '');
-  const [showExercisePicker, setShowExercisePicker] = useState(false);
+  const [workoutName, setWorkoutName] = useState(workout?.name || formatWeekdayFull(weekday));
+  const [isEditingName, setIsEditingName] = useState(false);
+  const [showExerciseDrawer, setShowExerciseDrawer] = useState(false);
+  const [showSearchInput, setShowSearchInput] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [expandedMuscles, setExpandedMuscles] = useState<Record<string, boolean>>({});
   const [selectedExercise, setSelectedExercise] = useState<ExerciseBlock | null>(null);
-
-  const bottomSheetRef = useRef<BottomSheet>(null);
+  const [showExerciseEditor, setShowExerciseEditor] = useState(false);
+  const nameInputRef = useRef<TextInput>(null);
 
   const handleSaveDay = () => {
     if (workoutName.trim()) {
@@ -52,13 +56,42 @@ export function CreateCycleDayEditor({ navigation, route }: CreateCycleDayEditor
   };
 
   const handleAddExercise = (exerciseId: string) => {
-    addExerciseToDay(weekday, exerciseId);
-    setShowExercisePicker(false);
+    const newExercise = addExerciseToDay(weekday, exerciseId);
+    setShowExerciseDrawer(false);
+    setShowSearchInput(false);
+    setSearchQuery('');
+    setExpandedMuscles({});
+    if (newExercise) {
+      setSelectedExercise(newExercise);
+      setShowExerciseEditor(true);
+    }
   };
+
+  const filteredExercises = useMemo(() => {
+    if (!searchQuery.trim()) {
+      return exerciseLibrary;
+    }
+    const query = searchQuery.toLowerCase();
+    return exerciseLibrary.filter((exercise) =>
+      exercise.name.toLowerCase().includes(query)
+    );
+  }, [exerciseLibrary, searchQuery]);
+
+  const groupedExercises = useMemo(() => {
+    const groups: Record<string, typeof filteredExercises> = {};
+    filteredExercises.forEach(exercise => {
+      const muscle = exercise.category || 'Other';
+      if (!groups[muscle]) {
+        groups[muscle] = [];
+      }
+      groups[muscle].push(exercise);
+    });
+    return Object.entries(groups).sort(([a], [b]) => a.localeCompare(b));
+  }, [filteredExercises]);
 
   const handleEditExercise = (exercise: ExerciseBlock) => {
     setSelectedExercise(exercise);
-    bottomSheetRef.current?.expand();
+    setShowExerciseEditor(true);
   };
 
   const handleDeleteExercise = (exerciseBlockId: string) => {
@@ -74,7 +107,7 @@ export function CreateCycleDayEditor({ navigation, route }: CreateCycleDayEditor
 
   const handleCloseEditor = () => {
     setSelectedExercise(null);
-    bottomSheetRef.current?.close();
+    setShowExerciseEditor(false);
   };
 
   return (
@@ -82,55 +115,45 @@ export function CreateCycleDayEditor({ navigation, route }: CreateCycleDayEditor
       <View style={styles.container}>
         {/* Header */}
         <View style={[styles.header, { paddingTop: insets.top }]}>
+          <View style={styles.topBar}>
+            <TouchableOpacity
+              onPress={() => navigation.goBack()}
+              style={styles.backButton}
+              activeOpacity={1}
+            >
+              <IconArrowLeft size={24} color={COLORS.text} />
+            </TouchableOpacity>
+            <View style={{ width: 48 }} />
+          </View>
           <TouchableOpacity
-            onPress={() => navigation.goBack()}
-            style={styles.backButton}
+            style={styles.pageTitleContainer}
+            onPress={() => setIsEditingName(true)}
             activeOpacity={1}
           >
-            <IconArrowLeft size={24} color={COLORS.text} />
+            {isEditingName ? (
+              <TextInput
+                ref={nameInputRef}
+                style={styles.pageTitleInput}
+                value={workoutName}
+                onChangeText={setWorkoutName}
+                onBlur={() => setIsEditingName(false)}
+                autoFocus
+                placeholder="Workout name"
+                placeholderTextColor={COLORS.textMeta}
+              />
+            ) : (
+              <View style={styles.pageTitleRow}>
+                <Text style={styles.pageTitle}>{workoutName}</Text>
+                <IconEdit size={20} color={COLORS.textMeta} />
+              </View>
+            )}
           </TouchableOpacity>
-          <View style={styles.headerTitleContainer}>
-            <Text style={styles.stepIndicator}>3/4</Text>
-            <Text style={styles.headerTitle}>{formatWeekdayFull(weekday)}</Text>
-          </View>
         </View>
 
         <ScrollView style={styles.content} contentContainerStyle={styles.scrollContent} bounces={false}>
-          {/* Workout Name */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Workout name (optional)</Text>
-              <TextInput
-                style={styles.input}
-                value={workoutName}
-                onChangeText={setWorkoutName}
-                placeholder="e.g., Upper Body, Push Day"
-                placeholderTextColor={COLORS.textMeta}
-              />
-          </View>
-
           {/* Exercises */}
           <View style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>Exercises</Text>
-              <TouchableOpacity
-                style={styles.addButton}
-                onPress={() => setShowExercisePicker(true)}
-                activeOpacity={1}
-              >
-                <IconAdd size={20} color={COLORS.accentPrimary} />
-                <Text style={styles.addButtonText}>Add exercise</Text>
-              </TouchableOpacity>
-            </View>
-
-            {workout?.exercises.length === 0 && (
-              <View style={styles.emptyState}>
-                <Text style={styles.emptyStateText}>No exercises added yet</Text>
-                <Text style={styles.emptyStateSubtext}>
-                  Tap "Add exercise" to get started
-                </Text>
-              </View>
-            )}
-
+            <Text style={styles.sectionTitle}>Exercises</Text>
             {workout?.exercises.map((exercise) => {
               const exerciseData = exerciseLibrary.find((e) => e.id === exercise.exerciseId);
               const summary = getExerciseSummary(exercise.weeks);
@@ -158,6 +181,15 @@ export function CreateCycleDayEditor({ navigation, route }: CreateCycleDayEditor
                 </TouchableOpacity>
               );
             })}
+
+            <TouchableOpacity
+              style={styles.addExerciseCardButton}
+              onPress={() => setShowExerciseDrawer(true)}
+              activeOpacity={1}
+            >
+              <IconAdd size={20} color={COLORS.text} />
+              <Text style={styles.addExerciseCardText}>Add exercise</Text>
+            </TouchableOpacity>
           </View>
         </ScrollView>
 
@@ -173,21 +205,109 @@ export function CreateCycleDayEditor({ navigation, route }: CreateCycleDayEditor
         </View>
       </View>
 
-      {/* Exercise Picker Modal */}
-      {showExercisePicker && (
-        <ExercisePickerModal
-          visible={showExercisePicker}
-          onClose={() => setShowExercisePicker(false)}
-          onSelectExercise={handleAddExercise}
-        />
-      )}
+      {/* Exercise Picker Drawer */}
+      <BottomDrawer
+        visible={showExerciseDrawer}
+        onClose={() => setShowExerciseDrawer(false)}
+        maxHeight="90%"
+        fixedHeight={true}
+        bottomOffset={8}
+        showHandle={false}
+        scrollable={false}
+        contentStyle={styles.drawerContent}
+      >
+        <View style={styles.drawerContent}>
+          <View style={styles.drawerHeader}>
+            <Text style={styles.drawerTitle}>Add Exercise</Text>
+            <TouchableOpacity
+              onPress={() => {
+                setShowSearchInput(prev => !prev);
+                if (showSearchInput) {
+                  setSearchQuery('');
+                }
+              }}
+              style={styles.searchButton}
+              activeOpacity={1}
+            >
+              <Text style={styles.searchButtonText}>🔍</Text>
+            </TouchableOpacity>
+          </View>
+
+          {showSearchInput && (
+            <View style={styles.swapSearchContainer}>
+              <Text style={styles.searchIcon}>🔍</Text>
+              <TextInput
+                style={styles.swapSearchInput}
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+                placeholder="Search exercises..."
+                placeholderTextColor={COLORS.textMeta}
+              />
+              {searchQuery.length > 0 && (
+                <TouchableOpacity
+                  onPress={() => setSearchQuery('')}
+                  activeOpacity={1}
+                >
+                  <Text style={styles.clearIcon}>✕</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          )}
+
+          <ScrollView style={styles.drawerScroll} contentContainerStyle={styles.drawerScrollContent} bounces={true}>
+            {groupedExercises.map(([muscle, muscleExercises]) => {
+              const isExpanded = !!expandedMuscles[muscle];
+              return (
+                <View key={muscle} style={styles.muscleSection}>
+                  <View style={styles.muscleCard}>
+                    <TouchableOpacity
+                      style={styles.muscleHeader}
+                      onPress={() =>
+                        setExpandedMuscles(prev => ({ ...prev, [muscle]: !isExpanded }))
+                      }
+                      activeOpacity={1}
+                    >
+                      <Text style={styles.muscleTitle}>{muscle}</Text>
+                      <IconChevronDown
+                        size={20}
+                        color={COLORS.textMeta}
+                        style={{
+                          transform: [{ rotate: isExpanded ? '180deg' : '0deg' }],
+                        }}
+                      />
+                    </TouchableOpacity>
+                    {isExpanded && (
+                      <View style={styles.muscleContent}>
+                        {muscleExercises.map((exercise, exerciseIndex) => (
+                          <View key={exercise.id}>
+                            <TouchableOpacity
+                              style={styles.swapExerciseItem}
+                              onPress={() => handleAddExercise(exercise.id)}
+                              activeOpacity={1}
+                            >
+                              <Text style={styles.swapExerciseName}>{exercise.name}</Text>
+                            </TouchableOpacity>
+                            {exerciseIndex < muscleExercises.length - 1 && (
+                              <View style={styles.muscleExerciseDivider} />
+                            )}
+                          </View>
+                        ))}
+                      </View>
+                    )}
+                  </View>
+                </View>
+              );
+            })}
+          </ScrollView>
+        </View>
+      </BottomDrawer>
 
       {/* Exercise Editor Bottom Sheet */}
       {selectedExercise && (
         <ExerciseEditorBottomSheet
-          ref={bottomSheetRef}
           weekday={weekday}
           exerciseBlock={selectedExercise}
+          visible={showExerciseEditor}
           onClose={handleCloseEditor}
         />
       )}
@@ -204,25 +324,34 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   header: {
-    paddingHorizontal: SPACING.xxl,
     paddingBottom: SPACING.lg,
   },
+  topBar: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    minHeight: 48,
+    paddingHorizontal: SPACING.xxl,
+  },
   backButton: {
-    width: 40,
-    height: 40,
     justifyContent: 'center',
-    marginBottom: SPACING.md,
+    alignItems: 'flex-start',
     marginLeft: -4,
   },
-  headerTitleContainer: {
-    gap: 4,
+  pageTitleContainer: {
+    paddingHorizontal: SPACING.xxl,
+    paddingTop: SPACING.md,
   },
-  stepIndicator: {
-    fontSize: 14,
-    color: COLORS.textMeta,
-    fontWeight: '500',
+  pageTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
-  headerTitle: {
+  pageTitle: {
+    ...TYPOGRAPHY.h2,
+    color: COLORS.text,
+  },
+  pageTitleInput: {
     ...TYPOGRAPHY.h2,
     color: COLORS.text,
   },
@@ -230,60 +359,34 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    paddingHorizontal: SPACING.xxl,
-    paddingBottom: 120,
+    padding: SPACING.xxl,
+    paddingBottom: 140,
   },
   section: {
     marginBottom: SPACING.xxxl,
   },
-  sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+  sectionTitle: {
+    ...TYPOGRAPHY.meta,
+    color: COLORS.textMeta,
     marginBottom: SPACING.lg,
   },
-  sectionTitle: {
-    fontSize: 20,
-    fontWeight: '600',
-    color: COLORS.text,
-  },
-  input: {
-    backgroundColor: COLORS.activeCard,
+  addExerciseCardButton: {
+    width: '100%',
+    height: 56,
+    borderRadius: 16,
     borderWidth: 1,
-    borderColor: COLORS.border,
-    borderRadius: BORDER_RADIUS.md,
-    padding: SPACING.lg,
-    fontSize: 16,
-    color: COLORS.text,
-  },
-  addButton: {
+    borderColor: COLORS.textMeta,
+    borderStyle: 'dashed',
+    backgroundColor: 'transparent',
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    paddingVertical: 8,
-    paddingHorizontal: 12,
+    justifyContent: 'center',
+    gap: 8,
+    marginTop: SPACING.sm,
   },
-  addButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: COLORS.accentPrimary,
-  },
-  emptyState: {
-    backgroundColor: COLORS.activeCard,
-    borderRadius: BORDER_RADIUS.md,
-    padding: SPACING.xxxl,
-    alignItems: 'center',
-  },
-  emptyStateText: {
-    fontSize: 16,
-    fontWeight: '600',
+  addExerciseCardText: {
+    ...TYPOGRAPHY.metaBold,
     color: COLORS.text,
-    marginBottom: 4,
-  },
-  emptyStateSubtext: {
-    fontSize: 14,
-    color: COLORS.textMeta,
-    textAlign: 'center',
   },
   exerciseCard: {
     ...CARDS.cardDeep.outer,
@@ -329,6 +432,101 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     fontWeight: '600',
     color: COLORS.backgroundCanvas,
+  },
+  drawerContent: {
+    flex: 1,
+    minHeight: 0,
+  },
+  drawerHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: SPACING.xxl,
+    paddingTop: SPACING.lg,
+    paddingBottom: SPACING.md,
+  },
+  drawerTitle: {
+    ...TYPOGRAPHY.h3,
+    color: COLORS.text,
+  },
+  searchButton: {
+    padding: SPACING.xs,
+  },
+  searchButtonText: {
+    fontSize: 20,
+    color: COLORS.text,
+  },
+  swapSearchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.backgroundCanvas,
+    borderRadius: BORDER_RADIUS.md,
+    borderCurve: 'continuous',
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: SPACING.md,
+    marginHorizontal: SPACING.xxl,
+    marginTop: SPACING.lg,
+    marginBottom: SPACING.md,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    gap: SPACING.md,
+  },
+  searchIcon: {
+    fontSize: 18,
+    color: COLORS.textMeta,
+  },
+  swapSearchInput: {
+    flex: 1,
+    ...TYPOGRAPHY.body,
+    color: COLORS.text,
+  },
+  clearIcon: {
+    fontSize: 16,
+    color: COLORS.textMeta,
+  },
+  drawerScroll: {
+    flex: 1,
+    minHeight: 0,
+  },
+  drawerScrollContent: {
+    paddingHorizontal: SPACING.xxl,
+    paddingBottom: SPACING.xl,
+  },
+  muscleSection: {
+    marginBottom: 12,
+  },
+  muscleCard: {
+    backgroundColor: COLORS.activeCard,
+    borderRadius: BORDER_RADIUS.md,
+    borderCurve: 'continuous',
+    overflow: 'hidden',
+  },
+  muscleHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: SPACING.lg,
+    paddingHorizontal: SPACING.lg,
+  },
+  muscleTitle: {
+    ...TYPOGRAPHY.body,
+    color: COLORS.text,
+    fontWeight: '600',
+  },
+  muscleContent: {},
+  swapExerciseItem: {
+    paddingVertical: SPACING.md,
+    paddingHorizontal: SPACING.lg,
+  },
+  swapExerciseName: {
+    ...TYPOGRAPHY.body,
+    color: COLORS.text,
+  },
+  muscleExerciseDivider: {
+    height: 1,
+    backgroundColor: COLORS.borderDimmed,
+    marginHorizontal: SPACING.lg,
+    marginVertical: 4,
   },
 });
 

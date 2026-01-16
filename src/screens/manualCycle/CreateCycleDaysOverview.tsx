@@ -1,10 +1,11 @@
 import React, { useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert } from 'react-native';
+import Svg, { Circle, Path } from 'react-native-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useCreateCycleDraftStore } from '../../store/useCreateCycleDraftStore';
 import { formatWeekdayFull } from '../../utils/manualCycleUtils';
 import { COLORS, SPACING, TYPOGRAPHY, CARDS } from '../../constants';
-import { IconArrowLeft } from '../../components/icons';
+import { IconArrowLeft, IconCheck } from '../../components/icons';
 
 interface CreateCycleDaysOverviewProps {
   navigation: any;
@@ -17,6 +18,7 @@ export function CreateCycleDaysOverview({ navigation }: CreateCycleDaysOverviewP
     workouts,
     ensureWorkoutsForSelectedDays,
     areAllDaysComplete,
+    resetDraft,
   } = useCreateCycleDraftStore();
 
   useEffect(() => {
@@ -44,15 +46,51 @@ export function CreateCycleDaysOverview({ navigation }: CreateCycleDaysOverviewP
         {/* Header */}
         <View style={[styles.header, { paddingTop: insets.top }]}>
           <TouchableOpacity
-            onPress={handleBack}
+            onPress={() => {
+              Alert.alert(
+                'Exit setup?',
+                "Your progress won't be saved.",
+                [
+                  { text: 'Cancel', style: 'cancel' },
+                  {
+                    text: 'Exit',
+                    style: 'destructive',
+                    onPress: () => {
+                      resetDraft();
+                      navigation.navigate('Tabs');
+                    },
+                  },
+                ]
+              );
+            }}
             style={styles.backButton}
             activeOpacity={1}
           >
             <IconArrowLeft size={24} color={COLORS.text} />
           </TouchableOpacity>
-          <View style={styles.headerTitleContainer}>
-            <Text style={styles.stepIndicator}>2/4</Text>
+          <View style={styles.headerTitleRow}>
             <Text style={styles.headerTitle}>Build your week</Text>
+            {(() => {
+              const progress = 2 / 4;
+              return (
+                <View style={styles.progressIndicator}>
+                  <Text style={styles.progressText}>2/4</Text>
+                  <Svg height="16" width="16" viewBox="0 0 16 16" style={styles.progressCircle}>
+                    <Circle cx="8" cy="8" r="8" fill={COLORS.backgroundCanvas} />
+                    {progress > 0 ? (
+                      <Path
+                        d={`M 8 8 L 8 0 A 8 8 0 ${progress > 0.5 ? 1 : 0} 1 ${
+                          8 + 8 * Math.sin(2 * Math.PI * progress)
+                        } ${
+                          8 - 8 * Math.cos(2 * Math.PI * progress)
+                        } Z`}
+                        fill={COLORS.signalWarning}
+                      />
+                    ) : null}
+                  </Svg>
+                </View>
+              );
+            })()}
           </View>
         </View>
 
@@ -63,73 +101,70 @@ export function CreateCycleDaysOverview({ navigation }: CreateCycleDaysOverviewP
             const isComplete = exerciseCount > 0;
 
             return (
-              <TouchableOpacity
-                key={day}
-                style={styles.dayCard}
-                onPress={() => handleDayPress(day)}
-                activeOpacity={1}
-              >
-                <View style={styles.dayCardContent}>
-                  <View style={styles.dayInfo}>
-                    <Text style={styles.dayLabel}>{formatWeekdayFull(day)}</Text>
+              <View key={day} style={styles.dayCard}>
+                <TouchableOpacity
+                  style={styles.dayCardInner}
+                  onPress={() => handleDayPress(day)}
+                  activeOpacity={1}
+                >
+                <View style={[
+                  styles.dayCardContent,
+                  isComplete ? styles.dayCardContentComplete : styles.dayCardContentWithAction,
+                ]}>
+                    <View style={styles.dayCardHeader}>
+                      <Text style={styles.dayLabel}>{formatWeekdayFull(day)}</Text>
+                    </View>
                     {workout?.name && (
                       <Text style={styles.dayName}>{workout.name}</Text>
                     )}
-                  </View>
-                  <View style={styles.dayMeta}>
                     <Text style={styles.exerciseCount}>
                       {exerciseCount} {exerciseCount === 1 ? 'exercise' : 'exercises'}
                     </Text>
-                    <View style={[styles.statusPill, isComplete && styles.statusPillComplete]}>
-                      <Text
-                        style={[
-                          styles.statusPillText,
-                          isComplete && styles.statusPillTextComplete,
-                        ]}
-                      >
-                        {isComplete ? 'Ready' : 'Incomplete'}
-                      </Text>
-                    </View>
                   </View>
-                </View>
-                <Text style={styles.chevron}>›</Text>
-              </TouchableOpacity>
+                  {isComplete && (
+                    <View style={styles.dayCheckIcon}>
+                      <IconCheck size={24} color={COLORS.signalPositive} />
+                    </View>
+                  )}
+                  {!isComplete && (
+                    <View style={styles.dayCardFooter} pointerEvents="none">
+                      <View style={styles.dayActionBar}>
+                        <Text style={styles.dayActionText}>Add exercises</Text>
+                      </View>
+                    </View>
+                  )}
+                </TouchableOpacity>
+              </View>
             );
           })}
-
-          {!canContinue && (
-            <View style={styles.warningBox}>
-              <Text style={styles.warningText}>
-                Add at least one exercise to each day to continue
-              </Text>
-            </View>
-          )}
         </ScrollView>
 
         {/* Footer Buttons */}
-        <View style={styles.stickyFooter}>
-          <TouchableOpacity
-            style={styles.backFooterButton}
-            onPress={handleBack}
-            activeOpacity={1}
-          >
-            <Text style={styles.backFooterButtonText}>Back</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.continueButton, !canContinue && styles.continueButtonDisabled]}
-            onPress={handleContinue}
-            disabled={!canContinue}
-            activeOpacity={1}
-          >
-            <Text
-              style={[
-                styles.continueButtonText,
-                !canContinue && styles.continueButtonTextDisabled,
-              ]}
+        <View style={[styles.stickyFooter, { paddingBottom: insets.bottom || 32 }]}>
+          <View style={styles.footerButtonsRow}>
+            <TouchableOpacity
+              style={styles.backFooterButton}
+              onPress={handleBack}
+              activeOpacity={1}
             >
-              Continue
-            </Text>
-          </TouchableOpacity>
+              <Text style={styles.backFooterButtonText}>Back</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.continueButton, !canContinue && styles.continueButtonDisabled]}
+              onPress={handleContinue}
+              disabled={!canContinue}
+              activeOpacity={1}
+            >
+              <Text
+                style={[
+                  styles.continueButtonText,
+                  !canContinue && styles.continueButtonTextDisabled,
+                ]}
+              >
+                Continue
+              </Text>
+            </TouchableOpacity>
+          </View>
         </View>
       </View>
     </View>
@@ -155,94 +190,105 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.md,
     marginLeft: -4,
   },
-  headerTitleContainer: {
-    gap: 4,
-  },
-  stepIndicator: {
-    fontSize: 14,
-    color: COLORS.textMeta,
-    fontWeight: '500',
+  headerTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
   headerTitle: {
     ...TYPOGRAPHY.h2,
     color: COLORS.text,
+  },
+  progressIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  progressCircle: {
+    // No additional styling needed
+  },
+  progressText: {
+    ...TYPOGRAPHY.meta,
+    color: COLORS.textMeta,
   },
   content: {
     flex: 1,
   },
   scrollContent: {
     paddingHorizontal: SPACING.xxl,
+    paddingTop: SPACING.xxl,
     paddingBottom: 120,
   },
   dayCard: {
-    ...CARDS.cardDeep.outer,
+    backgroundColor: CARDS.cardDeep.outer.backgroundColor,
+    borderRadius: CARDS.cardDeep.outer.borderRadius,
+    borderCurve: CARDS.cardDeep.outer.borderCurve,
+    overflow: CARDS.cardDeep.outer.overflow,
     marginBottom: SPACING.md,
   },
-  dayCardContent: {
+  dayCardInner: {
     ...CARDS.cardDeep.inner,
-    padding: SPACING.lg,
+    paddingHorizontal: 4,
+    paddingTop: 16,
+    paddingBottom: 4,
+  },
+  dayCardContent: {
+    paddingHorizontal: 20,
+  },
+  dayCardContentWithAction: {
+    paddingBottom: 16,
+  },
+  dayCardContentComplete: {
+    paddingBottom: 16,
+  },
+  dayCardHeader: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING.md,
-  },
-  dayInfo: {
-    marginBottom: 8,
-  },
-  dayLabel: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: COLORS.text,
+    justifyContent: 'space-between',
+    alignItems: 'baseline',
     marginBottom: 2,
   },
-  dayName: {
-    fontSize: 14,
-    color: COLORS.textMeta,
+  dayCardFooter: {
+    marginTop: 'auto',
   },
-  dayMeta: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
+  dayLabel: {
+    ...TYPOGRAPHY.h2,
+    color: COLORS.text,
+    flex: 1,
+  },
+  dayName: {
+    ...TYPOGRAPHY.meta,
+    color: COLORS.textMeta,
+    marginBottom: 8,
   },
   exerciseCount: {
-    fontSize: 14,
+    ...TYPOGRAPHY.meta,
     color: COLORS.textMeta,
   },
-  statusPill: {
-    backgroundColor: COLORS.backgroundCanvas,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 8,
+  dayActionText: {
+    ...TYPOGRAPHY.metaBold,
+    color: COLORS.accentPrimary,
+    textAlign: 'left',
   },
-  statusPillComplete: {
-    backgroundColor: `${COLORS.signalPositive}20`,
-    borderColor: COLORS.signalPositive,
+  dayActionBar: {
+    width: '100%',
+    height: 48,
+    backgroundColor: COLORS.accentPrimaryDimmed,
+    paddingHorizontal: 20,
+    borderTopLeftRadius: 0,
+    borderTopRightRadius: 0,
+    borderBottomLeftRadius: 12,
+    borderBottomRightRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'flex-start',
   },
-  statusPillText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: COLORS.textMeta,
-  },
-  statusPillTextComplete: {
-    color: COLORS.signalPositive,
-  },
-  chevron: {
-    fontSize: 24,
-    color: COLORS.textMeta,
-  },
-  warningBox: {
-    backgroundColor: `${COLORS.signalWarning}20`,
-    borderWidth: 1,
-    borderColor: COLORS.signalWarning,
-    borderRadius: 12,
-    padding: SPACING.lg,
-    marginTop: SPACING.md,
-  },
-  warningText: {
-    fontSize: 14,
-    color: COLORS.text,
-    textAlign: 'center',
+  dayCheckIcon: {
+    position: 'absolute',
+    top: 20,
+    right: 20,
+    width: 24,
+    height: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   stickyFooter: {
     position: 'absolute',
@@ -250,16 +296,17 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     paddingHorizontal: SPACING.xxl,
-    paddingBottom: SPACING.lg,
     paddingTop: SPACING.md,
+  },
+  footerButtonsRow: {
     flexDirection: 'row',
-    gap: 12,
+    gap: SPACING.md,
   },
   backFooterButton: {
     flex: 1,
-    backgroundColor: COLORS.activeCard,
-    borderWidth: 1,
-    borderColor: COLORS.border,
+    backgroundColor: 'transparent',
+    borderWidth: 0,
+    borderColor: 'transparent',
     paddingVertical: 16,
     borderRadius: 12,
     alignItems: 'center',
@@ -271,7 +318,7 @@ const styles = StyleSheet.create({
     color: COLORS.text,
   },
   continueButton: {
-    flex: 2,
+    flex: 1,
     backgroundColor: COLORS.accentPrimary,
     paddingVertical: 16,
     borderRadius: 12,
