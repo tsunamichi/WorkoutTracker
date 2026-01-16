@@ -5,6 +5,7 @@ import { useOnboardingStore } from '../../store/useOnboardingStore';
 import { ProgressHeader } from '../../components/common/ProgressHeader';
 import { StickyFooter } from '../../components/common/StickyFooter';
 import { COLORS } from '../../constants';
+import { useTranslation } from '../../i18n/useTranslation';
 
 type OnboardingStackParamList = {
   CustomTemplateInput: undefined;
@@ -38,6 +39,7 @@ Calf Raise - 4x15-20`;
 
 export function CustomTemplateInputScreen({ navigation }: CustomTemplateInputScreenProps) {
   const { draft, setRawText, parseRawTextIntoDraft } = useOnboardingStore();
+  const { t } = useTranslation();
   const [text, setText] = useState(draft?.rawText || '');
 
   const handleInsertExample = () => {
@@ -82,7 +84,7 @@ export function CustomTemplateInputScreen({ navigation }: CustomTemplateInputScr
           <TextInput
             style={styles.textInput}
             multiline
-            placeholder="Day 1: Push&#10;Bench Press - 4x5&#10;Incline Press - 3x8&#10;..."
+            placeholder={t('customTemplatePlaceholder')}
             value={text}
             onChangeText={setText}
             textAlignVertical="top"
@@ -91,10 +93,10 @@ export function CustomTemplateInputScreen({ navigation }: CustomTemplateInputScr
 
         <View style={styles.quickActions}>
           <TouchableOpacity style={styles.quickActionButton} onPress={handleInsertExample}>
-            <Text style={styles.quickActionText}>Insert example</Text>
+            <Text style={styles.quickActionText}>{t('insertExample')}</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.quickActionButton} onPress={handleClear}>
-            <Text style={styles.quickActionText}>Clear</Text>
+            <Text style={styles.quickActionText}>{t('clear')}</Text>
           </TouchableOpacity>
         </View>
       </ScrollView>

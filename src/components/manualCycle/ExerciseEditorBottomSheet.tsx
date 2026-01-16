@@ -13,6 +13,8 @@ import { SPACING, COLORS, TYPOGRAPHY, BORDER_RADIUS } from '../../constants';
 import { IconAddLine, IconMinusLine } from '../icons';
 import { BottomDrawer } from '../common/BottomDrawer';
 import { Toggle } from '../Toggle';
+import { formatWeight, toDisplayWeight, fromDisplayWeight } from '../../utils/weight';
+import { useTranslation } from '../../i18n/useTranslation';
 
 interface ExerciseEditorBottomSheetProps {
   weekday: Weekday;
@@ -30,12 +32,15 @@ export const ExerciseEditorBottomSheet = ({
   const { exercises: exerciseLibrary, settings } = useStore();
   const { updateExerciseWeekPlan, applyExercisePlanToAllWeeks } =
     useCreateCycleDraftStore();
+  const { t } = useTranslation();
 
   const exerciseData = exerciseLibrary.find((e) => e.id === exerciseBlock.exerciseId);
 
   const activeWeekIndex = 0;
   const currentWeek = exerciseBlock.weeks[activeWeekIndex] || {};
   const isTimeBased = currentWeek.isTimeBased || false;
+  const useKg = settings.useKg;
+  const weightStep = useKg ? 2.5 : 5;
 
   const handleUpdateField = useCallback(
     (field: keyof ExerciseWeekPlan, value: any) => {
@@ -72,8 +77,11 @@ export const ExerciseEditorBottomSheet = ({
     }
 
     const currentValue = (currentWeek.weight as number) || 0;
-    const nextValue = Math.max(0, currentValue + delta * 5);
-    handleUpdateField('weight', nextValue);
+    const nextDisplay = Math.max(
+      0,
+      toDisplayWeight(currentValue, useKg) + delta * weightStep
+    );
+    handleUpdateField('weight', fromDisplayWeight(nextDisplay, useKg));
   };
 
   return (
@@ -96,7 +104,7 @@ export const ExerciseEditorBottomSheet = ({
             onPress={onClose}
             activeOpacity={1}
           >
-            <Text style={styles.doneButtonText}>Done</Text>
+            <Text style={styles.doneButtonText}>{t('done')}</Text>
           </TouchableOpacity>
         </View>
 
@@ -111,8 +119,10 @@ export const ExerciseEditorBottomSheet = ({
 
           <View style={styles.adjustRow}>
             <View style={styles.adjustValue}>
-              <Text style={styles.adjustValueText}>{currentWeek.weight || 0}</Text>
-              <Text style={styles.adjustUnit}>{settings.useKg ? 'kg' : 'lb'}</Text>
+              <Text style={styles.adjustValueText}>
+                {formatWeight(currentWeek.weight || 0, useKg)}
+              </Text>
+              <Text style={styles.adjustUnit}>{useKg ? 'kg' : 'lb'}</Text>
             </View>
             <View style={styles.adjustButtons}>
               <TouchableOpacity
@@ -180,7 +190,7 @@ export const ExerciseEditorBottomSheet = ({
           <View style={styles.adjustRow}>
             <View style={styles.adjustValue}>
               <Text style={styles.adjustValueText}>{currentWeek.sets || 3}</Text>
-              <Text style={styles.adjustUnit}>sets</Text>
+              <Text style={styles.adjustUnit}>{t('setsUnit')}</Text>
             </View>
             <View style={styles.adjustButtons}>
               <TouchableOpacity

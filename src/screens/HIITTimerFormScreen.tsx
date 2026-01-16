@@ -17,6 +17,7 @@ import { TimerValueSheet } from '../components/timer/TimerValueSheet';
 import type { HIITTimer } from '../types';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/AppNavigator';
+import { useTranslation } from '../i18n/useTranslation';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'HIITTimerForm'>;
 
@@ -34,6 +35,7 @@ export default function HIITTimerFormScreen({ navigation, route }: Props) {
   const insets = useSafeAreaInsets();
   const { mode, timerId } = route.params;
   const { hiitTimers, addHIITTimer, updateHIITTimer, isHIITTimerActive, setActiveHIITTimer } = useStore();
+  const { t } = useTranslation();
   
   const existingTimer = timerId ? hiitTimers.find(t => t.id === timerId) : undefined;
   
@@ -95,7 +97,7 @@ export default function HIITTimerFormScreen({ navigation, route }: Props) {
     console.log('💾 handleSave called');
     
     if (!name.trim()) {
-      Alert.alert('Error', 'Please enter a name for the timer');
+      Alert.alert(t('alertErrorTitle'), t('timerNameRequired'));
       return { success: false, timerId: null };
     }
 
@@ -143,7 +145,7 @@ export default function HIITTimerFormScreen({ navigation, route }: Props) {
               },
             },
             {
-              text: 'Save & Reset',
+              text: t('saveAndReset'),
               style: 'destructive',
               onPress: async () => {
                 console.log('✅ User confirmed save & reset');
@@ -266,13 +268,13 @@ export default function HIITTimerFormScreen({ navigation, route }: Props) {
                 onChangeText={setName}
                 onBlur={() => setIsEditingName(false)}
                 autoFocus
-                placeholder="Timer name"
+                placeholder={t('timerName')}
                 placeholderTextColor={LIGHT_COLORS.textMeta}
               />
             ) : (
               <View style={styles.pageTitleRow}>
                 <Text style={[styles.pageTitle, !name && styles.pageTitlePlaceholder]}>
-                  {name || 'Timer name'}
+                  {name || t('timerName')}
                 </Text>
                 <IconEdit size={20} color={LIGHT_COLORS.textSecondary} />
               </View>
@@ -287,7 +289,7 @@ export default function HIITTimerFormScreen({ navigation, route }: Props) {
         >
           {/* Exercise Section */}
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Exercise</Text>
+            <Text style={styles.sectionTitle}>{t('exercise')}</Text>
             
             {/* Move for card */}
             <TouchableOpacity
@@ -299,7 +301,7 @@ export default function HIITTimerFormScreen({ navigation, route }: Props) {
                 styles.card,
               ]}>
                 <View style={[CARDS.cardDeepDimmed.inner, styles.cardInner]}>
-                  <Text style={styles.cardLabel}>Move for</Text>
+                  <Text style={styles.cardLabel}>{t('moveFor')}</Text>
                   <Text style={styles.cardValue}>{formatTime(work)}</Text>
                 </View>
               </View>
@@ -315,7 +317,7 @@ export default function HIITTimerFormScreen({ navigation, route }: Props) {
                 styles.card,
               ]}>
                 <View style={[CARDS.cardDeepDimmed.inner, styles.cardInner]}>
-                  <Text style={styles.cardLabel}>Rest after each exercise</Text>
+                  <Text style={styles.cardLabel}>{t('restAfterEachExercise')}</Text>
                   <Text style={styles.cardValue}>{formatTime(workRest)}</Text>
                 </View>
               </View>
@@ -324,7 +326,7 @@ export default function HIITTimerFormScreen({ navigation, route }: Props) {
 
           {/* Round Section */}
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Round</Text>
+            <Text style={styles.sectionTitle}>{t('round')}</Text>
             
             {/* Exercises in a round card */}
             <TouchableOpacity
@@ -336,7 +338,7 @@ export default function HIITTimerFormScreen({ navigation, route }: Props) {
                 styles.card,
               ]}>
                 <View style={[CARDS.cardDeepDimmed.inner, styles.cardInner]}>
-                  <Text style={styles.cardLabel}>Exercises in a round</Text>
+                  <Text style={styles.cardLabel}>{t('exercisesInRound')}</Text>
                   <Text style={styles.cardValue}>{sets}</Text>
                 </View>
               </View>
@@ -352,7 +354,7 @@ export default function HIITTimerFormScreen({ navigation, route }: Props) {
                 styles.card,
               ]}>
                 <View style={[CARDS.cardDeepDimmed.inner, styles.cardInner]}>
-                  <Text style={styles.cardLabel}>Rounds</Text>
+                  <Text style={styles.cardLabel}>{t('roundsLabel')}</Text>
                   <Text style={styles.cardValue}>{rounds}</Text>
                 </View>
               </View>
@@ -368,7 +370,7 @@ export default function HIITTimerFormScreen({ navigation, route }: Props) {
                 styles.card,
               ]}>
                 <View style={[CARDS.cardDeepDimmed.inner, styles.cardInner]}>
-                  <Text style={styles.cardLabel}>Rest between rounds</Text>
+                  <Text style={styles.cardLabel}>{t('restBetweenRounds')}</Text>
                   <Text style={styles.cardValue}>{formatTime(roundRest)}</Text>
                 </View>
               </View>
@@ -383,7 +385,7 @@ export default function HIITTimerFormScreen({ navigation, route }: Props) {
             onPress={handleSaveButtonPress}
             activeOpacity={1}
           >
-            <Text style={styles.startButtonText}>{timerId ? 'Save' : 'Create Timer'}</Text>
+            <Text style={styles.startButtonText}>{timerId ? t('save') : t('createTimer')}</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -393,8 +395,8 @@ export default function HIITTimerFormScreen({ navigation, route }: Props) {
         visible={activeSheet === 'work'}
         onClose={() => setActiveSheet(null)}
         onSave={(val) => setWork(val)}
-        title="Move for"
-        label="Exercise"
+        title={t('moveFor')}
+        label={t('exercise')}
         value={work}
         min={5}
         max={120}
@@ -406,8 +408,8 @@ export default function HIITTimerFormScreen({ navigation, route }: Props) {
         visible={activeSheet === 'workRest'}
         onClose={() => setActiveSheet(null)}
         onSave={(val) => setWorkRest(val)}
-        title="Rest after each exercise"
-        label="Exercise"
+        title={t('restAfterEachExercise')}
+        label={t('exercise')}
         value={workRest}
         min={5}
         max={120}
@@ -419,8 +421,8 @@ export default function HIITTimerFormScreen({ navigation, route }: Props) {
         visible={activeSheet === 'sets'}
         onClose={() => setActiveSheet(null)}
         onSave={(val) => setSets(val)}
-        title="Exercises in a round"
-        label="Round"
+        title={t('exercisesInRound')}
+        label={t('round')}
         value={sets}
         min={1}
         max={20}
@@ -432,8 +434,8 @@ export default function HIITTimerFormScreen({ navigation, route }: Props) {
         visible={activeSheet === 'rounds'}
         onClose={() => setActiveSheet(null)}
         onSave={(val) => setRounds(val)}
-        title="Rounds"
-        label="Round"
+        title={t('roundsLabel')}
+        label={t('round')}
         value={rounds}
         min={1}
         max={10}
@@ -445,8 +447,8 @@ export default function HIITTimerFormScreen({ navigation, route }: Props) {
         visible={activeSheet === 'roundRest'}
         onClose={() => setActiveSheet(null)}
         onSave={(val) => setRoundRest(val)}
-        title="Rest between rounds"
-        label="Round"
+        title={t('restBetweenRounds')}
+        label={t('round')}
         value={roundRest}
         min={5}
         max={180}

@@ -2,6 +2,7 @@ import React from 'react';
 import { TouchableOpacity, StyleSheet, Text } from 'react-native';
 import { IconUser } from './icons';
 import { COLORS } from '../constants';
+import { useTranslation } from '../i18n/useTranslation';
 
 interface ProfileAvatarProps {
   onPress: () => void;
@@ -18,6 +19,7 @@ export function ProfileAvatar({
   textColor = COLORS.textPrimary,
   showInitial = false,
 }: ProfileAvatarProps) {
+  const { t } = useTranslation();
   return (
     <TouchableOpacity 
       style={[
@@ -32,7 +34,9 @@ export function ProfileAvatar({
       activeOpacity={1}
     >
       {showInitial ? (
-        <Text style={[styles.initial, { color: textColor, fontSize: size * 0.5 }]}>U</Text>
+        <Text style={[styles.initial, { color: textColor, fontSize: size * 0.5 }]}>
+          {t('userInitial')}
+        </Text>
       ) : (
         <IconUser size={size * 0.6} color={textColor} />
       )}

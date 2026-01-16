@@ -32,6 +32,7 @@ import { navigate } from './navigationService';
 import { BottomDrawer } from '../components/common/BottomDrawer';
 import * as Haptics from 'expo-haptics';
 import dayjs from 'dayjs';
+import { useTranslation } from '../i18n/useTranslation';
 
 export type RootStackParamList = {
   Tabs: undefined;
@@ -72,6 +73,7 @@ function TabNavigator() {
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
   const { cycles, swapWorkoutAssignments } = useStore();
+  const { t } = useTranslation();
   const [activeTab, setActiveTab] = React.useState<'Schedule' | 'Workouts'>('Schedule');
   const [isViewingToday, setIsViewingToday] = React.useState(true);
   const [swapDrawerVisible, setSwapDrawerVisible] = React.useState(false);
@@ -222,7 +224,7 @@ function TabNavigator() {
                 ]} 
                 numberOfLines={1}
               >
-                Schedule
+                {t('schedule')}
               </Animated.Text>
             </Animated.View>
           </TouchableOpacity>
@@ -277,7 +279,7 @@ function TabNavigator() {
                 ]} 
                 numberOfLines={1}
               >
-                Workouts
+                {t('workouts')}
               </Animated.Text>
             </Animated.View>
           </TouchableOpacity>
@@ -291,7 +293,7 @@ function TabNavigator() {
         maxHeight="70%"
       >
         <View style={styles.swapSheetContent}>
-          <Text style={styles.swapSheetTitle}>Swap Workout</Text>
+          <Text style={styles.swapSheetTitle}>{t('swapWorkout')}</Text>
           {swapDrawerData && (() => {
             const { selectedDate, weekDays } = swapDrawerData;
             
@@ -329,7 +331,7 @@ function TabNavigator() {
               return (
                 <View style={styles.swapSheetEmpty}>
                   <Text style={styles.swapSheetEmptyText}>
-                    No other days this week to swap with
+                    {t('noOtherDaysThisWeek')}
                   </Text>
                 </View>
               );

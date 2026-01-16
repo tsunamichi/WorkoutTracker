@@ -10,6 +10,7 @@ import {
 import * as Haptics from 'expo-haptics';
 import { COLORS, SPACING, TYPOGRAPHY } from '../../constants';
 import { BottomDrawer } from '../common/BottomDrawer';
+import { useTranslation } from '../../i18n/useTranslation';
 
 interface TimerValueSheetProps {
   visible: boolean;
@@ -46,6 +47,7 @@ export function TimerValueSheet({
   step,
   formatValue = (val) => `${val}s`,
 }: TimerValueSheetProps) {
+  const { t } = useTranslation();
   const [selectedValue, setSelectedValue] = useState(value);
   
   // Use ref to track current value in touch handlers (avoid stale closures)
@@ -183,7 +185,7 @@ export function TimerValueSheet({
             }} 
             activeOpacity={1}
           >
-            <Text style={styles.saveButtonText}>Done</Text>
+            <Text style={styles.saveButtonText}>{t('done')}</Text>
           </TouchableOpacity>
         </View>
       )}

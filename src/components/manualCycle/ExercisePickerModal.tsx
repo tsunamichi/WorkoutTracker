@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { useStore } from '../../store';
 import { SPACING } from '../../constants';
+import { useTranslation } from '../../i18n/useTranslation';
 
 interface ExercisePickerModalProps {
   visible: boolean;
@@ -35,6 +36,7 @@ export function ExercisePickerModal({
 }: ExercisePickerModalProps) {
   const { exercises } = useStore();
   const [searchQuery, setSearchQuery] = useState('');
+  const { t } = useTranslation();
 
   const filteredExercises = useMemo(() => {
     if (!searchQuery.trim()) {
@@ -67,7 +69,7 @@ export function ExercisePickerModal({
       <SafeAreaView style={styles.container}>
         {/* Header */}
         <View style={styles.header}>
-          <Text style={styles.title}>Add Exercise</Text>
+          <Text style={styles.title}>{t('addExerciseTitle')}</Text>
           <TouchableOpacity
             style={styles.closeButton}
             onPress={handleClose}
@@ -84,7 +86,7 @@ export function ExercisePickerModal({
             style={styles.searchInput}
             value={searchQuery}
             onChangeText={setSearchQuery}
-            placeholder="Search exercises..."
+            placeholder={t('searchExercisesPlaceholder')}
             placeholderTextColor={LIGHT_COLORS.textMeta}
             autoFocus
           />

@@ -17,6 +17,7 @@ import { IconAdd, IconTrash, IconArrowLeft, IconChevronDown, IconEdit } from '..
 import { ExerciseEditorBottomSheet } from '../../components/manualCycle/ExerciseEditorBottomSheet';
 import { useStore } from '../../store';
 import { BottomDrawer } from '../../components/common/BottomDrawer';
+import { useTranslation } from '../../i18n/useTranslation';
 
 interface CreateCycleDayEditorProps {
   navigation: any;
@@ -29,6 +30,7 @@ interface CreateCycleDayEditorProps {
 
 export function CreateCycleDayEditor({ navigation, route }: CreateCycleDayEditorProps) {
   const insets = useSafeAreaInsets();
+  const { t } = useTranslation();
   const { weekday } = route.params;
 
   const { workouts, setWorkoutDayName, addExerciseToDay, removeExerciseFromDay } =
@@ -95,10 +97,10 @@ export function CreateCycleDayEditor({ navigation, route }: CreateCycleDayEditor
   };
 
   const handleDeleteExercise = (exerciseBlockId: string) => {
-    Alert.alert('Delete Exercise', 'Are you sure you want to remove this exercise?', [
-      { text: 'Cancel', style: 'cancel' },
+    Alert.alert(t('deleteExerciseTitle'), t('deleteExerciseMessage'), [
+      { text: t('cancel'), style: 'cancel' },
       {
-        text: 'Delete',
+        text: t('delete'),
         style: 'destructive',
         onPress: () => removeExerciseFromDay(weekday, exerciseBlockId),
       },
@@ -138,7 +140,7 @@ export function CreateCycleDayEditor({ navigation, route }: CreateCycleDayEditor
                 onChangeText={setWorkoutName}
                 onBlur={() => setIsEditingName(false)}
                 autoFocus
-                placeholder="Workout name"
+                placeholder={t('workoutNamePlaceholder')}
                 placeholderTextColor={COLORS.textMeta}
               />
             ) : (
@@ -153,7 +155,7 @@ export function CreateCycleDayEditor({ navigation, route }: CreateCycleDayEditor
         <ScrollView style={styles.content} contentContainerStyle={styles.scrollContent} bounces={false}>
           {/* Exercises */}
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Exercises</Text>
+            <Text style={styles.sectionTitle}>{t('exercises')}</Text>
             {workout?.exercises.map((exercise) => {
               const exerciseData = exerciseLibrary.find((e) => e.id === exercise.exerciseId);
               const summary = getExerciseSummary(exercise.weeks);
@@ -167,7 +169,7 @@ export function CreateCycleDayEditor({ navigation, route }: CreateCycleDayEditor
                 >
                   <View style={styles.exerciseCardContent}>
                     <Text style={styles.exerciseName}>
-                      {exerciseData?.name || 'Unknown Exercise'}
+                      {exerciseData?.name || t('unknownExercise')}
                     </Text>
                     <Text style={styles.exerciseSummary}>{summary}</Text>
                   </View>
@@ -188,7 +190,7 @@ export function CreateCycleDayEditor({ navigation, route }: CreateCycleDayEditor
               activeOpacity={1}
             >
               <IconAdd size={20} color={COLORS.text} />
-              <Text style={styles.addExerciseCardText}>Add exercise</Text>
+              <Text style={styles.addExerciseCardText}>{t('addExercise')}</Text>
             </TouchableOpacity>
           </View>
         </ScrollView>
@@ -200,7 +202,7 @@ export function CreateCycleDayEditor({ navigation, route }: CreateCycleDayEditor
             onPress={handleSaveDay}
             activeOpacity={1}
           >
-            <Text style={styles.saveButtonText}>Save day</Text>
+            <Text style={styles.saveButtonText}>{t('saveDay')}</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -218,7 +220,7 @@ export function CreateCycleDayEditor({ navigation, route }: CreateCycleDayEditor
       >
         <View style={styles.drawerContent}>
           <View style={styles.drawerHeader}>
-            <Text style={styles.drawerTitle}>Add Exercise</Text>
+            <Text style={styles.drawerTitle}>{t('addExerciseTitle')}</Text>
             <TouchableOpacity
               onPress={() => {
                 setShowSearchInput(prev => !prev);
@@ -240,7 +242,7 @@ export function CreateCycleDayEditor({ navigation, route }: CreateCycleDayEditor
                 style={styles.swapSearchInput}
                 value={searchQuery}
                 onChangeText={setSearchQuery}
-                placeholder="Search exercises..."
+                placeholder={t('searchExercisesPlaceholder')}
                 placeholderTextColor={COLORS.textMeta}
               />
               {searchQuery.length > 0 && (

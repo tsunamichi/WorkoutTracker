@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView } from 'react-na
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useOnboardingStore } from '../../store/useOnboardingStore';
 import { COLORS } from '../../constants';
+import { useTranslation } from '../../i18n/useTranslation';
 
 type OnboardingStackParamList = {
   Welcome: undefined;
@@ -15,6 +16,7 @@ type WelcomeScreenProps = {
 
 export function WelcomeScreen({ navigation }: WelcomeScreenProps) {
   const { setAuthStatus, finishOnboarding } = useOnboardingStore();
+  const { t } = useTranslation();
 
   const handleContinueWithApple = async () => {
     // TODO: Implement Apple Sign In
@@ -33,7 +35,7 @@ export function WelcomeScreen({ navigation }: WelcomeScreenProps) {
     <SafeAreaView style={styles.container}>
       <View style={styles.content}>
         <View style={styles.hero}>
-          <Text style={styles.title}>Welcome to{'\n'}Workout Tracker</Text>
+          <Text style={styles.title}>{t('welcomeTitle')}</Text>
           <Text style={styles.subtitle}>
             Let's build a training plan that fits your schedule and goals.
           </Text>
@@ -45,7 +47,7 @@ export function WelcomeScreen({ navigation }: WelcomeScreenProps) {
             onPress={handleContinueWithApple}
             activeOpacity={1}
           >
-            <Text style={styles.primaryButtonText}>Continue with Apple</Text>
+            <Text style={styles.primaryButtonText}>{t('continueWithApple')}</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -53,7 +55,7 @@ export function WelcomeScreen({ navigation }: WelcomeScreenProps) {
             onPress={handleContinueAsGuest}
             activeOpacity={1}
           >
-            <Text style={styles.secondaryButtonText}>Continue as guest</Text>
+            <Text style={styles.secondaryButtonText}>{t('continueAsGuest')}</Text>
           </TouchableOpacity>
         </View>
       </View>

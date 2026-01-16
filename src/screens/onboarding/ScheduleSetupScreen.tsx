@@ -5,6 +5,7 @@ import { useOnboardingStore } from '../../store/useOnboardingStore';
 import { ProgressHeader } from '../../components/common/ProgressHeader';
 import { StickyFooter } from '../../components/common/StickyFooter';
 import { COLORS } from '../../constants';
+import { useTranslation } from '../../i18n/useTranslation';
 
 type OnboardingStackParamList = {
   ScheduleSetup: undefined;
@@ -20,6 +21,7 @@ const SESSION_MINUTES_OPTIONS = [30, 45, 60, 75, 90];
 
 export function ScheduleSetupScreen({ navigation }: ScheduleSetupScreenProps) {
   const { prefs, setPrefs } = useOnboardingStore();
+  const { t } = useTranslation();
   const [daysPerWeek, setDaysPerWeek] = useState(prefs.daysPerWeek);
   const [sessionMinutes, setSessionMinutes] = useState(prefs.sessionMinutes);
 
@@ -37,7 +39,7 @@ export function ScheduleSetupScreen({ navigation }: ScheduleSetupScreenProps) {
         />
 
         <View style={styles.section}>
-          <Text style={styles.sectionLabel}>How many days per week can you train?</Text>
+          <Text style={styles.sectionLabel}>{t('daysPerWeekQuestion')}</Text>
           <View style={styles.chipContainer}>
             {DAYS_OPTIONS.map((days) => (
               <TouchableOpacity
@@ -62,7 +64,7 @@ export function ScheduleSetupScreen({ navigation }: ScheduleSetupScreenProps) {
         </View>
 
         <View style={styles.section}>
-          <Text style={styles.sectionLabel}>How long is each session?</Text>
+          <Text style={styles.sectionLabel}>{t('sessionLengthQuestion')}</Text>
           <View style={styles.chipContainer}>
             {SESSION_MINUTES_OPTIONS.map((minutes) => (
               <TouchableOpacity

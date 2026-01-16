@@ -15,6 +15,7 @@ import { IconArrowLeft, IconPlay, IconAdd } from '../components/icons';
 import type { HIITTimer } from '../types';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/AppNavigator';
+import { useTranslation } from '../i18n/useTranslation';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'HIITTimerList'>;
 
@@ -29,6 +30,7 @@ const LIGHT_COLORS = {
 export default function HIITTimerListScreen({ navigation }: Props) {
   const insets = useSafeAreaInsets();
   const { hiitTimers, deleteHIITTimer } = useStore();
+  const { t } = useTranslation();
   
   const templates = hiitTimers.filter(t => t.isTemplate);
   
@@ -98,15 +100,7 @@ export default function HIITTimerListScreen({ navigation }: Props) {
           </View>
           
           <View style={styles.pageTitleContainer}>
-            <Text style={styles.pageTitle}>Saved timers</Text>
-            <TouchableOpacity
-              style={styles.addTimerButton}
-              onPress={handleCreateNew}
-              activeOpacity={0.7}
-            >
-              <Text style={styles.addTimerButtonText}>New</Text>
-              <IconAdd size={24} color={COLORS.accentPrimary} />
-            </TouchableOpacity>
+            <Text style={styles.pageTitle}>{t('savedTimers')}</Text>
           </View>
         </View>
 
@@ -115,53 +109,57 @@ export default function HIITTimerListScreen({ navigation }: Props) {
           contentContainerStyle={styles.scrollContent}
           bounces={false}
         >
-          {templates.map(timer => (
-            <TouchableOpacity
-              key={timer.id}
-              onPress={() => handleSelectTemplate(timer)}
-              onLongPress={() => {
-                Alert.alert(
-                  timer.name,
-                  'What would you like to do?',
-                  [
-                    { text: 'Cancel', style: 'cancel' },
-                    {
-                      text: 'Edit',
-                      onPress: () => handleEditTemplate(timer),
-                    },
-                    {
-                      text: 'Delete',
-                      style: 'destructive',
-                      onPress: () => handleDeleteTemplate(timer),
-                    },
-                  ]
-                );
-              }}
-              activeOpacity={1}
-            >
-              <View style={[
-                CARDS.cardDeepDimmed.outer,
-                styles.timerCard,
-              ]}>
-                <View style={[CARDS.cardDeepDimmed.inner, styles.timerCardInner]}>
-                  <Text style={styles.timerName}>{timer.name}</Text>
-                  
-                  {/* Bottom row with time and start button */}
-                  <View style={styles.timerBottom}>
+          <View style={styles.grid}>
+            {templates.map(timer => (
+              <TouchableOpacity
+                key={timer.id}
+                onPress={() => handleSelectTemplate(timer)}
+                onLongPress={() => {
+                  Alert.alert(
+                    timer.name,
+                    'What would you like to do?',
+                    [
+                      { text: 'Cancel', style: 'cancel' },
+                      {
+                        text: 'Edit',
+                        onPress: () => handleEditTemplate(timer),
+                      },
+                      {
+                        text: 'Delete',
+                        style: 'destructive',
+                        onPress: () => handleDeleteTemplate(timer),
+                      },
+                    ]
+                  );
+                }}
+                activeOpacity={1}
+                style={styles.timerCard}
+              >
+                <View style={CARDS.cardDeepDimmed.outer}>
+                  <View style={[CARDS.cardDeepDimmed.inner, styles.timerCardInner]}>
+                    <Text style={styles.timerName}>{timer.name}</Text>
                     <Text style={styles.totalTime}>{calculateTotalTime(timer)}</Text>
                     <TouchableOpacity
                       onPress={() => handleSelectTemplate(timer)}
                       style={styles.startButton}
                       activeOpacity={1}
                     >
+                      <Text style={styles.startButtonText}>{t('start')}</Text>
                       <IconPlay size={10} color={COLORS.accentPrimary} />
-                      <Text style={styles.startButtonText}>Start</Text>
                     </TouchableOpacity>
                   </View>
                 </View>
-              </View>
-            </TouchableOpacity>
-          ))}
+              </TouchableOpacity>
+            ))}
+          </View>
+          <TouchableOpacity
+            style={styles.addTimerCardButton}
+            onPress={handleCreateNew}
+            activeOpacity={0.7}
+          >
+            <IconAdd size={24} color={COLORS.text} />
+            <Text style={styles.addTimerCardText}>{t('new')}</Text>
+          </TouchableOpacity>
         </ScrollView>
       </View>
     </View>
@@ -204,16 +202,6 @@ const styles = StyleSheet.create({
     ...TYPOGRAPHY.h2,
     color: LIGHT_COLORS.secondary,
   },
-  addTimerButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingVertical: 8,
-  },
-  addTimerButtonText: {
-    ...TYPOGRAPHY.metaBold,
-    color: COLORS.accentPrimary,
-  },
   scrollView: {
     flex: 1,
   },
@@ -221,35 +209,56 @@ const styles = StyleSheet.create({
     padding: SPACING.xxl,
     paddingBottom: 140, // Space for fixed button + 40px
   },
+  grid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    columnGap: SPACING.md,
+    rowGap: SPACING.md,
+  },
   timerCard: {
-    marginBottom: 8,
+    width: '48%',
   },
   timerCardInner: {
     paddingVertical: SPACING.lg,
     paddingHorizontal: 24,
   },
   timerName: {
-    ...TYPOGRAPHY.body,
+    ...TYPOGRAPHY.h3,
     color: COLORS.text,
-    marginBottom: 2,
-  },
-  timerBottom: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    marginBottom: 4,
   },
   totalTime: {
-    ...TYPOGRAPHY.meta,
+    ...TYPOGRAPHY.body,
     color: COLORS.textMeta,
   },
   startButton: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
+    marginTop: 24,
   },
   startButtonText: {
     ...TYPOGRAPHY.metaBold,
-    color: LIGHT_COLORS.secondary,
+    color: COLORS.accentPrimary,
+  },
+  addTimerCardButton: {
+    width: '100%',
+    height: 56,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: COLORS.textMeta,
+    borderStyle: 'dashed',
+    backgroundColor: 'transparent',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginTop: 48,
+  },
+  addTimerCardText: {
+    ...TYPOGRAPHY.metaBold,
+    color: COLORS.text,
   },
 });
 

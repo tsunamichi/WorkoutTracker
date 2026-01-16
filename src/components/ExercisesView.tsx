@@ -3,11 +3,13 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput } from 
 import { useStore } from '../store';
 import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS } from '../constants';
 import type { ExerciseCategory } from '../types';
+import { useTranslation } from '../i18n/useTranslation';
 
 const CATEGORIES: ExerciseCategory[] = ['Chest', 'Back', 'Legs', 'Shoulders', 'Arms', 'Core', 'Full Body'];
 
 export function ExercisesView() {
   const { exercises } = useStore();
+  const { t } = useTranslation();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<ExerciseCategory | 'All'>('All');
   
@@ -24,7 +26,7 @@ export function ExercisesView() {
       <View style={styles.searchContainer}>
         <TextInput
           style={styles.searchInput}
-          placeholder="Search exercises..."
+          placeholder={t('searchExercisesPlaceholder')}
           placeholderTextColor={COLORS.meta}
           value={searchQuery}
           onChangeText={setSearchQuery}
@@ -44,7 +46,7 @@ export function ExercisesView() {
           activeOpacity={1}
         >
           <Text style={[styles.categoryText, selectedCategory === 'All' && styles.categoryTextActive]}>
-            All
+            {t('all')}
           </Text>
         </TouchableOpacity>
         {CATEGORIES.map((category) => (
@@ -65,7 +67,7 @@ export function ExercisesView() {
       <ScrollView style={styles.list} contentContainerStyle={styles.listContent}>
         {filteredExercises.length === 0 ? (
           <View style={styles.emptyState}>
-            <Text style={styles.emptyText}>No exercises found</Text>
+            <Text style={styles.emptyText}>{t('noExercisesFound')}</Text>
             <Text style={styles.emptySubtext}>
               {searchQuery ? 'Try a different search term' : 'No exercises in this category'}
             </Text>
@@ -77,7 +79,7 @@ export function ExercisesView() {
                 <Text style={styles.exerciseName}>{exercise.name}</Text>
                 {exercise.isCustom && (
                   <View style={styles.customBadge}>
-                    <Text style={styles.customBadgeText}>CUSTOM</Text>
+                    <Text style={styles.customBadgeText}>{t('customBadge')}</Text>
                   </View>
                 )}
               </View>

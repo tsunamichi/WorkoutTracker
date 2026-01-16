@@ -4,6 +4,7 @@ import { useStore } from '../store';
 import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS } from '../constants';
 import { IconAdd } from './icons';
 import dayjs from 'dayjs';
+import { useTranslation } from '../i18n/useTranslation';
 
 interface CyclesViewProps {
   onCreateCycle: () => void;
@@ -12,6 +13,7 @@ interface CyclesViewProps {
 
 export function CyclesView({ onCreateCycle, onCyclePress }: CyclesViewProps) {
   const { cycles } = useStore();
+  const { t } = useTranslation();
   
   // Sort cycles by date (newest first)
   const sortedCycles = [...cycles].sort((a, b) => 
@@ -29,14 +31,14 @@ export function CyclesView({ onCreateCycle, onCyclePress }: CyclesViewProps) {
         <View style={styles.createIconContainer}>
           <IconAdd size={24} color={COLORS.text} />
         </View>
-        <Text style={styles.createButtonText}>New Cycle</Text>
+        <Text style={styles.createButtonText}>{t('newCycleButton')}</Text>
       </TouchableOpacity>
       
       {/* Cycles List */}
       {sortedCycles.length === 0 ? (
         <View style={styles.emptyState}>
-          <Text style={styles.emptyText}>No cycles yet</Text>
-          <Text style={styles.emptySubtext}>Tap "New Cycle" to create your first training cycle</Text>
+          <Text style={styles.emptyText}>{t('noCyclesYet')}</Text>
+          <Text style={styles.emptySubtext}>{t('noCyclesYetSubtext')}</Text>
         </View>
       ) : (
         sortedCycles.map((cycle) => {
@@ -55,15 +57,17 @@ export function CyclesView({ onCreateCycle, onCyclePress }: CyclesViewProps) {
               {/* Header */}
               <View style={styles.cycleHeader}>
                 <View style={styles.cycleTitleRow}>
-                  <Text style={styles.cycleName}>Cycle {cycle.cycleNumber}</Text>
+                  <Text style={styles.cycleName}>
+                    {t('cycleNumber').replace('{number}', String(cycle.cycleNumber))}
+                  </Text>
                   {cycle.isActive && (
                     <View style={styles.activeBadge}>
-                      <Text style={styles.activeBadgeText}>ACTIVE</Text>
+                      <Text style={styles.activeBadgeText}>{t('activeBadge')}</Text>
                     </View>
                   )}
                   {isComplete && !cycle.isActive && (
                     <View style={styles.completeBadge}>
-                      <Text style={styles.completeBadgeText}>COMPLETE</Text>
+                      <Text style={styles.completeBadgeText}>{t('completeBadge')}</Text>
                     </View>
                   )}
                 </View>
@@ -90,15 +94,15 @@ export function CyclesView({ onCreateCycle, onCyclePress }: CyclesViewProps) {
               <View style={styles.statsRow}>
                 <View style={styles.stat}>
                   <Text style={styles.statValue}>{cycle.lengthInWeeks}</Text>
-                  <Text style={styles.statLabel}>weeks</Text>
+                  <Text style={styles.statLabel}>{t('weeks')}</Text>
                 </View>
                 <View style={styles.stat}>
                   <Text style={styles.statValue}>{cycle.workoutsPerWeek}</Text>
-                  <Text style={styles.statLabel}>per week</Text>
+                  <Text style={styles.statLabel}>{t('perWeekLabel')}</Text>
                 </View>
                 <View style={styles.stat}>
                   <Text style={styles.statValue}>{cycle.workoutTemplates.length}</Text>
-                  <Text style={styles.statLabel}>workouts</Text>
+                  <Text style={styles.statLabel}>{t('workoutsCountLabel')}</Text>
                 </View>
               </View>
               

@@ -10,6 +10,7 @@ import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS, CARDS } from '../constants'
 import { IconCalendar, IconStopwatch, IconWorkouts, IconCheck, IconSwap, IconAdd } from '../components/icons';
 import dayjs from 'dayjs';
 import isoWeek from 'dayjs/plugin/isoWeek';
+import { useTranslation } from '../i18n/useTranslation';
 
 dayjs.extend(isoWeek);
 
@@ -40,6 +41,7 @@ export function TodayScreen({ onNavigateToWorkouts, onDateChange, onOpenSwapDraw
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
   const { cycles, workoutAssignments, getWorkoutCompletionPercentage, getExerciseProgress, swapWorkoutAssignments, getHIITTimerSessionsForDate } = useStore();
+  const { t } = useTranslation();
   const today = dayjs();
   
   // State for selected date (defaults to today)
@@ -257,7 +259,11 @@ export function TodayScreen({ onNavigateToWorkouts, onDateChange, onOpenSwapDraw
           <View style={[styles.header, { paddingTop: insets.top }]}>
             <View style={styles.topBar}>
               <Text style={styles.headerTitle}>
-                {activeCycle ? `Cycle ${activeCycle.cycleNumber} — Week ${currentWeek}` : 'Today'}
+                {activeCycle
+                  ? t('cycleWeekLabel')
+                      .replace('{cycle}', String(activeCycle.cycleNumber))
+                      .replace('{week}', String(currentWeek))
+                  : t('today')}
               </Text>
               <View style={styles.headerRight}>
                 {activeCycle && weekOffset !== 0 && (
@@ -340,7 +346,7 @@ export function TodayScreen({ onNavigateToWorkouts, onDateChange, onOpenSwapDraw
             {!activeCycle ? (
               /* Empty State */
               <View style={styles.emptyStateContent}>
-                <Text style={styles.emptyTitle}>No workouts yet</Text>
+                <Text style={styles.emptyTitle}>{t('noWorkoutsYet')}</Text>
                 <Text style={styles.emptyText}>
                   To get started, you need to create one.
                 </Text>
@@ -350,7 +356,7 @@ export function TodayScreen({ onNavigateToWorkouts, onDateChange, onOpenSwapDraw
                   activeOpacity={1}
                 >
                   <IconWorkouts size={24} color="#FFFFFF" />
-                  <Text style={styles.createButtonText}>Go to Workouts</Text>
+                  <Text style={styles.createButtonText}>{t('goToWorkouts')}</Text>
                 </TouchableOpacity>
               </View>
             ) : (
@@ -376,9 +382,11 @@ export function TodayScreen({ onNavigateToWorkouts, onDateChange, onOpenSwapDraw
                         }
                       });
                       const completionPercentage = getWorkoutCompletionPercentage(workoutKey, totalSets);
-                      const buttonState = completionPercentage === 100 ? 'Edit' 
-                        : completionPercentage > 0 ? 'Resume' 
-                        : 'Start';
+                      const buttonState = completionPercentage === 100
+                        ? t('edit')
+                        : completionPercentage > 0
+                          ? t('resume')
+                          : t('start');
                       const progress = completionPercentage / 100;
                       
                       return (
@@ -415,7 +423,8 @@ export function TodayScreen({ onNavigateToWorkouts, onDateChange, onOpenSwapDraw
                             
                             {/* Exercises Count */}
                             <Text style={styles.workoutExercises}>
-                              {selectedDay.workout.exercises.length} exercises
+                              {selectedDay.workout.exercises.length}{' '}
+                              {selectedDay.workout.exercises.length === 1 ? t('exercise') : t('exercises')}
                             </Text>
                           </View>
                           
@@ -434,8 +443,8 @@ export function TodayScreen({ onNavigateToWorkouts, onDateChange, onOpenSwapDraw
                 <View style={styles.restDayContainer}>
                   <View style={styles.restDayContent}>
                     <Text style={styles.restDayQuestion}>
-                      <Text style={styles.restDayQuestionGray}>This is your rest day{'\n'}</Text>
-                      <Text style={styles.restDayQuestionBlack}>No workouts scheduled</Text>
+                      <Text style={styles.restDayQuestionGray}>{t('restDayTitle')}{'\n'}</Text>
+                      <Text style={styles.restDayQuestionBlack}>{t('noWorkoutsScheduled')}</Text>
                     </Text>
                   </View>
                 </View>
@@ -467,7 +476,7 @@ export function TodayScreen({ onNavigateToWorkouts, onDateChange, onOpenSwapDraw
                     >
                       <IconSwap size={24} color={COLORS.text} />
                       <Text style={styles.swapButtonText}>
-                        {hasEligibleWorkoutsToSwap(selectedDate) ? 'Swap' : 'Create Workout'}
+                        {hasEligibleWorkoutsToSwap(selectedDate) ? t('swap') : t('createWorkout')}
                       </Text>
                     </TouchableOpacity>
                   );
@@ -481,7 +490,7 @@ export function TodayScreen({ onNavigateToWorkouts, onDateChange, onOpenSwapDraw
                   >
                     <IconAdd size={24} color={COLORS.accentPrimary} />
                     <Text style={styles.addWorkoutButtonText}>
-                      {hasEligibleWorkoutsToSwap(selectedDate) ? 'Add Workout' : 'Create Workout'}
+                      {hasEligibleWorkoutsToSwap(selectedDate) ? t('addWorkout') : t('createWorkout')}
                     </Text>
                   </TouchableOpacity>
                 )}
@@ -512,7 +521,7 @@ export function TodayScreen({ onNavigateToWorkouts, onDateChange, onOpenSwapDraw
                         activeOpacity={0.7}
                       >
                         <IconAdd size={24} color={COLORS.text} />
-                        <Text style={styles.addIntervalCardText}>Add interval timer</Text>
+                        <Text style={styles.addIntervalCardText}>{t('addIntervalTimer')}</Text>
                       </TouchableOpacity>
                     )}
                     
@@ -540,7 +549,7 @@ export function TodayScreen({ onNavigateToWorkouts, onDateChange, onOpenSwapDraw
                         activeOpacity={0.7}
                       >
                         <IconAdd size={24} color={COLORS.text} />
-                        <Text style={styles.addIntervalButtonText}>Add</Text>
+                        <Text style={styles.addIntervalButtonText}>{t('addInterval')}</Text>
                       </TouchableOpacity>
                     )}
                   </View>

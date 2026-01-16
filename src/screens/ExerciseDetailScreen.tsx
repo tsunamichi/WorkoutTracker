@@ -16,6 +16,8 @@ import { SetTimerSheet } from '../components/timer/SetTimerSheet';
 import { Toggle } from '../components/Toggle';
 import { BottomDrawer } from '../components/common/BottomDrawer';
 import { ActionSheet } from '../components/common/ActionSheet';
+import { formatWeight, toDisplayWeight, fromDisplayWeight } from '../utils/weight';
+import { useTranslation } from '../i18n/useTranslation';
 
 interface ExerciseDetailScreenProps {
   route?: {
@@ -81,7 +83,20 @@ function PulsatingCircle() {
 export function ExerciseDetailScreen({ route, navigation }: ExerciseDetailScreenProps) {
   const insets = useSafeAreaInsets();
   const { exercise, exerciseName, workoutName, workoutKey, cycleId, workoutTemplateId } = route?.params || {};
-  const { exercises, updateCycle, cycles, saveExerciseProgress, getExerciseProgress, skipExercise, getBarbellMode, setBarbellMode, sessions, detailedWorkoutProgress } = useStore();
+  const {
+    exercises,
+    updateCycle,
+    cycles,
+    saveExerciseProgress,
+    getExerciseProgress,
+    skipExercise,
+    getBarbellMode,
+    setBarbellMode,
+    sessions,
+    detailedWorkoutProgress,
+    settings,
+  } = useStore();
+  const { t, language } = useTranslation();
   const [showTimer, setShowTimer] = useState(false);
   const [isExerciseTimerPhase, setIsExerciseTimerPhase] = useState(false); // Track if showing exercise timer or rest timer
   
@@ -192,16 +207,20 @@ export function ExerciseDetailScreen({ route, navigation }: ExerciseDetailScreen
   
   const exerciseData = exercises.find(e => e.id === exercise.exerciseId);
   const isTimeBased = exerciseData?.measurementType === 'time';
-  const weightUnit = 'lbs'; // Weight is always in lbs (for added weight during exercise)
+  const useKg = settings.useKg;
+  const weightUnit = useKg ? 'kg' : 'lb';
   const repsUnit = isTimeBased ? 'sec' : 'reps'; // Time-based uses 'sec', rep-based uses 'reps'
   const BARBELL_WEIGHT = 45;
+  const WEIGHT_STEP = useKg ? 2.5 : 2.5;
   
   const handleWeightIncrement = (setIndex: number) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     const newSets = [...setsData];
+    const currentWeight = newSets[setIndex].weight;
+    const nextDisplay = toDisplayWeight(currentWeight, useKg) + WEIGHT_STEP;
     newSets[setIndex] = {
       ...newSets[setIndex],
-      weight: newSets[setIndex].weight + 2.5,
+      weight: fromDisplayWeight(nextDisplay, useKg),
     };
     setSetsData(newSets);
     setHasUnsavedChanges(true);
@@ -218,9 +237,11 @@ export function ExerciseDetailScreen({ route, navigation }: ExerciseDetailScreen
   const handleWeightDecrement = (setIndex: number) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     const newSets = [...setsData];
+    const currentWeight = newSets[setIndex].weight;
+    const nextDisplay = Math.max(0, toDisplayWeight(currentWeight, useKg) - WEIGHT_STEP);
     newSets[setIndex] = {
       ...newSets[setIndex],
-      weight: Math.max(0, newSets[setIndex].weight - 2.5),
+      weight: fromDisplayWeight(nextDisplay, useKg),
     };
     setSetsData(newSets);
     setHasUnsavedChanges(true);
@@ -482,6 +503,11 @@ export function ExerciseDetailScreen({ route, navigation }: ExerciseDetailScreen
       // Prevent default action
       e.preventDefault();
       
+      if (!workoutKey || !exercise) {
+        navigation.dispatch(e.data.action);
+        return;
+      }
+
       // Check if exercise was just skipped - if so, don't overwrite the skip state
       const currentProgress = getExerciseProgress(workoutKey, exercise.id);
       if (currentProgress?.skipped) {
@@ -503,15 +529,15 @@ export function ExerciseDetailScreen({ route, navigation }: ExerciseDetailScreen
     setShowMenu(false);
     
     Alert.alert(
-      'Complete Exercise',
-      'Mark all sets as complete?',
+      t('alertCompleteExerciseTitle'),
+      t('alertCompleteExerciseMessage'),
       [
         {
-          text: 'Cancel',
+          text: t('cancel'),
           style: 'cancel',
         },
         {
-          text: 'Complete',
+          text: t('complete'),
           style: 'default',
           onPress: async () => {
             const completedSets = setsData.map(set => ({
@@ -541,15 +567,15 @@ export function ExerciseDetailScreen({ route, navigation }: ExerciseDetailScreen
     setShowMenu(false);
     
     Alert.alert(
-      'Reset Exercise',
-      'Clear all progress for this exercise? This cannot be undone.',
+      t('alertResetExerciseTitle'),
+      t('alertResetExerciseMessage'),
       [
         {
-          text: 'Cancel',
+          text: t('cancel'),
           style: 'cancel',
         },
         {
-          text: 'Reset',
+          text: t('reset'),
           style: 'destructive',
           onPress: () => {
             // Reset all sets to default values
@@ -584,15 +610,15 @@ export function ExerciseDetailScreen({ route, navigation }: ExerciseDetailScreen
     setShowMenu(false);
     
     Alert.alert(
-      'Skip Exercise',
-      'Are you sure you want to skip this exercise?',
+      t('alertSkipExerciseTitle'),
+      t('alertSkipExerciseMessage'),
       [
         {
-          text: 'Cancel',
+          text: t('cancel'),
           style: 'cancel',
         },
         {
-          text: 'Skip',
+          text: t('skip'),
           style: 'default',
           onPress: () => {
             if (workoutKey && exercise) {
@@ -607,10 +633,10 @@ export function ExerciseDetailScreen({ route, navigation }: ExerciseDetailScreen
                 navigation?.goBack();
               }).catch((error) => {
                 console.error('❌ Error skipping exercise:', error);
-                Alert.alert('Error', 'Failed to skip exercise. Please try again.');
+                Alert.alert(t('alertErrorTitle'), t('alertSkipFailed'));
               });
             } else {
-              Alert.alert('Error', 'Missing workout or exercise information');
+              Alert.alert(t('alertErrorTitle'), t('alertMissingWorkoutInfo'));
             }
           },
         },
@@ -754,6 +780,9 @@ export function ExerciseDetailScreen({ route, navigation }: ExerciseDetailScreen
   
   // Helper function to get ordinal suffix
   const getOrdinalSuffix = (day: number) => {
+    if (language === 'es') {
+      return 'º';
+    }
     if (day > 3 && day < 21) return 'th';
     switch (day % 10) {
       case 1: return 'st';
@@ -796,7 +825,7 @@ export function ExerciseDetailScreen({ route, navigation }: ExerciseDetailScreen
             {/* Barbell Mode Toggle */}
             <View style={styles.barbellToggleContainer}>
               <Toggle
-                label="Barbell"
+                label={t('barbellLabel')}
                 value={useBarbellMode}
                 disabled={
                   expandedSetIndex !== -1 &&
@@ -823,9 +852,12 @@ export function ExerciseDetailScreen({ route, navigation }: ExerciseDetailScreen
           <View style={styles.setsAccordion}>
             {setsData.map((set, index) => {
               const isExpanded = expandedSetIndex === index;
-              const weight = set.weight;
+              const weightLbs = set.weight;
               const reps = set.reps;
-              const perSideWeight = useBarbellMode && weight > BARBELL_WEIGHT ? (weight - BARBELL_WEIGHT) / 2 : 0;
+              const perSideWeightLbs =
+                useBarbellMode && weightLbs > BARBELL_WEIGHT
+                  ? (weightLbs - BARBELL_WEIGHT) / 2
+                  : 0;
               const isCompleted = set.completed;
               
               return (
@@ -861,11 +893,13 @@ export function ExerciseDetailScreen({ route, navigation }: ExerciseDetailScreen
                           <View style={styles.adjustmentRow}>
                             <View style={styles.valueContainer}>
                               <View style={styles.valueRow}>
-                                <Text style={styles.largeValue}>{weight}</Text>
+                                <Text style={styles.largeValue}>
+                                  {formatWeight(weightLbs, useKg)}
+                                </Text>
                                 <Text style={styles.unit}>{weightUnit}</Text>
-                                {useBarbellMode && perSideWeight > 0 && (
+                                {useBarbellMode && perSideWeightLbs > 0 && (
                                   <Text style={styles.perSideText}>
-                                    {perSideWeight % 1 === 0 ? perSideWeight : perSideWeight.toFixed(1)} per side
+                                    {formatWeight(perSideWeightLbs, useKg)} {weightUnit} per side
                                   </Text>
                                 )}
                               </View>
@@ -975,7 +1009,9 @@ export function ExerciseDetailScreen({ route, navigation }: ExerciseDetailScreen
                               <View style={styles.setCardCollapsed}>
                                 <View style={styles.setCollapsedLeft}>
                                   <View style={styles.collapsedValueRow}>
-                                    <Text style={styles.setCollapsedText}>{weight}</Text>
+                                    <Text style={styles.setCollapsedText}>
+                                      {formatWeight(weightLbs, useKg)}
+                                    </Text>
                                     <Text style={styles.setCollapsedUnit}>{weightUnit}</Text>
                                   </View>
                                   <View style={styles.collapsedValueRow}>
@@ -1029,12 +1065,14 @@ export function ExerciseDetailScreen({ route, navigation }: ExerciseDetailScreen
               {allSetsCompleted ? (
                 // Save Changes button (black background)
                 <View style={[styles.markAsDoneButtonInner, styles.saveChangesButtonBackground, (!hasUnsavedChanges) && styles.buttonDisabled]}>
-                  <Text style={styles.markAsDoneButtonText}>Save changes</Text>
+                  <Text style={styles.markAsDoneButtonText}>{t('saveChanges')}</Text>
                 </View>
               ) : (
                 // Mark as Done / Start button (solid background)
                 <View style={[styles.markAsDoneButtonInner, styles.markAsDoneButtonBackground]}>
-                  <Text style={styles.markAsDoneButtonText}>{isTimeBased ? 'Start' : 'Mark as Done'}</Text>
+                  <Text style={styles.markAsDoneButtonText}>
+                    {isTimeBased ? t('start') : t('markAsDone')}
+                  </Text>
                 </View>
               )}
             </TouchableOpacity>
@@ -1064,24 +1102,24 @@ export function ExerciseDetailScreen({ route, navigation }: ExerciseDetailScreen
           items={[
             { 
               icon: <IconHistory size={24} color="#000000" />,
-              label: 'History', 
+              label: t('history'), 
               onPress: handleHistory,
               featured: true
             },
             { 
               icon: <IconRestart size={24} color={COLORS.signalNegative} />,
-              label: 'Reset', 
+              label: t('reset'), 
               onPress: handleResetExercise,
               destructive: true 
             },
             { 
               icon: <IconCheck size={24} color="#000000" />,
-              label: 'Complete', 
+              label: t('complete'), 
               onPress: handleCompleteExercise
             },
             { 
               icon: <IconSkip size={24} color="#000000" />,
-              label: 'Skip', 
+              label: t('skip'), 
               onPress: handleSkipExercise 
             },
           ]}
@@ -1095,11 +1133,11 @@ export function ExerciseDetailScreen({ route, navigation }: ExerciseDetailScreen
           expandable={true}
         >
           <View style={styles.historySheetContent}>
-              <Text style={styles.historySheetTitle}>History</Text>
+              <Text style={styles.historySheetTitle}>{t('history')}</Text>
                 {exerciseHistory.length === 0 ? (
                   <View style={styles.historySheetEmpty}>
                     <Text style={styles.historySheetEmptyText}>
-                      No history recorded yet
+                      {t('noHistoryRecordedYet')}
                     </Text>
                   </View>
                 ) : (
@@ -1126,7 +1164,12 @@ export function ExerciseDetailScreen({ route, navigation }: ExerciseDetailScreen
                         {workout.sets.slice().reverse().map((set, setIndex) => (
                           <View key={`${workout.sessionId}-${setIndex}`} style={styles.historySetRow}>
                             <View style={styles.historyValueColumn}>
-                              <Text style={styles.setCollapsedText}>{set.weight}</Text>
+                              <Text style={styles.setCollapsedText}>
+                                {formatWeight(set.weight, useKg)}
+                              </Text>
+                                  <Text style={styles.setCollapsedText}>
+                                    {formatWeight(set.weight, useKg)}
+                                  </Text>
                               <Text style={styles.setCollapsedUnit}>{weightUnit}</Text>
                             </View>
                             <View style={styles.historyValueColumn}>

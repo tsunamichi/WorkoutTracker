@@ -13,6 +13,7 @@ import { startRestTimer, updateRestTimer, endRestTimer, markRestTimerCompleted }
 import * as Haptics from 'expo-haptics';
 import { Audio } from 'expo-av';
 import { SetTimerSheet } from '../components/timer/SetTimerSheet';
+import { useTranslation } from '../i18n/useTranslation';
 
 interface WorkoutExecutionScreenProps {
   route: {
@@ -93,7 +94,13 @@ export function SetTimerSheetLegacy({ visible, onComplete, onClose, workoutName,
       endTimeRef.current = Date.now() + restTime * 1000;
       
       // Start Live Activity for Dynamic Island
-      startRestTimer(workoutName || 'Workout', exerciseName || 'Exercise', restTime, currentSet, totalSets).then((activityId) => {
+      startRestTimer(
+        workoutName || t('workoutsLabel'),
+        exerciseName || t('exercise'),
+        restTime,
+        currentSet,
+        totalSets
+      ).then((activityId) => {
         if (activityId) {
           liveActivityIdRef.current = activityId;
           console.log('🏝️ Dynamic Island Live Activity started');
@@ -425,7 +432,7 @@ export function SetTimerSheetLegacy({ visible, onComplete, onClose, workoutName,
         >
           <View style={styles.timerControlButtonContainer}>
             <View style={styles.timerControlButton}>
-              <Text style={styles.timerControlButtonText}>+5</Text>
+              <Text style={styles.timerControlButtonText}>{t('addFiveSeconds')}</Text>
             </View>
           </View>
         </TouchableOpacity>
@@ -453,7 +460,7 @@ export function SetTimerSheetLegacy({ visible, onComplete, onClose, workoutName,
         >
           <View style={styles.timerControlButtonContainer}>
             <View style={styles.timerControlButton}>
-              <Text style={styles.timerControlButtonText}>skip</Text>
+              <Text style={styles.timerControlButtonText}>{t('skip')}</Text>
             </View>
           </View>
         </TouchableOpacity>
@@ -468,6 +475,7 @@ export function WorkoutExecutionScreen({ route, navigation }: WorkoutExecutionSc
   const insets = useSafeAreaInsets();
   const { cycleId, workoutTemplateId, date } = route.params;
   const { cycles, exercises, addSession, getWorkoutCompletionPercentage, getExerciseProgress, saveExerciseProgress, clearWorkoutProgress, skipExercise } = useStore();
+  const { t } = useTranslation();
   
   // Subscribe to detailedWorkoutProgress for this specific workout
   const workoutKey = `${workoutTemplateId}-${date}`;
@@ -514,7 +522,7 @@ export function WorkoutExecutionScreen({ route, navigation }: WorkoutExecutionSc
     return (
       <View style={styles.gradient}>
         <View style={styles.container}>
-          <Text style={styles.errorText}>Workout not found</Text>
+          <Text style={styles.errorText}>{t('workoutNotFound')}</Text>
         </View>
       </View>
     );
@@ -583,15 +591,15 @@ export function WorkoutExecutionScreen({ route, navigation }: WorkoutExecutionSc
     setShowMenu(false);
     
     Alert.alert(
-      'Complete Workout',
-      'Mark all exercises and sets as complete?',
+      t('completeWorkoutTitle'),
+      t('completeWorkoutMessage'),
       [
         {
-          text: 'Cancel',
+          text: t('cancel'),
           style: 'cancel',
         },
         {
-          text: 'Complete',
+          text: t('complete'),
           style: 'default',
           onPress: async () => {
             if (!workout) return;
@@ -638,15 +646,15 @@ export function WorkoutExecutionScreen({ route, navigation }: WorkoutExecutionSc
     setShowMenu(false);
     
     Alert.alert(
-      'Reset Progress',
-      'Clear all progress for this workout? This cannot be undone.',
+      t('resetProgressTitle'),
+      t('resetProgressMessage'),
       [
         {
-          text: 'Cancel',
+          text: t('cancel'),
           style: 'cancel',
         },
         {
-          text: 'Reset',
+          text: t('reset'),
           style: 'destructive',
           onPress: async () => {
             if (!workout) return;
@@ -684,7 +692,7 @@ export function WorkoutExecutionScreen({ route, navigation }: WorkoutExecutionSc
                 style={styles.resetButton}
                 activeOpacity={1}
               >
-                <Text style={styles.resetButtonText}>Reset</Text>
+                <Text style={styles.resetButtonText}>{t('reset')}</Text>
               </TouchableOpacity>
             ) : (
               <TouchableOpacity 
@@ -808,15 +816,18 @@ export function WorkoutExecutionScreen({ route, navigation }: WorkoutExecutionSc
                   // If exercise is skipped, show dialog to activate it
                   if (isSkipped) {
                     Alert.alert(
-                      'Reactivate Exercise',
-                      `Do you want to reactivate ${exerciseData?.name || 'this exercise'}?`,
+                      t('reactivateExerciseTitle'),
+                      t('reactivateExerciseMessage').replace(
+                        '{name}',
+                        exerciseData?.name || t('unknownExercise')
+                      ),
                       [
                         {
-                          text: 'Cancel',
+                          text: t('cancel'),
                           style: 'cancel',
                         },
                         {
-                          text: 'Reactivate',
+                          text: t('reactivate'),
                           onPress: async () => {
                             console.log('🔄 Reactivating exercise:', exercise.id);
                             // Clear the entire progress for this exercise to reset it
@@ -848,7 +859,7 @@ export function WorkoutExecutionScreen({ route, navigation }: WorkoutExecutionSc
                   setCurrentExerciseIndex(index);
                   navigation.navigate('ExerciseDetail', {
                     exercise,
-                    exerciseName: exerciseData?.name || 'Exercise',
+                    exerciseName: exerciseData?.name || t('unknownExercise'),
                     workoutName: workout.name,
                     workoutKey: `${workoutTemplateId}-${date}`,
                     cycleId,
@@ -861,7 +872,7 @@ export function WorkoutExecutionScreen({ route, navigation }: WorkoutExecutionSc
                     {/* Skipped Section Header */}
                     {showSkippedHeader && (
                       <View style={styles.sectionHeader}>
-                        <Text style={styles.sectionHeaderText}>Skipped</Text>
+                        <Text style={styles.sectionHeaderText}>{t('skipped')}</Text>
                       </View>
                     )}
                     
@@ -930,7 +941,7 @@ export function WorkoutExecutionScreen({ route, navigation }: WorkoutExecutionSc
         items={[
           { 
             icon: <IconEdit size={24} color="#000000" />,
-            label: 'Edit', 
+            label: t('edit'), 
             onPress: () => {
                   navigation.navigate('WorkoutEdit', {
                     cycleId,
@@ -942,13 +953,13 @@ export function WorkoutExecutionScreen({ route, navigation }: WorkoutExecutionSc
           },
           { 
             icon: <IconRestart size={24} color={COLORS.signalNegative} />,
-            label: 'Reset', 
+            label: t('reset'), 
             onPress: handleResetWorkout,
             destructive: true 
           },
           { 
             icon: <IconCheck size={24} color="#000000" />,
-            label: 'Complete', 
+            label: t('complete'), 
             onPress: handleCompleteWorkout
           },
         ]}

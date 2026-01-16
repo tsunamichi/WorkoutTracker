@@ -6,8 +6,10 @@ import { useStore } from '../store';
 import { COLORS, SPACING, TYPOGRAPHY } from '../constants';
 import type { Cycle, WorkoutTemplate, WorkoutTemplateExercise } from '../types';
 import { calculateCycleEndDate } from '../utils/progression';
+import { kgToLbs } from '../utils/weight';
 import { generateCycleWithAI } from '../services/aiTrainer';
 import { IconSave } from './icons';
+import { useTranslation } from '../i18n/useTranslation';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -19,6 +21,7 @@ interface TrainerBottomSheetProps {
 export function TrainerBottomSheet({ visible, onClose }: TrainerBottomSheetProps) {
   const insets = useSafeAreaInsets();
   const { cycles, exercises, addCycle, addExercise, getNextCycleNumber, settings } = useStore();
+  const { t } = useTranslation();
   const [prompt, setPrompt] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [generatedPlan, setGeneratedPlan] = useState<string>('');
@@ -315,6 +318,7 @@ Lower: Lower A
         } else if (weightRaw.trim().toLowerCase() === 'light') {
           weight = 'light';
         } else {
+          const isKg = /kg/i.test(weightRaw);
           const weightRangeMatch = weightRaw.match(/([\d.+]+)[\-–—]([\d.]+)\s*(?:kg|lbs?)?/i);
           const singleWeightMatch = weightRaw.match(/([+\d.]+)\s*(?:kg|lbs?)?/i);
           
@@ -327,6 +331,10 @@ Lower: Lower A
             weight = parseFloat(singleWeightMatch[1].replace('+', ''));
           } else {
             weight = 0;
+          }
+
+          if (typeof weight === 'number' && isKg) {
+            weight = Math.round(kgToLbs(weight) * 10) / 10;
           }
         }
         
@@ -423,6 +431,7 @@ Lower: Lower A
               } else if (weekWeightRaw.trim().toLowerCase() === 'light') {
                 weekWeight = 'light';
               } else {
+                const weekIsKg = /kg/i.test(weekWeightRaw);
                 const wRangeMatch = weekWeightRaw.match(/([\d.+]+)[\-–—]([\d.]+)\s*(?:kg|lbs?)?/i);
                 const wSingleMatch = weekWeightRaw.match(/([+\d.]+)\s*(?:kg|lbs?)?/i);
                 if (wRangeMatch) {
@@ -431,6 +440,10 @@ Lower: Lower A
                   weekWeight = Math.round((w1 + w2) / 2 * 10) / 10;
                 } else if (wSingleMatch) {
                   weekWeight = parseFloat(wSingleMatch[1].replace('+', ''));
+                }
+
+                if (typeof weekWeight === 'number' && weekIsKg) {
+                  weekWeight = Math.round(kgToLbs(weekWeight) * 10) / 10;
                 }
               }
               
@@ -757,7 +770,7 @@ Lower: Lower A
           
           {/* Title */}
           <View style={styles.titleContainer}>
-            <Text style={styles.title}>Kaio Sama</Text>
+            <Text style={styles.title}>{t('trainerName')}</Text>
           </View>
         
         <ScrollView contentContainerStyle={styles.content}>
@@ -765,34 +778,18 @@ Lower: Lower A
             <>
               {!hasAI && (
                 <>
-                  <Text style={styles.formatInstructions}>
-                    Format: Week [number]{'\n'}
-                    [Workout Type]: [Workout Name]{'\n'}
-                    - Exercise name: sets × reps @ weight
-                  </Text>
+                  <Text style={styles.formatInstructions}>{t('trainerFormatInstructions')}</Text>
                   
-                  <Text style={styles.exampleTitle}>Example:</Text>
-                  <Text style={styles.example}>
-                    Week 8{'\n'}
-                    {'\n'}
-                    Push: Push A{'\n'}
-                    - Bench Press: 4 × 6-8 @ 50kg{'\n'}
-                    - Overhead Press: 3 × 8-10 @ 35kg{'\n'}
-                {'\n'}
-                Pull: Pull A{'\n'}
-                - Deadlift: 4 × 5-6 @ 80kg{'\n'}
-                - Pull-ups: 3 × 8-10 @ 0kg{'\n'}
-                {'\n'}
-                (Week number = cycle duration in weeks)
-              </Text>
+                  <Text style={styles.exampleTitle}>{t('trainerExampleTitle')}</Text>
+                  <Text style={styles.example}>{t('trainerExampleBody')}</Text>
                 </>
               )}
               
               <TextInput
                 style={[styles.input, isInputFocused && styles.inputFocused]}
                 placeholder={hasAI 
-                  ? "E.g., Create a 6-week push/pull/legs program focused on hypertrophy. I'm intermediate level and want to train 4 days per week."
-                  : "Week 8&#10;&#10;Push: Push A&#10;- Bench Press: 4 × 6-8 @ 50kg&#10;- Overhead Press: 3 × 8-10 @ 35kg&#10;&#10;Pull: Pull A&#10;- Deadlift: 4 × 5-6 @ 80kg"
+                  ? t('trainerAiPlaceholder')
+                  : t('trainerManualPlaceholder')
                 }
                 placeholderTextColor={COLORS.meta}
                 value={prompt}
@@ -807,13 +804,13 @@ Lower: Lower A
               {isGenerating && (
                 <View style={styles.loadingContainer}>
                   <ActivityIndicator size="large" color={COLORS.accent} />
-                  <Text style={styles.loadingText}>Creating your cycle...</Text>
+                  <Text style={styles.loadingText}>{t('trainerCreatingCycle')}</Text>
                 </View>
               )}
             </>
           ) : (
             <>
-              <Text style={styles.planTitle}>Preview</Text>
+              <Text style={styles.planTitle}>{t('trainerPreview')}</Text>
               <View style={styles.planContainer}>
                 <Text style={styles.planText}>{generatedPlan}</Text>
               </View>
@@ -829,7 +826,7 @@ Lower: Lower A
                   onClose();
                 }}
               >
-                <Text style={styles.confirmButtonText}>Save Cycle</Text>
+                <Text style={styles.confirmButtonText}>{t('trainerSaveCycle')}</Text>
               </TouchableOpacity>
               
               <TouchableOpacity
@@ -840,7 +837,7 @@ Lower: Lower A
                   setPrompt('');
                 }}
               >
-                <Text style={styles.regenerateButtonText}>Start Over</Text>
+                <Text style={styles.regenerateButtonText}>{t('trainerStartOver')}</Text>
               </TouchableOpacity>
             </>
           )}
@@ -856,7 +853,7 @@ Lower: Lower A
               activeOpacity={1}
             >
               <IconSave size={20} color={COLORS.text} />
-              <Text style={styles.saveButtonText}>Save Cycle</Text>
+              <Text style={styles.saveButtonText}>{t('trainerSaveCycle')}</Text>
             </TouchableOpacity>
           </View>
         )}

@@ -6,6 +6,7 @@ import { View, Text, StyleSheet, TextInput, TouchableOpacity, FlatList, Keyboard
 // import BottomSheet, { BottomSheetBackdrop } from '@gorhom/bottom-sheet';
 import { MovementPattern, Equipment, Exercise } from '../../types/workout';
 import { searchExercises, ExerciseLibraryEntry } from '../../utils/exerciseLibrary';
+import { useTranslation } from '../../i18n/useTranslation';
 
 interface AddExerciseBottomSheetProps {
   isVisible: boolean;
@@ -21,6 +22,7 @@ function generateId(): string {
 }
 
 export function AddExerciseBottomSheet({ isVisible, onClose, onSelectExercise }: AddExerciseBottomSheetProps) {
+  const { t } = useTranslation();
   const bottomSheetRef = useRef<BottomSheet>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedPattern, setSelectedPattern] = useState<MovementPattern | undefined>();
@@ -85,11 +87,11 @@ export function AddExerciseBottomSheet({ isVisible, onClose, onSelectExercise }:
       keyboardBlurBehavior="restore"
     >
       <View style={styles.contentContainer}>
-        <Text style={styles.title}>Add Exercise</Text>
+        <Text style={styles.title}>{t('addExerciseTitle')}</Text>
 
         <TextInput
           style={styles.searchInput}
-          placeholder="Search exercises..."
+          placeholder={t('searchExercisesPlaceholder')}
           value={searchQuery}
           onChangeText={setSearchQuery}
           autoCapitalize="none"
@@ -97,7 +99,7 @@ export function AddExerciseBottomSheet({ isVisible, onClose, onSelectExercise }:
         />
 
         <View style={styles.filterSection}>
-          <Text style={styles.filterLabel}>Movement:</Text>
+          <Text style={styles.filterLabel}>{t('movementLabel')}</Text>
           <FlatList
             horizontal
             showsHorizontalScrollIndicator={false}
@@ -126,7 +128,7 @@ export function AddExerciseBottomSheet({ isVisible, onClose, onSelectExercise }:
         </View>
 
         <View style={styles.filterSection}>
-          <Text style={styles.filterLabel}>Equipment:</Text>
+          <Text style={styles.filterLabel}>{t('equipmentLabel')}</Text>
           <FlatList
             horizontal
             showsHorizontalScrollIndicator={false}

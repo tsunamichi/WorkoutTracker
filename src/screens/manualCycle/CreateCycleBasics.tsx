@@ -7,6 +7,7 @@ import { DAY_ORDER } from '../../types/manualCycle';
 import { formatWeekdayFull } from '../../utils/manualCycleUtils';
 import { IconAddLine, IconMinusLine, IconArrowLeft } from '../../components/icons';
 import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS } from '../../constants';
+import { useTranslation } from '../../i18n/useTranslation';
 
 interface CreateCycleBasicsProps {
   navigation: any;
@@ -14,6 +15,7 @@ interface CreateCycleBasicsProps {
 
 export function CreateCycleBasics({ navigation }: CreateCycleBasicsProps) {
   const insets = useSafeAreaInsets();
+  const { t } = useTranslation();
   const {
     weeks,
     frequencyDays,
@@ -44,12 +46,12 @@ export function CreateCycleBasics({ navigation }: CreateCycleBasicsProps) {
           <TouchableOpacity
             onPress={() => {
               Alert.alert(
-                'Exit setup?',
-                "Your progress won't be saved.",
+                t('exitSetupTitle'),
+                t('exitSetupMessage'),
                 [
-                  { text: 'Cancel', style: 'cancel' },
+                  { text: t('cancel'), style: 'cancel' },
                   {
-                    text: 'Exit',
+                    text: t('exit'),
                     style: 'destructive',
                     onPress: () => {
                       resetDraft();
@@ -65,7 +67,7 @@ export function CreateCycleBasics({ navigation }: CreateCycleBasicsProps) {
             <IconArrowLeft size={24} color={COLORS.text} />
           </TouchableOpacity>
           <View style={styles.headerTitleRow}>
-            <Text style={styles.headerTitle}>Create cycle</Text>
+            <Text style={styles.headerTitle}>{t('createCycle')}</Text>
             {(() => {
               const progress = 1 / 4;
               return (
@@ -93,7 +95,7 @@ export function CreateCycleBasics({ navigation }: CreateCycleBasicsProps) {
         <ScrollView style={styles.content} contentContainerStyle={styles.scrollContent} bounces={false}>
           {/* Frequency Days */}
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Training days</Text>
+            <Text style={styles.sectionTitle}>{t('trainingDays')}</Text>
             <View style={styles.chipGrid}>
               {DAY_ORDER.map((day, index) => (
                 <TouchableOpacity
@@ -121,12 +123,12 @@ export function CreateCycleBasics({ navigation }: CreateCycleBasicsProps) {
 
           {/* Cycle Weeks */}
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Cycle length</Text>
+            <Text style={styles.sectionTitle}>{t('cycleLength')}</Text>
             <View style={styles.stepper}>
               <View style={styles.stepperValue}>
                 <View style={styles.stepperValueRow}>
                   <Text style={styles.stepperNumber}>{weeks}</Text>
-                  <Text style={styles.stepperLabel}>weeks</Text>
+                  <Text style={styles.stepperLabel}>{t('weeks')}</Text>
                 </View>
               </View>
               <View style={styles.stepperControls}>
@@ -169,7 +171,7 @@ export function CreateCycleBasics({ navigation }: CreateCycleBasicsProps) {
               activeOpacity={1}
             >
               <Text style={[styles.backFooterButtonText, styles.backFooterButtonTextDisabled]}>
-                Back
+                {t('back')}
               </Text>
             </TouchableOpacity>
             <TouchableOpacity
@@ -184,7 +186,7 @@ export function CreateCycleBasics({ navigation }: CreateCycleBasicsProps) {
                   !canContinue && styles.continueButtonTextDisabled,
                 ]}
               >
-                Continue
+                {t('continue')}
               </Text>
             </TouchableOpacity>
           </View>

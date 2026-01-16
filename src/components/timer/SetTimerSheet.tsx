@@ -9,7 +9,7 @@ import {
   Dimensions,
   AppState,
 } from 'react-native';
-import Svg, { Path } from 'react-native-svg';
+import Svg, { Path, Circle, Rect, Polygon } from 'react-native-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Audio } from 'expo-av';
 import * as Haptics from 'expo-haptics';
@@ -18,6 +18,7 @@ import { useStore } from '../../store';
 import { SPACING, TYPOGRAPHY, COLORS } from '../../constants';
 import { TimerControls } from './TimerControls';
 import { IconChevronDown } from '../icons';
+import { useTranslation } from '../../i18n/useTranslation';
 import { startRestTimer, endRestTimer, markRestTimerCompleted } from '../../modules/RestTimerLiveActivity';
 
 interface SetTimerSheetProps {
@@ -39,6 +40,7 @@ const REST_COLOR_YELLOW = COLORS.signalWarning;
 const REST_COLOR_RED = COLORS.signalNegative;
 const EXERCISE_COLOR_BLUE = '#1B1B1B'; // Black for exercise timer
 const PRE_EXERCISE_COUNTDOWN = 5;
+const COUNTDOWN_SHAPES = ['circle', 'pentagon', 'triangle', 'square'] as const;
   const COUNTDOWN_COLORS = [COLORS.text, COLORS.text, COLORS.text, COLORS.text, COLORS.text];
 const MIN_SIZE = 180;
 const SCREEN_WIDTH = Dimensions.get('window').width;
@@ -60,6 +62,7 @@ export function SetTimerSheet({
 }: SetTimerSheetProps) {
   const insets = useSafeAreaInsets();
   const { settings } = useStore();
+  const { t } = useTranslation();
   const restTime = settings.restTimerDefaultSeconds;
   
   // Determine initial time based on timer phase
@@ -624,6 +627,11 @@ export function SetTimerSheet({
       });
 
   const isPreCountdownActive = preCountdown >= 0 && currentPhase === 'exercise';
+  const countdownShapeIndex = Math.max(
+    0,
+    Math.min(COUNTDOWN_SHAPES.length - 1, PRE_EXERCISE_COUNTDOWN - preCountdown)
+  );
+  const countdownShape = COUNTDOWN_SHAPES[countdownShapeIndex];
 
   useEffect(() => {
     if (isPreCountdownActive && preCountdown === PRE_EXERCISE_COUNTDOWN) {
@@ -676,11 +684,15 @@ export function SetTimerSheet({
           <View style={styles.setIndicator}>
               {currentSet < totalSets ? (
                 <Text style={styles.nextSetText}>
-                  Next set <Text style={styles.nextSetNumber}>{currentSet + 1} out of {totalSets}</Text>
+                  {t('nextSetOutOf')
+                    .replace('{current}', String(currentSet + 1))
+                    .replace('{total}', String(totalSets))}
                 </Text>
               ) : (
                 <Text style={styles.nextSetText}>
-                  Set <Text style={styles.nextSetNumber}>{currentSet} of {totalSets}</Text>
+                  {t('setOf')
+                    .replace('{current}', String(currentSet))
+                    .replace('{total}', String(totalSets))}
                 </Text>
               )}
             </View>
@@ -697,28 +709,42 @@ export function SetTimerSheet({
             >
               {/* Circle/Squircle background */}
               {isPreCountdownActive ? (
-                <Svg width={100} height={100} viewBox="0 0 203 195">
-                  {(() => {
-                    // Order: top-left first, top-right last.
-                    const paths = [
-                      'M98.9364 102.129L1.78409 70.5625C2.16584 69.7229 2.60513 68.9077 3.10245 68.124C5.14672 64.9028 8.52616 62.4465 15.286 57.5352L82.2841 8.8584C89.0441 3.94698 92.4247 1.49079 96.12 0.541992C97.0483 0.303667 97.9897 0.134931 98.9364 0.0322266V102.129Z',
-                      'M97.6991 105.934L37.4228 188.897C36.7597 188.287 36.1356 187.631 35.5575 186.933C33.1258 183.993 31.8348 180.02 29.2528 172.073L3.66202 93.3125C1.07994 85.3657 -0.211326 81.3917 0.0282325 77.584C0.0969806 76.4916 0.255943 75.4108 0.499912 74.3516L97.6991 105.934Z',
-                      'M161.345 191.43C160.462 191.948 159.539 192.401 158.581 192.78C155.034 194.185 150.856 194.185 142.501 194.185H59.6864C51.3307 194.185 47.1527 194.185 43.6054 192.78C42.5678 192.369 41.5713 191.872 40.623 191.299L100.936 108.285L161.345 191.43Z',
-                      'M201.663 74.2568C201.92 75.3465 202.088 76.4588 202.159 77.584C202.399 81.3917 201.107 85.3657 198.525 93.3125L172.934 172.073C170.352 180.02 169.061 183.993 166.629 186.933C165.996 187.698 165.307 188.411 164.573 189.069L104.173 105.934L201.663 74.2568Z',
-                      'M102.936 0C103.989 0.0974266 105.036 0.277265 106.067 0.541992C109.763 1.49079 113.142 3.94705 119.902 8.8584L186.9 57.5352C193.66 62.4466 197.041 64.9027 199.085 68.124C199.565 68.8799 199.99 69.6655 200.362 70.4736L102.936 102.129V0Z',
-                    ];
-                    return paths.map((d, index) => (
-                      <AnimatedPath
-                        key={`pentagon-segment-${index}`}
-                        d={d}
-                        fill={countdownWedgeColors[index].interpolate({
-                          inputRange: [0, 1],
-                          outputRange: [COLORS.text, COLORS.activeCard],
-                        })}
-                      />
-                    ));
-                  })()}
-                </Svg>
+                countdownShape === 'pentagon' ? (
+                  <Svg width={100} height={100} viewBox="0 0 203 195">
+                    {(() => {
+                      // Order: top-left first, top-right last.
+                      const paths = [
+                        'M98.9364 102.129L1.78409 70.5625C2.16584 69.7229 2.60513 68.9077 3.10245 68.124C5.14672 64.9028 8.52616 62.4465 15.286 57.5352L82.2841 8.8584C89.0441 3.94698 92.4247 1.49079 96.12 0.541992C97.0483 0.303667 97.9897 0.134931 98.9364 0.0322266V102.129Z',
+                        'M97.6991 105.934L37.4228 188.897C36.7597 188.287 36.1356 187.631 35.5575 186.933C33.1258 183.993 31.8348 180.02 29.2528 172.073L3.66202 93.3125C1.07994 85.3657 -0.211326 81.3917 0.0282325 77.584C0.0969806 76.4916 0.255943 75.4108 0.499912 74.3516L97.6991 105.934Z',
+                        'M161.345 191.43C160.462 191.948 159.539 192.401 158.581 192.78C155.034 194.185 150.856 194.185 142.501 194.185H59.6864C51.3307 194.185 47.1527 194.185 43.6054 192.78C42.5678 192.369 41.5713 191.872 40.623 191.299L100.936 108.285L161.345 191.43Z',
+                        'M201.663 74.2568C201.92 75.3465 202.088 76.4588 202.159 77.584C202.399 81.3917 201.107 85.3657 198.525 93.3125L172.934 172.073C170.352 180.02 169.061 183.993 166.629 186.933C165.996 187.698 165.307 188.411 164.573 189.069L104.173 105.934L201.663 74.2568Z',
+                        'M102.936 0C103.989 0.0974266 105.036 0.277265 106.067 0.541992C109.763 1.49079 113.142 3.94705 119.902 8.8584L186.9 57.5352C193.66 62.4466 197.041 64.9027 199.085 68.124C199.565 68.8799 199.99 69.6655 200.362 70.4736L102.936 102.129V0Z',
+                      ];
+                      return paths.map((d, index) => (
+                        <AnimatedPath
+                          key={`pentagon-segment-${index}`}
+                          d={d}
+                          fill={countdownWedgeColors[index].interpolate({
+                            inputRange: [0, 1],
+                            outputRange: [COLORS.text, COLORS.activeCard],
+                          })}
+                        />
+                      ));
+                    })()}
+                  </Svg>
+                ) : (
+                  <Svg width={100} height={100} viewBox="0 0 100 100">
+                    {countdownShape === 'circle' && (
+                      <Circle cx="50" cy="50" r="48" fill={COLORS.text} />
+                    )}
+                    {countdownShape === 'triangle' && (
+                      <Polygon points="50,8 96,92 4,92" fill={COLORS.text} />
+                    )}
+                    {countdownShape === 'square' && (
+                      <Rect x="8" y="8" width="84" height="84" rx="6" ry="6" fill={COLORS.text} />
+                    )}
+                  </Svg>
+                )
               ) : (
                 <Animated.View
                   style={[

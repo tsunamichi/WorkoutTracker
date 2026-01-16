@@ -8,6 +8,7 @@ import { StickyFooter } from '../../components/common/StickyFooter';
 import { convertOnboardingCycleToAppCycle } from '../../utils/convertOnboardingCycle';
 import { generateRandomWorkoutAssignments } from '../../utils/assignCycleWorkouts';
 import { COLORS } from '../../constants';
+import { useTranslation } from '../../i18n/useTranslation';
 
 type OnboardingStackParamList = {
   ReviewCreateCycle: undefined;
@@ -28,6 +29,7 @@ const CYCLE_LENGTH_OPTIONS = [4, 6, 8];
 export function ReviewCreateCycleScreen({ navigation }: ReviewCreateCycleScreenProps) {
   const { draft, finalizeCycle } = useOnboardingStore();
   const { addCycle, addExercise, getNextCycleNumber, assignWorkout, exercises: existingExercises } = useStore();
+  const { t } = useTranslation();
   const [cycleLengthWeeks, setCycleLengthWeeks] = useState(6);
 
   const handleEditDay = () => {
@@ -110,7 +112,7 @@ export function ReviewCreateCycleScreen({ navigation }: ReviewCreateCycleScreenP
   if (!draft) {
     return (
       <SafeAreaView style={styles.container}>
-        <Text>No draft found</Text>
+        <Text>{t('noDraftFound')}</Text>
       </SafeAreaView>
     );
   }
@@ -126,15 +128,19 @@ export function ReviewCreateCycleScreen({ navigation }: ReviewCreateCycleScreenP
         <View style={styles.summaryCard}>
           <Text style={styles.summaryTitle}>{draft.templateName}</Text>
           <View style={styles.summaryRow}>
-            <Text style={styles.summaryLabel}>Training days:</Text>
-            <Text style={styles.summaryValue}>{draft.prefs.daysPerWeek}/week</Text>
+            <Text style={styles.summaryLabel}>{t('trainingDaysLabel')}</Text>
+            <Text style={styles.summaryValue}>
+              {draft.prefs.daysPerWeek}{t('perWeekSuffix')}
+            </Text>
           </View>
           <View style={styles.summaryRow}>
-            <Text style={styles.summaryLabel}>Session length:</Text>
-            <Text style={styles.summaryValue}>{draft.prefs.sessionMinutes} min</Text>
+            <Text style={styles.summaryLabel}>{t('sessionLengthLabel')}</Text>
+            <Text style={styles.summaryValue}>
+              {draft.prefs.sessionMinutes} {t('minutesShort')}
+            </Text>
           </View>
           <View style={styles.summaryRow}>
-            <Text style={styles.summaryLabel}>Total exercises:</Text>
+            <Text style={styles.summaryLabel}>{t('totalExercisesLabel')}</Text>
             <Text style={styles.summaryValue}>
               {draft.days.reduce((sum, day) => sum + day.exercises.length, 0)}
             </Text>
@@ -142,7 +148,7 @@ export function ReviewCreateCycleScreen({ navigation }: ReviewCreateCycleScreenP
         </View>
 
         <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Cycle Length</Text>
+          <Text style={styles.sectionTitle}>{t('cycleLengthTitle')}</Text>
         </View>
         <View style={styles.chipContainer}>
           {CYCLE_LENGTH_OPTIONS.map((weeks) => (
@@ -167,7 +173,7 @@ export function ReviewCreateCycleScreen({ navigation }: ReviewCreateCycleScreenP
         </View>
 
         <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Weekly Schedule</Text>
+          <Text style={styles.sectionTitle}>{t('weeklySchedule')}</Text>
         </View>
 
         {draft.days.map((day) => (
@@ -175,7 +181,7 @@ export function ReviewCreateCycleScreen({ navigation }: ReviewCreateCycleScreenP
             <View style={styles.dayCardHeader}>
               <Text style={styles.dayCardTitle}>{day.title}</Text>
               <TouchableOpacity onPress={handleEditDay}>
-                <Text style={styles.editLink}>Edit</Text>
+                <Text style={styles.editLink}>{t('editLabel')}</Text>
               </TouchableOpacity>
             </View>
             

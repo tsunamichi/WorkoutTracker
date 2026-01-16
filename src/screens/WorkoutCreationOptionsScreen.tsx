@@ -4,10 +4,12 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS } from '../constants';
 import { IconArrowLeft } from '../components/icons';
+import { useTranslation } from '../i18n/useTranslation';
 
 export function WorkoutCreationOptionsScreen() {
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
+  const { t } = useTranslation();
   return (
     <View style={styles.container}>
       {/* Header */}
@@ -21,7 +23,7 @@ export function WorkoutCreationOptionsScreen() {
         
         {/* Page Title */}
         <View style={styles.pageTitleContainer}>
-          <Text style={styles.pageTitle}>New Workout</Text>
+          <Text style={styles.pageTitle}>{t('newWorkout')}</Text>
         </View>
       </View>
 
@@ -33,8 +35,8 @@ export function WorkoutCreationOptionsScreen() {
         {/* Question Text */}
         <View style={styles.questionSection}>
           <Text style={styles.questionText}>
-            <Text style={styles.questionTextGray}>How do you want to{'\n'}</Text>
-            <Text style={styles.questionTextBlack}>create a new workout?</Text>
+            <Text style={styles.questionTextGray}>{t('questionCreateWorkoutLine1')}{'\n'}</Text>
+            <Text style={styles.questionTextBlack}>{t('questionCreateWorkoutLine2')}</Text>
           </Text>
         </View>
         
@@ -47,7 +49,7 @@ export function WorkoutCreationOptionsScreen() {
             }}
             activeOpacity={1}
           >
-            <Text style={styles.manuallyButtonText}>Manually</Text>
+            <Text style={styles.manuallyButtonText}>{t('manually')}</Text>
           </TouchableOpacity>
           
           <TouchableOpacity
@@ -57,7 +59,7 @@ export function WorkoutCreationOptionsScreen() {
             }}
             activeOpacity={1}
           >
-            <Text style={styles.aiButtonText}>With AI help</Text>
+            <Text style={styles.aiButtonText}>{t('withAiHelp')}</Text>
           </TouchableOpacity>
         </View>
         

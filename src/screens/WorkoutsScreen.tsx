@@ -10,6 +10,7 @@ import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS, CARDS } from '../constants'
 import { IconCheck, IconPlay, IconAdd } from '../components/icons';
 import { useStore } from '../store';
 import { useOnboardingStore } from '../store/useOnboardingStore';
+import { useTranslation } from '../i18n/useTranslation';
 import dayjs from 'dayjs';
 import isoWeek from 'dayjs/plugin/isoWeek';
 
@@ -34,12 +35,16 @@ export function WorkoutsScreen() {
   const insets = useSafeAreaInsets();
   const { cycles, addCycle, getNextCycleNumber, assignWorkout, exercises, addExercise, updateCycle, clearWorkoutAssignmentsForDateRange, workoutAssignments, detailedWorkoutProgress } = useStore();
   const { startDraftFromCustomText } = useOnboardingStore();
+  const { t, language } = useTranslation();
   const [showBottomSheet, setShowBottomSheet] = useState(false);
   const [workoutDetails, setWorkoutDetails] = useState('');
 
   const formatOrdinalDate = (dateStr: string) => {
     const date = dayjs(dateStr);
     const day = date.date();
+    if (language === 'es') {
+      return `${date.format('MMM')} ${day}º`;
+    }
     const suffix =
       day % 10 === 1 && day % 100 !== 11 ? 'st' :
       day % 10 === 2 && day % 100 !== 12 ? 'nd' :
@@ -91,7 +96,7 @@ export function WorkoutsScreen() {
   const handleCreateCycle = async () => {
     try {
       if (!workoutDetails.trim()) {
-        Alert.alert('Error', 'Please enter workout details');
+        Alert.alert(t('alertErrorTitle'), t('enterWorkoutDetails'));
         return;
       }
       
@@ -253,7 +258,7 @@ export function WorkoutsScreen() {
       }
       
       if (Object.keys(weeklyWorkouts).length === 0) {
-        Alert.alert('Error', 'No workouts found in the input. Please check the format.');
+        Alert.alert(t('alertErrorTitle'), t('errorNoWorkoutsFound'));
         return;
       }
       
@@ -346,7 +351,7 @@ export function WorkoutsScreen() {
       setShowBottomSheet(false);
     } catch (error) {
       console.error('Error creating cycle:', error);
-      Alert.alert('Error', 'Failed to create cycle. Please try again.');
+      Alert.alert(t('alertErrorTitle'), t('failedToCreateCycle'));
     }
   };
   
@@ -356,7 +361,7 @@ export function WorkoutsScreen() {
         {/* Header - Fixed */}
         <View style={[styles.header, { paddingTop: insets.top }]}>
           <View style={styles.topBar}>
-            <Text style={styles.headerTitle}>Workouts</Text>
+            <Text style={styles.headerTitle}>{t('workouts')}</Text>
             <ProfileAvatar 
               onPress={() => navigation.navigate('Profile')}
               size={40}
@@ -373,8 +378,8 @@ export function WorkoutsScreen() {
               {/* Question Text */}
               <View style={styles.questionSection}>
                 <Text style={styles.questionText}>
-                  <Text style={styles.questionTextGray}>How do you want to{'\n'}</Text>
-                  <Text style={styles.questionTextBlack}>create a new workout?</Text>
+                  <Text style={styles.questionTextGray}>{t('questionCreateWorkoutLine1')}{'\n'}</Text>
+                  <Text style={styles.questionTextBlack}>{t('questionCreateWorkoutLine2')}</Text>
                 </Text>
               </View>
               
@@ -388,7 +393,7 @@ export function WorkoutsScreen() {
                   }}
                   activeOpacity={1}
                 >
-                  <Text style={styles.manuallyButtonText}>Manually</Text>
+                  <Text style={styles.manuallyButtonText}>{t('manually')}</Text>
                 </TouchableOpacity>
                 
                 <TouchableOpacity
@@ -399,7 +404,7 @@ export function WorkoutsScreen() {
                   }}
                   activeOpacity={1}
                 >
-                  <Text style={styles.aiButtonText}>With AI help</Text>
+                  <Text style={styles.aiButtonText}>{t('withAiHelp')}</Text>
                 </TouchableOpacity>
               </View>
               
@@ -430,7 +435,9 @@ export function WorkoutsScreen() {
                                           1,
                                           dayjs(cycle.endDate).diff(dayjs(cycle.startDate), 'week') + 1
                                         );
-                                        return weeks === 1 ? '1-week Cycle' : `${weeks}-weeks Cycle`;
+                                        return weeks === 1
+                                          ? t('weekCycleSingular')
+                                          : t('weekCyclePlural').replace('{weeks}', String(weeks));
                                       })()}
                                     </Text>
                                     <View style={styles.progressIndicator}>
@@ -457,17 +464,17 @@ export function WorkoutsScreen() {
                                     </View>
                                   </View>
                                   <Text style={styles.cycleDateLine}>
-                                    <Text style={styles.cycleDateLabel}>from </Text>
+                                    <Text style={styles.cycleDateLabel}>{t('from')}</Text>
                                     {formatOrdinalDate(cycle.startDate)}
                                   </Text>
                                   <Text style={styles.cycleDateLine}>
-                                    <Text style={styles.cycleDateLabel}>to </Text>
+                                    <Text style={styles.cycleDateLabel}>{t('to')}</Text>
                                     {formatOrdinalDate(cycle.endDate)}
                                   </Text>
                                 </View>
                                 <View style={styles.cycleFooter} pointerEvents="none">
                                   <View style={styles.seeDetailsButton}>
-                                    <Text style={styles.seeDetailsText}>See details</Text>
+                                    <Text style={styles.seeDetailsText}>{t('seeDetails')}</Text>
                                   </View>
                                 </View>
                               </TouchableOpacity>
@@ -485,14 +492,14 @@ export function WorkoutsScreen() {
                   activeOpacity={0.7}
                 >
                   <IconAdd size={24} color={COLORS.text} />
-                  <Text style={styles.newButtonText}>New</Text>
+                  <Text style={styles.newButtonText}>{t('new')}</Text>
                 </TouchableOpacity>
               </View>
               
               {/* Past Cycles */}
               {cycles.filter(c => !c.isActive).length > 0 && (
                 <>
-                  <Text style={styles.pastCyclesTitle}>Past Cycles</Text>
+                  <Text style={styles.pastCyclesTitle}>{t('pastCycles')}</Text>
                   {cycles.filter(c => !c.isActive).sort((a, b) => b.cycleNumber - a.cycleNumber).map((cycle) => (
                     <View key={cycle.id} style={styles.pastCycleCardWrapper}>
                       <View style={styles.pastCycleCard}>
@@ -504,7 +511,9 @@ export function WorkoutsScreen() {
                             }}
                             activeOpacity={1}
                           >
-                            <Text style={styles.pastCycleName}>Cycle {cycle.cycleNumber}</Text>
+                            <Text style={styles.pastCycleName}>
+                              {t('cycleNumber').replace('{number}', String(cycle.cycleNumber))}
+                            </Text>
                             <IconPlay size={10} color="#000000" />
                           </TouchableOpacity>
                       </View>
@@ -527,7 +536,7 @@ export function WorkoutsScreen() {
             behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
             style={styles.sheetContent}
           >
-            <Text style={styles.sheetTitle}>New Cycle</Text>
+            <Text style={styles.sheetTitle}>{t('newCycle')}</Text>
             
             <TextInput
               style={styles.textInput}
@@ -544,7 +553,7 @@ export function WorkoutsScreen() {
               onPress={handleCreateCycle}
               activeOpacity={1}
             >
-              <Text style={styles.saveButtonText}>Save and Create</Text>
+              <Text style={styles.saveButtonText}>{t('saveAndCreate')}</Text>
             </TouchableOpacity>
           </KeyboardAvoidingView>
         </BottomDrawer>

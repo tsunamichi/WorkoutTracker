@@ -8,6 +8,7 @@ import {
   IconAdd, IconCheck, IconPlay, IconPause, IconEdit, IconTrash, 
   IconCalendar, IconWorkouts, IconUser, IconArrowLeft 
 } from '../components/icons';
+import { useTranslation } from '../i18n/useTranslation';
 
 interface DesignSystemScreenProps {
   navigation: any;
@@ -28,6 +29,7 @@ const LIGHT_COLORS = {
 };
 
 export function DesignSystemScreen({ navigation }: DesignSystemScreenProps) {
+  const { t } = useTranslation();
   return (
     <View style={styles.gradient}>
       <SafeAreaView style={styles.container} edges={['top']}>
@@ -47,14 +49,14 @@ export function DesignSystemScreen({ navigation }: DesignSystemScreenProps) {
               />
             </Svg>
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Design System</Text>
+          <Text style={styles.headerTitle}>{t('designSystemTitle')}</Text>
           <View style={{ width: 24 }} />
         </View>
 
         <ScrollView style={styles.scrollView} bounces={false}>
           {/* Colors Section */}
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Colors</Text>
+            <Text style={styles.sectionTitle}>{t('colorsTitle')}</Text>
             <View style={styles.colorList}>
               {Object.entries(LIGHT_COLORS).map(([name, value]) => (
                 <View key={name} style={styles.colorRow}>
@@ -85,7 +87,7 @@ export function DesignSystemScreen({ navigation }: DesignSystemScreenProps) {
 
           {/* Spacing Section */}
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Spacing</Text>
+            <Text style={styles.sectionTitle}>{t('spacingTitle')}</Text>
             {Object.entries(SPACING).map(([name, value], index) => (
               <View key={name}>
                 <View style={styles.spacingRow}>
@@ -102,37 +104,37 @@ export function DesignSystemScreen({ navigation }: DesignSystemScreenProps) {
 
           {/* Typography Section */}
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Typography</Text>
+            <Text style={styles.sectionTitle}>{t('typographyTitle')}</Text>
             <View style={styles.typographyRow}>
-              <Text style={[styles.typographyLabel, TYPOGRAPHY.h1]}>H1 Heading</Text>
+              <Text style={[styles.typographyLabel, TYPOGRAPHY.h1]}>H1 {t('typographyTitle')}</Text>
               <Text style={styles.typographyMeta}>
                 {TYPOGRAPHY.h1.fontSize}px / {TYPOGRAPHY.h1.fontWeight}
               </Text>
             </View>
             <View style={styles.divider} />
             <View style={styles.typographyRow}>
-              <Text style={[styles.typographyLabel, TYPOGRAPHY.h2]}>H2 Heading</Text>
+              <Text style={[styles.typographyLabel, TYPOGRAPHY.h2]}>H2 {t('typographyTitle')}</Text>
               <Text style={styles.typographyMeta}>
                 {TYPOGRAPHY.h2.fontSize}px / {TYPOGRAPHY.h2.fontWeight}
               </Text>
             </View>
             <View style={styles.divider} />
             <View style={styles.typographyRow}>
-              <Text style={[styles.typographyLabel, TYPOGRAPHY.h3]}>H3 Heading</Text>
+              <Text style={[styles.typographyLabel, TYPOGRAPHY.h3]}>H3 {t('typographyTitle')}</Text>
               <Text style={styles.typographyMeta}>
                 {TYPOGRAPHY.h3.fontSize}px / {TYPOGRAPHY.h3.fontWeight}
               </Text>
             </View>
             <View style={styles.divider} />
             <View style={styles.typographyRow}>
-              <Text style={[styles.typographyLabel, TYPOGRAPHY.body]}>Body Text</Text>
+              <Text style={[styles.typographyLabel, TYPOGRAPHY.body]}>Body {t('typographyTitle')}</Text>
               <Text style={styles.typographyMeta}>
                 {TYPOGRAPHY.body.fontSize}px / {TYPOGRAPHY.body.fontWeight}
               </Text>
             </View>
             <View style={styles.divider} />
             <View style={styles.typographyRow}>
-              <Text style={[styles.typographyLabel, TYPOGRAPHY.meta]}>Meta Text</Text>
+              <Text style={[styles.typographyLabel, TYPOGRAPHY.meta]}>Meta {t('typographyTitle')}</Text>
               <Text style={styles.typographyMeta}>
                 {TYPOGRAPHY.meta.fontSize}px / {TYPOGRAPHY.meta.fontWeight}
               </Text>
@@ -141,7 +143,7 @@ export function DesignSystemScreen({ navigation }: DesignSystemScreenProps) {
 
           {/* Border Radius Section */}
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Border Radius</Text>
+            <Text style={styles.sectionTitle}>{t('borderRadiusTitle')}</Text>
             <View style={styles.radiusList}>
               {Object.entries(BORDER_RADIUS).map(([name, value]) => (
                 <View key={name} style={styles.radiusItem}>
@@ -162,11 +164,11 @@ export function DesignSystemScreen({ navigation }: DesignSystemScreenProps) {
 
           {/* Components Section */}
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Components</Text>
+            <Text style={styles.sectionTitle}>{t('componentsTitle')}</Text>
             
             {/* Buttons */}
             <View style={styles.componentGroup}>
-              <Text style={styles.componentGroupTitle}>Buttons</Text>
+              <Text style={styles.componentGroupTitle}>{t('buttonsTitle')}</Text>
               
               {/* Primary Button - No Icon */}
               <TouchableOpacity style={styles.buttonPrimaryWrapper} activeOpacity={1}>
@@ -176,7 +178,7 @@ export function DesignSystemScreen({ navigation }: DesignSystemScreenProps) {
                   end={GRADIENTS.accentPrimary.end}
                   style={styles.buttonPrimary}
                 >
-                  <Text style={styles.buttonPrimaryText}>Primary Button</Text>
+                  <Text style={styles.buttonPrimaryText}>{t('primaryButton')}</Text>
                 </LinearGradient>
               </TouchableOpacity>
               
@@ -189,7 +191,7 @@ export function DesignSystemScreen({ navigation }: DesignSystemScreenProps) {
                   style={styles.buttonPrimary}
                 >
                   <IconPlay size={16} color="#FFFFFF" />
-                  <Text style={styles.buttonPrimaryText}>With Icon Left</Text>
+                  <Text style={styles.buttonPrimaryText}>{t('withIconLeft')}</Text>
                 </LinearGradient>
               </TouchableOpacity>
               
@@ -201,7 +203,7 @@ export function DesignSystemScreen({ navigation }: DesignSystemScreenProps) {
                   end={GRADIENTS.accentPrimary.end}
                   style={styles.buttonPrimary}
                 >
-                  <Text style={styles.buttonPrimaryText}>With Icon Right</Text>
+                  <Text style={styles.buttonPrimaryText}>{t('withIconRight')}</Text>
                   <View style={styles.triangleIcon}>
                     <Svg width={12} height={12} viewBox="0 0 24 24" fill="none">
                       <Path d="M8 5L16 12L8 19V5Z" fill="#000000" />
@@ -216,7 +218,7 @@ export function DesignSystemScreen({ navigation }: DesignSystemScreenProps) {
                   <IconPlay size={24} color="#FFFFFF" />
                 </TouchableOpacity>
                 <View style={styles.buttonInfo}>
-                  <Text style={styles.buttonInfoLabel}>Primary Button No Label</Text>
+                  <Text style={styles.buttonInfoLabel}>{t('primaryButtonNoLabel')}</Text>
                   <Text style={styles.buttonInfoMeta}>
                     {BUTTONS.primaryButtonNoLabel.width}×{BUTTONS.primaryButtonNoLabel.height}px / {BUTTONS.primaryButtonNoLabel.borderRadius}px radius
                   </Text>
@@ -225,93 +227,93 @@ export function DesignSystemScreen({ navigation }: DesignSystemScreenProps) {
               
               {/* Secondary Button - No Icon */}
               <TouchableOpacity style={styles.buttonSecondary} activeOpacity={1}>
-                <Text style={styles.buttonSecondaryText}>Secondary Button</Text>
+                <Text style={styles.buttonSecondaryText}>{t('secondaryButton')}</Text>
               </TouchableOpacity>
               
               {/* Secondary Button - Icon Left */}
               <TouchableOpacity style={styles.buttonSecondary} activeOpacity={1}>
                 <IconEdit size={16} color={LIGHT_COLORS.secondary} />
-                <Text style={styles.buttonSecondaryText}>With Icon Left</Text>
+                <Text style={styles.buttonSecondaryText}>{t('withIconLeft')}</Text>
               </TouchableOpacity>
               
               {/* Secondary Button - Icon Right */}
               <TouchableOpacity style={styles.buttonSecondary} activeOpacity={1}>
-                <Text style={styles.buttonSecondaryText}>With Icon Right</Text>
+                <Text style={styles.buttonSecondaryText}>{t('withIconRight')}</Text>
                 <IconArrowLeft size={16} color={LIGHT_COLORS.secondary} />
               </TouchableOpacity>
               
               {/* Text Button - No Icon */}
               <TouchableOpacity style={styles.buttonText} activeOpacity={1}>
-                <Text style={styles.buttonTextLabel}>Text Button</Text>
+                <Text style={styles.buttonTextLabel}>{t('textButton')}</Text>
               </TouchableOpacity>
               
               {/* Text Button - Icon Left */}
               <TouchableOpacity style={styles.buttonText} activeOpacity={1}>
                 <IconAdd size={16} color={LIGHT_COLORS.textMeta} />
-                <Text style={styles.buttonTextLabel}>With Icon Left</Text>
+                <Text style={styles.buttonTextLabel}>{t('withIconLeft')}</Text>
               </TouchableOpacity>
               
               {/* Text Button - Icon Right */}
               <TouchableOpacity style={styles.buttonText} activeOpacity={1}>
-                <Text style={styles.buttonTextLabel}>With Icon Right</Text>
+                <Text style={styles.buttonTextLabel}>{t('withIconRight')}</Text>
                 <IconCheck size={16} color={LIGHT_COLORS.textMeta} />
               </TouchableOpacity>
             </View>
             
             {/* Icons */}
             <View style={styles.componentGroup}>
-              <Text style={styles.componentGroupTitle}>Icons</Text>
+              <Text style={styles.componentGroupTitle}>{t('iconsTitle')}</Text>
               <View style={styles.iconGrid}>
                 <View style={styles.iconItem}>
                   <IconAdd size={24} color={LIGHT_COLORS.secondary} />
-                  <Text style={styles.iconLabel}>Add</Text>
+                  <Text style={styles.iconLabel}>{t('iconAdd')}</Text>
                 </View>
                 <View style={styles.iconItem}>
                   <IconCheck size={24} color={LIGHT_COLORS.secondary} />
-                  <Text style={styles.iconLabel}>Check</Text>
+                  <Text style={styles.iconLabel}>{t('iconCheck')}</Text>
                 </View>
                 <View style={styles.iconItem}>
                   <IconPlay size={24} color={LIGHT_COLORS.secondary} />
-                  <Text style={styles.iconLabel}>Play</Text>
+                  <Text style={styles.iconLabel}>{t('iconPlay')}</Text>
                 </View>
                 <View style={styles.iconItem}>
                   <IconPause size={24} color={LIGHT_COLORS.secondary} />
-                  <Text style={styles.iconLabel}>Pause</Text>
+                  <Text style={styles.iconLabel}>{t('iconPause')}</Text>
                 </View>
                 <View style={styles.iconItem}>
                   <IconEdit size={24} color={LIGHT_COLORS.secondary} />
-                  <Text style={styles.iconLabel}>Edit</Text>
+                  <Text style={styles.iconLabel}>{t('iconEdit')}</Text>
                 </View>
                 <View style={styles.iconItem}>
                   <IconTrash size={24} color={LIGHT_COLORS.secondary} />
-                  <Text style={styles.iconLabel}>Trash</Text>
+                  <Text style={styles.iconLabel}>{t('iconTrash')}</Text>
                 </View>
                 <View style={styles.iconItem}>
                   <IconCalendar size={24} color={LIGHT_COLORS.secondary} />
-                  <Text style={styles.iconLabel}>Calendar</Text>
+                  <Text style={styles.iconLabel}>{t('iconCalendar')}</Text>
                 </View>
                 <View style={styles.iconItem}>
                   <IconWorkouts size={24} color={LIGHT_COLORS.secondary} />
-                  <Text style={styles.iconLabel}>Workouts</Text>
+                  <Text style={styles.iconLabel}>{t('iconWorkouts')}</Text>
                 </View>
                 <View style={styles.iconItem}>
                   <IconUser size={24} color={LIGHT_COLORS.secondary} />
-                  <Text style={styles.iconLabel}>User</Text>
+                  <Text style={styles.iconLabel}>{t('iconUser')}</Text>
                 </View>
                 <View style={styles.iconItem}>
                   <IconArrowLeft size={24} color={LIGHT_COLORS.secondary} />
-                  <Text style={styles.iconLabel}>Arrow</Text>
+                  <Text style={styles.iconLabel}>{t('iconArrow')}</Text>
                 </View>
               </View>
             </View>
             
             {/* Cards */}
             <View style={styles.componentGroup}>
-              <Text style={styles.componentGroupTitle}>Cards</Text>
+              <Text style={styles.componentGroupTitle}>{t('cardsTitle')}</Text>
               
               {/* Basic Card */}
               <View style={styles.cardExample}>
-                <Text style={styles.cardTitle}>Basic Card</Text>
+                <Text style={styles.cardTitle}>{t('basicCard')}</Text>
                 <Text style={styles.cardDescription}>
                   A simple card with white background and border radius
                 </Text>
@@ -322,7 +324,7 @@ export function DesignSystemScreen({ navigation }: DesignSystemScreenProps) {
                 <View style={styles.cardShadowWhite}>
                   <View style={styles.cardWithShadow}>
                     <View style={styles.cardWithShadowInner}>
-                      <Text style={styles.cardTitle}>Card with Dual Shadows</Text>
+                      <Text style={styles.cardTitle}>{t('cardWithDualShadows')}</Text>
                       <Text style={styles.cardDescription}>
                         Black (-1,-1, 8%) and white (1,1, 100%) shadows with border token and inner borders for depth
                       </Text>

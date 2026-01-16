@@ -15,6 +15,7 @@ import { COLORS, TYPOGRAPHY, SPACING } from '../constants';
 import { useStore } from '../store';
 import { transcribeAudio, generateSpeech } from '../services/whisperService';
 import Svg, { Path } from 'react-native-svg';
+import { useTranslation } from '../i18n/useTranslation';
 
 interface Message {
   type: 'ai' | 'user';
@@ -23,16 +24,16 @@ interface Message {
 
 type ConversationStep = 'greeting' | 'goal' | 'experience' | 'complete';
 
-const QUESTIONS = {
-  greeting: "What's your main goal right now?",
-  experience: "How long have you been training consistently?",
-};
-
 export function TrainerScreen() {
   const { settings } = useStore();
+  const { t } = useTranslation();
+  const questions = {
+    greeting: t('trainerQuestionGreeting'),
+    experience: t('trainerQuestionExperience'),
+  };
   const [step, setStep] = useState<ConversationStep>('greeting');
   const [messages, setMessages] = useState<Message[]>([
-    { type: 'ai', text: QUESTIONS.greeting },
+    { type: 'ai', text: questions.greeting },
   ]);
   const [isRecording, setIsRecording] = useState(false);
   const [recording, setRecording] = useState<Audio.Recording | null>(null);
@@ -52,7 +53,7 @@ export function TrainerScreen() {
     (async () => {
       const { status } = await Audio.requestPermissionsAsync();
       if (status !== 'granted') {
-        Alert.alert('Permission Required', 'Audio recording permission is required to use the trainer.');
+        Alert.alert(t('permissionRequired'), t('audioPermissionRequired'));
       }
       await Audio.setAudioModeAsync({
         allowsRecordingIOS: true,
@@ -63,7 +64,7 @@ export function TrainerScreen() {
       });
       
       // Play initial greeting
-      await speakMessage(QUESTIONS.greeting);
+      await speakMessage(questions.greeting);
     })();
     
     // Cleanup on unmount
@@ -196,7 +197,7 @@ export function TrainerScreen() {
       ).start();
     } catch (err) {
       console.error('Failed to start recording', err);
-      Alert.alert('Error', 'Failed to start recording');
+      Alert.alert(t('alertErrorTitle'), t('errorFailedStartRecording'));
     }
   };
 
@@ -211,16 +212,13 @@ export function TrainerScreen() {
       setRecording(null);
 
       if (!uri) {
-        Alert.alert('Error', 'Failed to get recording URI');
+        Alert.alert(t('alertErrorTitle'), t('errorFailedGetRecordingUri'));
         return;
       }
 
       // Check if API key is available
       if (!settings.openaiApiKey || !settings.openaiApiKey.startsWith('sk-')) {
-        Alert.alert(
-          'API Key Required',
-          'Please add your OpenAI API key in the Profile settings to use voice transcription.'
-        );
+        Alert.alert(t('apiKeyRequired'), t('apiKeyRequiredMessage'));
         return;
       }
 
@@ -232,7 +230,7 @@ export function TrainerScreen() {
       
       if (error || !text) {
         console.error('Transcription error:', error);
-        Alert.alert('Transcription Error', error || 'Failed to transcribe audio. Please try again.');
+      Alert.alert(t('transcriptionErrorTitle'), error || t('transcriptionErrorMessage'));
         setIsProcessing(false);
         return;
       }
@@ -246,17 +244,17 @@ export function TrainerScreen() {
       // Move to next step
       if (step === 'greeting') {
         await new Promise(resolve => setTimeout(resolve, 500));
-        setMessages(prev => [...prev, { type: 'ai', text: QUESTIONS.experience }]);
+        setMessages(prev => [...prev, { type: 'ai', text: questions.experience }]);
         setStep('experience');
-        await speakMessage(QUESTIONS.experience);
+        await speakMessage(questions.experience);
       } else if (step === 'goal') {
         await new Promise(resolve => setTimeout(resolve, 500));
-        setMessages(prev => [...prev, { type: 'ai', text: QUESTIONS.experience }]);
+        setMessages(prev => [...prev, { type: 'ai', text: questions.experience }]);
         setStep('experience');
-        await speakMessage(QUESTIONS.experience);
+        await speakMessage(questions.experience);
       } else if (step === 'experience') {
         await new Promise(resolve => setTimeout(resolve, 500));
-        const finalMessage = "Great! Based on your goals and experience, I'll help you create a personalized training cycle. Let's build something amazing together!";
+        const finalMessage = t('trainerFinalMessage');
         setMessages(prev => [
           ...prev,
           { 
@@ -269,7 +267,7 @@ export function TrainerScreen() {
       }
     } catch (err) {
       console.error('Failed to stop recording', err);
-      Alert.alert('Error', 'Failed to process recording');
+      Alert.alert(t('alertErrorTitle'), t('errorFailedProcessRecording'));
       setIsProcessing(false);
     }
   };
@@ -308,8 +306,8 @@ export function TrainerScreen() {
     <SafeAreaView style={styles.container} edges={['top']}>
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>AI Trainer</Text>
-        <Text style={styles.headerSubtitle}>Let's create your perfect training cycle</Text>
+        <Text style={styles.headerTitle}>{t('aiTrainer')}</Text>
+        <Text style={styles.headerSubtitle}>{t('aiTrainerSubtitle')}</Text>
       </View>
 
       {/* Main Content */}
@@ -317,7 +315,7 @@ export function TrainerScreen() {
         {step === 'complete' ? (
           // Show transcript when conversation is complete
           <ScrollView style={styles.transcriptContainer} contentContainerStyle={styles.transcriptContent} bounces={false}>
-            <Text style={styles.transcriptTitle}>Conversation Summary</Text>
+            <Text style={styles.transcriptTitle}>{t('conversationSummary')}</Text>
             {messages.map((message, index) => (
               <View 
                 key={index} 
@@ -327,7 +325,7 @@ export function TrainerScreen() {
                 ]}
               >
                 <Text style={styles.messageLabel}>
-                  {message.type === 'ai' ? 'Trainer' : 'You'}
+                  {message.type === 'ai' ? t('trainerLabel') : t('youLabel')}
                 </Text>
                 <Text style={styles.messageText}>{message.text}</Text>
               </View>
@@ -387,14 +385,14 @@ export function TrainerScreen() {
             {/* Current status text */}
             <View style={styles.statusContainer}>
               {isSpeaking ? (
-                <Text style={styles.statusText}>AI is speaking...</Text>
+                <Text style={styles.statusText}>{t('aiIsSpeaking')}</Text>
               ) : isProcessing ? (
-                <Text style={styles.statusText}>Processing your response...</Text>
+                <Text style={styles.statusText}>{t('processingResponse')}</Text>
               ) : isRecording ? (
-                <Text style={styles.statusText}>Listening...</Text>
+                <Text style={styles.statusText}>{t('listening')}</Text>
               ) : (
                 <Text style={styles.statusText}>
-                  {step === 'greeting' ? 'Listening to trainer...' : 'Tap to answer'}
+                  {step === 'greeting' ? t('listeningToTrainer') : t('tapToAnswer')}
                 </Text>
               )}
             </View>

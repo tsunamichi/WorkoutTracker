@@ -5,9 +5,12 @@ import { LinearGradient } from 'expo-linear-gradient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useStore } from '../store';
 import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS } from '../constants';
-import { IconArrowLeft, IconAdd, IconMenu } from '../components/icons';
+import { IconArrowLeft, IconAdd, IconMenu, IconCheck } from '../components/icons';
 import { TimerValueSheet } from '../components/timer/TimerValueSheet';
 import dayjs from 'dayjs';
+import { formatWeight, fromDisplayWeight } from '../utils/weight';
+import { BottomDrawer } from '../components/common/BottomDrawer';
+import { useTranslation } from '../i18n/useTranslation';
 
 interface ProfileScreenProps {
   navigation: any;
@@ -30,14 +33,21 @@ export function ProfileScreen({ navigation, route }: ProfileScreenProps) {
   const [showAddWeight, setShowAddWeight] = useState(false);
   const [newWeight, setNewWeight] = useState('');
   const [showRestTimePicker, setShowRestTimePicker] = useState(false);
+  const [showLanguagePicker, setShowLanguagePicker] = useState(false);
+  const { t, language } = useTranslation();
+  const languageLabel = language === 'es' ? t('spanish') : t('english');
   
   const handleAddWeight = async () => {
     if (newWeight.trim()) {
+      const displayWeight = parseFloat(newWeight);
+      if (Number.isNaN(displayWeight)) {
+        return;
+      }
       const entry = {
         id: Date.now().toString(),
         date: dayjs().format('YYYY-MM-DD'),
-        weight: parseFloat(newWeight),
-        unit: settings.useKg ? ('kg' as const) : ('lb' as const),
+        weight: fromDisplayWeight(displayWeight, settings.useKg),
+        unit: 'lb' as const,
       };
       await addBodyWeightEntry(entry);
       setNewWeight('');
@@ -75,7 +85,9 @@ export function ProfileScreen({ navigation, route }: ProfileScreenProps) {
           <View style={styles.headerContent}>
             <View style={styles.headerLeft}>
               <View style={styles.titleContainer}>
-                <Text style={styles.headerTitle}>{isSettingsMode ? 'Settings' : 'Profile'}</Text>
+                <Text style={styles.headerTitle}>
+                  {isSettingsMode ? t('settings') : t('profile')}
+                </Text>
               </View>
             </View>
           </View>
@@ -87,14 +99,14 @@ export function ProfileScreen({ navigation, route }: ProfileScreenProps) {
             <>
               {/* Workout Stats */}
               <View style={styles.section}>
-                <Text style={styles.sectionTitle}>Workout Stats</Text>
+                <Text style={styles.sectionTitle}>{t('workoutStats')}</Text>
                 <View style={styles.statsGrid}>
                   <View style={styles.cardBlackShadow}>
                     <View style={styles.cardWhiteShadow}>
                       <View style={styles.statCard}>
                         <View style={styles.statCardInner}>
                           <Text style={styles.statValue}>{totalWorkouts}</Text>
-                          <Text style={styles.statLabel}>Total Workouts</Text>
+                          <Text style={styles.statLabel}>{t('totalWorkouts')}</Text>
                         </View>
                       </View>
                     </View>
@@ -104,7 +116,7 @@ export function ProfileScreen({ navigation, route }: ProfileScreenProps) {
                       <View style={styles.statCard}>
                         <View style={styles.statCardInner}>
                           <Text style={styles.statValue}>{thisMonth}</Text>
-                          <Text style={styles.statLabel}>This Month</Text>
+                          <Text style={styles.statLabel}>{t('thisMonth')}</Text>
                         </View>
                       </View>
                     </View>
@@ -115,7 +127,7 @@ export function ProfileScreen({ navigation, route }: ProfileScreenProps) {
               {/* Body Weight */}
               <View style={styles.section}>
                 <View style={styles.sectionHeader}>
-                  <Text style={styles.sectionTitle}>Body Weight</Text>
+                  <Text style={styles.sectionTitle}>{t('bodyWeight')}</Text>
                   <TouchableOpacity onPress={() => setShowAddWeight(true)}>
                     <IconAdd size={24} color={COLORS.primary} />
                   </TouchableOpacity>
@@ -126,7 +138,7 @@ export function ProfileScreen({ navigation, route }: ProfileScreenProps) {
                     <View style={styles.cardWhiteShadow}>
                       <View style={styles.emptyState}>
                         <View style={styles.emptyStateInner}>
-                          <Text style={styles.emptyText}>No weight entries yet</Text>
+                          <Text style={styles.emptyText}>{t('noWeightEntriesYet')}</Text>
                         </View>
                       </View>
                     </View>
@@ -145,7 +157,7 @@ export function ProfileScreen({ navigation, route }: ProfileScreenProps) {
                                   {dayjs(entry.date).format('MMM D, YYYY')}
                                 </Text>
                                 <Text style={styles.weightValue}>
-                                  {entry.weight} {entry.unit}
+                                  {formatWeight(entry.weight, settings.useKg)} {settings.useKg ? 'kg' : 'lb'}
                                 </Text>
                               </View>
                             </View>
@@ -162,9 +174,9 @@ export function ProfileScreen({ navigation, route }: ProfileScreenProps) {
               {/* Use Kilograms */}
               <View style={styles.settingsListItem}>
                 <View style={styles.settingInfo}>
-                  <Text style={styles.settingLabel}>Use Kilograms</Text>
+                  <Text style={styles.settingLabel}>{t('useKilograms')}</Text>
                   <Text style={styles.settingDescription}>
-                    {settings.useKg ? 'Weights shown in kg' : 'Weights shown in lb'}
+                    {settings.useKg ? t('weightsShownInKg') : t('weightsShownInLb')}
                   </Text>
                 </View>
                 <Switch
@@ -183,10 +195,26 @@ export function ProfileScreen({ navigation, route }: ProfileScreenProps) {
                 activeOpacity={1}
               >
                 <View style={styles.settingInfo}>
-                  <Text style={styles.settingLabel}>Default Rest Time</Text>
+                  <Text style={styles.settingLabel}>{t('defaultRestTime')}</Text>
                   <Text style={styles.settingDescription}>
-                    {Math.floor(settings.restTimerDefaultSeconds / 60)}:{(settings.restTimerDefaultSeconds % 60).toString().padStart(2, '0')} between sets
+                    {Math.floor(settings.restTimerDefaultSeconds / 60)}:{(settings.restTimerDefaultSeconds % 60).toString().padStart(2, '0')} {t('betweenSets')}
                   </Text>
+                </View>
+                <View style={styles.settingChevron}>
+                  <Text style={styles.chevronText}>›</Text>
+                </View>
+              </TouchableOpacity>
+              <View style={styles.settingsDivider} />
+
+              {/* Language */}
+              <TouchableOpacity 
+                style={styles.settingsListItem}
+                onPress={() => setShowLanguagePicker(true)}
+                activeOpacity={1}
+              >
+                <View style={styles.settingInfo}>
+                  <Text style={styles.settingLabel}>{t('language')}</Text>
+                  <Text style={styles.settingDescription}>{languageLabel}</Text>
                 </View>
                 <View style={styles.settingChevron}>
                   <Text style={styles.chevronText}>›</Text>
@@ -197,9 +225,9 @@ export function ProfileScreen({ navigation, route }: ProfileScreenProps) {
               {/* Monthly Progress Check */}
               <View style={styles.settingsListItem}>
                 <View style={styles.settingInfo}>
-                  <Text style={styles.settingLabel}>Monthly Progress Check</Text>
+                  <Text style={styles.settingLabel}>{t('monthlyProgressCheck')}</Text>
                   <Text style={styles.settingDescription}>
-                    Reminder on day {settings.monthlyProgressReminderDay} of each month
+                    {t('monthlyProgressReminder').replace('{day}', String(settings.monthlyProgressReminderDay))}
                   </Text>
                 </View>
                 <Switch
@@ -218,9 +246,9 @@ export function ProfileScreen({ navigation, route }: ProfileScreenProps) {
                 activeOpacity={1}
               >
                 <View style={styles.settingInfo}>
-                  <Text style={styles.settingLabel}>Design System</Text>
+                  <Text style={styles.settingLabel}>{t('designSystem')}</Text>
                   <Text style={styles.settingDescription}>
-                    View colors, typography, and components
+                    {t('viewDesignSystem')}
                   </Text>
                 </View>
                 <View style={styles.settingChevron}>
@@ -243,7 +271,7 @@ export function ProfileScreen({ navigation, route }: ProfileScreenProps) {
                         style: 'destructive',
                         onPress: async () => {
                           await clearAllHistory();
-                          Alert.alert('History Cleared', 'All workout history has been deleted.');
+                          Alert.alert(t('historyClearedTitle'), t('historyClearedMessage'));
                         }
                       }
                     ]
@@ -252,9 +280,11 @@ export function ProfileScreen({ navigation, route }: ProfileScreenProps) {
                 activeOpacity={1}
               >
                 <View style={styles.settingInfo}>
-                  <Text style={[styles.settingLabel, { color: COLORS.signalNegative }]}>Clear All History</Text>
+                  <Text style={[styles.settingLabel, { color: COLORS.signalNegative }]}>
+                    {t('clearAllHistory')}
+                  </Text>
                   <Text style={styles.settingDescription}>
-                    Delete all workout records and progress
+                    {t('clearAllHistoryDescription')}
                   </Text>
                 </View>
               </TouchableOpacity>
@@ -280,7 +310,7 @@ export function ProfileScreen({ navigation, route }: ProfileScreenProps) {
                             );
                           } catch (error) {
                             console.error('Failed to reset onboarding:', error);
-                            Alert.alert('Error', 'Failed to reset onboarding.');
+                            Alert.alert(t('alertErrorTitle'), t('resetOnboardingFailed'));
                           }
                         }
                       }
@@ -290,9 +320,11 @@ export function ProfileScreen({ navigation, route }: ProfileScreenProps) {
                 activeOpacity={1}
               >
                 <View style={styles.settingInfo}>
-                  <Text style={[styles.settingLabel, { color: COLORS.signalWarning }]}>Reset Onboarding</Text>
+                  <Text style={[styles.settingLabel, { color: COLORS.signalWarning }]}>
+                    {t('resetOnboarding')}
+                  </Text>
                   <Text style={styles.settingDescription}>
-                    Return to welcome screen for testing
+                    {t('resetOnboardingDescription')}
                   </Text>
                 </View>
               </TouchableOpacity>
@@ -304,10 +336,10 @@ export function ProfileScreen({ navigation, route }: ProfileScreenProps) {
         <Modal visible={showAddWeight} transparent animationType="fade">
           <View style={styles.modalOverlay}>
             <View style={styles.modal}>
-              <Text style={styles.modalTitle}>Add Weight Entry</Text>
+              <Text style={styles.modalTitle}>{t('addWeightEntry')}</Text>
               <TextInput
                 style={styles.weightInput}
-                placeholder={`Weight (${settings.useKg ? 'kg' : 'lb'})`}
+                placeholder={t('weightPlaceholder').replace('{unit}', settings.useKg ? 'kg' : 'lb')}
                 placeholderTextColor={COLORS.textMeta}
                 keyboardType="decimal-pad"
                 value={newWeight}
@@ -321,13 +353,13 @@ export function ProfileScreen({ navigation, route }: ProfileScreenProps) {
                     setNewWeight('');
                   }}
                 >
-                  <Text style={styles.modalButtonSecondaryText}>Cancel</Text>
+                  <Text style={styles.modalButtonSecondaryText}>{t('cancel')}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={[styles.modalButton, styles.modalButtonPrimary]}
                   onPress={handleAddWeight}
                 >
-                  <Text style={styles.modalButtonPrimaryText}>Add</Text>
+                  <Text style={styles.modalButtonPrimaryText}>{t('add')}</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -351,6 +383,41 @@ export function ProfileScreen({ navigation, route }: ProfileScreenProps) {
             return `${minutes}:${seconds.toString().padStart(2, '0')}`;
           }}
         />
+
+        <BottomDrawer
+          visible={showLanguagePicker}
+          onClose={() => setShowLanguagePicker(false)}
+          maxHeight="40%"
+          showHandle={false}
+          scrollable={false}
+          contentStyle={styles.languageDrawerContent}
+        >
+          <View style={styles.languageDrawerHeader}>
+            <Text style={styles.languageDrawerTitle}>{t('language')}</Text>
+          </View>
+          <View style={styles.languageOptions}>
+            {[
+              { key: 'en' as const, label: t('english') },
+              { key: 'es' as const, label: t('spanish') },
+            ].map(option => {
+              const isSelected = (settings.language || 'en') === option.key;
+              return (
+                <TouchableOpacity
+                  key={option.key}
+                  style={styles.languageOption}
+                  onPress={() => {
+                    updateSettings({ language: option.key });
+                    setShowLanguagePicker(false);
+                  }}
+                  activeOpacity={1}
+                >
+                  <Text style={styles.languageOptionText}>{option.label}</Text>
+                  {isSelected && <IconCheck size={20} color={COLORS.text} />}
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </BottomDrawer>
       </View>
     </View>
   );
@@ -591,6 +658,37 @@ const styles = StyleSheet.create({
     height: 1,
     backgroundColor: COLORS.borderDimmed,
   },
+  languageDrawerContent: {
+    paddingBottom: SPACING.xl,
+  },
+  languageDrawerHeader: {
+    paddingHorizontal: SPACING.xxl,
+    paddingVertical: SPACING.lg,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.borderDimmed,
+  },
+  languageDrawerTitle: {
+    ...TYPOGRAPHY.h3,
+    color: COLORS.text,
+  },
+  languageOptions: {
+    paddingHorizontal: SPACING.xxl,
+    paddingTop: SPACING.lg,
+    gap: SPACING.md,
+  },
+  languageOption: {
+    backgroundColor: COLORS.activeCard,
+    borderRadius: BORDER_RADIUS.md,
+    paddingVertical: SPACING.lg,
+    paddingHorizontal: SPACING.lg,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  languageOptionText: {
+    ...TYPOGRAPHY.body,
+    color: COLORS.text,
+  },
   modalOverlay: {
     flex: 1,
     backgroundColor: COLORS.overlay,
@@ -604,6 +702,11 @@ const styles = StyleSheet.create({
     padding: SPACING.xl,
     width: '100%',
     maxWidth: 400,
+  },
+  modalTitle: {
+    ...TYPOGRAPHY.h3,
+    color: COLORS.text,
+    marginBottom: SPACING.lg,
   },
   weightInput: {
     backgroundColor: COLORS.backgroundCanvas,

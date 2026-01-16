@@ -3,6 +3,7 @@ import dayjs from 'dayjs';
 import type { Cycle, Exercise, WorkoutSession, BodyWeightEntry, AppSettings, WorkoutAssignment, TrainerConversation, ExercisePR, WorkoutProgress, ExerciseProgress, HIITTimer, HIITTimerSession } from '../types';
 import * as storage from '../storage';
 import { SEED_EXERCISES } from '../constants';
+import { kgToLbs } from '../utils/weight';
 
 interface WorkoutStore {
   // State
@@ -78,6 +79,7 @@ interface WorkoutStore {
 
 const DEFAULT_SETTINGS: AppSettings = {
   useKg: false,
+  language: 'en',
   monthlyProgressReminderEnabled: true,
   monthlyProgressReminderDay: 1,
   restTimerDefaultSeconds: 120,
@@ -141,6 +143,18 @@ export const useStore = create<WorkoutStore>((set, get) => ({
         storage.loadHIITTimerSessions(),
       ]);
       
+      // Normalize body weight entries to lbs
+      let finalBodyWeightEntries = bodyWeightEntries;
+      const needsWeightUnitMigration = bodyWeightEntries.some(entry => entry.unit === 'kg');
+      if (needsWeightUnitMigration) {
+        finalBodyWeightEntries = bodyWeightEntries.map(entry =>
+          entry.unit === 'kg'
+            ? { ...entry, weight: kgToLbs(entry.weight), unit: 'lb' as const }
+            : entry
+        );
+        await storage.saveBodyWeightEntries(finalBodyWeightEntries);
+      }
+
       // Seed exercises if none exist
       let finalExercises = exercises;
       if (exercises.length === 0) {
@@ -359,7 +373,7 @@ export const useStore = create<WorkoutStore>((set, get) => ({
         cycles: finalCycles,
         exercises: finalExercises,
         sessions,
-        bodyWeightEntries,
+        bodyWeightEntries: finalBodyWeightEntries,
         workoutAssignments: finalWorkoutAssignments,
         exercisePRs,
         trainerConversations: finalConversations,

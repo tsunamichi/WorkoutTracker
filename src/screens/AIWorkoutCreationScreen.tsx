@@ -9,6 +9,7 @@ import { IconArrowLeft, IconChevronDown, IconMenu } from '../components/icons';
 import { BottomDrawer } from '../components/common/BottomDrawer';
 import dayjs from 'dayjs';
 import isoWeek from 'dayjs/plugin/isoWeek';
+import { useTranslation } from '../i18n/useTranslation';
 
 dayjs.extend(isoWeek);
 
@@ -21,19 +22,20 @@ export function AIWorkoutCreationScreen() {
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
   const { cycles, addCycle, getNextCycleNumber, assignWorkout, exercises, addExercise, updateExercise, updateCycle, clearWorkoutAssignmentsForDateRange } = useStore();
+  const { t } = useTranslation();
   const [workoutDetails, setWorkoutDetails] = useState('');
   const [showInstructionsSheet, setShowInstructionsSheet] = useState(false);
   
   const handleCopyTemplate = async () => {
     await Clipboard.setStringAsync(TEMPLATE_FORMAT);
-    Alert.alert('Copied', 'Template copied to clipboard');
+    Alert.alert(t('copiedTitle'), t('templateCopied'));
     setShowInstructionsSheet(false);
   };
 
   const handleCreateCycle = async () => {
     try {
       if (!workoutDetails.trim()) {
-        Alert.alert('Error', 'Please enter workout details');
+        Alert.alert(t('alertErrorTitle'), t('enterWorkoutDetails'));
         return;
       }
       
@@ -203,7 +205,7 @@ export function AIWorkoutCreationScreen() {
       }
       
       if (Object.keys(weeklyWorkouts).length === 0) {
-        Alert.alert('Error', 'No workouts found in the input. Please check the format.');
+        Alert.alert(t('alertErrorTitle'), t('errorNoWorkoutsFound'));
         return;
       }
       
@@ -287,7 +289,7 @@ export function AIWorkoutCreationScreen() {
       navigation.goBack();
     } catch (error) {
       console.error('Error creating cycle:', error);
-      Alert.alert('Error', 'Failed to create cycle. Please try again.');
+      Alert.alert(t('alertErrorTitle'), t('failedToCreateCycle'));
     }
   };
 
@@ -312,7 +314,7 @@ export function AIWorkoutCreationScreen() {
             
             {/* Page Title */}
             <View style={styles.pageTitleContainer}>
-              <Text style={styles.pageTitle}>Create Workout with AI</Text>
+              <Text style={styles.pageTitle}>{t('createWorkoutWithAi')}</Text>
             </View>
           </View>
 
@@ -329,14 +331,14 @@ export function AIWorkoutCreationScreen() {
               onPress={() => setShowInstructionsSheet(true)}
               activeOpacity={1}
             >
-              <Text style={styles.instructionsText}>Instructions</Text>
+              <Text style={styles.instructionsText}>{t('instructions')}</Text>
               <IconChevronDown size={16} color={COLORS.text} />
             </TouchableOpacity>
 
             {/* Text Input */}
             <TextInput
               style={styles.textInput}
-              placeholder="Paste the AI-generated workout here"
+              placeholder={t('pasteAiWorkoutPlaceholder')}
               placeholderTextColor={COLORS.textMeta}
               value={workoutDetails}
               onChangeText={setWorkoutDetails}
@@ -353,7 +355,9 @@ export function AIWorkoutCreationScreen() {
               activeOpacity={1}
               disabled={!workoutDetails.trim()}
             >
-              <Text style={[styles.createButtonText, !workoutDetails.trim() && styles.createButtonTextDisabled]}>Create Cycle</Text>
+              <Text style={[styles.createButtonText, !workoutDetails.trim() && styles.createButtonTextDisabled]}>
+                {t('createCycle')}
+              </Text>
             </TouchableOpacity>
           </View>
         </KeyboardAvoidingView>
@@ -367,8 +371,8 @@ export function AIWorkoutCreationScreen() {
           showHandle={false}
         >
           <View style={styles.sheetContent}>
-            <Text style={styles.sheetTitle}>Instructions</Text>
-            <Text style={styles.sheetSubtitle}>Ask your agent to use the following template:</Text>
+            <Text style={styles.sheetTitle}>{t('instructions')}</Text>
+            <Text style={styles.sheetSubtitle}>{t('instructionsSubtitle')}</Text>
             <View style={styles.templateBox}>
               <Text style={styles.templateText}>{TEMPLATE_FORMAT}</Text>
             </View>
@@ -377,7 +381,7 @@ export function AIWorkoutCreationScreen() {
               onPress={handleCopyTemplate}
               activeOpacity={1}
             >
-              <Text style={styles.copyButtonText}>Copy</Text>
+              <Text style={styles.copyButtonText}>{t('copy')}</Text>
             </TouchableOpacity>
           </View>
         </BottomDrawer>

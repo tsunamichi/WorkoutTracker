@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, Modal, TouchableOpacity, TextInput, ScrollView 
 import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS } from '../constants';
 import { IconCheck } from './icons';
 import dayjs from 'dayjs';
+import { useTranslation } from '../i18n/useTranslation';
 
 interface CreateCycleModalProps {
   visible: boolean;
@@ -19,6 +20,7 @@ export function CreateCycleModal({ visible, onClose, onSubmit, cycleNumber }: Cr
   const [goal, setGoal] = useState('');
   const [lengthInWeeks, setLengthInWeeks] = useState(8);
   const [workoutsPerWeek, setWorkoutsPerWeek] = useState(4);
+  const { t } = useTranslation();
   
   const handleCreate = () => {
     onSubmit({
@@ -46,8 +48,10 @@ export function CreateCycleModal({ visible, onClose, onSubmit, cycleNumber }: Cr
         <View style={styles.modal}>
           {/* Header */}
           <View style={styles.header}>
-            <Text style={styles.title}>Create Cycle {cycleNumber}</Text>
-            <Text style={styles.subtitle}>Step {step} of 3</Text>
+            <Text style={styles.title}>{t('createCycleTitle').replace('{number}', String(cycleNumber))}</Text>
+            <Text style={styles.subtitle}>
+              {t('stepOf').replace('{step}', String(step)).replace('{total}', '3')}
+            </Text>
           </View>
           
           {/* Progress Indicator */}
@@ -67,11 +71,11 @@ export function CreateCycleModal({ visible, onClose, onSubmit, cycleNumber }: Cr
             {/* Step 1: Goal */}
             {step === 1 && (
               <View style={styles.stepContainer}>
-                <Text style={styles.stepTitle}>What's your goal?</Text>
-                <Text style={styles.stepDescription}>Describe what you want to achieve</Text>
+                <Text style={styles.stepTitle}>{t('goalQuestion')}</Text>
+                <Text style={styles.stepDescription}>{t('goalDescription')}</Text>
                 <TextInput
                   style={styles.textInput}
-                  placeholder="e.g., Build strength, lose weight, gain muscle..."
+                  placeholder={t('goalPlaceholder')}
                   placeholderTextColor={COLORS.meta}
                   value={goal}
                   onChangeText={setGoal}
@@ -84,8 +88,8 @@ export function CreateCycleModal({ visible, onClose, onSubmit, cycleNumber }: Cr
             {/* Step 2: Length */}
             {step === 2 && (
               <View style={styles.stepContainer}>
-                <Text style={styles.stepTitle}>How long?</Text>
-                <Text style={styles.stepDescription}>Choose cycle duration</Text>
+                <Text style={styles.stepTitle}>{t('durationQuestion')}</Text>
+                <Text style={styles.stepDescription}>{t('durationDescription')}</Text>
                 <View style={styles.optionsGrid}>
                   {LENGTH_OPTIONS.map((weeks) => (
                     <TouchableOpacity
@@ -103,12 +107,12 @@ export function CreateCycleModal({ visible, onClose, onSubmit, cycleNumber }: Cr
                         </View>
                       )}
                       <Text style={styles.optionValue}>{weeks}</Text>
-                      <Text style={styles.optionLabel}>weeks</Text>
+                      <Text style={styles.optionLabel}>{t('weeks')}</Text>
                     </TouchableOpacity>
                   ))}
                 </View>
                 <Text style={styles.endDateText}>
-                  Ends {dayjs().add(lengthInWeeks, 'week').format('MMM D, YYYY')}
+                  {t('endDateLabel').replace('{date}', dayjs().add(lengthInWeeks, 'week').format('MMM D, YYYY'))}
                 </Text>
               </View>
             )}
@@ -116,8 +120,8 @@ export function CreateCycleModal({ visible, onClose, onSubmit, cycleNumber }: Cr
             {/* Step 3: Frequency */}
             {step === 3 && (
               <View style={styles.stepContainer}>
-                <Text style={styles.stepTitle}>Training frequency?</Text>
-                <Text style={styles.stepDescription}>Days per week</Text>
+                <Text style={styles.stepTitle}>{t('trainingFrequencyTitle')}</Text>
+                <Text style={styles.stepDescription}>{t('daysPerWeekLabel')}</Text>
                 <View style={styles.optionsGrid}>
                   {FREQUENCY_OPTIONS.map((days) => (
                     <TouchableOpacity
@@ -135,7 +139,7 @@ export function CreateCycleModal({ visible, onClose, onSubmit, cycleNumber }: Cr
                         </View>
                       )}
                       <Text style={styles.optionValue}>{days}</Text>
-                      <Text style={styles.optionLabel}>days/week</Text>
+                      <Text style={styles.optionLabel}>{t('daysPerWeekLabel')}</Text>
                     </TouchableOpacity>
                   ))}
                 </View>
@@ -151,7 +155,7 @@ export function CreateCycleModal({ visible, onClose, onSubmit, cycleNumber }: Cr
                 onPress={() => setStep(step - 1)}
                 activeOpacity={1}
               >
-                <Text style={styles.buttonSecondaryText}>Back</Text>
+                <Text style={styles.buttonSecondaryText}>{t('back')}</Text>
               </TouchableOpacity>
             )}
             <TouchableOpacity
@@ -160,7 +164,7 @@ export function CreateCycleModal({ visible, onClose, onSubmit, cycleNumber }: Cr
               activeOpacity={1}
             >
               <Text style={styles.buttonPrimaryText}>
-                {step === 3 ? 'Create Cycle' : 'Next'}
+                {step === 3 ? t('createCycle') : t('next')}
               </Text>
             </TouchableOpacity>
             {step === 1 && (
@@ -169,7 +173,7 @@ export function CreateCycleModal({ visible, onClose, onSubmit, cycleNumber }: Cr
                 onPress={handleCancel}
                 activeOpacity={1}
               >
-                <Text style={styles.buttonSecondaryText}>Cancel</Text>
+                <Text style={styles.buttonSecondaryText}>{t('cancel')}</Text>
               </TouchableOpacity>
             )}
           </View>

@@ -24,6 +24,7 @@ import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS, CARDS } from '../constants'
 import { IconArrowLeft, IconGripVertical, IconTrash, IconSwap, IconAdd, IconEdit, IconChevronDown, IconMinusLine, IconAddLine } from '../components/icons';
 import { generateId } from '../utils/manualCycleUtils';
 import { Toggle } from '../components/Toggle';
+import { formatWeight, fromDisplayWeight } from '../utils/weight';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/AppNavigator';
 import type { WorkoutTemplateExercise } from '../types';
@@ -45,7 +46,10 @@ const LIGHT_COLORS = {
 export default function WorkoutEditScreen({ navigation, route }: Props) {
   const insets = useSafeAreaInsets();
   const { cycleId, workoutTemplateId, date } = route.params;
-  const { cycles, exercises, updateCycle, updateExercise } = useStore();
+  const { cycles, exercises, updateCycle, updateExercise, settings } = useStore();
+  const useKg = settings.useKg;
+  const weightUnit = useKg ? 'kg' : 'lb';
+  const weightStep = useKg ? 2.5 : 5;
   
   const cycle = cycles.find(c => c.id === cycleId);
   const workout = cycle?.workoutTemplates.find(w => w.id === workoutTemplateId);
@@ -53,7 +57,7 @@ export default function WorkoutEditScreen({ navigation, route }: Props) {
   if (!workout) {
     return (
       <View style={styles.container}>
-        <Text style={styles.errorText}>Workout not found</Text>
+        <Text style={styles.errorText}>{t('workoutNotFound')}</Text>
       </View>
     );
   }
@@ -193,11 +197,11 @@ export default function WorkoutEditScreen({ navigation, route }: Props) {
   const handleBack = () => {
     if (hasChanges) {
       Alert.alert(
-        'Unsaved Changes',
-        'You have unsaved changes. Do you want to discard them?',
+        t('unsavedChangesTitle'),
+        t('unsavedChangesMessage'),
         [
-          { text: 'Cancel', style: 'cancel' },
-          { text: 'Discard', style: 'destructive', onPress: () => navigation.goBack() },
+          { text: t('cancel'), style: 'cancel' },
+          { text: t('discard'), style: 'destructive', onPress: () => navigation.goBack() },
         ]
       );
     } else {
@@ -257,19 +261,19 @@ export default function WorkoutEditScreen({ navigation, route }: Props) {
       navigation.goBack();
     } catch (error) {
       console.error('Error saving workout changes:', error);
-      Alert.alert('Error', 'Failed to save changes. Please try again.');
+      Alert.alert(t('alertErrorTitle'), t('failedToSaveChanges'));
       setShowApplyModal(false);
     }
   };
   
   const handleDeleteExercise = (exerciseId: string) => {
     Alert.alert(
-      'Delete Exercise',
-      'Are you sure you want to remove this exercise?',
+      t('deleteExerciseTitle'),
+      t('deleteExerciseMessage'),
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: t('cancel'), style: 'cancel' },
         {
-          text: 'Delete',
+          text: t('delete'),
           style: 'destructive',
           onPress: () => {
             setWorkoutExercises(prev => prev.filter(ex => ex.id !== exerciseId));
@@ -284,7 +288,11 @@ export default function WorkoutEditScreen({ navigation, route }: Props) {
     const exercise = workoutExercises.find(e => e.id === exerciseId);
     if (exercise) {
       setSwappingExerciseId(exerciseId);
-      setSwapWeight(exercise.targetWeight?.toString() || '');
+      setSwapWeight(
+        exercise.targetWeight !== undefined
+          ? formatWeight(exercise.targetWeight, useKg)
+          : ''
+      );
       setSwapReps(exercise.targetRepsMin?.toString() || '');
       setSwapSets(exercise.targetSets?.toString() || '');
       const exerciseData = exercises.find(e => e.id === exercise.exerciseId);
@@ -299,7 +307,8 @@ export default function WorkoutEditScreen({ navigation, route }: Props) {
     if (selectedNewExerciseId && !swappingExerciseId) {
       const reps = swapReps ? parseInt(swapReps, 10) : 8;
       const sets = swapSets ? parseInt(swapSets, 10) : 3;
-      const weight = swapWeight ? parseInt(swapWeight, 10) : 0;
+      const displayWeight = swapWeight ? parseFloat(swapWeight) : 0;
+      const weight = fromDisplayWeight(displayWeight, useKg);
       updateExercise(selectedNewExerciseId, { measurementType: isTimeBasedSwap ? 'time' as any : 'reps' as any });
       const newExercise: WorkoutTemplateExercise = {
         id: generateId(),
@@ -323,10 +332,12 @@ export default function WorkoutEditScreen({ navigation, route }: Props) {
       setWorkoutExercises(prev => prev.map(ex => {
         if (ex.id === swappingExerciseId) {
           const reps = swapReps ? parseInt(swapReps, 10) : ex.targetRepsMin;
+          const displayWeight = swapWeight ? parseFloat(swapWeight) : 0;
+          const weight = fromDisplayWeight(displayWeight, useKg);
           return {
             ...ex,
             exerciseId: selectedNewExerciseId,
-            targetWeight: swapWeight ? parseInt(swapWeight, 10) : ex.targetWeight,
+            targetWeight: swapWeight ? weight : ex.targetWeight,
             targetRepsMin: reps,
             targetRepsMax: reps, // Set max to same value as min
             targetSets: swapSets ? parseInt(swapSets, 10) : ex.targetSets,
@@ -473,7 +484,7 @@ export default function WorkoutEditScreen({ navigation, route }: Props) {
                 onChangeText={setWorkoutName}
                 onBlur={() => setIsEditingName(false)}
                 autoFocus
-                placeholder="Workout name"
+                placeholder={t('workoutNamePlaceholder')}
                 placeholderTextColor={COLORS.textMeta}
               />
             ) : (
@@ -496,7 +507,7 @@ export default function WorkoutEditScreen({ navigation, route }: Props) {
         >
           {/* Exercises Section */}
           <View style={styles.exercisesSectionHeader}>
-            <Text style={styles.sectionLabel}>List of Exercises</Text>
+            <Text style={styles.sectionLabel}>{t('listOfExercises')}</Text>
           </View>
           {workoutExercises.map((exercise, index) => {
             const exerciseData = exercises.find(e => e.id === exercise.exerciseId);
@@ -659,7 +670,7 @@ export default function WorkoutEditScreen({ navigation, route }: Props) {
             activeOpacity={1}
           >
             <IconAdd size={20} color={COLORS.text} />
-            <Text style={styles.addExerciseCardText}>Add exercise</Text>
+            <Text style={styles.addExerciseCardText}>{t('addExercise')}</Text>
           </TouchableOpacity>
         </ScrollView>
         
@@ -732,7 +743,7 @@ export default function WorkoutEditScreen({ navigation, route }: Props) {
                   style={styles.swapSearchInput}
                   value={searchQuery}
                   onChangeText={setSearchQuery}
-                  placeholder="Search exercises..."
+                  placeholder={t('searchExercisesPlaceholder')}
                   placeholderTextColor={COLORS.textMeta}
                 />
                 {searchQuery.length > 0 && (
@@ -844,13 +855,13 @@ export default function WorkoutEditScreen({ navigation, route }: Props) {
                   <View style={styles.swapAdjustControls}>
                     <View style={styles.swapAdjustValue}>
                       <Text style={styles.swapAdjustValueText}>{swapWeight || '0'}</Text>
-                      <Text style={styles.swapAdjustUnit}>lb</Text>
+                      <Text style={styles.swapAdjustUnit}>{weightUnit}</Text>
                     </View>
                     <View style={styles.swapAdjustButtons}>
                       <TouchableOpacity
                         onPress={() => {
-                          const current = parseInt(swapWeight || '0', 10) || 0;
-                          const next = Math.max(0, current - 5);
+                          const current = parseFloat(swapWeight || '0') || 0;
+                          const next = Math.max(0, current - weightStep);
                           setSwapWeight(next.toString());
                         }}
                         activeOpacity={1}
@@ -864,8 +875,8 @@ export default function WorkoutEditScreen({ navigation, route }: Props) {
                       </TouchableOpacity>
                       <TouchableOpacity
                         onPress={() => {
-                          const current = parseInt(swapWeight || '0', 10) || 0;
-                          const next = current + 5;
+                          const current = parseFloat(swapWeight || '0') || 0;
+                          const next = current + weightStep;
                           setSwapWeight(next.toString());
                         }}
                         activeOpacity={1}
@@ -933,7 +944,7 @@ export default function WorkoutEditScreen({ navigation, route }: Props) {
                   <View style={styles.swapAdjustControls}>
                     <View style={styles.swapAdjustValue}>
                       <Text style={styles.swapAdjustValueText}>{swapSets || '3'}</Text>
-                      <Text style={styles.swapAdjustUnit}>sets</Text>
+                      <Text style={styles.swapAdjustUnit}>{t('setsUnit')}</Text>
                     </View>
                     <View style={styles.swapAdjustButtons}>
                       <TouchableOpacity
@@ -999,7 +1010,7 @@ export default function WorkoutEditScreen({ navigation, route }: Props) {
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Apply Changes</Text>
+            <Text style={styles.modalTitle}>{t('applyChangesTitle')}</Text>
             <Text style={styles.modalMessage}>
               Do you want to apply these changes to this workout only or all future workouts in this cycle?
             </Text>
@@ -1010,7 +1021,7 @@ export default function WorkoutEditScreen({ navigation, route }: Props) {
                 onPress={() => handleApplyChanges(false)}
                 activeOpacity={1}
               >
-                <Text style={styles.modalButtonSecondaryText}>This Workout Only</Text>
+                <Text style={styles.modalButtonSecondaryText}>{t('thisWorkoutOnly')}</Text>
               </TouchableOpacity>
               
               <TouchableOpacity
@@ -1018,7 +1029,7 @@ export default function WorkoutEditScreen({ navigation, route }: Props) {
                 onPress={() => handleApplyChanges(true)}
                 activeOpacity={1}
               >
-                <Text style={styles.modalButtonPrimaryText}>All Future Workouts</Text>
+                <Text style={styles.modalButtonPrimaryText}>{t('allFutureWorkouts')}</Text>
               </TouchableOpacity>
             </View>
             
@@ -1027,7 +1038,7 @@ export default function WorkoutEditScreen({ navigation, route }: Props) {
               onPress={() => setShowApplyModal(false)}
               activeOpacity={1}
             >
-              <Text style={styles.modalCancelText}>Cancel</Text>
+              <Text style={styles.modalCancelText}>{t('cancel')}</Text>
             </TouchableOpacity>
           </View>
         </View>

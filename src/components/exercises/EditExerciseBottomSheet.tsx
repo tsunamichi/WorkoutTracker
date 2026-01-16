@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView } from 
 // import BottomSheet, { BottomSheetBackdrop } from '@gorhom/bottom-sheet';
 import { Exercise } from '../../types/workout';
 import { COLORS } from '../../constants';
+import { useTranslation } from '../../i18n/useTranslation';
 
 interface EditExerciseBottomSheetProps {
   isVisible: boolean;
@@ -21,6 +22,7 @@ export function EditExerciseBottomSheet({
   onSave,
   onDelete,
 }: EditExerciseBottomSheetProps) {
+  const { t } = useTranslation();
   const bottomSheetRef = useRef<BottomSheet>(null);
   
   const [name, setName] = useState('');
@@ -94,20 +96,20 @@ export function EditExerciseBottomSheet({
       keyboardBlurBehavior="restore"
     >
       <ScrollView style={styles.contentContainer} keyboardShouldPersistTaps="handled">
-        <Text style={styles.title}>Edit Exercise</Text>
+        <Text style={styles.title}>{t('editExerciseTitle')}</Text>
 
         <View style={styles.field}>
-          <Text style={styles.label}>Exercise Name</Text>
+          <Text style={styles.label}>{t('exerciseNameLabel')}</Text>
           <TextInput
             style={styles.textInput}
             value={name}
             onChangeText={setName}
-            placeholder="Exercise name"
+            placeholder={t('exerciseNameLabel')}
           />
         </View>
 
         <View style={styles.field}>
-          <Text style={styles.label}>Sets</Text>
+          <Text style={styles.label}>{t('setsLabel')}</Text>
           <View style={styles.stepper}>
             <TouchableOpacity
               style={styles.stepperButton}
@@ -126,7 +128,7 @@ export function EditExerciseBottomSheet({
         </View>
 
         <View style={styles.field}>
-          <Text style={styles.label}>Reps</Text>
+          <Text style={styles.label}>{t('repsLabel')}</Text>
           <View style={styles.presetContainer}>
             {REPS_PRESETS.map((preset) => (
               <TouchableOpacity
@@ -152,12 +154,12 @@ export function EditExerciseBottomSheet({
             style={[styles.textInput, styles.customRepsInput]}
             value={reps}
             onChangeText={setReps}
-            placeholder="Custom reps"
+            placeholder={t('repsLabel')}
           />
         </View>
 
         <View style={styles.field}>
-          <Text style={styles.label}>Rest (seconds)</Text>
+          <Text style={styles.label}>{t('restSecondsLabel')}</Text>
           <View style={styles.stepper}>
             <TouchableOpacity
               style={styles.stepperButton}
@@ -176,12 +178,12 @@ export function EditExerciseBottomSheet({
         </View>
 
         <View style={styles.field}>
-          <Text style={styles.label}>Notes (optional)</Text>
+          <Text style={styles.label}>{t('notesOptional')}</Text>
           <TextInput
             style={[styles.textInput, styles.notesInput]}
             value={notes}
             onChangeText={setNotes}
-            placeholder="Add notes..."
+            placeholder={t('notesOptional')}
             multiline
             numberOfLines={3}
           />
@@ -189,15 +191,15 @@ export function EditExerciseBottomSheet({
 
         <View style={styles.actions}>
           <TouchableOpacity style={styles.deleteButton} onPress={handleDelete}>
-            <Text style={styles.deleteButtonText}>Delete</Text>
+            <Text style={styles.deleteButtonText}>{t('delete')}</Text>
           </TouchableOpacity>
 
           <View style={styles.rightActions}>
             <TouchableOpacity style={styles.cancelButton} onPress={onClose}>
-              <Text style={styles.cancelButtonText}>Cancel</Text>
+              <Text style={styles.cancelButtonText}>{t('cancel')}</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.saveButton} onPress={handleSave}>
-              <Text style={styles.saveButtonText}>Save</Text>
+              <Text style={styles.saveButtonText}>{t('save')}</Text>
             </TouchableOpacity>
           </View>
         </View>

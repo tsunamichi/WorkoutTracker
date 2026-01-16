@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, Modal, TextInput, TouchableOpacity, ScrollView,
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { WorkoutTemplate, WorkoutType } from '../types';
 import { COLORS, SPACING } from '../constants';
+import { useTranslation } from '../i18n/useTranslation';
 
 interface WorkoutTemplateEditSheetProps {
   visible: boolean;
@@ -21,6 +22,7 @@ export function WorkoutTemplateEditSheet({
   onDelete,
   onEditFull 
 }: WorkoutTemplateEditSheetProps) {
+  const { t } = useTranslation();
   const [name, setName] = useState('');
   const [workoutType, setWorkoutType] = useState<WorkoutType>('Other');
   const [dayOfWeek, setDayOfWeek] = useState<number | undefined>();
@@ -38,7 +40,7 @@ export function WorkoutTemplateEditSheet({
   
   const handleSave = () => {
     if (!name.trim()) {
-      Alert.alert('Error', 'Please enter a workout name');
+      Alert.alert(t('alertErrorTitle'), t('workoutNameRequired'));
       return;
     }
     
@@ -52,12 +54,12 @@ export function WorkoutTemplateEditSheet({
   
   const handleDelete = () => {
     Alert.alert(
-      'Delete Workout',
-      'Are you sure you want to delete this workout?',
+      t('deleteWorkout'),
+      t('deleteWorkoutMessage'),
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: t('cancel'), style: 'cancel' },
         {
-          text: 'Delete',
+          text: t('delete'),
           style: 'destructive',
           onPress: () => {
             onDelete();
@@ -83,21 +85,21 @@ export function WorkoutTemplateEditSheet({
         {/* Header */}
         <View style={styles.header}>
           <TouchableOpacity onPress={onClose} activeOpacity={1}>
-            <Text style={styles.cancelButton}>Cancel</Text>
+            <Text style={styles.cancelButton}>{t('cancel')}</Text>
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Edit Workout</Text>
+          <Text style={styles.headerTitle}>{t('editWorkoutTitle')}</Text>
           <TouchableOpacity onPress={handleSave} activeOpacity={1}>
-            <Text style={styles.saveButton}>Save</Text>
+            <Text style={styles.saveButton}>{t('save')}</Text>
           </TouchableOpacity>
         </View>
         
         <ScrollView contentContainerStyle={styles.scrollContent}>
           {/* Name */}
           <View style={styles.section}>
-            <Text style={styles.label}>Workout Name</Text>
+            <Text style={styles.label}>{t('workoutNameLabel')}</Text>
             <TextInput
               style={styles.input}
-              placeholder="e.g., Push A"
+              placeholder={t('workoutNamePlaceholder')}
               value={name}
               onChangeText={setName}
               autoFocus={false}
@@ -106,7 +108,7 @@ export function WorkoutTemplateEditSheet({
           
           {/* Type */}
           <View style={styles.section}>
-            <Text style={styles.label}>Type</Text>
+            <Text style={styles.label}>{t('typeLabel')}</Text>
             <View style={styles.typeGrid}>
               {workoutTypes.map(type => (
                 <TouchableOpacity
@@ -131,7 +133,7 @@ export function WorkoutTemplateEditSheet({
           
           {/* Day of Week */}
           <View style={styles.section}>
-            <Text style={styles.label}>Assign to Day (optional)</Text>
+            <Text style={styles.label}>{t('assignToDayOptional')}</Text>
             <View style={styles.dayGrid}>
               {dayNames.map((day, idx) => (
                 <TouchableOpacity
@@ -156,13 +158,14 @@ export function WorkoutTemplateEditSheet({
           
           {/* Exercise Info */}
           <View style={styles.section}>
-            <Text style={styles.label}>Exercises</Text>
+            <Text style={styles.label}>{t('exercises')}</Text>
             <View style={styles.exerciseInfo}>
               <Text style={styles.exerciseCount}>
-                {template.exercises.length} exercise{template.exercises.length !== 1 ? 's' : ''}
+                {template.exercises.length}{' '}
+                {template.exercises.length === 1 ? t('exercise') : t('exercises')}
               </Text>
               <TouchableOpacity onPress={onEditFull} activeOpacity={1}>
-                <Text style={styles.editExercisesButton}>Edit Exercises →</Text>
+                <Text style={styles.editExercisesButton}>{t('editExercisesCta')}</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -174,7 +177,7 @@ export function WorkoutTemplateEditSheet({
               onPress={handleDelete}
               activeOpacity={1}
             >
-              <Text style={styles.deleteButtonText}>Delete Workout</Text>
+              <Text style={styles.deleteButtonText}>{t('deleteWorkout')}</Text>
             </TouchableOpacity>
           </View>
         </ScrollView>

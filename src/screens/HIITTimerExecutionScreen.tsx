@@ -13,11 +13,12 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Audio } from 'expo-av';
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
-import Svg, { Circle, Path } from 'react-native-svg';
+import Svg, { Circle, Path, Polygon, Rect } from 'react-native-svg';
 import dayjs from 'dayjs';
 import { useStore } from '../store';
 import { COLORS, SPACING, TYPOGRAPHY, GRADIENTS, BUTTONS, BORDER_RADIUS } from '../constants';
 import { IconArrowLeft, IconMenu, IconEdit, IconTrash } from '../components/icons';
+import { useTranslation } from '../i18n/useTranslation';
 import { ActionSheet } from '../components/common/ActionSheet';
 import { TimerControls } from '../components/timer/TimerControls';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -44,6 +45,7 @@ const PHASE_COLORS = {
   restRed: COLORS.signalNegative,
   complete: COLORS.signalPositive,
 };
+const COUNTDOWN_SHAPES = ['circle', 'pentagon', 'triangle', 'square'] as const;
 
 const MIN_SIZE = 180;
 const SCREEN_WIDTH = Dimensions.get('window').width;
@@ -63,6 +65,7 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
   const insets = useSafeAreaInsets();
   const { timerId } = route.params;
   const { hiitTimers, deleteHIITTimer, addHIITTimerSession, setActiveHIITTimer } = useStore();
+  const { t } = useTranslation();
   
   // Get timer reactively - will update when hiitTimers changes
   const timer = React.useMemo(() => {
@@ -1204,14 +1207,14 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
   };
 
   const getDisplayText = () => {
-    if (showGo) return 'Go!';
+    if (showGo) return t('go');
     if (currentPhase === 'countdown') return secondsRemaining.toString();
-    if (currentPhase === 'complete') return 'Workout complete';
+    if (currentPhase === 'complete') return t('workoutComplete');
     return formatTime(secondsRemaining);
   };
 
   const getSubtitleText = () => {
-    if (currentPhase === 'complete') return 'Nice work';
+    if (currentPhase === 'complete') return t('niceWork');
     return null;
   };
 
@@ -1245,6 +1248,12 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
       outputRange: [1 / minScale, 1], // Inverse of the circle scale
     });
   }, [textSizeAnim]);
+
+  const countdownShapeIndex = Math.max(
+    0,
+    Math.min(COUNTDOWN_SHAPES.length - 1, 5 - secondsRemaining)
+  );
+  const countdownShape = COUNTDOWN_SHAPES[countdownShapeIndex];
 
   // Get background color based on current phase
   const currentBackgroundColor = useMemo(() => {
@@ -1309,9 +1318,9 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
             <View style={styles.headerInfoLeft}>
             <Text style={styles.pageTitle}>{timer.name}</Text>
               <Text style={styles.progressInfo}>
-                <Text style={styles.progressLabel}>Set </Text>
+                <Text style={styles.progressLabel}>{t('setLabel')} </Text>
                 <Text style={styles.progressValue}>{currentSet}/{timer.sets}</Text>
-                <Text style={styles.progressLabel}>     Round </Text>
+                <Text style={styles.progressLabel}>     {t('roundLabel')} </Text>
                 <Text style={styles.progressValue}>{currentRound}/{timer.rounds}</Text>
               </Text>
               </View>
@@ -1357,13 +1366,13 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
           items={[
             { 
               icon: <IconTrash size={24} color={COLORS.signalNegative} />,
-              label: 'Delete', 
+              label: t('delete'), 
               onPress: handleDelete, 
               destructive: true 
             },
             { 
               icon: <IconEdit size={24} color={LIGHT_COLORS.text} />,
-              label: 'Edit', 
+              label: t('edit'), 
               onPress: handleEdit
             },
           ]}
@@ -1405,10 +1414,31 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
                 width: Animated.multiply(animatedSize, breathingAnim), // Animate width with breathing
                 height: Animated.multiply(animatedSize, breathingAnim), // Animate height with breathing
                 borderRadius: Animated.multiply(scaledBorderRadius, breathingAnim), // Proportional border radius with breathing
-                backgroundColor: currentBackgroundColor,
+                backgroundColor: currentPhase === 'countdown' ? 'transparent' : currentBackgroundColor,
               },
             ]}
           >
+            {currentPhase === 'countdown' && !showGo && (
+              <View style={styles.countdownShape}>
+                <Svg width="100%" height="100%" viewBox="0 0 100 100">
+                  {countdownShape === 'circle' && (
+                    <Circle cx="50" cy="50" r="50" fill={PHASE_COLORS.countdown} />
+                  )}
+                  {countdownShape === 'pentagon' && (
+                    <Polygon
+                      points="50,5 95,38 77,95 23,95 5,38"
+                      fill={PHASE_COLORS.countdown}
+                    />
+                  )}
+                  {countdownShape === 'triangle' && (
+                    <Polygon points="50,5 95,95 5,95" fill={PHASE_COLORS.countdown} />
+                  )}
+                  {countdownShape === 'square' && (
+                    <Rect x="5" y="5" width="90" height="90" rx="8" ry="8" fill={PHASE_COLORS.countdown} />
+                  )}
+                </Svg>
+              </View>
+            )}
             {/* Content container for text scaling */}
             <View
               style={{
@@ -1563,6 +1593,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     borderCurve: 'continuous',
+  },
+  countdownShape: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   timerText: {
     fontSize: 56,

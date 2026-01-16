@@ -23,6 +23,7 @@ import {
 import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS } from '../../constants';
 import { IconArrowLeft } from '../../components/icons';
 import { Weekday } from '../../types/manualCycle';
+import { useTranslation } from '../../i18n/useTranslation';
 
 interface CreateCycleReviewProps {
   navigation: any;
@@ -30,6 +31,7 @@ interface CreateCycleReviewProps {
 
 export function CreateCycleReview({ navigation }: CreateCycleReviewProps) {
   const insets = useSafeAreaInsets();
+  const { t } = useTranslation();
   const {
     weeks,
     frequencyDays,
@@ -60,7 +62,7 @@ export function CreateCycleReview({ navigation }: CreateCycleReviewProps) {
 
   const handleCreateCycle = async () => {
     if (!startDate) {
-      Alert.alert('Start Date Required', 'Please select a start date for your cycle.');
+      Alert.alert(t('startDateRequiredTitle'), t('startDateRequiredMessage'));
       return;
     }
 
@@ -72,7 +74,7 @@ export function CreateCycleReview({ navigation }: CreateCycleReviewProps) {
     // Create the cycle
     const newCycle = {
       id: cycleId,
-      name: `Cycle ${cycleNumber}`,
+      name: t('cycleNumber').replace('{number}', String(cycleNumber)),
       startDate,
       endDate,
       status: hasActiveCycle ? 'scheduled' : 'active',
@@ -175,12 +177,12 @@ export function CreateCycleReview({ navigation }: CreateCycleReviewProps) {
           <TouchableOpacity
             onPress={() => {
               Alert.alert(
-                'Exit setup?',
-                "Your progress won't be saved.",
+                t('exitSetupTitle'),
+                t('exitSetupMessage'),
                 [
-                  { text: 'Cancel', style: 'cancel' },
+                  { text: t('cancel'), style: 'cancel' },
                   {
-                    text: 'Exit',
+                    text: t('exit'),
                     style: 'destructive',
                     onPress: () => {
                       resetDraft();
@@ -196,7 +198,7 @@ export function CreateCycleReview({ navigation }: CreateCycleReviewProps) {
             <IconArrowLeft size={24} color={COLORS.text} />
           </TouchableOpacity>
           <View style={styles.headerTitleRow}>
-            <Text style={styles.headerTitle}>Review cycle</Text>
+            <Text style={styles.headerTitle}>{t('reviewCycle')}</Text>
             {(() => {
               const progress = 4 / 4;
               return (
@@ -224,22 +226,24 @@ export function CreateCycleReview({ navigation }: CreateCycleReviewProps) {
         <ScrollView style={styles.content} contentContainerStyle={styles.scrollContent} bounces={false}>
           {/* Summary Card */}
           <View style={styles.summaryCard}>
-            <Text style={styles.summaryTitle}>Cycle Summary</Text>
+            <Text style={styles.summaryTitle}>{t('cycleSummary')}</Text>
             <View style={styles.summaryRow}>
-              <Text style={styles.summaryLabel}>Training days</Text>
+              <Text style={styles.summaryLabel}>{t('trainingDays')}</Text>
               <Text style={styles.summaryValue}>
                 {sortedDays.map((d) => formatWeekdayFull(d).slice(0, 3)).join(', ')}
               </Text>
             </View>
             <View style={styles.summaryRow}>
-              <Text style={styles.summaryLabel}>Cycle length</Text>
-              <Text style={styles.summaryValue}>{weeks} weeks</Text>
+              <Text style={styles.summaryLabel}>{t('cycleLength')}</Text>
+              <Text style={styles.summaryValue}>
+                {weeks} {t('weeks')}
+              </Text>
             </View>
           </View>
 
           {/* Start Date Picker */}
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Start date</Text>
+            <Text style={styles.sectionTitle}>{t('startDate')}</Text>
             <TouchableOpacity
               style={styles.datePickerButton}
               onPress={() => setShowDatePicker(true)}
@@ -267,7 +271,7 @@ export function CreateCycleReview({ navigation }: CreateCycleReviewProps) {
 
           {/* Workouts */}
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Workouts</Text>
+            <Text style={styles.sectionTitle}>{t('workoutsLabel')}</Text>
             {sortedDays.map((day) => {
               const workout = workouts.find((w) => w.weekday === day);
               const exerciseCount = workout?.exercises.length || 0;
@@ -282,7 +286,7 @@ export function CreateCycleReview({ navigation }: CreateCycleReviewProps) {
                       )}
                     </View>
                     <TouchableOpacity onPress={() => handleEditDay(day)} activeOpacity={1}>
-                      <Text style={styles.editLink}>Edit</Text>
+                      <Text style={styles.editLink}>{t('editLabel')}</Text>
                     </TouchableOpacity>
                   </View>
                   <Text style={styles.workoutExerciseCount}>
@@ -314,7 +318,7 @@ export function CreateCycleReview({ navigation }: CreateCycleReviewProps) {
               onPress={() => navigation.goBack()}
               activeOpacity={1}
             >
-              <Text style={styles.backFooterButtonText}>Back</Text>
+              <Text style={styles.backFooterButtonText}>{t('back')}</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={[styles.createButton, !canCreate && styles.createButtonDisabled]}

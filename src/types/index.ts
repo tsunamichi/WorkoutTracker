@@ -142,6 +142,7 @@ export interface ProgressPhoto {
 
 export interface AppSettings {
   useKg: boolean;
+  language?: 'en' | 'es';
   monthlyProgressReminderEnabled: boolean;
   monthlyProgressReminderDay: number;
   restTimerDefaultSeconds: number;

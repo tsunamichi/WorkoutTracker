@@ -6,6 +6,7 @@ import { useCreateCycleDraftStore } from '../../store/useCreateCycleDraftStore';
 import { formatWeekdayFull } from '../../utils/manualCycleUtils';
 import { COLORS, SPACING, TYPOGRAPHY, CARDS } from '../../constants';
 import { IconArrowLeft, IconCheck } from '../../components/icons';
+import { useTranslation } from '../../i18n/useTranslation';
 
 interface CreateCycleDaysOverviewProps {
   navigation: any;
@@ -13,6 +14,7 @@ interface CreateCycleDaysOverviewProps {
 
 export function CreateCycleDaysOverview({ navigation }: CreateCycleDaysOverviewProps) {
   const insets = useSafeAreaInsets();
+  const { t } = useTranslation();
   const {
     selectedDaysSorted,
     workouts,
@@ -48,12 +50,12 @@ export function CreateCycleDaysOverview({ navigation }: CreateCycleDaysOverviewP
           <TouchableOpacity
             onPress={() => {
               Alert.alert(
-                'Exit setup?',
-                "Your progress won't be saved.",
+                t('exitSetupTitle'),
+                t('exitSetupMessage'),
                 [
-                  { text: 'Cancel', style: 'cancel' },
+                  { text: t('cancel'), style: 'cancel' },
                   {
-                    text: 'Exit',
+                    text: t('exit'),
                     style: 'destructive',
                     onPress: () => {
                       resetDraft();
@@ -69,7 +71,7 @@ export function CreateCycleDaysOverview({ navigation }: CreateCycleDaysOverviewP
             <IconArrowLeft size={24} color={COLORS.text} />
           </TouchableOpacity>
           <View style={styles.headerTitleRow}>
-            <Text style={styles.headerTitle}>Build your week</Text>
+            <Text style={styles.headerTitle}>{t('buildYourWeek')}</Text>
             {(() => {
               const progress = 2 / 4;
               return (
@@ -129,7 +131,7 @@ export function CreateCycleDaysOverview({ navigation }: CreateCycleDaysOverviewP
                   {!isComplete && (
                     <View style={styles.dayCardFooter} pointerEvents="none">
                       <View style={styles.dayActionBar}>
-                        <Text style={styles.dayActionText}>Add exercises</Text>
+                        <Text style={styles.dayActionText}>{t('addExercises')}</Text>
                       </View>
                     </View>
                   )}
@@ -147,7 +149,7 @@ export function CreateCycleDaysOverview({ navigation }: CreateCycleDaysOverviewP
               onPress={handleBack}
               activeOpacity={1}
             >
-              <Text style={styles.backFooterButtonText}>Back</Text>
+              <Text style={styles.backFooterButtonText}>{t('back')}</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={[styles.continueButton, !canContinue && styles.continueButtonDisabled]}

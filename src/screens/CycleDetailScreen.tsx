@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, Share } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useStore } from '../store';
+import { formatWeight } from '../utils/weight';
 import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS, CARDS } from '../constants';
 import { IconArrowLeft, IconMenu, IconShare, IconTrash } from '../components/icons';
 import { ActionSheet } from '../components/common/ActionSheet';
@@ -9,6 +10,7 @@ import { BottomDrawer } from '../components/common/BottomDrawer';
 import type { WorkoutTemplate } from '../types';
 import dayjs from 'dayjs';
 import isoWeek from 'dayjs/plugin/isoWeek';
+import { useTranslation } from '../i18n/useTranslation';
 
 dayjs.extend(isoWeek);
 
@@ -37,7 +39,10 @@ const LIGHT_COLORS = {
 export function CycleDetailScreen({ route, navigation }: CycleDetailScreenProps) {
   const insets = useSafeAreaInsets();
   const { cycleId } = route.params;
-  const { cycles, exercises, deleteCycle, getExerciseProgress, workoutAssignments } = useStore();
+  const { cycles, exercises, deleteCycle, getExerciseProgress, workoutAssignments, settings } = useStore();
+  const { t } = useTranslation();
+  const useKg = settings.useKg;
+  const weightUnit = useKg ? 'kg' : 'lb';
   const [selectedWorkout, setSelectedWorkout] = useState<WorkoutTemplate | null>(null);
   const [selectedWeekNumber, setSelectedWeekNumber] = useState<number>(1);
   const [menuVisible, setMenuVisible] = useState(false);
@@ -49,15 +54,15 @@ export function CycleDetailScreen({ route, navigation }: CycleDetailScreenProps)
   
   const handleDeleteCycle = () => {
     Alert.alert(
-      'Delete Cycle',
-      `Are you sure you want to delete Cycle ${cycle?.cycleNumber}? This action cannot be undone.`,
+      t('deleteCycleTitle'),
+      t('deleteCycleMessage').replace('{number}', String(cycle?.cycleNumber || '')),
       [
         {
-          text: 'Cancel',
+          text: t('cancel'),
           style: 'cancel',
         },
         {
-          text: 'Delete',
+          text: t('delete'),
           style: 'destructive',
           onPress: async () => {
             await deleteCycle(cycleId);
@@ -107,7 +112,7 @@ export function CycleDetailScreen({ route, navigation }: CycleDetailScreenProps)
         for (const exercise of workout.exercises) {
           const exerciseData = exercises.find(e => e.id === exercise.exerciseId);
           exportText += `    - ${exerciseData?.name || 'Unknown Exercise'}\n`;
-          exportText += `      Target: ${exercise.targetSets} sets × ${exercise.targetReps} reps\n`;
+          exportText += `      Target: ${exercise.targetSets} sets × ${exercise.targetReps} ${t('reps')}\n`;
           
           // Check if there's saved progress for any assignment
           let foundProgress = false;
@@ -119,7 +124,7 @@ export function CycleDetailScreen({ route, navigation }: CycleDetailScreenProps)
               foundProgress = true;
               exportText += `      Completed (${dayjs(assignment.date).format('MMM D')}):\n`;
               progress.sets.forEach((set, idx) => {
-                exportText += `        Set ${idx + 1}: ${set.weight}lbs × ${set.reps} reps${set.completed ? ' ✓' : ''}\n`;
+                exportText += `        Set ${idx + 1}: ${formatWeight(set.weight, useKg)} ${weightUnit} × ${set.reps} ${t('reps')}${set.completed ? ' ✓' : ''}\n`;
               });
             }
           }
@@ -140,10 +145,10 @@ export function CycleDetailScreen({ route, navigation }: CycleDetailScreenProps)
     try {
       await Share.share({
         message: exportText,
-        title: `Cycle ${cycle.cycleNumber} Data`
+        title: t('cycleDataTitle').replace('{number}', String(cycle.cycleNumber))
       });
     } catch (error) {
-      Alert.alert('Error', 'Failed to export data');
+      Alert.alert(t('alertErrorTitle'), t('failedToExportData'));
     }
   };
   
@@ -151,7 +156,7 @@ export function CycleDetailScreen({ route, navigation }: CycleDetailScreenProps)
     return (
       <View style={styles.gradient}>
         <View style={styles.container}>
-          <Text style={styles.errorText}>Cycle not found</Text>
+          <Text style={styles.errorText}>{t('cycleNotFound')}</Text>
         </View>
       </View>
     );
@@ -175,7 +180,9 @@ export function CycleDetailScreen({ route, navigation }: CycleDetailScreenProps)
           
           {/* Page Title */}
           <View style={styles.pageTitleContainer}>
-            <Text style={styles.pageTitle}>Cycle {cycle.cycleNumber}</Text>
+            <Text style={styles.pageTitle}>
+              {t('cycleNumber').replace('{number}', String(cycle.cycleNumber))}
+            </Text>
           </View>
         </View>
 
@@ -186,13 +193,13 @@ export function CycleDetailScreen({ route, navigation }: CycleDetailScreenProps)
           items={[
             { 
               icon: <IconTrash size={24} color={COLORS.signalNegative} />,
-              label: 'Delete Cycle', 
+              label: t('deleteCycleTitle'), 
               onPress: handleDeleteCycle, 
               destructive: true 
             },
             { 
               icon: <IconShare size={24} color={LIGHT_COLORS.secondary} />,
-              label: 'Export Data', 
+              label: t('exportData'), 
               onPress: handleExportData
             },
           ]}
@@ -207,8 +214,8 @@ export function CycleDetailScreen({ route, navigation }: CycleDetailScreenProps)
         {/* Workouts */}
         {cycle.workoutTemplates.length === 0 ? (
           <View style={styles.emptyState}>
-            <Text style={styles.emptyText}>No workouts yet</Text>
-            <Text style={styles.emptySubtext}>Create a cycle to see workouts</Text>
+            <Text style={styles.emptyText}>{t('noWorkoutsYet')}</Text>
+            <Text style={styles.emptySubtext}>{t('createCycleToSeeWorkouts')}</Text>
           </View>
         ) : (
           Array.from({ length: cycle.lengthInWeeks }).flatMap((_, weekIndex) => {
@@ -221,7 +228,7 @@ export function CycleDetailScreen({ route, navigation }: CycleDetailScreenProps)
               /* Week Label */
               <View key={`week-header-${weekIndex}`} style={styles.weekHeader}>
                 <Text style={styles.weekHeaderText}>
-                  Week {weekIndex + 1}
+                  {t('weekLabel').replace('{number}', String(weekIndex + 1))}
                 </Text>
               </View>,
               
@@ -281,12 +288,17 @@ export function CycleDetailScreen({ route, navigation }: CycleDetailScreenProps)
         <View style={styles.sheetContent}>
           <Text style={styles.sheetTitle}>{selectedWorkout?.name}</Text>
               <Text style={styles.sheetSubtitle}>
-                Week {selectedWeekNumber} — {dayjs(cycle.startDate).add(selectedWeekNumber - 1, 'week').format('MMM D, YYYY')}
+                {t('weekWithDate')
+                  .replace('{number}', String(selectedWeekNumber))
+                  .replace(
+                    '{date}',
+                    dayjs(cycle.startDate).add(selectedWeekNumber - 1, 'week').format('MMM D, YYYY')
+                  )}
               </Text>
               
               {selectedWorkout?.exercises.length === 0 ? (
                 <View style={styles.emptyExercises}>
-                  <Text style={styles.emptyExercisesText}>No exercises added yet</Text>
+                  <Text style={styles.emptyExercisesText}>{t('noExercisesAddedYet')}</Text>
                 </View>
               ) : (
                 <View style={styles.exercisesList}>
@@ -318,7 +330,7 @@ export function CycleDetailScreen({ route, navigation }: CycleDetailScreenProps)
                     if (completedAssignments.length === 0) {
                       return (
                         <View style={styles.emptyExercises}>
-                          <Text style={styles.emptyExercisesText}>No logged data for this week</Text>
+                          <Text style={styles.emptyExercisesText}>{t('noLoggedDataThisWeek')}</Text>
                         </View>
                       );
                     }
@@ -365,12 +377,14 @@ export function CycleDetailScreen({ route, navigation }: CycleDetailScreenProps)
                                   {item.progress.sets.slice().reverse().map((set, setIndex) => (
                                     <View key={setIndex} style={styles.historySetRow}>
                                       <View style={styles.historyValueColumn}>
-                                        <Text style={styles.historyValueText}>{set.weight}</Text>
-                                        <Text style={styles.historyUnitText}>lbs</Text>
+                                        <Text style={styles.historyValueText}>
+                                          {formatWeight(set.weight, useKg)}
+                                        </Text>
+                                        <Text style={styles.historyUnitText}>{weightUnit}</Text>
                                       </View>
                                       <View style={styles.historyValueColumn}>
                                         <Text style={styles.historyValueText}>{set.reps}</Text>
-                                        <Text style={styles.historyUnitText}>reps</Text>
+                                        <Text style={styles.historyUnitText}>{t('reps')}</Text>
                                       </View>
                                     </View>
                                   ))}

@@ -14,6 +14,7 @@ import { AddExerciseBottomSheet } from '../../components/exercises/AddExerciseBo
 import { EditExerciseBottomSheet } from '../../components/exercises/EditExerciseBottomSheet';
 import { Exercise } from '../../types/workout';
 import { COLORS } from '../../constants';
+import { useTranslation } from '../../i18n/useTranslation';
 
 type OnboardingStackParamList = {
   TemplateEditor: undefined;
@@ -32,6 +33,7 @@ export function TemplateEditorScreen({ navigation }: TemplateEditorScreenProps) 
     reorderExercisesInDay,
     updateExercise,
   } = useOnboardingStore();
+  const { t } = useTranslation();
 
   const [expandedDayIndex, setExpandedDayIndex] = useState<number | null>(1);
   const [addExerciseSheetVisible, setAddExerciseSheetVisible] = useState(false);
@@ -72,7 +74,7 @@ export function TemplateEditorScreen({ navigation }: TemplateEditorScreenProps) 
   if (!draft) {
     return (
       <SafeAreaView style={styles.container}>
-        <Text>No draft found</Text>
+        <Text>{t('noDraftFound')}</Text>
       </SafeAreaView>
     );
   }
@@ -131,14 +133,14 @@ export function TemplateEditorScreen({ navigation }: TemplateEditorScreenProps) 
                         ))}
                       </View>
                     ) : (
-                      <Text style={styles.emptyText}>No exercises yet. Add some below!</Text>
+                      <Text style={styles.emptyText}>{t('noExercisesYet')}</Text>
                     )}
 
                     <TouchableOpacity
                       style={styles.addButton}
                       onPress={() => handleAddExercise(day.dayIndex)}
                     >
-                      <Text style={styles.addButtonText}>+ Add exercise</Text>
+                      <Text style={styles.addButtonText}>{t('addExerciseCta')}</Text>
                     </TouchableOpacity>
                   </View>
                 )}
