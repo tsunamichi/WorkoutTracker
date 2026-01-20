@@ -28,6 +28,7 @@ import { formatWeight, fromDisplayWeight } from '../utils/weight';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/AppNavigator';
 import type { WorkoutTemplateExercise } from '../types';
+import { useTranslation } from '../i18n/useTranslation';
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -47,6 +48,7 @@ export default function WorkoutEditScreen({ navigation, route }: Props) {
   const insets = useSafeAreaInsets();
   const { cycleId, workoutTemplateId, date } = route.params;
   const { cycles, exercises, updateCycle, updateExercise, settings } = useStore();
+  const { t } = useTranslation();
   const useKg = settings.useKg;
   const weightUnit = useKg ? 'kg' : 'lb';
   const weightStep = useKg ? 2.5 : 5;

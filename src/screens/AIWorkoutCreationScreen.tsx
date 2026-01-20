@@ -57,7 +57,7 @@ export function AIWorkoutCreationScreen() {
       // • Barbell Row — 3×10 @ 100 lb
       
       const lines = workoutDetails.split('\n');
-      const weeklyWorkouts: { [week: number]: any[] } = {};
+      let weeklyWorkouts: { [week: number]: any[] } = {};
       let currentWeek = 1;
       let currentWorkout: any = null;
       
@@ -208,8 +208,22 @@ export function AIWorkoutCreationScreen() {
         Alert.alert(t('alertErrorTitle'), t('errorNoWorkoutsFound'));
         return;
       }
+
+      const weekNumbers = Object.keys(weeklyWorkouts).map(k => parseInt(k, 10));
+      const minWeekNumber = Math.min(...weekNumbers);
+      if (minWeekNumber !== 1) {
+        const normalizedWorkouts: { [week: number]: any[] } = {};
+        weekNumbers.forEach(oldWeek => {
+          const newWeek = oldWeek - minWeekNumber + 1;
+          normalizedWorkouts[newWeek] = (weeklyWorkouts[oldWeek] || []).map(workout => ({
+            ...workout,
+            week: newWeek,
+          }));
+        });
+        weeklyWorkouts = normalizedWorkouts;
+      }
       
-      const numberOfWeeks = Math.max(...Object.keys(weeklyWorkouts).map(k => parseInt(k)));
+      const numberOfWeeks = Math.max(...Object.keys(weeklyWorkouts).map(k => parseInt(k, 10)));
       
       // Create workout templates for each week
       const allWorkoutTemplates: any[] = [];
