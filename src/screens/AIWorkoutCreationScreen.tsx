@@ -25,7 +25,7 @@ export function AIWorkoutCreationScreen() {
   const { t } = useTranslation();
   const [workoutDetails, setWorkoutDetails] = useState('');
   const [showInstructionsSheet, setShowInstructionsSheet] = useState(false);
-  
+
   const handleCopyTemplate = async () => {
     await Clipboard.setStringAsync(TEMPLATE_FORMAT);
     Alert.alert(t('copiedTitle'), t('templateCopied'));
@@ -370,19 +370,19 @@ export function AIWorkoutCreationScreen() {
           scrollable={false}
           showHandle={false}
         >
-          <View style={styles.sheetContent}>
+                <View style={styles.sheetContent}>
             <Text style={styles.sheetTitle}>{t('instructions')}</Text>
             <Text style={styles.sheetSubtitle}>{t('instructionsSubtitle')}</Text>
-            <View style={styles.templateBox}>
-              <Text style={styles.templateText}>{TEMPLATE_FORMAT}</Text>
-            </View>
-            <TouchableOpacity
-              style={styles.copyButton}
-              onPress={handleCopyTemplate}
-              activeOpacity={1}
-            >
+                      <View style={styles.templateBox}>
+                        <Text style={styles.templateText}>{TEMPLATE_FORMAT}</Text>
+                      </View>
+                  <TouchableOpacity
+                    style={styles.copyButton}
+                    onPress={handleCopyTemplate}
+                    activeOpacity={1}
+                  >
               <Text style={styles.copyButtonText}>{t('copy')}</Text>
-            </TouchableOpacity>
+                  </TouchableOpacity>
           </View>
         </BottomDrawer>
     </View>

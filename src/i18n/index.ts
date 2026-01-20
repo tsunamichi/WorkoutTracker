@@ -251,6 +251,8 @@ type TranslationKey =
   | 'weekWithDate'
   | 'cycleWeekLabel'
   | 'noOtherDaysThisWeek'
+  | 'dayNumber'
+  | 'weekShort'
   | 'reps'
   | 'deleteCycleTitle'
   | 'deleteCycleMessage'
@@ -542,6 +544,8 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     weekWithDate: 'Week {number} — {date}',
     cycleWeekLabel: 'Cycle {cycle} — Week {week}',
     noOtherDaysThisWeek: 'No other days this week to swap with',
+    dayNumber: 'Day {number}',
+    weekShort: 'W{number}',
     deleteCycleTitle: 'Delete Cycle',
     deleteCycleMessage: 'Are you sure you want to delete Cycle {number}? This action cannot be undone.',
     cycleDataTitle: 'Cycle {number} Data',
@@ -832,6 +836,8 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     weekWithDate: 'Semana {number} — {date}',
     cycleWeekLabel: 'Ciclo {cycle} — Semana {week}',
     noOtherDaysThisWeek: 'No hay otros dias esta semana para cambiar',
+    dayNumber: 'Dia {number}',
+    weekShort: 'S{number}',
     deleteCycleTitle: 'Eliminar ciclo',
     deleteCycleMessage: 'Seguro que quieres eliminar el ciclo {number}? Esta accion no se puede deshacer.',
     cycleDataTitle: 'Datos del ciclo {number}',

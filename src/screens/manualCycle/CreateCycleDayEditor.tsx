@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -49,6 +49,19 @@ export function CreateCycleDayEditor({ navigation, route }: CreateCycleDayEditor
   const [selectedExercise, setSelectedExercise] = useState<ExerciseBlock | null>(null);
   const [showExerciseEditor, setShowExerciseEditor] = useState(false);
   const nameInputRef = useRef<TextInput>(null);
+  const hasFocusedInitialNameRef = useRef(false);
+
+  useEffect(() => {
+    if (hasFocusedInitialNameRef.current) return;
+    const defaultName = formatWeekdayFull(weekday);
+    if (!workout?.name || workout?.name === defaultName) {
+      hasFocusedInitialNameRef.current = true;
+      setIsEditingName(true);
+      requestAnimationFrame(() => {
+        nameInputRef.current?.focus();
+      });
+    }
+  }, [weekday, workout?.name]);
 
   const handleSaveDay = () => {
     if (workoutName.trim()) {

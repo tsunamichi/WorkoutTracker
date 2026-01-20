@@ -154,7 +154,7 @@ export const useStore = create<WorkoutStore>((set, get) => ({
         );
         await storage.saveBodyWeightEntries(finalBodyWeightEntries);
       }
-
+      
       // Seed exercises if none exist
       let finalExercises = exercises;
       if (exercises.length === 0) {
@@ -658,7 +658,7 @@ export const useStore = create<WorkoutStore>((set, get) => ({
     const exerciseProgress = workoutProgress?.exercises[exerciseId];
     // Only log if there's actual progress (reduces console noise)
     if (exerciseProgress) {
-      console.log(`🔎 getExerciseProgress(${exerciseId}):`, JSON.stringify(exerciseProgress, null, 2));
+    console.log(`🔎 getExerciseProgress(${exerciseId}):`, JSON.stringify(exerciseProgress, null, 2));
     }
     return exerciseProgress;
   },
@@ -724,7 +724,11 @@ export const useStore = create<WorkoutStore>((set, get) => ({
     Object.values(workoutProgress.exercises).forEach(exerciseProgress => {
       // Skip exercises marked as skipped - they don't count towards completion
       if (!exerciseProgress.skipped) {
-        completedSets += exerciseProgress.sets.filter(set => set.completed).length;
+        const sets = exerciseProgress.sets || [];
+        const hasCompletedFlag = sets.some(set => set.completed);
+        completedSets += hasCompletedFlag
+          ? sets.filter(set => set.completed).length
+          : sets.length;
       }
     });
     

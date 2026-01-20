@@ -1,13 +1,14 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, Share } from 'react-native';
+import Svg, { Circle, Path } from 'react-native-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useStore } from '../store';
 import { formatWeight } from '../utils/weight';
 import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS, CARDS } from '../constants';
-import { IconArrowLeft, IconMenu, IconShare, IconTrash } from '../components/icons';
+import { IconArrowLeft, IconMenu, IconShare, IconTrash, IconCheck } from '../components/icons';
 import { ActionSheet } from '../components/common/ActionSheet';
 import { BottomDrawer } from '../components/common/BottomDrawer';
-import type { WorkoutTemplate } from '../types';
+import type { WorkoutAssignment, WorkoutTemplate } from '../types';
 import dayjs from 'dayjs';
 import isoWeek from 'dayjs/plugin/isoWeek';
 import { useTranslation } from '../i18n/useTranslation';
@@ -39,7 +40,15 @@ const LIGHT_COLORS = {
 export function CycleDetailScreen({ route, navigation }: CycleDetailScreenProps) {
   const insets = useSafeAreaInsets();
   const { cycleId } = route.params;
-  const { cycles, exercises, deleteCycle, getExerciseProgress, workoutAssignments, settings } = useStore();
+  const {
+    cycles,
+    exercises,
+    deleteCycle,
+    getExerciseProgress,
+    workoutAssignments,
+    settings,
+    getWorkoutCompletionPercentage,
+  } = useStore();
   const { t } = useTranslation();
   const useKg = settings.useKg;
   const weightUnit = useKg ? 'kg' : 'lb';
@@ -50,6 +59,47 @@ export function CycleDetailScreen({ route, navigation }: CycleDetailScreenProps)
   const handleWorkoutPress = (workout: WorkoutTemplate, weekNumber: number) => {
     setSelectedWorkout(workout);
     setSelectedWeekNumber(weekNumber);
+  };
+
+  const getTotalSetsForWorkout = (workout: WorkoutTemplate, workoutKey: string | null) => {
+    return workout.exercises.reduce((sum, exercise) => {
+      const progress = workoutKey ? getExerciseProgress(workoutKey, exercise.id) : undefined;
+      const completedSets = progress?.sets?.filter(set => set.completed).length || 0;
+      const loggedSets = progress?.sets?.length || 0;
+      const targetSets = exercise.targetSets || 0;
+      return sum + Math.max(targetSets, loggedSets, completedSets);
+    }, 0);
+  };
+
+  const getWeekCompletionForWorkout = (
+    workout: WorkoutTemplate,
+    assignments: WorkoutAssignment[]
+  ) => {
+    let bestPercentage = 0;
+    let bestWorkoutKey: string | null = null;
+
+    assignments.forEach(assignment => {
+      const workoutKey = `${workout.id}-${assignment.date}`;
+      const totalSets = getTotalSetsForWorkout(workout, workoutKey);
+      const percentage = totalSets > 0 ? getWorkoutCompletionPercentage(workoutKey, totalSets) : 0;
+
+      if (percentage > bestPercentage) {
+        bestPercentage = percentage;
+        bestWorkoutKey = workoutKey;
+      }
+    });
+
+    if (!bestWorkoutKey && assignments.length > 0) {
+      const latestAssignment = assignments.reduce((latest, current) =>
+        dayjs(current.date).isAfter(dayjs(latest.date)) ? current : latest
+      );
+      const fallbackKey = `${workout.id}-${latestAssignment.date}`;
+      const totalSets = getTotalSetsForWorkout(workout, fallbackKey);
+      bestPercentage = totalSets > 0 ? getWorkoutCompletionPercentage(fallbackKey, totalSets) : 0;
+      bestWorkoutKey = fallbackKey;
+    }
+
+    return { percentage: bestPercentage, workoutKey: bestWorkoutKey };
   };
   
   const handleDeleteCycle = () => {
@@ -266,7 +316,42 @@ export function CycleDetailScreen({ route, navigation }: CycleDetailScreenProps)
                   >
                     <View style={styles.workoutCard}>
                       <View style={styles.workoutCardInner}>
-                        <Text style={styles.workoutName}>{workout.name}</Text>
+                        <View style={styles.workoutCardHeader}>
+                          <Text style={styles.workoutName}>{workout.name}</Text>
+                          {(() => {
+                            const { percentage: completionPercentage } = getWeekCompletionForWorkout(
+                              workout,
+                              weekAssignments
+                            );
+                            const progress = completionPercentage / 100;
+                            return (
+                              <View style={styles.progressIndicator}>
+                                {progress >= 0.999 ? (
+                                  <View style={styles.progressCheckCircle}>
+                                    <IconCheck size={24} color={COLORS.signalPositive} />
+                                  </View>
+                                ) : (
+                                  <>
+                                    <Text style={styles.progressText}>{completionPercentage}%</Text>
+                                    <Svg height="16" width="16" viewBox="0 0 16 16" style={styles.progressCircle}>
+                                      <Circle cx="8" cy="8" r="8" fill={COLORS.backgroundCanvas} />
+                                      {progress > 0 ? (
+                                        <Path
+                                          d={`M 8 8 L 8 0 A 8 8 0 ${progress > 0.5 ? 1 : 0} 1 ${
+                                            8 + 8 * Math.sin(2 * Math.PI * progress)
+                                          } ${
+                                            8 - 8 * Math.cos(2 * Math.PI * progress)
+                                          } Z`}
+                                          fill={COLORS.signalWarning}
+                                        />
+                                      ) : null}
+                                    </Svg>
+                                  </>
+                                )}
+                              </View>
+                            );
+                          })()}
+                        </View>
                         <Text style={styles.workoutDate}>{dateDisplay}</Text>
                       </View>
                     </View>
@@ -282,137 +367,197 @@ export function CycleDetailScreen({ route, navigation }: CycleDetailScreenProps)
       <BottomDrawer
         visible={!!selectedWorkout}
         onClose={() => setSelectedWorkout(null)}
-        maxHeight="40%"
-        expandable={true}
+        maxHeight="90%"
+        expandable={false}
+        scrollable={false}
+        fixedHeight={true}
       >
         <View style={styles.sheetContent}>
-          <Text style={styles.sheetTitle}>{selectedWorkout?.name}</Text>
-              <Text style={styles.sheetSubtitle}>
-                {t('weekWithDate')
-                  .replace('{number}', String(selectedWeekNumber))
-                  .replace(
-                    '{date}',
-                    dayjs(cycle.startDate).add(selectedWeekNumber - 1, 'week').format('MMM D, YYYY')
-                  )}
-              </Text>
-              
-              {selectedWorkout?.exercises.length === 0 ? (
-                <View style={styles.emptyExercises}>
-                  <Text style={styles.emptyExercisesText}>{t('noExercisesAddedYet')}</Text>
-                </View>
-              ) : (
-                <View style={styles.exercisesList}>
-                  {(() => {
-                    if (!selectedWorkout) return null;
-                    
-                    // Find workout assignments for the selected week
-                    const weekStartDate = dayjs(cycle.startDate).add(selectedWeekNumber - 1, 'week');
-                    const weekEndDate = weekStartDate.add(6, 'day');
-                    
-                    const weekAssignments = workoutAssignments.filter(a => {
-                      if (a.workoutTemplateId !== selectedWorkout.id || a.cycleId !== cycleId) {
-                        return false;
-                      }
-                      const assignmentDate = dayjs(a.date);
-                      return (assignmentDate.isAfter(weekStartDate, 'day') || assignmentDate.isSame(weekStartDate, 'day')) &&
-                             (assignmentDate.isBefore(weekEndDate, 'day') || assignmentDate.isSame(weekEndDate, 'day'));
-                    });
-                    
-                    // Filter assignments that have any completed exercises
-                    const completedAssignments = weekAssignments.filter(assignment => {
-                      const workoutKey = `${selectedWorkout.id}-${assignment.date}`;
-                      return selectedWorkout.exercises.some(exercise => {
-                        const progress = getExerciseProgress(workoutKey, exercise.id);
-                        return progress && progress.sets && progress.sets.length > 0;
-                      });
-                    });
-                    
-                    if (completedAssignments.length === 0) {
-                      return (
-                        <View style={styles.emptyExercises}>
-                          <Text style={styles.emptyExercisesText}>{t('noLoggedDataThisWeek')}</Text>
-                        </View>
-                      );
+          <View style={styles.sheetHeader}>
+            <View style={styles.sheetHeaderRow}>
+              <Text style={styles.sheetTitle}>{selectedWorkout?.name}</Text>
+              {(() => {
+                if (!selectedWorkout) return null;
+                const weekStartDate = dayjs(cycle.startDate).add(selectedWeekNumber - 1, 'week');
+                const weekEndDate = weekStartDate.add(6, 'day');
+                const weekAssignments = workoutAssignments
+                  .filter(a => {
+                    if (a.workoutTemplateId !== selectedWorkout.id || a.cycleId !== cycleId) {
+                      return false;
                     }
+                    const assignmentDate = dayjs(a.date);
+                    return (
+                      (assignmentDate.isAfter(weekStartDate, 'day') ||
+                        assignmentDate.isSame(weekStartDate, 'day')) &&
+                      (assignmentDate.isBefore(weekEndDate, 'day') ||
+                        assignmentDate.isSame(weekEndDate, 'day'))
+                    );
+                  });
+                const { percentage: completionPercentage } = getWeekCompletionForWorkout(
+                  selectedWorkout,
+                  weekAssignments
+                );
+                const progress = completionPercentage / 100;
+                return (
+                  <View style={styles.progressIndicator}>
+                    {progress >= 0.999 ? (
+                      <View style={styles.progressCheckCircle}>
+                        <IconCheck size={24} color={COLORS.signalPositive} />
+                      </View>
+                    ) : (
+                      <>
+                        <Text style={styles.progressText}>{completionPercentage}%</Text>
+                        <Svg height="16" width="16" viewBox="0 0 16 16" style={styles.progressCircle}>
+                          <Circle cx="8" cy="8" r="8" fill={COLORS.activeCard} />
+                          {progress > 0 ? (
+                            <Path
+                              d={`M 8 8 L 8 0 A 8 8 0 ${progress > 0.5 ? 1 : 0} 1 ${
+                                8 + 8 * Math.sin(2 * Math.PI * progress)
+                              } ${
+                                8 - 8 * Math.cos(2 * Math.PI * progress)
+                              } Z`}
+                              fill={COLORS.signalWarning}
+                            />
+                          ) : null}
+                        </Svg>
+                      </>
+                    )}
+                  </View>
+                );
+              })()}
+            </View>
+            <Text style={styles.sheetSubtitle}>
+              {t('weekWithDate')
+                .replace('{number}', String(selectedWeekNumber))
+                .replace(
+                  '{date}',
+                  dayjs(cycle.startDate).add(selectedWeekNumber - 1, 'week').format('MMM D, YYYY')
+                )}
+            </Text>
+          </View>
+          <ScrollView
+            style={styles.sheetBody}
+            contentContainerStyle={styles.sheetBodyContent}
+            bounces={false}
+          >
+            {selectedWorkout?.exercises.length === 0 ? (
+              <View style={styles.emptyExercises}>
+                <Text style={styles.emptyExercisesText}>{t('noExercisesAddedYet')}</Text>
+              </View>
+            ) : (
+              <View style={styles.exercisesList}>
+                {(() => {
+                  if (!selectedWorkout) return null;
+                  
+                  // Find workout assignments for the selected week
+                  const weekStartDate = dayjs(cycle.startDate).add(selectedWeekNumber - 1, 'week');
+                  const weekEndDate = weekStartDate.add(6, 'day');
+                  
+                  const weekAssignments = workoutAssignments.filter(a => {
+                    if (a.workoutTemplateId !== selectedWorkout.id || a.cycleId !== cycleId) {
+                      return false;
+                    }
+                    const assignmentDate = dayjs(a.date);
+                    return (assignmentDate.isAfter(weekStartDate, 'day') || assignmentDate.isSame(weekStartDate, 'day')) &&
+                           (assignmentDate.isBefore(weekEndDate, 'day') || assignmentDate.isSame(weekEndDate, 'day'));
+                  });
+                  
+                  // Filter assignments that have any completed exercises
+                  const completedAssignments = weekAssignments.filter(assignment => {
+                    const workoutKey = `${selectedWorkout.id}-${assignment.date}`;
+                    return selectedWorkout.exercises.some(exercise => {
+                      const progress = getExerciseProgress(workoutKey, exercise.id);
+                      return progress && progress.sets && progress.sets.length > 0;
+                    });
+                  });
+                  
+                  if (completedAssignments.length === 0) {
+                    return (
+                      <View style={styles.emptyExercises}>
+                        <Text style={styles.emptyExercisesText}>{t('noLoggedDataThisWeek')}</Text>
+                      </View>
+                    );
+                  }
+                  
+                  const reversedAssignments = completedAssignments.slice().reverse();
+                  return reversedAssignments.map((assignment, assignmentIndex) => {
+                    const workoutKey = `${selectedWorkout.id}-${assignment.date}`;
+                    const isLastAssignment = assignmentIndex === reversedAssignments.length - 1;
                     
-                    const reversedAssignments = completedAssignments.slice().reverse();
-                    return reversedAssignments.map((assignment, assignmentIndex) => {
-                      const workoutKey = `${selectedWorkout.id}-${assignment.date}`;
-                      const isLastAssignment = assignmentIndex === reversedAssignments.length - 1;
-                      
-                      const exercisesWithProgress = selectedWorkout.exercises
-                        .map((exercise) => {
-                          const exerciseData = exercises.find(e => e.id === exercise.exerciseId);
-                          const progress = getExerciseProgress(workoutKey, exercise.id);
-                          
-                          if (!progress || !progress.sets || progress.sets.length === 0) {
-                            return null;
-                          }
-                          
-                          return {
-                            exercise,
-                            exerciseData,
-                            progress,
-                          };
-                        })
-                        .filter(Boolean);
-                      
-                      return (
-                        <View 
-                          key={assignment.date}
-                          style={isLastAssignment ? { paddingBottom: 16 } : undefined}
-                        >
-                          {exercisesWithProgress.map((item, exerciseIndex) => (
-                            <View key={item.exercise.id}>
-                              <View style={styles.historyWorkoutGroup}>
-                                {/* Exercise name on the left */}
-                                <View style={styles.historyDateColumn}>
-                                  <Text style={styles.historyExerciseName}>
-                                    {item.exerciseData?.name || 'Unknown Exercise'}
-                                  </Text>
-                                </View>
-                                
-                                {/* Sets column on the right */}
-                                <View style={styles.historySetsColumn}>
-                                  {item.progress.sets.slice().reverse().map((set, setIndex) => (
-                                    <View key={setIndex} style={styles.historySetRow}>
-                                      <View style={styles.historyValueColumn}>
-                                        <Text style={styles.historyValueText}>
-                                          {formatWeight(set.weight, useKg)}
-                                        </Text>
-                                        <Text style={styles.historyUnitText}>{weightUnit}</Text>
-                                      </View>
-                                      <View style={styles.historyValueColumn}>
-                                        <Text style={styles.historyValueText}>{set.reps}</Text>
-                                        <Text style={styles.historyUnitText}>{t('reps')}</Text>
-                                      </View>
-                                    </View>
-                                  ))}
-                                </View>
+                    const exercisesWithProgress = selectedWorkout.exercises
+                      .map((exercise) => {
+                        const exerciseData = exercises.find(e => e.id === exercise.exerciseId);
+                        const progress = getExerciseProgress(workoutKey, exercise.id);
+                        
+                        if (!progress || !progress.sets || progress.sets.length === 0) {
+                          return null;
+                        }
+                        
+                        return {
+                          exercise,
+                          exerciseData,
+                          progress,
+                        };
+                      })
+                      .filter(Boolean);
+                    
+                    return (
+                      <View 
+                        key={assignment.date}
+                        style={isLastAssignment ? { paddingBottom: 16 } : undefined}
+                      >
+                        {exercisesWithProgress.map((item, exerciseIndex) => (
+                          <View key={item.exercise.id}>
+                            <View style={styles.historyWorkoutGroup}>
+                              {/* Exercise name on the left */}
+                              <View style={styles.historyDateColumn}>
+                                <Text style={styles.historyExerciseName}>
+                                  {item.exerciseData?.name || 'Unknown Exercise'}
+                                </Text>
                               </View>
                               
-                              {exerciseIndex < exercisesWithProgress.length - 1 && (
-                                <View style={styles.historyDividerContainer}>
-                                  <View style={styles.historyDividerTop} />
-                                  <View style={styles.historyDividerBottom} />
-                                </View>
-                              )}
+                              {/* Sets column on the right */}
+                              <View style={styles.historySetsColumn}>
+                                {item.progress.sets.slice().reverse().map((set, setIndex) => (
+                                  <View key={setIndex} style={styles.historySetRow}>
+                                    <View style={styles.historyValueColumn}>
+                                      <Text style={styles.historyValueText}>
+                                        {formatWeight(set.weight, useKg)}
+                                      </Text>
+                                      <Text style={styles.historyUnitText}>{weightUnit}</Text>
+                                    </View>
+                                    <View style={styles.historyValueColumn}>
+                                      <Text style={styles.historyValueText}>{set.reps}</Text>
+                                      <Text style={styles.historyUnitText}>{t('reps')}</Text>
+                                    </View>
+                                  </View>
+                                ))}
+                              </View>
                             </View>
-                          ))}
-                          
-                          {assignmentIndex < reversedAssignments.length - 1 && (
-                            <View style={[styles.historyDividerContainer, { marginVertical: SPACING.lg }]}>
-                              <View style={styles.historyDividerTop} />
-                              <View style={styles.historyDividerBottom} />
-                            </View>
-                          )}
-                        </View>
-                      );
-                    });
-                  })()}
-                </View>
-              )}
-            </View>
+                            
+                            {exerciseIndex < exercisesWithProgress.length - 1 && (
+                              <View style={styles.historyDividerContainer}>
+                                <View style={styles.historyDividerTop} />
+                                <View style={styles.historyDividerBottom} />
+                              </View>
+                            )}
+                          </View>
+                        ))}
+                        
+                        {assignmentIndex < reversedAssignments.length - 1 && (
+                          <View style={[styles.historyDividerContainer, { marginVertical: SPACING.lg }]}>
+                            <View style={styles.historyDividerTop} />
+                            <View style={styles.historyDividerBottom} />
+                          </View>
+                        )}
+                      </View>
+                    );
+                  });
+                })()}
+              </View>
+            )}
+          </ScrollView>
+        </View>
       </BottomDrawer>
       </View>
     </View>
@@ -502,14 +647,39 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.xl,
     paddingVertical: SPACING.lg,
   },
+  workoutCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
   workoutName: {
     ...TYPOGRAPHY.body,
     color: LIGHT_COLORS.secondary,
     marginBottom: 2,
+    flex: 1,
   },
   workoutDate: {
     ...TYPOGRAPHY.meta,
     color: LIGHT_COLORS.textMeta,
+  },
+  progressIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  progressCircle: {
+    // No additional styling needed
+  },
+  progressCheckCircle: {
+    width: 16,
+    height: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  progressText: {
+    ...TYPOGRAPHY.meta,
+    color: COLORS.textMeta,
   },
   errorText: {
     ...TYPOGRAPHY.body,
@@ -521,7 +691,26 @@ const styles = StyleSheet.create({
   
   // Bottom Sheet
   sheetContent: {
+    flex: 1,
     paddingHorizontal: SPACING.xxl,
+    paddingBottom: SPACING.xl,
+  },
+  sheetHeader: {
+    backgroundColor: COLORS.backgroundCanvas,
+    paddingTop: SPACING.xl,
+    paddingBottom: SPACING.lg,
+  },
+  sheetHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  sheetBody: {
+    flex: 1,
+  },
+  sheetBodyContent: {
+    paddingBottom: SPACING.xl,
   },
   sheetTitle: {
     ...TYPOGRAPHY.h2,

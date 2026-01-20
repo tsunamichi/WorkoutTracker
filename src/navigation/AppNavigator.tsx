@@ -187,11 +187,11 @@ function TabNavigator() {
               style={[
                 styles.tabIcon,
                 { 
-                  opacity: scheduleIconOpacity,
+                opacity: scheduleIconOpacity,
                   transform: [
                     {
                       scale: scheduleIconOpacity.interpolate({
-                        inputRange: [0, 1],
+                  inputRange: [0, 1],
                         outputRange: [0.85, 1],
                       }),
                     },
@@ -210,7 +210,7 @@ function TabNavigator() {
                 transform: [
                   {
                     translateX: scheduleIconOpacity.interpolate({
-                      inputRange: [0, 1],
+                  inputRange: [0, 1],
                       outputRange: [-LABEL_CENTER_OFFSET, 0],
                     }),
                   },
@@ -242,11 +242,11 @@ function TabNavigator() {
               style={[
                 styles.tabIcon,
                 { 
-                  opacity: workoutsIconOpacity,
+                opacity: workoutsIconOpacity,
                   transform: [
                     {
                       scale: workoutsIconOpacity.interpolate({
-                        inputRange: [0, 1],
+                  inputRange: [0, 1],
                         outputRange: [0.85, 1],
                       }),
                     },
@@ -265,7 +265,7 @@ function TabNavigator() {
                 transform: [
                   {
                     translateX: workoutsIconOpacity.interpolate({
-                      inputRange: [0, 1],
+                  inputRange: [0, 1],
                       outputRange: [-LABEL_CENTER_OFFSET, 0],
                     }),
                   },

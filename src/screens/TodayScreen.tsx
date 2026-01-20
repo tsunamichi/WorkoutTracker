@@ -318,9 +318,7 @@ export function TodayScreen({ onNavigateToWorkouts, onDateChange, onOpenSwapDraw
                         <View
                           style={[
                             styles.dayButton,
-                            isToday && !isSelected && {
-                              backgroundColor: COLORS.activeCard,
-                            },
+                            { backgroundColor: COLORS.activeCard },
                             isSelected && {
                               backgroundColor: COLORS.text,
                               borderWidth: 1,
@@ -392,40 +390,40 @@ export function TodayScreen({ onNavigateToWorkouts, onDateChange, onOpenSwapDraw
                       return (
                         <>
                           <View style={styles.workoutCardContent}>
-                            {/* Top Row: Workout Name + Progress */}
-                            <View style={styles.workoutCardHeader}>
-                              <Text style={styles.workoutName}>{selectedDay.workout.name}</Text>
-                              <View style={styles.progressIndicator}>
-                                {progress >= 0.999 ? (
+                          {/* Top Row: Workout Name + Progress */}
+                          <View style={styles.workoutCardHeader}>
+                            <Text style={styles.workoutName}>{selectedDay.workout.name}</Text>
+                            <View style={styles.progressIndicator}>
+                              {progress >= 0.999 ? (
                                   <View style={styles.progressCheckCircle}>
                                   <IconCheck size={24} color={COLORS.signalPositive} />
                                   </View>
-                                ) : (
-                                  <>
-                                    <Text style={styles.progressText}>{completionPercentage}%</Text>
-                                    <Svg height="16" width="16" viewBox="0 0 16 16" style={styles.progressCircle}>
+                              ) : (
+                                <>
+                                  <Text style={styles.progressText}>{completionPercentage}%</Text>
+                                  <Svg height="16" width="16" viewBox="0 0 16 16" style={styles.progressCircle}>
                                       <Circle cx="8" cy="8" r="8" fill={COLORS.backgroundCanvas} />
-                                      {progress > 0 ? (
-                                        <Path
-                                          d={`M 8 8 L 8 0 A 8 8 0 ${progress > 0.5 ? 1 : 0} 1 ${
-                                            8 + 8 * Math.sin(2 * Math.PI * progress)
-                                          } ${
-                                            8 - 8 * Math.cos(2 * Math.PI * progress)
-                                          } Z`}
+                                    {progress > 0 ? (
+                                      <Path
+                                        d={`M 8 8 L 8 0 A 8 8 0 ${progress > 0.5 ? 1 : 0} 1 ${
+                                          8 + 8 * Math.sin(2 * Math.PI * progress)
+                                        } ${
+                                          8 - 8 * Math.cos(2 * Math.PI * progress)
+                                        } Z`}
                                           fill={COLORS.signalWarning}
-                                        />
-                                      ) : null}
-                                    </Svg>
-                                  </>
-                                )}
-                              </View>
+                                      />
+                                    ) : null}
+                                  </Svg>
+                                </>
+                              )}
                             </View>
-                            
-                            {/* Exercises Count */}
-                            <Text style={styles.workoutExercises}>
+                          </View>
+                          
+                          {/* Exercises Count */}
+                          <Text style={styles.workoutExercises}>
                               {selectedDay.workout.exercises.length}{' '}
                               {selectedDay.workout.exercises.length === 1 ? t('exercise') : t('exercises')}
-                            </Text>
+                          </Text>
                           </View>
                           
                           {/* Footer: Action Button */}
@@ -483,17 +481,17 @@ export function TodayScreen({ onNavigateToWorkouts, onDateChange, onOpenSwapDraw
                 })()}
 
                 {!selectedDay?.workout && (
-                  <TouchableOpacity
-                    style={styles.addWorkoutButton}
-                    onPress={() => handleAddOrCreateWorkout(selectedDate)}
-                    activeOpacity={1}
-                  >
+                    <TouchableOpacity
+                      style={styles.addWorkoutButton}
+                      onPress={() => handleAddOrCreateWorkout(selectedDate)}
+                      activeOpacity={1}
+                    >
                     <IconAdd size={24} color={COLORS.accentPrimary} />
-                    <Text style={styles.addWorkoutButtonText}>
+                      <Text style={styles.addWorkoutButtonText}>
                       {hasEligibleWorkoutsToSwap(selectedDate) ? t('addWorkout') : t('createWorkout')}
-                    </Text>
-                  </TouchableOpacity>
-                )}
+                      </Text>
+                    </TouchableOpacity>
+              )}
               </View>
               </View>
               
@@ -515,14 +513,14 @@ export function TodayScreen({ onNavigateToWorkouts, onDateChange, onOpenSwapDraw
                   <View style={styles.intervalsSection}>
                     {/* Show explanatory text when no intervals */}
                     {completedIntervals.length === 0 && isToday && (
-                      <TouchableOpacity
+                        <TouchableOpacity
                         style={styles.addIntervalCardButton}
-                        onPress={() => navigation.navigate('HIITTimerList' as never)}
-                        activeOpacity={0.7}
-                      >
-                        <IconAdd size={24} color={COLORS.text} />
+                          onPress={() => navigation.navigate('HIITTimerList' as never)}
+                          activeOpacity={0.7}
+                        >
+                          <IconAdd size={24} color={COLORS.text} />
                         <Text style={styles.addIntervalCardText}>{t('addIntervalTimer')}</Text>
-                      </TouchableOpacity>
+                        </TouchableOpacity>
                     )}
                     
                     {/* Show completed intervals */}

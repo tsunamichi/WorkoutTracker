@@ -19,6 +19,8 @@ interface BottomDrawerProps {
   showHandle?: boolean;
   contentStyle?: ViewStyle;
   scrollable?: boolean;
+  alwaysScrollable?: boolean; // Force ScrollView even if content size isn't measured as tall
+  stickyHeaderIndices?: number[]; // Optional sticky header indices for ScrollView
   expandable?: boolean; // New prop to enable pull-to-expand
   fixedHeight?: boolean; // Force drawer to maxHeight
   bottomOffset?: number; // Override bottom margin
@@ -34,6 +36,8 @@ export function BottomDrawer({
   showHandle = true,
   contentStyle,
   scrollable = true,
+  alwaysScrollable = false,
+  stickyHeaderIndices,
   expandable = false,
   fixedHeight = false,
   bottomOffset = 8,
@@ -160,7 +164,7 @@ export function BottomDrawer({
     () => PanResponder.create({
       onStartShouldSetPanResponder: () => {
         hasTriggeredExpansion.current = false;
-        return true; // Always respond to gestures for all drawers
+        return true;
       },
       onMoveShouldSetPanResponder: (_, gestureState) => Math.abs(gestureState.dy) > 5,
       onPanResponderMove: (_, gestureState) => {
@@ -227,17 +231,25 @@ export function BottomDrawer({
   );
 
   // Only use ScrollView if content needs scrolling
-  const shouldScroll = scrollable && needsScrolling;
+  const shouldScroll = scrollable && (needsScrolling || alwaysScrollable);
   const Content = shouldScroll ? ScrollView : View;
-  const contentProps = shouldScroll 
-    ? { 
-        contentContainerStyle: contentStyle,
+  const contentContainerStyle = [
+    contentStyle,
+    { paddingTop: showHandle ? 16 : 0 },
+  ];
+  const contentProps = shouldScroll
+    ? {
+        contentContainerStyle,
         style: { flex: 1 },
         showsVerticalScrollIndicator: true,
         bounces: true,
+        stickyHeaderIndices,
+        onContentSizeChange: (_width: number, height: number) => {
+          setContentHeight(height);
+        },
       }
-    : { 
-        style: contentStyle
+    : {
+        style: [contentContainerStyle, { flex: 1, minHeight: 0 }],
       };
 
   const requestClose = () => {
@@ -285,7 +297,7 @@ export function BottomDrawer({
         styles.drawerContainer,
         {
           maxHeight: fixedHeight ? undefined : currentMaxHeight,
-          height: fixedHeight ? currentMaxHeight : undefined,
+          height: fixedHeight ? currentMaxHeight : (shouldScroll ? currentMaxHeight : undefined),
           bottom: bottomOffset,
           transform: [{ translateY }],
         }
@@ -310,18 +322,21 @@ export function BottomDrawer({
           )}
           
           <Content {...contentProps}>
-            <View
-              style={{
-                ...(fixedHeight ? { flex: 1 } : { flexShrink: 0 }),
-                paddingTop: showHandle ? 16 : 0,
-              }}
-              onLayout={(event) => {
-                const { height } = event.nativeEvent.layout;
-                setContentHeight(height);
-              }}
-            >
-              {typeof children === 'function' ? children({ requestClose }) : children}
-            </View>
+            {shouldScroll ? (
+              typeof children === 'function' ? children({ requestClose }) : children
+            ) : (
+              <View
+                style={{
+                  ...(fixedHeight ? { flex: 1 } : { flexShrink: 0 }),
+                }}
+                onLayout={(event) => {
+                  const { height } = event.nativeEvent.layout;
+                  setContentHeight(height);
+                }}
+              >
+                {typeof children === 'function' ? children({ requestClose }) : children}
+              </View>
+            )}
           </Content>
         </View>
       </Animated.View>

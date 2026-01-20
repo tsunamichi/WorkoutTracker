@@ -147,7 +147,7 @@ export const useCreateCycleDraftStore = create<CreateCycleDraftStore>((set, get)
     set((state) => {
       const weeks: ExerciseWeekPlan[] = [];
       for (let i = 0; i < state.weeks; i++) {
-        weeks.push({ weekIndex: i });
+        weeks.push({ weekIndex: i, sets: 3, reps: '8', isTimeBased: false });
       }
 
       newExercise = {

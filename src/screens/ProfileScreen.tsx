@@ -401,22 +401,22 @@ export function ProfileScreen({ navigation, route }: ProfileScreenProps) {
               { key: 'es' as const, label: t('spanish') },
             ].map(option => {
               const isSelected = (settings.language || 'en') === option.key;
-              return (
-                <TouchableOpacity
+                  return (
+                    <TouchableOpacity
                   key={option.key}
                   style={styles.languageOption}
-                  onPress={() => {
+                      onPress={() => {
                     updateSettings({ language: option.key });
                     setShowLanguagePicker(false);
-                  }}
-                  activeOpacity={1}
-                >
+                      }}
+                      activeOpacity={1}
+                    >
                   <Text style={styles.languageOptionText}>{option.label}</Text>
                   {isSelected && <IconCheck size={20} color={COLORS.text} />}
-                </TouchableOpacity>
-              );
-            })}
-          </View>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
         </BottomDrawer>
       </View>
     </View>

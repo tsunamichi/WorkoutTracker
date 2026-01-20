@@ -3,7 +3,6 @@ import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert } from 'rea
 import Svg, { Circle, Path } from 'react-native-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useCreateCycleDraftStore } from '../../store/useCreateCycleDraftStore';
-import { formatWeekdayFull } from '../../utils/manualCycleUtils';
 import { COLORS, SPACING, TYPOGRAPHY, CARDS } from '../../constants';
 import { IconArrowLeft, IconCheck } from '../../components/icons';
 import { useTranslation } from '../../i18n/useTranslation';
@@ -97,7 +96,7 @@ export function CreateCycleDaysOverview({ navigation }: CreateCycleDaysOverviewP
         </View>
 
         <ScrollView style={styles.content} contentContainerStyle={styles.scrollContent} bounces={false}>
-          {sortedDays.map((day) => {
+          {sortedDays.map((day, index) => {
             const workout = workouts.find((w) => w.weekday === day);
             const exerciseCount = workout?.exercises.length || 0;
             const isComplete = exerciseCount > 0;
@@ -114,13 +113,13 @@ export function CreateCycleDaysOverview({ navigation }: CreateCycleDaysOverviewP
                   isComplete ? styles.dayCardContentComplete : styles.dayCardContentWithAction,
                 ]}>
                     <View style={styles.dayCardHeader}>
-                      <Text style={styles.dayLabel}>{formatWeekdayFull(day)}</Text>
+                      <Text style={styles.dayLabel}>
+                        {workout?.name || t('dayNumber').replace('{number}', String(index + 1))}
+                      </Text>
                     </View>
-                    {workout?.name && (
-                      <Text style={styles.dayName}>{workout.name}</Text>
-                    )}
                     <Text style={styles.exerciseCount}>
-                      {exerciseCount} {exerciseCount === 1 ? 'exercise' : 'exercises'}
+                      {exerciseCount} {exerciseCount === 1 ? t('exercise') : t('exercises')}
+                      {` \u2022 ${t('dayNumber').replace('{number}', String(index + 1))}`}
                     </Text>
                   </View>
                   {isComplete && (
@@ -163,7 +162,7 @@ export function CreateCycleDaysOverview({ navigation }: CreateCycleDaysOverviewP
                   !canContinue && styles.continueButtonTextDisabled,
                 ]}
               >
-                Continue
+                {t('continue')}
               </Text>
             </TouchableOpacity>
           </View>
