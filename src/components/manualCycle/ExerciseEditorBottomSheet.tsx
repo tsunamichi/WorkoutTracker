@@ -15,7 +15,7 @@ import { SPACING, COLORS, TYPOGRAPHY, BORDER_RADIUS } from '../../constants';
 import { IconAddLine, IconMinusLine } from '../icons';
 import { BottomDrawer } from '../common/BottomDrawer';
 import { Toggle } from '../Toggle';
-import { formatWeight, toDisplayWeight, fromDisplayWeight } from '../../utils/weight';
+import { formatWeightForLoad, toDisplayWeight, fromDisplayWeight } from '../../utils/weight';
 import { useTranslation } from '../../i18n/useTranslation';
 
 interface ExerciseEditorBottomSheetProps {
@@ -99,7 +99,7 @@ export const ExerciseEditorBottomSheet = ({
     });
   }, [currentWeek, liveExerciseBlock.id, selectedWeekIndex, updateExerciseWeekPlan, weekday]);
   const useKg = settings.useKg;
-  const weightStep = useKg ? 2.5 : 5;
+  const weightStep = useKg ? 0.5 : 5;
 
   const handleUpdateField = useCallback(
     (field: keyof ExerciseWeekPlan, value: any) => {
@@ -209,7 +209,7 @@ export const ExerciseEditorBottomSheet = ({
                 <View style={styles.adjustRow}>
                   <View style={styles.adjustValue}>
                     <Text style={styles.adjustValueText}>
-                      {formatWeight(currentWeek.weight || 0, useKg)}
+                      {formatWeightForLoad(currentWeek.weight || 0, useKg)}
                     </Text>
                     <Text style={styles.adjustUnit}>{useKg ? 'kg' : 'lb'}</Text>
                   </View>

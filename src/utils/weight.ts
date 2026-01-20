@@ -8,6 +8,15 @@ const roundTo = (value: number, decimals: number): number => {
   return Math.round(value * factor) / factor;
 };
 
+const roundToIncrement = (value: number, increment: number): number =>
+  Math.round(value / increment) * increment;
+
+const getIncrementDecimals = (increment: number): number => {
+  if (increment % 1 === 0) return 0;
+  if ((increment * 10) % 1 === 0) return 1;
+  return 2;
+};
+
 export const toDisplayWeight = (weightLbs: number, useKg: boolean): number =>
   useKg ? lbsToKg(weightLbs) : weightLbs;
 
@@ -18,5 +27,14 @@ export const formatWeight = (weightLbs: number, useKg: boolean): string => {
   const value = toDisplayWeight(weightLbs, useKg);
   const rounded = roundTo(value, useKg ? 1 : 1);
   const asString = rounded.toFixed(rounded % 1 === 0 ? 0 : 1);
+  return asString;
+};
+
+export const formatWeightForLoad = (weightLbs: number, useKg: boolean): string => {
+  const value = toDisplayWeight(weightLbs, useKg);
+  const increment = useKg ? 0.5 : 2.5;
+  const rounded = roundToIncrement(value, increment);
+  const decimals = getIncrementDecimals(increment);
+  const asString = rounded.toFixed(rounded % 1 === 0 ? 0 : decimals);
   return asString;
 };

@@ -16,7 +16,7 @@ import { SetTimerSheet } from '../components/timer/SetTimerSheet';
 import { Toggle } from '../components/Toggle';
 import { BottomDrawer } from '../components/common/BottomDrawer';
 import { ActionSheet } from '../components/common/ActionSheet';
-import { formatWeight, toDisplayWeight, fromDisplayWeight } from '../utils/weight';
+import { formatWeightForLoad, toDisplayWeight, fromDisplayWeight } from '../utils/weight';
 import { useTranslation } from '../i18n/useTranslation';
 
 interface ExerciseDetailScreenProps {
@@ -211,7 +211,7 @@ export function ExerciseDetailScreen({ route, navigation }: ExerciseDetailScreen
   const weightUnit = useKg ? 'kg' : 'lb';
   const repsUnit = isTimeBased ? 'sec' : 'reps'; // Time-based uses 'sec', rep-based uses 'reps'
   const BARBELL_WEIGHT = 45;
-  const WEIGHT_STEP = useKg ? 2.5 : 2.5;
+  const WEIGHT_STEP = useKg ? 0.5 : 2.5;
   
   const handleWeightIncrement = (setIndex: number) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -894,12 +894,12 @@ export function ExerciseDetailScreen({ route, navigation }: ExerciseDetailScreen
                             <View style={styles.valueContainer}>
                               <View style={styles.valueRow}>
                                 <Text style={styles.largeValue}>
-                                  {formatWeight(weightLbs, useKg)}
+                                  {formatWeightForLoad(weightLbs, useKg)}
                                 </Text>
                                 <Text style={styles.unit}>{weightUnit}</Text>
                                 {useBarbellMode && perSideWeightLbs > 0 && (
                                   <Text style={styles.perSideText}>
-                                    {formatWeight(perSideWeightLbs, useKg)} {weightUnit} per side
+                                    {formatWeightForLoad(perSideWeightLbs, useKg)} {weightUnit} per side
                                   </Text>
                                 )}
                               </View>
@@ -1010,7 +1010,7 @@ export function ExerciseDetailScreen({ route, navigation }: ExerciseDetailScreen
                                 <View style={styles.setCollapsedLeft}>
                                   <View style={styles.collapsedValueRow}>
                                     <Text style={styles.setCollapsedText}>
-                                      {formatWeight(weightLbs, useKg)}
+                                      {formatWeightForLoad(weightLbs, useKg)}
                                     </Text>
                                     <Text style={styles.setCollapsedUnit}>{weightUnit}</Text>
                                   </View>
@@ -1165,10 +1165,10 @@ export function ExerciseDetailScreen({ route, navigation }: ExerciseDetailScreen
                           <View key={`${workout.sessionId}-${setIndex}`} style={styles.historySetRow}>
                             <View style={styles.historyValueColumn}>
                               <Text style={styles.setCollapsedText}>
-                                {formatWeight(set.weight, useKg)}
+                                {formatWeightForLoad(set.weight, useKg)}
                               </Text>
                                   <Text style={styles.setCollapsedText}>
-                                    {formatWeight(set.weight, useKg)}
+                                    {formatWeightForLoad(set.weight, useKg)}
                                   </Text>
                               <Text style={styles.setCollapsedUnit}>{weightUnit}</Text>
                             </View>

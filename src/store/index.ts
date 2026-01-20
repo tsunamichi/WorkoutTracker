@@ -359,7 +359,7 @@ export const useStore = create<WorkoutStore>((set, get) => ({
       }
       
       // Log settings info for debugging
-      const finalSettings = settings || DEFAULT_SETTINGS;
+      const finalSettings = { ...DEFAULT_SETTINGS, ...(settings || {}) };
       console.log('🔧 App Initialized with Settings:', {
         useKg: finalSettings.useKg,
         hasApiKey: !!finalSettings.openaiApiKey,

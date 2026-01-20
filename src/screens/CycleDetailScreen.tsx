@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, Share } fr
 import Svg, { Circle, Path } from 'react-native-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useStore } from '../store';
-import { formatWeight } from '../utils/weight';
+import { formatWeightForLoad } from '../utils/weight';
 import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS, CARDS } from '../constants';
 import { IconArrowLeft, IconMenu, IconShare, IconTrash, IconCheck } from '../components/icons';
 import { ActionSheet } from '../components/common/ActionSheet';
@@ -174,7 +174,7 @@ export function CycleDetailScreen({ route, navigation }: CycleDetailScreenProps)
               foundProgress = true;
               exportText += `      Completed (${dayjs(assignment.date).format('MMM D')}):\n`;
               progress.sets.forEach((set, idx) => {
-                exportText += `        Set ${idx + 1}: ${formatWeight(set.weight, useKg)} ${weightUnit} × ${set.reps} ${t('reps')}${set.completed ? ' ✓' : ''}\n`;
+          exportText += `        Set ${idx + 1}: ${formatWeightForLoad(set.weight, useKg)} ${weightUnit} × ${set.reps} ${t('reps')}${set.completed ? ' ✓' : ''}\n`;
               });
             }
           }
@@ -522,7 +522,7 @@ export function CycleDetailScreen({ route, navigation }: CycleDetailScreenProps)
                                   <View key={setIndex} style={styles.historySetRow}>
                                     <View style={styles.historyValueColumn}>
                                       <Text style={styles.historyValueText}>
-                                        {formatWeight(set.weight, useKg)}
+                                        {formatWeightForLoad(set.weight, useKg)}
                                       </Text>
                                       <Text style={styles.historyUnitText}>{weightUnit}</Text>
                                     </View>

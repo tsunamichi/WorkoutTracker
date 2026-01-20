@@ -24,7 +24,7 @@ import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS, CARDS } from '../constants'
 import { IconArrowLeft, IconGripVertical, IconTrash, IconSwap, IconAdd, IconEdit, IconChevronDown, IconMinusLine, IconAddLine } from '../components/icons';
 import { generateId } from '../utils/manualCycleUtils';
 import { Toggle } from '../components/Toggle';
-import { formatWeight, fromDisplayWeight } from '../utils/weight';
+import { formatWeightForLoad, fromDisplayWeight } from '../utils/weight';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/AppNavigator';
 import type { WorkoutTemplateExercise } from '../types';
@@ -51,7 +51,7 @@ export default function WorkoutEditScreen({ navigation, route }: Props) {
   const { t } = useTranslation();
   const useKg = settings.useKg;
   const weightUnit = useKg ? 'kg' : 'lb';
-  const weightStep = useKg ? 2.5 : 5;
+  const weightStep = useKg ? 0.5 : 5;
   
   const cycle = cycles.find(c => c.id === cycleId);
   const workout = cycle?.workoutTemplates.find(w => w.id === workoutTemplateId);
@@ -292,7 +292,7 @@ export default function WorkoutEditScreen({ navigation, route }: Props) {
       setSwappingExerciseId(exerciseId);
       setSwapWeight(
         exercise.targetWeight !== undefined
-          ? formatWeight(exercise.targetWeight, useKg)
+          ? formatWeightForLoad(exercise.targetWeight, useKg)
           : ''
       );
       setSwapReps(exercise.targetRepsMin?.toString() || '');
