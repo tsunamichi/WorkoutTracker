@@ -110,34 +110,34 @@ export default function HIITTimerListScreen({ navigation }: Props) {
           bounces={false}
         >
           <View style={styles.grid}>
-            {templates.map(timer => (
-              <TouchableOpacity
-                key={timer.id}
-                onPress={() => handleSelectTemplate(timer)}
-                onLongPress={() => {
-                  Alert.alert(
-                    timer.name,
-                    'What would you like to do?',
-                    [
-                      { text: 'Cancel', style: 'cancel' },
-                      {
-                        text: 'Edit',
-                        onPress: () => handleEditTemplate(timer),
-                      },
-                      {
-                        text: 'Delete',
-                        style: 'destructive',
-                        onPress: () => handleDeleteTemplate(timer),
-                      },
-                    ]
-                  );
-                }}
-                activeOpacity={1}
+          {templates.map(timer => (
+            <TouchableOpacity
+              key={timer.id}
+              onPress={() => handleSelectTemplate(timer)}
+              onLongPress={() => {
+                Alert.alert(
+                  timer.name,
+                  'What would you like to do?',
+                  [
+                    { text: 'Cancel', style: 'cancel' },
+                    {
+                      text: 'Edit',
+                      onPress: () => handleEditTemplate(timer),
+                    },
+                    {
+                      text: 'Delete',
+                      style: 'destructive',
+                      onPress: () => handleDeleteTemplate(timer),
+                    },
+                  ]
+                );
+              }}
+              activeOpacity={1}
                 style={styles.timerCard}
-              >
+            >
                 <View style={CARDS.cardDeepDimmed.outer}>
-                  <View style={[CARDS.cardDeepDimmed.inner, styles.timerCardInner]}>
-                    <Text style={styles.timerName}>{timer.name}</Text>
+                <View style={[CARDS.cardDeepDimmed.inner, styles.timerCardInner]}>
+                  <Text style={styles.timerName}>{timer.name}</Text>
                     <Text style={styles.totalTime}>{calculateTotalTime(timer)}</Text>
                     <TouchableOpacity
                       onPress={() => handleSelectTemplate(timer)}
@@ -147,10 +147,10 @@ export default function HIITTimerListScreen({ navigation }: Props) {
                       <Text style={styles.startButtonText}>{t('start')}</Text>
                       <IconPlay size={10} color={COLORS.accentPrimary} />
                     </TouchableOpacity>
-                  </View>
                 </View>
-              </TouchableOpacity>
-            ))}
+              </View>
+            </TouchableOpacity>
+          ))}
           </View>
           <TouchableOpacity
             style={styles.addTimerCardButton}

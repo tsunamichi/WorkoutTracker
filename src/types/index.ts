@@ -147,6 +147,8 @@ export interface AppSettings {
   monthlyProgressReminderDay: number;
   restTimerDefaultSeconds: number;
   notificationsEnabled?: boolean;
+  notificationsPermissionPrompted?: boolean;
+  profileAvatarUri?: string;
   // AI Trainer settings
   openaiApiKey?: string;
   trainerGoals?: string; // User's fitness goals

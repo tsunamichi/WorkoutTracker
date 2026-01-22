@@ -131,13 +131,13 @@ export function CreateCycleDayEditor({ navigation, route }: CreateCycleDayEditor
         {/* Header */}
         <View style={[styles.header, { paddingTop: insets.top }]}>
           <View style={styles.topBar}>
-            <TouchableOpacity
-              onPress={() => navigation.goBack()}
-              style={styles.backButton}
-              activeOpacity={1}
-            >
+          <TouchableOpacity
+            onPress={() => navigation.goBack()}
+            style={styles.backButton}
+            activeOpacity={1}
+          >
               <IconArrowLeft size={24} color={COLORS.text} />
-            </TouchableOpacity>
+          </TouchableOpacity>
             <View style={{ width: 48 }} />
           </View>
           <TouchableOpacity
@@ -304,7 +304,7 @@ export function CreateCycleDayEditor({ navigation, route }: CreateCycleDayEditor
                             </TouchableOpacity>
                             {exerciseIndex < muscleExercises.length - 1 && (
                               <View style={styles.muscleExerciseDivider} />
-                            )}
+      )}
                           </View>
                         ))}
                       </View>

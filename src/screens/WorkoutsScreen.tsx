@@ -33,7 +33,7 @@ const LIGHT_COLORS = {
 export function WorkoutsScreen() {
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
-  const { cycles, addCycle, getNextCycleNumber, assignWorkout, exercises, addExercise, updateCycle, clearWorkoutAssignmentsForDateRange, workoutAssignments, detailedWorkoutProgress } = useStore();
+  const { cycles, addCycle, getNextCycleNumber, assignWorkout, exercises, addExercise, updateCycle, clearWorkoutAssignmentsForDateRange, workoutAssignments, detailedWorkoutProgress, settings } = useStore();
   const { startDraftFromCustomText } = useOnboardingStore();
   const { t, language } = useTranslation();
   const [showBottomSheet, setShowBottomSheet] = useState(false);
@@ -89,6 +89,50 @@ export function WorkoutsScreen() {
       }
     });
     
+    if (totalSets === 0) return 0;
+    return Math.round((completedSets / totalSets) * 100);
+  };
+
+  const getCompletedSetsCount = (exerciseProgress: any) => {
+    if (!exerciseProgress || exerciseProgress.skipped) return 0;
+    const sets = exerciseProgress.sets || [];
+    const hasCompletedFlag = sets.some((set: any) => set.completed);
+    return hasCompletedFlag ? sets.filter((set: any) => set.completed).length : sets.length;
+  };
+
+  const getWeekCompletion = (cycle: any, weekIndex: number) => {
+    const weekStartDate = dayjs(cycle.startDate).add(weekIndex, 'week');
+    const weekEndDate = weekStartDate.add(6, 'day');
+    const weekAssignments = workoutAssignments.filter(assignment => {
+      if (assignment.cycleId !== cycle.id) return false;
+      const assignmentDate = dayjs(assignment.date);
+      return (
+        (assignmentDate.isAfter(weekStartDate, 'day') || assignmentDate.isSame(weekStartDate, 'day')) &&
+        (assignmentDate.isBefore(weekEndDate, 'day') || assignmentDate.isSame(weekEndDate, 'day'))
+      );
+    });
+
+    if (weekAssignments.length === 0) return 0;
+
+    let totalSets = 0;
+    let completedSets = 0;
+
+    weekAssignments.forEach(assignment => {
+      const template = cycle.workoutTemplates.find((t: any) => t.id === assignment.workoutTemplateId);
+      if (!template) return;
+      const workoutKey = `${assignment.workoutTemplateId}-${assignment.date}`;
+      const progress = detailedWorkoutProgress[workoutKey];
+
+      template.exercises.forEach((ex: any) => {
+        const exerciseProgress = progress?.exercises?.[ex.id];
+        const completed = getCompletedSetsCount(exerciseProgress);
+        const logged = exerciseProgress?.sets?.length || 0;
+        const target = ex.targetSets || 0;
+        totalSets += Math.max(target, logged, completed);
+        completedSets += completed;
+      });
+    });
+
     if (totalSets === 0) return 0;
     return Math.round((completedSets / totalSets) * 100);
   };
@@ -261,7 +305,7 @@ export function WorkoutsScreen() {
         Alert.alert(t('alertErrorTitle'), t('errorNoWorkoutsFound'));
         return;
       }
-
+      
       const weekNumbers = Object.keys(weeklyWorkouts).map(k => parseInt(k, 10));
       const minWeekNumber = Math.min(...weekNumbers);
       if (minWeekNumber !== 1) {
@@ -382,6 +426,7 @@ export function WorkoutsScreen() {
               backgroundColor="#9E9E9E"
               textColor="#FFFFFF"
               showInitial={true}
+              imageUri={settings.profileAvatarUri || null}
             />
           </View>
         </View>
@@ -434,63 +479,107 @@ export function WorkoutsScreen() {
                       <View key={cycle.id} style={styles.activeCycleSection}>
                         <View style={styles.cycleCard}>
                               <TouchableOpacity
-                                style={styles.cycleCardContent}
+                                style={[styles.cycleCardContent, styles.currentCycleCardContent]}
                                 onPress={() => {
                                   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                                   navigation.navigate('CycleDetail' as never, { cycleId: cycle.id } as never);
                                 }}
                                 activeOpacity={1}
                               >
-                                <View style={styles.cycleCardContentBody}>
-                                  <View style={styles.cycleCardHeader}>
-                                    <Text style={styles.cycleDuration}>
-                                      {(() => {
-                                        const weeks = Math.max(
-                                          1,
-                                          dayjs(cycle.endDate).diff(dayjs(cycle.startDate), 'week') + 1
-                                        );
-                                        return weeks === 1
-                                          ? t('weekCycleSingular')
-                                          : t('weekCyclePlural').replace('{weeks}', String(weeks));
-                                      })()}
-                                    </Text>
-                                    <View style={styles.progressIndicator}>
-                                      {completion >= 99.9 ? (
-                                        <IconCheck size={24} color={COLORS.signalPositive} />
-                                      ) : (
-                                        <>
-                                          <Text style={styles.progressText}>{completion}%</Text>
-                                          <Svg height="16" width="16" viewBox="0 0 16 16" style={styles.progressCircle}>
-                                            <Circle cx="8" cy="8" r="8" fill={COLORS.backgroundCanvas} />
-                                            {completion > 0 ? (
-                                              <Path
-                                                d={`M 8 8 L 8 0 A 8 8 0 ${completion / 100 > 0.5 ? 1 : 0} 1 ${
-                                                  8 + 8 * Math.sin(2 * Math.PI * (completion / 100))
-                                                } ${
-                                                  8 - 8 * Math.cos(2 * Math.PI * (completion / 100))
-                                                } Z`}
-                                                fill={COLORS.signalWarning}
-                                              />
-                                            ) : null}
-                                          </Svg>
-                                        </>
-                                      )}
-                                    </View>
+                            <View style={styles.cycleCardContentBody}>
+                                  <Text style={styles.currentCycleTitle}>{t('currentCycle')}</Text>
+                                  <View style={styles.weekList}>
+                                    {Array.from({ length: cycle.lengthInWeeks }).map((_, weekIndex) => {
+                                      const weekNumber = weekIndex + 1;
+                                      const weekStartDate = dayjs(cycle.startDate).add(weekIndex, 'week');
+                                      const weekEndDate = weekStartDate.add(6, 'day');
+                                      const weekCompletion = getWeekCompletion(cycle, weekIndex);
+                                      const weekProgress = weekCompletion / 100;
+                                      const today = dayjs().startOf('day');
+                                      const isCurrentWeek =
+                                        (today.isAfter(weekStartDate, 'day') || today.isSame(weekStartDate, 'day')) &&
+                                        (today.isBefore(weekEndDate, 'day') || today.isSame(weekEndDate, 'day'));
+                                      return (
+                                        <View key={`week-${cycle.id}-${weekNumber}`} style={styles.weekRow}>
+                                          <View style={styles.weekInfo}>
+                                            <Text
+                                              style={[
+                                                styles.weekTitle,
+                                                isCurrentWeek ? styles.weekTitleCurrent : styles.weekTitleInactive,
+                                              ]}
+                                            >
+                                              {t('weekLabel').replace('{number}', String(weekNumber))}
+                                            </Text>
+                                            <Text
+                                              style={[
+                                                styles.weekDates,
+                                                isCurrentWeek ? styles.weekDatesCurrent : styles.weekDatesInactive,
+                                              ]}
+                                            >
+                                              <Text
+                                                style={[
+                                                  styles.weekDateLabel,
+                                                  isCurrentWeek
+                                                    ? styles.weekDateLabelCurrent
+                                                    : styles.weekDateLabelInactive,
+                                                ]}
+                                              >
+                                                {t('from')}
+                                              </Text>
+                                              {formatOrdinalDate(weekStartDate.format('YYYY-MM-DD'))}
+                                              {' '}
+                                              <Text
+                                                style={[
+                                                  styles.weekDateLabel,
+                                                  isCurrentWeek
+                                                    ? styles.weekDateLabelCurrent
+                                                    : styles.weekDateLabelInactive,
+                                                ]}
+                                              >
+                                                {t('to')}
+                                              </Text>
+                                              {formatOrdinalDate(weekEndDate.format('YYYY-MM-DD'))}
+                                            </Text>
+                                          </View>
+                                          <View style={styles.progressIndicator}>
+                                            {weekProgress >= 0.999 ? (
+                                              <IconCheck size={24} color={COLORS.signalPositive} />
+                                            ) : (
+                                              <>
+                                                <Text
+                                                  style={[
+                                                    styles.progressText,
+                                                    isCurrentWeek ? styles.progressTextCurrent : styles.progressTextInactive,
+                                                  ]}
+                                                >
+                                                  {weekCompletion}%
+                                                </Text>
+                                                <Svg height="16" width="16" viewBox="0 0 16 16" style={styles.progressCircle}>
+                                                  <Circle cx="8" cy="8" r="8" fill={COLORS.backgroundCanvas} />
+                                                  {weekCompletion > 0 ? (
+                                                    <Path
+                                                      d={`M 8 8 L 8 0 A 8 8 0 ${weekCompletion / 100 > 0.5 ? 1 : 0} 1 ${
+                                                        8 + 8 * Math.sin(2 * Math.PI * (weekCompletion / 100))
+                                                      } ${
+                                                        8 - 8 * Math.cos(2 * Math.PI * (weekCompletion / 100))
+                                                      } Z`}
+                                                      fill={COLORS.signalWarning}
+                                                    />
+                                                  ) : null}
+                                                </Svg>
+                                              </>
+                                            )}
+                                          </View>
+                                        </View>
+                                      );
+                                    })}
                                   </View>
-                                  <Text style={styles.cycleDateLine}>
-                                    <Text style={styles.cycleDateLabel}>{t('from')}</Text>
-                                    {formatOrdinalDate(cycle.startDate)}
-                                  </Text>
-                                  <Text style={styles.cycleDateLine}>
-                                    <Text style={styles.cycleDateLabel}>{t('to')}</Text>
-                                    {formatOrdinalDate(cycle.endDate)}
-                                  </Text>
                                 </View>
                                 <View style={styles.cycleFooter} pointerEvents="none">
                                   <View style={styles.seeDetailsButton}>
                                     <Text style={styles.seeDetailsText}>{t('seeDetails')}</Text>
                                   </View>
-                                </View>
+                            </View>
                               </TouchableOpacity>
                         </View>
                       </View>
@@ -514,25 +603,68 @@ export function WorkoutsScreen() {
               {cycles.filter(c => !c.isActive).length > 0 && (
                 <>
                   <Text style={styles.pastCyclesTitle}>{t('pastCycles')}</Text>
-                  {cycles.filter(c => !c.isActive).sort((a, b) => b.cycleNumber - a.cycleNumber).map((cycle) => (
-                    <View key={cycle.id} style={styles.pastCycleCardWrapper}>
-                      <View style={styles.pastCycleCard}>
+                  {cycles.filter(c => !c.isActive).sort((a, b) => b.cycleNumber - a.cycleNumber).map((cycle) => {
+                    const completion = getCycleCompletion(cycle.id);
+                    return (
+                      <View key={cycle.id} style={styles.pastCycleCardWrapper}>
+                        <View style={styles.cycleCard}>
                           <TouchableOpacity
-                            style={styles.pastCycleCardContent}
+                            style={[styles.cycleCardContent, styles.pastCycleCardContent]}
                             onPress={() => {
                               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                               navigation.navigate('CycleDetail' as never, { cycleId: cycle.id } as never);
                             }}
                             activeOpacity={1}
                           >
-                            <Text style={styles.pastCycleName}>
-                              {t('cycleNumber').replace('{number}', String(cycle.cycleNumber))}
-                            </Text>
-                            <IconPlay size={10} color="#000000" />
+                            <View style={styles.cycleCardContentBody}>
+                              <View style={styles.cycleCardHeader}>
+                                <Text style={styles.cycleDuration}>
+                                  {(() => {
+                                    const weeks = Math.max(
+                                      1,
+                                      dayjs(cycle.endDate).diff(dayjs(cycle.startDate), 'week') + 1
+                                    );
+                                    return weeks === 1
+                                      ? t('weekCycleSingular')
+                                      : t('weekCyclePlural').replace('{weeks}', String(weeks));
+                                  })()}
+                                </Text>
+                                <View style={styles.progressIndicator}>
+                                  {completion >= 99.9 ? (
+                                    <IconCheck size={24} color={COLORS.signalPositive} />
+                                  ) : (
+                                    <>
+                                      <Text style={styles.progressText}>{completion}%</Text>
+                                      <Svg height="16" width="16" viewBox="0 0 16 16" style={styles.progressCircle}>
+                                        <Circle cx="8" cy="8" r="8" fill={COLORS.backgroundCanvas} />
+                                        {completion > 0 ? (
+                                          <Path
+                                            d={`M 8 8 L 8 0 A 8 8 0 ${completion / 100 > 0.5 ? 1 : 0} 1 ${
+                                              8 + 8 * Math.sin(2 * Math.PI * (completion / 100))
+                                            } ${
+                                              8 - 8 * Math.cos(2 * Math.PI * (completion / 100))
+                                            } Z`}
+                                            fill={COLORS.signalWarning}
+                                          />
+                                        ) : null}
+                                      </Svg>
+                                    </>
+                                  )}
+                                </View>
+                              </View>
+                              <Text style={styles.pastCycleDateLine}>
+                                <Text style={styles.pastCycleDateLabel}>{t('from')}</Text>
+                                {formatOrdinalDate(cycle.startDate)}
+                                {' '}
+                                <Text style={styles.pastCycleDateLabel}>{t('to')}</Text>
+                                {formatOrdinalDate(cycle.endDate)}
+                              </Text>
+                            </View>
                           </TouchableOpacity>
+                        </View>
                       </View>
-                    </View>
-                  ))}
+                    );
+                  })}
                 </>
               )}
             </>
@@ -686,6 +818,9 @@ const styles = StyleSheet.create({
     paddingTop: 20,
     paddingBottom: 4,
   },
+  currentCycleCardContent: {
+    paddingTop: 20,
+  },
   cycleCardContentBody: {
     paddingHorizontal: 20,
   },
@@ -710,8 +845,70 @@ const styles = StyleSheet.create({
     ...TYPOGRAPHY.h2,
     color: COLORS.textMeta,
   },
+  pastCycleDateLine: {
+    ...TYPOGRAPHY.meta,
+    color: COLORS.text,
+    marginBottom: 2,
+  },
+  pastCycleDateLabel: {
+    ...TYPOGRAPHY.meta,
+    color: COLORS.text,
+  },
   cycleFooter: {
     marginTop: 20,
+  },
+  weekList: {
+    marginTop: SPACING.md,
+    gap: SPACING.md + 8,
+  },
+  weekRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    position: 'relative',
+  },
+  weekInfo: {
+    flex: 1,
+    paddingRight: SPACING.md,
+  },
+  weekTitle: {
+    ...TYPOGRAPHY.meta,
+    color: COLORS.textMeta,
+    marginBottom: 2,
+  },
+  weekTitleInactive: {
+    color: COLORS.textMeta,
+  },
+  weekTitleCurrent: {
+    color: COLORS.text,
+  },
+  weekDates: {
+    ...TYPOGRAPHY.meta,
+    color: COLORS.text,
+  },
+  weekDateLabel: {
+    ...TYPOGRAPHY.meta,
+    color: COLORS.text,
+  },
+  weekDatesCurrent: {
+    ...TYPOGRAPHY.body,
+    color: COLORS.text,
+  },
+  weekDatesInactive: {
+    color: COLORS.textMeta,
+  },
+  weekDateLabelCurrent: {
+    ...TYPOGRAPHY.body,
+    color: COLORS.text,
+  },
+  weekDateLabelInactive: {
+    color: COLORS.textMeta,
+  },
+  currentCycleTitle: {
+    ...TYPOGRAPHY.h3,
+    color: COLORS.text,
+    marginTop: 0,
+    marginBottom: SPACING.md,
   },
   progressIndicator: {
     flexDirection: 'row',
@@ -723,6 +920,12 @@ const styles = StyleSheet.create({
   },
   progressText: {
     ...TYPOGRAPHY.meta,
+    color: COLORS.textMeta,
+  },
+  progressTextCurrent: {
+    color: COLORS.text,
+  },
+  progressTextInactive: {
     color: COLORS.textMeta,
   },
   seeDetailsButton: {
@@ -753,18 +956,8 @@ const styles = StyleSheet.create({
   pastCycleCardWrapper: {
     marginBottom: SPACING.sm,
   },
-  pastCycleCard: CARDS.cardDeepDimmed.outer,
   pastCycleCardContent: {
-    ...CARDS.cardDeepDimmed.inner,
-    paddingHorizontal: 24,
-    paddingVertical: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  pastCycleName: {
-    ...TYPOGRAPHY.body,
-    color: COLORS.text,
+    paddingBottom: 20,
   },
   
   // Bottom Sheet Content

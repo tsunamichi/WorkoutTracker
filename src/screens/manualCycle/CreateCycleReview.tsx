@@ -320,21 +320,21 @@ export function CreateCycleReview({ navigation }: CreateCycleReviewProps) {
             >
               <Text style={styles.backFooterButtonText}>{t('back')}</Text>
             </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.createButton, !canCreate && styles.createButtonDisabled]}
-              onPress={handleCreateCycle}
-              disabled={!canCreate}
-              activeOpacity={1}
+          <TouchableOpacity
+            style={[styles.createButton, !canCreate && styles.createButtonDisabled]}
+            onPress={handleCreateCycle}
+            disabled={!canCreate}
+            activeOpacity={1}
+          >
+            <Text
+              style={[
+                styles.createButtonText,
+                !canCreate && styles.createButtonTextDisabled,
+              ]}
             >
-              <Text
-                style={[
-                  styles.createButtonText,
-                  !canCreate && styles.createButtonTextDisabled,
-                ]}
-              >
-                Create cycle
-              </Text>
-            </TouchableOpacity>
+              Create cycle
+            </Text>
+          </TouchableOpacity>
           </View>
         </View>
       </View>

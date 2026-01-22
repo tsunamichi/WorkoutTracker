@@ -416,7 +416,7 @@ export function ExerciseDetailScreen({ route, navigation }: ExerciseDetailScreen
       navigation?.goBack();
       return;
     }
-
+    
     // Transition to rest timer phase (keep drawer open)
     setIsExerciseTimerPhase(false);
     // Timer stays visible, just switches to rest phase
@@ -507,7 +507,7 @@ export function ExerciseDetailScreen({ route, navigation }: ExerciseDetailScreen
         navigation.dispatch(e.data.action);
         return;
       }
-
+      
       // Check if exercise was just skipped - if so, don't overwrite the skip state
       const currentProgress = getExerciseProgress(workoutKey, exercise.id);
       if (currentProgress?.skipped) {

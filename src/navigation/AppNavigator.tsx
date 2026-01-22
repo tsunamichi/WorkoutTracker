@@ -1,11 +1,12 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Animated } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { TodayScreen } from '../screens/TodayScreen';
 import { WorkoutsScreen } from '../screens/WorkoutsScreen';
 import { ProfileScreen } from '../screens/ProfileScreen';
+import { BodyWeightHistoryScreen } from '../screens/BodyWeightHistoryScreen';
 import { CycleDetailScreen } from '../screens/CycleDetailScreen';
 import { WorkoutExecutionScreen } from '../screens/WorkoutExecutionScreen';
 import WorkoutEditScreen from '../screens/WorkoutEditScreen';
@@ -35,8 +36,9 @@ import dayjs from 'dayjs';
 import { useTranslation } from '../i18n/useTranslation';
 
 export type RootStackParamList = {
-  Tabs: undefined;
+  Tabs: { initialTab?: 'Schedule' | 'Workouts' } | undefined;
   Profile: { mode?: 'settings' } | undefined;
+  BodyWeightHistory: undefined;
   DesignSystem: undefined;
   CycleDetail: { cycleId: string };
   WorkoutExecution: { workoutTemplateId: string; date: string };
@@ -71,6 +73,7 @@ const LIGHT_COLORS = {
 
 function TabNavigator() {
   const navigation = useNavigation();
+  const route = useRoute();
   const insets = useSafeAreaInsets();
   const { cycles, swapWorkoutAssignments } = useStore();
   const { t } = useTranslation();
@@ -85,7 +88,7 @@ function TabNavigator() {
   const scheduleIconOpacity = React.useRef(new Animated.Value(1)).current;
   const workoutsIconOpacity = React.useRef(new Animated.Value(0)).current;
   const [tabBarWidth, setTabBarWidth] = React.useState(0);
-
+  
   // Animate label colors to avoid flicker while the pill transitions
   const scheduleLabelColor = indicatorPosition.interpolate({
     inputRange: [0, 1],
@@ -96,7 +99,7 @@ function TabNavigator() {
     outputRange: [COLORS.text, COLORS.backgroundCanvas],
   });
   
-  const switchTab = (tab: 'Schedule' | 'Workouts') => {
+  const switchTab = React.useCallback((tab: 'Schedule' | 'Workouts') => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setActiveTab(tab);
     
@@ -123,7 +126,14 @@ function TabNavigator() {
         friction: 12,
       })
     ]).start();
-  };
+  }, [indicatorPosition, scheduleIconOpacity, workoutsIconOpacity]);
+
+  React.useEffect(() => {
+    const params = (route as { params?: { initialTab?: 'Schedule' | 'Workouts' } }).params;
+    if (params?.initialTab && params.initialTab !== activeTab) {
+      switchTab(params.initialTab);
+    }
+  }, [activeTab, route, switchTab]);
   
   const handleTabBarLayout = (event: any) => {
     const { width } = event.nativeEvent.layout;
@@ -496,6 +506,7 @@ export default function AppNavigator() {
       >
         <Stack.Screen name="Tabs" component={TabNavigator} />
         <Stack.Screen name="Profile" component={ProfileScreen} />
+        <Stack.Screen name="BodyWeightHistory" component={BodyWeightHistoryScreen} />
         <Stack.Screen name="DesignSystem" component={DesignSystemScreen} />
         <Stack.Screen name="CycleDetail" component={CycleDetailScreen} />
         <Stack.Screen name="WorkoutExecution" component={WorkoutExecutionScreen} />

@@ -1,5 +1,5 @@
 import React from 'react';
-import { TouchableOpacity, StyleSheet, Text } from 'react-native';
+import { TouchableOpacity, StyleSheet, Text, Image } from 'react-native';
 import { IconUser } from './icons';
 import { COLORS } from '../constants';
 import { useTranslation } from '../i18n/useTranslation';
@@ -10,6 +10,7 @@ interface ProfileAvatarProps {
   backgroundColor?: string;
   textColor?: string;
   showInitial?: boolean;
+  imageUri?: string | null;
 }
 
 export function ProfileAvatar({ 
@@ -18,6 +19,7 @@ export function ProfileAvatar({
   backgroundColor = COLORS.canvas,
   textColor = COLORS.textPrimary,
   showInitial = false,
+  imageUri = null,
 }: ProfileAvatarProps) {
   const { t } = useTranslation();
   return (
@@ -33,7 +35,9 @@ export function ProfileAvatar({
       onPress={onPress}
       activeOpacity={1}
     >
-      {showInitial ? (
+      {imageUri ? (
+        <Image source={{ uri: imageUri }} style={{ width: size, height: size, borderRadius: 999 }} />
+      ) : showInitial ? (
         <Text style={[styles.initial, { color: textColor, fontSize: size * 0.5 }]}>
           {t('userInitial')}
         </Text>

@@ -40,7 +40,7 @@ interface TodayScreenProps {
 export function TodayScreen({ onNavigateToWorkouts, onDateChange, onOpenSwapDrawer }: TodayScreenProps) {
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
-  const { cycles, workoutAssignments, getWorkoutCompletionPercentage, getExerciseProgress, swapWorkoutAssignments, getHIITTimerSessionsForDate } = useStore();
+  const { cycles, workoutAssignments, getWorkoutCompletionPercentage, getExerciseProgress, swapWorkoutAssignments, getHIITTimerSessionsForDate, settings } = useStore();
   const { t } = useTranslation();
   const today = dayjs();
   
@@ -281,6 +281,7 @@ export function TodayScreen({ onNavigateToWorkouts, onDateChange, onOpenSwapDraw
                   backgroundColor="#9E9E9E"
                   textColor="#FFFFFF"
                   showInitial={true}
+                  imageUri={settings.profileAvatarUri || null}
                 />
               </View>
             </View>
@@ -390,33 +391,32 @@ export function TodayScreen({ onNavigateToWorkouts, onDateChange, onOpenSwapDraw
                       return (
                         <>
                           <View style={styles.workoutCardContent}>
+                            {progress >= 0.999 && (
+                              <View style={styles.progressCheckBadge}>
+                                <IconCheck size={24} color={COLORS.signalPositive} />
+                              </View>
+                            )}
                           {/* Top Row: Workout Name + Progress */}
                           <View style={styles.workoutCardHeader}>
                             <Text style={styles.workoutName}>{selectedDay.workout.name}</Text>
-                            <View style={styles.progressIndicator}>
-                              {progress >= 0.999 ? (
-                                  <View style={styles.progressCheckCircle}>
-                                  <IconCheck size={24} color={COLORS.signalPositive} />
-                                  </View>
-                              ) : (
-                                <>
-                                  <Text style={styles.progressText}>{completionPercentage}%</Text>
-                                  <Svg height="16" width="16" viewBox="0 0 16 16" style={styles.progressCircle}>
-                                      <Circle cx="8" cy="8" r="8" fill={COLORS.backgroundCanvas} />
-                                    {progress > 0 ? (
-                                      <Path
-                                        d={`M 8 8 L 8 0 A 8 8 0 ${progress > 0.5 ? 1 : 0} 1 ${
-                                          8 + 8 * Math.sin(2 * Math.PI * progress)
-                                        } ${
-                                          8 - 8 * Math.cos(2 * Math.PI * progress)
-                                        } Z`}
-                                          fill={COLORS.signalWarning}
-                                      />
-                                    ) : null}
-                                  </Svg>
-                                </>
-                              )}
-                            </View>
+                            {progress < 0.999 && (
+                              <View style={styles.progressIndicator}>
+                                <Text style={styles.progressText}>{completionPercentage}%</Text>
+                                <Svg height="16" width="16" viewBox="0 0 16 16" style={styles.progressCircle}>
+                                  <Circle cx="8" cy="8" r="8" fill={COLORS.backgroundCanvas} />
+                                  {progress > 0 ? (
+                                    <Path
+                                      d={`M 8 8 L 8 0 A 8 8 0 ${progress > 0.5 ? 1 : 0} 1 ${
+                                        8 + 8 * Math.sin(2 * Math.PI * progress)
+                                      } ${
+                                        8 - 8 * Math.cos(2 * Math.PI * progress)
+                                      } Z`}
+                                      fill={COLORS.signalWarning}
+                                    />
+                                  ) : null}
+                                </Svg>
+                              </View>
+                            )}
                           </View>
                           
                           {/* Exercises Count */}
@@ -761,6 +761,7 @@ const styles = StyleSheet.create({
   },
   workoutCardContent: {
     paddingHorizontal: 20,
+    position: 'relative',
   },
   workoutCardHeader: {
     flexDirection: 'row',
@@ -796,6 +797,11 @@ const styles = StyleSheet.create({
     height: 24,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  progressCheckBadge: {
+    position: 'absolute',
+    top: 0,
+    right: 16,
   },
   progressText: {
     ...TYPOGRAPHY.meta,

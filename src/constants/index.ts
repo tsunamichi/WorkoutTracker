@@ -363,7 +363,7 @@ export const SEED_EXERCISES = [
   { name: 'Pec Deck', category: 'Chest', equipment: 'Other' },
   { name: 'Push-Ups', category: 'Chest', equipment: 'Other' },
   { name: 'Chest Dips', category: 'Chest', equipment: 'Other' },
-
+  
   // Back (Lats & Mid-Back)
   { name: 'Pull-Ups', category: 'Back (Lats & Mid-Back)', equipment: 'Other' },
   { name: 'Chin-Ups', category: 'Back (Lats & Mid-Back)', equipment: 'Other' },
@@ -388,7 +388,7 @@ export const SEED_EXERCISES = [
   { name: 'Prone T Raise', category: 'Back (Upper / Scapular)', equipment: 'Other' },
   { name: 'Reverse Pec Deck', category: 'Back (Upper / Scapular)', equipment: 'Other' },
   { name: 'Scapular Pull-Ups', category: 'Back (Upper / Scapular)', equipment: 'Other' },
-
+  
   // Shoulders (Delts)
   { name: 'Overhead Barbell Press', category: 'Shoulders (Delts)', equipment: 'Other' },
   { name: 'Seated Dumbbell Shoulder Press', category: 'Shoulders (Delts)', equipment: 'Other' },
@@ -422,7 +422,7 @@ export const SEED_EXERCISES = [
   { name: 'Bench Dips', category: 'Triceps', equipment: 'Other' },
   { name: 'Assisted Dips', category: 'Triceps', equipment: 'Other' },
   { name: 'Single-Arm Cable Kickback', category: 'Triceps', equipment: 'Other' },
-
+  
   // Legs (Quads)
   { name: 'Back Squat', category: 'Legs (Quads)', equipment: 'Other' },
   { name: 'Front Squat', category: 'Legs (Quads)', equipment: 'Other' },
@@ -453,7 +453,7 @@ export const SEED_EXERCISES = [
   { name: 'Walking Lunge', category: 'Glutes', equipment: 'Other' },
   { name: 'Step-Back Lunge', category: 'Glutes', equipment: 'Other' },
   { name: 'Curtsy Lunge', category: 'Glutes', equipment: 'Other' },
-
+  
   // Adductors / Abductors
   { name: 'Adductor Machine', category: 'Adductors / Abductors', equipment: 'Other' },
   { name: 'Abductor Machine', category: 'Adductors / Abductors', equipment: 'Other' },
@@ -477,7 +477,7 @@ export const SEED_EXERCISES = [
   { name: 'Pallof Press', category: 'Core (Anti-Extension / Stability)', equipment: 'Other' },
   { name: 'Stability Ball Rollout', category: 'Core (Anti-Extension / Stability)', equipment: 'Other' },
   { name: 'Ab Wheel Rollout', category: 'Core (Anti-Extension / Stability)', equipment: 'Other' },
-
+  
   // Core (Flexion / Rotation)
   { name: 'Hanging Knee Raise', category: 'Core (Flexion / Rotation)', equipment: 'Other' },
   { name: 'Hanging Leg Raise', category: 'Core (Flexion / Rotation)', equipment: 'Other' },

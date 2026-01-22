@@ -208,7 +208,7 @@ export function AIWorkoutCreationScreen() {
         Alert.alert(t('alertErrorTitle'), t('errorNoWorkoutsFound'));
         return;
       }
-
+      
       const weekNumbers = Object.keys(weeklyWorkouts).map(k => parseInt(k, 10));
       const minWeekNumber = Math.min(...weekNumbers);
       if (minWeekNumber !== 1) {
@@ -299,8 +299,8 @@ export function AIWorkoutCreationScreen() {
       
       console.log('✅ Cycle created with', allWorkoutTemplates.length, 'workout templates across', numberOfWeeks, 'weeks');
       
-      // Navigate back to Workouts screen
-      navigation.goBack();
+      // Navigate to Schedule tab after creation
+      navigation.navigate('Tabs' as never, { initialTab: 'Schedule' } as never);
     } catch (error) {
       console.error('Error creating cycle:', error);
       Alert.alert(t('alertErrorTitle'), t('failedToCreateCycle'));

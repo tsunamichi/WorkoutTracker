@@ -18,6 +18,8 @@ type TranslationKey =
   | 'addIntervalTimer'
   | 'addInterval'
   | 'new'
+  | 'inProgress'
+  | 'currentCycle'
   | 'pastCycles'
   | 'cycleNumber'
   | 'seeDetails'
@@ -80,6 +82,8 @@ type TranslationKey =
   | 'setLabel'
   | 'roundLabel'
   | 'go'
+  | 'timerCompleteTitle'
+  | 'timerCompleteBody'
   | 'workoutComplete'
   | 'niceWork'
   | 'nextSetOutOf'
@@ -131,6 +135,20 @@ type TranslationKey =
   | 'trainerLabel'
   | 'youLabel'
   | 'permissionRequired'
+  | 'notificationPermissionTitle'
+  | 'notificationPermissionBody'
+  | 'enableNotifications'
+  | 'notNow'
+  | 'openSettings'
+  | 'timerNotifications'
+  | 'timerNotificationsDescription'
+  | 'notificationUnavailable'
+  | 'notificationSystemDisabled'
+  | 'currentStreak'
+  | 'viewAll'
+  | 'photoLibraryPermissionTitle'
+  | 'photoLibraryPermissionBody'
+  | 'imagePickerUnavailable'
   | 'audioPermissionRequired'
   | 'errorFailedStartRecording'
   | 'errorFailedGetRecordingUri'
@@ -308,6 +326,8 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     addIntervalTimer: 'Add interval timer',
     addInterval: 'Add',
     new: 'New',
+    inProgress: 'In progress',
+    currentCycle: 'Current Cycle',
     pastCycles: 'Past Cycles',
     cycleNumber: 'Cycle {number}',
     seeDetails: 'See details',
@@ -370,6 +390,8 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     setLabel: 'Set',
     roundLabel: 'Round',
     go: 'Go!',
+    timerCompleteTitle: 'Timer complete',
+    timerCompleteBody: '{exerciseName} is done',
     workoutComplete: 'Workout complete',
     niceWork: 'Nice work',
     nextSetOutOf: 'Next set {current} out of {total}',
@@ -421,6 +443,20 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     trainerLabel: 'Trainer',
     youLabel: 'You',
     permissionRequired: 'Permission Required',
+    notificationPermissionTitle: 'Enable notifications',
+    notificationPermissionBody: 'Get an alert when your timer finishes in the background.',
+    enableNotifications: 'Enable',
+    notNow: 'Not now',
+    openSettings: 'Open Settings',
+    timerNotifications: 'Timer notifications',
+    timerNotificationsDescription: 'Alerts when timers finish in the background.',
+    notificationUnavailable: 'Notifications are unavailable on this device.',
+    notificationSystemDisabled: 'Disabled in system settings.',
+    currentStreak: 'Current streak',
+    viewAll: 'View all',
+    photoLibraryPermissionTitle: 'Allow photo access',
+    photoLibraryPermissionBody: 'Enable photo access to upload your profile picture.',
+    imagePickerUnavailable: 'Photo picker is unavailable on this device.',
     audioPermissionRequired: 'Audio recording permission is required to use the trainer.',
     errorFailedStartRecording: 'Failed to start recording',
     errorFailedGetRecordingUri: 'Failed to get recording URI',
@@ -599,6 +635,8 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     addIntervalTimer: 'Agregar temporizador',
     addInterval: 'Agregar',
     new: 'Nuevo',
+    inProgress: 'En progreso',
+    currentCycle: 'Ciclo actual',
     pastCycles: 'Ciclos pasados',
     cycleNumber: 'Ciclo {number}',
     seeDetails: 'Ver detalles',
@@ -661,6 +699,8 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     setLabel: 'Serie',
     roundLabel: 'Ronda',
     go: 'Ya!',
+    timerCompleteTitle: 'Temporizador completo',
+    timerCompleteBody: '{exerciseName} terminó',
     workoutComplete: 'Entrenamiento completo',
     niceWork: 'Buen trabajo',
     nextSetOutOf: 'Siguiente serie {current} de {total}',
@@ -712,6 +752,20 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     trainerLabel: 'Entrenador',
     youLabel: 'Tu',
     permissionRequired: 'Permiso requerido',
+    notificationPermissionTitle: 'Habilitar notificaciones',
+    notificationPermissionBody: 'Recibe una alerta cuando tu temporizador termine en segundo plano.',
+    enableNotifications: 'Habilitar',
+    notNow: 'Ahora no',
+    openSettings: 'Abrir ajustes',
+    timerNotifications: 'Notificaciones de temporizador',
+    timerNotificationsDescription: 'Alertas cuando el temporizador termina en segundo plano.',
+    notificationUnavailable: 'Las notificaciones no estan disponibles en este dispositivo.',
+    notificationSystemDisabled: 'Desactivadas en los ajustes del sistema.',
+    currentStreak: 'Racha actual',
+    viewAll: 'Ver todo',
+    photoLibraryPermissionTitle: 'Permitir acceso a fotos',
+    photoLibraryPermissionBody: 'Habilita el acceso a fotos para subir tu imagen de perfil.',
+    imagePickerUnavailable: 'El selector de fotos no esta disponible en este dispositivo.',
     audioPermissionRequired: 'Se requiere permiso de audio para usar el entrenador.',
     errorFailedStartRecording: 'No se pudo iniciar la grabacion',
     errorFailedGetRecordingUri: 'No se pudo obtener el audio',

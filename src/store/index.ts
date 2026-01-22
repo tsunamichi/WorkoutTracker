@@ -83,6 +83,8 @@ const DEFAULT_SETTINGS: AppSettings = {
   monthlyProgressReminderEnabled: true,
   monthlyProgressReminderDay: 1,
   restTimerDefaultSeconds: 120,
+  notificationsPermissionPrompted: false,
+  profileAvatarUri: undefined,
   openaiApiKey: '', // API key removed for security - add via app settings
 };
 
@@ -110,6 +112,42 @@ const inferExerciseEquipment = (name: string): string => {
   return 'Dumbbell'; // Default to dumbbell
 };
 
+const normalizeExerciseName = (name: string): string => {
+  const normalized = name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+
+  if (normalized === 'adductor machine' || normalized === 'adductor') return 'adductor';
+  if (normalized === 'abductor machine' || normalized === 'abductor') return 'abductor';
+
+  return normalized;
+};
+
+const toTitleCase = (value: string): string =>
+  value.replace(/\w\S*/g, (word) => word[0].toUpperCase() + word.slice(1));
+
+const pickPreferredExercise = (primary: Exercise, candidate: Exercise, key: string): Exercise => {
+  if (key === 'adductor' || key === 'abductor') {
+    const primaryHasMachine = primary.name.toLowerCase().includes('machine');
+    const candidateHasMachine = candidate.name.toLowerCase().includes('machine');
+    if (primaryHasMachine && !candidateHasMachine) return candidate;
+    if (!primaryHasMachine && candidateHasMachine) return primary;
+  }
+
+  if (primary.isCustom !== candidate.isCustom) {
+    return primary.isCustom ? primary : candidate;
+  }
+
+  if (primary.notes && !candidate.notes) return primary;
+  if (!primary.notes && candidate.notes) return candidate;
+
+  if (primary.measurementType && !candidate.measurementType) return primary;
+  if (!primary.measurementType && candidate.measurementType) return candidate;
+
+  return primary;
+};
+
 export const useStore = create<WorkoutStore>((set, get) => ({
   cycles: [],
   exercises: [],
@@ -128,7 +166,20 @@ export const useStore = create<WorkoutStore>((set, get) => ({
   
   initialize: async () => {
     try {
-      const [cycles, exercises, sessions, bodyWeightEntries, settings, workoutAssignments, trainerConversations, exercisePRs, workoutProgress, detailedWorkoutProgress, hiitTimers, hiitTimerSessions] = await Promise.all([
+      const [
+        cycles,
+        exercises,
+        sessions,
+        bodyWeightEntries,
+        loadedSettings,
+        workoutAssignments,
+        trainerConversations,
+        exercisePRs,
+        workoutProgress,
+        detailedWorkoutProgress,
+        hiitTimers,
+        hiitTimerSessions,
+      ] = await Promise.all([
         storage.loadCycles(),
         storage.loadExercises(),
         storage.loadSessions(),
@@ -154,9 +205,37 @@ export const useStore = create<WorkoutStore>((set, get) => ({
         );
         await storage.saveBodyWeightEntries(finalBodyWeightEntries);
       }
+
+      // Seed body weight entries for demo/testing if less than 15 exist.
+      if (finalBodyWeightEntries.length < 15) {
+        const existingDates = new Set(finalBodyWeightEntries.map(entry => entry.date));
+        const missingCount = 15 - finalBodyWeightEntries.length;
+        const seedEntries = Array.from({ length: missingCount }).map((_, index) => {
+          const date = dayjs()
+            .subtract(index + 1, 'day')
+            .format('YYYY-MM-DD');
+          const safeDate = existingDates.has(date)
+            ? dayjs()
+                .subtract(index + 1 + missingCount, 'day')
+                .format('YYYY-MM-DD')
+            : date;
+          const weight = 180 - index * 0.4;
+          return {
+            id: `seed-weight-${Date.now()}-${index}`,
+            date: safeDate,
+            weight,
+            unit: 'lb' as const,
+          };
+        });
+        finalBodyWeightEntries = [...finalBodyWeightEntries, ...seedEntries];
+        await storage.saveBodyWeightEntries(finalBodyWeightEntries);
+      }
       
       // Seed exercises if none exist
       let finalExercises = exercises;
+      let exercisesDeduped = false;
+      const exerciseIdMap = new Map<string, string>();
+      const exerciseNameById = new Map<string, string>();
       if (exercises.length === 0) {
         finalExercises = SEED_EXERCISES.map((ex, idx) => ({
           id: `seed-${idx}`,
@@ -184,6 +263,52 @@ export const useStore = create<WorkoutStore>((set, get) => ({
           await storage.saveExercises(finalExercises);
           console.log('✅ Exercise equipment migration complete');
         }
+      }
+
+      // Migration: Deduplicate exercise library and normalize adductor/abductor
+      const exercisesByKey = new Map<string, Exercise[]>();
+      finalExercises.forEach((exercise) => {
+        const key = normalizeExerciseName(exercise.name);
+        const group = exercisesByKey.get(key) || [];
+        group.push(exercise);
+        exercisesByKey.set(key, group);
+      });
+
+      const dedupedExercises: Exercise[] = [];
+      exercisesByKey.forEach((group, key) => {
+        let preferred = group[0];
+        group.forEach((candidate) => {
+          preferred = pickPreferredExercise(preferred, candidate, key);
+        });
+
+        const merged = group.reduce<Exercise>((acc, exercise) => {
+          return {
+            ...acc,
+            equipment: acc.equipment || exercise.equipment,
+            measurementType: acc.measurementType || exercise.measurementType,
+            notes: acc.notes || exercise.notes,
+            isCustom: acc.isCustom || exercise.isCustom,
+          };
+        }, preferred);
+
+        const finalName = key === 'adductor' || key === 'abductor' ? toTitleCase(key) : merged.name;
+        const finalExercise: Exercise = { ...merged, name: finalName };
+        dedupedExercises.push(finalExercise);
+
+        group.forEach((exercise) => {
+          exerciseIdMap.set(exercise.id, finalExercise.id);
+          if (exercise.id !== finalExercise.id) {
+            exercisesDeduped = true;
+          }
+        });
+
+        exerciseNameById.set(finalExercise.id, finalExercise.name);
+      });
+
+      if (exercisesDeduped) {
+        finalExercises = dedupedExercises;
+        await storage.saveExercises(finalExercises);
+        console.log('✅ Exercise deduplication complete');
       }
       
       // Initialize advice conversation if it doesn't exist
@@ -230,6 +355,76 @@ export const useStore = create<WorkoutStore>((set, get) => ({
         finalCycles = migratedCycles;
         await storage.saveCycles(finalCycles);
         console.log('✅ Cycle duplicate templates migration complete');
+      }
+
+      let finalSessions = sessions;
+      let finalExercisePRs = exercisePRs;
+      let finalWorkoutProgress = workoutProgress;
+      let finalSettings = { ...DEFAULT_SETTINGS, ...(loadedSettings || {}) };
+
+      if (exercisesDeduped) {
+        finalCycles = finalCycles.map((cycle) => ({
+          ...cycle,
+          workoutTemplates: cycle.workoutTemplates.map((template) => ({
+            ...template,
+            exercises: template.exercises.map((exercise) => ({
+              ...exercise,
+              exerciseId: exerciseIdMap.get(exercise.exerciseId) || exercise.exerciseId,
+            })),
+          })),
+        }));
+        await storage.saveCycles(finalCycles);
+
+        finalSessions = finalSessions.map((session) => ({
+          ...session,
+          sets: session.sets.map((set) => ({
+            ...set,
+            exerciseId: exerciseIdMap.get(set.exerciseId) || set.exerciseId,
+          })),
+        }));
+        await storage.saveSessions(finalSessions);
+
+        finalExercisePRs = finalExercisePRs.map((pr) => {
+          const updatedId = exerciseIdMap.get(pr.exerciseId) || pr.exerciseId;
+          return {
+            ...pr,
+            exerciseId: updatedId,
+            exerciseName: exerciseNameById.get(updatedId) || pr.exerciseName,
+          };
+        });
+        await storage.saveExercisePRs(finalExercisePRs);
+
+        finalWorkoutProgress = Object.fromEntries(
+          Object.entries(finalWorkoutProgress).map(([workoutId, progress]) => {
+            const completedExercises = progress.completedExercises.map(
+              (exerciseId) => exerciseIdMap.get(exerciseId) || exerciseId
+            );
+            const completedSets: Record<string, number[]> = {};
+            Object.entries(progress.completedSets).forEach(([exerciseId, sets]) => {
+              const updatedId = exerciseIdMap.get(exerciseId) || exerciseId;
+              completedSets[updatedId] = (completedSets[updatedId] || []).concat(sets);
+            });
+            return [
+              workoutId,
+              {
+                ...progress,
+                completedExercises: Array.from(new Set(completedExercises)),
+                completedSets,
+              },
+            ];
+          })
+        );
+        await storage.saveWorkoutProgressToStorage(finalWorkoutProgress);
+
+        if (finalSettings.barbellMode) {
+          const updatedBarbellMode: Record<string, boolean> = {};
+          Object.entries(finalSettings.barbellMode).forEach(([exerciseId, enabled]) => {
+            const updatedId = exerciseIdMap.get(exerciseId) || exerciseId;
+            updatedBarbellMode[updatedId] = enabled;
+          });
+          finalSettings = { ...finalSettings, barbellMode: updatedBarbellMode };
+          await storage.saveSettings(finalSettings);
+        }
       }
       
       // Don't seed demo data - user will create their own cycles
@@ -359,7 +554,6 @@ export const useStore = create<WorkoutStore>((set, get) => ({
       }
       
       // Log settings info for debugging
-      const finalSettings = { ...DEFAULT_SETTINGS, ...(settings || {}) };
       console.log('🔧 App Initialized with Settings:', {
         useKg: finalSettings.useKg,
         hasApiKey: !!finalSettings.openaiApiKey,
@@ -372,13 +566,13 @@ export const useStore = create<WorkoutStore>((set, get) => ({
       set({
         cycles: finalCycles,
         exercises: finalExercises,
-        sessions,
+        sessions: finalSessions,
         bodyWeightEntries: finalBodyWeightEntries,
         workoutAssignments: finalWorkoutAssignments,
-        exercisePRs,
+        exercisePRs: finalExercisePRs,
         trainerConversations: finalConversations,
         settings: finalSettings,
-        workoutProgress,
+        workoutProgress: finalWorkoutProgress,
         detailedWorkoutProgress,
         hiitTimers,
         hiitTimerSessions,

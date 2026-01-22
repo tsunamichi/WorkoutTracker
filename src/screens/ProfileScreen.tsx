@@ -1,16 +1,33 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Switch, TextInput, Modal, Alert } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Switch, TextInput, Modal, Alert, Linking } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useStore } from '../store';
 import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS } from '../constants';
-import { IconArrowLeft, IconAdd, IconMenu, IconCheck } from '../components/icons';
+import { IconArrowLeft, IconAdd, IconMenu, IconCheck, IconEdit } from '../components/icons';
+import { ProfileAvatar } from '../components/ProfileAvatar';
 import { TimerValueSheet } from '../components/timer/TimerValueSheet';
 import dayjs from 'dayjs';
 import { formatWeight, fromDisplayWeight } from '../utils/weight';
 import { BottomDrawer } from '../components/common/BottomDrawer';
 import { useTranslation } from '../i18n/useTranslation';
+
+// Optional local notifications (expo-notifications). If not installed, toggle is disabled.
+let Notifications: any = null;
+try {
+  Notifications = require('expo-notifications');
+} catch (e) {
+  console.log('⚠️ expo-notifications not installed, notifications toggle disabled');
+}
+
+// Optional media picker (expo-image-picker). If not installed, avatar upload is disabled.
+let ImagePicker: any = null;
+try {
+  ImagePicker = require('expo-image-picker');
+} catch (e) {
+  console.log('⚠️ expo-image-picker not installed, avatar upload disabled');
+}
 
 interface ProfileScreenProps {
   navigation: any;
@@ -28,14 +45,139 @@ const LIGHT_COLORS = {
 
 export function ProfileScreen({ navigation, route }: ProfileScreenProps) {
   const insets = useSafeAreaInsets();
-  const { settings, updateSettings, bodyWeightEntries, addBodyWeightEntry, sessions, clearAllHistory } = useStore();
+  const {
+    settings,
+    updateSettings,
+    bodyWeightEntries,
+    addBodyWeightEntry,
+    sessions,
+    clearAllHistory,
+    cycles,
+    workoutAssignments,
+    getWorkoutCompletionPercentage,
+    getExerciseProgress,
+  } = useStore();
   const isSettingsMode = route?.params?.mode === 'settings';
   const [showAddWeight, setShowAddWeight] = useState(false);
   const [newWeight, setNewWeight] = useState('');
   const [showRestTimePicker, setShowRestTimePicker] = useState(false);
   const [showLanguagePicker, setShowLanguagePicker] = useState(false);
+  const [notificationsSystemEnabled, setNotificationsSystemEnabled] = useState<boolean | null>(null);
   const { t, language } = useTranslation();
   const languageLabel = language === 'es' ? t('spanish') : t('english');
+  const notificationsEnabled = settings.notificationsEnabled !== false;
+
+  const handlePickAvatar = async () => {
+    if (!ImagePicker) {
+      Alert.alert(t('notificationPermissionTitle'), t('imagePickerUnavailable'));
+      return;
+    }
+
+    try {
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permission.granted) {
+        Alert.alert(
+          t('photoLibraryPermissionTitle'),
+          t('photoLibraryPermissionBody'),
+          [
+            { text: t('notNow'), style: 'cancel' },
+            {
+              text: t('openSettings'),
+              onPress: () => Linking.openSettings().catch(() => {}),
+            },
+          ]
+        );
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        quality: 1,
+      });
+
+      if (!result.canceled && result.assets?.[0]?.uri) {
+        await updateSettings({ profileAvatarUri: result.assets[0].uri });
+      }
+    } catch (error) {
+      console.log('⚠️ Failed to pick avatar:', error instanceof Error ? error.message : error);
+    }
+  };
+
+  const handleToggleNotifications = async (value: boolean) => {
+    if (!value) {
+      await updateSettings({
+        notificationsEnabled: false,
+        notificationsPermissionPrompted: true,
+      });
+      return;
+    }
+
+    if (!Notifications) {
+      Alert.alert(t('notificationPermissionTitle'), t('notificationUnavailable'));
+      return;
+    }
+
+    try {
+      const permission = await Notifications.getPermissionsAsync();
+      const hasPermission = permission.granted || permission.ios?.status === 2;
+      if (hasPermission) {
+        await updateSettings({
+          notificationsEnabled: true,
+          notificationsPermissionPrompted: true,
+        });
+        return;
+      }
+
+      const requested = await Notifications.requestPermissionsAsync();
+      const granted = requested.granted || requested.ios?.status === 2;
+      await updateSettings({
+        notificationsEnabled: granted,
+        notificationsPermissionPrompted: true,
+      });
+
+      if (!granted) {
+        Alert.alert(
+          t('notificationPermissionTitle'),
+          t('notificationPermissionBody'),
+          [
+            { text: t('notNow'), style: 'cancel' },
+            {
+              text: t('openSettings'),
+              onPress: () => {
+                Linking.openSettings().catch(() => {});
+              },
+            },
+          ]
+        );
+      }
+    } catch (error) {
+      console.log('⚠️ Failed to request notification permissions:', error instanceof Error ? error.message : error);
+    }
+  };
+
+  React.useEffect(() => {
+    if (!Notifications) {
+      setNotificationsSystemEnabled(false);
+      return;
+    }
+
+    let isMounted = true;
+    Notifications.getPermissionsAsync()
+      .then((permission: any) => {
+        if (!isMounted) return;
+        const enabled = permission.granted || permission.ios?.status === 2;
+        setNotificationsSystemEnabled(enabled);
+      })
+      .catch(() => {
+        if (!isMounted) return;
+        setNotificationsSystemEnabled(false);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [isSettingsMode]);
   
   const handleAddWeight = async () => {
     if (newWeight.trim()) {
@@ -54,12 +196,85 @@ export function ProfileScreen({ navigation, route }: ProfileScreenProps) {
       setShowAddWeight(false);
     }
   };
+
+  const sortedWeightEntries = React.useMemo(
+    () => [...bodyWeightEntries].sort((a, b) => dayjs(b.date).valueOf() - dayjs(a.date).valueOf()),
+    [bodyWeightEntries]
+  );
+  const recentWeightEntries = sortedWeightEntries.slice(0, 3);
+  const weightDeltas = React.useMemo(() => {
+    const deltas = new Map<string, number | null>();
+    sortedWeightEntries.forEach((entry, index) => {
+      const previous = sortedWeightEntries[index + 1];
+      deltas.set(entry.id, previous ? entry.weight - previous.weight : null);
+    });
+    return deltas;
+  }, [sortedWeightEntries]);
   
   // Calculate workout stats
-  const totalWorkouts = sessions.length;
-  const thisMonth = sessions.filter(s => 
-    dayjs(s.date).isAfter(dayjs().startOf('month'))
-  ).length;
+  const totalWorkouts = React.useMemo(() => {
+    let completed = 0;
+    workoutAssignments.forEach(assignment => {
+      const cycle = cycles.find(c => c.id === assignment.cycleId);
+      const workout = cycle?.workoutTemplates.find(w => w.id === assignment.workoutTemplateId);
+      if (!workout) return;
+
+      const workoutKey = `${workout.id}-${assignment.date}`;
+      let totalSets = 0;
+      workout.exercises.forEach(exercise => {
+        const progress = getExerciseProgress(workoutKey, exercise.id);
+        if (!progress?.skipped) {
+          totalSets += exercise.targetSets || 0;
+        }
+      });
+
+      const completionPercentage = getWorkoutCompletionPercentage(workoutKey, totalSets);
+      if (completionPercentage === 100) {
+        completed += 1;
+      }
+    });
+
+    return completed;
+  }, [workoutAssignments, cycles, getExerciseProgress, getWorkoutCompletionPercentage]);
+
+  const currentStreak = React.useMemo(() => {
+    const completedDates = new Set<string>();
+    workoutAssignments.forEach(assignment => {
+      const cycle = cycles.find(c => c.id === assignment.cycleId);
+      const workout = cycle?.workoutTemplates.find(w => w.id === assignment.workoutTemplateId);
+      if (!workout) return;
+
+      const workoutKey = `${workout.id}-${assignment.date}`;
+      let totalSets = 0;
+      workout.exercises.forEach(exercise => {
+        const progress = getExerciseProgress(workoutKey, exercise.id);
+        if (!progress?.skipped) {
+          totalSets += exercise.targetSets || 0;
+        }
+      });
+
+      if (getWorkoutCompletionPercentage(workoutKey, totalSets) === 100) {
+        completedDates.add(assignment.date);
+      }
+    });
+
+    if (completedDates.size === 0) {
+      return 0;
+    }
+
+    let cursor = dayjs().startOf('day');
+    if (!completedDates.has(cursor.format('YYYY-MM-DD'))) {
+      cursor = cursor.subtract(1, 'day');
+    }
+
+    let streak = 0;
+    while (completedDates.has(cursor.format('YYYY-MM-DD'))) {
+      streak += 1;
+      cursor = cursor.subtract(1, 'day');
+    }
+
+    return streak;
+  }, [workoutAssignments, cycles, getExerciseProgress, getWorkoutCompletionPercentage]);
   
   return (
     <View style={styles.gradient}>
@@ -68,7 +283,16 @@ export function ProfileScreen({ navigation, route }: ProfileScreenProps) {
         <View style={[styles.header, { paddingTop: insets.top }]}>
           {/* Back Button */}
           <View style={styles.topBar}>
-            <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+            <TouchableOpacity
+              onPress={() => {
+                if (isSettingsMode) {
+                  navigation.setParams({ mode: undefined });
+                } else {
+                  navigation.goBack();
+                }
+              }}
+              style={styles.backButton}
+            >
               <IconArrowLeft size={24} color="#000000" />
             </TouchableOpacity>
             {!isSettingsMode && (
@@ -85,9 +309,11 @@ export function ProfileScreen({ navigation, route }: ProfileScreenProps) {
           <View style={styles.headerContent}>
             <View style={styles.headerLeft}>
               <View style={styles.titleContainer}>
-                <Text style={styles.headerTitle}>
-                  {isSettingsMode ? t('settings') : t('profile')}
-                </Text>
+                {isSettingsMode && (
+                  <Text style={styles.headerTitle}>
+                    {t('settings')}
+                  </Text>
+                )}
               </View>
             </View>
           </View>
@@ -97,29 +323,32 @@ export function ProfileScreen({ navigation, route }: ProfileScreenProps) {
           {!isSettingsMode ? (
             /* Progress Tab */
             <>
+              <View style={styles.avatarContainer}>
+                <View style={styles.avatarWrapper}>
+                  <ProfileAvatar
+                    size={96}
+                    onPress={handlePickAvatar}
+                    imageUri={settings.profileAvatarUri || null}
+                  />
+                  <TouchableOpacity
+                    style={styles.avatarEditButton}
+                    onPress={handlePickAvatar}
+                    activeOpacity={1}
+                  >
+                    <IconEdit size={16} color={COLORS.text} />
+                  </TouchableOpacity>
+                </View>
+              </View>
               {/* Workout Stats */}
               <View style={styles.section}>
-                <Text style={styles.sectionTitle}>{t('workoutStats')}</Text>
                 <View style={styles.statsGrid}>
-                  <View style={styles.cardBlackShadow}>
-                    <View style={styles.cardWhiteShadow}>
-                      <View style={styles.statCard}>
-                        <View style={styles.statCardInner}>
+                  <View style={styles.statBlock}>
                           <Text style={styles.statValue}>{totalWorkouts}</Text>
-                          <Text style={styles.statLabel}>{t('totalWorkouts')}</Text>
+                    <Text style={styles.statLabel}>{t('totalWorkouts')}</Text>
                         </View>
-                      </View>
-                    </View>
-                  </View>
-                  <View style={styles.cardBlackShadow}>
-                    <View style={styles.cardWhiteShadow}>
-                      <View style={styles.statCard}>
-                        <View style={styles.statCardInner}>
-                          <Text style={styles.statValue}>{thisMonth}</Text>
-                          <Text style={styles.statLabel}>{t('thisMonth')}</Text>
-                        </View>
-                      </View>
-                    </View>
+                  <View style={styles.statBlock}>
+                    <Text style={styles.statValue}>{currentStreak}</Text>
+                    <Text style={styles.statLabel}>{t('currentStreak')}</Text>
                   </View>
                 </View>
               </View>
@@ -127,45 +356,70 @@ export function ProfileScreen({ navigation, route }: ProfileScreenProps) {
               {/* Body Weight */}
               <View style={styles.section}>
                 <View style={styles.sectionHeader}>
-                  <Text style={styles.sectionTitle}>{t('bodyWeight')}</Text>
-                  <TouchableOpacity onPress={() => setShowAddWeight(true)}>
-                    <IconAdd size={24} color={COLORS.primary} />
+                <Text style={styles.sectionTitle}>{t('bodyWeight')}</Text>
+                  {bodyWeightEntries.length > 3 && (
+                    <TouchableOpacity
+                      onPress={() => navigation.navigate('BodyWeightHistory')}
+                      activeOpacity={1}
+                    >
+                      <Text style={styles.viewAllText}>{t('viewAll')}</Text>
                   </TouchableOpacity>
+                  )}
                 </View>
                 
-                {bodyWeightEntries.length === 0 ? (
-                  <View style={styles.cardBlackShadow}>
-                    <View style={styles.cardWhiteShadow}>
-                      <View style={styles.emptyState}>
-                        <View style={styles.emptyStateInner}>
-                          <Text style={styles.emptyText}>{t('noWeightEntriesYet')}</Text>
-                        </View>
-                      </View>
-                    </View>
-                  </View>
-                ) : (
-                  <View style={styles.weightList}>
-                    {[...bodyWeightEntries]
-                      .sort((a, b) => dayjs(b.date).valueOf() - dayjs(a.date).valueOf())
-                      .slice(0, 10)
-                      .map((entry) => (
-                        <View key={entry.id} style={styles.cardBlackShadow}>
-                          <View style={styles.cardWhiteShadow}>
-                            <View style={styles.weightEntry}>
-                              <View style={styles.weightEntryInner}>
+                {recentWeightEntries.length > 0 && (
+                  <View style={styles.weightCard}>
+                    {recentWeightEntries.map((entry) => (
+                      <View key={entry.id} style={styles.weightRow}>
                                 <Text style={styles.weightDate}>
                                   {dayjs(entry.date).format('MMM D, YYYY')}
                                 </Text>
-                                <Text style={styles.weightValue}>
-                                  {formatWeight(entry.weight, settings.useKg)} {settings.useKg ? 'kg' : 'lb'}
+                        <View style={styles.weightValueRow}>
+                          {(() => {
+                            const delta = weightDeltas.get(entry.id);
+                            if (delta == null || delta === 0) {
+                              return (
+                                <Text style={[styles.weightDelta, styles.weightDeltaNeutral]}>
+                                  —
                                 </Text>
-                              </View>
-                            </View>
+                              );
+                            }
+                            const direction = delta > 0 ? 'up' : 'down';
+                            const arrow = delta > 0 ? '↑' : '↓';
+                            const deltaValue = formatWeight(Math.abs(delta), settings.useKg);
+                            return (
+                              <Text
+                                style={[
+                                  styles.weightDelta,
+                                  direction === 'up' ? styles.weightDeltaUp : styles.weightDeltaDown,
+                                ]}
+                              >
+                                {arrow} {deltaValue}
+                              </Text>
+                            );
+                          })()}
+                                <Text style={styles.weightValue}>
+                            {formatWeight(entry.weight, settings.useKg)}
+                                </Text>
+                          <Text style={styles.weightUnit}>{settings.useKg ? 'kg' : 'lb'}</Text>
                           </View>
                         </View>
                       ))}
                   </View>
                 )}
+                <TouchableOpacity
+                  style={[
+                    styles.addWeightButton,
+                    recentWeightEntries.length === 0
+                      ? styles.addWeightButtonDashed
+                      : styles.addWeightButtonSolid,
+                  ]}
+                  onPress={() => setShowAddWeight(true)}
+                  activeOpacity={1}
+                >
+                  <IconAdd size={20} color={COLORS.text} />
+                  <Text style={styles.addWeightButtonText}>{t('addWeightEntry')}</Text>
+                </TouchableOpacity>
               </View>
             </>
           ) : (
@@ -233,6 +487,25 @@ export function ProfileScreen({ navigation, route }: ProfileScreenProps) {
                 <Switch
                   value={settings.monthlyProgressReminderEnabled}
                   onValueChange={(value) => updateSettings({ monthlyProgressReminderEnabled: value })}
+                  trackColor={{ false: COLORS.border, true: COLORS.primary }}
+                  thumbColor="#FFFFFF"
+                />
+              </View>
+              <View style={styles.settingsDivider} />
+
+              {/* Timer Notifications */}
+              <View style={styles.settingsListItem}>
+                <View style={styles.settingInfo}>
+                  <Text style={styles.settingLabel}>{t('timerNotifications')}</Text>
+                  <Text style={styles.settingDescription}>
+                    {notificationsSystemEnabled === false
+                      ? t('notificationSystemDisabled')
+                      : t('timerNotificationsDescription')}
+                  </Text>
+                </View>
+                <Switch
+                  value={notificationsEnabled && notificationsSystemEnabled !== false}
+                  onValueChange={handleToggleNotifications}
                   trackColor={{ false: COLORS.border, true: COLORS.primary }}
                   thumbColor="#FFFFFF"
                 />
@@ -483,13 +756,60 @@ const styles = StyleSheet.create({
     paddingBottom: SPACING.xxl,
   },
   section: {
-    marginBottom: SPACING.xl,
+    marginBottom: 56,
   },
   sectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    marginBottom: SPACING.md - 8,
+  },
+  viewAllText: {
+    ...TYPOGRAPHY.meta,
+    color: COLORS.text,
+  },
+  avatarContainer: {
+    alignItems: 'center',
+    marginBottom: 40,
+  },
+  avatarWrapper: {
+    position: 'relative',
+  },
+  avatarEditButton: {
+    position: 'absolute',
+    right: -2,
+    bottom: -2,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: COLORS.activeCard,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  addWeightButton: {
+    width: '100%',
+    height: 56,
+    borderRadius: 16,
+    borderWidth: 1,
+    backgroundColor: 'transparent',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
     marginBottom: SPACING.md,
+  },
+  addWeightButtonDashed: {
+    borderColor: COLORS.text,
+    borderStyle: 'dashed',
+  },
+  addWeightButtonSolid: {
+    borderWidth: 0,
+  },
+  addWeightButtonText: {
+    ...TYPOGRAPHY.meta,
+    color: COLORS.text,
   },
   sectionTitle: {
     ...TYPOGRAPHY.h3,
@@ -501,28 +821,8 @@ const styles = StyleSheet.create({
     gap: SPACING.sm,
     width: '100%',
   },
-  statCard: {
+  statBlock: {
     flex: 1,
-    backgroundColor: COLORS.activeCard,
-    borderRadius: 12,
-    borderCurve: 'continuous',
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    overflow: 'hidden',
-  },
-  statCardInner: {
-    backgroundColor: COLORS.activeCard,
-    borderRadius: 12,
-    borderCurve: 'continuous',
-    padding: SPACING.lg,
-    borderTopWidth: 2,
-    borderLeftWidth: 2,
-    borderBottomWidth: 2,
-    borderRightWidth: 2,
-    borderTopColor: 'rgba(255, 255, 255, 0.75)',
-    borderLeftColor: 'rgba(255, 255, 255, 0.75)',
-    borderBottomColor: 'rgba(0, 0, 0, 0.08)',
-    borderRightColor: 'rgba(0, 0, 0, 0.08)',
     alignItems: 'center',
   },
   statValue: {
@@ -535,68 +835,48 @@ const styles = StyleSheet.create({
     color: LIGHT_COLORS.secondary,
     textAlign: 'center',
   },
-  emptyState: {
+  weightCard: {
     backgroundColor: COLORS.activeCard,
-    borderRadius: 12,
-    borderCurve: 'continuous',
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    overflow: 'hidden',
-  },
-  emptyStateInner: {
-    backgroundColor: COLORS.activeCard,
-    borderRadius: 12,
-    borderCurve: 'continuous',
-    padding: SPACING.xl,
-    borderTopWidth: 2,
-    borderLeftWidth: 2,
-    borderBottomWidth: 2,
-    borderRightWidth: 2,
-    borderTopColor: 'rgba(255, 255, 255, 0.75)',
-    borderLeftColor: 'rgba(255, 255, 255, 0.75)',
-    borderBottomColor: 'rgba(0, 0, 0, 0.08)',
-    borderRightColor: 'rgba(0, 0, 0, 0.08)',
-    alignItems: 'center',
-  },
-  emptyText: {
-    ...TYPOGRAPHY.body,
-    color: LIGHT_COLORS.secondary,
-  },
-  weightList: {
-  },
-  weightEntry: {
-    backgroundColor: COLORS.activeCard,
-    borderRadius: 12,
-    borderCurve: 'continuous',
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    overflow: 'hidden',
+    borderRadius: BORDER_RADIUS.lg,
+    borderWidth: 2,
+    borderColor: 'transparent',
+    padding: SPACING.lg,
+    gap: SPACING.md,
     marginBottom: SPACING.sm,
   },
-  weightEntryInner: {
-    backgroundColor: COLORS.activeCard,
-    borderRadius: 12,
-    borderCurve: 'continuous',
-    padding: SPACING.lg,
-    borderTopWidth: 2,
-    borderLeftWidth: 2,
-    borderBottomWidth: 2,
-    borderRightWidth: 2,
-    borderTopColor: 'rgba(255, 255, 255, 0.75)',
-    borderLeftColor: 'rgba(255, 255, 255, 0.75)',
-    borderBottomColor: 'rgba(0, 0, 0, 0.08)',
-    borderRightColor: 'rgba(0, 0, 0, 0.08)',
+  weightRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  weightValueRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: 6,
   },
   weightDate: {
-    ...TYPOGRAPHY.body,
-    color: LIGHT_COLORS.secondary,
+    ...TYPOGRAPHY.meta,
+    color: COLORS.textMeta,
   },
   weightValue: {
-    ...TYPOGRAPHY.bodyBold,
-    color: LIGHT_COLORS.secondary,
+    ...TYPOGRAPHY.h3,
+    color: COLORS.text,
+  },
+  weightUnit: {
+    ...TYPOGRAPHY.h3,
+    color: COLORS.textMeta,
+  },
+  weightDelta: {
+    ...TYPOGRAPHY.meta,
+  },
+  weightDeltaUp: {
+    color: COLORS.signalNegative,
+  },
+  weightDeltaDown: {
+    color: COLORS.signalPositive,
+  },
+  weightDeltaNeutral: {
+    color: COLORS.textMeta,
   },
   settingRow: {
     backgroundColor: COLORS.activeCard,
@@ -747,11 +1027,6 @@ const styles = StyleSheet.create({
   modalButtonSecondaryText: {
     ...TYPOGRAPHY.button,
     color: LIGHT_COLORS.secondary,
-  },
-  // Dual shadow styles
-  cardBlackShadow: {
-  },
-  cardWhiteShadow: {
   },
 });
 

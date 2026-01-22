@@ -13,7 +13,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Audio } from 'expo-av';
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
-import Svg, { Circle, Path, Polygon, Rect } from 'react-native-svg';
+import Svg, { Circle, Path } from 'react-native-svg';
 import dayjs from 'dayjs';
 import { useStore } from '../store';
 import { COLORS, SPACING, TYPOGRAPHY, GRADIENTS, BUTTONS, BORDER_RADIUS } from '../constants';
@@ -45,7 +45,6 @@ const PHASE_COLORS = {
   restRed: COLORS.signalNegative,
   complete: COLORS.signalPositive,
 };
-const COUNTDOWN_SHAPES = ['circle', 'pentagon', 'triangle', 'square'] as const;
 
 const MIN_SIZE = 180;
 const SCREEN_WIDTH = Dimensions.get('window').width;
@@ -259,6 +258,7 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
   // Track previous phase and seconds for animations
   const prevPhaseRef = useRef<TimerPhase>('countdown');
   const prevSecondsRef = useRef<number>(secondsRemaining);
+  const countdownStartedRef = useRef(false);
 
   // Update refs whenever state changes
   useEffect(() => {
@@ -333,36 +333,60 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
     });
   }, [secondsRemaining, currentPhase, sizeAnim, textSizeAnim]);
 
-  // Countdown number fade and shrink animation (each number fades out and shrinks 20%)
-  useEffect(() => {
-    if (currentPhase === 'countdown' && secondsRemaining !== prevSecondsRef.current && !showGo) {
-      // Fade out and shrink, then fade back in at original size (but not for "Go!")
+  const runCountdownTextAnimation = useCallback(
+    (shouldShrink: boolean) => {
+      textOpacityAnim.stopAnimation();
+      textShrinkAnim.stopAnimation();
+      textOpacityAnim.setValue(1);
+      textShrinkAnim.setValue(1);
       Animated.parallel([
-        Animated.timing(textOpacityAnim, {
-          toValue: 0,
-          duration: 300,
-          easing: Easing.out(Easing.ease),
-          useNativeDriver: true,
-        }),
-        Animated.timing(textShrinkAnim, {
-          toValue: 0.8, // Shrink to 80% (20% reduction)
-          duration: 300,
-          easing: Easing.out(Easing.ease),
-          useNativeDriver: true,
-        }),
-      ]).start(() => {
-        // Reset to original size and fade in
-        textShrinkAnim.setValue(1); // Reset to original size
-        Animated.timing(textOpacityAnim, {
-          toValue: 1,
-          duration: 150,
-          easing: Easing.in(Easing.ease),
-          useNativeDriver: true,
-    }).start();
-      });
+        Animated.sequence([
+          Animated.delay(800),
+          Animated.timing(textOpacityAnim, {
+            toValue: 0,
+            duration: 180,
+            easing: Easing.out(Easing.quad),
+            useNativeDriver: true,
+          }),
+        ]),
+        Animated.sequence([
+          Animated.delay(800),
+          Animated.timing(textShrinkAnim, {
+            toValue: shouldShrink ? 0.8 : 1,
+            duration: 180,
+            easing: Easing.out(Easing.quad),
+            useNativeDriver: true,
+          }),
+        ]),
+      ]).start();
+    },
+    [textOpacityAnim, textShrinkAnim]
+  );
+
+  // Countdown number hold, then fade and shrink quickly
+  useEffect(() => {
+    if (isRunning && currentPhase === 'countdown' && secondsRemaining !== prevSecondsRef.current && !showGo) {
+      runCountdownTextAnimation(true);
     }
     prevSecondsRef.current = secondsRemaining;
-  }, [secondsRemaining, currentPhase, showGo, textOpacityAnim, textShrinkAnim]);
+  }, [secondsRemaining, currentPhase, showGo, runCountdownTextAnimation, isRunning]);
+  
+  useEffect(() => {
+    if (currentPhase === 'countdown') {
+      prevSecondsRef.current = secondsRemaining;
+      textOpacityAnim.setValue(1);
+      textShrinkAnim.setValue(1);
+      if (!countdownStartedRef.current && !showGo && isRunning) {
+        countdownStartedRef.current = true;
+        requestAnimationFrame(() => {
+          runCountdownTextAnimation(true);
+        });
+      }
+      return;
+    }
+
+    countdownStartedRef.current = false;
+  }, [currentPhase, secondsRemaining, textOpacityAnim, textShrinkAnim, runCountdownTextAnimation, showGo, isRunning]);
 
   // Breathing animation on main circle during rest (when timer is running)
   useEffect(() => {
@@ -598,11 +622,7 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
               breathingAnim.setValue(1);
             });
             borderRadiusAnim.setValue(CONTAINER_WIDTH / 2);
-            // Reset text animations for countdown
-            if (currentPhase === 'countdown') {
-              textOpacityAnim.setValue(1);
-              textShrinkAnim.setValue(1);
-            }
+            // Let countdown text animation control opacity/scale.
             
             // Run size/color animations
             if (animations.length > 0) {
@@ -684,19 +704,9 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
     }
 
     if (phase === 'countdown') {
-      // Show "Go!" for half a second, then transition fast
+      // Show "Go!" with hold, then fade out before transitioning
       setShowGo(true);
-      textOpacityAnim.setValue(1);
-      
-      // Wait 500ms, then fade out over 200ms
-      setTimeout(() => {
-        Animated.timing(textOpacityAnim, {
-          toValue: 0,
-          duration: 200,
-          easing: Easing.out(Easing.ease),
-          useNativeDriver: true,
-        }).start();
-      }, 500);
+      runCountdownTextAnimation(false);
       
       // Use requestAnimationFrame to ensure smooth transition
       requestAnimationFrame(() => {
@@ -704,7 +714,8 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
           try {
             // Batch state updates to minimize re-renders
             setShowGo(false);
-            textOpacityAnim.setValue(1); // Reset for next phase
+            textOpacityAnim.setValue(1);
+            textShrinkAnim.setValue(1);
             
             // Use a second RAF to split the updates
             requestAnimationFrame(() => {
@@ -718,7 +729,7 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
             console.log('⚠️ Error transitioning from countdown:', error);
             isTransitioningRef.current = false;
           }
-        }, 600); // 500ms display + 100ms buffer (shape transition starts immediately)
+        }, 1000); // Hold + fade timing for "Go!"
       });
     } else if (phase === 'work') {
       const isLastSet = set === timer.sets;
@@ -811,7 +822,21 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
         isTransitioningRef.current = false;
       }, 50);
     }
-  }, [timer, soundEnabled, setCurrentPhase, setSecondsRemaining, setCurrentSet, setCurrentRound, setIsRunning, setShowGo, textOpacityAnim, addHIITTimerSession, timerId]);
+  }, [
+    timer,
+    soundEnabled,
+    setCurrentPhase,
+    setSecondsRemaining,
+    setCurrentSet,
+    setCurrentRound,
+    setIsRunning,
+    setShowGo,
+    textOpacityAnim,
+    textShrinkAnim,
+    runCountdownTextAnimation,
+    addHIITTimerSession,
+    timerId,
+  ]);
 
   // Log when handlePhaseComplete recreates
   const handlePhaseCompleteIdRef = useRef(0);
@@ -1249,12 +1274,6 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
     });
   }, [textSizeAnim]);
 
-  const countdownShapeIndex = Math.max(
-    0,
-    Math.min(COUNTDOWN_SHAPES.length - 1, 5 - secondsRemaining)
-  );
-  const countdownShape = COUNTDOWN_SHAPES[countdownShapeIndex];
-
   // Get background color based on current phase
   const currentBackgroundColor = useMemo(() => {
     if (currentPhase === 'workRest' || currentPhase === 'roundRest') {
@@ -1418,27 +1437,6 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
               },
             ]}
           >
-            {currentPhase === 'countdown' && !showGo && (
-              <View style={styles.countdownShape}>
-                <Svg width="100%" height="100%" viewBox="0 0 100 100">
-                  {countdownShape === 'circle' && (
-                    <Circle cx="50" cy="50" r="50" fill={PHASE_COLORS.countdown} />
-                  )}
-                  {countdownShape === 'pentagon' && (
-                    <Polygon
-                      points="50,5 95,38 77,95 23,95 5,38"
-                      fill={PHASE_COLORS.countdown}
-                    />
-                  )}
-                  {countdownShape === 'triangle' && (
-                    <Polygon points="50,5 95,95 5,95" fill={PHASE_COLORS.countdown} />
-                  )}
-                  {countdownShape === 'square' && (
-                    <Rect x="5" y="5" width="90" height="90" rx="8" ry="8" fill={PHASE_COLORS.countdown} />
-                  )}
-                </Svg>
-              </View>
-            )}
             {/* Content container for text scaling */}
             <View
               style={{
@@ -1456,6 +1454,7 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
                       styles.timerText,
                       { 
                         opacity: textOpacityAnim,
+                        color: COLORS.text,
                       }
                     ]}
                   >
@@ -1469,6 +1468,7 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
                       { 
                         transform: [{ scale: textShrinkAnim }], // Shrink 20% as fading out
                         opacity: textOpacityAnim, // Fade animation for countdown
+                        color: COLORS.text,
                       }
                     ]}
                   >
@@ -1593,11 +1593,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     borderCurve: 'continuous',
-  },
-  countdownShape: {
-    ...StyleSheet.absoluteFillObject,
-    justifyContent: 'center',
-    alignItems: 'center',
   },
   timerText: {
     fontSize: 56,
