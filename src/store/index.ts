@@ -1,10 +1,14 @@
 import { create } from 'zustand';
 import dayjs from 'dayjs';
+import isoWeek from 'dayjs/plugin/isoWeek';
 import type { Cycle, Exercise, WorkoutSession, BodyWeightEntry, AppSettings, WorkoutAssignment, TrainerConversation, ExercisePR, WorkoutProgress, ExerciseProgress, HIITTimer, HIITTimerSession } from '../types';
 import type { WorkoutTemplate, CyclePlan, ScheduledWorkout, ConflictResolution, ConflictItem } from '../types/training';
+import type { ProgressLog } from '../types/progress';
 import * as storage from '../storage';
 import { SEED_EXERCISES } from '../constants';
 import { kgToLbs } from '../utils/weight';
+
+dayjs.extend(isoWeek);
 
 interface WorkoutStore {
   // State
@@ -12,6 +16,7 @@ interface WorkoutStore {
   exercises: Exercise[];
   sessions: WorkoutSession[];
   bodyWeightEntries: BodyWeightEntry[];
+  progressLogs: ProgressLog[];
   workoutAssignments: WorkoutAssignment[]; // NEW
   trainerConversations: TrainerConversation[]; // NEW
   exercisePRs: ExercisePR[]; // NEW: Personal Records
@@ -27,6 +32,8 @@ interface WorkoutStore {
   updateExercise: (exerciseId: string, updates: Partial<Exercise>) => Promise<void>;
   addSession: (session: WorkoutSession) => Promise<void>;
   addBodyWeightEntry: (entry: BodyWeightEntry) => Promise<void>;
+  addProgressLog: (params: { photoUri: string; weightLbs: number }) => Promise<{ success: boolean; error?: string }>;
+  deleteProgressLog: (progressLogId: string) => Promise<void>;
   updateSettings: (settings: Partial<AppSettings>) => Promise<void>;
   setBarbellMode: (exerciseId: string, enabled: boolean) => Promise<void>;
   getBarbellMode: (exerciseId: string) => boolean;
@@ -182,6 +189,7 @@ export const useStore = create<WorkoutStore>((set, get) => ({
   exercises: [],
   sessions: [],
   bodyWeightEntries: [],
+  progressLogs: [],
   workoutAssignments: [],
   trainerConversations: [],
   exercisePRs: [],
@@ -204,6 +212,7 @@ export const useStore = create<WorkoutStore>((set, get) => ({
         exercises,
         sessions,
         bodyWeightEntries,
+        progressLogs,
         loadedSettings,
         workoutAssignments,
         trainerConversations,
@@ -220,6 +229,7 @@ export const useStore = create<WorkoutStore>((set, get) => ({
         storage.loadExercises(),
         storage.loadSessions(),
         storage.loadBodyWeightEntries(),
+        storage.loadProgressLogs(),
         storage.loadSettings(),
         storage.loadWorkoutAssignments(),
         storage.loadTrainerConversations(),
@@ -607,6 +617,7 @@ export const useStore = create<WorkoutStore>((set, get) => ({
         exercises: finalExercises,
         sessions: finalSessions,
         bodyWeightEntries: finalBodyWeightEntries,
+        progressLogs,
         workoutAssignments: finalWorkoutAssignments,
         exercisePRs: finalExercisePRs,
         trainerConversations: finalConversations,
@@ -674,6 +685,43 @@ export const useStore = create<WorkoutStore>((set, get) => ({
     const entries = [...get().bodyWeightEntries, entry];
     set({ bodyWeightEntries: entries });
     await storage.saveBodyWeightEntries(entries);
+  },
+
+  addProgressLog: async ({ photoUri, weightLbs }) => {
+    const now = dayjs();
+    // Dev-only override: allow logging any day for testing.
+    // Production rule stays Friday-only.
+    const isFriday = now.isoWeekday() === 5;
+    const isAllowedDay = __DEV__ || isFriday;
+    if (!isAllowedDay) return { success: false, error: 'not_friday' };
+    if (!photoUri) return { success: false, error: 'photo_required' };
+    if (!Number.isFinite(weightLbs) || weightLbs <= 0) return { success: false, error: 'weight_invalid' };
+
+    const weekKey = `${now.isoWeekYear()}-W${String(now.isoWeek()).padStart(2, '0')}`;
+    const alreadyLogged = get().progressLogs.some(l => l.weekKey === weekKey);
+    if (alreadyLogged) return { success: false, error: 'already_logged' };
+
+    const createdAt = new Date().toISOString();
+    const dateLabel = dayjs(createdAt).format('MMM D');
+    const log: ProgressLog = {
+      id: `pl-${Date.now()}`,
+      createdAt,
+      dateLabel,
+      weekKey,
+      weightLbs,
+      photoUri,
+    };
+
+    const next = [log, ...get().progressLogs].sort((a, b) => dayjs(b.createdAt).valueOf() - dayjs(a.createdAt).valueOf());
+    set({ progressLogs: next });
+    await storage.saveProgressLogs(next);
+    return { success: true };
+  },
+
+  deleteProgressLog: async (progressLogId) => {
+    const next = get().progressLogs.filter(l => l.id !== progressLogId);
+    set({ progressLogs: next });
+    await storage.saveProgressLogs(next);
   },
   
   updateSettings: async (updates) => {

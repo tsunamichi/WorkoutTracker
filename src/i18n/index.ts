@@ -50,6 +50,29 @@ type TranslationKey =
   | 'createYourFirstWorkout'
   | 'singleWorkout'
   | 'singleWorkouts'
+  | 'scheduledSingleWorkouts'
+  | 'progress'
+  | 'noProgressYet'
+  | 'seeAllProgress'
+  | 'nextLogOnFriday'
+  | 'progressHelperLocked'
+  | 'progressHelperAvailable'
+  | 'progressEmptyCtaAvailable'
+  | 'progressEmptyCtaLocked'
+  | 'weeklyCheckIn'
+  | 'weeklyCheckInSubtitle'
+  | 'progressPhoto'
+  | 'progressPhotoRequired'
+  | 'progressWeightRequired'
+  | 'progressAlreadyLoggedThisWeek'
+  | 'progressOnlyAvailableFriday'
+  | 'failedToPickImage'
+  | 'failedToSaveProgress'
+  | 'chooseFromLibrary'
+  | 'takePhoto'
+  | 'progressLogNotFound'
+  | 'deleteProgressLogTitle'
+  | 'deleteProgressLogMessage'
   | 'thisWeeksWorkouts'
   | 'createOneWorkout'
   | 'weeklyPlan'
@@ -196,6 +219,8 @@ type TranslationKey =
   | 'photoLibraryPermissionTitle'
   | 'photoLibraryPermissionBody'
   | 'imagePickerUnavailable'
+  | 'photoPickerUnavailableTitle'
+  | 'photoPickerUnavailableBody'
   | 'audioPermissionRequired'
   | 'errorFailedStartRecording'
   | 'errorFailedGetRecordingUri'
@@ -399,6 +424,28 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     singleWorkout: 'Single Workout',
     singleWorkouts: 'Single Workouts',
     scheduledSingleWorkouts: 'Scheduled Single Workouts',
+    progress: 'Progress',
+    noProgressYet: 'No progress yet',
+    seeAllProgress: 'See all progress',
+    nextLogOnFriday: 'Next log on Friday',
+    progressHelperLocked: 'You can log once a week. Next check-in: Friday.',
+    progressHelperAvailable: 'Weekly check-in is available today.',
+    progressEmptyCtaAvailable: 'Add your first weekly check-in.',
+    progressEmptyCtaLocked: 'Your first weekly check-in unlocks on Friday.',
+    weeklyCheckIn: 'Weekly check-in',
+    weeklyCheckInSubtitle: 'Add one photo + one weight entry ({unit}).',
+    progressPhoto: 'Photo',
+    progressPhotoRequired: 'Photo is required.',
+    progressWeightRequired: 'Weight is required and must be greater than 0.',
+    progressAlreadyLoggedThisWeek: 'You already logged your progress this week.',
+    progressOnlyAvailableFriday: 'Weekly check-ins are only available on Fridays.',
+    failedToPickImage: 'Could not pick an image. Please try again.',
+    failedToSaveProgress: 'Could not save your progress. Please try again.',
+    chooseFromLibrary: 'Choose from library',
+    takePhoto: 'Take photo',
+    progressLogNotFound: 'This progress entry could not be found.',
+    deleteProgressLogTitle: 'Delete progress entry?',
+    deleteProgressLogMessage: 'This cannot be undone.',
     thisWeeksWorkouts: "This Week's Workouts",
     createOneWorkout: 'Create one workout',
     weeklyPlan: 'Weekly Plan',
@@ -615,6 +662,8 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     photoLibraryPermissionTitle: 'Allow photo access',
     photoLibraryPermissionBody: 'Enable photo access to upload your profile picture.',
     imagePickerUnavailable: 'Photo picker is unavailable on this device.',
+    photoPickerUnavailableTitle: 'Photo picker unavailable',
+    photoPickerUnavailableBody: 'Photo picker is unavailable on this device.',
     audioPermissionRequired: 'Audio recording permission is required to use the trainer.',
     errorFailedStartRecording: 'Failed to start recording',
     errorFailedGetRecordingUri: 'Failed to get recording URI',
@@ -797,6 +846,28 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     singleWorkout: 'Entrenamiento Único',
     singleWorkouts: 'Entrenamientos Únicos',
     scheduledSingleWorkouts: 'Entrenamientos Únicos Programados',
+    progress: 'Progreso',
+    noProgressYet: 'Sin progreso aún',
+    seeAllProgress: 'Ver todo el progreso',
+    nextLogOnFriday: 'Próximo registro el viernes',
+    progressHelperLocked: 'Puedes registrar una vez por semana. Próximo check-in: viernes.',
+    progressHelperAvailable: 'El check-in semanal está disponible hoy.',
+    progressEmptyCtaAvailable: 'Agrega tu primer check-in semanal.',
+    progressEmptyCtaLocked: 'Tu primer check-in semanal se habilita el viernes.',
+    weeklyCheckIn: 'Check-in semanal',
+    weeklyCheckInSubtitle: 'Agrega una foto + un peso ({unit}).',
+    progressPhoto: 'Foto',
+    progressPhotoRequired: 'La foto es obligatoria.',
+    progressWeightRequired: 'El peso es obligatorio y debe ser mayor que 0.',
+    progressAlreadyLoggedThisWeek: 'Ya registraste tu progreso esta semana.',
+    progressOnlyAvailableFriday: 'Los check-ins semanales solo están disponibles los viernes.',
+    failedToPickImage: 'No se pudo seleccionar la imagen. Inténtalo de nuevo.',
+    failedToSaveProgress: 'No se pudo guardar tu progreso. Inténtalo de nuevo.',
+    chooseFromLibrary: 'Elegir de la galería',
+    takePhoto: 'Tomar foto',
+    progressLogNotFound: 'No se pudo encontrar esta entrada de progreso.',
+    deleteProgressLogTitle: '¿Eliminar entrada de progreso?',
+    deleteProgressLogMessage: 'Esto no se puede deshacer.',
     thisWeeksWorkouts: 'Entrenamientos de Esta Semana',
     createOneWorkout: 'Crear un entrenamiento',
     weeklyPlan: 'Plan Semanal',
@@ -1013,6 +1084,8 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     photoLibraryPermissionTitle: 'Permitir acceso a fotos',
     photoLibraryPermissionBody: 'Habilita el acceso a fotos para subir tu imagen de perfil.',
     imagePickerUnavailable: 'El selector de fotos no esta disponible en este dispositivo.',
+    photoPickerUnavailableTitle: 'Selector de fotos no disponible',
+    photoPickerUnavailableBody: 'El selector de fotos no esta disponible en este dispositivo.',
     audioPermissionRequired: 'Se requiere permiso de audio para usar el entrenador.',
     errorFailedStartRecording: 'No se pudo iniciar la grabacion',
     errorFailedGetRecordingUri: 'No se pudo obtener el audio',

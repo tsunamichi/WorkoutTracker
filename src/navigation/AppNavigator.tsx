@@ -10,6 +10,8 @@ import { WorkoutBuilderScreen } from '../screens/WorkoutBuilderScreen';
 import { WorkoutTemplateDetailScreen } from '../screens/WorkoutTemplateDetailScreen';
 import { ProfileScreen } from '../screens/ProfileScreen';
 import { BodyWeightHistoryScreen } from '../screens/BodyWeightHistoryScreen';
+import { ProgressGalleryScreen } from '../screens/ProgressGalleryScreen';
+import { ProgressLogDetailScreen } from '../screens/ProgressLogDetailScreen';
 import { CycleDetailScreen } from '../screens/CycleDetailScreen';
 import { CycleConflictsScreen } from '../screens/CycleConflictsScreen';
 import { WorkoutExecutionScreen } from '../screens/WorkoutExecutionScreen';
@@ -43,6 +45,8 @@ export type RootStackParamList = {
   Tabs: { initialTab?: 'Schedule' | 'Workouts' } | undefined;
   Profile: { mode?: 'settings' } | undefined;
   BodyWeightHistory: undefined;
+  ProgressGallery: undefined;
+  ProgressLogDetail: { progressLogId: string };
   History: undefined;
   WorkoutBuilder: undefined;
   WorkoutTemplateDetail: { templateId: string };
@@ -678,6 +682,12 @@ export default function AppNavigator() {
         <Stack.Screen name="Tabs" component={TabNavigator} />
         <Stack.Screen name="Profile" component={ProfileScreen} />
         <Stack.Screen name="BodyWeightHistory" component={BodyWeightHistoryScreen} />
+        <Stack.Screen name="ProgressGallery" component={ProgressGalleryScreen} />
+        <Stack.Screen
+          name="ProgressLogDetail"
+          component={ProgressLogDetailScreen}
+          options={{ presentation: 'modal' }}
+        />
         <Stack.Screen name="History" component={HistoryScreen} />
         <Stack.Screen name="WorkoutBuilder" component={WorkoutBuilderScreen} />
         <Stack.Screen name="WorkoutTemplateDetail" component={WorkoutTemplateDetailScreen} />

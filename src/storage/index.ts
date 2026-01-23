@@ -1,12 +1,14 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { Cycle, Exercise, WorkoutSession, BodyWeightEntry, AppSettings, WorkoutAssignment, TrainerConversation, ExercisePR, WorkoutProgress, HIITTimer, HIITTimerSession } from '../types';
 import type { WorkoutTemplate, CyclePlan, ScheduledWorkout } from '../types/training';
+import type { ProgressLog } from '../types/progress';
 
 const STORAGE_KEYS = {
   CYCLES: '@workout_tracker_cycles',
   EXERCISES: '@workout_tracker_exercises',
   SESSIONS: '@workout_tracker_sessions',
   BODY_WEIGHT: '@workout_tracker_body_weight',
+  PROGRESS_LOGS: '@workout_tracker_progress_logs',
   SETTINGS: '@workout_tracker_settings',
   WORKOUT_ASSIGNMENTS: '@workout_tracker_assignments',
   TRAINER_CONVERSATIONS: '@workout_tracker_conversations',
@@ -94,6 +96,25 @@ export async function saveBodyWeightEntries(entries: BodyWeightEntry[]): Promise
     await AsyncStorage.setItem(STORAGE_KEYS.BODY_WEIGHT, JSON.stringify(entries));
   } catch (error) {
     console.error('Error saving body weight:', error);
+  }
+}
+
+// Progress Logs (Weekly check-ins)
+export async function loadProgressLogs(): Promise<ProgressLog[]> {
+  try {
+    const data = await AsyncStorage.getItem(STORAGE_KEYS.PROGRESS_LOGS);
+    return data ? JSON.parse(data) : [];
+  } catch (error) {
+    console.error('Error loading progress logs:', error);
+    return [];
+  }
+}
+
+export async function saveProgressLogs(logs: ProgressLog[]): Promise<void> {
+  try {
+    await AsyncStorage.setItem(STORAGE_KEYS.PROGRESS_LOGS, JSON.stringify(logs));
+  } catch (error) {
+    console.error('Error saving progress logs:', error);
   }
 }
 
