@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { Cycle, Exercise, WorkoutSession, BodyWeightEntry, AppSettings, WorkoutAssignment, TrainerConversation, ExercisePR, WorkoutProgress, HIITTimer, HIITTimerSession } from '../types';
+import type { WorkoutTemplate, CyclePlan, ScheduledWorkout } from '../types/training';
 
 const STORAGE_KEYS = {
   CYCLES: '@workout_tracker_cycles',
@@ -14,6 +15,10 @@ const STORAGE_KEYS = {
   DETAILED_WORKOUT_PROGRESS: '@workout_tracker_detailed_progress',
   HIIT_TIMERS: '@workout_tracker_hiit_timers',
   HIIT_TIMER_SESSIONS: '@workout_tracker_hiit_timer_sessions',
+  // NEW: Training architecture
+  WORKOUT_TEMPLATES: '@workout_tracker_workout_templates',
+  CYCLE_PLANS: '@workout_tracker_cycle_plans',
+  SCHEDULED_WORKOUTS: '@workout_tracker_scheduled_workouts',
 };
 
 // Cycles
@@ -256,6 +261,63 @@ export async function saveHIITTimerSessions(sessions: HIITTimerSession[]): Promi
     await AsyncStorage.setItem(STORAGE_KEYS.HIIT_TIMER_SESSIONS, JSON.stringify(sessions));
   } catch (error) {
     console.error('Error saving HIIT timer sessions:', error);
+  }
+}
+
+// Workout Templates
+export async function loadWorkoutTemplates(): Promise<WorkoutTemplate[]> {
+  try {
+    const data = await AsyncStorage.getItem(STORAGE_KEYS.WORKOUT_TEMPLATES);
+    return data ? JSON.parse(data) : [];
+  } catch (error) {
+    console.error('Error loading workout templates:', error);
+    return [];
+  }
+}
+
+export async function saveWorkoutTemplates(templates: WorkoutTemplate[]): Promise<void> {
+  try {
+    await AsyncStorage.setItem(STORAGE_KEYS.WORKOUT_TEMPLATES, JSON.stringify(templates));
+  } catch (error) {
+    console.error('Error saving workout templates:', error);
+  }
+}
+
+// Cycle Plans
+export async function loadCyclePlans(): Promise<CyclePlan[]> {
+  try {
+    const data = await AsyncStorage.getItem(STORAGE_KEYS.CYCLE_PLANS);
+    return data ? JSON.parse(data) : [];
+  } catch (error) {
+    console.error('Error loading cycle plans:', error);
+    return [];
+  }
+}
+
+export async function saveCyclePlans(plans: CyclePlan[]): Promise<void> {
+  try {
+    await AsyncStorage.setItem(STORAGE_KEYS.CYCLE_PLANS, JSON.stringify(plans));
+  } catch (error) {
+    console.error('Error saving cycle plans:', error);
+  }
+}
+
+// Scheduled Workouts
+export async function loadScheduledWorkouts(): Promise<ScheduledWorkout[]> {
+  try {
+    const data = await AsyncStorage.getItem(STORAGE_KEYS.SCHEDULED_WORKOUTS);
+    return data ? JSON.parse(data) : [];
+  } catch (error) {
+    console.error('Error loading scheduled workouts:', error);
+    return [];
+  }
+}
+
+export async function saveScheduledWorkouts(workouts: ScheduledWorkout[]): Promise<void> {
+  try {
+    await AsyncStorage.setItem(STORAGE_KEYS.SCHEDULED_WORKOUTS, JSON.stringify(workouts));
+  } catch (error) {
+    console.error('Error saving scheduled workouts:', error);
   }
 }
 

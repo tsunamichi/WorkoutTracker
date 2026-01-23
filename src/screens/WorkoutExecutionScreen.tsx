@@ -474,7 +474,7 @@ export function SetTimerSheetLegacy({ visible, onComplete, onClose, workoutName,
 export function WorkoutExecutionScreen({ route, navigation }: WorkoutExecutionScreenProps) {
   const insets = useSafeAreaInsets();
   const { cycleId, workoutTemplateId, date } = route.params;
-  const { cycles, exercises, addSession, getWorkoutCompletionPercentage, getExerciseProgress, saveExerciseProgress, clearWorkoutProgress, skipExercise } = useStore();
+  const { cycles, exercises, addSession, getWorkoutCompletionPercentage, getExerciseProgress, saveExerciseProgress, clearWorkoutProgress, skipExercise, getWorkoutTemplate } = useStore();
   const { t } = useTranslation();
   
   // Subscribe to detailedWorkoutProgress for this specific workout
@@ -499,8 +499,34 @@ export function WorkoutExecutionScreen({ route, navigation }: WorkoutExecutionSc
     console.log('🔄 Workout progress changed:', currentWorkoutProgress);
   }, [currentWorkoutProgress]);
   
-  const cycle = cycles.find(c => c.id === cycleId);
-  const workout = cycle?.workoutTemplates.find(w => w.id === workoutTemplateId);
+  // Support both old cycle-based workouts and new standalone workouts
+  const cycle = cycleId ? cycles.find(c => c.id === cycleId) : null;
+  let workout = cycle?.workoutTemplates.find(w => w.id === workoutTemplateId);
+  
+  // If not found in cycle (or no cycle), try to get the template directly (new architecture)
+  if (!workout) {
+    const template = getWorkoutTemplate(workoutTemplateId);
+    if (template) {
+      // Convert WorkoutTemplate to old workout format for backward compatibility
+      workout = {
+        id: template.id,
+        cycleId: cycleId || '',
+        name: template.name,
+        workoutType: 'Other' as const,
+        dayOfWeek: 0,
+        orderIndex: 0,
+        exercises: template.items.map(item => ({
+          id: item.exerciseId,
+          exerciseId: item.exerciseId,
+          orderIndex: item.order,
+          targetSets: item.sets,
+          targetRepsMin: item.reps,
+          targetRepsMax: item.reps,
+          progressionType: 'none' as const,
+        })),
+      };
+    }
+  }
   
   // Calculate completion percentage, excluding skipped exercises
   let totalSets = 0;

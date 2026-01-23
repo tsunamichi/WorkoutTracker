@@ -66,104 +66,80 @@ export function CreateCycleReview({ navigation }: CreateCycleReviewProps) {
       return;
     }
 
-    // Convert draft to main store format
-    const endDate = calculateEndDate(startDate, weeks);
-    const cycleId = generateId();
-    const cycleNumber = mainStore.getNextCycleNumber();
-
-    // Create the cycle
-    const newCycle = {
-      id: cycleId,
-      name: t('cycleNumber').replace('{number}', String(cycleNumber)),
-      startDate,
-      endDate,
-      status: hasActiveCycle ? 'scheduled' : 'active',
-      workoutIds: [],
+    // NEW: Create WorkoutTemplates and CyclePlan
+    const templateIdsByWeekday: Partial<Record<number, string>> = {};
+    const weekdayMap: Record<Weekday, number> = {
+      sun: 0,
+      mon: 1,
+      tue: 2,
+      wed: 3,
+      thu: 4,
+      fri: 5,
+      sat: 6,
     };
 
-    // Create workouts and exercises
+    // First, create all workout templates
     for (const workout of workouts) {
-      const workoutId = generateId();
-      newCycle.workoutIds.push(workoutId);
-
-      const exerciseIds: string[] = [];
-
-      for (const exerciseBlock of workout.exercises) {
-        // Add exercise to library if not already there
-        const existingExercise = mainStore.exercises.find(
-          (e) => e.id === exerciseBlock.exerciseId
-        );
-
-        if (!existingExercise) {
-          // This shouldn't happen, but handle it just in case
-          console.warn(`Exercise ${exerciseBlock.exerciseId} not found in library`);
-          continue;
-        }
-
-        exerciseIds.push(exerciseBlock.exerciseId);
-      }
-
-      // Add the workout
-      mainStore.addWorkout({
-        id: workoutId,
-        name: workout.name || formatWeekdayFull(workout.weekday),
-        cycleId,
-        exerciseIds,
+      const templateId = `wt-${Date.now()}-${workout.weekday}`;
+      const weekdayNum = weekdayMap[workout.weekday];
+      
+      // Convert draft exercise blocks to WorkoutTemplateExercise format
+      const items = workout.exercises.map((exerciseBlock, index) => {
+        // Get the settings for week 0 (first week)
+        const week0Settings = exerciseBlock.weeks[0] || {};
+        
+        return {
+          exerciseId: exerciseBlock.exerciseId,
+          order: index,
+          sets: week0Settings.sets ?? 3,
+          reps: parseInt(week0Settings.reps || '8', 10),
+          weight: week0Settings.weight,
+          restSeconds: undefined,
+        };
       });
+
+      await mainStore.addWorkoutTemplate({
+        id: templateId,
+        name: workout.name || formatWeekdayFull(workout.weekday),
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        items,
+      });
+
+      templateIdsByWeekday[weekdayNum] = templateId;
     }
 
-    mainStore.addCycle(newCycle as any);
+    // Create the CyclePlan
+    const planId = `cp-${Date.now()}`;
+    const newPlan = {
+      id: planId,
+      name: `${weeks}-Week Plan`,
+      startDate,
+      weeks,
+      mapping: {
+        kind: 'weekdays' as const,
+        weekdays: sortedDays.map(day => weekdayMap[day]),
+      },
+      templateIdsByWeekday,
+      active: true,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
 
-    // Generate workout assignments for the cycle dates
-    const assignments: any[] = [];
-    let currentDate = dayjs(startDate);
-    const endDateDayjs = dayjs(endDate);
-
-    while (
-      currentDate.isBefore(endDateDayjs) ||
-      currentDate.isSame(endDateDayjs, 'day')
-    ) {
-      const weekdayIndex = currentDate.day(); // 0 = Sun, 1 = Mon, etc.
-      const weekdayMap: Record<number, Weekday> = {
-        0: 'sun',
-        1: 'mon',
-        2: 'tue',
-        3: 'wed',
-        4: 'thu',
-        5: 'fri',
-        6: 'sat',
-      };
-      const weekday = weekdayMap[weekdayIndex];
-
-      if (frequencyDays.includes(weekday)) {
-        const workout = workouts.find((w) => w.weekday === weekday);
-        if (workout) {
-          const workoutId = newCycle.workoutIds.find((id) => {
-            const w = mainStore.workouts.find((wo) => wo.id === id);
-            return w?.name === (workout.name || formatWeekdayFull(workout.weekday));
-          });
-
-          if (workoutId) {
-            assignments.push({
-              date: currentDate.format('YYYY-MM-DD'),
-              cycleId,
-              workoutId,
-            });
-          }
-        }
-      }
-
-      currentDate = currentDate.add(1, 'day');
+    // Check for conflicts
+    const result = await mainStore.addCyclePlan(newPlan);
+    
+    if (!result.success && result.conflicts && result.conflicts.length > 0) {
+      // Navigate to conflicts screen
+      navigation.navigate('CycleConflicts', {
+        plan: newPlan,
+        conflicts: result.conflicts,
+      });
+    } else {
+      // No conflicts, cycle was created successfully
+      resetDraft();
+      navigation.navigate('Tabs', { initialTab: 'Schedule' } as any);
     }
-
-    // Add assignments to store
-    for (const assignment of assignments) {
-      mainStore.assignWorkout(assignment.date, assignment.cycleId, assignment.workoutId);
-    }
-
-    // Reset draft and navigate
-    resetDraft();
-    navigation.navigate('AppTabs', { screen: 'Schedule' });
   };
 
   const endDate = startDate ? calculateEndDate(startDate, weeks) : null;

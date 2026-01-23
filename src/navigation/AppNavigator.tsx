@@ -1,13 +1,17 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Animated } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Animated, ScrollView } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { TodayScreen } from '../screens/TodayScreen';
 import { WorkoutsScreen } from '../screens/WorkoutsScreen';
+import { HistoryScreen } from '../screens/HistoryScreen';
+import { WorkoutBuilderScreen } from '../screens/WorkoutBuilderScreen';
+import { WorkoutTemplateDetailScreen } from '../screens/WorkoutTemplateDetailScreen';
 import { ProfileScreen } from '../screens/ProfileScreen';
 import { BodyWeightHistoryScreen } from '../screens/BodyWeightHistoryScreen';
 import { CycleDetailScreen } from '../screens/CycleDetailScreen';
+import { CycleConflictsScreen } from '../screens/CycleConflictsScreen';
 import { WorkoutExecutionScreen } from '../screens/WorkoutExecutionScreen';
 import WorkoutEditScreen from '../screens/WorkoutEditScreen';
 import { ExerciseDetailScreen } from '../screens/ExerciseDetailScreen';
@@ -25,7 +29,7 @@ import { CreateCycleReview } from '../screens/manualCycle/CreateCycleReview';
 import { AIWorkoutCreationScreen } from '../screens/AIWorkoutCreationScreen';
 import { WorkoutCreationOptionsScreen } from '../screens/WorkoutCreationOptionsScreen';
 import { IconCalendar, IconWorkouts, IconSwap } from '../components/icons';
-import { COLORS, TYPOGRAPHY, SPACING, CARDS } from '../constants';
+import { COLORS, TYPOGRAPHY, SPACING, CARDS, BORDER_RADIUS } from '../constants';
 import { useStore } from '../store';
 import { CycleTemplateId } from '../types/workout';
 import { Weekday } from '../types/manualCycle';
@@ -39,8 +43,12 @@ export type RootStackParamList = {
   Tabs: { initialTab?: 'Schedule' | 'Workouts' } | undefined;
   Profile: { mode?: 'settings' } | undefined;
   BodyWeightHistory: undefined;
+  History: undefined;
+  WorkoutBuilder: undefined;
+  WorkoutTemplateDetail: { templateId: string };
   DesignSystem: undefined;
   CycleDetail: { cycleId: string };
+  CycleConflicts: { plan: any; conflicts: any[] };
   WorkoutExecution: { workoutTemplateId: string; date: string };
   WorkoutEdit: { cycleId: string; workoutTemplateId: string; date: string };
   ExerciseDetail: { exerciseId: string; workoutKey: string };
@@ -75,7 +83,7 @@ function TabNavigator() {
   const navigation = useNavigation();
   const route = useRoute();
   const insets = useSafeAreaInsets();
-  const { cycles, swapWorkoutAssignments } = useStore();
+  const { cycles, cyclePlans, getActiveCyclePlan, swapWorkoutAssignments, workoutTemplates, scheduleWorkout } = useStore();
   const { t } = useTranslation();
   const [activeTab, setActiveTab] = React.useState<'Schedule' | 'Workouts'>('Schedule');
   const [isViewingToday, setIsViewingToday] = React.useState(true);
@@ -133,7 +141,7 @@ function TabNavigator() {
     if (params?.initialTab && params.initialTab !== activeTab) {
       switchTab(params.initialTab);
     }
-  }, [activeTab, route, switchTab]);
+  }, [route.params]);
   
   const handleTabBarLayout = (event: any) => {
     const { width } = event.nativeEvent.layout;
@@ -239,7 +247,7 @@ function TabNavigator() {
             </Animated.View>
           </TouchableOpacity>
           
-          {/* Workouts Tab */}
+          {/* Library Tab */}
           <TouchableOpacity
             style={styles.tab}
             activeOpacity={1}
@@ -300,12 +308,20 @@ function TabNavigator() {
       <BottomDrawer
         visible={swapDrawerVisible}
         onClose={() => setSwapDrawerVisible(false)}
-        maxHeight="70%"
       >
         <View style={styles.swapSheetContent}>
           <Text style={styles.swapSheetTitle}>{t('swapWorkout')}</Text>
+          <ScrollView 
+            style={styles.swapSheetScrollView}
+            contentContainerStyle={styles.swapSheetScrollContent}
+            showsVerticalScrollIndicator={false}
+            bounces={false}
+          >
           {swapDrawerData && (() => {
             const { selectedDate, weekDays } = swapDrawerData;
+            
+            const activeCycleOld = cycles.find(c => c.isActive);
+            const activeCyclePlan = getActiveCyclePlan();
             
             // Check if the selected day is a rest day
             const selectedDay = weekDays.find((day: any) => day.date === selectedDate);
@@ -317,16 +333,41 @@ function TabNavigator() {
               day.date !== selectedDate
             );
             
-            // Filter workouts that haven't been started
-            const workoutDays = eligibleDays.filter((day: any) => {
+            // Filter cycle workouts (exclude manually scheduled single workouts)
+            const cycleWorkoutDays = eligibleDays.filter((day: any) => {
               if (!day.workout) return false;
               
               // Check if workout has been started
-              const workoutKey = `${day.workout.id}-${day.date}`;
               const hasStarted = day.completionPercentage > 0;
+              if (hasStarted) return false;
               
-              return !hasStarted;
+              // Only include cycle workouts
+              const isFromCycle = day.assignment && (
+                day.assignment.cycleId === activeCycleOld?.id ||
+                day.assignment.cycleId === activeCyclePlan?.id
+              );
+              
+              return isFromCycle;
             });
+            
+            // Filter manually scheduled single workouts (separate section)
+            const scheduledSingleWorkouts = eligibleDays.filter((day: any) => {
+              if (!day.workout) return false;
+              
+              // Check if workout has been started
+              const hasStarted = day.completionPercentage > 0;
+              if (hasStarted) return false;
+              
+              // Include if it's a manually scheduled single workout
+              // (has assignment but cycleId is empty or doesn't match active cycle)
+              const hasAssignment = !!day.assignment;
+              const hasEmptyCycleId = !day.assignment?.cycleId || day.assignment.cycleId === '';
+              const isManualSingleWorkout = hasAssignment && hasEmptyCycleId;
+              
+              return isManualSingleWorkout;
+            });
+            
+            const workoutDays = cycleWorkoutDays;
             
             const restDays = eligibleDays.filter((day: any) => !day.workout);
             
@@ -337,7 +378,18 @@ function TabNavigator() {
             // Combine: workouts first, then rest day (if any and if allowed)
             const allDays = [...workoutDays, ...limitedRestDays];
             
-            if (allDays.length === 0) {
+            // Get all single workout templates, but filter out ones already scheduled this week
+            const scheduledTemplateIds = new Set(
+              weekDays
+                .filter((d: any) => d.workout && d.assignment?.workoutTemplateId)
+                .map((d: any) => d.assignment.workoutTemplateId)
+            );
+            
+            const singleWorkouts = workoutTemplates.filter(template => 
+              !scheduledTemplateIds.has(template.id)
+            );
+            
+            if (allDays.length === 0 && singleWorkouts.length === 0) {
               return (
                 <View style={styles.swapSheetEmpty}>
                   <Text style={styles.swapSheetEmptyText}>
@@ -347,15 +399,16 @@ function TabNavigator() {
               );
             }
             
-            return allDays.map((day: any, index: number) => {
-              const isLastItem = index === allDays.length - 1;
+            return (
+              <>
+                {/* Section 1: Cycle Workouts (no title) */}
+                {allDays.length > 0 && (
+                  <>
+                    {allDays.map((day: any, index: number) => {
               return (
                 <View 
-                  key={index} 
-                  style={[
-                    styles.swapSheetItemWrapper,
-                    isLastItem && { paddingBottom: 16 }
-                  ]}
+                  key={day.date}
+                  style={styles.swapSheetItemWrapper}
                 >
                   <View style={[
                     styles.swapSheetItem,
@@ -385,8 +438,109 @@ function TabNavigator() {
                   </View>
                 </View>
               );
-            });
+            })}
+                  </>
+                )}
+                
+                {/* Spacing between sections */}
+                {allDays.length > 0 && (scheduledSingleWorkouts.length > 0 || singleWorkouts.length > 0) && (
+                  <View style={{ height: SPACING.xl }} />
+                )}
+                
+                {/* Section 2: Scheduled Single Workouts (already on schedule) */}
+                {scheduledSingleWorkouts.length > 0 && (
+                  <>
+                    <View style={styles.swapSheetSection}>
+                      <Text style={styles.swapSheetSectionTitle}>{t('scheduledSingleWorkouts')}</Text>
+                      {scheduledSingleWorkouts.map((day: any) => (
+                        <View 
+                          key={day.date}
+                          style={styles.swapSheetItemWrapper}
+                        >
+                          <View style={[
+                            styles.swapSheetItem,
+                            pressedSwapItemDate === day.date && styles.swapSheetItemPressed
+                          ]}>
+                            <TouchableOpacity
+                              style={styles.swapSheetItemInner}
+                              onPress={async () => {
+                                await swapWorkoutAssignments(selectedDate, day.date);
+                                setSwapDrawerVisible(false);
+                                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                              }}
+                              onPressIn={() => setPressedSwapItemDate(day.date)}
+                              onPressOut={() => setPressedSwapItemDate(null)}
+                              activeOpacity={1}
+                            >
+                              <View>
+                                <Text style={styles.swapSheetItemTitle}>
+                                  {day.workout?.name}
+                                </Text>
+                                <Text style={styles.swapSheetItemSubtitle}>
+                                  {day.dateObj.format('dddd, MMM D')}
+                                </Text>
+                              </View>
+                              <IconSwap size={24} color="#817B77" />
+                            </TouchableOpacity>
+                          </View>
+                        </View>
+                      ))}
+                    </View>
+                    
+                    {/* Spacing before unscheduled templates */}
+                    {singleWorkouts.length > 0 && (
+                      <View style={{ height: SPACING.xl }} />
+                    )}
+                  </>
+                )}
+                
+                {/* Section 3: Unscheduled Single Workout Templates */}
+                {singleWorkouts.length > 0 && (
+                  <View style={styles.swapSheetSection}>
+                    <Text style={styles.swapSheetSectionTitle}>{t('singleWorkouts')}</Text>
+                    {singleWorkouts.map((template, index) => (
+                      <View 
+                        key={template.id}
+                        style={styles.swapSheetItemWrapper}
+                      >
+                        <View style={[
+                          styles.swapSheetItem,
+                          pressedSwapItemDate === template.id && styles.swapSheetItemPressed
+                        ]}>
+                          <TouchableOpacity
+                            style={styles.swapSheetItemInner}
+                            onPress={async () => {
+                              const selectedDayData = weekDays.find((d: any) => d.date === selectedDate);
+                              
+                              // Schedule the single workout to the selected date (replaces whatever is there)
+                              const result = await scheduleWorkout(selectedDate, template.id, 'manual', undefined, 'replace');
+                              void result;
+                              setSwapDrawerVisible(false);
+                              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                            }}
+                            onPressIn={() => setPressedSwapItemDate(template.id)}
+                            onPressOut={() => setPressedSwapItemDate(null)}
+                            activeOpacity={1}
+                          >
+                            <View style={{ flex: 1 }}>
+                              <Text style={styles.swapSheetItemTitle}>
+                                {template.name}
+                              </Text>
+                              <Text style={styles.swapSheetItemSubtitle}>
+                                {template.items.length} {template.items.length === 1 ? t('exercise') : t('exercises')}
+                              </Text>
+                            </View>
+                            <IconSwap size={24} color="#817B77" />
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                    ))}
+                  </View>
+                )}
+              </>
+            );
           })()}
+          </ScrollView>
         </View>
       </BottomDrawer>
     </View>
@@ -446,11 +600,28 @@ const styles = StyleSheet.create({
   // Swap Drawer Styles
   swapSheetContent: {
     paddingHorizontal: SPACING.xxl,
+    flex: 1,
   },
   swapSheetTitle: {
     ...TYPOGRAPHY.h2,
     color: LIGHT_COLORS.secondary,
     marginBottom: SPACING.xl,
+  },
+  swapSheetScrollView: {
+    flex: 1,
+  },
+  swapSheetScrollContent: {
+    paddingBottom: SPACING.xl,
+  },
+  swapSheetSection: {
+    marginBottom: SPACING.xl,
+  },
+  swapSheetSectionTitle: {
+    ...TYPOGRAPHY.meta,
+    color: LIGHT_COLORS.textMeta,
+    marginBottom: SPACING.md,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   swapSheetItemWrapper: {
     marginBottom: SPACING.md,
@@ -507,8 +678,12 @@ export default function AppNavigator() {
         <Stack.Screen name="Tabs" component={TabNavigator} />
         <Stack.Screen name="Profile" component={ProfileScreen} />
         <Stack.Screen name="BodyWeightHistory" component={BodyWeightHistoryScreen} />
+        <Stack.Screen name="History" component={HistoryScreen} />
+        <Stack.Screen name="WorkoutBuilder" component={WorkoutBuilderScreen} />
+        <Stack.Screen name="WorkoutTemplateDetail" component={WorkoutTemplateDetailScreen} />
         <Stack.Screen name="DesignSystem" component={DesignSystemScreen} />
         <Stack.Screen name="CycleDetail" component={CycleDetailScreen} />
+        <Stack.Screen name="CycleConflicts" component={CycleConflictsScreen} />
         <Stack.Screen name="WorkoutExecution" component={WorkoutExecutionScreen} />
         <Stack.Screen name="WorkoutEdit" component={WorkoutEditScreen} />
         <Stack.Screen name="ExerciseDetail" component={ExerciseDetailScreen} />

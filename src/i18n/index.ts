@@ -5,9 +5,38 @@ export const DEFAULT_LANGUAGE: Language = 'en';
 type TranslationKey =
   | 'today'
   | 'workouts'
+  | 'library'
   | 'noWorkoutsYet'
   | 'goToWorkouts'
   | 'start'
+  | 'exerciseLibrary'
+  | 'browseExercises'
+  | 'create'
+  | 'buildCustomWorkout'
+  | 'planTrainingProgram'
+  | 'noCyclesYet'
+  | 'cyclesWillAppearHere'
+  | 'all'
+  | 'noExercisesFound'
+  | 'tryDifferentSearch'
+  | 'selectExercises'
+  | 'configureWorkout'
+  | 'workoutName'
+  | 'workoutNamePlaceholder'
+  | 'addMoreExercises'
+  | 'saveWorkout'
+  | 'discardWorkout'
+  | 'discardWorkoutMessage'
+  | 'discard'
+  | 'noExercisesSelected'
+  | 'pleaseAddExercises'
+  | 'enterWorkoutName'
+  | 'pleaseEnterWorkoutName'
+  | 'workoutSaved'
+  | 'workoutSavedMessage'
+  | 'workoutSavedToLibrary'
+  | 'ok'
+  | 'week'
   | 'resume'
   | 'edit'
   | 'restDayTitle'
@@ -16,6 +45,21 @@ type TranslationKey =
   | 'createWorkout'
   | 'addWorkout'
   | 'addIntervalTimer'
+  | 'templates'
+  | 'noTemplatesYet'
+  | 'createYourFirstWorkout'
+  | 'singleWorkout'
+  | 'singleWorkouts'
+  | 'thisWeeksWorkouts'
+  | 'createOneWorkout'
+  | 'weeklyPlan'
+  | 'createMultiWeekPlan'
+  | 'createWithAI'
+  | 'aiGenerateWorkout'
+  | 'selectCreationType'
+  | 'scheduleForToday'
+  | 'created'
+  | 'timesCompleted'
   | 'addInterval'
   | 'new'
   | 'inProgress'
@@ -68,6 +112,9 @@ type TranslationKey =
   | 'deleteExerciseTitle'
   | 'deleteExerciseMessage'
   | 'delete'
+  | 'featureComingSoon'
+  | 'noExercisesLeft'
+  | 'deleteTemplateInstead'
   | 'unknownExercise'
   | 'exercise'
   | 'round'
@@ -272,6 +319,29 @@ type TranslationKey =
   | 'dayNumber'
   | 'weekShort'
   | 'reps'
+  | 'timeBased'
+  | 'duration'
+  | 'seconds'
+  | 'sets'
+  | 'weight'
+  | 'conflictsFound'
+  | 'conflictsDescription'
+  | 'conflictingWorkouts'
+  | 'manual'
+  | 'cycle'
+  | 'howToResolve'
+  | 'replaceConflicting'
+  | 'replaceConflictingDesc'
+  | 'keepExisting'
+  | 'keepExistingDesc'
+  | 'cancelPlan'
+  | 'cancelPlanDesc'
+  | 'conflictFooterNote'
+  | 'applyPlan'
+  | 'goBack'
+  | 'planAppliedSuccessfully'
+  | 'failedToApplyPlan'
+  | 'error'
   | 'deleteCycleTitle'
   | 'deleteCycleMessage'
   | 'cycleDataTitle'
@@ -313,9 +383,71 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
   en: {
     today: 'Today',
     workouts: 'Workouts',
+    library: 'Library',
     noWorkoutsYet: 'No workouts yet',
     goToWorkouts: 'Go to Workouts',
     start: 'Start',
+    exerciseLibrary: 'Exercise Library',
+    browseExercises: 'Browse exercises',
+    create: 'Create',
+    buildCustomWorkout: 'Build a custom workout from scratch',
+    planTrainingProgram: 'Plan a multi-week training program',
+    noCyclesYet: 'No cycles yet',
+    templates: 'Templates',
+    noTemplatesYet: 'No templates yet',
+    createYourFirstWorkout: 'Create your first workout to get started',
+    singleWorkout: 'Single Workout',
+    singleWorkouts: 'Single Workouts',
+    scheduledSingleWorkouts: 'Scheduled Single Workouts',
+    thisWeeksWorkouts: "This Week's Workouts",
+    createOneWorkout: 'Create one workout',
+    weeklyPlan: 'Weekly Plan',
+    createMultiWeekPlan: 'Create a multi-week training plan',
+    createWithAI: 'Create with AI',
+    aiGenerateWorkout: 'Let AI generate a workout plan for you',
+    selectCreationType: 'Select Creation Type',
+    deleteWorkout: 'Delete Workout',
+    deleteWorkoutMessage: 'Are you sure you want to delete this workout template? This action cannot be undone.',
+    scheduleForToday: 'Schedule for Today',
+    unknownExercise: 'Unknown Exercise',
+    created: 'Created',
+    timesCompleted: 'Times Completed',
+    cyclesWillAppearHere: 'Your training cycles will appear here',
+    all: 'All',
+    noExercisesFound: 'No exercises found',
+    tryDifferentSearch: 'Try a different search or filter',
+    selectExercises: 'Select Exercises',
+    configureWorkout: 'Configure Workout',
+    workoutName: 'Workout Name',
+    workoutNamePlaceholder: 'e.g., Upper Body',
+    addMoreExercises: 'Add more exercises',
+    saveWorkout: 'Save Workout',
+    discardWorkout: 'Discard Workout?',
+    discardWorkoutMessage: 'Are you sure you want to discard this workout?',
+    discard: 'Discard',
+    noExercisesSelected: 'No exercises selected',
+    pleaseAddExercises: 'Please add at least one exercise',
+    enterWorkoutName: 'Enter workout name',
+    pleaseEnterWorkoutName: 'Please enter a name for your workout',
+    workoutSaved: 'Workout Saved',
+    workoutSavedMessage: 'Your workout has been saved successfully',
+    workoutSavedToLibrary: 'Your workout has been saved to your library. Go to Schedule to add it to your week.',
+    whatNext: 'What would you like to do next?',
+    scheduleIt: 'Schedule It',
+    addToCycle: 'Add to Cycle',
+    done: 'Done',
+    scheduleForDate: 'Schedule for Date',
+    selectDate: 'Select a date for this workout',
+    today: 'Today',
+    tomorrow: 'Tomorrow',
+    pickDate: 'Pick Date',
+    workoutScheduled: 'Workout Scheduled',
+    workoutScheduledFor: 'Workout scheduled for {date}',
+    conflictExists: 'Conflict',
+    workoutExistsOn: 'A workout already exists on {date}',
+    replaceIt: 'Replace It',
+    ok: 'OK',
+    week: 'week',
     resume: 'Resume',
     edit: 'Edit',
     restDayTitle: 'This is your rest day',
@@ -376,6 +508,9 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     deleteExerciseTitle: 'Delete Exercise',
     deleteExerciseMessage: 'Are you sure you want to remove this exercise?',
     delete: 'Delete',
+    featureComingSoon: 'This feature is coming soon!',
+    noExercisesLeft: 'No exercises left',
+    deleteTemplateInstead: 'This was the last exercise. Would you like to delete the entire workout instead?',
     unknownExercise: 'Unknown Exercise',
     exercise: 'Exercise',
     round: 'Round',
@@ -435,6 +570,29 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     errorNoWorkoutsFound: 'No workouts found in the input. Please check the format.',
     failedToCreateCycle: 'Failed to create cycle. Please try again.',
     reps: 'reps',
+    timeBased: 'Time-based',
+    duration: 'Duration',
+    seconds: 'seconds',
+    sets: 'Sets',
+    weight: 'Weight',
+    conflictsFound: 'Conflicts found',
+    conflictsDescription: 'You have {n} workouts already scheduled during this plan.',
+    conflictingWorkouts: 'Conflicting Workouts',
+    manual: 'Manual',
+    cycle: 'Cycle',
+    howToResolve: 'How to Resolve',
+    replaceConflicting: 'Replace conflicting workouts with the plan',
+    replaceConflictingDesc: 'Remove existing workouts and use the new cycle schedule',
+    keepExisting: 'Keep existing workouts and apply the plan around them',
+    keepExistingDesc: 'Existing workouts stay, cycle fills empty days',
+    cancelPlan: 'Cancel',
+    cancelPlanDesc: 'Don\'t activate this cycle',
+    conflictFooterNote: 'You can change this later by scheduling workouts manually.',
+    applyPlan: 'Apply Plan',
+    goBack: 'Go Back',
+    planAppliedSuccessfully: 'Plan applied successfully',
+    failedToApplyPlan: 'Failed to apply plan. Please try again.',
+    error: 'Error',
     completeWorkoutTitle: 'Complete Workout',
     completeWorkoutMessage: 'Mark all exercises and sets as complete?',
     reactivateExerciseTitle: 'Reactivate Exercise',
@@ -559,6 +717,7 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     discard: 'Discard',
     failedToSaveChanges: 'Failed to save changes. Please try again.',
     listOfExercises: 'List of Exercises',
+    listOfExercises: 'List of Exercises',
     applyChangesTitle: 'Apply Changes',
     thisWorkoutOnly: 'This Workout Only',
     allFutureWorkouts: 'All Future Workouts',
@@ -622,9 +781,71 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
   es: {
     today: 'Hoy',
     workouts: 'Entrenamientos',
+    library: 'Biblioteca',
     noWorkoutsYet: 'No hay entrenamientos',
     goToWorkouts: 'Ir a Entrenamientos',
     start: 'Empezar',
+    exerciseLibrary: 'Biblioteca de Ejercicios',
+    browseExercises: 'Explorar ejercicios',
+    create: 'Crear',
+    buildCustomWorkout: 'Construir un entrenamiento personalizado',
+    planTrainingProgram: 'Planificar un programa de entrenamiento',
+    noCyclesYet: 'No hay ciclos todavía',
+    templates: 'Plantillas',
+    noTemplatesYet: 'No hay plantillas todavía',
+    createYourFirstWorkout: 'Crea tu primer entrenamiento para comenzar',
+    singleWorkout: 'Entrenamiento Único',
+    singleWorkouts: 'Entrenamientos Únicos',
+    scheduledSingleWorkouts: 'Entrenamientos Únicos Programados',
+    thisWeeksWorkouts: 'Entrenamientos de Esta Semana',
+    createOneWorkout: 'Crear un entrenamiento',
+    weeklyPlan: 'Plan Semanal',
+    createMultiWeekPlan: 'Crear un plan de entrenamiento semanal',
+    createWithAI: 'Crear con IA',
+    aiGenerateWorkout: 'Deja que la IA genere un plan de entrenamiento',
+    selectCreationType: 'Seleccionar Tipo de Creación',
+    deleteWorkout: 'Eliminar Entrenamiento',
+    deleteWorkoutMessage: '¿Estás seguro de que deseas eliminar esta plantilla de entrenamiento? Esta acción no se puede deshacer.',
+    scheduleForToday: 'Programar para Hoy',
+    unknownExercise: 'Ejercicio Desconocido',
+    created: 'Creado',
+    timesCompleted: 'Veces completado',
+    cyclesWillAppearHere: 'Tus ciclos de entrenamiento aparecerán aquí',
+    all: 'Todos',
+    noExercisesFound: 'No se encontraron ejercicios',
+    tryDifferentSearch: 'Intenta una búsqueda o filtro diferente',
+    selectExercises: 'Seleccionar Ejercicios',
+    configureWorkout: 'Configurar Entrenamiento',
+    workoutName: 'Nombre del Entrenamiento',
+    workoutNamePlaceholder: 'ej. Parte Superior del Cuerpo',
+    addMoreExercises: 'Agregar más ejercicios',
+    saveWorkout: 'Guardar Entrenamiento',
+    discardWorkout: '¿Descartar Entrenamiento?',
+    discardWorkoutMessage: '¿Estás seguro de que quieres descartar este entrenamiento?',
+    discard: 'Descartar',
+    noExercisesSelected: 'No hay ejercicios seleccionados',
+    pleaseAddExercises: 'Por favor agrega al menos un ejercicio',
+    enterWorkoutName: 'Ingresa el nombre del entrenamiento',
+    pleaseEnterWorkoutName: 'Por favor ingresa un nombre para tu entrenamiento',
+    workoutSaved: 'Entrenamiento Guardado',
+    workoutSavedMessage: 'Tu entrenamiento ha sido guardado exitosamente',
+    workoutSavedToLibrary: 'Tu entrenamiento se ha guardado en tu biblioteca. Ve a Programación para agregarlo a tu semana.',
+    whatNext: '¿Qué te gustaría hacer ahora?',
+    scheduleIt: 'Programarlo',
+    addToCycle: 'Agregar a Ciclo',
+    done: 'Listo',
+    scheduleForDate: 'Programar para Fecha',
+    selectDate: 'Selecciona una fecha para este entrenamiento',
+    today: 'Hoy',
+    tomorrow: 'Mañana',
+    pickDate: 'Elegir Fecha',
+    workoutScheduled: 'Entrenamiento Programado',
+    workoutScheduledFor: 'Entrenamiento programado para {date}',
+    conflictExists: 'Conflicto',
+    workoutExistsOn: 'Ya existe un entrenamiento en {date}',
+    replaceIt: 'Reemplazarlo',
+    ok: 'OK',
+    week: 'semana',
     resume: 'Reanudar',
     edit: 'Editar',
     restDayTitle: 'Es tu dia de descanso',
@@ -685,6 +906,9 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     deleteExerciseTitle: 'Eliminar ejercicio',
     deleteExerciseMessage: 'Seguro que quieres eliminar este ejercicio?',
     delete: 'Eliminar',
+    featureComingSoon: '¡Esta función estará disponible pronto!',
+    noExercisesLeft: 'No quedan ejercicios',
+    deleteTemplateInstead: 'Este era el último ejercicio. ¿Quieres eliminar todo el entrenamiento?',
     unknownExercise: 'Ejercicio desconocido',
     exercise: 'Ejercicio',
     round: 'Ronda',
@@ -744,6 +968,29 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     errorNoWorkoutsFound: 'No se encontraron entrenamientos. Revisa el formato.',
     failedToCreateCycle: 'No se pudo crear el ciclo. Intenta de nuevo.',
     reps: 'reps',
+    timeBased: 'Basado en Tiempo',
+    duration: 'Duración',
+    seconds: 'segundos',
+    sets: 'Series',
+    weight: 'Peso',
+    conflictsFound: 'Conflictos encontrados',
+    conflictsDescription: 'Tienes {n} entrenamientos ya programados durante este plan.',
+    conflictingWorkouts: 'Entrenamientos en Conflicto',
+    manual: 'Manual',
+    cycle: 'Ciclo',
+    howToResolve: 'Cómo Resolver',
+    replaceConflicting: 'Reemplazar entrenamientos en conflicto con el plan',
+    replaceConflictingDesc: 'Eliminar entrenamientos existentes y usar el nuevo horario del ciclo',
+    keepExisting: 'Mantener entrenamientos existentes y aplicar el plan alrededor',
+    keepExistingDesc: 'Los entrenamientos existentes se mantienen, el ciclo llena los días vacíos',
+    cancelPlan: 'Cancelar',
+    cancelPlanDesc: 'No activar este ciclo',
+    conflictFooterNote: 'Puedes cambiar esto más tarde programando entrenamientos manualmente.',
+    applyPlan: 'Aplicar Plan',
+    goBack: 'Volver',
+    planAppliedSuccessfully: 'Plan aplicado exitosamente',
+    failedToApplyPlan: 'No se pudo aplicar el plan. Intenta de nuevo.',
+    error: 'Error',
     completeWorkoutTitle: 'Completar entrenamiento',
     completeWorkoutMessage: 'Marcar todos los ejercicios y series como completos?',
     reactivateExerciseTitle: 'Reactivar ejercicio',
@@ -868,6 +1115,7 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     unsavedChangesMessage: 'Tienes cambios sin guardar. Deseas descartarlos?',
     discard: 'Descartar',
     failedToSaveChanges: 'No se pudieron guardar los cambios. Intenta de nuevo.',
+    listOfExercises: 'Lista de Ejercicios',
     listOfExercises: 'Lista de ejercicios',
     applyChangesTitle: 'Aplicar cambios',
     thisWorkoutOnly: 'Solo este entrenamiento',

@@ -1,708 +1,229 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Modal, TextInput, ScrollView, Alert, KeyboardAvoidingView, Platform } from 'react-native';
+import React, { useState, useEffect, useRef } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Modal, Animated } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
-import Svg, { Circle, Path } from 'react-native-svg';
 import * as Haptics from 'expo-haptics';
 import { ProfileAvatar } from '../components/ProfileAvatar';
-import { BottomDrawer } from '../components/common/BottomDrawer';
 import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS, CARDS } from '../constants';
-import { IconCheck, IconPlay, IconAdd } from '../components/icons';
+import { IconAdd, IconWorkouts, IconCalendar, IconClose } from '../components/icons';
 import { useStore } from '../store';
-import { useOnboardingStore } from '../store/useOnboardingStore';
 import { useTranslation } from '../i18n/useTranslation';
-import dayjs from 'dayjs';
-import isoWeek from 'dayjs/plugin/isoWeek';
 
-dayjs.extend(isoWeek);
-
-// Light theme colors matching Today screen
+// Light theme colors
 const LIGHT_COLORS = {
   backgroundCanvas: '#E3E6E0',
-  backgroundContainer: '#CDCABB',
   secondary: '#1B1B1B',
-  textSecondary: '#3C3C43',
   textMeta: '#817B77',
   border: '#C7C7CC',
   accentPrimary: '#FD6B00',
   buttonBg: '#F2F2F7',
-  buttonText: '#000000',
-  meta: '#817B77',
 };
 
 export function WorkoutsScreen() {
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
-  const { cycles, addCycle, getNextCycleNumber, assignWorkout, exercises, addExercise, updateCycle, clearWorkoutAssignmentsForDateRange, workoutAssignments, detailedWorkoutProgress, settings } = useStore();
-  const { startDraftFromCustomText } = useOnboardingStore();
-  const { t, language } = useTranslation();
-  const [showBottomSheet, setShowBottomSheet] = useState(false);
-  const [workoutDetails, setWorkoutDetails] = useState('');
+  const { settings, workoutTemplates } = useStore();
+  const { t } = useTranslation();
+  
+  const [showCreateSheet, setShowCreateSheet] = useState(false);
+  const slideAnim = useRef(new Animated.Value(0)).current;
 
-  const formatOrdinalDate = (dateStr: string) => {
-    const date = dayjs(dateStr);
-    const day = date.date();
-    if (language === 'es') {
-      return `${date.format('MMM')} ${day}º`;
+  useEffect(() => {
+    if (showCreateSheet) {
+      Animated.spring(slideAnim, {
+        toValue: 1,
+        useNativeDriver: true,
+        tension: 80,
+        friction: 20,
+      }).start();
+    } else {
+      Animated.timing(slideAnim, {
+        toValue: 0,
+        duration: 200,
+        useNativeDriver: true,
+      }).start();
     }
-    const suffix =
-      day % 10 === 1 && day % 100 !== 11 ? 'st' :
-      day % 10 === 2 && day % 100 !== 12 ? 'nd' :
-      day % 10 === 3 && day % 100 !== 13 ? 'rd' : 'th';
-    return `${date.format('MMM')} ${day}${suffix}`;
-  };
-  
-  // Calculate cycle completion percentage
-  const getCycleCompletion = (cycleId: string) => {
-    const cycle = cycles.find(c => c.id === cycleId);
-    if (!cycle) return 0;
-    
-    // Get all workout assignments for this cycle
-    const cycleAssignments = workoutAssignments.filter(
-      assignment => assignment.cycleId === cycleId
-    );
-    
-    if (cycleAssignments.length === 0) return 0;
-    
-    let totalSets = 0;
-    let completedSets = 0;
-    
-    cycleAssignments.forEach(assignment => {
-      const template = cycle.workoutTemplates.find(t => t.id === assignment.workoutTemplateId);
-      if (!template) return;
-      
-      const workoutKey = `${assignment.workoutTemplateId}-${assignment.date}`;
-      const progress = detailedWorkoutProgress[workoutKey];
-      
-      // Count total sets from template
-      template.exercises.forEach(ex => {
-        totalSets += ex.targetSets;
-      });
-      
-      // Count completed sets from progress
-      if (progress) {
-        Object.values(progress.exercises).forEach(exerciseProgress => {
-          if (!exerciseProgress.skipped) {
-            completedSets += exerciseProgress.sets.filter(set => set.completed).length;
-          }
-        });
-      }
-    });
-    
-    if (totalSets === 0) return 0;
-    return Math.round((completedSets / totalSets) * 100);
+  }, [showCreateSheet]);
+
+  const handleCreatePress = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setShowCreateSheet(true);
   };
 
-  const getCompletedSetsCount = (exerciseProgress: any) => {
-    if (!exerciseProgress || exerciseProgress.skipped) return 0;
-    const sets = exerciseProgress.sets || [];
-    const hasCompletedFlag = sets.some((set: any) => set.completed);
-    return hasCompletedFlag ? sets.filter((set: any) => set.completed).length : sets.length;
+  const handleCloseSheet = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setShowCreateSheet(false);
   };
 
-  const getWeekCompletion = (cycle: any, weekIndex: number) => {
-    const weekStartDate = dayjs(cycle.startDate).add(weekIndex, 'week');
-    const weekEndDate = weekStartDate.add(6, 'day');
-    const weekAssignments = workoutAssignments.filter(assignment => {
-      if (assignment.cycleId !== cycle.id) return false;
-      const assignmentDate = dayjs(assignment.date);
-      return (
-        (assignmentDate.isAfter(weekStartDate, 'day') || assignmentDate.isSame(weekStartDate, 'day')) &&
-        (assignmentDate.isBefore(weekEndDate, 'day') || assignmentDate.isSame(weekEndDate, 'day'))
-      );
-    });
-
-    if (weekAssignments.length === 0) return 0;
-
-    let totalSets = 0;
-    let completedSets = 0;
-
-    weekAssignments.forEach(assignment => {
-      const template = cycle.workoutTemplates.find((t: any) => t.id === assignment.workoutTemplateId);
-      if (!template) return;
-      const workoutKey = `${assignment.workoutTemplateId}-${assignment.date}`;
-      const progress = detailedWorkoutProgress[workoutKey];
-
-      template.exercises.forEach((ex: any) => {
-        const exerciseProgress = progress?.exercises?.[ex.id];
-        const completed = getCompletedSetsCount(exerciseProgress);
-        const logged = exerciseProgress?.sets?.length || 0;
-        const target = ex.targetSets || 0;
-        totalSets += Math.max(target, logged, completed);
-        completedSets += completed;
-      });
-    });
-
-    if (totalSets === 0) return 0;
-    return Math.round((completedSets / totalSets) * 100);
+  const handleSingleWorkout = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setShowCreateSheet(false);
+    (navigation as any).navigate('WorkoutBuilder');
   };
-  
-  const handleCreateCycle = async () => {
-    try {
-      if (!workoutDetails.trim()) {
-        Alert.alert(t('alertErrorTitle'), t('enterWorkoutDetails'));
-        return;
-      }
-      
-      const cycleNumber = getNextCycleNumber();
-      const today = dayjs();
-      const weekStart = today.startOf('isoWeek'); // Monday
-      
-      // Create the cycle
-      const cycleId = `cycle-${Date.now()}`;
-      
-      // Parse workout details from user input
-      // Expected format:
-      // ⭐️ WEEK 1
-      // ⸻
-      // DAY 1 — Pull
-      // • Rear Delt Row — 3×10 @ 100 lb
-      // • Barbell Row — 3×10 @ 100 lb
-      
-      const lines = workoutDetails.split('\n');
-      let weeklyWorkouts: { [week: number]: any[] } = {};
-      let currentWeek = 1;
-      let currentWorkout: any = null;
-      
-      for (let line of lines) {
-        // Clean up the line
-        const trimmedLine = line.trim();
-        
-        // Skip empty lines and separator lines
-        if (!trimmedLine || trimmedLine === '⸻' || trimmedLine.startsWith('⸻')) {
-          continue;
-        }
-        
-        // Check if this is a week header (e.g., "⭐️ WEEK 1")
-        if (trimmedLine.startsWith('⭐️') && trimmedLine.toUpperCase().includes('WEEK')) {
-          // Save previous workout if exists
-          if (currentWorkout && currentWorkout.exercises.length > 0) {
-            if (!weeklyWorkouts[currentWeek]) {
-              weeklyWorkouts[currentWeek] = [];
-            }
-            weeklyWorkouts[currentWeek].push(currentWorkout);
-            currentWorkout = null;
-          }
-          
-          // Extract week number
-          const weekMatch = trimmedLine.match(/WEEK\s+(\d+)/i);
-          if (weekMatch) {
-            currentWeek = parseInt(weekMatch[1]);
-          }
-          continue;
-        }
-        
-        // Check if this is a day header (e.g., "DAY 1 — Pull")
-        if (trimmedLine.toUpperCase().startsWith('DAY')) {
-          // Save previous workout if exists
-          if (currentWorkout && currentWorkout.exercises.length > 0) {
-            if (!weeklyWorkouts[currentWeek]) {
-              weeklyWorkouts[currentWeek] = [];
-            }
-            weeklyWorkouts[currentWeek].push(currentWorkout);
-          }
-          
-          // Extract day number and workout name from "DAY X — WorkoutName"
-          const dayMatch = trimmedLine.match(/DAY\s+(\d+)/i);
-          const dayNumber = dayMatch ? parseInt(dayMatch[1]) : 1;
-          
-          const parts = trimmedLine.split(/—|-/).map(p => p.trim());
-          const workoutName = parts.length > 1 ? parts[parts.length - 1] : parts[0];
-          
-          currentWorkout = {
-            name: workoutName,
-            dayNumber: dayNumber,
-            week: currentWeek,
-            exercises: [],
-          };
-        } 
-        // Check if this is an exercise line (starts with bullet or tab)
-        else if (currentWorkout && (trimmedLine.startsWith('•') || trimmedLine.startsWith('\t') || trimmedLine.startsWith('-'))) {
-          // Remove bullet point, tabs, and clean
-          let exerciseLine = trimmedLine.replace(/^[•\t\s\-]+/, '').trim();
-          
-          // Parse format: "Exercise Name — Sets×Reps @ Weight lb"
-          // Try to split by em dash first, then regular dash
-          let exerciseName = '';
-          let detailsPart = '';
-          
-          if (exerciseLine.includes('—')) {
-            const dashParts = exerciseLine.split('—').map(p => p.trim());
-            exerciseName = dashParts[0];
-            detailsPart = dashParts.slice(1).join(' ');
-          } else if (exerciseLine.match(/\s+-\s+\d+/)) {
-            // Match " - " followed by a number (for sets)
-            const dashMatch = exerciseLine.match(/^(.+?)\s+-\s+(.+)$/);
-            if (dashMatch) {
-              exerciseName = dashMatch[1].trim();
-              detailsPart = dashMatch[2].trim();
-            }
-          }
-          
-          if (exerciseName && detailsPart) {
-            // Parse sets×reps (e.g., "3×10" or "4×8-12")
-            const setsRepsMatch = detailsPart.match(/(\d+)\s*[×x]\s*(\d+)(?:[-–](\d+))?/i);
-            
-            // Parse weight (e.g., "@ 100 lb" or "@ 25 lb")
-            const weightMatch = detailsPart.match(/@\s*(\d+(?:\.\d+)?)/);
-            
-            if (setsRepsMatch) {
-              const sets = parseInt(setsRepsMatch[1]);
-              const repsMin = parseInt(setsRepsMatch[2]);
-              const repsMax = setsRepsMatch[3] ? parseInt(setsRepsMatch[3]) : repsMin;
-              const weight = weightMatch ? parseFloat(weightMatch[1]) : 0;
-              
-              // Find or create exercise in database
-              let exerciseData = exercises.find(e => 
-                e.name.toLowerCase() === exerciseName.toLowerCase()
-              );
-              
-              // If exercise doesn't exist, create it
-              let exerciseId = exerciseData?.id;
-              if (!exerciseData) {
-                const timestamp = Date.now();
-                const random = Math.floor(Math.random() * 10000);
-                exerciseId = `exercise-${timestamp}-${random}`;
-                const newExercise = {
-                  id: exerciseId,
-                  name: exerciseName,
-                  category: 'Other' as any,
-                  equipment: 'Dumbbell',
-                  isCustom: true,
-                };
-                await addExercise(newExercise);
-                // Small delay to prevent ID collisions
-                await new Promise(resolve => setTimeout(resolve, 10));
-              }
-              
-              const exTimestamp = Date.now();
-              const exRandom = Math.floor(Math.random() * 10000);
-              currentWorkout.exercises.push({
-                id: `ex-${exTimestamp}-${exRandom}`,
-                exerciseId: exerciseId || `fallback-${exTimestamp}-${exRandom}`,
-                orderIndex: currentWorkout.exercises.length,
-                targetSets: sets,
-                targetRepsMin: repsMin,
-                targetRepsMax: repsMax,
-                targetWeight: weight,
-                progressionType: 'double' as any,
-                progressionValue: 2.5,
-              });
-            }
-          }
-        }
-      }
-      
-      // Add the last workout
-      if (currentWorkout && currentWorkout.exercises.length > 0) {
-        if (!weeklyWorkouts[currentWeek]) {
-          weeklyWorkouts[currentWeek] = [];
-        }
-        weeklyWorkouts[currentWeek].push(currentWorkout);
-      }
-      
-      if (Object.keys(weeklyWorkouts).length === 0) {
-        Alert.alert(t('alertErrorTitle'), t('errorNoWorkoutsFound'));
-        return;
-      }
-      
-      const weekNumbers = Object.keys(weeklyWorkouts).map(k => parseInt(k, 10));
-      const minWeekNumber = Math.min(...weekNumbers);
-      if (minWeekNumber !== 1) {
-        const normalizedWorkouts: { [week: number]: any[] } = {};
-        weekNumbers.forEach(oldWeek => {
-          const newWeek = oldWeek - minWeekNumber + 1;
-          normalizedWorkouts[newWeek] = (weeklyWorkouts[oldWeek] || []).map(workout => ({
-            ...workout,
-            week: newWeek,
-          }));
-        });
-        weeklyWorkouts = normalizedWorkouts;
-      }
-      
-      const numberOfWeeks = Math.max(...Object.keys(weeklyWorkouts).map(k => parseInt(k, 10)));
-      
-      // Create workout templates for each week
-      const allWorkoutTemplates: any[] = [];
-      let templateIndex = 0;
-      
-      for (let week = 1; week <= numberOfWeeks; week++) {
-        const workoutsForWeek = weeklyWorkouts[week] || [];
-        
-        for (const workout of workoutsForWeek) {
-          // Infer workout type from name
-          let workoutType = 'Other';
-          const nameLower = workout.name.toLowerCase();
-          if (nameLower.includes('push')) workoutType = 'Push';
-          else if (nameLower.includes('pull')) workoutType = 'Pull';
-          else if (nameLower.includes('legs') || nameLower.includes('leg')) workoutType = 'Legs';
-          else if (nameLower.includes('full')) workoutType = 'Full Body';
-          
-          allWorkoutTemplates.push({
-            id: `workout-${cycleId}-w${week}-d${workout.dayNumber}`,
-            cycleId,
-            name: workout.name,
-            workoutType: workoutType as any,
-            dayOfWeek: workout.dayNumber,
-            orderIndex: templateIndex++,
-            week: week,
-            exercises: workout.exercises,
-          });
-        }
-      }
-      
-      // Deactivate all existing cycles first
-      const existingCycles = cycles.map(c => ({ ...c, isActive: false }));
-      for (const oldCycle of existingCycles) {
-        await updateCycle(oldCycle.id, { isActive: false });
-      }
-      
-      // Get workouts per week from first week
-      const workoutsPerWeek = weeklyWorkouts[1]?.length || 0;
-      
-      const cycle = {
-        id: cycleId,
-        cycleNumber,
-        startDate: weekStart.format('YYYY-MM-DD'),
-        lengthInWeeks: numberOfWeeks,
-        endDate: weekStart.add(numberOfWeeks, 'week').format('YYYY-MM-DD'),
-        workoutsPerWeek,
-        goal: `Cycle ${cycleNumber}`,
-        isActive: true,
-        workoutTemplates: allWorkoutTemplates,
-        createdAt: new Date().toISOString(),
-      };
-      
-      await addCycle(cycle);
-      
-      // Clear any existing assignments in this date range to avoid conflicts
-      await clearWorkoutAssignmentsForDateRange(
-        cycle.startDate,
-        cycle.endDate
-      );
-      
-      // Assign workouts for each specific week
-      for (let week = 1; week <= numberOfWeeks; week++) {
-        const templatesForWeek = allWorkoutTemplates.filter(t => t.week === week);
-        
-        for (const template of templatesForWeek) {
-          const dayIndex = template.dayOfWeek - 1; // Convert to 0-based (0 = Monday)
-          if (dayIndex >= 0 && dayIndex < 7) {
-            const workoutDate = weekStart.add((week - 1) * 7 + dayIndex, 'day').format('YYYY-MM-DD');
-            await assignWorkout(workoutDate, template.id, cycleId);
-          }
-        }
-      }
-      
-      console.log('✅ Cycle created with', allWorkoutTemplates.length, 'workout templates across', numberOfWeeks, 'weeks');
-      console.log('📊 Templates created:');
-      allWorkoutTemplates.forEach(t => {
-        console.log(`  Week ${t.week}, Day ${t.dayOfWeek}: ${t.name} (${t.exercises.length} exercises)`);
-        t.exercises.forEach(ex => {
-          const exerciseName = exercises.find(e => e.id === ex.exerciseId)?.name || 'Unknown';
-          console.log(`    - ${exerciseName}: ${ex.targetSets}×${ex.targetRepsMin} @ ${ex.targetWeight}lbs`);
-        });
-      });
-      console.log('✅ Assigned workouts for cycle');
-      
-      setWorkoutDetails('');
-      setShowBottomSheet(false);
-    } catch (error) {
-      console.error('Error creating cycle:', error);
-      Alert.alert(t('alertErrorTitle'), t('failedToCreateCycle'));
-    }
+
+  const handleWeeklyPlan = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setShowCreateSheet(false);
+    // TODO: Navigate to plan setup
+    (navigation as any).navigate('CreateCycleBasics');
   };
-  
+
+  const handleCreateWithAI = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setShowCreateSheet(false);
+    // TODO: Navigate to AI creation
+    (navigation as any).navigate('AIWorkoutCreation');
+  };
+
+  const handleTemplatePress = (templateId: string) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    (navigation as any).navigate('WorkoutTemplateDetail', { templateId });
+  };
+
   return (
     <View style={styles.gradient}>
       <SafeAreaView style={[styles.container, { paddingBottom: 88 }]} edges={[]}>
-        {/* Header - Fixed */}
+        {/* Header */}
         <View style={[styles.header, { paddingTop: insets.top }]}>
           <View style={styles.topBar}>
             <Text style={styles.headerTitle}>{t('workouts')}</Text>
-            <ProfileAvatar 
-              onPress={() => navigation.navigate('Profile')}
-              size={40}
-              backgroundColor="#9E9E9E"
-              textColor="#FFFFFF"
-              showInitial={true}
-              imageUri={settings.profileAvatarUri || null}
-            />
+            <View style={styles.headerRight}>
+              <ProfileAvatar 
+                onPress={() => (navigation as any).navigate('Profile')}
+                size={40}
+                backgroundColor="#9E9E9E"
+                textColor="#FFFFFF"
+                showInitial={true}
+                imageUri={settings.profileAvatarUri || null}
+              />
+            </View>
           </View>
         </View>
-        
-        <ScrollView style={styles.content} contentContainerStyle={styles.scrollContent} bounces={false}>
-          {cycles.length === 0 ? (
-            <>
-              {/* Question Text */}
-              <View style={styles.questionSection}>
-                <Text style={styles.questionText}>
-                  <Text style={styles.questionTextGray}>{t('questionCreateWorkoutLine1')}{'\n'}</Text>
-                  <Text style={styles.questionTextBlack}>{t('questionCreateWorkoutLine2')}</Text>
-                </Text>
-              </View>
-              
-              {/* Action Buttons */}
-              <View style={styles.actionsSection}>
-                <TouchableOpacity
-                  style={styles.manuallyButton}
-                  onPress={() => {
-                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                    navigation.navigate('CreateCycleBasics');
-                  }}
-                  activeOpacity={1}
-                >
-                  <Text style={styles.manuallyButtonText}>{t('manually')}</Text>
-                </TouchableOpacity>
-                
-                <TouchableOpacity
-                  style={styles.aiButton}
-                  onPress={() => {
-                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                    navigation.navigate('AIWorkoutCreation' as never);
-                  }}
-                  activeOpacity={1}
-                >
-                  <Text style={styles.aiButtonText}>{t('withAiHelp')}</Text>
-                </TouchableOpacity>
-              </View>
-              
-            </>
-          ) : (
-            <>
-              {/* Active Cycle */}
-              {cycles.filter(c => c.isActive).length > 0 && (
-                <>
-                  {cycles.filter(c => c.isActive).map((cycle) => {
-                    const completion = getCycleCompletion(cycle.id);
-                    return (
-                      <View key={cycle.id} style={styles.activeCycleSection}>
-                        <View style={styles.cycleCard}>
-                              <TouchableOpacity
-                                style={[styles.cycleCardContent, styles.currentCycleCardContent]}
-                                onPress={() => {
-                                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                                  navigation.navigate('CycleDetail' as never, { cycleId: cycle.id } as never);
-                                }}
-                                activeOpacity={1}
-                              >
-                            <View style={styles.cycleCardContentBody}>
-                                  <Text style={styles.currentCycleTitle}>{t('currentCycle')}</Text>
-                                  <View style={styles.weekList}>
-                                    {Array.from({ length: cycle.lengthInWeeks }).map((_, weekIndex) => {
-                                      const weekNumber = weekIndex + 1;
-                                      const weekStartDate = dayjs(cycle.startDate).add(weekIndex, 'week');
-                                      const weekEndDate = weekStartDate.add(6, 'day');
-                                      const weekCompletion = getWeekCompletion(cycle, weekIndex);
-                                      const weekProgress = weekCompletion / 100;
-                                      const today = dayjs().startOf('day');
-                                      const isCurrentWeek =
-                                        (today.isAfter(weekStartDate, 'day') || today.isSame(weekStartDate, 'day')) &&
-                                        (today.isBefore(weekEndDate, 'day') || today.isSame(weekEndDate, 'day'));
-                                      return (
-                                        <View key={`week-${cycle.id}-${weekNumber}`} style={styles.weekRow}>
-                                          <View style={styles.weekInfo}>
-                                            <Text
-                                              style={[
-                                                styles.weekTitle,
-                                                isCurrentWeek ? styles.weekTitleCurrent : styles.weekTitleInactive,
-                                              ]}
-                                            >
-                                              {t('weekLabel').replace('{number}', String(weekNumber))}
-                                            </Text>
-                                            <Text
-                                              style={[
-                                                styles.weekDates,
-                                                isCurrentWeek ? styles.weekDatesCurrent : styles.weekDatesInactive,
-                                              ]}
-                                            >
-                                              <Text
-                                                style={[
-                                                  styles.weekDateLabel,
-                                                  isCurrentWeek
-                                                    ? styles.weekDateLabelCurrent
-                                                    : styles.weekDateLabelInactive,
-                                                ]}
-                                              >
-                                                {t('from')}
-                                              </Text>
-                                              {formatOrdinalDate(weekStartDate.format('YYYY-MM-DD'))}
-                                              {' '}
-                                              <Text
-                                                style={[
-                                                  styles.weekDateLabel,
-                                                  isCurrentWeek
-                                                    ? styles.weekDateLabelCurrent
-                                                    : styles.weekDateLabelInactive,
-                                                ]}
-                                              >
-                                                {t('to')}
-                                              </Text>
-                                              {formatOrdinalDate(weekEndDate.format('YYYY-MM-DD'))}
-                                            </Text>
-                                          </View>
-                                          <View style={styles.progressIndicator}>
-                                            {weekProgress >= 0.999 ? (
-                                              <IconCheck size={24} color={COLORS.signalPositive} />
-                                            ) : (
-                                              <>
-                                                <Text
-                                                  style={[
-                                                    styles.progressText,
-                                                    isCurrentWeek ? styles.progressTextCurrent : styles.progressTextInactive,
-                                                  ]}
-                                                >
-                                                  {weekCompletion}%
-                                                </Text>
-                                                <Svg height="16" width="16" viewBox="0 0 16 16" style={styles.progressCircle}>
-                                                  <Circle cx="8" cy="8" r="8" fill={COLORS.backgroundCanvas} />
-                                                  {weekCompletion > 0 ? (
-                                                    <Path
-                                                      d={`M 8 8 L 8 0 A 8 8 0 ${weekCompletion / 100 > 0.5 ? 1 : 0} 1 ${
-                                                        8 + 8 * Math.sin(2 * Math.PI * (weekCompletion / 100))
-                                                      } ${
-                                                        8 - 8 * Math.cos(2 * Math.PI * (weekCompletion / 100))
-                                                      } Z`}
-                                                      fill={COLORS.signalWarning}
-                                                    />
-                                                  ) : null}
-                                                </Svg>
-                                              </>
-                                            )}
-                                          </View>
-                                        </View>
-                                      );
-                                    })}
-                                  </View>
-                                </View>
-                                <View style={styles.cycleFooter} pointerEvents="none">
-                                  <View style={styles.seeDetailsButton}>
-                                    <Text style={styles.seeDetailsText}>{t('seeDetails')}</Text>
-                                  </View>
-                            </View>
-                              </TouchableOpacity>
-                        </View>
-                      </View>
-                    );
-                  })}
-                </>
-              )}
 
-              <View style={styles.newButtonContainer}>
+        <ScrollView 
+          style={styles.scrollView}
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+        >
+          {/* Primary Create Button */}
+          <TouchableOpacity
+            style={styles.primaryCreateButton}
+            onPress={handleCreatePress}
+            activeOpacity={0.8}
+          >
+            <IconAdd size={24} color={COLORS.backgroundCanvas} />
+            <Text style={styles.primaryCreateButtonText}>{t('create')}</Text>
+          </TouchableOpacity>
+
+          {/* Templates Section */}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>{t('templates')}</Text>
+            
+            {workoutTemplates.length === 0 ? (
+              <View style={styles.emptyState}>
+                <IconWorkouts size={48} color={LIGHT_COLORS.textMeta} />
+                <Text style={styles.emptyStateTitle}>{t('noTemplatesYet')}</Text>
+                <Text style={styles.emptyStateSubtitle}>{t('createYourFirstWorkout')}</Text>
+              </View>
+            ) : (
+              workoutTemplates.map((template) => (
                 <TouchableOpacity
-                  style={styles.newButton}
-                  onPress={() => navigation.navigate('WorkoutCreationOptions' as never)}
+                  key={template.id}
+                  style={styles.templateCard}
+                  onPress={() => handleTemplatePress(template.id)}
                   activeOpacity={0.7}
                 >
-                  <IconAdd size={24} color={COLORS.text} />
-                  <Text style={styles.newButtonText}>{t('new')}</Text>
+                  <View style={styles.templateCardInner}>
+                    <View style={styles.templateCardContent}>
+                      <Text style={styles.templateCardTitle}>{template.name}</Text>
+                      <Text style={styles.templateCardSubtitle}>
+                        {template.items.length} {template.items.length === 1 ? t('exercise') : t('exercises')}
+                      </Text>
+                    </View>
+                  </View>
+                </TouchableOpacity>
+              ))
+            )}
+          </View>
+
+          <View style={{ height: 100 }} />
+        </ScrollView>
+
+        {/* Create Sheet Modal */}
+        <Modal
+          visible={showCreateSheet}
+          transparent
+          animationType="fade"
+          onRequestClose={handleCloseSheet}
+        >
+          <View style={styles.modalOverlay}>
+            <TouchableOpacity 
+              style={styles.modalBackdrop} 
+              activeOpacity={1} 
+              onPress={handleCloseSheet}
+            />
+            <Animated.View 
+              style={[
+                styles.sheetContainer, 
+                { 
+                  paddingBottom: insets.bottom || 16,
+                  transform: [{
+                    translateY: slideAnim.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [400, 0],
+                    })
+                  }]
+                }
+              ]}
+            >
+              <View style={styles.sheetHeader}>
+                <Text style={styles.sheetTitle}>{t('selectCreationType')}</Text>
+                <TouchableOpacity onPress={handleCloseSheet} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                  <IconClose size={24} color={LIGHT_COLORS.secondary} />
                 </TouchableOpacity>
               </View>
-              
-              {/* Past Cycles */}
-              {cycles.filter(c => !c.isActive).length > 0 && (
-                <>
-                  <Text style={styles.pastCyclesTitle}>{t('pastCycles')}</Text>
-                  {cycles.filter(c => !c.isActive).sort((a, b) => b.cycleNumber - a.cycleNumber).map((cycle) => {
-                    const completion = getCycleCompletion(cycle.id);
-                    return (
-                      <View key={cycle.id} style={styles.pastCycleCardWrapper}>
-                        <View style={styles.cycleCard}>
-                          <TouchableOpacity
-                            style={[styles.cycleCardContent, styles.pastCycleCardContent]}
-                            onPress={() => {
-                              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                              navigation.navigate('CycleDetail' as never, { cycleId: cycle.id } as never);
-                            }}
-                            activeOpacity={1}
-                          >
-                            <View style={styles.cycleCardContentBody}>
-                              <View style={styles.cycleCardHeader}>
-                                <Text style={styles.cycleDuration}>
-                                  {(() => {
-                                    const weeks = Math.max(
-                                      1,
-                                      dayjs(cycle.endDate).diff(dayjs(cycle.startDate), 'week') + 1
-                                    );
-                                    return weeks === 1
-                                      ? t('weekCycleSingular')
-                                      : t('weekCyclePlural').replace('{weeks}', String(weeks));
-                                  })()}
-                                </Text>
-                                <View style={styles.progressIndicator}>
-                                  {completion >= 99.9 ? (
-                                    <IconCheck size={24} color={COLORS.signalPositive} />
-                                  ) : (
-                                    <>
-                                      <Text style={styles.progressText}>{completion}%</Text>
-                                      <Svg height="16" width="16" viewBox="0 0 16 16" style={styles.progressCircle}>
-                                        <Circle cx="8" cy="8" r="8" fill={COLORS.backgroundCanvas} />
-                                        {completion > 0 ? (
-                                          <Path
-                                            d={`M 8 8 L 8 0 A 8 8 0 ${completion / 100 > 0.5 ? 1 : 0} 1 ${
-                                              8 + 8 * Math.sin(2 * Math.PI * (completion / 100))
-                                            } ${
-                                              8 - 8 * Math.cos(2 * Math.PI * (completion / 100))
-                                            } Z`}
-                                            fill={COLORS.signalWarning}
-                                          />
-                                        ) : null}
-                                      </Svg>
-                                    </>
-                                  )}
-                                </View>
-                              </View>
-                              <Text style={styles.pastCycleDateLine}>
-                                <Text style={styles.pastCycleDateLabel}>{t('from')}</Text>
-                                {formatOrdinalDate(cycle.startDate)}
-                                {' '}
-                                <Text style={styles.pastCycleDateLabel}>{t('to')}</Text>
-                                {formatOrdinalDate(cycle.endDate)}
-                              </Text>
-                            </View>
-                          </TouchableOpacity>
-                        </View>
-                      </View>
-                    );
-                  })}
-                </>
-              )}
-            </>
-          )}
-        </ScrollView>
-        
-        {/* Bottom Sheet */}
-        <BottomDrawer
-          visible={showBottomSheet}
-          onClose={() => setShowBottomSheet(false)}
-          scrollable={false}
-          backgroundColor="#FFFFFF"
-        >
-          <KeyboardAvoidingView 
-            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-            style={styles.sheetContent}
-          >
-            <Text style={styles.sheetTitle}>{t('newCycle')}</Text>
-            
-            <TextInput
-              style={styles.textInput}
-              placeholder={`⭐️ WEEK 1\n⸻\nDAY 1 — Push\n\t• Bench Press — 4×8-12 @ 135 lb\n\t• Overhead Press — 3×10 @ 95 lb\n\nDAY 2 — Pull\n\t• Deadlift — 4×5 @ 225 lb\n\t• Barbell Row — 4×10 @ 135 lb`}
-              placeholderTextColor={LIGHT_COLORS.meta}
-              value={workoutDetails}
-              onChangeText={setWorkoutDetails}
-              multiline
-              textAlignVertical="top"
-            />
-            
-            <TouchableOpacity
-              style={styles.saveButton}
-              onPress={handleCreateCycle}
-              activeOpacity={1}
-            >
-              <Text style={styles.saveButtonText}>{t('saveAndCreate')}</Text>
-            </TouchableOpacity>
-          </KeyboardAvoidingView>
-        </BottomDrawer>
+
+              <View style={styles.sheetOptions}>
+                {/* Top Row: Single Workout & Weekly Plan */}
+                <View style={styles.sheetRow}>
+                  <TouchableOpacity
+                    style={styles.sheetOption}
+                    onPress={handleSingleWorkout}
+                    activeOpacity={0.7}
+                  >
+                    <View style={styles.sheetOptionInner}>
+                      <IconWorkouts size={24} color={LIGHT_COLORS.accentPrimary} />
+                      <Text style={styles.sheetOptionTitle}>{t('singleWorkout')}</Text>
+                    </View>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={styles.sheetOption}
+                    onPress={handleWeeklyPlan}
+                    activeOpacity={0.7}
+                  >
+                    <View style={styles.sheetOptionInner}>
+                      <IconCalendar size={24} color={LIGHT_COLORS.accentPrimary} />
+                      <Text style={styles.sheetOptionTitle}>{t('weeklyPlan')}</Text>
+                    </View>
+                  </TouchableOpacity>
+                </View>
+
+                {/* Bottom Row: Create with AI */}
+                <TouchableOpacity
+                  style={styles.sheetOptionFull}
+                  onPress={handleCreateWithAI}
+                  activeOpacity={0.7}
+                >
+                  <View style={styles.sheetOptionInnerRow}>
+                    <Text style={styles.aiIcon}>✨</Text>
+                    <Text style={styles.sheetOptionTitle}>{t('createWithAI')}</Text>
+                  </View>
+                </TouchableOpacity>
+              </View>
+            </Animated.View>
+          </View>
+        </Modal>
       </SafeAreaView>
     </View>
   );
@@ -717,15 +238,6 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: 'transparent',
   },
-  content: {
-    flex: 1,
-  },
-  scrollContent: {
-    paddingHorizontal: SPACING.xxl,
-    paddingBottom: 120,
-  },
-  
-  // Header
   header: {
     marginBottom: SPACING.xl,
   },
@@ -740,258 +252,161 @@ const styles = StyleSheet.create({
     ...TYPOGRAPHY.h2,
     color: LIGHT_COLORS.secondary,
   },
-  
-  // Question Section
-  questionSection: {
-    marginBottom: SPACING.xl,
-  },
-  questionText: {
-    ...TYPOGRAPHY.h3,
-    lineHeight: 28,
-  },
-  questionTextGray: {
-    color: COLORS.textMeta,
-  },
-  questionTextBlack: {
-    color: COLORS.text,
-  },
-  
-  // Actions Section
-  actionsSection: {
+  headerRight: {
     flexDirection: 'row',
+    alignItems: 'center',
     gap: SPACING.md,
-    marginBottom: 40,
   },
-  manuallyButton: {
+  scrollView: {
     flex: 1,
+  },
+  scrollContent: {
+    paddingHorizontal: SPACING.xxl,
+  },
+  primaryCreateButton: {
     height: 56,
-    backgroundColor: '#1B1B1B',
-    borderRadius: BORDER_RADIUS.md,
+    backgroundColor: LIGHT_COLORS.secondary,
+    borderRadius: BORDER_RADIUS.lg,
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    gap: SPACING.sm,
+    marginBottom: SPACING.xxxl,
   },
-  manuallyButtonText: {
-    ...TYPOGRAPHY.meta,
-    fontWeight: 'bold',
-    color: '#FFFFFF',
-  },
-  aiButton: {
-    flex: 1,
-    height: 56,
-    backgroundColor: COLORS.accentPrimary,
-    borderRadius: BORDER_RADIUS.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  aiButtonText: {
-    ...TYPOGRAPHY.meta,
-    fontWeight: 'bold',
-    color: '#FFFFFF',
-  },
-  
-  // Templates Section
-  // Templates section removed
-  
-  // Cycles List
-  newButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingVertical: 8,
-  },
-  newButtonContainer: {
-    alignItems: 'center',
-    marginTop: 0,
-    marginBottom: 48,
-  },
-  newButtonText: {
-    ...TYPOGRAPHY.metaBold,
-    color: COLORS.text,
-  },
-  activeCycleSection: {
-    marginBottom: SPACING.sm,
-  },
-  cycleCard: CARDS.cardDeep.outer,
-  cycleCardContent: {
-    ...CARDS.cardDeep.inner,
-    paddingHorizontal: 4,
-    paddingTop: 20,
-    paddingBottom: 4,
-  },
-  currentCycleCardContent: {
-    paddingTop: 20,
-  },
-  cycleCardContentBody: {
-    paddingHorizontal: 20,
-  },
-  cycleCardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'baseline',
-    marginBottom: 2,
-  },
-  cycleDuration: {
-    ...TYPOGRAPHY.meta,
-    color: COLORS.textMeta,
-    flex: 1,
-    marginBottom: 4,
-  },
-  cycleDateLine: {
-    ...TYPOGRAPHY.h2,
-    color: COLORS.text,
-    marginBottom: 2,
-  },
-  cycleDateLabel: {
-    ...TYPOGRAPHY.h2,
-    color: COLORS.textMeta,
-  },
-  pastCycleDateLine: {
-    ...TYPOGRAPHY.meta,
-    color: COLORS.text,
-    marginBottom: 2,
-  },
-  pastCycleDateLabel: {
-    ...TYPOGRAPHY.meta,
-    color: COLORS.text,
-  },
-  cycleFooter: {
-    marginTop: 20,
-  },
-  weekList: {
-    marginTop: SPACING.md,
-    gap: SPACING.md + 8,
-  },
-  weekRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    position: 'relative',
-  },
-  weekInfo: {
-    flex: 1,
-    paddingRight: SPACING.md,
-  },
-  weekTitle: {
-    ...TYPOGRAPHY.meta,
-    color: COLORS.textMeta,
-    marginBottom: 2,
-  },
-  weekTitleInactive: {
-    color: COLORS.textMeta,
-  },
-  weekTitleCurrent: {
-    color: COLORS.text,
-  },
-  weekDates: {
-    ...TYPOGRAPHY.meta,
-    color: COLORS.text,
-  },
-  weekDateLabel: {
-    ...TYPOGRAPHY.meta,
-    color: COLORS.text,
-  },
-  weekDatesCurrent: {
-    ...TYPOGRAPHY.body,
-    color: COLORS.text,
-  },
-  weekDatesInactive: {
-    color: COLORS.textMeta,
-  },
-  weekDateLabelCurrent: {
-    ...TYPOGRAPHY.body,
-    color: COLORS.text,
-  },
-  weekDateLabelInactive: {
-    color: COLORS.textMeta,
-  },
-  currentCycleTitle: {
+  primaryCreateButtonText: {
     ...TYPOGRAPHY.h3,
-    color: COLORS.text,
-    marginTop: 0,
-    marginBottom: SPACING.md,
+    color: COLORS.backgroundCanvas,
   },
-  progressIndicator: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
+  section: {
+    marginBottom: SPACING.xxxl,
   },
-  progressCircle: {
-    // No additional styling needed
-  },
-  progressText: {
-    ...TYPOGRAPHY.meta,
-    color: COLORS.textMeta,
-  },
-  progressTextCurrent: {
-    color: COLORS.text,
-  },
-  progressTextInactive: {
-    color: COLORS.textMeta,
-  },
-  seeDetailsButton: {
-    width: '100%',
-    height: 48,
-    backgroundColor: COLORS.accentPrimaryDimmed,
-    paddingHorizontal: 20,
-    borderTopLeftRadius: 0,
-    borderTopRightRadius: 0,
-    borderBottomLeftRadius: 12,
-    borderBottomRightRadius: 12,
-    borderCurve: 'continuous',
-    alignItems: 'flex-start',
-    justifyContent: 'center',
-  },
-  seeDetailsText: {
-    ...TYPOGRAPHY.metaBold,
-    color: COLORS.accentPrimary,
-    textAlign: 'left',
-  },
-  
-  // Past Cycles
-  pastCyclesTitle: {
-    ...TYPOGRAPHY.meta,
-    color: COLORS.textMeta,
+  sectionTitle: {
+    ...TYPOGRAPHY.h2,
+    color: LIGHT_COLORS.secondary,
     marginBottom: SPACING.lg,
   },
-  pastCycleCardWrapper: {
-    marginBottom: SPACING.sm,
+  emptyState: {
+    alignItems: 'center',
+    paddingVertical: SPACING.xxxl,
   },
-  pastCycleCardContent: {
-    paddingBottom: 20,
+  emptyStateTitle: {
+    ...TYPOGRAPHY.h3,
+    color: LIGHT_COLORS.secondary,
+    marginTop: SPACING.lg,
+    marginBottom: SPACING.xs,
   },
-  
-  // Bottom Sheet Content
-  sheetContent: {
+  emptyStateSubtitle: {
+    ...TYPOGRAPHY.body,
+    color: LIGHT_COLORS.textMeta,
+    textAlign: 'center',
+  },
+  templateCard: {
+    backgroundColor: CARDS.cardDeepDimmed.outer.backgroundColor,
+    borderRadius: CARDS.cardDeepDimmed.outer.borderRadius,
+    borderCurve: CARDS.cardDeepDimmed.outer.borderCurve,
+    borderWidth: CARDS.cardDeepDimmed.outer.borderWidth,
+    borderColor: CARDS.cardDeepDimmed.outer.borderColor,
+    overflow: CARDS.cardDeepDimmed.outer.overflow,
+    marginBottom: SPACING.md,
+  },
+  templateCardInner: {
+    ...CARDS.cardDeepDimmed.inner,
+    padding: SPACING.lg,
+  },
+  templateCardContent: {
+    flex: 1,
+  },
+  templateCardTitle: {
+    ...TYPOGRAPHY.h3,
+    color: LIGHT_COLORS.secondary,
+    marginBottom: SPACING.xs,
+  },
+  templateCardSubtitle: {
+    ...TYPOGRAPHY.meta,
+    color: LIGHT_COLORS.textMeta,
+  },
+  modalOverlay: {
+    flex: 1,
+    justifyContent: 'flex-end',
+  },
+  modalBackdrop: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: COLORS.overlay,
+  },
+  sheetContainer: {
+    marginBottom: 8,
+    marginHorizontal: 8,
+    backgroundColor: COLORS.backgroundCanvas,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    borderBottomLeftRadius: 24,
+    borderBottomRightRadius: 24,
+    paddingTop: SPACING.xl,
     paddingHorizontal: SPACING.xxl,
-    paddingBottom: SPACING.xxl,
+  },
+  sheetHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 40,
   },
   sheetTitle: {
     ...TYPOGRAPHY.h2,
     color: LIGHT_COLORS.secondary,
-    marginBottom: SPACING.xl,
   },
-  textInput: {
-    backgroundColor: LIGHT_COLORS.buttonBg,
-    borderRadius: BORDER_RADIUS.md,
-    padding: SPACING.lg,
-    fontSize: 16,
-    color: LIGHT_COLORS.secondary,
-    height: 200,
-    marginBottom: SPACING.xl,
-    borderWidth: 1,
-    borderColor: LIGHT_COLORS.border,
+  sheetOptions: {
+    gap: SPACING.md,
+    marginBottom: SPACING.lg,
   },
-  saveButton: {
-    backgroundColor: LIGHT_COLORS.accentPrimary,
+  sheetRow: {
+    flexDirection: 'row',
+    gap: SPACING.md,
+  },
+  sheetOption: {
+    flex: 1,
+    backgroundColor: CARDS.cardDeepDimmed.outer.backgroundColor,
+    borderRadius: CARDS.cardDeepDimmed.outer.borderRadius,
+    borderCurve: CARDS.cardDeepDimmed.outer.borderCurve,
+    borderWidth: CARDS.cardDeepDimmed.outer.borderWidth,
+    borderColor: CARDS.cardDeepDimmed.outer.borderColor,
+    overflow: CARDS.cardDeepDimmed.outer.overflow,
+  },
+  sheetOptionFull: {
+    backgroundColor: CARDS.cardDeepDimmed.outer.backgroundColor,
+    borderRadius: CARDS.cardDeepDimmed.outer.borderRadius,
+    borderCurve: CARDS.cardDeepDimmed.outer.borderCurve,
+    borderWidth: CARDS.cardDeepDimmed.outer.borderWidth,
+    borderColor: CARDS.cardDeepDimmed.outer.borderColor,
+    overflow: CARDS.cardDeepDimmed.outer.overflow,
+  },
+  sheetOptionInner: {
+    ...CARDS.cardDeepDimmed.inner,
     paddingVertical: SPACING.lg,
-    borderRadius: BORDER_RADIUS.md,
+    paddingHorizontal: SPACING.md,
     alignItems: 'center',
+    justifyContent: 'center',
+    gap: SPACING.sm,
   },
-  saveButtonText: {
-    ...TYPOGRAPHY.meta,
-    fontWeight: 'bold',
-    color: '#FFFFFF',
+  sheetOptionInnerRow: {
+    ...CARDS.cardDeepDimmed.inner,
+    paddingVertical: SPACING.lg,
+    paddingHorizontal: SPACING.lg,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: SPACING.sm,
+  },
+  sheetOptionTitle: {
+    ...TYPOGRAPHY.body,
+    fontWeight: '600',
+    color: LIGHT_COLORS.secondary,
+    textAlign: 'center',
+  },
+  aiIcon: {
+    fontSize: 24,
   },
 });
-
-

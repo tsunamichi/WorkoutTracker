@@ -47,14 +47,40 @@ const LIGHT_COLORS = {
 export default function WorkoutEditScreen({ navigation, route }: Props) {
   const insets = useSafeAreaInsets();
   const { cycleId, workoutTemplateId, date } = route.params;
-  const { cycles, exercises, updateCycle, updateExercise, settings } = useStore();
+  const { cycles, exercises, updateCycle, updateExercise, settings, getWorkoutTemplate, updateWorkoutTemplate } = useStore();
   const { t } = useTranslation();
   const useKg = settings.useKg;
   const weightUnit = useKg ? 'kg' : 'lb';
   const weightStep = useKg ? 0.5 : 5;
   
+  // Try to find workout in cycle first (old structure), then fall back to standalone template (new structure)
   const cycle = cycles.find(c => c.id === cycleId);
-  const workout = cycle?.workoutTemplates.find(w => w.id === workoutTemplateId);
+  let workout = cycle?.workoutTemplates.find(w => w.id === workoutTemplateId);
+  
+  // If not found in cycle, try to get standalone template
+  const isStandaloneTemplate = !workout && workoutTemplateId;
+  if (isStandaloneTemplate) {
+    const template = getWorkoutTemplate(workoutTemplateId);
+    if (template) {
+      // Convert WorkoutTemplate to old workout format for backward compatibility
+      workout = {
+        id: template.id,
+        name: template.name,
+        exercises: template.items.map(item => ({
+          id: item.exerciseId,
+          exerciseId: item.exerciseId,
+          orderIndex: item.order,
+          targetSets: item.sets,
+          targetRepsMin: item.reps,
+          targetRepsMax: item.reps,
+          targetWeight: item.weight,
+          progressionType: 'double' as const,
+          repRangeMin: item.reps,
+          repRangeMax: item.reps,
+        })),
+      };
+    }
+  }
   
   if (!workout) {
     return (
@@ -212,51 +238,71 @@ export default function WorkoutEditScreen({ navigation, route }: Props) {
   };
   
   const handleSave = () => {
-    setShowApplyModal(true);
+    // For standalone templates, save directly without showing the modal
+    if (isStandaloneTemplate) {
+      handleApplyChanges(true);
+    } else {
+      // For cycle-based workouts, show the modal to choose apply scope
+      setShowApplyModal(true);
+    }
   };
   
   const handleApplyChanges = async (applyToAll: boolean) => {
-    if (!cycle) return;
-    
     try {
-      if (applyToAll) {
-        // Update the workout template for all future workouts
-        const updatedTemplates = cycle.workoutTemplates.map(template => 
-          template.id === workoutTemplateId
-            ? {
-                ...template,
-                name: workoutName,
-                exercises: workoutExercises.map((ex, idx) => ({
-                  ...ex,
-                  orderIndex: idx,
-                })),
-              }
-            : template
-        );
-        
-        await updateCycle(cycleId, {
-          workoutTemplates: updatedTemplates,
+      if (isStandaloneTemplate && updateWorkoutTemplate) {
+        // Update standalone template
+        await updateWorkoutTemplate(workoutTemplateId, {
+          name: workoutName,
+          items: workoutExercises.map((ex, idx) => ({
+            exerciseId: ex.exerciseId,
+            order: idx,
+            sets: ex.targetSets || 3,
+            reps: ex.targetRepsMin || 8,
+            weight: ex.targetWeight,
+            restSeconds: ex.restSeconds,
+          })),
         });
-      } else {
-        // For "This Workout Only", we would need to implement workout-specific overrides
-        // This requires a different data structure to store per-date workout modifications
-        // For now, just apply to the template
-        const updatedTemplates = cycle.workoutTemplates.map(template => 
-          template.id === workoutTemplateId
-            ? {
-                ...template,
-                name: workoutName,
-                exercises: workoutExercises.map((ex, idx) => ({
-                  ...ex,
-                  orderIndex: idx,
-                })),
-              }
-            : template
-        );
-        
-        await updateCycle(cycleId, {
-          workoutTemplates: updatedTemplates,
-        });
+      } else if (cycle) {
+        // Update workout within cycle (old structure)
+        if (applyToAll) {
+          // Update the workout template for all future workouts
+          const updatedTemplates = cycle.workoutTemplates.map(template => 
+            template.id === workoutTemplateId
+              ? {
+                  ...template,
+                  name: workoutName,
+                  exercises: workoutExercises.map((ex, idx) => ({
+                    ...ex,
+                    orderIndex: idx,
+                  })),
+                }
+              : template
+          );
+          
+          await updateCycle(cycleId, {
+            workoutTemplates: updatedTemplates,
+          });
+        } else {
+          // For "This Workout Only", we would need to implement workout-specific overrides
+          // This requires a different data structure to store per-date workout modifications
+          // For now, just apply to the template
+          const updatedTemplates = cycle.workoutTemplates.map(template => 
+            template.id === workoutTemplateId
+              ? {
+                  ...template,
+                  name: workoutName,
+                  exercises: workoutExercises.map((ex, idx) => ({
+                    ...ex,
+                    orderIndex: idx,
+                  })),
+                }
+              : template
+          );
+          
+          await updateCycle(cycleId, {
+            workoutTemplates: updatedTemplates,
+          });
+        }
       }
       
       setShowApplyModal(false);
