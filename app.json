@@ -18,7 +18,10 @@
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "NSSupportsLiveActivities": true,
-        "NSSupportsLiveActivitiesFrequentUpdates": true
+        "NSSupportsLiveActivitiesFrequentUpdates": true,
+        "NSCameraUsageDescription": "Allow access to take progress photos for your weekly check-in.",
+        "NSPhotoLibraryUsageDescription": "Allow access to select progress photos for your weekly check-in.",
+        "NSPhotoLibraryAddUsageDescription": "Allow saving progress photos to your library."
       }
     },
     "android": {
