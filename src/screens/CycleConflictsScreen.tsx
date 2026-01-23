@@ -22,6 +22,7 @@ interface CycleConflictsScreenProps {
     params: {
       plan: CyclePlan;
       conflicts: ConflictItem[];
+      planId?: string;
     };
   };
 }
@@ -29,8 +30,8 @@ interface CycleConflictsScreenProps {
 export function CycleConflictsScreen({ navigation, route }: CycleConflictsScreenProps) {
   const insets = useSafeAreaInsets();
   const { t } = useTranslation();
-  const { addCyclePlan } = useStore();
-  const { plan, conflicts } = route.params;
+  const { addCyclePlan, applyCyclePlan, cyclePlans } = useStore();
+  const { plan, conflicts, planId } = route.params;
   
   const [selectedResolution, setSelectedResolution] = useState<CycleConflictResolution>('replace');
   const [isApplying, setIsApplying] = useState(false);
@@ -47,12 +48,14 @@ export function CycleConflictsScreen({ navigation, route }: CycleConflictsScreen
     setIsApplying(true);
 
     try {
-      const result = await addCyclePlan(plan, selectedResolution);
+      const result = planId
+        ? await applyCyclePlan(planId, selectedResolution)
+        : await addCyclePlan(plan, selectedResolution);
       
       if (result.success) {
         // Navigate to Schedule (Today) with a success message
         navigation.navigate('Tabs', { 
-          screen: 'Schedule',
+          initialTab: 'Schedule',
           params: { 
             showToast: true,
             toastMessage: t('planAppliedSuccessfully')

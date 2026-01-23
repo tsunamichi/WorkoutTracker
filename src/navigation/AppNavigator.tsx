@@ -42,7 +42,7 @@ import dayjs from 'dayjs';
 import { useTranslation } from '../i18n/useTranslation';
 
 export type RootStackParamList = {
-  Tabs: { initialTab?: 'Schedule' | 'Workouts' } | undefined;
+  Tabs: { initialTab?: 'Schedule' | 'Training' } | undefined;
   Profile: { mode?: 'settings' } | undefined;
   BodyWeightHistory: undefined;
   ProgressGallery: undefined;
@@ -52,7 +52,7 @@ export type RootStackParamList = {
   WorkoutTemplateDetail: { templateId: string };
   DesignSystem: undefined;
   CycleDetail: { cycleId: string };
-  CycleConflicts: { plan: any; conflicts: any[] };
+  CycleConflicts: { plan: any; conflicts: any[]; planId?: string };
   WorkoutExecution: { workoutTemplateId: string; date: string };
   WorkoutEdit: { cycleId: string; workoutTemplateId: string; date: string };
   ExerciseDetail: { exerciseId: string; workoutKey: string };
@@ -66,7 +66,7 @@ export type RootStackParamList = {
   CreateCycleDaysOverview: undefined;
   CreateCycleDayEditor: { weekday: Weekday };
   CreateCycleReview: undefined;
-  AIWorkoutCreation: undefined;
+  AIWorkoutCreation: { mode?: 'single' | 'plan' } | undefined;
   WorkoutCreationOptions: undefined;
 };
 
@@ -89,13 +89,13 @@ function TabNavigator() {
   const insets = useSafeAreaInsets();
   const { cycles, cyclePlans, getActiveCyclePlan, swapWorkoutAssignments, workoutTemplates, scheduleWorkout } = useStore();
   const { t } = useTranslation();
-  const [activeTab, setActiveTab] = React.useState<'Schedule' | 'Workouts'>('Schedule');
+  const [activeTab, setActiveTab] = React.useState<'Schedule' | 'Training'>('Schedule');
   const [isViewingToday, setIsViewingToday] = React.useState(true);
   const [swapDrawerVisible, setSwapDrawerVisible] = React.useState(false);
   const [swapDrawerData, setSwapDrawerData] = React.useState<{ selectedDate: string; weekDays: any[] } | null>(null);
   const [pressedSwapItemDate, setPressedSwapItemDate] = React.useState<string | null>(null);
   
-  // Animated value for tab indicator position (0 = Schedule, 1 = Workouts)
+  // Animated value for tab indicator position (0 = Schedule, 1 = Training)
   const indicatorPosition = React.useRef(new Animated.Value(0)).current;
   const scheduleIconOpacity = React.useRef(new Animated.Value(1)).current;
   const workoutsIconOpacity = React.useRef(new Animated.Value(0)).current;
@@ -111,7 +111,7 @@ function TabNavigator() {
     outputRange: [COLORS.text, COLORS.backgroundCanvas],
   });
   
-  const switchTab = React.useCallback((tab: 'Schedule' | 'Workouts') => {
+  const switchTab = React.useCallback((tab: 'Schedule' | 'Training') => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setActiveTab(tab);
     
@@ -132,7 +132,7 @@ function TabNavigator() {
         friction: 12,
       }),
       Animated.spring(workoutsIconOpacity, {
-        toValue: tab === 'Workouts' ? 1 : 0,
+        toValue: tab === 'Training' ? 1 : 0,
         useNativeDriver: true,
         tension: 80,
         friction: 12,
@@ -141,7 +141,7 @@ function TabNavigator() {
   }, [indicatorPosition, scheduleIconOpacity, workoutsIconOpacity]);
 
   React.useEffect(() => {
-    const params = (route as { params?: { initialTab?: 'Schedule' | 'Workouts' } }).params;
+    const params = (route as { params?: { initialTab?: 'Schedule' | 'Training' } }).params;
     if (params?.initialTab && params.initialTab !== activeTab) {
       switchTab(params.initialTab);
     }
@@ -162,7 +162,7 @@ function TabNavigator() {
       {/* Screen Content */}
       {activeTab === 'Schedule' ? (
         <TodayScreen 
-          onNavigateToWorkouts={() => switchTab('Workouts')} 
+          onNavigateToWorkouts={() => switchTab('Training')} 
           onDateChange={(isToday) => setIsViewingToday(isToday)}
           onOpenSwapDrawer={handleOpenSwapDrawer}
         />
@@ -257,7 +257,7 @@ function TabNavigator() {
             activeOpacity={1}
             onPress={() => {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              switchTab('Workouts');
+              switchTab('Training');
             }}
           >
             <Animated.View 
@@ -278,7 +278,7 @@ function TabNavigator() {
             >
               <IconWorkouts 
                 size={24} 
-                color={activeTab === 'Workouts' ? COLORS.backgroundCanvas : COLORS.text} 
+                color={activeTab === 'Training' ? COLORS.backgroundCanvas : COLORS.text} 
               />
             </Animated.View>
             <Animated.View
@@ -301,7 +301,7 @@ function TabNavigator() {
                 ]} 
                 numberOfLines={1}
               >
-                {t('workouts')}
+                {t('training')}
               </Animated.Text>
             </Animated.View>
           </TouchableOpacity>

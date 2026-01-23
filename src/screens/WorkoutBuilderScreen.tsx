@@ -130,8 +130,8 @@ export function WorkoutBuilderScreen() {
         {
           text: t('ok'),
           onPress: () => {
-            // Navigate to Workouts tab
-            navigation.navigate('Tabs', { screen: 'Workouts' });
+            // Navigate to Training tab
+            navigation.navigate('Tabs', { initialTab: 'Training' } as any);
           },
         },
       ]

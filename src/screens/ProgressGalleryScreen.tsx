@@ -20,9 +20,10 @@ export function ProgressGalleryScreen({ navigation }: any) {
     [progressLogs]
   );
 
-  const gap = SPACING.xs;
+  const gap = 2;
   const horizontalPadding = SPACING.xxl;
   const tileSize = (SCREEN_WIDTH - horizontalPadding * 2 - gap * 2) / 3;
+  const tileHeight = tileSize * (16 / 9);
 
   return (
     <View style={styles.container}>
@@ -44,7 +45,7 @@ export function ProgressGalleryScreen({ navigation }: any) {
           <TouchableOpacity
             activeOpacity={0.9}
             onPress={() => navigation.navigate('ProgressLogDetail', { progressLogId: item.id })}
-            style={[styles.tile, { width: tileSize, height: tileSize, marginBottom: gap }]}
+            style={[styles.tile, { width: tileSize, height: tileHeight, marginBottom: gap }]}
           >
             <Image source={{ uri: item.photoUri }} style={styles.tileImage} />
             <View style={styles.tileOverlay}>
@@ -95,7 +96,7 @@ const styles = StyleSheet.create({
     paddingTop: SPACING.md,
   },
   tile: {
-    borderRadius: BORDER_RADIUS.lg,
+    borderRadius: 0,
     overflow: 'hidden',
     backgroundColor: COLORS.activeCard,
   },

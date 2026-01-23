@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, Alert, KeyboardAvoidingView, Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute } from '@react-navigation/native';
 import * as Clipboard from 'expo-clipboard';
 import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS, CARDS } from '../constants';
 import { useStore } from '../store';
@@ -20,11 +20,14 @@ DAY [number] — [Workout name]
 
 export function AIWorkoutCreationScreen() {
   const navigation = useNavigation();
+  const route = useRoute<any>();
   const insets = useSafeAreaInsets();
-  const { cycles, addCycle, getNextCycleNumber, assignWorkout, exercises, addExercise, updateExercise, updateCycle, clearWorkoutAssignmentsForDateRange } = useStore();
+  const { exercises, addExercise, updateExercise, addWorkoutTemplate, addCyclePlan } = useStore();
   const { t } = useTranslation();
   const [workoutDetails, setWorkoutDetails] = useState('');
   const [showInstructionsSheet, setShowInstructionsSheet] = useState(false);
+
+  const mode: 'single' | 'plan' = route?.params?.mode === 'single' ? 'single' : 'plan';
 
   const handleCopyTemplate = async () => {
     await Clipboard.setStringAsync(TEMPLATE_FORMAT);
@@ -32,19 +35,14 @@ export function AIWorkoutCreationScreen() {
     setShowInstructionsSheet(false);
   };
 
-  const handleCreateCycle = async () => {
+  const handleCreateFromAiText = async () => {
     try {
       if (!workoutDetails.trim()) {
         Alert.alert(t('alertErrorTitle'), t('enterWorkoutDetails'));
         return;
       }
-      
-      const cycleNumber = getNextCycleNumber();
       const today = dayjs();
       const weekStart = today.startOf('isoWeek'); // Monday
-      
-      // Create the cycle
-      const cycleId = `cycle-${Date.now()}`;
       
       // Parse workout details from user input
       // Expected format:
@@ -224,82 +222,88 @@ export function AIWorkoutCreationScreen() {
       }
       
       const numberOfWeeks = Math.max(...Object.keys(weeklyWorkouts).map(k => parseInt(k, 10)));
-      
-      // Create workout templates for each week
-      const allWorkoutTemplates: any[] = [];
-      let templateIndex = 0;
-      
-      for (let week = 1; week <= numberOfWeeks; week++) {
-        const workoutsForWeek = weeklyWorkouts[week] || [];
-        
-        for (const workout of workoutsForWeek) {
-          // Infer workout type from name
-          let workoutType = 'Other';
-          const nameLower = workout.name.toLowerCase();
-          if (nameLower.includes('push')) workoutType = 'Push';
-          else if (nameLower.includes('pull')) workoutType = 'Pull';
-          else if (nameLower.includes('legs') || nameLower.includes('leg')) workoutType = 'Legs';
-          else if (nameLower.includes('full')) workoutType = 'Full Body';
-          
-          allWorkoutTemplates.push({
-            id: `workout-${cycleId}-w${week}-d${workout.dayNumber}`,
-            cycleId,
-            name: workout.name,
-            workoutType: workoutType as any,
-            dayOfWeek: workout.dayNumber,
-            orderIndex: templateIndex++,
-            week: week,
-            exercises: workout.exercises,
-          });
+
+      const nowIso = new Date().toISOString();
+
+      if (mode === 'single') {
+        const firstWorkout = (weeklyWorkouts[1] || [])[0] || Object.values(weeklyWorkouts)[0]?.[0];
+        if (!firstWorkout) {
+          Alert.alert(t('alertErrorTitle'), t('errorNoWorkoutsFound'));
+          return;
         }
+
+        const templateId = `wt-${Date.now()}`;
+        await addWorkoutTemplate({
+          id: templateId,
+          name: firstWorkout.name || 'Workout',
+          createdAt: nowIso,
+          updatedAt: nowIso,
+          items: (firstWorkout.exercises || []).map((ex: any, idx: number) => ({
+            exerciseId: ex.exerciseId,
+            order: idx,
+            sets: ex.targetSets ?? 3,
+            reps: ex.targetRepsMin ?? 8,
+            weight: ex.targetWeight,
+          })),
+        });
+
+        Alert.alert(t('workoutSavedToLibrary'), t('workoutSavedToLibrary'));
+        navigation.navigate('Tabs' as never, { initialTab: 'Training' } as never);
+        return;
       }
-      
-      // Deactivate all existing cycles first
-      const existingCycles = cycles.map(c => ({ ...c, isActive: false }));
-      for (const oldCycle of existingCycles) {
-        await updateCycle(oldCycle.id, { isActive: false });
+
+      // mode === 'plan': create templates from Week 1 and create a CyclePlan that repeats weekly
+      const week1 = weeklyWorkouts[1] || [];
+      if (week1.length === 0) {
+        Alert.alert(t('alertErrorTitle'), t('errorNoWorkoutsFound'));
+        return;
       }
-      
-      // Get workouts per week from first week
-      const workoutsPerWeek = weeklyWorkouts[1]?.length || 0;
-      
-      const cycle = {
-        id: cycleId,
-        cycleNumber,
+
+      const templateIdsByWeekday: Partial<Record<number, string>> = {};
+      const weekdays: number[] = [];
+
+      for (const workout of week1) {
+        // Map DAY 1..7 to dayjs weekday 1..6,0 (Sun)
+        const weekday = workout.dayNumber === 7 ? 0 : workout.dayNumber;
+        weekdays.push(weekday);
+
+        const templateId = `wt-${Date.now()}-${weekday}-${Math.floor(Math.random() * 10000)}`;
+        await addWorkoutTemplate({
+          id: templateId,
+          name: workout.name || `Day ${workout.dayNumber}`,
+          createdAt: nowIso,
+          updatedAt: nowIso,
+          items: (workout.exercises || []).map((ex: any, idx: number) => ({
+            exerciseId: ex.exerciseId,
+            order: idx,
+            sets: ex.targetSets ?? 3,
+            reps: ex.targetRepsMin ?? 8,
+            weight: ex.targetWeight,
+          })),
+        });
+
+        templateIdsByWeekday[weekday] = templateId;
+      }
+
+      const planId = `cp-${Date.now()}`;
+      const newPlan = {
+        id: planId,
+        name: `${numberOfWeeks}-Week Plan`,
         startDate: weekStart.format('YYYY-MM-DD'),
-        lengthInWeeks: numberOfWeeks,
-        endDate: weekStart.add(numberOfWeeks, 'week').format('YYYY-MM-DD'),
-        workoutsPerWeek,
-        goal: `Cycle ${cycleNumber}`,
-        isActive: true,
-        workoutTemplates: allWorkoutTemplates,
-        createdAt: new Date().toISOString(),
+        weeks: numberOfWeeks,
+        mapping: { kind: 'weekdays' as const, weekdays: Array.from(new Set(weekdays)) },
+        templateIdsByWeekday,
+        active: true,
+        createdAt: nowIso,
+        updatedAt: nowIso,
       };
-      
-      await addCycle(cycle);
-      
-      // Clear any existing assignments in this date range to avoid conflicts
-      await clearWorkoutAssignmentsForDateRange(
-        cycle.startDate,
-        cycle.endDate
-      );
-      
-      // Assign workouts for each specific week
-      for (let week = 1; week <= numberOfWeeks; week++) {
-        const templatesForWeek = allWorkoutTemplates.filter(t => t.week === week);
-        
-        for (const template of templatesForWeek) {
-          const dayIndex = template.dayOfWeek - 1; // Convert to 0-based (0 = Monday)
-          if (dayIndex >= 0 && dayIndex < 7) {
-            const workoutDate = weekStart.add((week - 1) * 7 + dayIndex, 'day').format('YYYY-MM-DD');
-            await assignWorkout(workoutDate, template.id, cycleId);
-          }
-        }
+
+      const result = await addCyclePlan(newPlan);
+      if (!result.success && result.conflicts && result.conflicts.length > 0) {
+        navigation.navigate('CycleConflicts' as never, { plan: newPlan, conflicts: result.conflicts, planId: newPlan.id } as never);
+        return;
       }
-      
-      console.log('✅ Cycle created with', allWorkoutTemplates.length, 'workout templates across', numberOfWeeks, 'weeks');
-      
-      // Navigate to Schedule tab after creation
+
       navigation.navigate('Tabs' as never, { initialTab: 'Schedule' } as never);
     } catch (error) {
       console.error('Error creating cycle:', error);
@@ -328,7 +332,9 @@ export function AIWorkoutCreationScreen() {
             
             {/* Page Title */}
             <View style={styles.pageTitleContainer}>
-              <Text style={styles.pageTitle}>{t('createWorkoutWithAi')}</Text>
+              <Text style={styles.pageTitle}>
+                {mode === 'single' ? t('createWorkoutWithAi') : t('createPlanWithAi')}
+              </Text>
             </View>
           </View>
 
@@ -365,12 +371,12 @@ export function AIWorkoutCreationScreen() {
           <View style={styles.bottomContainer}>
             <TouchableOpacity
               style={[styles.createButton, !workoutDetails.trim() && styles.createButtonDisabled]}
-              onPress={handleCreateCycle}
+              onPress={handleCreateFromAiText}
               activeOpacity={1}
               disabled={!workoutDetails.trim()}
             >
               <Text style={[styles.createButtonText, !workoutDetails.trim() && styles.createButtonTextDisabled]}>
-                {t('createCycle')}
+                {mode === 'single' ? t('createWorkout') : t('createPlan')}
               </Text>
             </TouchableOpacity>
           </View>

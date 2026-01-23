@@ -71,8 +71,8 @@ export function ProfileScreen({ navigation, route }: ProfileScreenProps) {
   const currentWeekKey = `${today.isoWeekYear()}-W${String(today.isoWeek()).padStart(2, '0')}`;
   const isFriday = today.isoWeekday() === 5;
   const hasLoggedThisWeek = progressLogs.some(l => l.weekKey === currentWeekKey);
-  // Dev-only override: allow logging any day for testing.
-  const canLogToday = (__DEV__ || isFriday) && !hasLoggedThisWeek;
+  // Dev-only override: always allow logging locally for testing.
+  const canLogToday = __DEV__ ? true : isFriday && !hasLoggedThisWeek;
 
   const openWeeklyCheckIn = () => {
     if (!canLogToday) return;
@@ -382,32 +382,32 @@ export function ProfileScreen({ navigation, route }: ProfileScreenProps) {
           {!isSettingsMode ? (
             /* Progress Tab */
             <>
-              <View style={styles.avatarContainer}>
-                <View style={styles.avatarWrapper}>
-                  <ProfileAvatar
-                    size={96}
-                    onPress={handlePickAvatar}
-                    imageUri={settings.profileAvatarUri || null}
-                  />
-                  <TouchableOpacity
-                    style={styles.avatarEditButton}
-                    onPress={handlePickAvatar}
-                    activeOpacity={1}
-                  >
-                    <IconEdit size={16} color={COLORS.text} />
-                  </TouchableOpacity>
-                </View>
-              </View>
-              {/* Workout Stats */}
+              {/* Avatar + Stats Row */}
               <View style={styles.section}>
-                <View style={styles.statsGrid}>
-                  <View style={styles.statBlock}>
-                          <Text style={styles.statValue}>{totalWorkouts}</Text>
-                    <Text style={styles.statLabel}>{t('totalWorkouts')}</Text>
-                        </View>
-                  <View style={styles.statBlock}>
-                    <Text style={styles.statValue}>{currentStreak}</Text>
-                    <Text style={styles.statLabel}>{t('currentStreak')}</Text>
+                <View style={styles.profileTopRow}>
+                  <View style={styles.profileTopAvatar}>
+                    <ProfileAvatar
+                      size={96}
+                      onPress={handlePickAvatar}
+                      imageUri={settings.profileAvatarUri || null}
+                    />
+                    <TouchableOpacity
+                      style={styles.profileTopAvatarEdit}
+                      onPress={handlePickAvatar}
+                      activeOpacity={1}
+                    >
+                      <IconEdit size={14} color="#FFFFFF" />
+                    </TouchableOpacity>
+                  </View>
+
+                  <View style={styles.profileTopStat}>
+                    <Text style={styles.profileTopStatValue}>{totalWorkouts}</Text>
+                    <Text style={styles.profileTopStatLabel}>{'Total\nWorkouts'}</Text>
+                  </View>
+
+                  <View style={styles.profileTopStat}>
+                    <Text style={styles.profileTopStatValue}>{currentStreak}</Text>
+                    <Text style={styles.profileTopStatLabel}>{'Current\nStreak'}</Text>
                   </View>
                 </View>
               </View>
@@ -428,10 +428,6 @@ export function ProfileScreen({ navigation, route }: ProfileScreenProps) {
                   )}
                 </View>
 
-                <Text style={styles.progressHelperText}>
-                  {canLogToday ? t('progressHelperAvailable') : t('progressHelperLocked')}
-                </Text>
-
                 {sortedProgressLogs.length === 0 ? (
                   <View style={styles.progressEmptyState}>
                     <Text style={styles.progressEmptyTitle}>{t('noProgressYet')}</Text>
@@ -443,9 +439,10 @@ export function ProfileScreen({ navigation, route }: ProfileScreenProps) {
                   <>
                     <View style={styles.progressGrid}>
                       {sortedProgressLogs.slice(0, 6).map((log, index) => {
-                        const gap = SPACING.xs;
+                        const gap = 2;
                         const horizontalPadding = SPACING.xxl;
                         const tileSize = (SCREEN_WIDTH - horizontalPadding * 2 - gap * 2) / 3;
+                        const tileHeight = tileSize * (16 / 9);
                         const isEndOfRow = index % 3 === 2;
                         return (
                           <TouchableOpacity
@@ -456,7 +453,7 @@ export function ProfileScreen({ navigation, route }: ProfileScreenProps) {
                               styles.progressTile,
                               {
                                 width: tileSize,
-                                height: tileSize,
+                                height: tileHeight,
                                 marginRight: isEndOfRow ? 0 : gap,
                                 marginBottom: gap,
                               },
@@ -879,11 +876,7 @@ const styles = StyleSheet.create({
   progressActionTextDisabled: {
     color: COLORS.textMeta,
   },
-  progressHelperText: {
-    ...TYPOGRAPHY.meta,
-    color: COLORS.textMeta,
-    marginBottom: SPACING.md,
-  },
+  // progressHelperText removed
   progressEmptyState: {
     paddingVertical: SPACING.lg,
     paddingHorizontal: SPACING.md,
@@ -906,7 +899,7 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
   },
   progressTile: {
-    borderRadius: BORDER_RADIUS.lg,
+    borderRadius: 0,
     overflow: 'hidden',
     backgroundColor: COLORS.activeCard,
   },
@@ -1030,24 +1023,43 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   avatarContainer: {
+    marginBottom: 24,
+  },
+  profileTopRow: {
+    flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 40,
+    gap: 32,
   },
-  avatarWrapper: {
-    position: 'relative',
+  profileTopAvatar: {
+    width: 96,
+    height: 96,
   },
-  avatarEditButton: {
+  profileTopAvatarEdit: {
     position: 'absolute',
-    right: -2,
-    bottom: -2,
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: COLORS.activeCard,
+    right: -4,
+    bottom: -4,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: 'rgba(0,0,0,0.6)',
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: COLORS.border,
+    borderWidth: 2,
+    borderColor: COLORS.backgroundCanvas,
+  },
+  profileTopStat: {
+    flex: 1,
+    alignItems: 'flex-start',
+    justifyContent: 'center',
+  },
+  profileTopStatValue: {
+    ...TYPOGRAPHY.h1,
+    color: LIGHT_COLORS.secondary,
+    marginBottom: 4,
+  },
+  profileTopStatLabel: {
+    ...TYPOGRAPHY.body,
+    color: COLORS.textMeta,
   },
   addWeightButton: {
     width: '100%',

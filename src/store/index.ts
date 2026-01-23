@@ -94,11 +94,14 @@ interface WorkoutStore {
   updateWorkoutTemplate: (templateId: string, updates: Partial<WorkoutTemplate>) => Promise<void>;
   deleteWorkoutTemplate: (templateId: string) => Promise<void>;
   getWorkoutTemplate: (templateId: string) => WorkoutTemplate | undefined;
+  duplicateWorkoutTemplate: (templateId: string) => Promise<string | null>;
   
   // Cycle Plans
   addCyclePlan: (plan: CyclePlan, resolution?: import('../types/training').CycleConflictResolution) => Promise<{ success: boolean; conflicts?: import('../types/training').ConflictItem[] }>;
   updateCyclePlan: (planId: string, updates: Partial<CyclePlan>) => Promise<void>;
   archiveCyclePlan: (planId: string) => Promise<void>;
+  applyCyclePlan: (planId: string, resolution?: import('../types/training').CycleConflictResolution) => Promise<{ success: boolean; conflicts?: import('../types/training').ConflictItem[] }>;
+  duplicateCyclePlan: (planId: string) => Promise<string | null>;
   getActiveCyclePlan: () => CyclePlan | undefined;
   generateScheduledWorkoutsFromCycle: (planId: string) => Promise<void>;
   detectCycleConflicts: (plan: CyclePlan) => import('../types/training').ConflictItem[];
@@ -699,7 +702,7 @@ export const useStore = create<WorkoutStore>((set, get) => ({
 
     const weekKey = `${now.isoWeekYear()}-W${String(now.isoWeek()).padStart(2, '0')}`;
     const alreadyLogged = get().progressLogs.some(l => l.weekKey === weekKey);
-    if (alreadyLogged) return { success: false, error: 'already_logged' };
+    if (!__DEV__ && alreadyLogged) return { success: false, error: 'already_logged' };
 
     const createdAt = new Date().toISOString();
     const dateLabel = dayjs(createdAt).format('MMM D');
@@ -1271,6 +1274,27 @@ export const useStore = create<WorkoutStore>((set, get) => ({
   getWorkoutTemplate: (templateId) => {
     return get().workoutTemplates.find(t => t.id === templateId);
   },
+
+  duplicateWorkoutTemplate: async (templateId) => {
+    const existing = get().workoutTemplates.find(t => t.id === templateId);
+    if (!existing) return null;
+
+    const now = new Date().toISOString();
+    const copyId = `wt-${Date.now()}`;
+    const copy: WorkoutTemplate = {
+      ...existing,
+      id: copyId,
+      name: `${existing.name} Copy`,
+      createdAt: now,
+      updatedAt: now,
+      items: existing.items.map(i => ({ ...i })),
+    };
+
+    const templates = [copy, ...get().workoutTemplates];
+    set({ workoutTemplates: templates });
+    await storage.saveWorkoutTemplates(templates);
+    return copyId;
+  },
   
   // Cycle Plans
   getCycleEndDate: (startDate, weeks) => {
@@ -1363,6 +1387,118 @@ export const useStore = create<WorkoutStore>((set, get) => ({
     }
     
     return { success: true };
+  },
+
+  applyCyclePlan: async (planId, resolution) => {
+    const plan = get().cyclePlans.find(p => p.id === planId);
+    if (!plan) return { success: false };
+
+    // Detect conflicts first
+    const conflicts = get().detectCycleConflicts(plan);
+    if (conflicts.length > 0 && !resolution) {
+      return { success: false, conflicts };
+    }
+
+    if (resolution === 'cancel') {
+      return { success: false };
+    }
+
+    // Clear conflicts according to resolution.
+    // - replace: remove all conflicting scheduled workouts (manual + cycle)
+    // - keep: keep manual scheduled workouts, but clear conflicting cycle workouts from other plans
+    if (conflicts.length > 0) {
+      let scheduledWorkouts = get().scheduledWorkouts;
+      const conflictDates = new Set(conflicts.map(c => c.date));
+
+      if (resolution === 'replace') {
+        scheduledWorkouts = scheduledWorkouts.filter(sw => !conflictDates.has(sw.date));
+      } else if (resolution === 'keep') {
+        const cycleConflicts = new Set(
+          conflicts.filter(c => c.existing.source === 'cycle').map(c => c.date)
+        );
+        scheduledWorkouts = scheduledWorkouts.filter(sw => !(sw.source === 'cycle' && cycleConflicts.has(sw.date)));
+      }
+
+      set({ scheduledWorkouts });
+      await storage.saveScheduledWorkouts(scheduledWorkouts);
+    }
+
+    // Deactivate any currently active plans (archive them), activate this plan (unarchive if needed)
+    const now = new Date().toISOString();
+    const plans = get().cyclePlans.map(p => {
+      if (p.id === planId) {
+        return { ...p, active: true, archivedAt: undefined, updatedAt: now };
+      }
+      if (p.active) {
+        return { ...p, active: false, archivedAt: p.archivedAt || now, updatedAt: now };
+      }
+      return p;
+    });
+
+    set({ cyclePlans: plans });
+    await storage.saveCyclePlans(plans);
+
+    // Generate scheduled workouts for this plan
+    await get().generateScheduledWorkoutsFromCycle(planId);
+    return { success: true };
+  },
+
+  duplicateCyclePlan: async (planId) => {
+    const plan = get().cyclePlans.find(p => p.id === planId);
+    if (!plan) return null;
+
+    const nowIso = new Date().toISOString();
+    const newPlanId = `cp-${Date.now()}`;
+
+    // Duplicate referenced workout templates (deep copy, new IDs)
+    const oldToNew = new Map<string, string>();
+    const newTemplates: WorkoutTemplate[] = [];
+
+    Object.values(plan.templateIdsByWeekday).forEach((templateId) => {
+      if (!templateId) return;
+      if (oldToNew.has(templateId)) return;
+      const existingTemplate = get().workoutTemplates.find(t => t.id === templateId);
+      if (!existingTemplate) return;
+
+      const newTemplateId = `wt-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
+      oldToNew.set(templateId, newTemplateId);
+      newTemplates.push({
+        ...existingTemplate,
+        id: newTemplateId,
+        name: `${existingTemplate.name} Copy`,
+        createdAt: nowIso,
+        updatedAt: nowIso,
+        items: existingTemplate.items.map(i => ({ ...i })),
+      });
+    });
+
+    const templates = [...newTemplates, ...get().workoutTemplates];
+    set({ workoutTemplates: templates });
+    await storage.saveWorkoutTemplates(templates);
+
+    const newTemplateIdsByWeekday: Partial<Record<number, string>> = {};
+    Object.entries(plan.templateIdsByWeekday).forEach(([weekdayStr, templateId]) => {
+      if (!templateId) return;
+      const newId = oldToNew.get(templateId);
+      if (newId) newTemplateIdsByWeekday[Number(weekdayStr)] = newId;
+    });
+
+    const newPlan: CyclePlan = {
+      ...plan,
+      id: newPlanId,
+      name: `${plan.name} Copy`,
+      active: false,
+      archivedAt: undefined,
+      createdAt: nowIso,
+      updatedAt: nowIso,
+      templateIdsByWeekday: newTemplateIdsByWeekday,
+    };
+
+    const plans = [newPlan, ...get().cyclePlans];
+    set({ cyclePlans: plans });
+    await storage.saveCyclePlans(plans);
+
+    return newPlanId;
   },
   
   updateCyclePlan: async (planId, updates) => {

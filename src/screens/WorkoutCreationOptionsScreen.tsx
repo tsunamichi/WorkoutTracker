@@ -55,7 +55,7 @@ export function WorkoutCreationOptionsScreen() {
           <TouchableOpacity
             style={styles.aiButton}
             onPress={() => {
-              navigation.navigate('AIWorkoutCreation' as never);
+              navigation.navigate('AIWorkoutCreation' as never, { mode: 'plan' } as never);
             }}
             activeOpacity={1}
           >

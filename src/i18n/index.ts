@@ -5,6 +5,7 @@ export const DEFAULT_LANGUAGE: Language = 'en';
 type TranslationKey =
   | 'today'
   | 'workouts'
+  | 'training'
   | 'library'
   | 'noWorkoutsYet'
   | 'goToWorkouts'
@@ -51,6 +52,19 @@ type TranslationKey =
   | 'singleWorkout'
   | 'singleWorkouts'
   | 'scheduledSingleWorkouts'
+  | 'singleWorkoutsSubtitle'
+  | 'workoutPlans'
+  | 'workoutPlansSubtitle'
+  | 'createWorkout'
+  | 'createPlan'
+  | 'noPlansYet'
+  | 'applyPlan'
+  | 'archive'
+  | 'active'
+  | 'archived'
+  | 'duplicate'
+  | 'schedule'
+  | 'createPlanWithAi'
   | 'progress'
   | 'noProgressYet'
   | 'seeAllProgress'
@@ -408,6 +422,7 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
   en: {
     today: 'Today',
     workouts: 'Workouts',
+    training: 'Training',
     library: 'Library',
     noWorkoutsYet: 'No workouts yet',
     goToWorkouts: 'Go to Workouts',
@@ -424,6 +439,19 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     singleWorkout: 'Single Workout',
     singleWorkouts: 'Single Workouts',
     scheduledSingleWorkouts: 'Scheduled Single Workouts',
+    singleWorkoutsSubtitle: 'Reusable workouts you can schedule anytime.',
+    workoutPlans: 'Workout Plans',
+    workoutPlansSubtitle: 'Multi-workout plans you follow over weeks.',
+    createWorkout: 'Create workout',
+    createPlan: 'Create Plan',
+    noPlansYet: 'No plans yet.',
+    applyPlan: 'Apply plan',
+    archive: 'Archive',
+    active: 'Active',
+    archived: 'Archived',
+    duplicate: 'Duplicate',
+    schedule: 'Schedule',
+    createPlanWithAi: 'Create Plan with AI',
     progress: 'Progress',
     noProgressYet: 'No progress yet',
     seeAllProgress: 'See all progress',
@@ -830,6 +858,7 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
   es: {
     today: 'Hoy',
     workouts: 'Entrenamientos',
+    training: 'Entrenamiento',
     library: 'Biblioteca',
     noWorkoutsYet: 'No hay entrenamientos',
     goToWorkouts: 'Ir a Entrenamientos',
@@ -846,6 +875,19 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     singleWorkout: 'Entrenamiento Único',
     singleWorkouts: 'Entrenamientos Únicos',
     scheduledSingleWorkouts: 'Entrenamientos Únicos Programados',
+    singleWorkoutsSubtitle: 'Entrenamientos reutilizables que puedes programar cuando quieras.',
+    workoutPlans: 'Planes',
+    workoutPlansSubtitle: 'Planes de varios entrenamientos que sigues por semanas.',
+    createWorkout: 'Crear entrenamiento',
+    createPlan: 'Crear plan',
+    noPlansYet: 'No hay planes todavía.',
+    applyPlan: 'Aplicar plan',
+    archive: 'Archivar',
+    active: 'Activo',
+    archived: 'Archivado',
+    duplicate: 'Duplicar',
+    schedule: 'Programar',
+    createPlanWithAi: 'Crear plan con IA',
     progress: 'Progreso',
     noProgressYet: 'Sin progreso aún',
     seeAllProgress: 'Ver todo el progreso',

@@ -134,6 +134,7 @@ export function CreateCycleReview({ navigation }: CreateCycleReviewProps) {
       navigation.navigate('CycleConflicts', {
         plan: newPlan,
         conflicts: result.conflicts,
+        planId: newPlan.id,
       });
     } else {
       // No conflicts, cycle was created successfully
