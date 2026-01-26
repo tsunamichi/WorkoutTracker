@@ -4,7 +4,7 @@ import Svg, { Circle, Path } from 'react-native-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useCreateCycleDraftStore } from '../../store/useCreateCycleDraftStore';
 import { COLORS, SPACING, TYPOGRAPHY, CARDS } from '../../constants';
-import { IconArrowLeft, IconCheck } from '../../components/icons';
+import { IconClose, IconCheck } from '../../components/icons';
 import { useTranslation } from '../../i18n/useTranslation';
 
 interface CreateCycleDaysOverviewProps {
@@ -58,7 +58,8 @@ export function CreateCycleDaysOverview({ navigation }: CreateCycleDaysOverviewP
                     style: 'destructive',
                     onPress: () => {
                       resetDraft();
-                      navigation.navigate('Tabs');
+                      // Pop all screens to return to Tabs with back animation
+                      navigation.popToTop();
                     },
                   },
                 ]
@@ -67,7 +68,7 @@ export function CreateCycleDaysOverview({ navigation }: CreateCycleDaysOverviewP
             style={styles.backButton}
             activeOpacity={1}
           >
-            <IconArrowLeft size={24} color={COLORS.text} />
+            <IconClose size={24} color={COLORS.text} />
           </TouchableOpacity>
           <View style={styles.headerTitleRow}>
             <Text style={styles.headerTitle}>{t('buildYourWeek')}</Text>
@@ -77,7 +78,7 @@ export function CreateCycleDaysOverview({ navigation }: CreateCycleDaysOverviewP
                 <View style={styles.progressIndicator}>
                   <Text style={styles.progressText}>2/4</Text>
                   <Svg height="16" width="16" viewBox="0 0 16 16" style={styles.progressCircle}>
-                    <Circle cx="8" cy="8" r="8" fill={COLORS.backgroundCanvas} />
+                    <Circle cx="8" cy="8" r="8" fill={COLORS.activeCard} />
                     {progress > 0 ? (
                       <Path
                         d={`M 8 8 L 8 0 A 8 8 0 ${progress > 0.5 ? 1 : 0} 1 ${

@@ -51,15 +51,42 @@ export function WorkoutsScreen() {
   const [scheduleDate, setScheduleDate] = useState<Date>(new Date());
   const [showDatePicker, setShowDatePicker] = useState(false);
 
+  // SCHEDULE-FIRST: Sort templates by lastUsedAt (recently used first)
+  const sortedTemplates = useMemo(() => {
+    return [...workoutTemplates].sort((a, b) => {
+      // Recently used first (lastUsedAt DESC)
+      if (a.lastUsedAt && b.lastUsedAt) {
+        return dayjs(b.lastUsedAt).valueOf() - dayjs(a.lastUsedAt).valueOf();
+      }
+      if (a.lastUsedAt && !b.lastUsedAt) return -1;
+      if (!a.lastUsedAt && b.lastUsedAt) return 1;
+      // If both never used, sort by created date (newest first)
+      return dayjs(b.createdAt).valueOf() - dayjs(a.createdAt).valueOf();
+    });
+  }, [workoutTemplates]);
+
   const sortedPlans = useMemo(() => {
     const active = cyclePlans.filter(p => p.active && !p.archivedAt);
     const inactive = cyclePlans.filter(p => !p.active && !p.archivedAt);
     const archived = cyclePlans.filter(p => !!p.archivedAt);
-    return [...active, ...inactive, ...archived].sort((a, b) => {
-      if (a.active !== b.active) return a.active ? -1 : 1;
-      if (!!a.archivedAt !== !!b.archivedAt) return a.archivedAt ? 1 : -1;
-      return dayjs(b.updatedAt).valueOf() - dayjs(a.updatedAt).valueOf();
-    });
+    
+    // Within each group, sort by lastUsedAt (recently used first)
+    const sortByRecency = (plans: typeof cyclePlans) => {
+      return [...plans].sort((a, b) => {
+        if (a.lastUsedAt && b.lastUsedAt) {
+          return dayjs(b.lastUsedAt).valueOf() - dayjs(a.lastUsedAt).valueOf();
+        }
+        if (a.lastUsedAt && !b.lastUsedAt) return -1;
+        if (!a.lastUsedAt && b.lastUsedAt) return 1;
+        return dayjs(b.updatedAt).valueOf() - dayjs(a.updatedAt).valueOf();
+      });
+    };
+    
+    return [
+      ...sortByRecency(active),
+      ...sortByRecency(inactive),
+      ...sortByRecency(archived)
+    ];
   }, [cyclePlans]);
 
   const openSchedulePicker = (templateId: string) => {
@@ -126,7 +153,7 @@ export function WorkoutsScreen() {
               </View>
             </TouchableOpacity>
 
-            {workoutTemplates.map((template) => (
+            {sortedTemplates.map((template) => (
               <TouchableOpacity
                 key={template.id}
                 style={styles.rowCard}
@@ -138,6 +165,7 @@ export function WorkoutsScreen() {
                     <Text style={styles.rowTitle}>{template.name}</Text>
                     <Text style={styles.rowSubtitle}>
                       {template.items.length} {template.items.length === 1 ? t('exercise') : t('exercises')}
+                      {template.usageCount > 0 && ` • ${template.usageCount}x`}
                     </Text>
                   </View>
                   <TouchableOpacity

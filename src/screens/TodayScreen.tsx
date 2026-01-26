@@ -5,9 +5,8 @@ import * as Haptics from 'expo-haptics';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { useStore } from '../store';
-import { ProfileAvatar } from '../components/ProfileAvatar';
 import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS, CARDS } from '../constants';
-import { IconCalendar, IconStopwatch, IconWorkouts, IconCheck, IconSwap, IconAdd, IconHistory } from '../components/icons';
+import { IconCheck, IconSwap, IconAdd, IconSettings } from '../components/icons';
 import dayjs from 'dayjs';
 import isoWeek from 'dayjs/plugin/isoWeek';
 import { useTranslation } from '../i18n/useTranslation';
@@ -32,29 +31,23 @@ const LIGHT_COLORS = {
 };
 
 interface TodayScreenProps {
-  onNavigateToWorkouts?: () => void;
   onDateChange?: (isToday: boolean) => void;
   onOpenSwapDrawer?: (selectedDate: string, weekDays: any[]) => void;
+  onOpenAddWorkout?: (date: string) => void;
 }
 
-export function TodayScreen({ onNavigateToWorkouts, onDateChange, onOpenSwapDrawer }: TodayScreenProps) {
+export function TodayScreen({ onDateChange, onOpenSwapDrawer, onOpenAddWorkout }: TodayScreenProps) {
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
   const {
-    cycles,
-    workoutAssignments,
     getWorkoutCompletionPercentage,
     getExerciseProgress,
-    swapWorkoutAssignments,
     getHIITTimerSessionsForDate,
     settings,
-    // NEW: Training architecture
+    // Schedule-First Architecture
     scheduledWorkouts,
-    workoutTemplates,
-    cyclePlans,
-    getActiveCyclePlan,
     getScheduledWorkout,
-    getWorkoutTemplate,
+    getWarmupCompletion,
   } = useStore();
   const { t } = useTranslation();
   const today = dayjs();
@@ -76,19 +69,12 @@ export function TodayScreen({ onNavigateToWorkouts, onDateChange, onOpenSwapDraw
   const [dayPositions, setDayPositions] = useState<number[]>([]);
   const previousDayIndex = useRef<number>(-1);
   
-  // Find active cycle
-  const activeCycle = cycles.find(c => c.isActive);
-  const activeCyclePlan = getActiveCyclePlan();
-  
-  // Clear selected day when there are no workouts created
+  // Initialize selected date to today
   useEffect(() => {
-    if (!activeCycle && scheduledWorkouts.length === 0) {
-      setSelectedDate('');
-    } else if (!selectedDate) {
-      // If selectedDate was cleared but we now have workouts, reset to today
+    if (!selectedDate) {
       setSelectedDate(today.format('YYYY-MM-DD'));
     }
-  }, [activeCycle, scheduledWorkouts.length, selectedDate, today]);
+  }, [selectedDate, today]);
   
   // Notify parent when viewing date changes
   useEffect(() => {
@@ -100,83 +86,42 @@ export function TodayScreen({ onNavigateToWorkouts, onDateChange, onOpenSwapDraw
   
   // (debug logging removed)
   
-  // Calculate current week based on week offset
-  const viewedWeekStart = today.startOf('isoWeek').add(weekOffset, 'week');
-  const currentWeek = activeCycle 
-    ? Math.floor(viewedWeekStart.diff(dayjs(activeCycle.startDate), 'week')) + 1
-    : 0;
-  
   // Get start of week based on offset (Monday)
   const weekStart = today.startOf('isoWeek').add(weekOffset, 'week');
   
-  // Get workouts for this week
+  // Calculate current week label from any scheduled workout
+  const anyScheduledWorkout = scheduledWorkouts.find(sw => sw.programName);
+  const currentWeekLabel = anyScheduledWorkout?.programName || t('schedule');
+  
+  // Get workouts for this week (SCHEDULE-FIRST: Only use ScheduledWorkout)
   const weekDays = React.useMemo(() => DAYS_SHORT.map((dayLetter, index) => {
     const date = weekStart.add(index, 'day');
     const dateStr = date.format('YYYY-MM-DD');
     const isToday = date.isSame(today, 'day');
     
-    // Check BOTH data sources
+    // SCHEDULE-FIRST: Only check scheduledWorkouts (single source of truth)
     const scheduledWorkout = getScheduledWorkout(dateStr);
-    const cycleAssignment = workoutAssignments.find(a => 
-      a.date === dateStr && 
-      a.cycleId === activeCycle?.id
-    );
     
-    let workout = null;
-    let assignment = null;
-    
-    // Priority: ScheduledWorkout (new) > WorkoutAssignment (old)
-    if (scheduledWorkout) {
-      // Use new architecture: ScheduledWorkout → WorkoutTemplate
-      const template = getWorkoutTemplate(scheduledWorkout.templateId);
-      
-      if (template) {
-        // Convert WorkoutTemplate to old workout format for backward compatibility
-        workout = {
-          id: template.id,
-          cycleId: scheduledWorkout.cyclePlanId || '',
-          name: template.name,
-          workoutType: 'Other' as const,
-          dayOfWeek: date.day(),
-          orderIndex: 0,
-          exercises: template.items.map(item => ({
-            id: item.exerciseId,
-            exerciseId: item.exerciseId,
-            orderIndex: item.order,
-            targetSets: item.sets,
-            targetRepsMin: item.reps,
-            targetRepsMax: item.reps,
-            progressionType: 'none' as const,
-          })),
-        };
-        // Create a pseudo-assignment for compatibility
-        assignment = {
-          id: scheduledWorkout.id,
-          date: dateStr,
-          workoutTemplateId: template.id,
-          cycleId: scheduledWorkout.cyclePlanId || '',
-          completed: scheduledWorkout.status === 'completed',
-        };
-      }
-    } else if (cycleAssignment && activeCycle) {
-      // Fallback to old architecture: WorkoutAssignment → Cycle
-      assignment = cycleAssignment;
-      workout = activeCycle.workoutTemplates.find(w => w.id === assignment.workoutTemplateId) || null;
-    }
-    
-    // Check if workout is 100% complete
-    const workoutKey = workout ? `${workout.id}-${dateStr}` : '';
+    // Calculate completion percentage using snapshot data
+    let completionPercentage = 0;
     let totalSets = 0;
-    if (workout) {
-      workout.exercises.forEach(ex => {
+    
+    if (scheduledWorkout && scheduledWorkout.exercisesSnapshot) {
+      // Use exercisesSnapshot (not template) for completion calculation
+      const workoutKey = `${scheduledWorkout.templateId}-${dateStr}`;
+      
+      scheduledWorkout.exercisesSnapshot.forEach(ex => {
         const progress = getExerciseProgress(workoutKey, ex.id);
         if (!progress?.skipped) {
-          totalSets += ex.targetSets || 0;
+          totalSets += ex.sets || 0;
         }
       });
+      
+      completionPercentage = totalSets > 0 ? getWorkoutCompletionPercentage(workoutKey, totalSets) : 0;
     }
-    const completionPercentage = workout ? getWorkoutCompletionPercentage(workoutKey, totalSets) : 0;
-    const isCompleted = completionPercentage === 100;
+    
+    const isCompleted = scheduledWorkout?.status === 'completed' || completionPercentage === 100;
+    const isLocked = scheduledWorkout?.isLocked || false;
     
     return {
       dayLetter,
@@ -184,19 +129,15 @@ export function TodayScreen({ onNavigateToWorkouts, onDateChange, onOpenSwapDraw
       date: dateStr,
       dateObj: date,
       isToday,
-      workout,
-      assignment,
+      scheduledWorkout, // NEW: direct reference to scheduled workout
       isCompleted,
+      isLocked, // NEW: track if workout is locked
       completionPercentage,
     };
   }), [
     weekStart, 
     scheduledWorkouts, 
-    workoutTemplates, 
     getScheduledWorkout, 
-    getWorkoutTemplate, 
-    workoutAssignments, 
-    activeCycle, 
     getExerciseProgress, 
     getWorkoutCompletionPercentage,
     refreshTrigger
@@ -252,29 +193,35 @@ export function TodayScreen({ onNavigateToWorkouts, onDateChange, onOpenSwapDraw
     }
   }, [selectedDayIndex]);
   
-  // Check if there are eligible workouts to swap with
+  // Check if there are eligible workouts to swap with (using new architecture)
   const hasEligibleWorkoutsToSwap = (currentDate: string) => {
     const currentDay = weekDays.find(d => d.date === currentDate);
-    const isCurrentDayRestDay = !currentDay?.workout;
+    const hasCurrentWorkout = !!currentDay?.scheduledWorkout;
     
-    // Filter eligible days (not completed, not selected date)
+    // CRITICAL: Cannot swap if the current day is completed or locked
+    if (currentDay?.isCompleted || currentDay?.isLocked) {
+      return false;
+    }
+    
+    // Filter eligible days (not locked, not selected date)
     const eligibleDays = weekDays.filter(day => 
-      !day.isCompleted && 
-      day.date !== currentDate
+      !day.isLocked && 
+      day.date !== currentDate &&
+      !day.isCompleted
     );
     
     // Filter workouts that haven't been started
     const unStartedWorkouts = eligibleDays.filter(day => {
-      if (!day.workout) return false;
+      if (!day.scheduledWorkout) return false;
       return day.completionPercentage === 0;
     });
     
-    // If current day is rest day, we need at least one workout to swap
+    // If current day has no workout, we need at least one workout to swap
     // Otherwise, we need workouts OR rest days
-    if (isCurrentDayRestDay) {
+    if (!hasCurrentWorkout) {
       return unStartedWorkouts.length > 0;
     } else {
-      const restDays = eligibleDays.filter(day => !day.workout);
+      const restDays = eligibleDays.filter(day => !day.scheduledWorkout);
       return unStartedWorkouts.length > 0 || restDays.length > 0;
     }
   };
@@ -284,8 +231,8 @@ export function TodayScreen({ onNavigateToWorkouts, onDateChange, onOpenSwapDraw
       // Open swap drawer with current weekDays data
       onOpenSwapDrawer?.(currentDate, weekDays);
     } else {
-      // Navigate to workout creation
-      navigation.navigate('WorkoutCreationOptions');
+      // NEW: Open AddWorkoutSheet to choose workout or plan
+      onOpenAddWorkout?.(currentDate);
     }
   };
   
@@ -294,26 +241,20 @@ export function TodayScreen({ onNavigateToWorkouts, onDateChange, onOpenSwapDraw
   };
   
   const handleWorkoutPress = () => {
-    if (selectedDay?.workout) {
-      // Support both old cycle-based workouts and new standalone workouts
-      const cycleId = selectedDay.workout.cycleId || activeCycle?.id || '';
-      navigation.navigate('WorkoutExecution', {
-        cycleId,
-        workoutTemplateId: selectedDay.workout.id,
+    if (selectedDay?.scheduledWorkout) {
+      const sw = selectedDay.scheduledWorkout;
+      
+      // SCHEDULE-FIRST: Pass scheduled workout data to execution screen
+      // WorkoutExecution will use snapshots from the scheduled workout
+      (navigation as any).navigate('WorkoutExecution', {
+        workoutId: sw.id, // Pass scheduled workout ID (not template ID)
+        workoutTemplateId: sw.templateId, // Must match param name in WorkoutExecutionScreen
+        cycleId: sw.programId, // Pass programId as cycleId for backward compatibility
+        templateId: sw.templateId, // Keep for backward compatibility
         date: selectedDay.date,
+        isLocked: sw.isLocked,
       });
     }
-  };
-  
-  const handleBackToToday = () => {
-    setWeekOffset(0);
-    setSelectedDate(today.format('YYYY-MM-DD'));
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-  };
-
-  const handleNavigateToHistory = () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    (navigation as any).navigate('History');
   };
   
   // Match device corner radius (iPhone rounded corners)
@@ -322,49 +263,26 @@ export function TodayScreen({ onNavigateToWorkouts, onDateChange, onOpenSwapDraw
   return (
       <View style={styles.gradient}>
         <SafeAreaView style={[styles.container, { paddingBottom: 88 }]} edges={[]}>
-          {/* Header with Cycle Info and Avatar - Fixed - Always shown */}
+          {/* Header with Schedule Info and Avatar - Fixed - Always shown */}
           <View style={[styles.header, { paddingTop: insets.top }]}>
             <View style={styles.topBar}>
               <Text style={styles.headerTitle}>
-                {activeCycle
-                  ? t('cycleWeekLabel')
-                      .replace('{cycle}', String(activeCycle.cycleNumber))
-                      .replace('{week}', String(currentWeek))
-                  : t('today')}
+                {currentWeekLabel}
               </Text>
               <View style={styles.headerRight}>
-                {activeCycle && weekOffset !== 0 && (
-                  <TouchableOpacity
-                    style={styles.calendarButton}
-                    onPress={handleBackToToday}
-                    activeOpacity={1}
-                  >
-                    <IconCalendar size={24} color="#000000" />
-                  </TouchableOpacity>
-                )}
-                {cycles.length > 0 && (
-                  <TouchableOpacity
-                    style={styles.historyButton}
-                    onPress={handleNavigateToHistory}
-                    activeOpacity={1}
-                  >
-                    <IconHistory size={24} color="#000000" />
-                  </TouchableOpacity>
-                )}
-                <ProfileAvatar 
-                  onPress={() => navigation.navigate('Profile')}
-                  size={40}
-                  backgroundColor="#9E9E9E"
-                  textColor="#FFFFFF"
-                  showInitial={true}
-                  imageUri={settings.profileAvatarUri || null}
-                />
+                <TouchableOpacity
+                  style={styles.settingsButton}
+                  onPress={() => (navigation as any).navigate('Profile')}
+                  activeOpacity={1}
+                >
+                  <IconSettings size={24} color="#000000" />
+                </TouchableOpacity>
               </View>
             </View>
           </View>
           
-          {/* Week Calendar - Fixed - Always shown, disabled when no workouts */}
-          <View style={[styles.weekCalendar, (!activeCycle && scheduledWorkouts.length === 0) && styles.weekCalendarDisabled]}>
+          {/* Week Calendar - Always shown and interactive */}
+          <View style={styles.weekCalendar}>
             {weekDays.map((day, index) => {
               const isSelected = day.date === selectedDate;
               const isToday = day.isToday;
@@ -377,9 +295,8 @@ export function TodayScreen({ onNavigateToWorkouts, onDateChange, onOpenSwapDraw
                   >
                   <TouchableOpacity
                     style={styles.dayTouchable}
-                    onPress={() => (activeCycle || scheduledWorkouts.length > 0) && handleDayChange(day.date)}
+                    onPress={() => handleDayChange(day.date)}
                     activeOpacity={1}
-                    disabled={!activeCycle && scheduledWorkouts.length === 0}
                   >
                     <View style={styles.dayButtonWrapper}>
                       {isToday && (
@@ -417,51 +334,48 @@ export function TodayScreen({ onNavigateToWorkouts, onDateChange, onOpenSwapDraw
               })}
             </View>
             
-            {/* Scrollable Content with Swipe Gesture or Empty State */}
-            {!activeCycle && scheduledWorkouts.length === 0 ? (
-              /* Empty State */
-              <View style={styles.emptyStateContent}>
-                <Text style={styles.emptyTitle}>{t('noWorkoutsYet')}</Text>
-                <Text style={styles.emptyText}>
-                  To get started, you need to create one.
-                </Text>
-                <TouchableOpacity
-                  style={styles.createButton}
-                  onPress={onNavigateToWorkouts}
-                  activeOpacity={1}
-                >
-                  <IconWorkouts size={24} color="#FFFFFF" />
-                  <Text style={styles.createButtonText}>{t('goToWorkouts')}</Text>
-                </TouchableOpacity>
-              </View>
-            ) : (
+            {/* Day Detail Content */}
+            {(
               <View style={styles.content}>
                 {/* Workout Content Wrapper - Fixed height for consistent Intervals positioning */}
                 <View style={styles.workoutContentWrapper}>
                 <View style={styles.cardsContainer}>
-              {/* Workout card or Rest Day */}
-              {selectedDay?.workout ? (
+              {/* Workout card or Empty Day */}
+              {selectedDay?.scheduledWorkout ? (
                 <View style={styles.workoutCard}>
                       <TouchableOpacity
                         style={styles.workoutCardInner}
                         onPress={handleWorkoutPress}
                         activeOpacity={1}
+                        disabled={selectedDay.isLocked} // Disable if locked (completed)
                       >
                     {(() => {
-                      const workoutKey = `${selectedDay.workout.id}-${selectedDay.date}`;
+                      const sw = selectedDay.scheduledWorkout;
+                      const workoutKey = `${sw.templateId}-${selectedDay.date}`;
+                      
+                      // Calculate total sets from snapshot (not template)
                       let totalSets = 0;
-                      selectedDay.workout.exercises.forEach((ex: any) => {
-                        const progress = getExerciseProgress(workoutKey, ex.id);
-                        if (!progress?.skipped) {
-                          totalSets += ex.targetSets || 0;
-                        }
-                      });
-                      const completionPercentage = getWorkoutCompletionPercentage(workoutKey, totalSets);
-                      const buttonState = completionPercentage === 100
-                        ? t('edit')
-                        : completionPercentage > 0
-                          ? t('resume')
-                          : t('start');
+                      if (sw.exercisesSnapshot) {
+                        sw.exercisesSnapshot.forEach(ex => {
+                          const progress = getExerciseProgress(workoutKey, ex.id);
+                          if (!progress?.skipped) {
+                            totalSets += ex.sets || 0;
+                          }
+                        });
+                      }
+                      
+                      const completionPercentage = totalSets > 0 ? getWorkoutCompletionPercentage(workoutKey, totalSets) : 0;
+                      
+                      // Determine button state
+                      let buttonState = t('start');
+                      if (sw.isLocked) {
+                        buttonState = t('completed'); // Show "Completed" for locked workouts
+                      } else if (completionPercentage === 100) {
+                        buttonState = t('edit');
+                      } else if (completionPercentage > 0) {
+                        buttonState = t('resume');
+                      }
+                      
                       const progress = completionPercentage / 100;
                       
                       return (
@@ -474,7 +388,7 @@ export function TodayScreen({ onNavigateToWorkouts, onDateChange, onOpenSwapDraw
                             )}
                           {/* Top Row: Workout Name + Progress */}
                           <View style={styles.workoutCardHeader}>
-                            <Text style={styles.workoutName}>{selectedDay.workout.name}</Text>
+                            <Text style={styles.workoutName}>{sw.titleSnapshot}</Text>
                             {progress < 0.999 && (
                               <View style={styles.progressIndicator}>
                                 <Text style={styles.progressText}>{completionPercentage}%</Text>
@@ -495,17 +409,22 @@ export function TodayScreen({ onNavigateToWorkouts, onDateChange, onOpenSwapDraw
                             )}
                           </View>
                           
-                          {/* Exercises Count */}
+                          {/* Exercises Count and Program Name */}
                           <Text style={styles.workoutExercises}>
-                              {selectedDay.workout.exercises.length}{' '}
-                              {selectedDay.workout.exercises.length === 1 ? t('exercise') : t('exercises')}
+                              {sw.exercisesSnapshot?.length || 0}{' '}
+                              {(sw.exercisesSnapshot?.length || 0) === 1 ? t('exercise') : t('exercises')}
+                              {sw.programName && (
+                                <Text style={styles.workoutMeta}>
+                                  {' • '}{sw.programName}
+                                </Text>
+                              )}
                           </Text>
                           </View>
                           
                           {/* Footer: Action Button */}
                           <View style={styles.workoutCardFooter} pointerEvents="none">
-                            <View style={styles.startButton}>
-                              <Text style={styles.startButtonText}>{buttonState}</Text>
+                            <View style={[styles.startButton, sw.isLocked && styles.startButtonCompleted]}>
+                              <Text style={[styles.startButtonText, sw.isLocked && styles.startButtonTextCompleted]}>{buttonState}</Text>
                             </View>
                           </View>
                         </>
@@ -514,44 +433,41 @@ export function TodayScreen({ onNavigateToWorkouts, onDateChange, onOpenSwapDraw
                       </TouchableOpacity>
                 </View>
               ) : (
+                /* Per Product Spec: Empty Day State */
                 <View style={styles.restDayContainer}>
                   <View style={styles.restDayContent}>
                     <Text style={styles.restDayQuestion}>
-                      <Text style={styles.restDayQuestionGray}>{t('restDayTitle')}{'\n'}</Text>
-                      <Text style={styles.restDayQuestionBlack}>{t('noWorkoutsScheduled')}</Text>
+                      <Text style={styles.restDayQuestionGray}>{t('noWorkoutPlanned')}</Text>
                     </Text>
                   </View>
                 </View>
               )}
 
               <View style={styles.cardActionsContainer}>
-                {/* Show swap button for any scheduled workout (even if started or completed) */}
-                {selectedDay?.workout && (
-                  <TouchableOpacity 
-                    style={styles.swapButton}
-                    onPress={() => handleAddOrCreateWorkout(selectedDate)}
-                    activeOpacity={1}
-                  >
-                    <IconSwap size={24} color={COLORS.text} />
-                    <Text style={styles.swapButtonText}>
-                      {hasEligibleWorkoutsToSwap(selectedDate) ? t('swap') : t('createWorkout')}
-                    </Text>
-                  </TouchableOpacity>
-                )}
-
-                {/* Show add button when no workout is scheduled */}
-                {!selectedDay?.workout && (
-                    <TouchableOpacity
-                      style={styles.addWorkoutButton}
+                {/* Per Product Spec: Show actions based on workout existence and lock status */}
+                {selectedDay?.scheduledWorkout ? (
+                  /* Workout EXISTS: Show swap button (unless locked, completed, or in progress) */
+                  !selectedDay.isLocked && !selectedDay.isCompleted && selectedDay.completionPercentage === 0 && (
+                    <TouchableOpacity 
+                      style={styles.swapButton}
                       onPress={() => handleAddOrCreateWorkout(selectedDate)}
                       activeOpacity={1}
                     >
-                    <IconAdd size={24} color={COLORS.accentPrimary} />
-                      <Text style={styles.addWorkoutButtonText}>
-                      {hasEligibleWorkoutsToSwap(selectedDate) ? t('addWorkout') : t('createWorkout')}
-                      </Text>
+                      <IconSwap size={24} color={COLORS.text} />
+                      <Text style={styles.swapButtonText}>{t('swap')}</Text>
                     </TouchableOpacity>
-              )}
+                  )
+                ) : (
+                  /* Per Product Spec: NO workout - show ONLY "Add workout" button */
+                  <TouchableOpacity
+                    style={styles.addWorkoutButton}
+                    onPress={() => handleAddOrCreateWorkout(selectedDate)}
+                    activeOpacity={1}
+                  >
+                    <IconAdd size={24} color={COLORS.accentPrimary} />
+                    <Text style={styles.addWorkoutButtonText}>{t('addWorkout')}</Text>
+                  </TouchableOpacity>
+                )}
               </View>
               </View>
               
@@ -710,13 +626,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: SPACING.md,
   },
-  calendarButton: {
-    width: 40,
-    height: 40,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  historyButton: {
+  settingsButton: {
     width: 40,
     height: 40,
     justifyContent: 'center',
@@ -845,6 +755,15 @@ const styles = StyleSheet.create({
     color: LIGHT_COLORS.textMeta,
     marginBottom: 20,
   },
+  workoutMeta: {
+    ...TYPOGRAPHY.meta,
+    color: LIGHT_COLORS.textMeta,
+  },
+  programLabel: {
+    ...TYPOGRAPHY.meta,
+    color: COLORS.accentPrimary,
+    marginBottom: 16,
+  },
   
   // Footer
   workoutCardFooter: {
@@ -892,10 +811,17 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     justifyContent: 'center',
   },
+  startButtonCompleted: {
+    backgroundColor: COLORS.signalPositive,
+    opacity: 0.2,
+  },
   startButtonText: {
     ...TYPOGRAPHY.metaBold,
     color: COLORS.accentPrimary,
     textAlign: 'left',
+  },
+  startButtonTextCompleted: {
+    color: COLORS.signalPositive,
   },
   
   // Completed Badge

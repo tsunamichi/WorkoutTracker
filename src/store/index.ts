@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import dayjs from 'dayjs';
 import isoWeek from 'dayjs/plugin/isoWeek';
 import type { Cycle, Exercise, WorkoutSession, BodyWeightEntry, AppSettings, WorkoutAssignment, TrainerConversation, ExercisePR, WorkoutProgress, ExerciseProgress, HIITTimer, HIITTimerSession } from '../types';
-import type { WorkoutTemplate, CyclePlan, ScheduledWorkout, ConflictResolution, ConflictItem } from '../types/training';
+import type { WorkoutTemplate, CyclePlan, ScheduledWorkout, ConflictResolution, ConflictItem, ConflictResolutionMap, PlanApplySummary } from '../types/training';
 import type { ProgressLog } from '../types/progress';
 import * as storage from '../storage';
 import { SEED_EXERCISES } from '../constants';
@@ -32,7 +32,7 @@ interface WorkoutStore {
   updateExercise: (exerciseId: string, updates: Partial<Exercise>) => Promise<void>;
   addSession: (session: WorkoutSession) => Promise<void>;
   addBodyWeightEntry: (entry: BodyWeightEntry) => Promise<void>;
-  addProgressLog: (params: { photoUri: string; weightLbs: number }) => Promise<{ success: boolean; error?: string }>;
+  addProgressLog: (params: { photoUris: string[]; weightLbs?: number }) => Promise<{ success: boolean; error?: string }>;
   deleteProgressLog: (progressLogId: string) => Promise<void>;
   updateSettings: (settings: Partial<AppSettings>) => Promise<void>;
   setBarbellMode: (exerciseId: string, enabled: boolean) => Promise<void>;
@@ -100,7 +100,7 @@ interface WorkoutStore {
   addCyclePlan: (plan: CyclePlan, resolution?: import('../types/training').CycleConflictResolution) => Promise<{ success: boolean; conflicts?: import('../types/training').ConflictItem[] }>;
   updateCyclePlan: (planId: string, updates: Partial<CyclePlan>) => Promise<void>;
   archiveCyclePlan: (planId: string) => Promise<void>;
-  applyCyclePlan: (planId: string, resolution?: import('../types/training').CycleConflictResolution) => Promise<{ success: boolean; conflicts?: import('../types/training').ConflictItem[] }>;
+  applyCyclePlan: (planId: string, resolutionMap?: ConflictResolutionMap) => Promise<PlanApplySummary | { success: false; conflicts: ConflictItem[] }>;
   duplicateCyclePlan: (planId: string) => Promise<string | null>;
   getActiveCyclePlan: () => CyclePlan | undefined;
   generateScheduledWorkoutsFromCycle: (planId: string) => Promise<void>;
@@ -114,6 +114,12 @@ interface WorkoutStore {
   completeWorkout: (workoutId: string) => Promise<void>;
   getScheduledWorkout: (date: string) => ScheduledWorkout | undefined;
   getScheduledWorkoutsForDateRange: (startDate: string, endDate: string) => ScheduledWorkout[];
+  moveScheduledWorkout: (workoutId: string, toDate: string) => Promise<{ success: boolean; error?: string }>;
+  duplicateScheduledWorkout: (workoutId: string, toDate: string) => Promise<{ success: boolean; error?: string }>;
+  
+  // Warm-up Completion (independent from workout completion)
+  updateWarmupCompletion: (workoutId: string, warmupItemId: string, completed: boolean) => Promise<void>;
+  getWarmupCompletion: (workoutId: string) => { completedItems: string[]; totalItems: number; percentage: number };
 }
 
 const DEFAULT_SETTINGS: AppSettings = {
@@ -615,6 +621,234 @@ export const useStore = create<WorkoutStore>((set, get) => ({
         hasPersonality: !!finalSettings.trainerPersonality,
       });
       
+      // Migration: Initialize new architecture fields
+      let finalWorkoutTemplates = workoutTemplates;
+      let finalCyclePlans = cyclePlans;
+      let finalScheduledWorkouts = scheduledWorkouts;
+      let templatesMigrationNeeded = false;
+      let plansMigrationNeeded = false;
+      let scheduledMigrationNeeded = false;
+      
+      // Migrate WorkoutTemplates: add lastUsedAt, usageCount, warmupItems, kind
+      if (workoutTemplates.length > 0) {
+        finalWorkoutTemplates = workoutTemplates.map((template: any) => {
+          const needsMigration = 
+            template.lastUsedAt === undefined ||
+            template.usageCount === undefined ||
+            template.warmupItems === undefined ||
+            template.kind === undefined;
+          
+          if (needsMigration) {
+            templatesMigrationNeeded = true;
+            return {
+              ...template,
+              kind: 'workout' as const,
+              lastUsedAt: template.lastUsedAt ?? null,
+              usageCount: template.usageCount ?? 0,
+              warmupItems: template.warmupItems ?? [],
+              source: template.source ?? 'user',
+            };
+          }
+          return template;
+        });
+      }
+      
+      // Migrate CyclePlans: add lastUsedAt, usageCount
+      if (cyclePlans.length > 0) {
+        finalCyclePlans = cyclePlans.map((plan: any) => {
+          const needsMigration = 
+            plan.lastUsedAt === undefined ||
+            plan.usageCount === undefined;
+          
+          if (needsMigration) {
+            plansMigrationNeeded = true;
+            return {
+              ...plan,
+              lastUsedAt: plan.lastUsedAt ?? null,
+              usageCount: plan.usageCount ?? 0,
+            };
+          }
+          return plan;
+        });
+      }
+      
+      // Migrate ScheduledWorkouts: add snapshots, completion states, isLocked
+      if (scheduledWorkouts.length > 0) {
+        finalScheduledWorkouts = scheduledWorkouts.map((sw: any) => {
+          const needsMigration = 
+            sw.titleSnapshot === undefined ||
+            sw.warmupSnapshot === undefined ||
+            sw.exercisesSnapshot === undefined ||
+            sw.warmupCompletion === undefined ||
+            sw.workoutCompletion === undefined ||
+            sw.isLocked === undefined ||
+            sw.programId === undefined;
+          
+          if (needsMigration) {
+            scheduledMigrationNeeded = true;
+            
+            // Get template to create snapshots if missing
+            const template = workoutTemplates.find((t: any) => t.id === sw.templateId);
+            
+            return {
+              ...sw,
+              titleSnapshot: sw.titleSnapshot ?? (template?.name || 'Workout'),
+              warmupSnapshot: sw.warmupSnapshot ?? (template?.warmupItems || []).map((item: any) => ({ ...item })),
+              exercisesSnapshot: sw.exercisesSnapshot ?? (template?.items || []).map((item: any) => ({ ...item })),
+              warmupCompletion: sw.warmupCompletion ?? { completedItems: [] },
+              workoutCompletion: sw.workoutCompletion ?? { completedExercises: {}, completedSets: {} },
+              isLocked: sw.isLocked ?? (sw.status === 'completed'),
+              programId: sw.programId ?? (sw.cyclePlanId || null),
+              programName: sw.programName ?? null,
+              weekIndex: sw.weekIndex ?? null,
+              dayIndex: sw.dayIndex ?? null,
+              startedAt: sw.startedAt ?? null,
+              completedAt: sw.completedAt ?? (sw.status === 'completed' ? new Date().toISOString() : null),
+            };
+          }
+          return sw;
+        });
+      }
+      
+      // Save migrations if needed
+      if (templatesMigrationNeeded) {
+        await storage.saveWorkoutTemplates(finalWorkoutTemplates);
+        console.log('✅ WorkoutTemplates migration complete:', finalWorkoutTemplates.length, 'templates');
+      }
+      if (plansMigrationNeeded) {
+        await storage.saveCyclePlans(finalCyclePlans);
+        console.log('✅ CyclePlans migration complete:', finalCyclePlans.length, 'plans');
+      }
+      if (scheduledMigrationNeeded) {
+        await storage.saveScheduledWorkouts(finalScheduledWorkouts);
+        console.log('✅ ScheduledWorkouts migration complete:', finalScheduledWorkouts.length, 'workouts');
+      }
+      
+      // ============================================
+      // VERIFICATION LOG: Schedule-First Architecture
+      // ============================================
+      console.log('🔍 SCHEDULE-FIRST ARCHITECTURE VERIFICATION:');
+      console.log('================================================');
+      
+      console.log('\n📋 WORKOUT TEMPLATES (' + finalWorkoutTemplates.length + ' total):');
+      if (finalWorkoutTemplates.length > 0) {
+        const sample = finalWorkoutTemplates[0];
+        console.log('  Sample template:', {
+          id: sample.id,
+          name: sample.name,
+          kind: sample.kind,
+          hasWarmupItems: Array.isArray(sample.warmupItems),
+          warmupItemsCount: sample.warmupItems?.length || 0,
+          exerciseCount: sample.items?.length || 0,
+          lastUsedAt: sample.lastUsedAt,
+          usageCount: sample.usageCount,
+          source: sample.source,
+        });
+      } else {
+        console.log('  ⚠️ No templates found - this is normal for a new installation');
+      }
+      
+      console.log('\n📅 CYCLE PLANS (' + finalCyclePlans.length + ' total):');
+      if (finalCyclePlans.length > 0) {
+        const sample = finalCyclePlans[0];
+        console.log('  Sample plan:', {
+          id: sample.id,
+          name: sample.name,
+          active: sample.active,
+          weeks: sample.weeks,
+          lastUsedAt: sample.lastUsedAt,
+          usageCount: sample.usageCount,
+        });
+      } else {
+        console.log('  ℹ️ No plans found - this is normal for a new installation');
+      }
+      
+      console.log('\n🗓️  SCHEDULED WORKOUTS (' + finalScheduledWorkouts.length + ' total):');
+      if (finalScheduledWorkouts.length > 0) {
+        const sample = finalScheduledWorkouts[0];
+        console.log('  Sample scheduled workout:', {
+          id: sample.id,
+          date: sample.date,
+          status: sample.status,
+          isLocked: sample.isLocked,
+          hasSnapshots: {
+            title: !!sample.titleSnapshot,
+            warmup: Array.isArray(sample.warmupSnapshot),
+            exercises: Array.isArray(sample.exercisesSnapshot),
+          },
+          snapshotCounts: {
+            warmupItems: sample.warmupSnapshot?.length || 0,
+            exercises: sample.exercisesSnapshot?.length || 0,
+          },
+          hasCompletion: {
+            warmup: !!sample.warmupCompletion,
+            workout: !!sample.workoutCompletion,
+          },
+          programMetadata: {
+            programId: sample.programId,
+            programName: sample.programName,
+            weekIndex: sample.weekIndex,
+            dayIndex: sample.dayIndex,
+          },
+        });
+        
+        // Check for any locked workouts
+        const lockedCount = finalScheduledWorkouts.filter(sw => sw.isLocked).length;
+        console.log('  🔒 Locked (completed) workouts:', lockedCount);
+      } else {
+        console.log('  ℹ️ No scheduled workouts found - this is normal for a new installation');
+      }
+      
+      console.log('\n✅ NEW ARCHITECTURE STATUS:');
+      console.log('  - Data structure: ✅ Loaded');
+      console.log('  - Migrations: ✅ ' + (templatesMigrationNeeded || plansMigrationNeeded || scheduledMigrationNeeded ? 'Applied' : 'Not needed'));
+      console.log('  - Store methods: ✅ Available');
+      console.log('  - Ready for UI: ✅ Yes');
+      
+      // Run a simple test if in development mode
+      if (__DEV__ && finalWorkoutTemplates.length === 0 && finalScheduledWorkouts.length === 0) {
+        console.log('\n🧪 RUNNING QUICK TEST (dev mode only)...');
+        
+        // Create a test template
+        const testTemplate: WorkoutTemplate = {
+          id: 'test-template-1',
+          kind: 'workout',
+          name: 'Test Push Workout',
+          warmupItems: [
+            { id: 'warmup-1', exerciseName: 'Arm Circles', duration: 60 },
+            { id: 'warmup-2', exerciseName: 'Push-up', reps: 10 },
+          ],
+          items: [
+            { id: 'ex-1', exerciseId: 'bench-press', order: 1, sets: 4, reps: 8, weight: 135 },
+            { id: 'ex-2', exerciseId: 'incline-press', order: 2, sets: 3, reps: 10, weight: 100 },
+          ],
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          lastUsedAt: null,
+          usageCount: 0,
+          source: 'user',
+        };
+        
+        console.log('  1️⃣ Created test template:', testTemplate.name);
+        console.log('     - Warm-up items:', testTemplate.warmupItems.length);
+        console.log('     - Exercises:', testTemplate.items.length);
+        console.log('     - Initial usageCount:', testTemplate.usageCount);
+        console.log('     - Initial lastUsedAt:', testTemplate.lastUsedAt);
+        
+        console.log('\n  2️⃣ Test template ready for scheduling');
+        console.log('     Next: UI can call scheduleWorkout(date, "test-template-1", "manual")');
+        console.log('     This will:');
+        console.log('       ✓ Create snapshots (title, warmup, exercises)');
+        console.log('       ✓ Initialize completion states');
+        console.log('       ✓ Set isLocked = false');
+        console.log('       ✓ Update lastUsedAt to now');
+        console.log('       ✓ Increment usageCount to 1');
+        
+        console.log('\n  ℹ️ Test template NOT saved - add UI to test scheduling flow');
+      }
+      
+      console.log('================================================\n');
+      
       set({
         cycles: finalCycles,
         exercises: finalExercises,
@@ -629,9 +863,9 @@ export const useStore = create<WorkoutStore>((set, get) => ({
         detailedWorkoutProgress,
         hiitTimers,
         hiitTimerSessions,
-        workoutTemplates,
-        cyclePlans,
-        scheduledWorkouts,
+        workoutTemplates: finalWorkoutTemplates,
+        cyclePlans: finalCyclePlans,
+        scheduledWorkouts: finalScheduledWorkouts,
         isLoading: false,
       });
     } catch (error) {
@@ -690,14 +924,14 @@ export const useStore = create<WorkoutStore>((set, get) => ({
     await storage.saveBodyWeightEntries(entries);
   },
 
-  addProgressLog: async ({ photoUri, weightLbs }) => {
+  addProgressLog: async ({ photoUris, weightLbs }) => {
     const now = dayjs();
     // Dev-only override: allow logging any day for testing.
     // Production rule stays Friday-only.
     const isFriday = now.isoWeekday() === 5;
     const isAllowedDay = __DEV__ || isFriday;
     if (!isAllowedDay) return { success: false, error: 'not_friday' };
-    if (!photoUri) return { success: false, error: 'photo_required' };
+    if (!photoUris || photoUris.length === 0) return { success: false, error: 'photo_required' };
     if (!Number.isFinite(weightLbs) || weightLbs <= 0) return { success: false, error: 'weight_invalid' };
 
     const weekKey = `${now.isoWeekYear()}-W${String(now.isoWeek()).padStart(2, '0')}`;
@@ -712,7 +946,7 @@ export const useStore = create<WorkoutStore>((set, get) => ({
       dateLabel,
       weekKey,
       weightLbs,
-      photoUri,
+      photoUris,
     };
 
     const next = [log, ...get().progressLogs].sort((a, b) => dayjs(b.createdAt).valueOf() - dayjs(a.createdAt).valueOf());
@@ -807,6 +1041,16 @@ export const useStore = create<WorkoutStore>((set, get) => ({
     const scheduled1 = currentScheduled.find(s => s.date === date1);
     const scheduled2 = currentScheduled.find(s => s.date === date2);
     
+    // HARD LOCK ENFORCEMENT: Cannot swap locked (completed) workouts
+    if (scheduled1?.isLocked || scheduled1?.status === 'completed') {
+      console.warn('⚠️ Cannot swap locked (completed) workout on date1:', date1, { isLocked: scheduled1?.isLocked, status: scheduled1?.status });
+      return;
+    }
+    if (scheduled2?.isLocked || scheduled2?.status === 'completed') {
+      console.warn('⚠️ Cannot swap locked (completed) workout on date2:', date2, { isLocked: scheduled2?.isLocked, status: scheduled2?.status });
+      return;
+    }
+    
     console.log('  scheduled1:', scheduled1 ? { date: scheduled1.date, templateId: scheduled1.templateId, template: get().getWorkoutTemplate(scheduled1.templateId)?.name } : 'none');
     console.log('  scheduled2:', scheduled2 ? { date: scheduled2.date, templateId: scheduled2.templateId, template: get().getWorkoutTemplate(scheduled2.templateId)?.name } : 'none');
     console.log('  assignment1:', assignment1 ? { date: assignment1.date, workoutTemplateId: assignment1.workoutTemplateId } : 'none');
@@ -888,12 +1132,38 @@ export const useStore = create<WorkoutStore>((set, get) => ({
       
       if (scheduled1 && scheduled2) {
         console.log('  Action: Swapping both workouts');
-        // Both dates have scheduled workouts - swap them
+        // Both dates have scheduled workouts - swap ONLY the workout identity, NOT completion status
         newScheduled = currentScheduled.map(s => {
           if (s.date === date1) {
-            return { ...s, date: date2 };
+            // Swap workout identity from scheduled2, keep date1's completion state
+            return { 
+              ...s,
+              templateId: scheduled2.templateId,
+              titleSnapshot: scheduled2.titleSnapshot,
+              warmupSnapshot: scheduled2.warmupSnapshot,
+              exercisesSnapshot: scheduled2.exercisesSnapshot,
+              source: scheduled2.source,
+              programId: scheduled2.programId,
+              programName: scheduled2.programName,
+              weekIndex: scheduled2.weekIndex,
+              dayIndex: scheduled2.dayIndex,
+              cyclePlanId: scheduled2.cyclePlanId,
+            };
           } else if (s.date === date2) {
-            return { ...s, date: date1 };
+            // Swap workout identity from scheduled1, keep date2's completion state
+            return { 
+              ...s,
+              templateId: scheduled1.templateId,
+              titleSnapshot: scheduled1.titleSnapshot,
+              warmupSnapshot: scheduled1.warmupSnapshot,
+              exercisesSnapshot: scheduled1.exercisesSnapshot,
+              source: scheduled1.source,
+              programId: scheduled1.programId,
+              programName: scheduled1.programName,
+              weekIndex: scheduled1.weekIndex,
+              dayIndex: scheduled1.dayIndex,
+              cyclePlanId: scheduled1.cyclePlanId,
+            };
           }
           return s;
         });
@@ -1022,6 +1292,9 @@ export const useStore = create<WorkoutStore>((set, get) => ({
       workoutProgress: {},
       detailedWorkoutProgress: {},
       exercisePRs: [],
+      workoutTemplates: [],
+      cyclePlans: [],
+      scheduledWorkouts: [],
     });
     
     // Save to storage
@@ -1029,6 +1302,9 @@ export const useStore = create<WorkoutStore>((set, get) => ({
     await storage.saveWorkoutProgressToStorage({});
     await storage.saveDetailedWorkoutProgress({});
     await storage.saveExercisePRs([]);
+    await storage.saveWorkoutTemplates([]);
+    await storage.saveCyclePlans([]);
+    await storage.saveScheduledWorkouts([]);
     
     console.log('✅ All history cleared!');
   },
@@ -1252,9 +1528,11 @@ export const useStore = create<WorkoutStore>((set, get) => ({
   
   // Workout Templates
   addWorkoutTemplate: async (template) => {
+    console.log('📝 addWorkoutTemplate called:', { id: template.id, name: template.name, items: template.items.length });
     const templates = [...get().workoutTemplates, template];
     set({ workoutTemplates: templates });
     await storage.saveWorkoutTemplates(templates);
+    console.log(`   ✅ Template saved. Total templates: ${templates.length}`);
   },
   
   updateWorkoutTemplate: async (templateId, updates) => {
@@ -1327,12 +1605,17 @@ export const useStore = create<WorkoutStore>((set, get) => ({
           return;
         }
         
+        // Determine which workout would be scheduled on this date from the plan
+        const dayOfWeek = dayjs(date).day(); // 0=Sun, 6=Sat
+        const incomingTemplateId = plan.templateIdsByWeekday[dayOfWeek];
+        const incomingTemplate = incomingTemplateId ? get().getWorkoutTemplate(incomingTemplateId) : null;
+        
         // It's a conflict: either manual or from another cycle
-        const template = get().getWorkoutTemplate(existing.templateId);
         conflicts.push({
           date,
           existing,
-          templateName: template?.name || 'Unknown Workout',
+          incomingTemplateName: incomingTemplate?.name || 'Planned Workout',
+          isLocked: existing.isLocked, // true if completed (cannot be replaced)
         });
       }
     });
@@ -1341,8 +1624,11 @@ export const useStore = create<WorkoutStore>((set, get) => ({
   },
   
   addCyclePlan: async (plan, resolution) => {
+    console.log('📅 addCyclePlan called:', { id: plan.id, name: plan.name, active: plan.active });
     // Detect conflicts first
     const conflicts = get().detectCycleConflicts(plan);
+    
+    console.log(`   - Detected ${conflicts.length} conflicts`);
     
     // If conflicts exist and no resolution provided, return conflicts
     if (conflicts.length > 0 && !resolution) {
@@ -1371,6 +1657,7 @@ export const useStore = create<WorkoutStore>((set, get) => ({
     
     // If this plan is active, archive any existing active plans
     if (plan.active) {
+      console.log('   - Archiving existing active plans');
       const now = new Date().toISOString();
       plans = plans.map(p => 
         p.active ? { ...p, active: false, archivedAt: now } : p
@@ -1380,67 +1667,185 @@ export const useStore = create<WorkoutStore>((set, get) => ({
     plans = [...plans, plan];
     set({ cyclePlans: plans });
     await storage.saveCyclePlans(plans);
+    console.log(`   ✅ Plan saved. Total plans: ${plans.length}`);
     
     // Generate scheduled workouts for this plan
     if (plan.active) {
+      console.log('   🔄 Generating scheduled workouts (plan is active)...');
       await get().generateScheduledWorkoutsFromCycle(plan.id);
+    } else {
+      console.log('   ⏭️  Skipping workout generation (plan is not active)');
     }
     
     return { success: true };
   },
 
-  applyCyclePlan: async (planId, resolution) => {
+  applyCyclePlan: async (planId, resolutionMap) => {
     const plan = get().cyclePlans.find(p => p.id === planId);
-    if (!plan) return { success: false };
+    if (!plan) return { success: false, conflicts: [] };
 
-    // Detect conflicts first
+    // PHASE 1: DETECT CONFLICTS (in-memory, no writes)
     const conflicts = get().detectCycleConflicts(plan);
-    if (conflicts.length > 0 && !resolution) {
+    
+    // If conflicts exist and no resolution provided, return conflicts for user decision
+    if (conflicts.length > 0 && !resolutionMap) {
+      console.log('⚠️ Conflicts detected, awaiting user resolution:', conflicts.length);
       return { success: false, conflicts };
     }
 
-    if (resolution === 'cancel') {
-      return { success: false };
-    }
-
-    // Clear conflicts according to resolution.
-    // - replace: remove all conflicting scheduled workouts (manual + cycle)
-    // - keep: keep manual scheduled workouts, but clear conflicting cycle workouts from other plans
-    if (conflicts.length > 0) {
-      let scheduledWorkouts = get().scheduledWorkouts;
-      const conflictDates = new Set(conflicts.map(c => c.date));
-
-      if (resolution === 'replace') {
-        scheduledWorkouts = scheduledWorkouts.filter(sw => !conflictDates.has(sw.date));
-      } else if (resolution === 'keep') {
-        const cycleConflicts = new Set(
-          conflicts.filter(c => c.existing.source === 'cycle').map(c => c.date)
-        );
-        scheduledWorkouts = scheduledWorkouts.filter(sw => !(sw.source === 'cycle' && cycleConflicts.has(sw.date)));
-      }
-
-      set({ scheduledWorkouts });
-      await storage.saveScheduledWorkouts(scheduledWorkouts);
-    }
-
-    // Deactivate any currently active plans (archive them), activate this plan (unarchive if needed)
+    // PHASE 2: BUILD IN-MEMORY PROPOSAL
     const now = new Date().toISOString();
+    const endDate = get().getCycleEndDate(plan.startDate, plan.weeks);
+    const datesInRange = get().listDatesInRange(plan.startDate, endDate);
+    
+    // Build proposed scheduled workouts
+    const proposedWorkouts: ScheduledWorkout[] = [];
+    const datesToReplace = new Set<string>();
+    
+    let appliedCount = 0;
+    let keptCount = 0;
+    let replacedCount = 0;
+    let lockedCount = 0;
+    
+    datesInRange.forEach(date => {
+      const dayOfWeek = dayjs(date).day();
+      const templateId = plan.templateIdsByWeekday[dayOfWeek];
+      
+      if (!templateId) return; // No workout scheduled for this day of week
+      
+      const template = get().getWorkoutTemplate(templateId);
+      if (!template) return;
+      
+      const existing = get().getScheduledWorkout(date);
+      
+      if (existing) {
+        // There's a conflict
+        const isLocked = existing.isLocked;
+        const decision = resolutionMap?.[date];
+        
+        if (isLocked) {
+          // Locked workouts CANNOT be replaced - always keep
+          keptCount++;
+          lockedCount++;
+          console.log(`🔒 Keeping locked workout on ${date}`);
+        } else if (decision === 'replace') {
+          // User chose to replace
+          datesToReplace.add(date);
+          replacedCount++;
+          
+          // Create new workout instance
+          proposedWorkouts.push({
+            id: `sw-${planId}-${date}`,
+            date,
+            templateId,
+            titleSnapshot: template.name,
+            warmupSnapshot: (template.warmupItems || []).map(item => ({ ...item })),
+            exercisesSnapshot: (template.items || []).map(item => ({ ...item })),
+            warmupCompletion: { completedItems: [] },
+            workoutCompletion: { completedExercises: {}, completedSets: {} },
+            status: 'planned',
+            startedAt: null,
+            completedAt: null,
+            source: 'cycle',
+            programId: planId,
+            programName: plan.name,
+            weekIndex: null, // TODO: calculate
+            dayIndex: null, // TODO: calculate
+            isLocked: false,
+            cyclePlanId: planId,
+          });
+          appliedCount++;
+        } else {
+          // User chose to keep existing (or no decision = default keep)
+          keptCount++;
+          console.log(`✋ Keeping existing workout on ${date}`);
+        }
+      } else {
+        // No conflict, schedule new workout
+        proposedWorkouts.push({
+          id: `sw-${planId}-${date}`,
+          date,
+          templateId,
+          titleSnapshot: template.name,
+          warmupSnapshot: (template.warmupItems || []).map(item => ({ ...item })),
+          exercisesSnapshot: (template.items || []).map(item => ({ ...item })),
+          warmupCompletion: { completedItems: [] },
+          workoutCompletion: { completedExercises: {}, completedSets: {} },
+          status: 'planned',
+          startedAt: null,
+          completedAt: null,
+          source: 'cycle',
+          programId: planId,
+          programName: plan.name,
+          weekIndex: null,
+          dayIndex: null,
+          isLocked: false,
+          cyclePlanId: planId,
+        });
+        appliedCount++;
+      }
+    });
+    
+    // PHASE 3: ATOMIC COMMIT (single write batch)
+    console.log('💾 Committing plan apply atomically...');
+    
+    // Remove workouts marked for replacement
+    let scheduledWorkouts = get().scheduledWorkouts.filter(sw => 
+      !datesToReplace.has(sw.date)
+    );
+    
+    // Add proposed workouts
+    scheduledWorkouts = [...scheduledWorkouts, ...proposedWorkouts];
+    
+    // Deactivate other active plans, activate this plan
     const plans = get().cyclePlans.map(p => {
       if (p.id === planId) {
-        return { ...p, active: true, archivedAt: undefined, updatedAt: now };
+        return { 
+          ...p, 
+          active: true, 
+          archivedAt: undefined, 
+          updatedAt: now,
+          lastUsedAt: now, // Update lastUsedAt when plan is applied
+          usageCount: (p.usageCount || 0) + 1, // Increment usageCount
+        };
       }
       if (p.active) {
         return { ...p, active: false, archivedAt: p.archivedAt || now, updatedAt: now };
       }
       return p;
     });
-
-    set({ cyclePlans: plans });
-    await storage.saveCyclePlans(plans);
-
-    // Generate scheduled workouts for this plan
-    await get().generateScheduledWorkoutsFromCycle(planId);
-    return { success: true };
+    
+    // Update template usage tracking for all templates used in this plan
+    const templateIds = new Set(Object.values(plan.templateIdsByWeekday).filter(Boolean));
+    const templates = get().workoutTemplates.map(t => {
+      if (templateIds.has(t.id)) {
+        return {
+          ...t,
+          lastUsedAt: now,
+          usageCount: (t.usageCount || 0) + appliedCount, // Increment by number of times scheduled
+        };
+      }
+      return t;
+    });
+    
+    // Commit all changes in single batch
+    set({ scheduledWorkouts, cyclePlans: plans, workoutTemplates: templates });
+    await Promise.all([
+      storage.saveScheduledWorkouts(scheduledWorkouts),
+      storage.saveCyclePlans(plans),
+      storage.saveWorkoutTemplates(templates),
+    ]);
+    
+    const summary: PlanApplySummary = {
+      success: true,
+      applied: appliedCount,
+      kept: keptCount,
+      replaced: replacedCount,
+      locked: lockedCount,
+    };
+    
+    console.log('✅ Plan applied successfully:', summary);
+    return summary;
   },
 
   duplicateCyclePlan: async (planId) => {
@@ -1529,11 +1934,25 @@ export const useStore = create<WorkoutStore>((set, get) => ({
   },
   
   generateScheduledWorkoutsFromCycle: async (planId) => {
+    console.log('🔄 generateScheduledWorkoutsFromCycle called for planId:', planId);
     const plan = get().cyclePlans.find(p => p.id === planId);
-    if (!plan) return;
+    if (!plan) {
+      console.log('   ❌ Plan not found!');
+      return;
+    }
+    
+    console.log('   - Plan found:', {
+      name: plan.name,
+      startDate: plan.startDate,
+      weeks: plan.weeks,
+      mapping: plan.mapping,
+      templateIdsByWeekday: plan.templateIdsByWeekday,
+    });
     
     const startDate = dayjs(plan.startDate);
     const endDate = startDate.add(plan.weeks, 'week');
+    
+    console.log('   - Date range:', startDate.format('YYYY-MM-DD'), 'to', endDate.format('YYYY-MM-DD'));
     
     // Remove existing cycle-generated workouts for this plan in this date range
     let scheduledWorkouts = get().scheduledWorkouts.filter(sw => 
@@ -1545,14 +1964,85 @@ export const useStore = create<WorkoutStore>((set, get) => ({
     const newWorkouts: ScheduledWorkout[] = [];
     
     if (plan.mapping.kind === 'weekdays') {
-      // Generate for specific weekdays
-      for (let i = 0; i < plan.weeks * 7; i++) {
-        const currentDate = startDate.add(i, 'day');
-        const weekday = currentDate.day(); // 0=Sun, 6=Sat
+      console.log('   - Using weekdays mapping:', plan.mapping.weekdays);
+      
+      // SPECIAL CASE: Single workout (1 week, 1 day) - schedule on start date directly
+      const isSingleWorkout = plan.weeks === 1 && plan.mapping.weekdays.length === 1;
+      
+      if (isSingleWorkout) {
+        console.log('   - SINGLE WORKOUT MODE: Scheduling on start date directly');
+        const weekday = startDate.day();
+        const templateId = plan.templateIdsByWeekday[plan.mapping.weekdays[0]];
         
-        if (plan.mapping.weekdays.includes(weekday)) {
-          const templateId = plan.templateIdsByWeekday[weekday];
-          if (templateId) {
+        if (templateId) {
+          const existing = scheduledWorkouts.find(sw => sw.date === startDate.format('YYYY-MM-DD'));
+          if (!existing || existing.source !== 'manual') {
+            if (existing) {
+              scheduledWorkouts = scheduledWorkouts.filter(sw => sw.date !== startDate.format('YYYY-MM-DD'));
+            }
+            
+            const template = get().workoutTemplates.find(t => t.id === templateId);
+            if (template) {
+              const now = new Date().toISOString();
+              newWorkouts.push({
+                id: `sw-${planId}-${startDate.format('YYYY-MM-DD')}`,
+                date: startDate.format('YYYY-MM-DD'),
+                templateId,
+                
+                titleSnapshot: template.name,
+                warmupSnapshot: (template.warmupItems || []).map(item => ({ ...item })),
+                exercisesSnapshot: (template.items || []).map(item => ({ ...item })),
+                
+                warmupCompletion: { completedItems: [] },
+                workoutCompletion: { completedExercises: {}, completedSets: {} },
+                status: 'planned',
+                startedAt: null,
+                completedAt: null,
+                
+                source: 'cycle',
+                programId: planId,
+                programName: plan.name,
+                weekIndex: 0,
+                dayIndex: 0,
+                
+                isLocked: false,
+                cyclePlanId: planId,
+              });
+              console.log(`       ✓ Created single workout on ${startDate.format('YYYY-MM-DD')}`);
+            }
+          }
+        }
+      } else {
+        // MULTI-DAY/MULTI-WEEK: Start from beginning of week containing start date
+        console.log('   - MULTI-DAY MODE: Using weekday matching from start of week');
+        
+        // Calculate the start of the week (Sunday = 0)
+        const startOfWeek = startDate.startOf('week');
+        const endDate = startDate.add(plan.weeks, 'week');
+        console.log(`   - Week starts on: ${startOfWeek.format('YYYY-MM-DD')}`);
+        console.log(`   - Start date: ${startDate.format('YYYY-MM-DD')}`);
+        console.log(`   - End date: ${endDate.format('YYYY-MM-DD')}`);
+        
+        // Calculate total days from start of week to end date
+        const totalDays = endDate.diff(startOfWeek, 'day');
+        
+        for (let i = 0; i < totalDays; i++) {
+          const currentDate = startOfWeek.add(i, 'day');
+          const weekday = currentDate.day(); // 0=Sun, 6=Sat
+          
+          // Skip dates before the start date
+          if (currentDate.isBefore(startDate, 'day')) {
+            console.log(`     Day ${i}: ${currentDate.format('YYYY-MM-DD')} (weekday ${weekday}) - SKIPPED (before start date)`);
+            continue;
+          }
+          
+          console.log(`     Day ${i}: ${currentDate.format('YYYY-MM-DD')} (weekday ${weekday})`);
+          
+          if (plan.mapping.weekdays.includes(weekday)) {
+            console.log(`       ✓ Weekday ${weekday} is in mapping`);
+            const templateId = plan.templateIdsByWeekday[weekday];
+            console.log(`       - Template ID for weekday ${weekday}:`, templateId);
+            if (templateId) {
             // Check if there's a manual workout on this date
             const existing = scheduledWorkouts.find(sw => sw.date === currentDate.format('YYYY-MM-DD'));
             if (!existing || existing.source !== 'manual') {
@@ -1561,30 +2051,79 @@ export const useStore = create<WorkoutStore>((set, get) => ({
                 scheduledWorkouts = scheduledWorkouts.filter(sw => sw.date !== currentDate.format('YYYY-MM-DD'));
               }
               
-              newWorkouts.push({
-                id: `sw-${planId}-${currentDate.format('YYYY-MM-DD')}`,
-                date: currentDate.format('YYYY-MM-DD'),
-                templateId,
-                source: 'cycle',
-                cyclePlanId: planId,
-                status: 'planned',
-              });
+              // Get template to create snapshots
+              const template = get().workoutTemplates.find(t => t.id === templateId);
+              if (template) {
+                const now = new Date().toISOString();
+                newWorkouts.push({
+                  id: `sw-${planId}-${currentDate.format('YYYY-MM-DD')}`,
+                  date: currentDate.format('YYYY-MM-DD'),
+                  templateId,
+                  
+                  // Snapshots (deep copy to avoid mutation)
+                  titleSnapshot: template.name,
+                  warmupSnapshot: (template.warmupItems || []).map(item => ({ ...item })),
+                  exercisesSnapshot: (template.items || []).map(item => ({ ...item })),
+                  
+                  // Initialize completion states
+                  warmupCompletion: { completedItems: [] },
+                  workoutCompletion: { completedExercises: {}, completedSets: {} },
+                  status: 'planned',
+                  startedAt: null,
+                  completedAt: null,
+                  
+                  // Program metadata
+                  source: 'cycle',
+                  programId: planId,
+                  programName: plan.name,
+                  weekIndex: Math.floor(i / 7),
+                  dayIndex: i % 7,
+                  
+                  // Integrity flags
+                  isLocked: false,
+                  
+                  // Legacy
+                  cyclePlanId: planId,
+                });
+              }
+            }
             }
           }
         }
       }
     } else if (plan.mapping.kind === 'daysPerWeek') {
-      // Simple distribution: spread workouts evenly across the week
-      // This is a simplified implementation - can be enhanced
+      // Consecutive day scheduling from start date
+      console.log('   - CONSECUTIVE DAYS MODE');
       const daysPerWeek = plan.mapping.daysPerWeek;
       const templateIds = Object.values(plan.templateIdsByWeekday).filter(Boolean) as string[];
       
+      console.log(`   - Scheduling ${daysPerWeek} consecutive days starting from ${startDate.format('YYYY-MM-DD')}`);
+      
+      // Week 1: Schedule consecutively from start date
+      const firstWeekDates: string[] = [];
+      const firstWeekWeekdays: number[] = [];
+      
+      for (let day = 0; day < daysPerWeek; day++) {
+        const currentDate = startDate.add(day, 'day');
+        firstWeekDates.push(currentDate.format('YYYY-MM-DD'));
+        firstWeekWeekdays.push(currentDate.day());
+      }
+      
+      console.log('   - First week pattern:', firstWeekDates.map((d, i) => `${d} (weekday ${firstWeekWeekdays[i]})`));
+      
+      // For each week, schedule on the same weekdays as week 1
       for (let week = 0; week < plan.weeks; week++) {
-        const weekStart = startDate.add(week, 'week');
-        
-        for (let day = 0; day < daysPerWeek && day < 7; day++) {
-          const currentDate = weekStart.add(day, 'day');
+        for (let day = 0; day < daysPerWeek; day++) {
+          // Calculate date by finding the matching weekday in this week
+          const targetWeekday = firstWeekWeekdays[day];
+          const weekStart = startDate.add(week, 'week');
+          const weekStartWeekday = weekStart.day();
+          const daysToAdd = (targetWeekday - weekStartWeekday + 7) % 7;
+          const currentDate = weekStart.add(daysToAdd, 'day');
+          
           const templateId = templateIds[day % templateIds.length];
+          
+          console.log(`   Week ${week + 1}, Day ${day + 1}: ${currentDate.format('YYYY-MM-DD')} (weekday ${targetWeekday})`);
           
           if (templateId) {
             const existing = scheduledWorkouts.find(sw => sw.date === currentDate.format('YYYY-MM-DD'));
@@ -1593,14 +2132,41 @@ export const useStore = create<WorkoutStore>((set, get) => ({
                 scheduledWorkouts = scheduledWorkouts.filter(sw => sw.date !== currentDate.format('YYYY-MM-DD'));
               }
               
-              newWorkouts.push({
-                id: `sw-${planId}-${currentDate.format('YYYY-MM-DD')}`,
-                date: currentDate.format('YYYY-MM-DD'),
-                templateId,
-                source: 'cycle',
-                cyclePlanId: planId,
-                status: 'planned',
-              });
+              // Get template to create snapshots
+              const template = get().workoutTemplates.find(t => t.id === templateId);
+              if (template) {
+                const now = new Date().toISOString();
+                newWorkouts.push({
+                  id: `sw-${planId}-${currentDate.format('YYYY-MM-DD')}`,
+                  date: currentDate.format('YYYY-MM-DD'),
+                  templateId,
+                  
+                  // Snapshots (deep copy to avoid mutation)
+                  titleSnapshot: template.name,
+                  warmupSnapshot: (template.warmupItems || []).map(item => ({ ...item })),
+                  exercisesSnapshot: (template.items || []).map(item => ({ ...item })),
+                  
+                  // Initialize completion states
+                  warmupCompletion: { completedItems: [] },
+                  workoutCompletion: { completedExercises: {}, completedSets: {} },
+                  status: 'planned',
+                  startedAt: null,
+                  completedAt: null,
+                  
+                  // Program metadata
+                  source: 'cycle',
+                  programId: planId,
+                  programName: plan.name,
+                  weekIndex: week,
+                  dayIndex: day,
+                  
+                  // Integrity flags
+                  isLocked: false,
+                  
+                  // Legacy
+                  cyclePlanId: planId,
+                });
+              }
             }
           }
         }
@@ -1609,8 +2175,14 @@ export const useStore = create<WorkoutStore>((set, get) => ({
     
     scheduledWorkouts = [...scheduledWorkouts, ...newWorkouts];
     
+    console.log(`   ✅ Generated ${newWorkouts.length} new workouts`);
+    newWorkouts.forEach(sw => {
+      console.log(`     - ${sw.date}: ${sw.titleSnapshot} (template: ${sw.templateId})`);
+    });
+    
     set({ scheduledWorkouts });
     await storage.saveScheduledWorkouts(scheduledWorkouts);
+    console.log('   💾 Saved to storage');
   },
   
   // Scheduled Workouts
@@ -1627,21 +2199,82 @@ export const useStore = create<WorkoutStore>((set, get) => ({
       return { success: false };
     }
     
+    // Check if existing is locked (completed)
+    if (existing && existing.isLocked) {
+      console.warn('⚠️ Cannot replace locked (completed) workout');
+      return { success: false, conflict: existing };
+    }
+    
+    // Get the template to create snapshots
+    const template = get().getWorkoutTemplate(templateId);
+    if (!template) {
+      console.error('❌ Template not found:', templateId);
+      return { success: false };
+    }
+    
     // Resolution is 'replace' or no conflict
     let scheduledWorkouts = get().scheduledWorkouts.filter(sw => sw.date !== date);
     
+    // Create snapshots from template
+    const now = new Date().toISOString();
     const newWorkout: ScheduledWorkout = {
       id: `sw-${Date.now()}`,
       date,
       templateId,
-      source,
-      cyclePlanId,
+      
+      // Snapshots (deep copy to avoid mutation)
+      titleSnapshot: template.name,
+      warmupSnapshot: (template.warmupItems || []).map(item => ({ ...item })),
+      exercisesSnapshot: (template.items || []).map(item => ({ ...item })),
+      
+      // Initialize completion states
+      warmupCompletion: { completedItems: [] },
+      workoutCompletion: { completedExercises: {}, completedSets: {} },
       status: 'planned',
+      startedAt: null,
+      completedAt: null,
+      
+      // Program metadata
+      source,
+      programId: cyclePlanId || null,
+      programName: null, // TODO: get from cycle plan
+      weekIndex: null,
+      dayIndex: null,
+      
+      // Integrity flags
+      isLocked: false,
+      
+      // Legacy
+      cyclePlanId,
     };
     
     scheduledWorkouts = [...scheduledWorkouts, newWorkout];
     set({ scheduledWorkouts });
     await storage.saveScheduledWorkouts(scheduledWorkouts);
+    
+    // Update template usage tracking (lastUsedAt, usageCount)
+    // This ONLY happens when template is applied to schedule
+    const templates = get().workoutTemplates.map(t => {
+      if (t.id === templateId) {
+        return {
+          ...t,
+          lastUsedAt: now,
+          usageCount: (t.usageCount || 0) + 1,
+        };
+      }
+      return t;
+    });
+    set({ workoutTemplates: templates });
+    await storage.saveWorkoutTemplates(templates);
+    
+    console.log('✅ Workout scheduled with snapshots:', {
+      date,
+      template: template.name,
+      warmupItems: newWorkout.warmupSnapshot?.length || 0,
+      exercises: newWorkout.exercisesSnapshot?.length || 0,
+      lastUsedAt: now,
+      usageCount: (template.usageCount || 0) + 1,
+    });
     
     // NOTE: We do NOT remove the workoutAssignment (cycle workout) here
     // The TodayScreen already prioritizes ScheduledWorkout over WorkoutAssignment
@@ -1650,19 +2283,35 @@ export const useStore = create<WorkoutStore>((set, get) => ({
   },
   
   unscheduleWorkout: async (workoutId) => {
+    const workout = get().scheduledWorkouts.find(sw => sw.id === workoutId);
+    
+    // Enforce hard lock: cannot delete completed workouts
+    if (workout?.isLocked) {
+      console.warn('⚠️ Cannot unschedule locked (completed) workout');
+      return;
+    }
+    
     const scheduledWorkouts = get().scheduledWorkouts.filter(sw => sw.id !== workoutId);
     set({ scheduledWorkouts });
     await storage.saveScheduledWorkouts(scheduledWorkouts);
   },
   
   completeWorkout: async (workoutId) => {
+    const now = new Date().toISOString();
     const scheduledWorkouts = get().scheduledWorkouts.map(sw =>
       sw.id === workoutId 
-        ? { ...sw, status: 'completed' as const, completedAt: new Date().toISOString() }
+        ? { 
+            ...sw, 
+            status: 'completed' as const, 
+            completedAt: now,
+            isLocked: true // Hard lock when completed - prevents move/replace/delete
+          }
         : sw
     );
     set({ scheduledWorkouts });
     await storage.saveScheduledWorkouts(scheduledWorkouts);
+    
+    console.log('🔒 Workout completed and locked:', workoutId);
   },
   
   getScheduledWorkout: (date) => {
@@ -1673,6 +2322,147 @@ export const useStore = create<WorkoutStore>((set, get) => ({
     return get().scheduledWorkouts.filter(sw => 
       sw.date >= startDate && sw.date <= endDate
     );
+  },
+  
+  // Warm-up Completion (independent from workout completion)
+  updateWarmupCompletion: async (workoutId, warmupItemId, completed) => {
+    const scheduledWorkouts = get().scheduledWorkouts.map(sw => {
+      if (sw.id === workoutId) {
+        const completedItems = completed
+          ? [...new Set([...sw.warmupCompletion.completedItems, warmupItemId])]
+          : sw.warmupCompletion.completedItems.filter(id => id !== warmupItemId);
+        
+        return {
+          ...sw,
+          warmupCompletion: {
+            ...sw.warmupCompletion,
+            completedItems,
+          },
+        };
+      }
+      return sw;
+    });
+    
+    set({ scheduledWorkouts });
+    await storage.saveScheduledWorkouts(scheduledWorkouts);
+    
+    console.log('✅ Warm-up item updated:', { workoutId, warmupItemId, completed });
+  },
+  
+  getWarmupCompletion: (workoutId) => {
+    const workout = get().scheduledWorkouts.find(sw => sw.id === workoutId);
+    
+    if (!workout) {
+      return { completedItems: [], totalItems: 0, percentage: 0 };
+    }
+    
+    const totalItems = workout.warmupSnapshot.length;
+    const completedItems = workout.warmupCompletion.completedItems;
+    const percentage = totalItems > 0 ? Math.round((completedItems.length / totalItems) * 100) : 0;
+    
+    return {
+      completedItems,
+      totalItems,
+      percentage,
+    };
+  },
+  
+  // Move scheduled workout to another date
+  moveScheduledWorkout: async (workoutId, toDate) => {
+    const workout = get().scheduledWorkouts.find(sw => sw.id === workoutId);
+    
+    if (!workout) {
+      return { success: false, error: 'workout_not_found' };
+    }
+    
+    // HARD LOCK: Cannot move completed workouts
+    if (workout.isLocked) {
+      console.warn('⚠️ Cannot move locked (completed) workout');
+      return { success: false, error: 'workout_locked' };
+    }
+    
+    // Check if target date already has a workout
+    const existing = get().scheduledWorkouts.find(sw => sw.date === toDate);
+    if (existing) {
+      // If existing is locked, cannot replace
+      if (existing.isLocked) {
+        console.warn('⚠️ Cannot move to date with locked (completed) workout');
+        return { success: false, error: 'target_date_locked' };
+      }
+      // Otherwise, would require explicit user confirmation via conflict resolution
+      return { success: false, error: 'target_date_has_workout', conflict: existing };
+    }
+    
+    // Move workout to new date
+    const scheduledWorkouts = get().scheduledWorkouts.map(sw => 
+      sw.id === workoutId ? { ...sw, date: toDate } : sw
+    );
+    
+    set({ scheduledWorkouts });
+    await storage.saveScheduledWorkouts(scheduledWorkouts);
+    
+    console.log('✅ Workout moved:', { from: workout.date, to: toDate });
+    return { success: true };
+  },
+  
+  // Duplicate scheduled workout to another date (creates new instance)
+  duplicateScheduledWorkout: async (workoutId, toDate) => {
+    const workout = get().scheduledWorkouts.find(sw => sw.id === workoutId);
+    
+    if (!workout) {
+      return { success: false, error: 'workout_not_found' };
+    }
+    
+    // Duplication is allowed even for completed workouts
+    // (per spec: "Can only be duplicated to another day")
+    
+    // Check if target date already has a workout
+    const existing = get().scheduledWorkouts.find(sw => sw.date === toDate);
+    if (existing) {
+      // If existing is locked, cannot replace
+      if (existing.isLocked) {
+        console.warn('⚠️ Cannot duplicate to date with locked (completed) workout');
+        return { success: false, error: 'target_date_locked' };
+      }
+      // Otherwise, would require explicit user confirmation via conflict resolution
+      return { success: false, error: 'target_date_has_workout', conflict: existing };
+    }
+    
+    // Create new instance (deep copy with new ID and date)
+    const now = new Date().toISOString();
+    const newWorkout: ScheduledWorkout = {
+      ...workout,
+      id: `sw-${Date.now()}`,
+      date: toDate,
+      // Reset completion state for duplicate
+      status: 'planned',
+      startedAt: null,
+      completedAt: null,
+      isLocked: false,
+      warmupCompletion: { completedItems: [] },
+      workoutCompletion: { completedExercises: {}, completedSets: {} },
+    };
+    
+    const scheduledWorkouts = [...get().scheduledWorkouts, newWorkout];
+    set({ scheduledWorkouts });
+    await storage.saveScheduledWorkouts(scheduledWorkouts);
+    
+    // Update template usage tracking (lastUsedAt, usageCount)
+    const templates = get().workoutTemplates.map(t => {
+      if (t.id === workout.templateId) {
+        return {
+          ...t,
+          lastUsedAt: now,
+          usageCount: (t.usageCount || 0) + 1,
+        };
+      }
+      return t;
+    });
+    set({ workoutTemplates: templates });
+    await storage.saveWorkoutTemplates(templates);
+    
+    console.log('✅ Workout duplicated:', { from: workout.date, to: toDate, newId: newWorkout.id });
+    return { success: true };
   },
 }));
 

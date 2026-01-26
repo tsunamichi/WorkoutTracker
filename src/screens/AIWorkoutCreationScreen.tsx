@@ -5,7 +5,7 @@ import { useNavigation, useRoute } from '@react-navigation/native';
 import * as Clipboard from 'expo-clipboard';
 import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS, CARDS } from '../constants';
 import { useStore } from '../store';
-import { IconArrowLeft, IconChevronDown, IconMenu } from '../components/icons';
+import { IconClose, IconChevronDown, IconMenu } from '../components/icons';
 import { BottomDrawer } from '../components/common/BottomDrawer';
 import dayjs from 'dayjs';
 import isoWeek from 'dayjs/plugin/isoWeek';
@@ -248,7 +248,7 @@ export function AIWorkoutCreationScreen() {
         });
 
         Alert.alert(t('workoutSavedToLibrary'), t('workoutSavedToLibrary'));
-        navigation.navigate('Tabs' as never, { initialTab: 'Training' } as never);
+        navigation.goBack();
         return;
       }
 
@@ -304,6 +304,16 @@ export function AIWorkoutCreationScreen() {
         return;
       }
 
+      // Plan was added successfully without conflicts - now apply it to the schedule
+      const { applyCyclePlan } = useStore.getState();
+      const applyResult = await applyCyclePlan(planId);
+      
+      if (applyResult.success) {
+        Alert.alert(t('planAppliedSuccessfully'));
+      } else {
+        Alert.alert(t('error'), t('failedToApplyPlan'));
+      }
+
       navigation.navigate('Tabs' as never, { initialTab: 'Schedule' } as never);
     } catch (error) {
       console.error('Error creating cycle:', error);
@@ -322,7 +332,7 @@ export function AIWorkoutCreationScreen() {
           {/* Back Button and Menu Button */}
           <View style={styles.topBar}>
               <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-                <IconArrowLeft size={24} color={COLORS.text} />
+                <IconClose size={24} color={COLORS.text} />
               </TouchableOpacity>
               
               <TouchableOpacity style={styles.menuButton} activeOpacity={1}>

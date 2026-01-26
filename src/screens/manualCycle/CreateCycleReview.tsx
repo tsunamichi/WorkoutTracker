@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -7,6 +7,8 @@ import {
   ScrollView,
   Platform,
   Alert,
+  Modal,
+  Animated,
 } from 'react-native';
 import Svg, { Circle, Path } from 'react-native-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -21,7 +23,7 @@ import {
   generateId,
 } from '../../utils/manualCycleUtils';
 import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS } from '../../constants';
-import { IconArrowLeft } from '../../components/icons';
+import { IconClose } from '../../components/icons';
 import { Weekday } from '../../types/manualCycle';
 import { useTranslation } from '../../i18n/useTranslation';
 
@@ -45,15 +47,72 @@ export function CreateCycleReview({ navigation }: CreateCycleReviewProps) {
   const mainStore = useStore();
 
   const [showDatePicker, setShowDatePicker] = useState(false);
+  const [tempDate, setTempDate] = useState<Date>(new Date());
+  const slideAnim = useRef(new Animated.Value(400)).current;
+  const fadeAnim = useRef(new Animated.Value(0)).current;
 
   const sortedDays = selectedDaysSorted();
   const hasActiveCycle = mainStore.cycles.some((c) => c.status === 'active');
 
-  const handleDateChange = (event: any, selectedDate?: Date) => {
-    setShowDatePicker(Platform.OS === 'ios');
-    if (selectedDate) {
-      setStartDate(dayjs(selectedDate).format('YYYY-MM-DD'));
+  useEffect(() => {
+    if (showDatePicker) {
+      // Animate in
+      Animated.parallel([
+        Animated.timing(fadeAnim, {
+          toValue: 1,
+          duration: 300,
+          useNativeDriver: true,
+        }),
+        Animated.spring(slideAnim, {
+          toValue: 0,
+          damping: 20,
+          stiffness: 90,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    } else {
+      // Animate out
+      Animated.parallel([
+        Animated.timing(fadeAnim, {
+          toValue: 0,
+          duration: 200,
+          useNativeDriver: true,
+        }),
+        Animated.timing(slideAnim, {
+          toValue: 400,
+          duration: 200,
+          useNativeDriver: true,
+        }),
+      ]).start();
     }
+  }, [showDatePicker]);
+
+  const handleOpenDatePicker = () => {
+    setTempDate(startDate ? dayjs(startDate).toDate() : new Date());
+    setShowDatePicker(true);
+  };
+
+  const handleDateChange = (event: any, selectedDate?: Date) => {
+    if (Platform.OS === 'android') {
+      setShowDatePicker(false);
+      if (event.type === 'set' && selectedDate) {
+        setStartDate(dayjs(selectedDate).format('YYYY-MM-DD'));
+      }
+    } else {
+      // iOS: update temp date while user is scrolling
+      if (selectedDate) {
+        setTempDate(selectedDate);
+      }
+    }
+  };
+
+  const handleConfirmDate = () => {
+    setStartDate(dayjs(tempDate).format('YYYY-MM-DD'));
+    setShowDatePicker(false);
+  };
+
+  const handleCancelDate = () => {
+    setShowDatePicker(false);
   };
 
   const handleEditDay = (weekday: Weekday) => {
@@ -65,6 +124,10 @@ export function CreateCycleReview({ navigation }: CreateCycleReviewProps) {
       Alert.alert(t('startDateRequiredTitle'), t('startDateRequiredMessage'));
       return;
     }
+
+    console.log('🎯 Creating cycle with startDate:', startDate);
+    console.log('   - weeks:', weeks);
+    console.log('   - frequencyDays:', sortedDays);
 
     // NEW: Create WorkoutTemplates and CyclePlan
     const templateIdsByWeekday: Partial<Record<number, string>> = {};
@@ -83,12 +146,15 @@ export function CreateCycleReview({ navigation }: CreateCycleReviewProps) {
       const templateId = `wt-${Date.now()}-${workout.weekday}`;
       const weekdayNum = weekdayMap[workout.weekday];
       
+      console.log(`   - Creating template for ${workout.weekday} (weekday ${weekdayNum}):`, templateId);
+      
       // Convert draft exercise blocks to WorkoutTemplateExercise format
       const items = workout.exercises.map((exerciseBlock, index) => {
         // Get the settings for week 0 (first week)
         const week0Settings = exerciseBlock.weeks[0] || {};
         
         return {
+          id: `wte-${Date.now()}-${index}`,
           exerciseId: exerciseBlock.exerciseId,
           order: index,
           sets: week0Settings.sets ?? 3,
@@ -100,25 +166,31 @@ export function CreateCycleReview({ navigation }: CreateCycleReviewProps) {
 
       await mainStore.addWorkoutTemplate({
         id: templateId,
+        kind: 'workout',
         name: workout.name || formatWeekdayFull(workout.weekday),
+        warmupItems: [],
+        items,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
-        items,
+        lastUsedAt: null,
+        usageCount: 0,
+        source: 'user',
       });
 
       templateIdsByWeekday[weekdayNum] = templateId;
     }
 
-    // Create the CyclePlan
+    // Create the CyclePlan using consecutive day scheduling
     const planId = `cp-${Date.now()}`;
+    const daysPerWeek = sortedDays.length;
     const newPlan = {
       id: planId,
       name: `${weeks}-Week Plan`,
       startDate,
       weeks,
       mapping: {
-        kind: 'weekdays' as const,
-        weekdays: sortedDays.map(day => weekdayMap[day]),
+        kind: 'daysPerWeek' as const,
+        daysPerWeek,
       },
       templateIdsByWeekday,
       active: true,
@@ -126,18 +198,32 @@ export function CreateCycleReview({ navigation }: CreateCycleReviewProps) {
       updatedAt: new Date().toISOString(),
     };
 
-    // Check for conflicts
+    console.log('📋 Created plan:', {
+      id: planId,
+      name: newPlan.name,
+      startDate: newPlan.startDate,
+      weeks: newPlan.weeks,
+      daysPerWeek: newPlan.mapping.daysPerWeek,
+      templateIdsByWeekday: newPlan.templateIdsByWeekday,
+    });
+
+    // Add the cycle plan (this also generates scheduled workouts if active)
     const result = await mainStore.addCyclePlan(newPlan);
+    
+    console.log('✅ addCyclePlan result:', result);
     
     if (!result.success && result.conflicts && result.conflicts.length > 0) {
       // Navigate to conflicts screen
+      console.log('⚠️ Conflicts detected, navigating to conflicts screen');
       navigation.navigate('CycleConflicts', {
         plan: newPlan,
         conflicts: result.conflicts,
         planId: newPlan.id,
       });
     } else {
-      // No conflicts, cycle was created successfully
+      // Success!
+      console.log('✅ Cycle created and scheduled successfully!');
+      
       resetDraft();
       navigation.navigate('Tabs', { initialTab: 'Schedule' } as any);
     }
@@ -163,7 +249,8 @@ export function CreateCycleReview({ navigation }: CreateCycleReviewProps) {
                     style: 'destructive',
                     onPress: () => {
                       resetDraft();
-                      navigation.navigate('Tabs');
+                      // Pop all screens to return to Tabs with back animation
+                      navigation.popToTop();
                     },
                   },
                 ]
@@ -172,7 +259,7 @@ export function CreateCycleReview({ navigation }: CreateCycleReviewProps) {
             style={styles.backButton}
             activeOpacity={1}
           >
-            <IconArrowLeft size={24} color={COLORS.text} />
+            <IconClose size={24} color={COLORS.text} />
           </TouchableOpacity>
           <View style={styles.headerTitleRow}>
             <Text style={styles.headerTitle}>{t('reviewCycle')}</Text>
@@ -182,7 +269,7 @@ export function CreateCycleReview({ navigation }: CreateCycleReviewProps) {
                 <View style={styles.progressIndicator}>
                   <Text style={styles.progressText}>4/4</Text>
                   <Svg height="16" width="16" viewBox="0 0 16 16" style={styles.progressCircle}>
-                    <Circle cx="8" cy="8" r="8" fill={COLORS.backgroundCanvas} />
+                    <Circle cx="8" cy="8" r="8" fill={COLORS.activeCard} />
                     {progress > 0 ? (
                       <Path
                         d={`M 8 8 L 8 0 A 8 8 0 ${progress > 0.5 ? 1 : 0} 1 ${
@@ -223,7 +310,7 @@ export function CreateCycleReview({ navigation }: CreateCycleReviewProps) {
             <Text style={styles.sectionTitle}>{t('startDate')}</Text>
             <TouchableOpacity
               style={styles.datePickerButton}
-              onPress={() => setShowDatePicker(true)}
+              onPress={handleOpenDatePicker}
               activeOpacity={1}
             >
               <Text style={styles.datePickerText}>
@@ -316,8 +403,50 @@ export function CreateCycleReview({ navigation }: CreateCycleReviewProps) {
         </View>
       </View>
 
-      {/* Date Picker */}
-      {showDatePicker && (
+      {/* Date Picker Modal - iOS Native Style */}
+      {Platform.OS === 'ios' && showDatePicker && (
+        <Modal
+          visible={showDatePicker}
+          transparent={true}
+          animationType="none"
+          onRequestClose={handleCancelDate}
+        >
+          <Animated.View style={[styles.modalOverlay, { opacity: fadeAnim }]}>
+            <TouchableOpacity 
+              style={styles.modalBackdrop} 
+              activeOpacity={1} 
+              onPress={handleCancelDate}
+            />
+          </Animated.View>
+          <Animated.View style={[
+            styles.datePickerModalContainer,
+            { transform: [{ translateY: slideAnim }] }
+          ]}>
+            <View style={styles.datePickerModal}>
+              <View style={styles.datePickerHeader}>
+                <TouchableOpacity onPress={handleCancelDate} activeOpacity={1}>
+                  <Text style={styles.datePickerCancelButton}>{t('cancel')}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={handleConfirmDate} activeOpacity={1}>
+                  <Text style={styles.datePickerDoneButton}>{t('done')}</Text>
+                </TouchableOpacity>
+              </View>
+              <DateTimePicker
+                value={tempDate}
+                mode="date"
+                display="spinner"
+                onChange={handleDateChange}
+                minimumDate={new Date()}
+                textColor={COLORS.text}
+                themeVariant="light"
+              />
+            </View>
+          </Animated.View>
+        </Modal>
+      )}
+
+      {/* Android Date Picker */}
+      {Platform.OS === 'android' && showDatePicker && (
         <DateTimePicker
           value={startDate ? dayjs(startDate).toDate() : new Date()}
           mode="date"
@@ -529,6 +658,43 @@ const styles = StyleSheet.create({
   },
   createButtonTextDisabled: {
     color: COLORS.textMeta,
+  },
+  modalOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0, 0, 0, 0.4)',
+  },
+  modalBackdrop: {
+    flex: 1,
+  },
+  datePickerModalContainer: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+  },
+  datePickerModal: {
+    backgroundColor: COLORS.backgroundCanvas,
+    borderTopLeftRadius: BORDER_RADIUS.lg,
+    borderTopRightRadius: BORDER_RADIUS.lg,
+    paddingBottom: 34,
+  },
+  datePickerHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: SPACING.md,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+  },
+  datePickerCancelButton: {
+    fontSize: 17,
+    color: COLORS.text,
+  },
+  datePickerDoneButton: {
+    fontSize: 17,
+    fontWeight: '600',
+    color: COLORS.accentPrimary,
   },
 });
 

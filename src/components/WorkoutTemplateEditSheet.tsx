@@ -308,7 +308,7 @@ const styles = StyleSheet.create({
     marginTop: SPACING.lg,
     paddingTop: SPACING.lg,
     borderTopWidth: 1,
-    borderTopColor: COLORS.border,
+    borderTopColor: COLORS.borderDimmed,
   },
   deleteButton: {
     backgroundColor: COLORS.error,

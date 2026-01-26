@@ -103,15 +103,39 @@ export const ExerciseEditorBottomSheet = ({
 
   const handleUpdateField = useCallback(
     (field: keyof ExerciseWeekPlan, value: any) => {
-      updateExerciseWeekPlan(weekday, exerciseBlock.id, selectedWeekIndex, {
-        [field]: value,
-      });
+      // isTimeBased affects ALL weeks
+      if (field === 'isTimeBased') {
+        // Update all weeks with the new isTimeBased value
+        for (let i = 0; i < weeks; i++) {
+          const weekPlan = liveExerciseBlock.weeks[i] || {};
+          const updates: Partial<ExerciseWeekPlan> = { isTimeBased: value };
+          
+          // When toggling time-based ON, round reps to nearest multiple of 5
+          if (value === true) {
+            const currentReps = parseInt(weekPlan.reps || '8', 10);
+            const roundedReps = Math.ceil(currentReps / 5) * 5;
+            updates.reps = `${Math.max(5, roundedReps)}`;
+          }
+          
+          updateExerciseWeekPlan(weekday, exerciseBlock.id, i, updates);
+        }
+        return;
+      }
+      
+      // For other fields (sets, reps, weight), cascade from current week to following weeks
+      const updates: Partial<ExerciseWeekPlan> = { [field]: value };
+      
+      for (let i = selectedWeekIndex; i < weeks; i++) {
+        updateExerciseWeekPlan(weekday, exerciseBlock.id, i, updates);
+      }
     },
     [
       weekday,
       exerciseBlock.id,
       updateExerciseWeekPlan,
       selectedWeekIndex,
+      weeks,
+      liveExerciseBlock.weeks,
     ]
   );
 
@@ -191,12 +215,6 @@ export const ExerciseEditorBottomSheet = ({
                           { opacity: tabActiveAnims.current[index] || 0 },
                         ]}
                       />
-                      {isActive && (
-                        <>
-                          <View style={styles.weekTabCornerLeft} />
-                          <View style={styles.weekTabCornerRight} />
-                        </>
-                      )}
                       <Text style={styles.weekTabText}>
                         {t('weekShort').replace('{number}', String(index + 1))}
                       </Text>
@@ -412,26 +430,6 @@ const styles = StyleSheet.create({
     borderBottomRightRadius: 0,
     borderCurve: 'continuous',
   },
-  weekTabCornerLeft: {
-    position: 'absolute',
-    bottom: -8,
-    left: 0,
-    width: 8,
-    height: 8,
-    backgroundColor: COLORS.signalNegative,
-    borderTopLeftRadius: 8,
-    zIndex: 3,
-  },
-  weekTabCornerRight: {
-    position: 'absolute',
-    bottom: -8,
-    right: 0,
-    width: 8,
-    height: 8,
-    backgroundColor: COLORS.signalNegative,
-    borderTopRightRadius: 8,
-    zIndex: 3,
-  },
   adjustRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -490,14 +488,14 @@ const styles = StyleSheet.create({
     paddingTop: SPACING.lg,
   },
   saveButton: {
-    backgroundColor: COLORS.accentPrimaryDimmed,
+    backgroundColor: COLORS.accentPrimary,
     borderRadius: BORDER_RADIUS.md,
     paddingVertical: SPACING.lg,
     alignItems: 'center',
   },
   saveButtonText: {
     ...TYPOGRAPHY.metaBold,
-    color: COLORS.accentPrimary,
+    color: COLORS.backgroundCanvas,
   },
 });
 

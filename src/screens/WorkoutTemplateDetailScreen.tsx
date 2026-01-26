@@ -321,6 +321,30 @@ export function WorkoutTemplateDetailScreen() {
           </View>
         </View>
 
+        {/* Warm-up Section */}
+        {template.warmupItems && template.warmupItems.length > 0 && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>{t('warmup')}</Text>
+            {template.warmupItems.map((item) => (
+              <View key={item.id} style={styles.warmupCard}>
+                <View style={styles.warmupContent}>
+                  <Text style={styles.warmupName}>{item.exerciseName}</Text>
+                  {(item.duration || item.reps) && (
+                    <Text style={styles.warmupDetails}>
+                      {item.duration && `${item.duration}s`}
+                      {item.duration && item.reps && ' • '}
+                      {item.reps && `${item.reps} reps`}
+                    </Text>
+                  )}
+                  {item.notes && (
+                    <Text style={styles.warmupNotes}>{item.notes}</Text>
+                  )}
+                </View>
+              </View>
+            ))}
+          </View>
+        )}
+
         {/* Exercises List */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>{t('listOfExercises')}</Text>
@@ -501,5 +525,32 @@ const styles = StyleSheet.create({
   scheduleButtonText: {
     ...TYPOGRAPHY.metaBold,
     color: COLORS.backgroundCanvas,
+  },
+  warmupCard: {
+    backgroundColor: CARDS.cardDeepDimmed.outer.backgroundColor,
+    borderRadius: CARDS.cardDeepDimmed.outer.borderRadius,
+    borderWidth: CARDS.cardDeepDimmed.outer.borderWidth,
+    borderColor: CARDS.cardDeepDimmed.outer.borderColor,
+    marginBottom: SPACING.sm,
+    padding: SPACING.md,
+  },
+  warmupContent: {
+    flex: 1,
+  },
+  warmupName: {
+    ...TYPOGRAPHY.body,
+    color: COLORS.text,
+    fontWeight: '600',
+    marginBottom: 2,
+  },
+  warmupDetails: {
+    ...TYPOGRAPHY.meta,
+    color: COLORS.textMeta,
+    marginBottom: 2,
+  },
+  warmupNotes: {
+    ...TYPOGRAPHY.meta,
+    color: COLORS.textMeta,
+    fontStyle: 'italic',
   },
 });

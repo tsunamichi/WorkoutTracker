@@ -22,6 +22,7 @@ export { IconPR } from './IconPR';
 export { IconRestart } from './IconRestart';
 export { IconSave } from './IconSave';
 export { IconSearch } from './IconSearch';
+export { IconSettings } from './IconSettings';
 export { IconSkip } from './IconSkip';
 export { IconSoundOff } from './IconSoundOff';
 export { IconSoundOn } from './IconSoundOn';

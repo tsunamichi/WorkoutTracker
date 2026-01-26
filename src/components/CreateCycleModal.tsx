@@ -305,7 +305,7 @@ const styles = StyleSheet.create({
     gap: SPACING.md,
     padding: SPACING.xl,
     borderTopWidth: 1,
-    borderTopColor: COLORS.border,
+    borderTopColor: COLORS.borderDimmed,
   },
   button: {
     paddingVertical: SPACING.lg,

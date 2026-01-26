@@ -18,6 +18,7 @@ import { ExerciseEditorBottomSheet } from '../../components/manualCycle/Exercise
 import { useStore } from '../../store';
 import { BottomDrawer } from '../../components/common/BottomDrawer';
 import { useTranslation } from '../../i18n/useTranslation';
+import { DraggableExerciseList, type DraggableExerciseItem } from '../../components/exercises';
 
 interface CreateCycleDayEditorProps {
   navigation: any;
@@ -33,42 +34,42 @@ export function CreateCycleDayEditor({ navigation, route }: CreateCycleDayEditor
   const { t } = useTranslation();
   const { weekday } = route.params;
 
-  const { workouts, setWorkoutDayName, addExerciseToDay, removeExerciseFromDay } =
+  const { workouts, setWorkoutDayName, addExerciseToDay, removeExerciseFromDay, reorderExercises } =
     useCreateCycleDraftStore();
 
   const { exercises: exerciseLibrary } = useStore();
 
   const workout = workouts.find((w) => w.weekday === weekday);
 
-  const [workoutName, setWorkoutName] = useState(workout?.name || formatWeekdayFull(weekday));
-  const [isEditingName, setIsEditingName] = useState(false);
+  const [workoutName, setWorkoutName] = useState(workout?.name || '');
+  const [isEditingName, setIsEditingName] = useState(true); // Start in editing mode
   const [showExerciseDrawer, setShowExerciseDrawer] = useState(false);
   const [showSearchInput, setShowSearchInput] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [expandedMuscles, setExpandedMuscles] = useState<Record<string, boolean>>({});
   const [selectedExercise, setSelectedExercise] = useState<ExerciseBlock | null>(null);
   const [showExerciseEditor, setShowExerciseEditor] = useState(false);
+  const [selectedExerciseId, setSelectedExerciseId] = useState<string | null>(null);
+  const [scrollEnabled, setScrollEnabled] = useState(true);
   const nameInputRef = useRef<TextInput>(null);
   const hasFocusedInitialNameRef = useRef(false);
 
+  // Auto-focus the name input when component mounts
   useEffect(() => {
-    if (hasFocusedInitialNameRef.current) return;
-    const defaultName = formatWeekdayFull(weekday);
-    if (!workout?.name || workout?.name === defaultName) {
+    if (!workout?.name && !hasFocusedInitialNameRef.current) {
       hasFocusedInitialNameRef.current = true;
-      setIsEditingName(true);
       requestAnimationFrame(() => {
         nameInputRef.current?.focus();
       });
     }
-  }, [weekday, workout?.name]);
+  }, [workout?.name]);
 
-  const handleSaveDay = () => {
+  // Auto-save workout name whenever it changes
+  useEffect(() => {
     if (workoutName.trim()) {
       setWorkoutDayName(weekday, workoutName.trim());
     }
-    navigation.goBack();
-  };
+  }, [workoutName, weekday, setWorkoutDayName]);
 
   const handleAddExercise = (exerciseId: string) => {
     const newExercise = addExerciseToDay(weekday, exerciseId);
@@ -125,6 +126,30 @@ export function CreateCycleDayEditor({ navigation, route }: CreateCycleDayEditor
     setShowExerciseEditor(false);
   };
 
+  const handleReorderExercises = (reorderedExercises: DraggableExerciseItem[]) => {
+    if (!workout) return;
+    
+    // Build a map of exercise ID to its current index
+    const originalOrder = workout.exercises;
+    const idToOriginalIndex = new Map(originalOrder.map((ex, idx) => [ex.id, idx]));
+    
+    // Find which item moved and where
+    for (let newIndex = 0; newIndex < reorderedExercises.length; newIndex++) {
+      const item = reorderedExercises[newIndex];
+      const originalIndex = idToOriginalIndex.get(item.id);
+      
+      if (originalIndex !== undefined && originalIndex !== newIndex) {
+        // This item moved from originalIndex to newIndex
+        reorderExercises(weekday, originalIndex, newIndex);
+        break; // Only handle one move at a time
+      }
+    }
+  };
+
+  const handleSelectExercise = (exerciseId: string | null) => {
+    setSelectedExerciseId(exerciseId);
+  };
+
   return (
     <View style={styles.gradient}>
       <View style={styles.container}>
@@ -153,7 +178,7 @@ export function CreateCycleDayEditor({ navigation, route }: CreateCycleDayEditor
                 onChangeText={setWorkoutName}
                 onBlur={() => setIsEditingName(false)}
                 autoFocus
-                placeholder={t('workoutNamePlaceholder')}
+                placeholder={t('workoutName')}
                 placeholderTextColor={COLORS.textMeta}
               />
             ) : (
@@ -165,37 +190,37 @@ export function CreateCycleDayEditor({ navigation, route }: CreateCycleDayEditor
           </TouchableOpacity>
         </View>
 
-        <ScrollView style={styles.content} contentContainerStyle={styles.scrollContent} bounces={false}>
+        <ScrollView 
+          style={styles.content} 
+          contentContainerStyle={styles.scrollContent} 
+          bounces={false}
+          scrollEnabled={scrollEnabled}
+        >
           {/* Exercises */}
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>{t('exercises')}</Text>
-            {workout?.exercises.map((exercise) => {
-              const exerciseData = exerciseLibrary.find((e) => e.id === exercise.exerciseId);
-              const summary = getExerciseSummary(exercise.weeks);
-
-              return (
-                <TouchableOpacity
-                  key={exercise.id}
-                  style={styles.exerciseCard}
-                  onPress={() => handleEditExercise(exercise)}
-                  activeOpacity={1}
-                >
-                  <View style={styles.exerciseCardContent}>
-                    <Text style={styles.exerciseName}>
-                      {exerciseData?.name || t('unknownExercise')}
-                    </Text>
-                    <Text style={styles.exerciseSummary}>{summary}</Text>
-                  </View>
-                  <TouchableOpacity
-                    style={styles.deleteButton}
-                    onPress={() => handleDeleteExercise(exercise.id)}
-                    activeOpacity={1}
-                  >
-                    <IconTrash size={18} color={COLORS.textMeta} />
-                  </TouchableOpacity>
-                </TouchableOpacity>
-              );
-            })}
+            <DraggableExerciseList
+              exercises={(workout?.exercises || []).map((exercise, index) => {
+                const exerciseData = exerciseLibrary.find((e) => e.id === exercise.exerciseId);
+                return {
+                  id: exercise.id,
+                  exerciseId: exercise.exerciseId,
+                  name: exerciseData?.name || t('unknownExercise'),
+                  order: index,
+                };
+              })}
+              onReorder={handleReorderExercises}
+              onEdit={(id) => {
+                const exercise = workout?.exercises.find(ex => ex.id === id);
+                if (exercise) handleEditExercise(exercise);
+              }}
+              onDelete={(id) => handleDeleteExercise(id)}
+              selectedExerciseId={selectedExerciseId}
+              onSelectExercise={handleSelectExercise}
+              actionButtons={['edit', 'delete']}
+              scrollEnabled={scrollEnabled}
+              onScrollEnabledChange={setScrollEnabled}
+            />
 
             <TouchableOpacity
               style={styles.addExerciseCardButton}
@@ -207,17 +232,6 @@ export function CreateCycleDayEditor({ navigation, route }: CreateCycleDayEditor
             </TouchableOpacity>
           </View>
         </ScrollView>
-
-        {/* Save Button */}
-        <View style={styles.stickyFooter}>
-          <TouchableOpacity
-            style={styles.saveButton}
-            onPress={handleSaveDay}
-            activeOpacity={1}
-          >
-            <Text style={styles.saveButtonText}>{t('saveDay')}</Text>
-          </TouchableOpacity>
-        </View>
       </View>
 
       {/* Exercise Picker Drawer */}
@@ -375,7 +389,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     padding: SPACING.xxl,
-    paddingBottom: 140,
+    paddingBottom: SPACING.xxl,
   },
   section: {
     marginBottom: SPACING.xxxl,
@@ -402,51 +416,6 @@ const styles = StyleSheet.create({
   addExerciseCardText: {
     ...TYPOGRAPHY.metaBold,
     color: COLORS.text,
-  },
-  exerciseCard: {
-    ...CARDS.cardDeep.outer,
-    padding: SPACING.lg,
-    marginBottom: SPACING.md,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING.md,
-  },
-  exerciseCardContent: {
-    flex: 1,
-  },
-  exerciseName: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: COLORS.text,
-    marginBottom: 4,
-  },
-  exerciseSummary: {
-    fontSize: 13,
-    color: COLORS.textMeta,
-  },
-  deleteButton: {
-    padding: 8,
-  },
-  stickyFooter: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    paddingHorizontal: SPACING.xxl,
-    paddingBottom: SPACING.lg,
-    paddingTop: SPACING.md,
-  },
-  saveButton: {
-    backgroundColor: COLORS.accentPrimary,
-    paddingVertical: 16,
-    borderRadius: BORDER_RADIUS.md,
-    alignItems: 'center',
-  },
-  saveButtonText: {
-    ...TYPOGRAPHY.meta,
-    fontWeight: 'bold',
-    fontWeight: '600',
-    color: COLORS.backgroundCanvas,
   },
   drawerContent: {
     flex: 1,

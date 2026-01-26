@@ -14,7 +14,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.tsunamichi.workouttracker",
-      "buildNumber": "94",
+      "buildNumber": "96",
       "deploymentTarget": "16.1",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,

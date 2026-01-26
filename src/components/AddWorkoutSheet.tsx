@@ -1,0 +1,233 @@
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
+import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS, CARDS } from '../constants';
+import { IconAdd } from './icons';
+import { BottomDrawer } from './common/BottomDrawer';
+import { useTranslation } from '../i18n/useTranslation';
+import { WorkoutTemplate } from '../types/training';
+import dayjs from 'dayjs';
+import * as Haptics from 'expo-haptics';
+
+// Light theme colors
+const LIGHT_COLORS = {
+  secondary: '#1B1B1B',
+  textMeta: '#817B77',
+};
+
+interface AddWorkoutSheetProps {
+  visible: boolean;
+  onClose: () => void;
+  selectedDate: string; // YYYY-MM-DD
+  workoutTemplates: WorkoutTemplate[]; // Existing templates to schedule
+  onSelectTemplate: (templateId: string) => void;
+  onCreateBlank: () => void;
+  onCreateWithAI: () => void;
+}
+
+/**
+ * AddWorkoutSheet
+ * 
+ * Shows existing workout templates + create options
+ * Part 1: Existing templates to schedule
+ * Part 2: Create new workout options (Blank, AI, Template)
+ */
+export function AddWorkoutSheet({
+  visible,
+  onClose,
+  selectedDate,
+  workoutTemplates,
+  onSelectTemplate,
+  onCreateBlank,
+  onCreateWithAI,
+}: AddWorkoutSheetProps) {
+  const { t } = useTranslation();
+  const dateLabel = dayjs(selectedDate).format('MMM D');
+
+  return (
+    <BottomDrawer visible={visible} onClose={onClose} maxHeight="80%" showHandle={false}>
+      <View style={styles.container}>
+        <Text style={styles.title}>{t('addWorkoutFor')} {dateLabel}</Text>
+
+        <ScrollView 
+          style={styles.scrollView}
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+        >
+          {/* Part 1: Create Options */}
+          <View style={styles.createOptionsSection}>
+            <View style={styles.optionsRow}>
+              {/* Blank Workout */}
+              <TouchableOpacity
+                style={styles.optionCard}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  onCreateBlank();
+                }}
+                activeOpacity={0.85}
+              >
+                <View style={styles.optionCardInner}>
+                  <IconAdd size={24} color={COLORS.text} />
+                  <Text style={styles.optionTitle}>{t('blankWorkout')}</Text>
+                  <Text style={styles.optionSubtitle}>{t('singleOrMultiDay')}</Text>
+                </View>
+              </TouchableOpacity>
+
+              {/* AI Generation */}
+              <TouchableOpacity
+                style={styles.aiCard}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  onCreateWithAI();
+                }}
+                activeOpacity={0.85}
+              >
+                <View style={styles.optionCardInner}>
+                  <IconAdd size={24} color={COLORS.accentPrimary} />
+                  <Text style={[styles.optionTitle, { color: COLORS.accentPrimary }]}>{t('generateWithAI')}</Text>
+                  <Text style={styles.optionSubtitle}>{t('singleOrMultiDay')}</Text>
+                </View>
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          {/* Part 2: Existing Templates */}
+          {workoutTemplates.length > 0 && (
+            <>
+              <View style={styles.sectionHeader}>
+                <Text style={styles.sectionTitle}>{t('fromTemplate')}</Text>
+              </View>
+              
+              {workoutTemplates.map((template) => (
+                <TouchableOpacity
+                  key={template.id}
+                  style={styles.templateCard}
+                  onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    onSelectTemplate(template.id);
+                  }}
+                  activeOpacity={0.85}
+                >
+                  <View style={styles.templateCardInner}>
+                    <View style={styles.templateTextContainer}>
+                      <Text style={styles.templateTitle}>{template.name}</Text>
+                      <Text style={styles.templateSubtitle}>
+                        {template.items.length} {template.items.length === 1 ? t('exercise') : t('exercises')}
+                        {template.usageCount > 0 && ` • ${template.usageCount}x`}
+                      </Text>
+                    </View>
+                  </View>
+                </TouchableOpacity>
+              ))}
+            </>
+          )}
+        </ScrollView>
+      </View>
+    </BottomDrawer>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    paddingHorizontal: SPACING.xxl,
+    paddingTop: 24,
+    paddingBottom: 32,
+    flex: 1,
+  },
+  title: {
+    ...TYPOGRAPHY.h3,
+    color: LIGHT_COLORS.secondary,
+    marginBottom: SPACING.xxl,
+  },
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingBottom: SPACING.xl,
+  },
+  createOptionsSection: {
+    gap: SPACING.md,
+    marginBottom: SPACING.md,
+  },
+  optionsRow: {
+    flexDirection: 'row',
+    gap: SPACING.md,
+  },
+  optionCard: {
+    flex: 1,
+    backgroundColor: COLORS.activeCard,
+    borderRadius: BORDER_RADIUS.lg,
+  },
+  optionCardInner: {
+    padding: SPACING.lg,
+    flexDirection: 'column',
+    alignItems: 'flex-start',
+    gap: SPACING.sm,
+  },
+  aiCard: {
+    flex: 1,
+    backgroundColor: COLORS.accentPrimaryDimmed,
+    borderRadius: BORDER_RADIUS.lg,
+  },
+  optionTitle: {
+    ...TYPOGRAPHY.bodyBold,
+    color: COLORS.text,
+  },
+  optionSubtitle: {
+    ...TYPOGRAPHY.meta,
+    color: COLORS.textMeta,
+  },
+  sectionHeader: {
+    marginTop: SPACING.xl,
+    marginBottom: SPACING.md,
+  },
+  sectionTitle: {
+    ...TYPOGRAPHY.meta,
+    color: LIGHT_COLORS.textMeta,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  templateCard: {
+    backgroundColor: CARDS.cardDeepDimmed.outer.backgroundColor,
+    borderRadius: CARDS.cardDeepDimmed.outer.borderRadius,
+    borderCurve: CARDS.cardDeepDimmed.outer.borderCurve,
+    borderWidth: CARDS.cardDeepDimmed.outer.borderWidth,
+    borderColor: CARDS.cardDeepDimmed.outer.borderColor,
+    overflow: CARDS.cardDeepDimmed.outer.overflow,
+    marginBottom: SPACING.sm,
+  },
+  templateCardInner: {
+    ...CARDS.cardDeepDimmed.inner,
+    padding: SPACING.lg,
+  },
+  templateTextContainer: {
+    flex: 1,
+  },
+  templateTitle: {
+    ...TYPOGRAPHY.body,
+    color: COLORS.text,
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  templateSubtitle: {
+    ...TYPOGRAPHY.meta,
+    color: COLORS.textMeta,
+  },
+  templateCreationCard: {
+    backgroundColor: COLORS.activeCard,
+    borderRadius: BORDER_RADIUS.lg,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    marginBottom: SPACING.md,
+  },
+  templateCreationCardInner: {
+    padding: SPACING.lg,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.lg,
+  },
+  templateCreationTitle: {
+    ...TYPOGRAPHY.bodyBold,
+    color: COLORS.text,
+    marginBottom: 4,
+  },
+});

@@ -36,6 +36,13 @@ type TranslationKey =
   | 'workoutSaved'
   | 'workoutSavedMessage'
   | 'workoutSavedToLibrary'
+  | 'scheduleWorkoutNow'
+  | 'useWorkoutToday'
+  | 'useIt'
+  | 'workoutSavedNotScheduled'
+  | 'createTemplate'
+  | 'newTemplate'
+  | 'saveToLibraryOnly'
   | 'ok'
   | 'week'
   | 'resume'
@@ -45,6 +52,8 @@ type TranslationKey =
   | 'swap'
   | 'createWorkout'
   | 'addWorkout'
+  | 'noWorkoutPlanned'
+  | 'completed'
   | 'addIntervalTimer'
   | 'templates'
   | 'noTemplatesYet'
@@ -66,8 +75,11 @@ type TranslationKey =
   | 'schedule'
   | 'createPlanWithAi'
   | 'progress'
+  | 'progressSectionHelper'
   | 'noProgressYet'
   | 'seeAllProgress'
+  | 'logProgress'
+  | 'progressLogHint'
   | 'nextLogOnFriday'
   | 'progressHelperLocked'
   | 'progressHelperAvailable'
@@ -75,6 +87,8 @@ type TranslationKey =
   | 'progressEmptyCtaLocked'
   | 'weeklyCheckIn'
   | 'weeklyCheckInSubtitle'
+  | 'addPhotos'
+  | 'addWeight'
   | 'progressPhoto'
   | 'progressPhotoRequired'
   | 'progressWeightRequired'
@@ -403,7 +417,9 @@ type TranslationKey =
   | 'useKilograms'
   | 'weightsShownInKg'
   | 'weightsShownInLb'
+  | 'unit'
   | 'defaultRestTime'
+  | 'restTime'
   | 'betweenSets'
   | 'monthlyProgressCheck'
   | 'monthlyProgressReminder'
@@ -416,7 +432,47 @@ type TranslationKey =
   | 'addWeightEntry'
   | 'weightPlaceholder'
   | 'cancel'
-  | 'add';
+  | 'add'
+  | 'addWorkoutFor'
+  | 'singleWorkoutDescription'
+  | 'workoutPlan'
+  | 'workoutPlanDescription'
+  | 'createWorkoutFor'
+  | 'blankWorkout'
+  | 'startFromScratch'
+  | 'singleDayWorkout'
+  | 'multiDayCycle'
+  | 'weeklyProgram'
+  | 'fromTemplate'
+  | 'fromPlan'
+  | 'generateWorkout'
+  | 'generateWithAI'
+  | 'aiWillCreateWorkout'
+  | 'singleOrMultiDay'
+  | 'perWeek'
+  | 'workoutExistsOn'
+  | 'selectPlan'
+  | 'noPlansAvailable'
+  | 'startDate'
+  | 'planSummary'
+  | 'duration'
+  | 'workoutsPerWeek'
+  | 'endDate'
+  | 'selectDayFromPlan'
+  | 'noDaysInPlan'
+  | 'workoutDays'
+  | 'scheduleThisWorkout'
+  | 'warmup'
+  | 'addWarmupItem'
+  | 'noWarmupItems'
+  | 'exerciseName'
+  | 'seconds'
+  | 'optional'
+  | 'warmupExercisePlaceholder'
+  | 'warmupNotesPlaceholder'
+  | 'progressPhotos'
+  | 'addPhotosAndWeight'
+  | 'createNewWorkout';
 
 const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
   en: {
@@ -453,8 +509,11 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     schedule: 'Schedule',
     createPlanWithAi: 'Create Plan with AI',
     progress: 'Progress',
+    progressSectionHelper: 'Check-ins unlock on Fridays',
     noProgressYet: 'No progress yet',
     seeAllProgress: 'See all progress',
+    logProgress: 'Log progress',
+    progressLogHint: 'Enabled on Friday',
     nextLogOnFriday: 'Next log on Friday',
     progressHelperLocked: 'You can log once a week. Next check-in: Friday.',
     progressHelperAvailable: 'Weekly check-in is available today.',
@@ -462,6 +521,8 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     progressEmptyCtaLocked: 'Your first weekly check-in unlocks on Friday.',
     weeklyCheckIn: 'Weekly check-in',
     weeklyCheckInSubtitle: 'Add one photo + one weight entry ({unit}).',
+    addPhotos: 'Add photos',
+    addWeight: 'Add weight',
     progressPhoto: 'Photo',
     progressPhotoRequired: 'Photo is required.',
     progressWeightRequired: 'Weight is required and must be greater than 0.',
@@ -507,6 +568,13 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     workoutSaved: 'Workout Saved',
     workoutSavedMessage: 'Your workout has been saved successfully',
     workoutSavedToLibrary: 'Your workout has been saved to your library. Go to Schedule to add it to your week.',
+    scheduleWorkoutNow: 'Schedule this workout for {date}?',
+    useWorkoutToday: 'Use this workout on {date}?',
+    useIt: 'Use It',
+    workoutSavedNotScheduled: 'Your workout has been saved to your library, but it wasn\'t added to {date} because there is another workout already scheduled for that day.',
+    createTemplate: 'Create Template',
+    newTemplate: 'New Template',
+    saveToLibraryOnly: 'Save to library only',
     whatNext: 'What would you like to do next?',
     scheduleIt: 'Schedule It',
     addToCycle: 'Add to Cycle',
@@ -530,6 +598,8 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     swap: 'Swap',
     createWorkout: 'Create Workout',
     addWorkout: 'Add Workout',
+    noWorkoutPlanned: 'No workout planned',
+    completed: 'Completed',
     addIntervalTimer: 'Add interval timer',
     addInterval: 'Add',
     new: 'New',
@@ -564,6 +634,7 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     alertMissingWorkoutInfo: 'Missing workout or exercise information',
     createCycle: 'Create cycle',
     trainingDays: 'Training days',
+    daysPerWeek: 'Days per week',
     cycleLength: 'Cycle length',
     weeks: 'weeks',
     buildYourWeek: 'Build your week',
@@ -681,8 +752,8 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     enableNotifications: 'Enable',
     notNow: 'Not now',
     openSettings: 'Open Settings',
-    timerNotifications: 'Timer notifications',
-    timerNotificationsDescription: 'Alerts when timers finish in the background.',
+    timerNotifications: 'Timer alerts',
+    timerNotificationsDescription: 'Get notified when a timer ends',
     notificationUnavailable: 'Notifications are unavailable on this device.',
     notificationSystemDisabled: 'Disabled in system settings.',
     currentStreak: 'Current streak',
@@ -840,12 +911,14 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     useKilograms: 'Use Kilograms',
     weightsShownInKg: 'Weights shown in kg',
     weightsShownInLb: 'Weights shown in lb',
+    unit: 'unit',
     defaultRestTime: 'Default Rest Time',
+    restTime: 'rest time',
     betweenSets: 'between sets',
-    monthlyProgressCheck: 'Monthly Progress Check',
+    monthlyProgressCheck: 'Monthly progress check',
     monthlyProgressReminder: 'Reminder on day {day} of each month',
     designSystem: 'Design System',
-    viewDesignSystem: 'View colors, typography, and components',
+    viewDesignSystem: 'View colors, type, and components',
     clearAllHistory: 'Clear All History',
     clearAllHistoryDescription: 'Delete all workout records and progress',
     resetOnboarding: 'Reset Onboarding',
@@ -854,6 +927,45 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     weightPlaceholder: 'Weight ({unit})',
     cancel: 'Cancel',
     add: 'Add',
+    addWorkoutFor: 'Add workout for',
+    singleWorkoutDescription: 'Schedule one workout for this day',
+    workoutPlan: 'Workout Plan',
+    workoutPlanDescription: 'Apply multiple workouts from a plan',
+    createWorkoutFor: 'Create workout for',
+    blankWorkout: 'Blank Workout',
+    startFromScratch: 'Start from scratch',
+    singleDayWorkout: 'Single day workout',
+    multiDayCycle: 'Multi-Day Cycle',
+    weeklyProgram: 'Weekly program',
+    fromTemplate: 'From Template',
+    fromPlan: 'From Plan',
+    generateWorkout: 'Generate Workout',
+    generateWithAI: 'Generate with AI',
+    aiWillCreateWorkout: 'AI will create a workout for you',
+    singleOrMultiDay: 'Single or multi-day',
+    perWeek: 'per week',
+    selectPlan: 'Select Plan',
+    noPlansAvailable: 'No plans available. Create a plan first.',
+    startDate: 'Start Date',
+    planSummary: 'Plan Summary',
+    duration: 'Duration',
+    workoutsPerWeek: 'Workouts per week',
+    endDate: 'End Date',
+    selectDayFromPlan: 'Select Day from Plan',
+    noDaysInPlan: 'No workout days found in this plan.',
+    workoutDays: 'Workout Days',
+    scheduleThisWorkout: 'Schedule This Workout',
+    warmup: 'Warm-up',
+    addWarmupItem: 'Add Item',
+    noWarmupItems: 'No warm-up items yet. Tap "Add Item" to get started.',
+    exerciseName: 'Exercise Name',
+    seconds: 'seconds',
+    optional: 'optional',
+    warmupExercisePlaceholder: 'e.g., Jumping jacks, Arm circles',
+    warmupNotesPlaceholder: 'Additional notes...',
+    progressPhotos: 'Progress Photos',
+    addPhotosAndWeight: 'Add photos and track your weight',
+    createNewWorkout: 'Create new workout',
   },
   es: {
     today: 'Hoy',
@@ -889,8 +1001,11 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     schedule: 'Programar',
     createPlanWithAi: 'Crear plan con IA',
     progress: 'Progreso',
+    progressSectionHelper: 'Check-ins se desbloquean los viernes',
     noProgressYet: 'Sin progreso aún',
     seeAllProgress: 'Ver todo el progreso',
+    logProgress: 'Registrar progreso',
+    progressLogHint: 'Disponible el viernes',
     nextLogOnFriday: 'Próximo registro el viernes',
     progressHelperLocked: 'Puedes registrar una vez por semana. Próximo check-in: viernes.',
     progressHelperAvailable: 'El check-in semanal está disponible hoy.',
@@ -898,6 +1013,8 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     progressEmptyCtaLocked: 'Tu primer check-in semanal se habilita el viernes.',
     weeklyCheckIn: 'Check-in semanal',
     weeklyCheckInSubtitle: 'Agrega una foto + un peso ({unit}).',
+    addPhotos: 'Agregar fotos',
+    addWeight: 'Agregar peso',
     progressPhoto: 'Foto',
     progressPhotoRequired: 'La foto es obligatoria.',
     progressWeightRequired: 'El peso es obligatorio y debe ser mayor que 0.',
@@ -943,6 +1060,13 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     workoutSaved: 'Entrenamiento Guardado',
     workoutSavedMessage: 'Tu entrenamiento ha sido guardado exitosamente',
     workoutSavedToLibrary: 'Tu entrenamiento se ha guardado en tu biblioteca. Ve a Programación para agregarlo a tu semana.',
+    scheduleWorkoutNow: '¿Programar este entrenamiento para {date}?',
+    useWorkoutToday: '¿Usar este entrenamiento el {date}?',
+    useIt: 'Usarlo',
+    workoutSavedNotScheduled: 'Tu entrenamiento se ha guardado en tu biblioteca, pero no se agregó al {date} porque ya hay otro entrenamiento programado para ese día.',
+    createTemplate: 'Crear Plantilla',
+    newTemplate: 'Nueva Plantilla',
+    saveToLibraryOnly: 'Guardar solo en biblioteca',
     whatNext: '¿Qué te gustaría hacer ahora?',
     scheduleIt: 'Programarlo',
     addToCycle: 'Agregar a Ciclo',
@@ -966,6 +1090,8 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     swap: 'Cambiar',
     createWorkout: 'Crear entrenamiento',
     addWorkout: 'Agregar entrenamiento',
+    noWorkoutPlanned: 'No hay entrenamiento planeado',
+    completed: 'Completado',
     addIntervalTimer: 'Agregar temporizador',
     addInterval: 'Agregar',
     new: 'Nuevo',
@@ -1000,6 +1126,7 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     alertMissingWorkoutInfo: 'Falta informacion del entrenamiento',
     createCycle: 'Crear ciclo',
     trainingDays: 'Dias de entrenamiento',
+    daysPerWeek: 'Días por semana',
     cycleLength: 'Duracion del ciclo',
     weeks: 'semanas',
     buildYourWeek: 'Construye tu semana',
@@ -1117,8 +1244,8 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     enableNotifications: 'Habilitar',
     notNow: 'Ahora no',
     openSettings: 'Abrir ajustes',
-    timerNotifications: 'Notificaciones de temporizador',
-    timerNotificationsDescription: 'Alertas cuando el temporizador termina en segundo plano.',
+    timerNotifications: 'Alertas de temporizador',
+    timerNotificationsDescription: 'Recibe notificaciones cuando termine un temporizador',
     notificationUnavailable: 'Las notificaciones no estan disponibles en este dispositivo.',
     notificationSystemDisabled: 'Desactivadas en los ajustes del sistema.',
     currentStreak: 'Racha actual',
@@ -1277,12 +1404,14 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     useKilograms: 'Usar kilogramos',
     weightsShownInKg: 'Pesos en kg',
     weightsShownInLb: 'Pesos en lb',
+    unit: 'unidad',
     defaultRestTime: 'Descanso por defecto',
+    restTime: 'descanso',
     betweenSets: 'entre series',
     monthlyProgressCheck: 'Revision mensual',
     monthlyProgressReminder: 'Recordatorio el dia {day} de cada mes',
     designSystem: 'Sistema de diseno',
-    viewDesignSystem: 'Ver colores, tipografia y componentes',
+    viewDesignSystem: 'Ver colores, tipo y componentes',
     clearAllHistory: 'Borrar historial',
     clearAllHistoryDescription: 'Eliminar registros y progreso',
     resetOnboarding: 'Reiniciar inicio',
@@ -1291,6 +1420,45 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     weightPlaceholder: 'Peso ({unit})',
     cancel: 'Cancelar',
     add: 'Agregar',
+    addWorkoutFor: 'Agregar entrenamiento para',
+    singleWorkoutDescription: 'Programar un entrenamiento para este día',
+    workoutPlan: 'Plan de Entrenamiento',
+    workoutPlanDescription: 'Aplicar múltiples entrenamientos de un plan',
+    createWorkoutFor: 'Crear entrenamiento para',
+    blankWorkout: 'Entrenamiento en Blanco',
+    startFromScratch: 'Empezar desde cero',
+    singleDayWorkout: 'Entrenamiento de un día',
+    multiDayCycle: 'Ciclo Multi-Día',
+    weeklyProgram: 'Programa semanal',
+    fromTemplate: 'Desde Plantilla',
+    fromPlan: 'Desde Plan',
+    generateWorkout: 'Generar Entrenamiento',
+    generateWithAI: 'Generar con IA',
+    aiWillCreateWorkout: 'La IA creará un entrenamiento para ti',
+    singleOrMultiDay: 'Uno o varios días',
+    perWeek: 'por semana',
+    selectPlan: 'Seleccionar Plan',
+    noPlansAvailable: 'No hay planes disponibles. Crea un plan primero.',
+    startDate: 'Fecha de Inicio',
+    planSummary: 'Resumen del Plan',
+    duration: 'Duración',
+    workoutsPerWeek: 'Entrenamientos por semana',
+    endDate: 'Fecha de Fin',
+    selectDayFromPlan: 'Seleccionar Día del Plan',
+    noDaysInPlan: 'No se encontraron días de entrenamiento en este plan.',
+    workoutDays: 'Días de Entrenamiento',
+    scheduleThisWorkout: 'Programar Este Entrenamiento',
+    warmup: 'Calentamiento',
+    addWarmupItem: 'Agregar',
+    noWarmupItems: 'No hay calentamiento. Toca "Agregar" para comenzar.',
+    exerciseName: 'Nombre del Ejercicio',
+    seconds: 'segundos',
+    optional: 'opcional',
+    warmupExercisePlaceholder: 'ej., Saltos, Círculos con los brazos',
+    warmupNotesPlaceholder: 'Notas adicionales...',
+    progressPhotos: 'Fotos de Progreso',
+    addPhotosAndWeight: 'Agrega fotos y registra tu peso',
+    createNewWorkout: 'Crear nuevo entrenamiento',
   },
 };
 

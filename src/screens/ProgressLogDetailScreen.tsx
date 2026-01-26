@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Image, Alert } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Image, Alert, ScrollView } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useStore } from '../store';
 import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS } from '../constants';
@@ -61,8 +61,14 @@ export function ProgressLogDetailScreen({ navigation, route }: any) {
         <View style={{ width: 48 }} />
       </View>
 
-      <View style={styles.content}>
-        <Image source={{ uri: log.photoUri }} style={styles.image} />
+      <ScrollView style={styles.content} contentContainerStyle={styles.scrollContent}>
+        {/* Photo Gallery */}
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.photoScroll}>
+          {(log.photoUris || [log.photoUri]).filter(Boolean).map((uri, index) => (
+            <Image key={index} source={{ uri: uri! }} style={[styles.image, index > 0 && { marginLeft: SPACING.md }]} />
+          ))}
+        </ScrollView>
+
         <View style={styles.metaCard}>
           <Text style={styles.weightText}>
             {formatWeight(log.weightLbs, settings.useKg)} {settings.useKg ? 'kg' : 'lb'}
@@ -75,7 +81,7 @@ export function ProgressLogDetailScreen({ navigation, route }: any) {
         <TouchableOpacity style={styles.deleteButton} onPress={handleDelete} activeOpacity={0.9}>
           <Text style={styles.deleteButtonText}>{t('delete')}</Text>
         </TouchableOpacity>
-      </View>
+      </ScrollView>
     </View>
   );
 }
@@ -105,13 +111,19 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
+  },
+  scrollContent: {
     paddingHorizontal: SPACING.xxl,
     paddingTop: SPACING.md,
     gap: SPACING.lg,
+    paddingBottom: SPACING.xxl,
+  },
+  photoScroll: {
+    flexGrow: 0,
   },
   image: {
-    width: '100%',
-    aspectRatio: 1,
+    width: 300,
+    height: 300,
     borderRadius: BORDER_RADIUS.lg,
     backgroundColor: COLORS.activeCard,
   },

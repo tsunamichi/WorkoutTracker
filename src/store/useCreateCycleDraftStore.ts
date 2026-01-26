@@ -7,8 +7,10 @@ import {
   WorkoutDay,
   ExerciseBlock,
   ExerciseWeekPlan,
+  DAY_ORDER,
 } from '../types/manualCycle';
 import { sortWeekdays, generateId } from '../utils/manualCycleUtils';
+import dayjs from 'dayjs';
 
 interface CreateCycleDraftStore {
   // State
@@ -20,14 +22,17 @@ interface CreateCycleDraftStore {
 
   // Actions
   resetDraft: () => void;
+  initializeWithSelectedDate: (date: string) => void;
   setWeeks: (weeks: number) => void;
   toggleFrequencyDay: (day: Weekday) => void;
+  setDaysPerWeek: (count: number) => void;
   setWorkoutLength: (length: WorkoutLength) => void;
   ensureWorkoutsForSelectedDays: () => void;
   setWorkoutDayName: (weekday: Weekday, name: string) => void;
   addExerciseToDay: (weekday: Weekday, exerciseId: string) => ExerciseBlock;
   removeExerciseFromDay: (weekday: Weekday, exerciseBlockId: string) => void;
   reorderExercises: (weekday: Weekday, fromIndex: number, toIndex: number) => void;
+  reorderWorkoutDays: (newOrder: Weekday[]) => void;
   updateExerciseWeekPlan: (
     weekday: Weekday,
     exerciseBlockId: string,
@@ -47,7 +52,7 @@ interface CreateCycleDraftStore {
   areAllDaysComplete: () => boolean;
 }
 
-const DEFAULT_WEEKS = 4;
+const DEFAULT_WEEKS = 1;
 
 export const useCreateCycleDraftStore = create<CreateCycleDraftStore>((set, get) => ({
   // Initial state
@@ -62,6 +67,29 @@ export const useCreateCycleDraftStore = create<CreateCycleDraftStore>((set, get)
     set({
       weeks: DEFAULT_WEEKS,
       frequencyDays: [],
+      workoutLength: null,
+      workouts: [],
+      startDate: null,
+    });
+  },
+
+  initializeWithSelectedDate: (date: string) => {
+    // Convert date to weekday (using shortened format: 'mon', 'tue', etc.)
+    const dayOfWeek = dayjs(date).day(); // 0 = Sunday, 1 = Monday, ..., 6 = Saturday
+    const weekdayMap: Record<number, Weekday> = {
+      0: 'sun',
+      1: 'mon',
+      2: 'tue',
+      3: 'wed',
+      4: 'thu',
+      5: 'fri',
+      6: 'sat',
+    };
+    const weekday = weekdayMap[dayOfWeek];
+    
+    set({
+      weeks: DEFAULT_WEEKS,
+      frequencyDays: [weekday],
       workoutLength: null,
       workouts: [],
       startDate: null,
@@ -106,6 +134,13 @@ export const useCreateCycleDraftStore = create<CreateCycleDraftStore>((set, get)
 
       return { frequencyDays: newDays };
     });
+  },
+
+  setDaysPerWeek: (count: number) => {
+    const validCount = Math.max(1, Math.min(7, count));
+    // Use first N days from DAY_ORDER as placeholders
+    const newDays = DAY_ORDER.slice(0, validCount);
+    set({ frequencyDays: newDays });
   },
 
   setWorkoutLength: (length: WorkoutLength) => {
@@ -192,6 +227,21 @@ export const useCreateCycleDraftStore = create<CreateCycleDraftStore>((set, get)
         return { ...workout, exercises };
       }),
     }));
+  },
+
+  reorderWorkoutDays: (newOrder: Weekday[]) => {
+    set((state) => {
+      // Create a new workouts array ordered by newOrder
+      const reorderedWorkouts = newOrder
+        .map(weekday => state.workouts.find(w => w.weekday === weekday))
+        .filter(Boolean) as WorkoutDay[];
+      
+      // Also update frequencyDays to match
+      return {
+        workouts: reorderedWorkouts,
+        frequencyDays: newOrder,
+      };
+    });
   },
 
   updateExerciseWeekPlan: (

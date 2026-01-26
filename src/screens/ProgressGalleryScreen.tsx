@@ -47,7 +47,7 @@ export function ProgressGalleryScreen({ navigation }: any) {
             onPress={() => navigation.navigate('ProgressLogDetail', { progressLogId: item.id })}
             style={[styles.tile, { width: tileSize, height: tileHeight, marginBottom: gap }]}
           >
-            <Image source={{ uri: item.photoUri }} style={styles.tileImage} />
+            <Image source={{ uri: item.photoUris?.[0] || item.photoUri || '' }} style={styles.tileImage} />
             <View style={styles.tileOverlay}>
               <Text style={styles.tileWeight}>
                 {formatWeight(item.weightLbs, settings.useKg)} {settings.useKg ? 'kg' : 'lb'}

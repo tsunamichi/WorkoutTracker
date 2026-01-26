@@ -996,7 +996,7 @@ const styles = StyleSheet.create({
     paddingBottom: 24,
     backgroundColor: COLORS.background,
     borderTopWidth: 1,
-    borderTopColor: COLORS.border,
+    borderTopColor: COLORS.borderDimmed,
   },
   saveButton: {
     backgroundColor: COLORS.primary,

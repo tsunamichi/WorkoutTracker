@@ -1,15 +1,16 @@
 import React, { useState, useMemo } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput, Alert, FlatList } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute } from '@react-navigation/native';
 import * as Haptics from 'expo-haptics';
 import dayjs from 'dayjs';
 import { useStore } from '../store';
 import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS, CARDS } from '../constants';
 import { IconArrowLeft, IconAdd, IconClose, IconSearch, IconCheck } from '../components/icons';
+import { WarmupItemEditor } from '../components/WarmupItemEditor';
 import { useTranslation } from '../i18n/useTranslation';
 import type { Exercise, ExerciseCategory } from '../types';
-import type { WorkoutTemplate } from '../types/training';
+import type { WorkoutTemplate, WarmupItem } from '../types/training';
 
 // Light theme colors
 const LIGHT_COLORS = {
@@ -34,12 +35,15 @@ const MUSCLE_GROUPS: ExerciseCategory[] = [
 
 export function WorkoutBuilderScreen() {
   const navigation = useNavigation();
+  const route = useRoute();
+  const params = (route.params as { selectedDate?: string; shouldScheduleAfterCreate?: boolean } | undefined);
   const insets = useSafeAreaInsets();
-  const { exercises, addWorkoutTemplate } = useStore();
+  const { exercises, addWorkoutTemplate, scheduleWorkout, getScheduledWorkout } = useStore();
   const { t } = useTranslation();
 
   const [workoutName, setWorkoutName] = useState('');
   const [selectedExercises, setSelectedExercises] = useState<string[]>([]);
+  const [warmupItems, setWarmupItems] = useState<WarmupItem[]>([]);
   const [showExercisePicker, setShowExercisePicker] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedMuscle, setSelectedMuscle] = useState<ExerciseCategory | 'All'>('All');
@@ -112,30 +116,86 @@ export function WorkoutBuilderScreen() {
       name: workoutName.trim(),
       createdAt: now,
       updatedAt: now,
+      kind: 'workout',
+      warmupItems: warmupItems,
       items: selectedExercises.map((exerciseId, index) => ({
         exerciseId,
         order: index,
         sets: 3, // Default values
         reps: 10,
       })),
+      lastUsedAt: null,
+      usageCount: 0,
     };
 
     await addWorkoutTemplate(template);
     
-    // Show success and navigate to Workouts tab
-    Alert.alert(
-      t('workoutSaved'),
-      t('workoutSavedToLibrary'),
-      [
-        {
-          text: t('ok'),
-          onPress: () => {
-            // Navigate to Training tab
-            navigation.navigate('Tabs', { initialTab: 'Training' } as any);
+    console.log('📝 Workout saved. Params:', params);
+    console.log('  - shouldScheduleAfterCreate:', params?.shouldScheduleAfterCreate);
+    console.log('  - selectedDate:', params?.selectedDate);
+    
+    // If should schedule after create, check if day is empty
+    if (params?.shouldScheduleAfterCreate && params?.selectedDate) {
+      const dateStr = dayjs(params.selectedDate).format('MMM D');
+      const existingWorkout = getScheduledWorkout(params.selectedDate);
+      
+      console.log('  - existingWorkout:', existingWorkout);
+      
+      if (!existingWorkout) {
+        // Day is empty - ask if they want to use it today
+        Alert.alert(
+          t('workoutSaved'),
+          t('useWorkoutToday').replace('{date}', dateStr),
+          [
+            {
+              text: t('notNow'),
+              style: 'cancel',
+              onPress: () => {
+                navigation.goBack();
+              },
+            },
+            {
+              text: t('useIt'),
+              onPress: async () => {
+                const result = await scheduleWorkout(params.selectedDate, templateId, 'manual');
+                if (result.success) {
+                  Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                }
+                navigation.goBack();
+              },
+            },
+          ]
+        );
+      } else {
+        // Day has a workout - explain it was saved to library but not scheduled
+        Alert.alert(
+          t('workoutSaved'),
+          t('workoutSavedNotScheduled').replace('{date}', dateStr),
+          [
+            {
+              text: t('ok'),
+              onPress: () => {
+                navigation.goBack();
+              },
+            },
+          ]
+        );
+      }
+    } else {
+      // Default behavior: just show success and go back (creating template only)
+      Alert.alert(
+        t('workoutSaved'),
+        t('workoutSavedToLibrary'),
+        [
+          {
+            text: t('ok'),
+            onPress: () => {
+              navigation.goBack();
+            },
           },
-        },
-      ]
-    );
+        ]
+      );
+    }
   };
 
   const handleClearSearch = () => {
@@ -325,6 +385,14 @@ export function WorkoutBuilderScreen() {
             value={workoutName}
             onChangeText={setWorkoutName}
             autoFocus
+          />
+        </View>
+
+        {/* Warm-up Section */}
+        <View style={styles.section}>
+          <WarmupItemEditor 
+            warmupItems={warmupItems}
+            onUpdate={setWarmupItems}
           />
         </View>
 

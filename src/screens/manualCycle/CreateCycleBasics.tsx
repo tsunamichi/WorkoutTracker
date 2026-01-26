@@ -1,19 +1,25 @@
-import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert } from 'react-native';
+import React, { useEffect } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
 import Svg, { Circle, Path } from 'react-native-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useCreateCycleDraftStore } from '../../store/useCreateCycleDraftStore';
-import { DAY_ORDER } from '../../types/manualCycle';
+import { DAY_ORDER, Weekday } from '../../types/manualCycle';
 import { formatWeekdayFull } from '../../utils/manualCycleUtils';
-import { IconAddLine, IconMinusLine, IconArrowLeft } from '../../components/icons';
+import { IconAddLine, IconMinusLine, IconClose } from '../../components/icons';
 import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS } from '../../constants';
 import { useTranslation } from '../../i18n/useTranslation';
+import dayjs from 'dayjs';
 
 interface CreateCycleBasicsProps {
   navigation: any;
+  route?: {
+    params?: {
+      selectedDate?: string; // YYYY-MM-DD
+    };
+  };
 }
 
-export function CreateCycleBasics({ navigation }: CreateCycleBasicsProps) {
+export function CreateCycleBasics({ navigation, route }: CreateCycleBasicsProps) {
   const insets = useSafeAreaInsets();
   const { t } = useTranslation();
   const {
@@ -21,10 +27,30 @@ export function CreateCycleBasics({ navigation }: CreateCycleBasicsProps) {
     frequencyDays,
     setWeeks,
     toggleFrequencyDay,
+    setDaysPerWeek,
     ensureWorkoutsForSelectedDays,
     isBasicsValid,
     resetDraft,
+    initializeWithSelectedDate,
   } = useCreateCycleDraftStore();
+
+  // Initialize draft store on mount
+  useEffect(() => {
+    const selectedDate = route?.params?.selectedDate;
+    
+    if (selectedDate) {
+      // Initialize with selected date (this resets everything and sets the weekday)
+      initializeWithSelectedDate(selectedDate);
+    } else {
+      // No selected date - reset to defaults
+      resetDraft();
+    }
+    
+    // Cleanup on unmount
+    return () => {
+      resetDraft();
+    };
+  }, []);
 
   const handleContinue = () => {
     ensureWorkoutsForSelectedDays();
@@ -45,26 +71,13 @@ export function CreateCycleBasics({ navigation }: CreateCycleBasicsProps) {
         <View style={[styles.header, { paddingTop: insets.top }]}>
           <TouchableOpacity
             onPress={() => {
-              Alert.alert(
-                t('exitSetupTitle'),
-                t('exitSetupMessage'),
-                [
-                  { text: t('cancel'), style: 'cancel' },
-                  {
-                    text: t('exit'),
-                    style: 'destructive',
-                    onPress: () => {
-                      resetDraft();
-                      navigation.navigate('Tabs');
-                    },
-                  },
-                ]
-              );
+              resetDraft();
+              navigation.goBack();
             }}
             style={styles.backButton}
             activeOpacity={1}
           >
-            <IconArrowLeft size={24} color={COLORS.text} />
+            <IconClose size={24} color={COLORS.text} />
           </TouchableOpacity>
           <View style={styles.headerTitleRow}>
             <Text style={styles.headerTitle}>{t('createCycle')}</Text>
@@ -74,7 +87,7 @@ export function CreateCycleBasics({ navigation }: CreateCycleBasicsProps) {
                 <View style={styles.progressIndicator}>
                   <Text style={styles.progressText}>1/4</Text>
                   <Svg height="16" width="16" viewBox="0 0 16 16" style={styles.progressCircle}>
-                    <Circle cx="8" cy="8" r="8" fill={COLORS.backgroundCanvas} />
+                    <Circle cx="8" cy="8" r="8" fill={COLORS.activeCard} />
                     {progress > 0 ? (
                       <Path
                         d={`M 8 8 L 8 0 A 8 8 0 ${progress > 0.5 ? 1 : 0} 1 ${
@@ -93,31 +106,43 @@ export function CreateCycleBasics({ navigation }: CreateCycleBasicsProps) {
         </View>
 
         <ScrollView style={styles.content} contentContainerStyle={styles.scrollContent} bounces={false}>
-          {/* Frequency Days */}
+          {/* Days Per Week */}
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>{t('trainingDays')}</Text>
-            <View style={styles.chipGrid}>
-              {DAY_ORDER.map((day, index) => (
+            <Text style={styles.sectionTitle}>{t('daysPerWeek')}</Text>
+            <Text style={styles.sectionSubtitle}>Workouts will be scheduled consecutively from your start date</Text>
+            <View style={styles.stepper}>
+              <View style={styles.stepperValue}>
+                <View style={styles.stepperValueRow}>
+                  <Text style={styles.stepperNumber}>{frequencyDays.length}</Text>
+                  <Text style={styles.stepperLabel}>{frequencyDays.length === 1 ? 'day' : 'days'}</Text>
+                </View>
+              </View>
+              <View style={styles.stepperControls}>
                 <TouchableOpacity
-                  key={day}
-                  style={[
-                    styles.dayChip,
-                    index % 2 === 0 && styles.dayChipLeft,
-                    frequencyDays.includes(day) && styles.dayChipSelected,
-                  ]}
-                  onPress={() => toggleFrequencyDay(day)}
+                  style={[styles.adjustButtonTapTarget, frequencyDays.length <= 1 && styles.adjustButtonDisabled]}
+                  onPress={() => setDaysPerWeek(frequencyDays.length - 1)}
+                  disabled={frequencyDays.length <= 1}
                   activeOpacity={1}
                 >
-                  <Text
-                    style={[
-                      styles.dayChipText,
-                      frequencyDays.includes(day) && styles.dayChipTextSelected,
-                    ]}
-                  >
-                    {formatWeekdayFull(day)}
-                  </Text>
+                  <View style={styles.adjustButton}>
+                    <View style={styles.adjustButtonInner}>
+                    <IconMinusLine size={24} color={COLORS.accentPrimary} />
+                    </View>
+                  </View>
                 </TouchableOpacity>
-              ))}
+                <TouchableOpacity
+                  style={[styles.adjustButtonTapTarget, frequencyDays.length >= 7 && styles.adjustButtonDisabled]}
+                  onPress={() => setDaysPerWeek(frequencyDays.length + 1)}
+                  disabled={frequencyDays.length >= 7}
+                  activeOpacity={1}
+                >
+                  <View style={styles.adjustButton}>
+                    <View style={styles.adjustButtonInner}>
+                    <IconAddLine size={24} color={COLORS.accentPrimary} />
+                    </View>
+                  </View>
+                </TouchableOpacity>
+              </View>
             </View>
           </View>
 
@@ -250,6 +275,11 @@ const styles = StyleSheet.create({
   sectionTitle: {
     ...TYPOGRAPHY.h3,
     color: COLORS.text,
+    marginBottom: 12,
+  },
+  sectionSubtitle: {
+    ...TYPOGRAPHY.meta,
+    color: COLORS.textMeta,
     marginBottom: 24,
   },
   chipGrid: {

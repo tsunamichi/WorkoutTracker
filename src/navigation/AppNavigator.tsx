@@ -4,12 +4,12 @@ import { useNavigation, useRoute } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { TodayScreen } from '../screens/TodayScreen';
-import { WorkoutsScreen } from '../screens/WorkoutsScreen';
 import { HistoryScreen } from '../screens/HistoryScreen';
 import { WorkoutBuilderScreen } from '../screens/WorkoutBuilderScreen';
 import { WorkoutTemplateDetailScreen } from '../screens/WorkoutTemplateDetailScreen';
 import { ProfileScreen } from '../screens/ProfileScreen';
 import { BodyWeightHistoryScreen } from '../screens/BodyWeightHistoryScreen';
+import { ProgressHomeScreen } from '../screens/ProgressHomeScreen';
 import { ProgressGalleryScreen } from '../screens/ProgressGalleryScreen';
 import { ProgressLogDetailScreen } from '../screens/ProgressLogDetailScreen';
 import { CycleDetailScreen } from '../screens/CycleDetailScreen';
@@ -24,25 +24,26 @@ import HIITTimerExecutionScreen from '../screens/HIITTimerExecutionScreen';
 import { TemplateEditorScreen } from '../screens/onboarding/TemplateEditorScreen';
 import { CustomTemplateInputScreen } from '../screens/onboarding/CustomTemplateInputScreen';
 import { ReviewCreateCycleScreen } from '../screens/onboarding/ReviewCreateCycleScreen';
-import { CreateCycleBasics } from '../screens/manualCycle/CreateCycleBasics';
-import { CreateCycleDaysOverview } from '../screens/manualCycle/CreateCycleDaysOverview';
+import { CreateCycleFlow } from '../screens/manualCycle/CreateCycleFlow';
 import { CreateCycleDayEditor } from '../screens/manualCycle/CreateCycleDayEditor';
-import { CreateCycleReview } from '../screens/manualCycle/CreateCycleReview';
 import { AIWorkoutCreationScreen } from '../screens/AIWorkoutCreationScreen';
 import { WorkoutCreationOptionsScreen } from '../screens/WorkoutCreationOptionsScreen';
-import { IconCalendar, IconWorkouts, IconSwap } from '../components/icons';
+import { IconCalendar, IconHistory, IconSwap, IconAdd } from '../components/icons';
 import { COLORS, TYPOGRAPHY, SPACING, CARDS, BORDER_RADIUS } from '../constants';
 import { useStore } from '../store';
 import { CycleTemplateId } from '../types/workout';
 import { Weekday } from '../types/manualCycle';
 import { navigate } from './navigationService';
 import { BottomDrawer } from '../components/common/BottomDrawer';
+import { AddWorkoutSheet } from '../components/AddWorkoutSheet';
+import { PlanSelectionSheet } from '../components/PlanSelectionSheet';
+import { ExtractDayFromPlanSheet } from '../components/ExtractDayFromPlanSheet';
 import * as Haptics from 'expo-haptics';
 import dayjs from 'dayjs';
 import { useTranslation } from '../i18n/useTranslation';
 
 export type RootStackParamList = {
-  Tabs: { initialTab?: 'Schedule' | 'Training' } | undefined;
+  Tabs: { initialTab?: 'Schedule' | 'Progress' } | undefined;
   Profile: { mode?: 'settings' } | undefined;
   BodyWeightHistory: undefined;
   ProgressGallery: undefined;
@@ -53,7 +54,7 @@ export type RootStackParamList = {
   DesignSystem: undefined;
   CycleDetail: { cycleId: string };
   CycleConflicts: { plan: any; conflicts: any[]; planId?: string };
-  WorkoutExecution: { workoutTemplateId: string; date: string };
+  WorkoutExecution: { workoutId?: string; templateId?: string; workoutTemplateId?: string; date: string; isLocked?: boolean };
   WorkoutEdit: { cycleId: string; workoutTemplateId: string; date: string };
   ExerciseDetail: { exerciseId: string; workoutKey: string };
   HIITTimerList: undefined;
@@ -62,10 +63,8 @@ export type RootStackParamList = {
   TemplateEditor: { templateId?: CycleTemplateId };
   CustomTemplateInput: undefined;
   ReviewCreateCycle: undefined;
-  CreateCycleBasics: undefined;
-  CreateCycleDaysOverview: undefined;
+  CreateCycleFlow: { selectedDate?: string };
   CreateCycleDayEditor: { weekday: Weekday };
-  CreateCycleReview: undefined;
   AIWorkoutCreation: { mode?: 'single' | 'plan' } | undefined;
   WorkoutCreationOptions: undefined;
 };
@@ -87,18 +86,25 @@ function TabNavigator() {
   const navigation = useNavigation();
   const route = useRoute();
   const insets = useSafeAreaInsets();
-  const { cycles, cyclePlans, getActiveCyclePlan, swapWorkoutAssignments, workoutTemplates, scheduleWorkout } = useStore();
+  const { cycles, cyclePlans, getActiveCyclePlan, swapWorkoutAssignments, workoutTemplates, scheduleWorkout, detectCycleConflicts, applyCyclePlan, updateCyclePlan } = useStore();
   const { t } = useTranslation();
-  const [activeTab, setActiveTab] = React.useState<'Schedule' | 'Training'>('Schedule');
+  const [activeTab, setActiveTab] = React.useState<'Schedule' | 'Progress'>('Schedule');
   const [isViewingToday, setIsViewingToday] = React.useState(true);
   const [swapDrawerVisible, setSwapDrawerVisible] = React.useState(false);
   const [swapDrawerData, setSwapDrawerData] = React.useState<{ selectedDate: string; weekDays: any[] } | null>(null);
   const [pressedSwapItemDate, setPressedSwapItemDate] = React.useState<string | null>(null);
   
-  // Animated value for tab indicator position (0 = Schedule, 1 = Training)
+  // NEW: State for Add Workout flow
+  const [addWorkoutSheetVisible, setAddWorkoutSheetVisible] = React.useState(false);
+  const [addWorkoutDate, setAddWorkoutDate] = React.useState<string>('');
+  const [planSelectionSheetVisible, setPlanSelectionSheetVisible] = React.useState(false);
+  const [extractDaySheetVisible, setExtractDaySheetVisible] = React.useState(false);
+  const [selectedPlanForExtract, setSelectedPlanForExtract] = React.useState<string | null>(null);
+  
+  // Animated value for tab indicator position (0 = Schedule, 1 = Progress)
   const indicatorPosition = React.useRef(new Animated.Value(0)).current;
   const scheduleIconOpacity = React.useRef(new Animated.Value(1)).current;
-  const workoutsIconOpacity = React.useRef(new Animated.Value(0)).current;
+  const progressIconOpacity = React.useRef(new Animated.Value(0)).current;
   const [tabBarWidth, setTabBarWidth] = React.useState(0);
   
   // Animate label colors to avoid flicker while the pill transitions
@@ -106,12 +112,12 @@ function TabNavigator() {
     inputRange: [0, 1],
     outputRange: [COLORS.backgroundCanvas, COLORS.text],
   });
-  const workoutsLabelColor = indicatorPosition.interpolate({
+  const progressLabelColor = indicatorPosition.interpolate({
     inputRange: [0, 1],
     outputRange: [COLORS.text, COLORS.backgroundCanvas],
   });
   
-  const switchTab = React.useCallback((tab: 'Schedule' | 'Training') => {
+  const switchTab = React.useCallback((tab: 'Schedule' | 'Progress') => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setActiveTab(tab);
     
@@ -131,17 +137,17 @@ function TabNavigator() {
         tension: 80,
         friction: 12,
       }),
-      Animated.spring(workoutsIconOpacity, {
-        toValue: tab === 'Training' ? 1 : 0,
+      Animated.spring(progressIconOpacity, {
+        toValue: tab === 'Progress' ? 1 : 0,
         useNativeDriver: true,
         tension: 80,
         friction: 12,
       })
     ]).start();
-  }, [indicatorPosition, scheduleIconOpacity, workoutsIconOpacity]);
+  }, [indicatorPosition, scheduleIconOpacity, progressIconOpacity]);
 
   React.useEffect(() => {
-    const params = (route as { params?: { initialTab?: 'Schedule' | 'Training' } }).params;
+    const params = (route as { params?: { initialTab?: 'Schedule' | 'Progress' } }).params;
     if (params?.initialTab && params.initialTab !== activeTab) {
       switchTab(params.initialTab);
     }
@@ -157,17 +163,164 @@ function TabNavigator() {
     setSwapDrawerVisible(true);
   };
   
+  // NEW: Handler for opening Add Workout flow
+  const handleOpenAddWorkout = (date: string) => {
+    setAddWorkoutDate(date);
+    setAddWorkoutSheetVisible(true);
+  };
+  
+  // NEW: Handler for creating blank workout - now opens day/week selector
+  const handleCreateBlank = () => {
+    console.log('🎯 handleCreateBlank called');
+    console.log('   - addWorkoutDate:', addWorkoutDate);
+    setAddWorkoutSheetVisible(false);
+    (navigation as any).navigate('CreateCycleFlow', { 
+      selectedDate: addWorkoutDate,
+    });
+  };
+  
+  // NEW: Handler for selecting a template
+  const handleSelectTemplate = async (templateId: string) => {
+    setAddWorkoutSheetVisible(false);
+    
+    const result = await scheduleWorkout(addWorkoutDate, templateId, 'manual');
+    
+    if (!result.success && result.conflict) {
+      // Handle conflict - ask user if they want to replace
+      const dateStr = dayjs(addWorkoutDate).format('MMM D');
+      const conflictWorkout = result.conflict;
+      
+      // Show native alert with options
+      if (typeof window !== 'undefined' && window.confirm) {
+        const shouldReplace = window.confirm(
+          `${t('workoutExistsOn').replace('{date}', dateStr)}\n\n` +
+          `Existing: ${conflictWorkout.titleSnapshot}\n\n` +
+          `Replace with the new workout?`
+        );
+        
+        if (shouldReplace) {
+          // Try again with replace resolution
+          await scheduleWorkout(addWorkoutDate, templateId, 'manual', undefined, 'replace');
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        }
+      } else {
+        // Fallback for native (use Alert from react-native)
+        const { Alert } = require('react-native');
+        Alert.alert(
+          t('conflictExists'),
+          `${t('workoutExistsOn').replace('{date}', dateStr)}\n\nExisting: ${conflictWorkout.titleSnapshot}`,
+          [
+            { text: t('cancel'), style: 'cancel' },
+            {
+              text: t('replaceIt'),
+              style: 'destructive',
+              onPress: async () => {
+                await scheduleWorkout(addWorkoutDate, templateId, 'manual', undefined, 'replace');
+                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+              }
+            }
+          ]
+        );
+      }
+    } else {
+      // Success - show success feedback
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    }
+  };
+  
+  // Removed: handleSelectFromPlan - no longer needed
+  
+  // NEW: Handler for AI creation (defaults to 'plan' mode to handle both single and multi-day)
+  const handleCreateWithAI = () => {
+    setAddWorkoutSheetVisible(false);
+    (navigation as any).navigate('AIWorkoutCreation', { mode: 'plan' });
+  };
+  
+  // NEW: Handler for extracting a specific day from a plan
+  const handleExtractDay = async (templateId: string, templateName: string) => {
+    setExtractDaySheetVisible(false);
+    setSelectedPlanForExtract(null);
+    
+    // Schedule the extracted workout on the selected date
+    const result = await scheduleWorkout(addWorkoutDate, templateId, 'manual');
+    
+    if (!result.success && result.conflict) {
+      // Handle conflict - show alert with option to replace
+      const dateStr = dayjs(addWorkoutDate).format('MMM D');
+      const conflictWorkout = result.conflict;
+      
+      const { Alert } = require('react-native');
+      Alert.alert(
+        t('conflictExists'),
+        `${t('workoutExistsOn').replace('{date}', dateStr)}\n\nExisting: ${conflictWorkout.titleSnapshot}\n\nReplace with "${templateName}"?`,
+        [
+          { text: t('cancel'), style: 'cancel' },
+          {
+            text: t('replaceIt'),
+            style: 'destructive',
+            onPress: async () => {
+              await scheduleWorkout(addWorkoutDate, templateId, 'manual', undefined, 'replace');
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            }
+          }
+        ]
+      );
+    } else {
+      // Success - show success feedback
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    }
+  };
+  
+  // NEW: Handler for plan selection
+  const handleSelectPlan = async (planId: string, startDate: string) => {
+    setPlanSelectionSheetVisible(false);
+    
+    // Find the plan
+    const plan = cyclePlans.find(p => p.id === planId);
+    if (!plan) return;
+    
+    // Update the plan's start date in the store
+    await updateCyclePlan(planId, { startDate });
+    
+    // Get the updated plan (with new start date)
+    const updatedPlan = { ...plan, startDate };
+    
+    // Detect conflicts
+    const conflicts = detectCycleConflicts(updatedPlan);
+    
+    if (conflicts.length > 0) {
+      // Navigate to conflict resolution screen
+      (navigation as any).navigate('CycleConflicts', {
+        plan: updatedPlan,
+        conflicts,
+        planId,
+      });
+    } else {
+      // No conflicts, apply the plan directly
+      const result = await applyCyclePlan(planId);
+      
+      if (result.success) {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        // Optionally show success message
+      } else {
+        // Show error
+        const { Alert } = require('react-native');
+        Alert.alert(t('error'), 'Failed to apply plan');
+      }
+    }
+  };
+  
   return (
     <View style={{ flex: 1, backgroundColor: COLORS.backgroundCanvas }}>
       {/* Screen Content */}
       {activeTab === 'Schedule' ? (
         <TodayScreen 
-          onNavigateToWorkouts={() => switchTab('Training')} 
           onDateChange={(isToday) => setIsViewingToday(isToday)}
           onOpenSwapDrawer={handleOpenSwapDrawer}
+          onOpenAddWorkout={handleOpenAddWorkout}
         />
       ) : (
-        <WorkoutsScreen />
+        <ProgressHomeScreen navigation={navigation} />
       )}
       
       {/* Custom Bottom Navigation */}
@@ -251,23 +404,23 @@ function TabNavigator() {
             </Animated.View>
           </TouchableOpacity>
           
-          {/* Library Tab */}
+          {/* Progress Tab */}
           <TouchableOpacity
             style={styles.tab}
             activeOpacity={1}
             onPress={() => {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              switchTab('Training');
+              switchTab('Progress');
             }}
           >
             <Animated.View 
               style={[
                 styles.tabIcon,
                 { 
-                opacity: workoutsIconOpacity,
+                opacity: progressIconOpacity,
                   transform: [
                     {
-                      scale: workoutsIconOpacity.interpolate({
+                      scale: progressIconOpacity.interpolate({
                   inputRange: [0, 1],
                         outputRange: [0.85, 1],
                       }),
@@ -276,9 +429,9 @@ function TabNavigator() {
                 }
               ]}
             >
-              <IconWorkouts 
+              <IconHistory 
                 size={24} 
-                color={activeTab === 'Training' ? COLORS.backgroundCanvas : COLORS.text} 
+                color={activeTab === 'Progress' ? COLORS.backgroundCanvas : COLORS.text} 
               />
             </Animated.View>
             <Animated.View
@@ -286,7 +439,7 @@ function TabNavigator() {
                 marginLeft: TAB_ICON_GAP,
                 transform: [
                   {
-                    translateX: workoutsIconOpacity.interpolate({
+                    translateX: progressIconOpacity.interpolate({
                   inputRange: [0, 1],
                       outputRange: [-LABEL_CENTER_OFFSET, 0],
                     }),
@@ -297,11 +450,11 @@ function TabNavigator() {
               <Animated.Text 
                 style={[
                   styles.tabLabel,
-                  { color: workoutsLabelColor }
+                  { color: progressLabelColor }
                 ]} 
                 numberOfLines={1}
               >
-                {t('training')}
+                {t('progress')}
               </Animated.Text>
             </Animated.View>
           </TouchableOpacity>
@@ -329,7 +482,8 @@ function TabNavigator() {
             
             // Check if the selected day is a rest day
             const selectedDay = weekDays.find((day: any) => day.date === selectedDate);
-            const isSelectedDayRestDay = !selectedDay?.workout;
+            const isSelectedDayRestDay = !selectedDay?.scheduledWorkout;
+            const currentTemplateId = selectedDay?.scheduledWorkout?.templateId;
             
             // Filter eligible days (not completed and not the selected date)
             const eligibleDays = weekDays.filter((day: any) => 
@@ -337,43 +491,37 @@ function TabNavigator() {
               day.date !== selectedDate
             );
             
-            // Filter cycle workouts (exclude manually scheduled single workouts)
+            // Filter cycle workouts (from active plan)
             const cycleWorkoutDays = eligibleDays.filter((day: any) => {
-              if (!day.workout) return false;
+              if (!day.scheduledWorkout) return false;
               
-              // Check if workout has been started
+              // Check if workout has been started (in-progress)
               const hasStarted = day.completionPercentage > 0;
               if (hasStarted) return false;
               
-              // Only include cycle workouts
-              const isFromCycle = day.assignment && (
-                day.assignment.cycleId === activeCycleOld?.id ||
-                day.assignment.cycleId === activeCyclePlan?.id
-              );
+              // Only include cycle workouts (source is 'cycle')
+              const isFromCycle = day.scheduledWorkout.source === 'cycle';
               
               return isFromCycle;
             });
             
             // Filter manually scheduled single workouts (separate section)
             const scheduledSingleWorkouts = eligibleDays.filter((day: any) => {
-              if (!day.workout) return false;
+              if (!day.scheduledWorkout) return false;
               
-              // Check if workout has been started
+              // Check if workout has been started (in-progress)
               const hasStarted = day.completionPercentage > 0;
               if (hasStarted) return false;
               
-              // Include if it's a manually scheduled single workout
-              // (has assignment but cycleId is empty or doesn't match active cycle)
-              const hasAssignment = !!day.assignment;
-              const hasEmptyCycleId = !day.assignment?.cycleId || day.assignment.cycleId === '';
-              const isManualSingleWorkout = hasAssignment && hasEmptyCycleId;
+              // Include if it's a manually scheduled single workout (source is 'manual')
+              const isManualSingleWorkout = day.scheduledWorkout.source === 'manual';
               
               return isManualSingleWorkout;
             });
             
             const workoutDays = cycleWorkoutDays;
             
-            const restDays = eligibleDays.filter((day: any) => !day.workout);
+            const restDays = eligibleDays.filter((day: any) => !day.scheduledWorkout);
             
             // If selected day is a rest day, don't show any rest days (only workouts)
             // Otherwise, show up to 1 rest day
@@ -382,11 +530,13 @@ function TabNavigator() {
             // Combine: workouts first, then rest day (if any and if allowed)
             const allDays = [...workoutDays, ...limitedRestDays];
             
-            // Get all single workout templates, but filter out ones already scheduled this week
+            // Get all single workout templates, but filter out:
+            // 1. Ones already scheduled this week
+            // 2. The currently scheduled workout on the selected date (if any)
             const scheduledTemplateIds = new Set(
               weekDays
-                .filter((d: any) => d.workout && d.assignment?.workoutTemplateId)
-                .map((d: any) => d.assignment.workoutTemplateId)
+                .filter((d: any) => d.scheduledWorkout?.templateId)
+                .map((d: any) => d.scheduledWorkout.templateId)
             );
             
             const singleWorkouts = workoutTemplates.filter(template => 
@@ -431,7 +581,7 @@ function TabNavigator() {
                     >
                       <View>
                         <Text style={styles.swapSheetItemTitle}>
-                          {day.workout?.name || 'Rest Day'}
+                          {day.scheduledWorkout?.titleSnapshot || 'Rest Day'}
                         </Text>
                         <Text style={styles.swapSheetItemSubtitle}>
                           {day.dateObj.format('dddd, MMM D')}
@@ -478,7 +628,7 @@ function TabNavigator() {
                             >
                               <View>
                                 <Text style={styles.swapSheetItemTitle}>
-                                  {day.workout?.name}
+                                  {day.scheduledWorkout?.titleSnapshot}
                                 </Text>
                                 <Text style={styles.swapSheetItemSubtitle}>
                                   {day.dateObj.format('dddd, MMM D')}
@@ -541,12 +691,60 @@ function TabNavigator() {
                     ))}
                   </View>
                 )}
+                
+                {/* Create New Workout Button */}
+                <View style={{ height: SPACING.xl }} />
+                <TouchableOpacity
+                  style={styles.createNewWorkoutButton}
+                  onPress={() => {
+                    if (swapDrawerData) {
+                      setSwapDrawerVisible(false);
+                      // Open add workout flow for the selected date
+                      handleOpenAddWorkout(swapDrawerData.selectedDate);
+                    }
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <IconAdd size={20} color={COLORS.accentPrimary} />
+                  <Text style={styles.createNewWorkoutButtonText}>{t('createNewWorkout')}</Text>
+                </TouchableOpacity>
               </>
             );
           })()}
           </ScrollView>
         </View>
       </BottomDrawer>
+      
+      {/* NEW: Add Workout Sheet - Shows templates + create options */}
+      <AddWorkoutSheet
+        visible={addWorkoutSheetVisible}
+        onClose={() => setAddWorkoutSheetVisible(false)}
+        selectedDate={addWorkoutDate}
+        workoutTemplates={workoutTemplates}
+        onSelectTemplate={handleSelectTemplate}
+        onCreateBlank={handleCreateBlank}
+        onCreateWithAI={handleCreateWithAI}
+      />
+      
+      {/* NEW: Plan Selection Sheet - Choose cycle plan and start date */}
+      <PlanSelectionSheet
+        visible={planSelectionSheetVisible}
+        onClose={() => setPlanSelectionSheetVisible(false)}
+        cyclePlans={cyclePlans}
+        onSelectPlan={handleSelectPlan}
+      />
+      
+      {/* NEW: Extract Day from Plan Sheet - Choose specific day from a cycle plan */}
+      <ExtractDayFromPlanSheet
+        visible={extractDaySheetVisible}
+        onClose={() => {
+          setExtractDaySheetVisible(false);
+          setSelectedPlanForExtract(null);
+        }}
+        plan={selectedPlanForExtract ? cyclePlans.find(p => p.id === selectedPlanForExtract) || null : null}
+        workoutTemplates={workoutTemplates}
+        onSelectDay={handleExtractDay}
+      />
     </View>
   );
 }
@@ -627,6 +825,23 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
+  createNewWorkoutButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: SPACING.md,
+    paddingHorizontal: SPACING.lg,
+    borderRadius: BORDER_RADIUS.md,
+    borderWidth: 2,
+    borderColor: COLORS.accentPrimary,
+    borderStyle: 'dashed',
+    backgroundColor: COLORS.backgroundCanvas,
+    gap: SPACING.xs,
+  },
+  createNewWorkoutButtonText: {
+    ...TYPOGRAPHY.bodyBold,
+    color: COLORS.accentPrimary,
+  },
   swapSheetItemWrapper: {
     marginBottom: SPACING.md,
   },
@@ -703,10 +918,8 @@ export default function AppNavigator() {
         <Stack.Screen name="TemplateEditor" component={TemplateEditorScreen} />
         <Stack.Screen name="CustomTemplateInput" component={CustomTemplateInputScreen} />
         <Stack.Screen name="ReviewCreateCycle" component={ReviewCreateCycleScreen} />
-        <Stack.Screen name="CreateCycleBasics" component={CreateCycleBasics} />
-        <Stack.Screen name="CreateCycleDaysOverview" component={CreateCycleDaysOverview} />
+        <Stack.Screen name="CreateCycleFlow" component={CreateCycleFlow} />
         <Stack.Screen name="CreateCycleDayEditor" component={CreateCycleDayEditor} />
-        <Stack.Screen name="CreateCycleReview" component={CreateCycleReview} />
         <Stack.Screen name="AIWorkoutCreation" component={AIWorkoutCreationScreen} />
         <Stack.Screen name="WorkoutCreationOptions" component={WorkoutCreationOptionsScreen} />
       </Stack.Navigator>
