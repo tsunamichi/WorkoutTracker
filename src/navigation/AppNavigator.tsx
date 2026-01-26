@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { TodayScreen } from '../screens/TodayScreen';
 import { HistoryScreen } from '../screens/HistoryScreen';
+import { PlanHistoryDetailScreen } from '../screens/PlanHistoryDetailScreen';
 import { WorkoutBuilderScreen } from '../screens/WorkoutBuilderScreen';
 import { WorkoutTemplateDetailScreen } from '../screens/WorkoutTemplateDetailScreen';
 import { ProfileScreen } from '../screens/ProfileScreen';
@@ -49,6 +50,7 @@ export type RootStackParamList = {
   ProgressGallery: undefined;
   ProgressLogDetail: { progressLogId: string };
   History: undefined;
+  PlanHistoryDetail: { programId: string; programName: string };
   WorkoutBuilder: undefined;
   WorkoutTemplateDetail: { templateId: string };
   DesignSystem: undefined;
@@ -904,6 +906,7 @@ export default function AppNavigator() {
           options={{ presentation: 'modal' }}
         />
         <Stack.Screen name="History" component={HistoryScreen} />
+        <Stack.Screen name="PlanHistoryDetail" component={PlanHistoryDetailScreen} />
         <Stack.Screen name="WorkoutBuilder" component={WorkoutBuilderScreen} />
         <Stack.Screen name="WorkoutTemplateDetail" component={WorkoutTemplateDetailScreen} />
         <Stack.Screen name="DesignSystem" component={DesignSystemScreen} />

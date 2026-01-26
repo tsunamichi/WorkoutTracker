@@ -522,6 +522,7 @@ export function WorkoutExecutionScreen({ route, navigation }: WorkoutExecutionSc
           targetSets: item.sets,
           targetRepsMin: item.reps,
           targetRepsMax: item.reps,
+          targetWeight: item.weight || 0,
           progressionType: 'none' as const,
         })),
       };

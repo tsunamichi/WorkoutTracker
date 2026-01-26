@@ -6,7 +6,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { useStore } from '../store';
 import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS, CARDS } from '../constants';
-import { IconCheck, IconSwap, IconAdd, IconSettings } from '../components/icons';
+import { IconCheck, IconSwap, IconAdd, IconSettings, IconHistory } from '../components/icons';
 import dayjs from 'dayjs';
 import isoWeek from 'dayjs/plugin/isoWeek';
 import { useTranslation } from '../i18n/useTranslation';
@@ -89,9 +89,8 @@ export function TodayScreen({ onDateChange, onOpenSwapDrawer, onOpenAddWorkout }
   // Get start of week based on offset (Monday)
   const weekStart = today.startOf('isoWeek').add(weekOffset, 'week');
   
-  // Calculate current week label from any scheduled workout
-  const anyScheduledWorkout = scheduledWorkouts.find(sw => sw.programName);
-  const currentWeekLabel = anyScheduledWorkout?.programName || t('schedule');
+  // Always show "Schedule" - plan info is shown on individual cards
+  const currentWeekLabel = t('schedule');
   
   // Get workouts for this week (SCHEDULE-FIRST: Only use ScheduledWorkout)
   const weekDays = React.useMemo(() => DAYS_SHORT.map((dayLetter, index) => {
@@ -270,6 +269,13 @@ export function TodayScreen({ onDateChange, onOpenSwapDrawer, onOpenAddWorkout }
                 {currentWeekLabel}
               </Text>
               <View style={styles.headerRight}>
+                <TouchableOpacity
+                  style={styles.settingsButton}
+                  onPress={() => (navigation as any).navigate('History')}
+                  activeOpacity={1}
+                >
+                  <IconHistory size={24} color="#000000" />
+                </TouchableOpacity>
                 <TouchableOpacity
                   style={styles.settingsButton}
                   onPress={() => (navigation as any).navigate('Profile')}

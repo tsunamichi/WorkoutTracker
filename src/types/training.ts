@@ -69,8 +69,9 @@ export type WorkoutTemplateExercise = {
   exerciseId: string;
   order: number;
   sets: number;
-  reps: number;
+  reps: string | number; // string for "8-10", "AMRAP", or numeric
   weight?: number; // optional placeholder
+  isTimeBased?: boolean; // true for time-based exercises (seconds instead of reps)
   restSeconds?: number; // optional
 };
 

@@ -1435,10 +1435,8 @@ export const useStore = create<WorkoutStore>((set, get) => ({
       // Skip exercises marked as skipped - they don't count towards completion
       if (!exerciseProgress.skipped) {
         const sets = exerciseProgress.sets || [];
-        const hasCompletedFlag = sets.some(set => set.completed);
-        completedSets += hasCompletedFlag
-          ? sets.filter(set => set.completed).length
-          : sets.length;
+        // Only count sets that are actually marked as completed
+        completedSets += sets.filter(set => set.completed).length;
       }
     });
     

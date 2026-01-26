@@ -18,6 +18,131 @@ DAY [number] — [Workout name]
 [Exercise] — [Sets]×[Reps] @ [weight] lb
 [Exercise] — [Sets]×[Time] sec @ [weight] lb (optional)`;
 
+type ParsedExercise = {
+  name: string;
+  sets: number | null;
+  reps: number | null;
+  seconds: number | null;
+  weight: number | null;
+  weightMin: number | null;
+  weightMax: number | null;
+  unit: "lb" | "kg" | null;
+  raw: string;
+};
+
+const normalize = (input: string) => {
+  return input
+    .replace(/[—–⸻]/g, "-")
+    .replace(/×/g, "x")
+    .replace(/\t/g, " ")
+    .replace(/[•●]/g, "-")
+    .replace(/\s+/g, " ")
+    .trim();
+};
+
+const parseExerciseLine = (lineRaw: string, inheritedUnit: "lb" | "kg" | null): { ex: ParsedExercise | null; unitOut: "lb" | "kg" | null } => {
+  const line = normalize(lineRaw);
+
+  // Quick filter: likely not an exercise line
+  const looksLikeExercise =
+    line.startsWith("- ") || /\b\d+\s*x\s*\d+\b/i.test(line) || /\bsets?\b/i.test(line);
+  if (!looksLikeExercise) return { ex: null, unitOut: inheritedUnit };
+
+  // Remove bullet prefix
+  const body = line.replace(/^-+\s*/, "");
+
+  // Split name from the rest using a dash, but don't require it
+  // e.g. "Rear Delt Row - 3x10 @ 120 lb"
+  // or "Rear Delt Row 3x10 @ 120 lb"
+  let name = body;
+  let details = "";
+  const mSplit = body.match(/^(.*?)(?:\s+-\s+|\s+)(\d+\s*x\s*\d+.*)$/i);
+  if (mSplit) {
+    name = mSplit[1].trim();
+    details = mSplit[2].trim();
+  } else {
+    // fallback: try to locate first "sets x reps" occurrence
+    const idx = body.search(/\b\d+\s*x\s*\d+\b/i);
+    if (idx !== -1) {
+      name = body.slice(0, idx).trim().replace(/[-–—]\s*$/, "").trim();
+      details = body.slice(idx).trim();
+    } else {
+      // If no sets/reps found, still keep name; details might include weight only
+      const atIdx = body.indexOf("@");
+      if (atIdx !== -1) {
+        name = body.slice(0, atIdx).trim();
+        details = body.slice(atIdx).trim();
+      }
+    }
+  }
+
+  // Parse sets & reps
+  let sets: number | null = null;
+  let reps: number | null = null;
+  let seconds: number | null = null;
+
+  // 3x10
+  const mSR = details.match(/\b(\d+)\s*x\s*(\d+)\b/i);
+  if (mSR) {
+    sets = parseInt(mSR[1], 10);
+    reps = parseInt(mSR[2], 10);
+  }
+
+  // time like 3x45s or 3x45 sec
+  const mTime = details.match(/\b(\d+)\s*x\s*(\d+)\s*(s|sec|secs|second|seconds)\b/i);
+  if (mTime) {
+    sets = parseInt(mTime[1], 10);
+    seconds = parseInt(mTime[2], 10);
+    reps = null;
+  }
+
+  // Parse unit (explicit)
+  let unit: "lb" | "kg" | null = null;
+  if (/\bkg\b/i.test(details)) unit = "kg";
+  if (/\blb\b/i.test(details)) unit = "lb";
+  if (!unit) unit = inheritedUnit;
+
+  // Parse weight
+  let weight: number | null = null;
+  let weightMin: number | null = null;
+  let weightMax: number | null = null;
+
+  // Bodyweight
+  if (/\b(bw|bodyweight)\b/i.test(details)) {
+    weight = null;
+    weightMin = null;
+    weightMax = null;
+  } else {
+    // Range: 15-20 or 15 to 20 (allow decimals)
+    const mRange = details.match(/@\s*([\d.]+)\s*(?:-|to)\s*([\d.]+)/i) || details.match(/\b([\d.]+)\s*(?:-|to)\s*([\d.]+)\s*(?:lb|kg)?\b/i);
+    if (mRange) {
+      weightMin = parseFloat(mRange[1]);
+      weightMax = parseFloat(mRange[2]);
+    } else {
+      // Single number after @, or any trailing number
+      const mAt = details.match(/@\s*([\d.]+)/i);
+      const mAny = details.match(/\b([\d.]+)\s*(?:lb|kg)?\b(?!.*\b[\d.]+\b)/i); // last number in string
+      const pick = mAt?.[1] ?? mAny?.[1];
+      if (pick) weight = parseFloat(pick);
+    }
+  }
+
+  // IMPORTANT: never coerce missing weight to 0
+  const ex: ParsedExercise = {
+    name,
+    sets,
+    reps,
+    seconds,
+    weight,
+    weightMin,
+    weightMax,
+    unit,
+    raw: lineRaw,
+  };
+
+  return { ex, unitOut: unit };
+};
+
 export function AIWorkoutCreationScreen() {
   const navigation = useNavigation();
   const route = useRoute<any>();
@@ -58,6 +183,7 @@ export function AIWorkoutCreationScreen() {
       let weeklyWorkouts: { [week: number]: any[] } = {};
       let currentWeek = 1;
       let currentWorkout: any = null;
+      let inheritedUnit: "lb" | "kg" | null = null;
       
       for (let line of lines) {
         // Clean up the line
@@ -111,85 +237,73 @@ export function AIWorkoutCreationScreen() {
             exercises: [],
           };
         } 
-        // Check if this is an exercise line (starts with bullet or tab)
-        else if (currentWorkout && (trimmedLine.startsWith('•') || trimmedLine.startsWith('\t') || trimmedLine.startsWith('-'))) {
-          // Remove bullet point, tabs, and clean
-          let exerciseLine = trimmedLine.replace(/^[•\t\s\-]+/, '').trim();
+        // Check if this is an exercise line
+        else if (currentWorkout) {
+          const { ex, unitOut } = parseExerciseLine(trimmedLine, inheritedUnit);
+          inheritedUnit = unitOut;
           
-          // Parse format: "Exercise Name — Sets×Reps @ Weight lb" or "Exercise Name — Sets×Time sec"
-          // Try to split by em dash first, then regular dash
-          let exerciseName = '';
-          let detailsPart = '';
-          
-          if (exerciseLine.includes('—')) {
-            const dashParts = exerciseLine.split('—').map(p => p.trim());
-            exerciseName = dashParts[0];
-            detailsPart = dashParts.slice(1).join(' ');
-          } else if (exerciseLine.match(/\s+-\s+\d+/)) {
-            // Match " - " followed by a number (for sets)
-            const dashMatch = exerciseLine.match(/^(.+?)\s+-\s+(.+)$/);
-            if (dashMatch) {
-              exerciseName = dashMatch[1].trim();
-              detailsPart = dashMatch[2].trim();
-            }
-          }
-          
-          if (exerciseName && detailsPart) {
-            // Parse sets×reps/time (e.g., "3×10 @ 60 lb", "4×8-12 @ 100 lb", or "4×30 sec" for time-based)
-            const setsRepsMatch = detailsPart.match(/(\d+)\s*[×x]\s*(\d+)(?:[-–](\d+))?\s*(sec|lb)?/i);
+          if (ex && ex.name) {
+            const isTimeBased = ex.seconds !== null;
+            const sets = ex.sets ?? 3;
+            const reps = ex.reps ?? (isTimeBased ? ex.seconds : 8);
             
-            // Parse weight (e.g., "@ 100 lb" or "@ 25 lb")
-            const weightMatch = detailsPart.match(/@\s*(\d+(?:\.\d+)?)/);
-            
-            if (setsRepsMatch) {
-              const sets = parseInt(setsRepsMatch[1]);
-              const repsMin = parseInt(setsRepsMatch[2]);
-              const repsMax = setsRepsMatch[3] ? parseInt(setsRepsMatch[3]) : repsMin;
-              const unit = setsRepsMatch[4]?.toLowerCase();
-              const isTimeBased = unit === 'sec'; // Check if unit is 'sec'
-              const weight = weightMatch ? parseFloat(weightMatch[1]) : 0;
-              
-              // Find or create exercise in database
-              let exerciseData = exercises.find(e => 
-                e.name.toLowerCase() === exerciseName.toLowerCase()
-              );
-              
-              // If exercise doesn't exist, create it
-              let exerciseId = exerciseData?.id;
-              if (!exerciseData) {
-                const timestamp = Date.now();
-                const random = Math.floor(Math.random() * 10000);
-                exerciseId = `exercise-${timestamp}-${random}`;
-                const newExercise = {
-                  id: exerciseId,
-                  name: exerciseName,
-                  category: 'Other' as any,
-                  equipment: 'Dumbbell',
-                  isCustom: true,
-                  measurementType: isTimeBased ? 'time' as any : 'reps' as any,
-                };
-                await addExercise(newExercise);
-                // Small delay to prevent ID collisions
-                await new Promise(resolve => setTimeout(resolve, 10));
-              } else if (exerciseData && isTimeBased && exerciseData.measurementType !== 'time') {
-                // Update existing exercise to be time-based if it's detected as time-based
-                await updateExercise(exerciseData.id, { measurementType: 'time' as any });
-              }
-              
-              const exTimestamp = Date.now();
-              const exRandom = Math.floor(Math.random() * 10000);
-              currentWorkout.exercises.push({
-                id: `ex-${exTimestamp}-${exRandom}`,
-                exerciseId: exerciseId || `fallback-${exTimestamp}-${exRandom}`,
-                orderIndex: currentWorkout.exercises.length,
-                targetSets: sets,
-                targetRepsMin: repsMin,
-                targetRepsMax: repsMax,
-                targetWeight: weight,
-                progressionType: 'double' as any,
-                progressionValue: 2.5,
-              });
+            // Calculate final weight: use parsed weight, or average of range, or null for bodyweight
+            let weight: number | null = null;
+            if (ex.weight !== null) {
+              weight = ex.weight;
+            } else if (ex.weightMin !== null && ex.weightMax !== null) {
+              weight = (ex.weightMin + ex.weightMax) / 2;
+            } else if (ex.weightMin !== null) {
+              weight = ex.weightMin;
             }
+            // If weight is still null, it's intentionally bodyweight (don't default to 0 here)
+            
+            // Find or create exercise in database
+            let exerciseData = exercises.find(e => 
+              e.name.toLowerCase() === ex.name.toLowerCase()
+            );
+            
+            // If exercise doesn't exist, create it
+            let exerciseId = exerciseData?.id;
+            if (!exerciseData) {
+              const timestamp = Date.now();
+              const random = Math.floor(Math.random() * 10000);
+              exerciseId = `exercise-${timestamp}-${random}`;
+              const newExercise = {
+                id: exerciseId,
+                name: ex.name,
+                category: 'Other' as any,
+                equipment: 'Dumbbell',
+                isCustom: true,
+                measurementType: isTimeBased ? 'time' as any : 'reps' as any,
+              };
+              await addExercise(newExercise);
+              // Small delay to prevent ID collisions
+              await new Promise(resolve => setTimeout(resolve, 10));
+            } else if (exerciseData && isTimeBased && exerciseData.measurementType !== 'time') {
+              // Update existing exercise to be time-based if it's detected as time-based
+              await updateExercise(exerciseData.id, { measurementType: 'time' as any });
+            }
+            
+            const exTimestamp = Date.now();
+            const exRandom = Math.floor(Math.random() * 10000);
+            const targetRepsValue = typeof reps === 'number' ? reps : parseInt(String(reps), 10);
+            
+            currentWorkout.exercises.push({
+              id: `ex-${exTimestamp}-${exRandom}`,
+              exerciseId: exerciseId || `fallback-${exTimestamp}-${exRandom}`,
+              orderIndex: currentWorkout.exercises.length,
+              targetSets: sets,
+              targetRepsMin: targetRepsValue,
+              targetRepsMax: targetRepsValue,
+              targetWeight: weight,
+              isTimeBased: isTimeBased,
+              progressionType: 'double' as any,
+              progressionValue: 2.5,
+            });
+            
+            // Small delay between exercises to prevent collisions
+            await new Promise(resolve => setTimeout(resolve, 5));
           }
         }
       }
@@ -238,12 +352,19 @@ export function AIWorkoutCreationScreen() {
           name: firstWorkout.name || 'Workout',
           createdAt: nowIso,
           updatedAt: nowIso,
+          kind: 'workout',
+          warmupItems: [],
+          lastUsedAt: null,
+          usageCount: 0,
+          source: 'ai',
           items: (firstWorkout.exercises || []).map((ex: any, idx: number) => ({
+            id: `item-${Date.now()}-${idx}`,
             exerciseId: ex.exerciseId,
             order: idx,
             sets: ex.targetSets ?? 3,
-            reps: ex.targetRepsMin ?? 8,
-            weight: ex.targetWeight,
+            reps: ex.isTimeBased ? String(ex.targetRepsMin ?? 30) : String(ex.targetRepsMin ?? 8),
+            weight: ex.targetWeight ?? 0,
+            isTimeBased: ex.isTimeBased ?? false,
           })),
         });
 
@@ -273,12 +394,19 @@ export function AIWorkoutCreationScreen() {
           name: workout.name || `Day ${workout.dayNumber}`,
           createdAt: nowIso,
           updatedAt: nowIso,
+          kind: 'workout',
+          warmupItems: [],
+          lastUsedAt: null,
+          usageCount: 0,
+          source: 'ai',
           items: (workout.exercises || []).map((ex: any, idx: number) => ({
+            id: `item-${Date.now()}-${idx}-${Math.floor(Math.random() * 1000)}`,
             exerciseId: ex.exerciseId,
             order: idx,
             sets: ex.targetSets ?? 3,
-            reps: ex.targetRepsMin ?? 8,
-            weight: ex.targetWeight,
+            reps: ex.isTimeBased ? String(ex.targetRepsMin ?? 30) : String(ex.targetRepsMin ?? 8),
+            weight: ex.targetWeight ?? 0,
+            isTimeBased: ex.isTimeBased ?? false,
           })),
         });
 

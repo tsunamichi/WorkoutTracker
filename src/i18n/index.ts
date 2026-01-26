@@ -17,6 +17,7 @@ type TranslationKey =
   | 'planTrainingProgram'
   | 'noCyclesYet'
   | 'cyclesWillAppearHere'
+  | 'completedWorkoutsWillAppearHere'
   | 'all'
   | 'noExercisesFound'
   | 'tryDifferentSearch'
@@ -549,6 +550,7 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     created: 'Created',
     timesCompleted: 'Times Completed',
     cyclesWillAppearHere: 'Your training cycles will appear here',
+    completedWorkoutsWillAppearHere: 'Your completed workouts will appear here',
     all: 'All',
     noExercisesFound: 'No exercises found',
     tryDifferentSearch: 'Try a different search or filter',
@@ -1041,6 +1043,7 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     created: 'Creado',
     timesCompleted: 'Veces completado',
     cyclesWillAppearHere: 'Tus ciclos de entrenamiento aparecerán aquí',
+    completedWorkoutsWillAppearHere: 'Tus entrenamientos completados aparecerán aquí',
     all: 'Todos',
     noExercisesFound: 'No se encontraron ejercicios',
     tryDifferentSearch: 'Intenta una búsqueda o filtro diferente',
