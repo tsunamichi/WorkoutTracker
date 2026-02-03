@@ -19,7 +19,8 @@ export async function addFakeHistory() {
   
   console.log('✅ Found exercises:', { barbellRow: barbellRow.id, hammerCurl: hammerCurl.id, rearDeltRow: rearDeltRow.id });
   
-  // Create fake sessions for the past 4 weeks
+  // Create fake sessions for the past 3 weeks with progression
+  // Latest week (7 days ago) will be used when "Use latest logged" is toggled
   const sessions = [];
   
   // Week 1 - 21 days ago
@@ -31,19 +32,19 @@ export async function addFakeHistory() {
     notes: 'Good session',
     sets: [
       // Barbell Row - 3 sets
-      { id: `set-1-1`, sessionId: `fake-session-${Date.now()}-1`, exerciseId: barbellRow.id, setIndex: 0, weight: 95, reps: 10, isCompleted: true },
-      { id: `set-1-2`, sessionId: `fake-session-${Date.now()}-1`, exerciseId: barbellRow.id, setIndex: 1, weight: 95, reps: 10, isCompleted: true },
-      { id: `set-1-3`, sessionId: `fake-session-${Date.now()}-1`, exerciseId: barbellRow.id, setIndex: 2, weight: 95, reps: 9, isCompleted: true },
+      { id: `set-1-1`, sessionId: `fake-session-${Date.now()}-1`, exerciseId: barbellRow.id, setIndex: 0, weight: 135, reps: 8, isCompleted: true },
+      { id: `set-1-2`, sessionId: `fake-session-${Date.now()}-1`, exerciseId: barbellRow.id, setIndex: 1, weight: 135, reps: 8, isCompleted: true },
+      { id: `set-1-3`, sessionId: `fake-session-${Date.now()}-1`, exerciseId: barbellRow.id, setIndex: 2, weight: 135, reps: 7, isCompleted: true },
       
       // Rear Delt Row - 3 sets
-      { id: `set-1-4`, sessionId: `fake-session-${Date.now()}-1`, exerciseId: rearDeltRow.id, setIndex: 0, weight: 110, reps: 10, isCompleted: true },
-      { id: `set-1-5`, sessionId: `fake-session-${Date.now()}-1`, exerciseId: rearDeltRow.id, setIndex: 1, weight: 110, reps: 10, isCompleted: true },
-      { id: `set-1-6`, sessionId: `fake-session-${Date.now()}-1`, exerciseId: rearDeltRow.id, setIndex: 2, weight: 110, reps: 9, isCompleted: true },
+      { id: `set-1-4`, sessionId: `fake-session-${Date.now()}-1`, exerciseId: rearDeltRow.id, setIndex: 0, weight: 80, reps: 12, isCompleted: true },
+      { id: `set-1-5`, sessionId: `fake-session-${Date.now()}-1`, exerciseId: rearDeltRow.id, setIndex: 1, weight: 80, reps: 12, isCompleted: true },
+      { id: `set-1-6`, sessionId: `fake-session-${Date.now()}-1`, exerciseId: rearDeltRow.id, setIndex: 2, weight: 80, reps: 11, isCompleted: true },
       
       // Hammer Curl - 3 sets
-      { id: `set-1-7`, sessionId: `fake-session-${Date.now()}-1`, exerciseId: hammerCurl.id, setIndex: 0, weight: 25, reps: 10, isCompleted: true },
-      { id: `set-1-8`, sessionId: `fake-session-${Date.now()}-1`, exerciseId: hammerCurl.id, setIndex: 1, weight: 25, reps: 10, isCompleted: true },
-      { id: `set-1-9`, sessionId: `fake-session-${Date.now()}-1`, exerciseId: hammerCurl.id, setIndex: 2, weight: 25, reps: 8, isCompleted: true },
+      { id: `set-1-7`, sessionId: `fake-session-${Date.now()}-1`, exerciseId: hammerCurl.id, setIndex: 0, weight: 35, reps: 12, isCompleted: true },
+      { id: `set-1-8`, sessionId: `fake-session-${Date.now()}-1`, exerciseId: hammerCurl.id, setIndex: 1, weight: 35, reps: 12, isCompleted: true },
+      { id: `set-1-9`, sessionId: `fake-session-${Date.now()}-1`, exerciseId: hammerCurl.id, setIndex: 2, weight: 35, reps: 11, isCompleted: true },
     ],
   });
   
@@ -55,24 +56,24 @@ export async function addFakeHistory() {
     endTime: dayjs().subtract(14, 'days').hour(11).minute(30).toISOString(),
     notes: 'Felt stronger',
     sets: [
-      // Barbell Row - 3 sets (slight progression)
-      { id: `set-2-1`, sessionId: `fake-session-${Date.now()}-2`, exerciseId: barbellRow.id, setIndex: 0, weight: 100, reps: 10, isCompleted: true },
-      { id: `set-2-2`, sessionId: `fake-session-${Date.now()}-2`, exerciseId: barbellRow.id, setIndex: 1, weight: 100, reps: 10, isCompleted: true },
-      { id: `set-2-3`, sessionId: `fake-session-${Date.now()}-2`, exerciseId: barbellRow.id, setIndex: 2, weight: 100, reps: 10, isCompleted: true },
+      // Barbell Row - 3 sets (progression)
+      { id: `set-2-1`, sessionId: `fake-session-${Date.now()}-2`, exerciseId: barbellRow.id, setIndex: 0, weight: 145, reps: 8, isCompleted: true },
+      { id: `set-2-2`, sessionId: `fake-session-${Date.now()}-2`, exerciseId: barbellRow.id, setIndex: 1, weight: 145, reps: 8, isCompleted: true },
+      { id: `set-2-3`, sessionId: `fake-session-${Date.now()}-2`, exerciseId: barbellRow.id, setIndex: 2, weight: 145, reps: 8, isCompleted: true },
       
       // Rear Delt Row - 3 sets
-      { id: `set-2-4`, sessionId: `fake-session-${Date.now()}-2`, exerciseId: rearDeltRow.id, setIndex: 0, weight: 115, reps: 10, isCompleted: true },
-      { id: `set-2-5`, sessionId: `fake-session-${Date.now()}-2`, exerciseId: rearDeltRow.id, setIndex: 1, weight: 115, reps: 10, isCompleted: true },
-      { id: `set-2-6`, sessionId: `fake-session-${Date.now()}-2`, exerciseId: rearDeltRow.id, setIndex: 2, weight: 115, reps: 10, isCompleted: true },
+      { id: `set-2-4`, sessionId: `fake-session-${Date.now()}-2`, exerciseId: rearDeltRow.id, setIndex: 0, weight: 85, reps: 12, isCompleted: true },
+      { id: `set-2-5`, sessionId: `fake-session-${Date.now()}-2`, exerciseId: rearDeltRow.id, setIndex: 1, weight: 85, reps: 12, isCompleted: true },
+      { id: `set-2-6`, sessionId: `fake-session-${Date.now()}-2`, exerciseId: rearDeltRow.id, setIndex: 2, weight: 85, reps: 12, isCompleted: true },
       
       // Hammer Curl - 3 sets
-      { id: `set-2-7`, sessionId: `fake-session-${Date.now()}-2`, exerciseId: hammerCurl.id, setIndex: 0, weight: 27.5, reps: 10, isCompleted: true },
-      { id: `set-2-8`, sessionId: `fake-session-${Date.now()}-2`, exerciseId: hammerCurl.id, setIndex: 1, weight: 27.5, reps: 10, isCompleted: true },
-      { id: `set-2-9`, sessionId: `fake-session-${Date.now()}-2`, exerciseId: hammerCurl.id, setIndex: 2, weight: 27.5, reps: 9, isCompleted: true },
+      { id: `set-2-7`, sessionId: `fake-session-${Date.now()}-2`, exerciseId: hammerCurl.id, setIndex: 0, weight: 37.5, reps: 12, isCompleted: true },
+      { id: `set-2-8`, sessionId: `fake-session-${Date.now()}-2`, exerciseId: hammerCurl.id, setIndex: 1, weight: 37.5, reps: 12, isCompleted: true },
+      { id: `set-2-9`, sessionId: `fake-session-${Date.now()}-2`, exerciseId: hammerCurl.id, setIndex: 2, weight: 37.5, reps: 11, isCompleted: true },
     ],
   });
   
-  // Week 3 - 7 days ago
+  // Week 3 - 7 days ago (most recent - these will be used for "use latest logged")
   sessions.push({
     id: `fake-session-${Date.now()}-3`,
     date: dayjs().subtract(7, 'days').format('YYYY-MM-DD'),
@@ -80,20 +81,20 @@ export async function addFakeHistory() {
     endTime: dayjs().subtract(7, 'days').hour(11).minute(30).toISOString(),
     notes: 'Great workout!',
     sets: [
-      // Barbell Row - 3 sets
-      { id: `set-3-1`, sessionId: `fake-session-${Date.now()}-3`, exerciseId: barbellRow.id, setIndex: 0, weight: 105, reps: 10, isCompleted: true },
-      { id: `set-3-2`, sessionId: `fake-session-${Date.now()}-3`, exerciseId: barbellRow.id, setIndex: 1, weight: 105, reps: 10, isCompleted: true },
-      { id: `set-3-3`, sessionId: `fake-session-${Date.now()}-3`, exerciseId: barbellRow.id, setIndex: 2, weight: 105, reps: 10, isCompleted: true },
+      // Barbell Row - 3 sets (most recent history)
+      { id: `set-3-1`, sessionId: `fake-session-${Date.now()}-3`, exerciseId: barbellRow.id, setIndex: 0, weight: 155, reps: 8, isCompleted: true },
+      { id: `set-3-2`, sessionId: `fake-session-${Date.now()}-3`, exerciseId: barbellRow.id, setIndex: 1, weight: 155, reps: 8, isCompleted: true },
+      { id: `set-3-3`, sessionId: `fake-session-${Date.now()}-3`, exerciseId: barbellRow.id, setIndex: 2, weight: 155, reps: 7, isCompleted: true },
       
-      // Rear Delt Row - 3 sets (progression!)
-      { id: `set-3-4`, sessionId: `fake-session-${Date.now()}-3`, exerciseId: rearDeltRow.id, setIndex: 0, weight: 120, reps: 10, isCompleted: true },
-      { id: `set-3-5`, sessionId: `fake-session-${Date.now()}-3`, exerciseId: rearDeltRow.id, setIndex: 1, weight: 120, reps: 10, isCompleted: true },
-      { id: `set-3-6`, sessionId: `fake-session-${Date.now()}-3`, exerciseId: rearDeltRow.id, setIndex: 2, weight: 120, reps: 10, isCompleted: true },
+      // Rear Delt Row - 3 sets (most recent history)
+      { id: `set-3-4`, sessionId: `fake-session-${Date.now()}-3`, exerciseId: rearDeltRow.id, setIndex: 0, weight: 90, reps: 12, isCompleted: true },
+      { id: `set-3-5`, sessionId: `fake-session-${Date.now()}-3`, exerciseId: rearDeltRow.id, setIndex: 1, weight: 90, reps: 12, isCompleted: true },
+      { id: `set-3-6`, sessionId: `fake-session-${Date.now()}-3`, exerciseId: rearDeltRow.id, setIndex: 2, weight: 90, reps: 11, isCompleted: true },
       
-      // Hammer Curl - 3 sets
-      { id: `set-3-7`, sessionId: `fake-session-${Date.now()}-3`, exerciseId: hammerCurl.id, setIndex: 0, weight: 27.5, reps: 10, isCompleted: true },
-      { id: `set-3-8`, sessionId: `fake-session-${Date.now()}-3`, exerciseId: hammerCurl.id, setIndex: 1, weight: 27.5, reps: 10, isCompleted: true },
-      { id: `set-3-9`, sessionId: `fake-session-${Date.now()}-3`, exerciseId: hammerCurl.id, setIndex: 2, weight: 27.5, reps: 10, isCompleted: true },
+      // Hammer Curl - 3 sets (most recent history)
+      { id: `set-3-7`, sessionId: `fake-session-${Date.now()}-3`, exerciseId: hammerCurl.id, setIndex: 0, weight: 40, reps: 12, isCompleted: true },
+      { id: `set-3-8`, sessionId: `fake-session-${Date.now()}-3`, exerciseId: hammerCurl.id, setIndex: 1, weight: 40, reps: 12, isCompleted: true },
+      { id: `set-3-9`, sessionId: `fake-session-${Date.now()}-3`, exerciseId: hammerCurl.id, setIndex: 2, weight: 40, reps: 12, isCompleted: true },
     ],
   });
   
