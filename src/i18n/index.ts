@@ -464,7 +464,11 @@ type TranslationKey =
   | 'workoutDays'
   | 'scheduleThisWorkout'
   | 'warmup'
+  | 'core'
   | 'addWarmupItem'
+  | 'createNew'
+  | 'useTemplate'
+  | 'saved'
   | 'noWarmupItems'
   | 'exerciseName'
   | 'seconds'
@@ -532,8 +536,8 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     progressHelperAvailable: 'Weekly check-in is available today.',
     progressEmptyCtaAvailable: 'Add your first weekly check-in.',
     progressEmptyCtaLocked: 'Your first weekly check-in unlocks on Friday.',
-    weeklyCheckIn: 'Weekly check-in',
-    weeklyCheckInSubtitle: 'Add one photo + one weight entry ({unit}).',
+    weeklyCheckIn: 'Log progress',
+    weeklyCheckInSubtitle: 'Add photos and track your weight.',
     addPhotos: 'Add photos',
     addWeight: 'Add weight',
     progressPhoto: 'Photo',
@@ -974,7 +978,11 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     workoutDays: 'Workout Days',
     scheduleThisWorkout: 'Schedule This Workout',
     warmup: 'Warm-up',
+    core: 'Core',
     addWarmupItem: 'Add Item',
+    createNew: 'Create new',
+    useTemplate: 'Use template',
+    saved: 'Saved',
     noWarmupItems: 'No warm-up items yet. Tap "Add Item" to get started.',
     completed: 'completed',
     removeWarmup: 'Remove Warm-up',
@@ -1048,8 +1056,8 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     progressHelperAvailable: 'El check-in semanal está disponible hoy.',
     progressEmptyCtaAvailable: 'Agrega tu primer check-in semanal.',
     progressEmptyCtaLocked: 'Tu primer check-in semanal se habilita el viernes.',
-    weeklyCheckIn: 'Check-in semanal',
-    weeklyCheckInSubtitle: 'Agrega una foto + un peso ({unit}).',
+    weeklyCheckIn: 'Registrar progreso',
+    weeklyCheckInSubtitle: 'Agrega fotos y registra tu peso.',
     addPhotos: 'Agregar fotos',
     addWeight: 'Agregar peso',
     progressPhoto: 'Foto',
@@ -1491,7 +1499,11 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     workoutDays: 'Días de Entrenamiento',
     scheduleThisWorkout: 'Programar Este Entrenamiento',
     warmup: 'Calentamiento',
+    core: 'Core',
     addWarmupItem: 'Agregar',
+    createNew: 'Crear nuevo',
+    useTemplate: 'Usar plantilla',
+    saved: 'Guardados',
     noWarmupItems: 'No hay calentamiento. Toca "Agregar" para comenzar.',
     completed: 'completados',
     removeWarmup: 'Eliminar Calentamiento',

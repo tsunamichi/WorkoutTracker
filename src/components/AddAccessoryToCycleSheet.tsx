@@ -92,7 +92,7 @@ export const AddAccessoryToCycleSheet = ({
       <View style={styles.container}>
         <ScrollView contentContainerStyle={styles.content} bounces={false}>
           <View style={styles.header}>
-            <Text style={styles.title}>Add Accessory</Text>
+            <Text style={styles.title}>Add Core Exercise</Text>
             <Text style={styles.subtitle}>
               {t('cycleSetsSyncedInfo')} ({cycleSets} {t('setsUnit')})
             </Text>

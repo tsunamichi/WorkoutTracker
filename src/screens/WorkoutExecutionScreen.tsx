@@ -1019,6 +1019,62 @@ export function WorkoutExecutionScreen({ route, navigation }: WorkoutExecutionSc
               });
             })()}
           </View>
+          
+          {/* Accessories Section */}
+          {template?.accessoryItems && template.accessoryItems.length > 0 && (() => {
+            const accessoryCompletion = { percentage: 0, completedCount: 0, totalCount: 0 }; // TODO: implement getAccessoryCompletion
+            const allComplete = accessoryCompletion.percentage === 100;
+            
+            // Check if any exercise has been started
+            const isAnyExerciseStarted = workout?.exercises.some(ex => {
+              const progress = getExerciseProgress(workoutKey, ex.id);
+              return progress?.sets.some(set => set.completed) || false;
+            }) || false;
+            
+            return (
+              <View style={styles.accessorySection}>
+                <TouchableOpacity
+                  style={[
+                    styles.accessoryCard, 
+                    allComplete && styles.accessoryCardComplete,
+                    isAnyExerciseStarted && styles.accessoryCardDisabled
+                  ]}
+                  onPress={() => {
+                    if (isAnyExerciseStarted) return;
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    (navigation as any).navigate('AccessoriesExecution', { 
+                      workoutKey, 
+                      workoutTemplateId 
+                    });
+                  }}
+                  activeOpacity={1}
+                  disabled={isAnyExerciseStarted}
+                >
+                  <View style={styles.accessoryCardContent}>
+                    <Text style={[styles.accessoryCardTitle, isAnyExerciseStarted && styles.accessoryCardTitleDisabled]}>{t('core')}</Text>
+                    {!isAnyExerciseStarted && <Text style={styles.accessoryStartText}>{t('start')}</Text>}
+                  </View>
+                </TouchableOpacity>
+              </View>
+            );
+          })()}
+          
+          {/* Add Accessories Button (when no accessories exist) */}
+          {template && (!template.accessoryItems || template.accessoryItems.length === 0) && (
+            <View style={styles.accessorySection}>
+              <TouchableOpacity
+                style={styles.addAccessoryButton}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  (navigation as any).navigate('AccessoriesEditor', { templateId: workoutTemplateId });
+                }}
+                activeOpacity={1}
+              >
+                <IconAdd size={20} color={COLORS.text} />
+                <Text style={styles.addAccessoryText}>{t('core')}</Text>
+              </TouchableOpacity>
+            </View>
+          )}
         </ScrollView>
         
       
@@ -1215,6 +1271,57 @@ const styles = StyleSheet.create({
     gap: SPACING.sm,
   },
   addWarmupText: {
+    ...TYPOGRAPHY.metaBold,
+    color: COLORS.text,
+  },
+  // Accessories Section (mirrors warmup)
+  accessorySection: {
+    marginTop: SPACING.xxxl,
+  },
+  accessoryCard: {
+    backgroundColor: CARDS.cardDeepDimmed.outer.backgroundColor,
+    borderRadius: CARDS.cardDeepDimmed.outer.borderRadius,
+    borderWidth: CARDS.cardDeepDimmed.outer.borderWidth,
+    borderColor: CARDS.cardDeepDimmed.outer.borderColor,
+    padding: SPACING.lg,
+  },
+  accessoryCardComplete: {
+    backgroundColor: COLORS.activeCard,
+    opacity: 0.7,
+  },
+  accessoryCardDisabled: {
+    opacity: 0.4,
+  },
+  accessoryCardContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  accessoryCardTitle: {
+    ...TYPOGRAPHY.body,
+    color: COLORS.text,
+  },
+  accessoryCardTitleDisabled: {
+    color: COLORS.textMeta,
+  },
+  accessoryStartText: {
+    ...TYPOGRAPHY.metaBold,
+    color: COLORS.accentPrimary,
+  },
+  addAccessoryButton: {
+    width: '100%',
+    height: 56,
+    borderRadius: BORDER_RADIUS.lg,
+    borderWidth: 1,
+    borderColor: COLORS.textMeta,
+    borderStyle: 'dashed',
+    backgroundColor: 'transparent',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: SPACING.sm,
+  },
+  addAccessoryText: {
     ...TYPOGRAPHY.metaBold,
     color: COLORS.text,
   },

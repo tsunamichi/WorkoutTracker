@@ -107,7 +107,7 @@ export function AccessoryItemEditorSheet({
           {/* Header */}
           <View style={styles.header}>
             <Text style={styles.title}>
-              {item.exerciseName || 'Add Accessory'}
+              {item.exerciseName || 'Add Core Exercise'}
             </Text>
           </View>
 

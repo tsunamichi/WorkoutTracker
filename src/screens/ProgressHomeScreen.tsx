@@ -42,14 +42,7 @@ export function ProgressHomeScreen({ navigation }: ProgressHomeScreenProps) {
   const [isSavingCheckIn, setIsSavingCheckIn] = useState(false);
   const { t } = useTranslation();
 
-  const today = dayjs();
-  const currentWeekKey = `${today.isoWeekYear()}-W${String(today.isoWeek()).padStart(2, '0')}`;
-  const isFriday = today.isoWeekday() === 5;
-  const hasLoggedThisWeek = progressLogs.some(l => l.weekKey === currentWeekKey);
-  const canLogToday = __DEV__ ? true : isFriday && !hasLoggedThisWeek;
-
   const openWeeklyCheckIn = () => {
-    if (!canLogToday) return;
     setShowWeeklyCheckIn(true);
   };
 
@@ -117,20 +110,13 @@ export function ProgressHomeScreen({ navigation }: ProgressHomeScreenProps) {
     setIsSavingCheckIn(false);
 
     if (!result.success) {
-      if (result.error === 'already_logged') {
-        Alert.alert(t('alertErrorTitle'), t('progressAlreadyLoggedThisWeek'));
-      } else if (result.error === 'not_friday') {
-        Alert.alert(t('alertErrorTitle'), t('progressOnlyAvailableFriday'));
-      } else {
-        Alert.alert(t('alertErrorTitle'), t('progressLogFailed'));
-      }
+      Alert.alert(t('alertErrorTitle'), t('progressLogFailed'));
       return;
     }
 
     setCheckInPhotoUris([]);
     setCheckInWeight('');
     setShowWeeklyCheckIn(false);
-    Alert.alert(t('progressLogged'), t('progressLoggedSuccess'));
   };
 
   const sortedProgressLogs = useMemo(() => {
@@ -206,37 +192,28 @@ export function ProgressHomeScreen({ navigation }: ProgressHomeScreenProps) {
           </View>
         </View>
 
+        {/* Add Progress Button - Above Grid */}
+        <View style={styles.addProgressContainer}>
+          <TouchableOpacity
+            onPress={openWeeklyCheckIn}
+            activeOpacity={1}
+            style={styles.addProgressButton}
+          >
+            <IconAdd size={20} color={COLORS.text} />
+            <Text style={styles.addProgressButtonText}>
+              {t('add')}
+            </Text>
+          </TouchableOpacity>
+        </View>
+
         {/* Progress Grid - Full Bleed */}
         <View style={styles.progressGridContainer}>
           <View style={styles.progressGrid}>
             {(() => {
               const tileSize = SCREEN_WIDTH / 3;
               const tileHeight = tileSize * (16 / 9);
-              
-              const logButton = (
-                <TouchableOpacity
-                  key="log-progress-btn"
-                  onPress={openWeeklyCheckIn}
-                  activeOpacity={1}
-                  disabled={!canLogToday}
-                  style={[
-                    styles.progressTile,
-                    styles.progressLogTile,
-                    !canLogToday && styles.progressLogTileDisabled,
-                    {
-                      width: tileSize,
-                      height: tileHeight,
-                    },
-                  ]}
-                >
-                  <IconAdd size={20} color={canLogToday ? COLORS.accentPrimary : COLORS.textMeta} />
-                  <Text style={[styles.progressLogTileText, !canLogToday && styles.progressLogTileTextDisabled]}>
-                    {t('add')}
-                  </Text>
-                </TouchableOpacity>
-              );
 
-              const logTiles = sortedProgressLogs.slice(0, 5).map((log, index) => {
+              const logTiles = sortedProgressLogs.slice(0, 6).map((log, index) => {
                 const hasPhoto = (log.photoUris && log.photoUris.length > 0) || !!log.photoUri;
                 const hasWeight = log.weightLbs !== undefined;
                 
@@ -284,13 +261,13 @@ export function ProgressHomeScreen({ navigation }: ProgressHomeScreenProps) {
                 );
               });
 
-              return [logButton, ...logTiles];
+              return logTiles;
             })()}
           </View>
         </View>
 
         {/* See All Button - Back in padded area */}
-        {sortedProgressLogs.length > 5 && (
+        {sortedProgressLogs.length > 6 && (
           <View style={styles.seeAllContainer}>
             <TouchableOpacity
               style={styles.progressSeeAllButton}
@@ -303,7 +280,7 @@ export function ProgressHomeScreen({ navigation }: ProgressHomeScreenProps) {
         )}
       </ScrollView>
 
-      {/* Weekly Check-in Bottom Drawer */}
+      {/* Progress Log Bottom Drawer */}
       <BottomDrawer
         visible={showWeeklyCheckIn}
         onClose={() => {
@@ -314,7 +291,7 @@ export function ProgressHomeScreen({ navigation }: ProgressHomeScreenProps) {
       >
         <View style={styles.checkInContent}>
           <Text style={styles.checkInTitle}>{t('weeklyCheckIn')}</Text>
-          <Text style={styles.checkInSubtitle}>{t('addPhotosAndWeight')}</Text>
+          <Text style={styles.checkInSubtitle}>{t('weeklyCheckInSubtitle')}</Text>
 
           {/* Photos */}
           <View style={styles.checkInSection}>
@@ -429,6 +406,27 @@ const styles = StyleSheet.create({
     color: COLORS.textMeta,
     textAlign: 'center',
   },
+  addProgressContainer: {
+    paddingHorizontal: SPACING.xxl,
+    marginBottom: SPACING.xl,
+  },
+  addProgressButton: {
+    width: '100%',
+    height: 56,
+    borderRadius: BORDER_RADIUS.lg,
+    borderWidth: 1,
+    borderColor: COLORS.textMeta,
+    borderStyle: 'dashed',
+    backgroundColor: 'transparent',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: SPACING.sm,
+  },
+  addProgressButtonText: {
+    ...TYPOGRAPHY.metaBold,
+    color: COLORS.text,
+  },
   progressGridContainer: {
     marginBottom: SPACING.xl,
   },
@@ -441,23 +439,6 @@ const styles = StyleSheet.create({
   },
   progressTile: {
     overflow: 'hidden',
-  },
-  progressLogTile: {
-    backgroundColor: COLORS.activeCard,
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: SPACING.xs,
-  },
-  progressLogTileDisabled: {
-    opacity: 0.5,
-  },
-  progressLogTileText: {
-    ...TYPOGRAPHY.meta,
-    color: COLORS.accentPrimary,
-    fontWeight: '600',
-  },
-  progressLogTileTextDisabled: {
-    color: COLORS.textMeta,
   },
   progressTileImage: {
     width: '100%',

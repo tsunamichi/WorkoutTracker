@@ -270,7 +270,7 @@ export function WarmupEditorScreen() {
       >
         {/* Templates Section */}
         <View style={styles.templatesSection}>
-          <Text style={styles.sectionTitle}>Templates</Text>
+          <Text style={styles.sectionTitle}>{t('saved')}</Text>
           <View style={styles.templatesGrid}>
             {Object.entries(WARMUP_TEMPLATES).map(([key, template]) => (
               <TouchableOpacity
@@ -290,7 +290,7 @@ export function WarmupEditorScreen() {
                       style={styles.applyButton}
                       activeOpacity={1}
                     >
-                      <Text style={styles.applyButtonText}>Apply</Text>
+                      <Text style={styles.applyButtonText}>{t('useTemplate')}</Text>
                       <IconPlay size={10} color={COLORS.accentPrimary} />
                     </TouchableOpacity>
                   </View>
@@ -300,14 +300,7 @@ export function WarmupEditorScreen() {
           </View>
         </View>
 
-        {warmupItems.length === 0 ? (
-          <View style={styles.emptyState}>
-            <Text style={styles.emptyText}>{t('noWarmupItems')}</Text>
-            <Text style={styles.emptySubtext}>
-              Tap "Add Item" to add warm-up exercises
-            </Text>
-          </View>
-        ) : (
+        {warmupItems.length === 0 ? null : (
           warmupItems.map((item, index) => {
             const isPartOfCycle = !!item.cycleId;
             const isNextInCycle = index < warmupItems.length - 1 && 
@@ -386,7 +379,7 @@ export function WarmupEditorScreen() {
           activeOpacity={1}
         >
           <IconAdd size={20} color={COLORS.text} />
-          <Text style={styles.addItemText}>{t('addWarmupItem')}</Text>
+          <Text style={styles.addItemText}>{t('createNew')}</Text>
         </TouchableOpacity>
       </ScrollView>
 

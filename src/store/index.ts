@@ -967,17 +967,13 @@ export const useStore = create<WorkoutStore>((set, get) => ({
 
   addProgressLog: async ({ photoUris, weightLbs }) => {
     const now = dayjs();
-    // Dev-only override: allow logging any day for testing.
-    // Production rule stays Friday-only.
-    const isFriday = now.isoWeekday() === 5;
-    const isAllowedDay = __DEV__ || isFriday;
-    if (!isAllowedDay) return { success: false, error: 'not_friday' };
-    if (!photoUris || photoUris.length === 0) return { success: false, error: 'photo_required' };
-    if (!Number.isFinite(weightLbs) || weightLbs <= 0) return { success: false, error: 'weight_invalid' };
+    
+    // Validate that at least photos or weight is provided
+    const hasPhotos = photoUris && photoUris.length > 0;
+    const hasWeight = Number.isFinite(weightLbs) && weightLbs! > 0;
+    if (!hasPhotos && !hasWeight) return { success: false, error: 'data_required' };
 
     const weekKey = `${now.isoWeekYear()}-W${String(now.isoWeek()).padStart(2, '0')}`;
-    const alreadyLogged = get().progressLogs.some(l => l.weekKey === weekKey);
-    if (!__DEV__ && alreadyLogged) return { success: false, error: 'already_logged' };
 
     const createdAt = new Date().toISOString();
     const dateLabel = dayjs(createdAt).format('MMM D');

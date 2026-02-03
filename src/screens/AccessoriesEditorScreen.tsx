@@ -14,24 +14,52 @@ import type { AccessoryItem } from '../types/training';
 
 // Accessory Templates (Core work)
 const ACCESSORY_TEMPLATES = {
-  core: {
-    name: 'Core',
+  dayA: {
+    name: 'Day A',
     items: [
-      // Superset 1 - 3 rounds
-      { exerciseName: 'Plank', sets: 3, reps: 30, weight: 0, isTimeBased: true, cycleId: 'template-cycle-1', cycleOrder: 0 },
-      { exerciseName: 'Dead Bug', sets: 3, reps: 10, weight: 0, isTimeBased: false, cycleId: 'template-cycle-1', cycleOrder: 1 },
-      // Superset 2 - 3 rounds
-      { exerciseName: 'Side Plank', sets: 3, reps: 20, weight: 0, isTimeBased: true, isPerSide: true, cycleId: 'template-cycle-2', cycleOrder: 0 },
-      { exerciseName: 'Bird Dog', sets: 3, reps: 8, weight: 0, isTimeBased: false, isPerSide: true, cycleId: 'template-cycle-2', cycleOrder: 1 },
+      { exerciseName: 'Ab Wheel Rollout', sets: 3, reps: 8, weight: 0, isTimeBased: false },
+      { exerciseName: 'Cable Crunch', sets: 3, reps: 12, weight: 0, isTimeBased: false },
+      { exerciseName: 'Dead Bug', sets: 2, reps: 8, weight: 0, isTimeBased: false, isPerSide: true },
     ],
   },
-  abs: {
-    name: 'Abs',
+  dayB: {
+    name: 'Day B',
     items: [
-      // Single exercises
-      { exerciseName: 'Ab Wheel', sets: 3, reps: 12, weight: 0, isTimeBased: false },
-      { exerciseName: 'Hanging Leg Raise', sets: 3, reps: 10, weight: 0, isTimeBased: false },
-      { exerciseName: 'Cable Crunch', sets: 3, reps: 15, weight: 80, isTimeBased: false },
+      { exerciseName: 'Pallof Press', sets: 3, reps: 10, weight: 0, isTimeBased: false, isPerSide: true },
+      { exerciseName: 'Half-Kneeling Cable Chop', sets: 3, reps: 8, weight: 0, isTimeBased: false, isPerSide: true },
+      { exerciseName: 'Single-Arm Farmer Hold', sets: 2, reps: 35, weight: 0, isTimeBased: true, isPerSide: true },
+    ],
+  },
+  dayC: {
+    name: 'Day C',
+    items: [
+      { exerciseName: 'Suitcase Carry', sets: 4, reps: 35, weight: 0, isTimeBased: true, isPerSide: true },
+      { exerciseName: 'Weighted Side Plank', sets: 3, reps: 25, weight: 0, isTimeBased: true, isPerSide: true },
+      { exerciseName: 'Offset Kettlebell March', sets: 2, reps: 10, weight: 0, isTimeBased: false, isPerSide: true },
+    ],
+  },
+  dayD: {
+    name: 'Day D',
+    items: [
+      { exerciseName: 'Long-Lever Plank', sets: 4, reps: 25, weight: 0, isTimeBased: true },
+      { exerciseName: 'Cable Pulldown Crunch', sets: 3, reps: 10, weight: 0, isTimeBased: false },
+      { exerciseName: 'Dead Bug (Straight-Leg)', sets: 2, reps: 6, weight: 0, isTimeBased: false, isPerSide: true },
+    ],
+  },
+  dayE: {
+    name: 'Day E',
+    items: [
+      { exerciseName: 'Cable Lift', sets: 3, reps: 8, weight: 0, isTimeBased: false, isPerSide: true },
+      { exerciseName: 'Pallof Press ISO Hold', sets: 3, reps: 25, weight: 0, isTimeBased: true, isPerSide: true },
+      { exerciseName: 'Single-Arm DB Carry', sets: 2, reps: 25, weight: 0, isTimeBased: true, isPerSide: true },
+    ],
+  },
+  dayF: {
+    name: 'Day F',
+    items: [
+      { exerciseName: 'Hanging Knee Raise', sets: 3, reps: 10, weight: 0, isTimeBased: false },
+      { exerciseName: 'Decline Sit-Up', sets: 3, reps: 8, weight: 0, isTimeBased: false },
+      { exerciseName: 'Side Plank Reach-Through', sets: 2, reps: 8, weight: 0, isTimeBased: false, isPerSide: true },
     ],
   },
 };
@@ -253,7 +281,7 @@ export function AccessoriesEditorScreen() {
         </View>
         
         <View style={styles.pageTitleContainer}>
-          <Text style={styles.pageTitle}>Accessories</Text>
+          <Text style={styles.pageTitle}>Core</Text>
           <Text style={styles.pageSubtitle}>{template.name}</Text>
         </View>
       </View>
@@ -265,7 +293,7 @@ export function AccessoriesEditorScreen() {
       >
         {/* Templates Section */}
         <View style={styles.templatesSection}>
-          <Text style={styles.sectionTitle}>Templates</Text>
+          <Text style={styles.sectionTitle}>{t('saved')}</Text>
           <View style={styles.templatesGrid}>
             {Object.entries(ACCESSORY_TEMPLATES).map(([key, template]) => (
               <TouchableOpacity
@@ -285,7 +313,7 @@ export function AccessoriesEditorScreen() {
                       style={styles.applyButton}
                       activeOpacity={1}
                     >
-                      <Text style={styles.applyButtonText}>Apply</Text>
+                      <Text style={styles.applyButtonText}>{t('useTemplate')}</Text>
                       <IconPlay size={10} color={COLORS.accentPrimary} />
                     </TouchableOpacity>
                   </View>
@@ -295,14 +323,7 @@ export function AccessoriesEditorScreen() {
           </View>
         </View>
 
-        {accessoryItems.length === 0 ? (
-          <View style={styles.emptyState}>
-            <Text style={styles.emptyText}>No accessory exercises</Text>
-            <Text style={styles.emptySubtext}>
-              Tap "Add Item" to add accessory exercises
-            </Text>
-          </View>
-        ) : (
+        {accessoryItems.length === 0 ? null : (
           accessoryItems.map((item, index) => {
             const isPartOfCycle = !!item.cycleId;
             const isNextInCycle = index < accessoryItems.length - 1 && 
@@ -381,7 +402,7 @@ export function AccessoriesEditorScreen() {
           activeOpacity={1}
         >
           <IconAdd size={20} color={COLORS.text} />
-          <Text style={styles.addItemText}>Add Accessory</Text>
+          <Text style={styles.addItemText}>{t('createNew')}</Text>
         </TouchableOpacity>
       </ScrollView>
 
