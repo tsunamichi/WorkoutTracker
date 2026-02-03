@@ -95,6 +95,37 @@ export function DesignSystemScreen({ navigation }: DesignSystemScreenProps) {
           {/* Colors Section */}
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>{t('colorsTitle')}</Text>
+            
+            {/* Accent Color Clarification */}
+            <View style={styles.accentClarification}>
+              <Text style={styles.clarificationTitle}>Accent Primary Usage</Text>
+              <View style={styles.clarificationRow}>
+                <View style={styles.clarificationItem}>
+                  <View style={styles.colorSwatchWrapper}>
+                    <View style={[styles.colorSwatchGradient, { backgroundColor: COLORS.accentPrimary }]} />
+                  </View>
+                  <Text style={styles.clarificationLabel}>Solid Color</Text>
+                  <Text style={styles.clarificationValue}>{COLORS.accentPrimary}</Text>
+                  <Text style={styles.clarificationUsage}>Use for: borders, highlights, animated effects</Text>
+                </View>
+                <View style={styles.clarificationItem}>
+                  <View style={styles.colorSwatchWrapper}>
+                    <LinearGradient
+                      colors={GRADIENTS.accentPrimary.colors}
+                      start={GRADIENTS.accentPrimary.start}
+                      end={GRADIENTS.accentPrimary.end}
+                      style={styles.colorSwatchGradient}
+                    />
+                  </View>
+                  <Text style={styles.clarificationLabel}>Gradient</Text>
+                  <Text style={styles.clarificationValue}>
+                    {GRADIENTS.accentPrimary.colors[0]} → {GRADIENTS.accentPrimary.colors[1]}
+                  </Text>
+                  <Text style={styles.clarificationUsage}>Use for: primary buttons, CTAs</Text>
+                </View>
+              </View>
+            </View>
+            
             <View style={styles.colorList}>
               {Object.entries(LIGHT_COLORS).map(([name, value]) => (
                 <View key={name} style={styles.colorRow}>
@@ -104,12 +135,7 @@ export function DesignSystemScreen({ navigation }: DesignSystemScreenProps) {
                   </View>
                   {name === 'accentPrimary' ? (
                     <View style={styles.colorSwatchWrapper}>
-                      <LinearGradient
-                        colors={GRADIENTS.accentPrimary.colors}
-                        start={GRADIENTS.accentPrimary.start}
-                        end={GRADIENTS.accentPrimary.end}
-                        style={styles.colorSwatchGradient}
-                      />
+                      <View style={[styles.colorSwatchGradient, { backgroundColor: value }]} />
                     </View>
                   ) : name === 'accentPrimaryLight' || name === 'accentPrimaryDark' ? (
                     <View style={styles.colorSwatchWrapper}>
@@ -503,6 +529,46 @@ const styles = StyleSheet.create({
   },
   
   // Colors
+  accentClarification: {
+    backgroundColor: COLORS.activeCard,
+    borderRadius: BORDER_RADIUS.md,
+    padding: SPACING.lg,
+    marginBottom: SPACING.xl,
+  },
+  clarificationTitle: {
+    ...TYPOGRAPHY.body,
+    fontWeight: '600',
+    color: LIGHT_COLORS.text,
+    marginBottom: SPACING.md,
+  },
+  clarificationRow: {
+    flexDirection: 'row',
+    gap: SPACING.md,
+  },
+  clarificationItem: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  clarificationLabel: {
+    ...TYPOGRAPHY.meta,
+    fontWeight: '600',
+    color: LIGHT_COLORS.text,
+    marginTop: SPACING.sm,
+    marginBottom: SPACING.xs,
+  },
+  clarificationValue: {
+    ...TYPOGRAPHY.meta,
+    color: LIGHT_COLORS.textMeta,
+    marginBottom: SPACING.xs,
+    textAlign: 'center',
+  },
+  clarificationUsage: {
+    ...TYPOGRAPHY.meta,
+    fontSize: 12,
+    color: LIGHT_COLORS.textMeta,
+    textAlign: 'center',
+    fontStyle: 'italic',
+  },
   colorList: {
   },
   colorRow: {
