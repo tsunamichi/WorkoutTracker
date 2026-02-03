@@ -301,8 +301,7 @@ export function BottomDrawer({
         {
           maxHeight: fixedHeight ? undefined : currentMaxHeight,
           height: fixedHeight ? currentMaxHeight : (shouldScroll ? currentMaxHeight : undefined),
-          bottom: drawerMargin,
-          marginBottom: insets.bottom,
+          bottom: drawerMargin + insets.bottom,
           transform: [{ translateY }],
         }
       ]}>
