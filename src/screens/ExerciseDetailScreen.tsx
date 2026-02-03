@@ -131,6 +131,7 @@ export function ExerciseDetailScreen({ route, navigation }: ExerciseDetailScreen
   const [showMenu, setShowMenu] = useState(false);
   const [showAdjustmentDrawer, setShowAdjustmentDrawer] = useState(false);
   const [useLatestLogged, setUseLatestLogged] = useState(false);
+  const [originalSetValues, setOriginalSetValues] = useState<{ weight: number; reps: number } | null>(null);
   
   // Gradient border animation for active card
   const gradientRotation = useRef(new Animated.Value(0)).current;
@@ -905,6 +906,11 @@ export function ExerciseDetailScreen({ route, navigation }: ExerciseDetailScreen
                           } else {
                             // Open adjustment drawer
                             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                            // Store original values before opening drawer
+                            setOriginalSetValues({
+                              weight: setsData[index].weight,
+                              reps: setsData[index].reps,
+                            });
                             setShowAdjustmentDrawer(true);
                           }
                         }}
@@ -1119,7 +1125,11 @@ export function ExerciseDetailScreen({ route, navigation }: ExerciseDetailScreen
         {/* Adjustment Drawer */}
         <BottomDrawer
           visible={showAdjustmentDrawer}
-          onClose={() => setShowAdjustmentDrawer(false)}
+          onClose={() => {
+            setShowAdjustmentDrawer(false);
+            setUseLatestLogged(false);
+            setOriginalSetValues(null);
+          }}
           maxHeight="50%"
           bottomOffset={-8}
         >
@@ -1154,6 +1164,24 @@ export function ExerciseDetailScreen({ route, navigation }: ExerciseDetailScreen
                           sets: newSets,
                         });
                       }
+                    }
+                  } else if (!value && originalSetValues && expandedSetIndex !== -1) {
+                    // Reset to original values when toggled off
+                    const newSets = [...setsData];
+                    newSets[expandedSetIndex] = {
+                      ...newSets[expandedSetIndex],
+                      weight: originalSetValues.weight,
+                      reps: originalSetValues.reps,
+                    };
+                    setSetsData(newSets);
+                    setHasUnsavedChanges(true);
+                    
+                    // Save immediately
+                    if (workoutKey && exercise) {
+                      saveExerciseProgress(workoutKey, exercise.id, {
+                        exerciseId: exercise.id,
+                        sets: newSets,
+                      });
                     }
                   }
                 }}
