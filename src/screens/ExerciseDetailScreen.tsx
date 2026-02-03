@@ -1131,7 +1131,6 @@ export function ExerciseDetailScreen({ route, navigation }: ExerciseDetailScreen
             setOriginalSetValues(null);
           }}
           maxHeight="50%"
-          bottomOffset={-8}
         >
           <View style={styles.adjustmentDrawerContent}>
             <Text style={styles.adjustmentDrawerTitle}>{t('adjustValues')}</Text>
@@ -1736,7 +1735,6 @@ const styles = StyleSheet.create({
   adjustmentDrawerContent: {
     paddingHorizontal: SPACING.xl,
     paddingTop: SPACING.lg,
-    paddingBottom: 24,
   },
   adjustmentDrawerTitle: {
     ...TYPOGRAPHY.h2,
@@ -1784,7 +1782,7 @@ const styles = StyleSheet.create({
   
   // History Bottom Sheet Content
   historySheetContent: {
-    paddingHorizontal: SPACING.xxl,
+    paddingHorizontal: SPACING.xl,
   },
   historySheetTitle: {
     ...TYPOGRAPHY.h2,

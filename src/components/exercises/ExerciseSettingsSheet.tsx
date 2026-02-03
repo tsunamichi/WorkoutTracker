@@ -92,7 +92,6 @@ export const ExerciseSettingsSheet = ({
       onClose={onClose}
       maxHeight="90%"
       fixedHeight={true}
-      bottomOffset={8}
       showHandle={false}
       scrollable={false}
       contentStyle={styles.drawerContent}

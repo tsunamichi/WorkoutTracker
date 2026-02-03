@@ -240,7 +240,6 @@ export function CreateCycleDayEditor({ navigation, route }: CreateCycleDayEditor
         onClose={() => setShowExerciseDrawer(false)}
         maxHeight="90%"
         fixedHeight={true}
-        bottomOffset={8}
         showHandle={false}
         scrollable={false}
         contentStyle={styles.drawerContent}

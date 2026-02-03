@@ -744,7 +744,6 @@ export default function WorkoutEditScreen({ navigation, route }: Props) {
         maxHeight="90%"
         scrollable={false}
         fixedHeight={true}
-        bottomOffset={8}
         showHandle={false}
         contentStyle={styles.swapDrawerContent}
       >

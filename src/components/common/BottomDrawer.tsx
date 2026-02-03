@@ -23,7 +23,6 @@ interface BottomDrawerProps {
   stickyHeaderIndices?: number[]; // Optional sticky header indices for ScrollView
   expandable?: boolean; // New prop to enable pull-to-expand
   fixedHeight?: boolean; // Force drawer to maxHeight
-  bottomOffset?: number; // Override bottom margin
   onRequestClose?: () => void; // Called when close is initiated (before animation)
 }
 
@@ -40,7 +39,6 @@ export function BottomDrawer({
   stickyHeaderIndices,
   expandable = false,
   fixedHeight = false,
-  bottomOffset = 8,
   onRequestClose,
 }: BottomDrawerProps) {
   const insets = useSafeAreaInsets();
@@ -54,7 +52,7 @@ export function BottomDrawer({
   // Match device corner radius (iPhone rounded corners)
   const deviceCornerRadius = insets.bottom > 0 ? 40 : 24;
 
-  // Calculate max drawer height (percentage of screen minus bottom offset)
+  // Calculate max drawer height (percentage of screen)
   const maxHeightRatio = (() => {
     const trimmed = maxHeight.trim();
     if (trimmed.endsWith('%')) {
@@ -65,7 +63,9 @@ export function BottomDrawer({
     }
     return 0.9;
   })();
-  const maxDrawerHeight = (SCREEN_HEIGHT - bottomOffset - insets.bottom) * maxHeightRatio;
+  // Margin from screen edges (8px on each side)
+  const drawerMargin = 8;
+  const maxDrawerHeight = (SCREEN_HEIGHT - insets.bottom - drawerMargin) * maxHeightRatio;
   
   // Handle height (if showHandle is true)
   const handleHeight = showHandle ? 28 : 0; // ~12px padding top + 4px handle + 12px padding bottom
@@ -235,7 +235,10 @@ export function BottomDrawer({
   const Content = shouldScroll ? ScrollView : View;
   const contentContainerStyle = [
     contentStyle,
-    { paddingTop: showHandle ? 16 : 0 },
+    { 
+      paddingTop: showHandle ? 16 : 0,
+      paddingBottom: 24, // Consistent bottom padding for all drawers
+    },
   ];
   const contentProps = shouldScroll
     ? {
@@ -298,7 +301,8 @@ export function BottomDrawer({
         {
           maxHeight: fixedHeight ? undefined : currentMaxHeight,
           height: fixedHeight ? currentMaxHeight : (shouldScroll ? currentMaxHeight : undefined),
-          bottom: bottomOffset + insets.bottom,
+          bottom: drawerMargin,
+          marginBottom: insets.bottom,
           transform: [{ translateY }],
         }
       ]}>

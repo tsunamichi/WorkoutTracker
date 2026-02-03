@@ -54,7 +54,6 @@ export const CycleWarmupPickerSheet = ({
       onClose={onClose}
       maxHeight="80%"
       fixedHeight={true}
-      bottomOffset={8}
       showHandle={false}
       scrollable={false}
       contentStyle={styles.drawerContent}

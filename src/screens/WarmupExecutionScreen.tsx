@@ -548,7 +548,6 @@ export function WarmupExecutionScreen() {
         visible={showAdjustmentDrawer}
         onClose={() => setShowAdjustmentDrawer(false)}
         maxHeight="50%"
-        bottomOffset={-8}
       >
         <View style={styles.adjustmentDrawerContent}>
           <Text style={styles.adjustmentDrawerTitle}>{t('adjustValues')}</Text>
@@ -1077,7 +1076,6 @@ const styles = StyleSheet.create({
   adjustmentDrawerContent: {
     paddingHorizontal: SPACING.xl,
     paddingTop: SPACING.lg,
-    paddingBottom: 24,
   },
   adjustmentDrawerTitle: {
     ...TYPOGRAPHY.h3,
