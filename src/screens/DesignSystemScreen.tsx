@@ -1,7 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Path } from 'react-native-svg';
 import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS, GRADIENTS, BUTTONS, CARDS } from '../constants';
 import { 
@@ -393,24 +392,14 @@ export function DesignSystemScreen({ navigation }: DesignSystemScreenProps) {
                 </View>
               </View>
               
-              {/* Card with Static Gradient Border */}
+              {/* Card with Active Border */}
               <View style={styles.animatedCardWrapper}>
-                <LinearGradient
-                  colors={[
-                    COLORS.accentPrimary,
-                    COLORS.accentPrimaryDark,
-                  ]}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
-                  style={styles.gradientBorderWrapper}
-                >
-                  <View style={styles.animatedCardInner}>
-                    <Text style={styles.cardTitle}>Card with Static Gradient Border</Text>
-                    <Text style={styles.cardDescription}>
-                      Diagonal gradient border using accentPrimary and accentPrimaryDark
-                    </Text>
-                  </View>
-                </LinearGradient>
+                <View style={[styles.animatedCardInner, { borderWidth: 2, borderColor: COLORS.accentPrimary }]}>
+                  <Text style={styles.cardTitle}>Card with Active Border</Text>
+                  <Text style={styles.cardDescription}>
+                    Solid 2px border using accentPrimary
+                  </Text>
+                </View>
               </View>
             </View>
           </View>
@@ -785,10 +774,6 @@ const styles = StyleSheet.create({
   // Animated Gradient Border Card
   animatedCardWrapper: {
     marginBottom: SPACING.lg,
-  },
-  gradientBorderWrapper: {
-    padding: 2, // Border width
-    borderRadius: 18,
   },
   animatedCardInner: {
     ...CARDS.cardDeep.outer,

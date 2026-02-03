@@ -1,7 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, LayoutAnimation, Platform, UIManager, Animated, Modal, Alert } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
-
 // Enable LayoutAnimation on Android
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -896,18 +894,9 @@ export function ExerciseDetailScreen({ route, navigation }: ExerciseDetailScreen
                           }
                         }}
                       >
-                        {/* Static Gradient Border */}
-                        <LinearGradient
-                          colors={[
-                            COLORS.accentPrimary,
-                            COLORS.accentPrimaryDark,
-                          ]}
-                          start={{ x: 0, y: 0 }}
-                          end={{ x: 1, y: 1 }}
-                          style={styles.gradientBorderWrapper}
-                        >
-                          <View style={styles.setCard}>
-                            <View style={styles.setCardInner}>
+                        {/* Active Card with Border */}
+                        <View style={styles.setCard}>
+                          <View style={styles.setCardInner}>
                       {/* Expanded View - Now just shows values without controls */}
                       {isExpanded && (
                         <View style={styles.setCardExpanded}>
@@ -936,10 +925,10 @@ export function ExerciseDetailScreen({ route, navigation }: ExerciseDetailScreen
                           </View>
                         </View>
                       )}
-                            </View>
-                          </View>
-                        </View>
-                      </TouchableOpacity>
+                    </View>
+                  </View>
+                </TouchableOpacity>
+              </View>
                     </View>
                   )}
                   
@@ -1368,14 +1357,12 @@ const styles = StyleSheet.create({
   activeSetWrapper: {
     width: '100%',
   },
-  gradientBorderWrapper: {
-    padding: 2, // Border width
-    borderRadius: 18,
-  },
   setCard: {
     ...CARDS.cardDeep.outer,
     position: 'relative',
     zIndex: 1,
+    borderWidth: 2,
+    borderColor: COLORS.accentPrimary,
   },
   setCardInner: {
     ...CARDS.cardDeep.inner,
