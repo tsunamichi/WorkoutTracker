@@ -1,90 +1,96 @@
-import React, { useCallback, useState, useEffect } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  ScrollView,
-} from 'react-native';
-import { SPACING, COLORS, TYPOGRAPHY, BORDER_RADIUS } from '../../constants';
-import { IconAddLine, IconMinusLine } from '../icons';
-import { BottomDrawer } from '../common/BottomDrawer';
-import { Toggle } from '../Toggle';
-import { formatWeightForLoad, toDisplayWeight, fromDisplayWeight } from '../../utils/weight';
-import { useTranslation } from '../../i18n/useTranslation';
-import { useStore } from '../../store';
-import type { WorkoutTemplateExercise } from '../../types/training';
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import * as Haptics from 'expo-haptics';
+import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS, BUTTONS } from '../constants';
+import { BottomDrawer } from './common/BottomDrawer';
+import { Toggle } from './Toggle';
+import { IconAddLine, IconMinusLine } from './icons';
+import { useTranslation } from '../i18n/useTranslation';
+import { formatWeightForLoad, toDisplayWeight, fromDisplayWeight } from '../utils/weight';
+import { useStore } from '../store';
+import type { WarmupItem_DEPRECATED as WarmupItem } from '../types/training';
 
-interface ExerciseSettingsSheetProps {
-  exercise: WorkoutTemplateExercise & { name: string };
+interface WarmupItemEditorSheetProps {
+  item: WarmupItem;
   visible: boolean;
   onClose: () => void;
-  onSave: (updates: Partial<WorkoutTemplateExercise>) => void;
+  onSave: (updates: Partial<WarmupItem>) => void;
+  onDelete: () => void;
 }
 
-export const ExerciseSettingsSheet = ({ 
-  exercise, 
-  visible, 
-  onClose, 
-  onSave, 
-}: ExerciseSettingsSheetProps) => {
-  const { settings } = useStore();
+export function WarmupItemEditorSheet({
+  item,
+  visible,
+  onClose,
+  onSave,
+  onDelete,
+}: WarmupItemEditorSheetProps) {
+  const insets = useSafeAreaInsets();
   const { t } = useTranslation();
+  const { settings } = useStore();
   const useKg = settings.useKg;
+  const weightUnit = useKg ? 'kg' : 'lb';
   const weightStep = useKg ? 0.5 : 5;
-
-  const [sets, setSets] = useState(exercise.sets);
-  const [reps, setReps] = useState(exercise.reps.toString());
-  const [isTimeBased, setIsTimeBased] = useState(false);
-  const [weight, setWeight] = useState(exercise.weight ? toDisplayWeight(exercise.weight, useKg) : 0);
   
-  // Check if exercise is part of a cycle (to disable sets control)
-  const isPartOfCycle = !!exercise.cycleId;
-  const isFirstInCycle = isPartOfCycle && exercise.cycleOrder === 0;
+  const [exerciseName, setExerciseName] = useState(item.exerciseName);
+  const [sets, setSets] = useState(item.sets || 1);
+  const [reps, setReps] = useState(item.reps || 10);
+  const [weight, setWeight] = useState(item.weight || 0);
+  const [isTimeBased, setIsTimeBased] = useState(item.isTimeBased || false);
+  const [isPerSide, setIsPerSide] = useState(item.isPerSide || false);
+  
+  // Check if item is part of a cycle (to disable sets control)
+  const isPartOfCycle = !!item.cycleId;
+  const isFirstInCycle = isPartOfCycle && item.cycleOrder === 0;
 
+  // Reset form when item changes
   useEffect(() => {
-    if (visible) {
-      setSets(exercise.sets || 3);
-      setReps((exercise.reps || 8).toString());
-      setIsTimeBased(false);
-      setWeight(exercise.weight ? toDisplayWeight(exercise.weight, useKg) : 0);
-    }
-  }, [exercise, visible, useKg]);
+    setExerciseName(item.exerciseName);
+    setSets(item.sets || 1);
+    setReps(item.reps || 10);
+    setWeight(item.weight || 0);
+    setIsTimeBased(item.isTimeBased || false);
+    setIsPerSide(item.isPerSide || false);
+  }, [item]);
 
   const handleSave = () => {
-    const updates: Partial<WorkoutTemplateExercise> = {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    
+    onSave({
+      exerciseName: exerciseName.trim(),
       sets,
-      reps: parseInt(reps, 10),
-      weight: fromDisplayWeight(weight, useKg),
-    };
-    onSave(updates);
-    onClose();
+      reps,
+      weight,
+      isTimeBased,
+      isPerSide,
+    });
+  };
+
+  const handleToggleTimeBased = (value: boolean) => {
+    setIsTimeBased(value);
+    // When toggling to time-based, round reps to nearest multiple of 5
+    if (value) {
+      const roundedReps = Math.ceil(reps / 5) * 5;
+      setReps(Math.max(5, roundedReps));
+    }
   };
 
   const handleStepper = (field: 'sets' | 'reps' | 'weight', delta: number) => {
-    if (field === 'reps') {
-      const currentValue = parseInt(reps, 10) || 0;
+    if (field === 'weight') {
+      const currentDisplay = toDisplayWeight(weight, useKg);
+      const nextDisplay = Math.max(0, currentDisplay + delta * weightStep);
+      setWeight(fromDisplayWeight(nextDisplay, useKg));
+    } else if (field === 'reps') {
       const step = isTimeBased ? 5 : 1;
       const min = isTimeBased ? 5 : 1;
-      const nextValue = Math.max(min, currentValue + delta * step);
-      setReps(`${nextValue}`);
-      return;
-    }
-
-    if (field === 'sets') {
-      const nextValue = Math.max(1, sets + delta);
-      setSets(nextValue);
-      return;
-    }
-
-    if (field === 'weight') {
-      const nextValue = Math.max(0, weight + delta * weightStep);
-      setWeight(nextValue);
-      return;
+      setReps(Math.max(min, reps + delta * step));
+    } else if (field === 'sets') {
+      setSets(Math.max(1, sets + delta));
     }
   };
 
-  const weightUnit = useKg ? 'kg' : 'lb';
+  const canSave = exerciseName.trim().length > 0;
 
   return (
     <BottomDrawer
@@ -101,15 +107,41 @@ export const ExerciseSettingsSheet = ({
         <ScrollView contentContainerStyle={styles.content} bounces={false}>
           {/* Header */}
           <View style={styles.header}>
-            <Text style={styles.title}>{exercise.name}</Text>
+            <Text style={styles.title}>
+              {item.exerciseName || t('addWarmupItem')}
+            </Text>
           </View>
 
+          {/* Exercise Name */}
+          <View style={styles.field}>
+            <Text style={styles.label}>{t('exerciseName')}</Text>
+            <TextInput
+              style={styles.input}
+              value={exerciseName}
+              onChangeText={setExerciseName}
+              placeholder={t('warmupExercisePlaceholder')}
+              placeholderTextColor={COLORS.textMeta}
+              autoCapitalize="words"
+            />
+          </View>
+
+          {/* Settings Container */}
           <View style={styles.settingsContainer}>
+            {/* Time-based Toggle */}
             <View style={styles.toggleRow}>
               <Toggle
                 label={t('timeBased')}
                 value={isTimeBased}
-                onValueChange={setIsTimeBased}
+                onValueChange={handleToggleTimeBased}
+              />
+            </View>
+
+            {/* Per Side Toggle */}
+            <View style={styles.toggleRow}>
+              <Toggle
+                label="Per side"
+                value={isPerSide}
+                onValueChange={setIsPerSide}
               />
             </View>
 
@@ -121,12 +153,13 @@ export const ExerciseSettingsSheet = ({
               </View>
             )}
 
+            {/* Values Card */}
             <View style={styles.valuesCard}>
               {/* Weight Row */}
               <View style={styles.adjustRow}>
                 <View style={styles.adjustValue}>
                   <Text style={styles.adjustValueText}>
-                    {formatWeightForLoad(fromDisplayWeight(weight, useKg), useKg)}
+                    {formatWeightForLoad(weight, useKg)}
                   </Text>
                   <Text style={styles.adjustUnit}>{weightUnit}</Text>
                 </View>
@@ -239,10 +272,15 @@ export const ExerciseSettingsSheet = ({
           </View>
         </ScrollView>
 
+        {/* Save Button */}
         <View style={styles.saveButtonContainer}>
           <TouchableOpacity
-            style={styles.saveButton}
+            style={[
+              styles.saveButton,
+              !canSave && styles.saveButtonDisabled,
+            ]}
             onPress={handleSave}
+            disabled={!canSave}
             activeOpacity={1}
           >
             <Text style={styles.saveButtonText}>{t('save')}</Text>
@@ -251,7 +289,7 @@ export const ExerciseSettingsSheet = ({
       </View>
     </BottomDrawer>
   );
-};
+}
 
 const styles = StyleSheet.create({
   drawerContent: {
@@ -259,40 +297,48 @@ const styles = StyleSheet.create({
   },
   sheetContainer: {
     flex: 1,
+    paddingHorizontal: SPACING.xxl,
   },
   content: {
-    paddingBottom: SPACING.xxl,
+    paddingTop: SPACING.lg,
+    paddingBottom: SPACING.xl,
   },
   header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: SPACING.xxl,
-    paddingVertical: SPACING.lg,
+    marginBottom: SPACING.xl,
   },
   title: {
-    ...TYPOGRAPHY.h3,
+    ...TYPOGRAPHY.h2,
     color: COLORS.text,
-    flex: 1,
+  },
+  field: {
+    marginBottom: SPACING.xl,
+  },
+  label: {
+    ...TYPOGRAPHY.meta,
+    color: COLORS.textMeta,
+    marginBottom: SPACING.sm,
+    textTransform: 'capitalize',
+  },
+  input: {
+    ...TYPOGRAPHY.body,
+    color: COLORS.text,
+    backgroundColor: COLORS.activeCard,
+    borderRadius: BORDER_RADIUS.md,
+    borderWidth: 1,
+    borderColor: COLORS.borderDimmed,
+    padding: SPACING.md,
+    minHeight: 48,
   },
   settingsContainer: {
-    paddingHorizontal: SPACING.xxl,
-    paddingTop: SPACING.xl,
-  },
-  valuesCard: {
-    backgroundColor: COLORS.activeCard,
-    borderRadius: BORDER_RADIUS.lg,
-    borderCurve: 'continuous',
-    padding: 24,
+    gap: SPACING.xl,
   },
   toggleRow: {
-    marginBottom: SPACING.xl,
+    paddingVertical: 4,
   },
   cycleInfoBanner: {
     backgroundColor: COLORS.accentPrimaryDimmed,
     borderRadius: BORDER_RADIUS.md,
     padding: SPACING.md,
-    marginBottom: SPACING.xl,
   },
   cycleInfoText: {
     ...TYPOGRAPHY.meta,
@@ -308,27 +354,34 @@ const styles = StyleSheet.create({
   disabledButtonInner: {
     backgroundColor: COLORS.borderDimmed,
   },
+  valuesCard: {
+    backgroundColor: COLORS.activeCard,
+    borderRadius: BORDER_RADIUS.lg,
+    overflow: 'hidden',
+  },
   adjustRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    paddingVertical: SPACING.lg,
+    paddingHorizontal: SPACING.xl,
   },
   adjustValue: {
     flexDirection: 'row',
     alignItems: 'baseline',
-    gap: 8,
+    gap: SPACING.sm,
   },
   adjustValueText: {
     ...TYPOGRAPHY.h1,
     color: COLORS.text,
   },
   adjustUnit: {
-    ...TYPOGRAPHY.h1,
+    ...TYPOGRAPHY.body,
     color: COLORS.textMeta,
   },
   adjustButtons: {
     flexDirection: 'row',
-    gap: 12,
+    gap: SPACING.md,
   },
   adjustButtonTapTarget: {
     width: 48,
@@ -339,38 +392,36 @@ const styles = StyleSheet.create({
   adjustButton: {
     width: 48,
     height: 48,
-    borderRadius: BORDER_RADIUS.md,
+    borderRadius: 12,
     borderCurve: 'continuous',
-    alignItems: 'center',
-    justifyContent: 'center',
+    overflow: 'hidden',
   },
   adjustButtonInner: {
     width: 48,
     height: 48,
-    borderRadius: BORDER_RADIUS.md,
+    borderRadius: 12,
     borderCurve: 'continuous',
-    backgroundColor: COLORS.accentPrimaryDimmed,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: COLORS.accentPrimaryDimmed,
   },
   adjustDivider: {
     height: 1,
     backgroundColor: COLORS.borderDimmed,
-    marginVertical: 16,
+    marginHorizontal: SPACING.xl,
   },
   saveButtonContainer: {
-    paddingHorizontal: SPACING.xxl,
-    paddingBottom: SPACING.xl,
-    paddingTop: SPACING.lg,
+    paddingBottom: SPACING.lg,
+    paddingTop: SPACING.md,
   },
   saveButton: {
-    backgroundColor: COLORS.accentPrimaryDimmed,
-    borderRadius: BORDER_RADIUS.md,
-    paddingVertical: SPACING.lg,
-    alignItems: 'center',
+    ...BUTTONS.primaryButtonLabeled,
+  },
+  saveButtonDisabled: {
+    opacity: 0.5,
   },
   saveButtonText: {
     ...TYPOGRAPHY.metaBold,
-    color: COLORS.accentPrimary,
+    color: COLORS.backgroundCanvas,
   },
 });

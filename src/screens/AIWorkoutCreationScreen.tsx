@@ -10,6 +10,7 @@ import { BottomDrawer } from '../components/common/BottomDrawer';
 import dayjs from 'dayjs';
 import isoWeek from 'dayjs/plugin/isoWeek';
 import { useTranslation } from '../i18n/useTranslation';
+import { parseWarmupText, convertToWarmupItems } from '../utils/warmupParser';
 
 dayjs.extend(isoWeek);
 
@@ -17,6 +18,16 @@ const TEMPLATE_FORMAT = `WEEK [number]
 DAY [number] — [Workout name]
 [Exercise] — [Sets]×[Reps] @ [weight] lb
 [Exercise] — [Sets]×[Time] sec @ [weight] lb (optional)`;
+
+const WARMUP_TEMPLATE_FORMAT = `- [Exercise] x [Number] reps
+- [Exercise] x [Number] sec
+- [Exercise] [Number] sec
+repeat this superset [Number] times
+
+Example:
+- 90/90 Hip Rotations x 6 reps
+- Half-Kneeling Hip Flexor 30 sec
+repeat this superset 2 times`;
 
 type ParsedExercise = {
   name: string;
@@ -151,6 +162,8 @@ export function AIWorkoutCreationScreen() {
   const { t } = useTranslation();
   const [workoutDetails, setWorkoutDetails] = useState('');
   const [showInstructionsSheet, setShowInstructionsSheet] = useState(false);
+  const [warmupDetails, setWarmupDetails] = useState('');
+  const [showWarmupSheet, setShowWarmupSheet] = useState(false);
 
   const mode: 'single' | 'plan' = route?.params?.mode === 'single' ? 'single' : 'plan';
 
@@ -158,6 +171,12 @@ export function AIWorkoutCreationScreen() {
     await Clipboard.setStringAsync(TEMPLATE_FORMAT);
     Alert.alert(t('copiedTitle'), t('templateCopied'));
     setShowInstructionsSheet(false);
+  };
+
+  const handleCopyWarmupTemplate = async () => {
+    await Clipboard.setStringAsync(WARMUP_TEMPLATE_FORMAT);
+    Alert.alert(t('copiedTitle'), 'Warmup template copied');
+    setShowWarmupSheet(false);
   };
 
   const handleCreateFromAiText = async () => {
@@ -173,13 +192,56 @@ export function AIWorkoutCreationScreen() {
       // Expected format:
       // ⭐️ WEEK 1
       // ⸻
+      // Warm up: (optional, will be extracted)
+      // - exercise x reps
+      // repeat this superset N times
       // DAY 1 — Pull
       // • Rear Delt Row — 3×10 @ 100 lb
       // • Spanish Squat ISO — 4×30 sec @ 25 lb (time-based with weight)
       // • Wall Sit — 4×45 sec (time-based without weight)
       // • Barbell Row — 3×10 @ 100 lb
       
-      const lines = workoutDetails.split('\n');
+      // First, extract warmup section if it exists in the workout text
+      let workoutText = workoutDetails;
+      let extractedWarmup = warmupDetails; // Start with any manually entered warmup
+      
+      // Look for "Warm up:" section - it should end when we see "DAY" marker
+      const warmupMatch = workoutDetails.match(/warm\s*up\s*:?\s*([\s\S]*?)(?=DAY\s+\d+)/i);
+      if (warmupMatch) {
+        let rawWarmup = warmupMatch[1].trim();
+        
+        // The warmup text can have bullets (•) and multiple exercises on same line separated by tabs/spaces
+        // Example: "• Exercise1 x 6  • Exercise2 x 8 superset - 2 rounds"
+        
+        // Strategy:
+        // 1. Replace bullet points (•) with newlines and dashes
+        // 2. Handle tabs and multiple spaces
+        
+        rawWarmup = rawWarmup
+          // Replace bullet points with newline + dash
+          .replace(/[•●]/g, '\n- ')
+          // Replace tabs with spaces
+          .replace(/\t+/g, ' ')
+          // Replace multiple spaces with single space (except at line start)
+          .replace(/([^\n]) {2,}/g, '$1 ')
+          // Clean up: remove empty lines and trim
+          .split('\n')
+          .map(line => line.trim())
+          .filter(line => line.length > 0)
+          .join('\n');
+        
+        // Add dash to first line if it doesn't have one
+        if (!rawWarmup.startsWith('-')) {
+          rawWarmup = '- ' + rawWarmup;
+        }
+        
+        extractedWarmup = rawWarmup;
+        
+        // Remove the warmup section from workout text
+        workoutText = workoutDetails.replace(/warm\s*up\s*:?\s*[\s\S]*?(?=DAY\s+\d+)/i, '');
+      }
+      
+      const lines = workoutText.split('\n');
       let weeklyWorkouts: { [week: number]: any[] } = {};
       let currentWeek = 1;
       let currentWorkout: any = null;
@@ -189,8 +251,11 @@ export function AIWorkoutCreationScreen() {
         // Clean up the line
         const trimmedLine = line.trim();
         
-        // Skip empty lines and separator lines
-        if (!trimmedLine || trimmedLine === '⸻' || trimmedLine.startsWith('⸻')) {
+        // Skip empty lines, separator lines, and warmup-related lines
+        if (!trimmedLine || trimmedLine === '⸻' || trimmedLine.startsWith('⸻') || 
+            /warm\s*up\s*:?/i.test(trimmedLine) || 
+            /repeat\s+this\s+superset/i.test(trimmedLine) ||
+            (trimmedLine.startsWith('-') && !currentWorkout)) {
           continue;
         }
         
@@ -339,6 +404,18 @@ export function AIWorkoutCreationScreen() {
 
       const nowIso = new Date().toISOString();
 
+      // Parse warmup if provided (either extracted from workout text or manually entered)
+      let parsedWarmupItems: any[] = [];
+      if (extractedWarmup.trim()) {
+        try {
+          const parsedGroups = parseWarmupText(extractedWarmup);
+          parsedWarmupItems = convertToWarmupItems(parsedGroups);
+        } catch (error) {
+          console.error('Error parsing warmup:', error);
+          // Continue without warmup if parsing fails
+        }
+      }
+
       if (mode === 'single') {
         const firstWorkout = (weeklyWorkouts[1] || [])[0] || Object.values(weeklyWorkouts)[0]?.[0];
         if (!firstWorkout) {
@@ -353,7 +430,7 @@ export function AIWorkoutCreationScreen() {
           createdAt: nowIso,
           updatedAt: nowIso,
           kind: 'workout',
-          warmupItems: [],
+          warmupItems: parsedWarmupItems,
           lastUsedAt: null,
           usageCount: 0,
           source: 'ai',
@@ -395,7 +472,7 @@ export function AIWorkoutCreationScreen() {
           createdAt: nowIso,
           updatedAt: nowIso,
           kind: 'workout',
-          warmupItems: [],
+          warmupItems: parsedWarmupItems,
           lastUsedAt: null,
           usageCount: 0,
           source: 'ai',
@@ -493,7 +570,8 @@ export function AIWorkoutCreationScreen() {
               <IconChevronDown size={16} color={COLORS.text} />
             </TouchableOpacity>
 
-            {/* Text Input */}
+            {/* Workout Text Input */}
+            <Text style={styles.sectionLabel}>Workout</Text>
             <TextInput
               style={styles.textInput}
               placeholder={t('pasteAiWorkoutPlaceholder')}
@@ -503,6 +581,29 @@ export function AIWorkoutCreationScreen() {
               multiline
               textAlignVertical="top"
             />
+
+            {/* Warmup Section */}
+            <View style={styles.warmupSection}>
+              <TouchableOpacity
+                style={styles.instructionsButton}
+                onPress={() => setShowWarmupSheet(true)}
+                activeOpacity={1}
+              >
+                <Text style={styles.instructionsText}>Warmup (Optional)</Text>
+                <IconChevronDown size={16} color={COLORS.text} />
+              </TouchableOpacity>
+
+              <Text style={styles.sectionLabel}>Warmup</Text>
+              <TextInput
+                style={styles.warmupInput}
+                placeholder="Paste warmup routine (optional)..."
+                placeholderTextColor={COLORS.textMeta}
+                value={warmupDetails}
+                onChangeText={setWarmupDetails}
+                multiline
+                textAlignVertical="top"
+              />
+            </View>
           </ScrollView>
 
           {/* Bottom Button */}
@@ -541,6 +642,30 @@ export function AIWorkoutCreationScreen() {
                   >
               <Text style={styles.copyButtonText}>{t('copy')}</Text>
                   </TouchableOpacity>
+          </View>
+        </BottomDrawer>
+
+        {/* Warmup Instructions Bottom Drawer */}
+        <BottomDrawer
+          visible={showWarmupSheet}
+          onClose={() => setShowWarmupSheet(false)}
+          maxHeight="80%"
+          scrollable={false}
+          showHandle={false}
+        >
+          <View style={styles.sheetContent}>
+            <Text style={styles.sheetTitle}>Warmup Format</Text>
+            <Text style={styles.sheetSubtitle}>Follow this format for warmup exercises</Text>
+            <View style={styles.templateBox}>
+              <Text style={styles.templateText}>{WARMUP_TEMPLATE_FORMAT}</Text>
+            </View>
+            <TouchableOpacity
+              style={styles.copyButton}
+              onPress={handleCopyWarmupTemplate}
+              activeOpacity={1}
+            >
+              <Text style={styles.copyButtonText}>{t('copy')}</Text>
+            </TouchableOpacity>
           </View>
         </BottomDrawer>
     </View>
@@ -607,6 +732,25 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: COLORS.text,
     minHeight: 400,
+    borderWidth: 0,
+  },
+  sectionLabel: {
+    ...TYPOGRAPHY.bodyBold,
+    fontSize: 14,
+    color: COLORS.text,
+    marginBottom: SPACING.sm,
+    marginTop: SPACING.md,
+  },
+  warmupSection: {
+    marginTop: SPACING.lg,
+  },
+  warmupInput: {
+    backgroundColor: COLORS.activeCard,
+    borderRadius: BORDER_RADIUS.md,
+    padding: SPACING.lg,
+    fontSize: 16,
+    color: COLORS.text,
+    minHeight: 200,
     borderWidth: 0,
   },
   bottomContainer: {

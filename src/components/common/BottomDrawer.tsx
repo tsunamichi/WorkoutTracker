@@ -65,7 +65,7 @@ export function BottomDrawer({
     }
     return 0.9;
   })();
-  const maxDrawerHeight = (SCREEN_HEIGHT - bottomOffset) * maxHeightRatio;
+  const maxDrawerHeight = (SCREEN_HEIGHT - bottomOffset - insets.bottom) * maxHeightRatio;
   
   // Handle height (if showHandle is true)
   const handleHeight = showHandle ? 28 : 0; // ~12px padding top + 4px handle + 12px padding bottom
@@ -298,7 +298,7 @@ export function BottomDrawer({
         {
           maxHeight: fixedHeight ? undefined : currentMaxHeight,
           height: fixedHeight ? currentMaxHeight : (shouldScroll ? currentMaxHeight : undefined),
-          bottom: bottomOffset,
+          bottom: bottomOffset + insets.bottom,
           transform: [{ translateY }],
         }
       ]}>

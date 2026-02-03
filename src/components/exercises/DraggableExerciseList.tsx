@@ -8,14 +8,17 @@ import {
   PanResponder,
   PanResponderInstance,
 } from 'react-native';
-import { COLORS, SPACING, TYPOGRAPHY, CARDS } from '../../constants';
-import { IconGripVertical, IconSwap, IconTrash, IconEdit } from '../icons';
+import { COLORS, SPACING, TYPOGRAPHY, CARDS, BORDER_RADIUS } from '../../constants';
+import { IconGripVertical, IconSwap, IconTrash, IconEdit, IconAdd } from '../icons';
+import { useTranslation } from '../../i18n/useTranslation';
 
 export type DraggableExerciseItem = {
   id: string;
   exerciseId: string;
   name: string;
   order: number;
+  cycleId?: string;
+  cycleOrder?: number;
 };
 
 type ActionButton = 'swap' | 'edit' | 'delete';
@@ -31,6 +34,7 @@ type Props = {
   actionButtons?: ActionButton[];
   scrollEnabled?: boolean;
   onScrollEnabledChange?: (enabled: boolean) => void;
+  onAddToCycle?: (exerciseId: string) => void;
 };
 
 export function DraggableExerciseList({
@@ -44,6 +48,7 @@ export function DraggableExerciseList({
   actionButtons = ['edit', 'delete'],
   scrollEnabled = true,
   onScrollEnabledChange,
+  onAddToCycle,
 }: Props) {
   const [draggingIndex, setDraggingIndex] = React.useState<number | null>(null);
   const [dropTargetIndex, setDropTargetIndex] = React.useState<number | null>(null);
@@ -191,12 +196,33 @@ export function DraggableExerciseList({
     onSelectExercise?.(selectedExerciseId === exerciseId ? null : exerciseId);
   };
   
+  const { t } = useTranslation();
+  
+  // Helper to check if next exercise is in same cycle
+  const isNextInCycle = (index: number) => {
+    if (index >= exercises.length - 1) return false;
+    const current = exercises[index];
+    const next = exercises[index + 1];
+    return current.cycleId && current.cycleId === next.cycleId;
+  };
+  
+  // Helper to check if we should show "Add to cycle" button
+  const shouldShowAddToCycleButton = (index: number) => {
+    if (!onAddToCycle) return false;
+    const exercise = exercises[index];
+    // Show if not in a cycle, OR is the last exercise in its cycle
+    if (!exercise.cycleId) return true;
+    return !isNextInCycle(index);
+  };
+
   return (
     <>
       {exercises.map((exercise, index) => {
         const isSelected = selectedExerciseId === exercise.id;
         const anims = animValuesRef.current[exercise.id];
         const isDragging = draggingIndex === index;
+        const isPartOfCycle = !!exercise.cycleId;
+        const showCycleConnector = isNextInCycle(index);
         
         if (!anims) return null;
         
@@ -284,13 +310,22 @@ export function DraggableExerciseList({
                       activeOpacity={1}
                     >
                       <View style={styles.exerciseCardContent}>
-                        <Text
-                          style={styles.exerciseName}
-                          numberOfLines={1}
-                          ellipsizeMode="tail"
-                        >
-                          {exercise.name}
-                        </Text>
+                        <View style={styles.exerciseNameRow}>
+                          <Text
+                            style={styles.exerciseName}
+                            numberOfLines={1}
+                            ellipsizeMode="tail"
+                          >
+                            {exercise.name}
+                          </Text>
+                          {isPartOfCycle && exercise.cycleOrder !== undefined && (
+                            <View style={styles.cycleBadge}>
+                              <Text style={styles.cycleBadgeText}>
+                                {String.fromCharCode(65 + exercise.cycleOrder)}
+                              </Text>
+                            </View>
+                          )}
+                        </View>
                       </View>
                       
                       {/* Grip Handle - Absolute positioned with drag functionality */}
@@ -346,6 +381,26 @@ export function DraggableExerciseList({
                 </Animated.View>
               </View>
             </Animated.View>
+            
+            {/* Cycle Connector Line */}
+            {showCycleConnector && (
+              <View style={styles.cycleConnector}>
+                <View style={styles.cycleConnectorLine} />
+                <Text style={styles.cycleConnectorText}>cycle</Text>
+              </View>
+            )}
+            
+            {/* Add to Cycle Button */}
+            {shouldShowAddToCycleButton(index) && (
+              <TouchableOpacity
+                style={styles.addToCycleButton}
+                onPress={() => onAddToCycle?.(exercise.id)}
+                activeOpacity={0.7}
+              >
+                <IconAdd size={16} color={COLORS.accentPrimary} />
+                <Text style={styles.addToCycleText}>{t('addToCycle')}</Text>
+              </TouchableOpacity>
+            )}
           </React.Fragment>
         );
       })}
@@ -401,6 +456,69 @@ const styles = StyleSheet.create({
   exerciseCardContent: {
     flex: 1,
     justifyContent: 'center',
+  },
+  exerciseNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.sm,
+    flex: 1,
+  },
+  cycleBadge: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: COLORS.accentPrimaryDimmed,
+    borderWidth: 1,
+    borderColor: COLORS.accentPrimary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cycleBadgeText: {
+    ...TYPOGRAPHY.meta,
+    fontSize: 11,
+    fontWeight: '700',
+    color: COLORS.accentPrimary,
+  },
+  cycleConnector: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingLeft: 16,
+    marginTop: -SPACING.md / 2,
+    marginBottom: -SPACING.md / 2,
+    gap: SPACING.sm,
+  },
+  cycleConnectorLine: {
+    width: 2,
+    height: 24,
+    backgroundColor: COLORS.accentPrimaryDimmed,
+  },
+  cycleConnectorText: {
+    ...TYPOGRAPHY.meta,
+    fontSize: 10,
+    fontWeight: '600',
+    color: COLORS.accentPrimary,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  addToCycleButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: SPACING.xs,
+    paddingVertical: SPACING.sm,
+    paddingHorizontal: SPACING.md,
+    backgroundColor: COLORS.accentPrimaryDimmed,
+    borderRadius: BORDER_RADIUS.md,
+    borderWidth: 1,
+    borderColor: COLORS.accentPrimary,
+    borderStyle: 'dashed',
+    marginTop: SPACING.sm,
+    marginBottom: SPACING.md,
+  },
+  addToCycleText: {
+    ...TYPOGRAPHY.meta,
+    fontWeight: '600',
+    color: COLORS.accentPrimary,
   },
   gripHandle: {
     position: 'absolute',

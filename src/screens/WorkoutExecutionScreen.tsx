@@ -8,6 +8,7 @@ import * as storage from '../storage';
 import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS, CARDS } from '../constants';
 import { IconArrowLeft, IconCheck, IconPlay, IconPause, IconMenu, IconRestart, IconAdd, IconEdit } from '../components/icons';
 import { ActionSheet } from '../components/common/ActionSheet';
+import { formatWeightForLoad } from '../utils/weight';
 import dayjs from 'dayjs';
 import { startRestTimer, updateRestTimer, endRestTimer, markRestTimerCompleted } from '../modules/RestTimerLiveActivity';
 import * as Haptics from 'expo-haptics';
@@ -474,8 +475,10 @@ export function SetTimerSheetLegacy({ visible, onComplete, onClose, workoutName,
 export function WorkoutExecutionScreen({ route, navigation }: WorkoutExecutionScreenProps) {
   const insets = useSafeAreaInsets();
   const { cycleId, workoutTemplateId, date } = route.params;
-  const { cycles, exercises, addSession, getWorkoutCompletionPercentage, getExerciseProgress, saveExerciseProgress, clearWorkoutProgress, skipExercise, getWorkoutTemplate } = useStore();
+  const { cycles, exercises, addSession, getWorkoutCompletionPercentage, getExerciseProgress, saveExerciseProgress, clearWorkoutProgress, skipExercise, getWorkoutTemplate, getWarmupCompletion, settings } = useStore();
   const { t } = useTranslation();
+  const useKg = settings.useKg;
+  const weightUnit = useKg ? 'kg' : 'lb';
   
   // Subscribe to detailedWorkoutProgress for this specific workout
   const workoutKey = `${workoutTemplateId}-${date}`;
@@ -504,8 +507,9 @@ export function WorkoutExecutionScreen({ route, navigation }: WorkoutExecutionSc
   let workout = cycle?.workoutTemplates.find(w => w.id === workoutTemplateId);
   
   // If not found in cycle (or no cycle), try to get the template directly (new architecture)
+  // Get template for warmup items
+  const template = getWorkoutTemplate(workoutTemplateId);
   if (!workout) {
-    const template = getWorkoutTemplate(workoutTemplateId);
     if (template) {
       // Convert WorkoutTemplate to old workout format for backward compatibility
       workout = {
@@ -743,6 +747,62 @@ export function WorkoutExecutionScreen({ route, navigation }: WorkoutExecutionSc
         </View>
         
         <ScrollView style={styles.content} contentContainerStyle={styles.scrollContent} bounces={false}>
+          {/* Warm-up Section */}
+          {template?.warmupItems && template.warmupItems.length > 0 && (() => {
+            const warmupCompletion = getWarmupCompletion(workoutKey);
+            const allComplete = warmupCompletion.percentage === 100;
+            
+            // Check if any exercise has been started
+            const isAnyExerciseStarted = workout?.exercises.some(ex => {
+              const progress = getExerciseProgress(workoutKey, ex.id);
+              return progress?.sets.some(set => set.completed) || false;
+            }) || false;
+            
+            return (
+              <View style={styles.warmupSection}>
+                <TouchableOpacity
+                  style={[
+                    styles.warmupCard, 
+                    allComplete && styles.warmupCardComplete,
+                    isAnyExerciseStarted && styles.warmupCardDisabled
+                  ]}
+                  onPress={() => {
+                    if (isAnyExerciseStarted) return;
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    (navigation as any).navigate('WarmupExecution', { 
+                      workoutKey, 
+                      workoutTemplateId 
+                    });
+                  }}
+                  activeOpacity={1}
+                  disabled={isAnyExerciseStarted}
+                >
+                  <View style={styles.warmupCardContent}>
+                    <Text style={[styles.warmupCardTitle, isAnyExerciseStarted && styles.warmupCardTitleDisabled]}>{t('warmup')}</Text>
+                    {!isAnyExerciseStarted && <Text style={styles.warmupStartText}>{t('start')}</Text>}
+                  </View>
+                </TouchableOpacity>
+              </View>
+            );
+          })()}
+          
+          {/* Add Warmup Button (when no warmup exists) */}
+          {template && (!template.warmupItems || template.warmupItems.length === 0) && (
+            <View style={styles.warmupSection}>
+              <TouchableOpacity
+                style={styles.addWarmupButton}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  (navigation as any).navigate('WarmupEditor', { templateId: workoutTemplateId });
+                }}
+                activeOpacity={1}
+              >
+                <IconAdd size={20} color={COLORS.text} />
+                <Text style={styles.addWarmupText}>{t('warmup')}</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+          
           {/* Exercises List */}
           <View style={styles.exercisesList}>
             {(() => {
@@ -919,11 +979,21 @@ export function WorkoutExecutionScreen({ route, navigation }: WorkoutExecutionSc
                               disabled={isDisabled && !isSkipped}
                             >
                               <View style={styles.exerciseInfo}>
-                                <View>
+                                <View style={styles.exerciseNameContainer}>
                               <Text style={[styles.exerciseName, isSkipped && styles.exerciseNameSkipped]}>
                                     {exerciseData?.name || 'Unknown Exercise'}
                                   </Text>
+                                  {exercise.cycleId && exercise.cycleOrder !== undefined && (
+                                    <View style={styles.cycleBadge}>
+                                      <Text style={styles.cycleBadgeText}>
+                                        {String.fromCharCode(65 + exercise.cycleOrder)}
+                                      </Text>
+                                    </View>
+                                  )}
                                 </View>
+                                {exercise.cycleId && (
+                                  <Text style={styles.cycleHintText}>{t('partOfCycle')}</Text>
+                                )}
                               </View>
                               {isSkipped ? (
                                 <View style={styles.exerciseCheckIcon}>
@@ -1077,6 +1147,77 @@ const styles = StyleSheet.create({
     backgroundColor: 'transparent',
     gap: 12, // Space between cards
   },
+  warmupSection: {
+    marginBottom: SPACING.xxxl,
+  },
+  warmupCard: {
+    backgroundColor: CARDS.cardDeepDimmed.outer.backgroundColor,
+    borderRadius: CARDS.cardDeepDimmed.outer.borderRadius,
+    borderWidth: CARDS.cardDeepDimmed.outer.borderWidth,
+    borderColor: CARDS.cardDeepDimmed.outer.borderColor,
+    padding: SPACING.lg,
+  },
+  warmupCardComplete: {
+    backgroundColor: COLORS.activeCard,
+    opacity: 0.7,
+  },
+  warmupCardDisabled: {
+    opacity: 0.4,
+  },
+  warmupCardContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  warmupCardLeft: {
+    flex: 1,
+    marginRight: SPACING.md,
+  },
+  warmupCardTitle: {
+    ...TYPOGRAPHY.body,
+    color: COLORS.text,
+  },
+  warmupCardTitleDisabled: {
+    color: COLORS.textMeta,
+  },
+  warmupStartText: {
+    ...TYPOGRAPHY.metaBold,
+    color: COLORS.accentPrimary,
+  },
+  warmupCardSubtitle: {
+    ...TYPOGRAPHY.meta,
+    color: COLORS.textMeta,
+  },
+  warmupCheckCircle: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    borderWidth: 2,
+    borderColor: COLORS.borderDimmed,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  warmupCheckCircleComplete: {
+    backgroundColor: COLORS.accentPrimary,
+    borderColor: COLORS.accentPrimary,
+  },
+  addWarmupButton: {
+    width: '100%',
+    height: 56,
+    borderRadius: BORDER_RADIUS.lg,
+    borderWidth: 1,
+    borderColor: COLORS.textMeta,
+    borderStyle: 'dashed',
+    backgroundColor: 'transparent',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: SPACING.sm,
+  },
+  addWarmupText: {
+    ...TYPOGRAPHY.metaBold,
+    color: COLORS.text,
+  },
   sectionHeader: {
     marginTop: 40,
     marginBottom: 4,
@@ -1098,13 +1239,38 @@ const styles = StyleSheet.create({
   },
   exerciseInfo: {
     flex: 1,
+    flexDirection: 'column',
+    gap: SPACING.xs,
+  },
+  exerciseNameContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    gap: SPACING.sm,
   },
   exerciseName: {
     ...TYPOGRAPHY.body,
     color: LIGHT_COLORS.secondary,
+  },
+  cycleBadge: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: COLORS.accentPrimaryDimmed,
+    borderWidth: 1,
+    borderColor: COLORS.accentPrimary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cycleBadgeText: {
+    ...TYPOGRAPHY.meta,
+    fontSize: 10,
+    fontWeight: '700',
+    color: COLORS.accentPrimary,
+  },
+  cycleHintText: {
+    ...TYPOGRAPHY.meta,
+    fontSize: 11,
+    color: COLORS.textMeta,
   },
   exerciseNameSkipped: {
     color: COLORS.textMeta,

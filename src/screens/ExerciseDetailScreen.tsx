@@ -11,7 +11,7 @@ import dayjs from 'dayjs';
 import type { WorkoutTemplateExercise } from '../types';
 import { useStore } from '../store';
 import { COLORS, SPACING, TYPOGRAPHY, GRADIENTS, CARDS, BORDER_RADIUS } from '../constants';
-import { IconArrowLeft, IconPlay, IconCheck, IconMenu, IconMinusLine, IconAddLine, IconHistory, IconSkip, IconRestart } from '../components/icons';
+import { IconArrowLeft, IconPlay, IconCheck, IconMenu, IconMinusLine, IconAddLine, IconHistory, IconSkip, IconRestart, IconEdit } from '../components/icons';
 import { SetTimerSheet } from '../components/timer/SetTimerSheet';
 import { Toggle } from '../components/Toggle';
 import { BottomDrawer } from '../components/common/BottomDrawer';
@@ -128,6 +128,8 @@ export function ExerciseDetailScreen({ route, navigation }: ExerciseDetailScreen
   const [recordingSetIndex, setRecordingSetIndex] = useState<number | null>(null);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
+  const [showAdjustmentDrawer, setShowAdjustmentDrawer] = useState(false);
+  const [useLatestLogged, setUseLatestLogged] = useState(false);
   
   // Get number of sets from exercise
   const numberOfSets = exercise?.targetSets || 3;
@@ -870,7 +872,7 @@ export function ExerciseDetailScreen({ route, navigation }: ExerciseDetailScreen
                         onPress={() => {
                           // Check if all sets are complete
                           const allSetsComplete = setsData.every(set => set.completed);
-                          // Only allow manual expand/collapse when all sets are complete
+                          // Only allow manual expand/collapse when all sets are complete or open drawer
                           if (allSetsComplete) {
                             LayoutAnimation.configureNext(
                               LayoutAnimation.create(
@@ -880,93 +882,39 @@ export function ExerciseDetailScreen({ route, navigation }: ExerciseDetailScreen
                               )
                             );
                             setExpandedSetIndex(isExpanded ? -1 : index);
+                          } else {
+                            // Open adjustment drawer
+                            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                            setShowAdjustmentDrawer(true);
                           }
                         }}
-                        disabled={!setsData.every(set => set.completed)}
                       >
                         <View style={styles.setCard}>
                           <View style={styles.setCardInner}>
-                      {/* Expanded View */}
+                      {/* Expanded View - Now just shows values without controls */}
                       {isExpanded && (
                         <View style={styles.setCardExpanded}>
-                          {/* Weight Adjustment */}
-                          <View style={styles.adjustmentRow}>
-                            <View style={styles.valueContainer}>
+                          {/* Weight and Reps Display - All on one line */}
+                          <View style={styles.valuesDisplayRow}>
+                            <View style={styles.valuesDisplayLeft}>
                               <View style={styles.valueRow}>
                                 <Text style={styles.largeValue}>
                                   {formatWeightForLoad(weightLbs, useKg)}
                                 </Text>
                                 <Text style={styles.unit}>{weightUnit}</Text>
-                                {useBarbellMode && perSideWeightLbs > 0 && (
-                                  <Text style={styles.perSideText}>
-                                    {formatWeightForLoad(perSideWeightLbs, useKg)} {weightUnit} per side
-                                  </Text>
-                                )}
                               </View>
-                            </View>
-                            <View style={styles.buttonsContainer}>
-                              <TouchableOpacity 
-                                onPress={() => handleWeightDecrement(index)}
-                                activeOpacity={1}
-                                style={styles.adjustButtonTapTarget}
-                              >
-                                <View style={styles.adjustButton}>
-                                  <View style={styles.adjustButtonInner}>
-                                    <IconMinusLine size={24} color={COLORS.accentPrimary} />
-                                  </View>
-                                </View>
-                              </TouchableOpacity>
-                              <TouchableOpacity 
-                                onPress={() => handleWeightIncrement(index)}
-                                activeOpacity={1}
-                                style={styles.adjustButtonTapTarget}
-                              >
-                                <View style={styles.adjustButton}>
-                                  <View style={styles.adjustButtonInner}>
-                                    <IconAddLine size={24} color={COLORS.accentPrimary} />
-                                  </View>
-                                </View>
-                              </TouchableOpacity>
-                            </View>
-                          </View>
-                          
-                          {/* Divider */}
-                          <View style={styles.dividerContainer}>
-                            <View style={styles.dividerTop} />
-                            <View style={styles.dividerBottom} />
-                          </View>
-                          
-                          {/* Reps Adjustment */}
-                          <View style={[styles.adjustmentRow, { marginBottom: 0 }]}>
-                            <View style={styles.valueContainer}>
                               <View style={styles.valueRow}>
                                 <Text style={styles.largeValue}>{reps}</Text>
                                 <Text style={styles.unit}>{repsUnit}</Text>
                               </View>
+                              {useBarbellMode && perSideWeightLbs > 0 && (
+                                <Text style={styles.perSideText}>
+                                  {formatWeightForLoad(perSideWeightLbs, useKg)} {weightUnit} per side
+                                </Text>
+                              )}
                             </View>
-                            <View style={styles.buttonsContainer}>
-                              <TouchableOpacity 
-                                onPress={() => handleRepsDecrement(index)}
-                                activeOpacity={1}
-                                style={styles.adjustButtonTapTarget}
-                              >
-                                <View style={styles.adjustButton}>
-                                  <View style={styles.adjustButtonInner}>
-                                    <IconMinusLine size={24} color={COLORS.accentPrimary} />
-                                  </View>
-                                </View>
-                              </TouchableOpacity>
-                              <TouchableOpacity 
-                                onPress={() => handleRepsIncrement(index)}
-                                activeOpacity={1}
-                                style={styles.adjustButtonTapTarget}
-                              >
-                                <View style={styles.adjustButton}>
-                                  <View style={styles.adjustButtonInner}>
-                                    <IconAddLine size={24} color={COLORS.accentPrimary} />
-                                  </View>
-                                </View>
-                              </TouchableOpacity>
+                            <View style={styles.editIconContainer}>
+                              <IconEdit size={20} color={COLORS.textMeta} />
                             </View>
                           </View>
                         </View>
@@ -1079,51 +1027,126 @@ export function ExerciseDetailScreen({ route, navigation }: ExerciseDetailScreen
           </View>
         )}
         
-        {/* Timer Bottom Sheet */}
-        <SetTimerSheet
-          visible={showTimer}
-          workoutName={displayWorkoutName}
-          exerciseName={displayExerciseName}
-          currentSet={recordingSetIndex !== null ? recordingSetIndex + 1 : 1}
-          totalSets={numberOfSets}
-          exerciseId={exercise?.id}
-          workoutKey={workoutKey}
-          onComplete={handleTimerComplete}
-          onClose={() => setShowTimer(false)}
-          isExerciseTimerPhase={isExerciseTimerPhase}
-          exerciseDuration={recordingSetIndex !== null ? setsData[recordingSetIndex]?.reps || 0 : 0}
-          onExerciseTimerComplete={handleExerciseTimerComplete}
-        />
-        
-        {/* Action Sheet Menu */}
-        <ActionSheet
-          visible={showMenu}
-          onClose={() => setShowMenu(false)}
-          items={[
-            { 
-              icon: <IconHistory size={24} color="#000000" />,
-              label: t('history'), 
-              onPress: handleHistory,
-              featured: true
-            },
-            { 
-              icon: <IconRestart size={24} color={COLORS.signalNegative} />,
-              label: t('reset'), 
-              onPress: handleResetExercise,
-              destructive: true 
-            },
-            { 
-              icon: <IconCheck size={24} color="#000000" />,
-              label: t('complete'), 
-              onPress: handleCompleteExercise
-            },
-            { 
-              icon: <IconSkip size={24} color="#000000" />,
-              label: t('skip'), 
-              onPress: handleSkipExercise 
-            },
-          ]}
-        />
+        {/* Adjustment Drawer */}
+        <BottomDrawer
+          visible={showAdjustmentDrawer}
+          onClose={() => setShowAdjustmentDrawer(false)}
+          maxHeight="50%"
+          bottomOffset={-8}
+        >
+          <View style={styles.adjustmentDrawerContent}>
+            <Text style={styles.adjustmentDrawerTitle}>{t('adjustValues')}</Text>
+            
+            {/* Use Latest Logged Toggle */}
+            <View style={styles.drawerToggleRow}>
+              <Toggle
+                label={t('useLatestLogged')}
+                value={useLatestLogged}
+                onValueChange={(value) => {
+                  setUseLatestLogged(value);
+                  if (value && exerciseHistory.length > 0) {
+                    // Get the most recent workout's last set
+                    const latestWorkout = exerciseHistory[0];
+                    const latestSet = latestWorkout.sets[latestWorkout.sets.length - 1];
+                    if (latestSet && expandedSetIndex !== -1) {
+                      const newSets = [...setsData];
+                      newSets[expandedSetIndex] = {
+                        ...newSets[expandedSetIndex],
+                        weight: latestSet.weight,
+                        reps: latestSet.reps,
+                      };
+                      setSetsData(newSets);
+                      setHasUnsavedChanges(true);
+                      
+                      // Save immediately
+                      if (workoutKey && exercise) {
+                        saveExerciseProgress(workoutKey, exercise.id, {
+                          exerciseId: exercise.id,
+                          sets: newSets,
+                        });
+                      }
+                    }
+                  }
+                }}
+              />
+            </View>
+            
+            {/* Adjustments - Using same pattern as WarmupItemEditorSheet */}
+            {expandedSetIndex !== -1 && (
+              <View style={styles.drawerValuesCard}>
+                {/* Weight Row */}
+                <View style={styles.drawerAdjustRow}>
+                  <View style={styles.drawerAdjustValue}>
+                    <Text style={styles.drawerAdjustValueText}>
+                      {formatWeightForLoad(setsData[expandedSetIndex].weight, useKg)}
+                    </Text>
+                    <Text style={styles.drawerAdjustUnit}>{weightUnit}</Text>
+                  </View>
+                  <View style={styles.drawerAdjustButtons}>
+                    <TouchableOpacity 
+                      onPress={() => handleWeightDecrement(expandedSetIndex)}
+                      activeOpacity={1}
+                      style={styles.adjustButtonTapTarget}
+                    >
+                      <View style={styles.adjustButton}>
+                        <View style={styles.adjustButtonInner}>
+                          <IconMinusLine size={24} color={COLORS.accentPrimary} />
+                        </View>
+                      </View>
+                    </TouchableOpacity>
+                    <TouchableOpacity 
+                      onPress={() => handleWeightIncrement(expandedSetIndex)}
+                      activeOpacity={1}
+                      style={styles.adjustButtonTapTarget}
+                    >
+                      <View style={styles.adjustButton}>
+                        <View style={styles.adjustButtonInner}>
+                          <IconAddLine size={24} color={COLORS.accentPrimary} />
+                        </View>
+                      </View>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+                
+                <View style={styles.drawerAdjustDivider} />
+                
+                {/* Reps Row */}
+                <View style={styles.drawerAdjustRow}>
+                  <View style={styles.drawerAdjustValue}>
+                    <Text style={styles.drawerAdjustValueText}>
+                      {setsData[expandedSetIndex].reps}
+                    </Text>
+                    <Text style={styles.drawerAdjustUnit}>{repsUnit}</Text>
+                  </View>
+                  <View style={styles.drawerAdjustButtons}>
+                    <TouchableOpacity 
+                      onPress={() => handleRepsDecrement(expandedSetIndex)}
+                      activeOpacity={1}
+                      style={styles.adjustButtonTapTarget}
+                    >
+                      <View style={styles.adjustButton}>
+                        <View style={styles.adjustButtonInner}>
+                          <IconMinusLine size={24} color={COLORS.accentPrimary} />
+                        </View>
+                      </View>
+                    </TouchableOpacity>
+                    <TouchableOpacity 
+                      onPress={() => handleRepsIncrement(expandedSetIndex)}
+                      activeOpacity={1}
+                      style={styles.adjustButtonTapTarget}
+                    >
+                      <View style={styles.adjustButton}>
+                        <View style={styles.adjustButtonInner}>
+                          <IconAddLine size={24} color={COLORS.accentPrimary} />
+                        </View>
+                      </View>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              </View>
+            )}
+          </View>
+        </BottomDrawer>
         
         {/* Exercise History Bottom Sheet */}
         <BottomDrawer
@@ -1193,8 +1216,54 @@ export function ExerciseDetailScreen({ route, navigation }: ExerciseDetailScreen
                 )}
             </View>
         </BottomDrawer>
-          </View>
       </View>
+      
+      {/* Timer Bottom Sheet - Rendered outside main container */}
+      <SetTimerSheet
+        visible={showTimer}
+        workoutName={displayWorkoutName}
+        exerciseName={displayExerciseName}
+        currentSet={recordingSetIndex !== null ? recordingSetIndex + 1 : 1}
+        totalSets={numberOfSets}
+        exerciseId={exercise?.id}
+        workoutKey={workoutKey}
+        onComplete={handleTimerComplete}
+        onClose={() => setShowTimer(false)}
+        isExerciseTimerPhase={isExerciseTimerPhase}
+        exerciseDuration={recordingSetIndex !== null ? setsData[recordingSetIndex]?.reps || 0 : 0}
+        onExerciseTimerComplete={handleExerciseTimerComplete}
+      />
+      
+      {/* Action Sheet Menu - Rendered outside main container */}
+      <ActionSheet
+        visible={showMenu}
+        onClose={() => setShowMenu(false)}
+        items={[
+          { 
+            icon: <IconHistory size={24} color="#000000" />,
+            label: t('history'), 
+            onPress: handleHistory,
+            featured: true
+          },
+          { 
+            icon: <IconRestart size={24} color={COLORS.signalNegative} />,
+            label: t('reset'), 
+            onPress: handleResetExercise,
+            destructive: true 
+          },
+          { 
+            icon: <IconCheck size={24} color="#000000" />,
+            label: t('complete'), 
+            onPress: handleCompleteExercise
+          },
+          { 
+            icon: <IconSkip size={24} color="#000000" />,
+            label: t('skip'), 
+            onPress: handleSkipExercise 
+          },
+        ]}
+      />
+    </View>
   );
 }
 
@@ -1320,6 +1389,20 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingBottom: 24,
   },
+  valuesDisplayRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  valuesDisplayLeft: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    flex: 1,
+    gap: 24,
+  },
+  editIconContainer: {
+    marginLeft: SPACING.md,
+  },
   adjustmentRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1341,7 +1424,7 @@ const styles = StyleSheet.create({
     color: '#000000',
   },
   unit: {
-    ...TYPOGRAPHY.h1,
+    ...TYPOGRAPHY.body,
     color: LIGHT_COLORS.textMeta,
   },
   perSideText: {
@@ -1488,6 +1571,56 @@ const styles = StyleSheet.create({
   barbellToggleContainer: {
     marginTop: SPACING.lg,
     paddingBottom: 40,
+  },
+  
+  // Adjustment Drawer Content
+  adjustmentDrawerContent: {
+    paddingHorizontal: SPACING.xl,
+    paddingTop: SPACING.lg,
+    paddingBottom: 24,
+  },
+  adjustmentDrawerTitle: {
+    ...TYPOGRAPHY.h2,
+    color: COLORS.text,
+    marginBottom: SPACING.xl,
+  },
+  drawerToggleRow: {
+    paddingVertical: 4,
+    marginBottom: SPACING.xl,
+  },
+  drawerValuesCard: {
+    backgroundColor: COLORS.activeCard,
+    borderRadius: BORDER_RADIUS.lg,
+    overflow: 'hidden',
+  },
+  drawerAdjustRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: SPACING.lg,
+    paddingHorizontal: SPACING.xl,
+  },
+  drawerAdjustValue: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: SPACING.sm,
+  },
+  drawerAdjustValueText: {
+    ...TYPOGRAPHY.h1,
+    color: COLORS.text,
+  },
+  drawerAdjustUnit: {
+    ...TYPOGRAPHY.body,
+    color: COLORS.textMeta,
+  },
+  drawerAdjustButtons: {
+    flexDirection: 'row',
+    gap: SPACING.md,
+  },
+  drawerAdjustDivider: {
+    height: 1,
+    backgroundColor: COLORS.borderDimmed,
+    marginHorizontal: SPACING.xl,
   },
   
   // History Bottom Sheet Content

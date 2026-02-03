@@ -9,7 +9,7 @@ import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS, CARDS, BUTTONS } from '../c
 import { IconArrowLeft, IconCalendar, IconTrash, IconEdit, IconAdd } from '../components/icons';
 import { useTranslation } from '../i18n/useTranslation';
 import type { WorkoutTemplateExercise } from '../types/training';
-import { DraggableExerciseList, type DraggableExerciseItem, ExerciseSettingsSheet } from '../components/exercises';
+import { DraggableExerciseList, type DraggableExerciseItem, ExerciseSettingsSheet, AddToCycleSheet } from '../components/exercises';
 
 // Enable LayoutAnimation on Android
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -36,6 +36,7 @@ export function WorkoutTemplateDetailScreen() {
   const [selectedExerciseId, setSelectedExerciseId] = useState<string | null>(null);
   const [scrollEnabled, setScrollEnabled] = useState(true);
   const [editingExerciseId, setEditingExerciseId] = useState<string | null>(null);
+  const [addToCycleExerciseId, setAddToCycleExerciseId] = useState<string | null>(null);
 
   const handleBack = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -93,6 +94,65 @@ export function WorkoutTemplateDetailScreen() {
     await updateWorkoutTemplate(template.id, { items: updatedItems });
     setEditingExerciseId(null);
   };
+
+  const handleAddToCycle = (compositeId: string) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setAddToCycleExerciseId(compositeId);
+  };
+
+  const handleAddExerciseToCycle = async (compositeId: string, newExercise: Omit<WorkoutTemplateExercise, 'id' | 'order'>) => {
+    if (!template) return;
+    
+    // Extract original index from composite ID
+    const originalIndex = parseInt(compositeId.split('-').pop() || '0', 10);
+    
+    // Sort items to match the order we used when creating exerciseDetails
+    const sortedItems = [...template.items].sort((a, b) => a.order - b.order);
+    const targetExercise = sortedItems[originalIndex];
+    
+    // Determine cycleId and cycleOrder
+    let cycleId = targetExercise.cycleId;
+    let cycleOrder = 0;
+    
+    if (!cycleId) {
+      // Create new cycle
+      cycleId = `cycle-${Date.now()}`;
+      // Update target exercise to be part of the cycle
+      sortedItems[originalIndex] = {
+        ...targetExercise,
+        cycleId,
+        cycleOrder: 0,
+      };
+      cycleOrder = 1;
+    } else {
+      // Find the highest cycleOrder in this cycle and add 1
+      const cycleExercises = sortedItems.filter(item => item.cycleId === cycleId);
+      cycleOrder = Math.max(...cycleExercises.map(ex => ex.cycleOrder ?? 0)) + 1;
+    }
+    
+    // Create the new exercise with cycle info
+    const newItem: WorkoutTemplateExercise = {
+      id: `exercise-${Date.now()}-${Math.random()}`,
+      ...newExercise,
+      cycleId,
+      cycleOrder,
+      order: originalIndex + 1, // Insert right after the target exercise
+    };
+    
+    // Insert the new exercise right after the target
+    const updatedItems = [
+      ...sortedItems.slice(0, originalIndex + 1),
+      newItem,
+      ...sortedItems.slice(originalIndex + 1),
+    ].map((item, idx) => ({
+      ...item,
+      order: idx,
+    }));
+    
+    await updateWorkoutTemplate(template.id, { items: updatedItems });
+    setAddToCycleExerciseId(null);
+  };
+
 
   const handleEditWorkoutName = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -270,6 +330,8 @@ export function WorkoutTemplateDetailScreen() {
       exerciseId: item.exerciseId,
       name: exercise?.name || t('unknownExercise'),
       order: index,
+      cycleId: item.cycleId,
+      cycleOrder: item.cycleOrder,
     };
   });
 
@@ -321,30 +383,6 @@ export function WorkoutTemplateDetailScreen() {
           </View>
         </View>
 
-        {/* Warm-up Section */}
-        {template.warmupItems && template.warmupItems.length > 0 && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>{t('warmup')}</Text>
-            {template.warmupItems.map((item) => (
-              <View key={item.id} style={styles.warmupCard}>
-                <View style={styles.warmupContent}>
-                  <Text style={styles.warmupName}>{item.exerciseName}</Text>
-                  {(item.duration || item.reps) && (
-                    <Text style={styles.warmupDetails}>
-                      {item.duration && `${item.duration}s`}
-                      {item.duration && item.reps && ' • '}
-                      {item.reps && `${item.reps} reps`}
-                    </Text>
-                  )}
-                  {item.notes && (
-                    <Text style={styles.warmupNotes}>{item.notes}</Text>
-                  )}
-                </View>
-              </View>
-            ))}
-          </View>
-        )}
-
         {/* Exercises List */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>{t('listOfExercises')}</Text>
@@ -359,6 +397,7 @@ export function WorkoutTemplateDetailScreen() {
             actionButtons={['edit', 'delete']}
             scrollEnabled={scrollEnabled}
             onScrollEnabledChange={setScrollEnabled}
+            onAddToCycle={handleAddToCycle}
           />
           
           {/* Add Exercise Button */}
@@ -404,6 +443,24 @@ export function WorkoutTemplateDetailScreen() {
             visible={true}
             onClose={() => setEditingExerciseId(null)}
             onSave={(updates) => handleSaveExercise(editingExerciseId, updates)}
+          />
+        );
+      })()}
+
+      {/* Add to Cycle Sheet */}
+      {addToCycleExerciseId && (() => {
+        const originalIndex = parseInt(addToCycleExerciseId.split('-').pop() || '0', 10);
+        const sortedItems = [...template.items].sort((a, b) => a.order - b.order);
+        const targetExercise = sortedItems[originalIndex];
+        
+        if (!targetExercise) return null;
+        
+        return (
+          <AddToCycleSheet
+            visible={true}
+            onClose={() => setAddToCycleExerciseId(null)}
+            onAdd={(newExercise) => handleAddExerciseToCycle(addToCycleExerciseId, newExercise)}
+            cycleSets={targetExercise.sets}
           />
         );
       })()}
@@ -486,10 +543,15 @@ const styles = StyleSheet.create({
   section: {
     marginBottom: SPACING.xxxl,
   },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: SPACING.lg,
+  },
   sectionTitle: {
     ...TYPOGRAPHY.meta,
     color: COLORS.textMeta,
-    marginBottom: SPACING.lg,
   },
   addExerciseButton: {
     width: '100%',
@@ -525,32 +587,5 @@ const styles = StyleSheet.create({
   scheduleButtonText: {
     ...TYPOGRAPHY.metaBold,
     color: COLORS.backgroundCanvas,
-  },
-  warmupCard: {
-    backgroundColor: CARDS.cardDeepDimmed.outer.backgroundColor,
-    borderRadius: CARDS.cardDeepDimmed.outer.borderRadius,
-    borderWidth: CARDS.cardDeepDimmed.outer.borderWidth,
-    borderColor: CARDS.cardDeepDimmed.outer.borderColor,
-    marginBottom: SPACING.sm,
-    padding: SPACING.md,
-  },
-  warmupContent: {
-    flex: 1,
-  },
-  warmupName: {
-    ...TYPOGRAPHY.body,
-    color: COLORS.text,
-    fontWeight: '600',
-    marginBottom: 2,
-  },
-  warmupDetails: {
-    ...TYPOGRAPHY.meta,
-    color: COLORS.textMeta,
-    marginBottom: 2,
-  },
-  warmupNotes: {
-    ...TYPOGRAPHY.meta,
-    color: COLORS.textMeta,
-    fontStyle: 'italic',
   },
 });

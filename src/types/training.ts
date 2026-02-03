@@ -23,9 +23,13 @@ export type Exercise = {
 export type WarmupItem_DEPRECATED = {
   id: string;
   exerciseName: string;
-  duration?: number; // seconds
-  reps?: number;
-  notes?: string;
+  sets: number;
+  reps: number; // if isTimeBased, this is seconds; otherwise it's reps
+  weight: number; // in lbs (internal storage)
+  isTimeBased: boolean;
+  isPerSide?: boolean; // if true, timer runs for one side, then 10s countdown, then repeats for other side
+  cycleId?: string; // optional ID to group warmup items in a cycle/circuit
+  cycleOrder?: number; // order within the cycle (0-indexed)
 };
 
 // Unified structure for both warmup and workout exercises
@@ -73,6 +77,8 @@ export type WorkoutTemplateExercise = {
   weight?: number; // optional placeholder
   isTimeBased?: boolean; // true for time-based exercises (seconds instead of reps)
   restSeconds?: number; // optional
+  cycleId?: string; // optional ID to group exercises in a cycle/superset
+  cycleOrder?: number; // order within the cycle (0-indexed)
 };
 
 export type WorkoutTemplate = {

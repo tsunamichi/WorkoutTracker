@@ -638,6 +638,32 @@ export const useStore = create<WorkoutStore>((set, get) => ({
             template.warmupItems === undefined ||
             template.kind === undefined;
           
+          // Migrate warmup items from old format to new format
+          let migratedWarmupItems = template.warmupItems ?? [];
+          if (migratedWarmupItems.length > 0) {
+            migratedWarmupItems = migratedWarmupItems.map((item: any) => {
+              // Old format: { id, exerciseName, duration?, reps?, notes? }
+              // New format: { id, exerciseName, sets, reps, weight, isTimeBased, isPerSide }
+              if (item.duration !== undefined || item.notes !== undefined || item.weight === undefined || item.isPerSide === undefined) {
+                templatesMigrationNeeded = true;
+                // Convert old format to new
+                const isTimeBased = item.duration !== undefined;
+                return {
+                  id: item.id,
+                  exerciseName: item.exerciseName || '',
+                  sets: item.sets ?? 1, // Default to 1 set for old items
+                  reps: isTimeBased ? (item.duration || 30) : (item.reps || 10),
+                  weight: item.weight ?? 0,
+                  isTimeBased: item.isTimeBased ?? isTimeBased,
+                  isPerSide: item.isPerSide ?? false, // Default to false for existing items
+                  cycleId: item.cycleId,
+                  cycleOrder: item.cycleOrder,
+                };
+              }
+              return item;
+            });
+          }
+          
           if (needsMigration) {
             templatesMigrationNeeded = true;
             return {
@@ -645,11 +671,14 @@ export const useStore = create<WorkoutStore>((set, get) => ({
               kind: 'workout' as const,
               lastUsedAt: template.lastUsedAt ?? null,
               usageCount: template.usageCount ?? 0,
-              warmupItems: template.warmupItems ?? [],
+              warmupItems: migratedWarmupItems,
               source: template.source ?? 'user',
             };
           }
-          return template;
+          return {
+            ...template,
+            warmupItems: migratedWarmupItems,
+          };
         });
       }
       
@@ -2326,14 +2355,18 @@ export const useStore = create<WorkoutStore>((set, get) => ({
   updateWarmupCompletion: async (workoutId, warmupItemId, completed) => {
     const scheduledWorkouts = get().scheduledWorkouts.map(sw => {
       if (sw.id === workoutId) {
+        // Initialize warmupCompletion if it doesn't exist
+        const existingCompletion = sw.warmupCompletion || { completedItems: [] };
+        const existingCompletedItems = existingCompletion.completedItems || [];
+        
         const completedItems = completed
-          ? [...new Set([...sw.warmupCompletion.completedItems, warmupItemId])]
-          : sw.warmupCompletion.completedItems.filter(id => id !== warmupItemId);
+          ? [...new Set([...existingCompletedItems, warmupItemId])]
+          : existingCompletedItems.filter(id => id !== warmupItemId);
         
         return {
           ...sw,
           warmupCompletion: {
-            ...sw.warmupCompletion,
+            ...existingCompletion,
             completedItems,
           },
         };
@@ -2354,8 +2387,8 @@ export const useStore = create<WorkoutStore>((set, get) => ({
       return { completedItems: [], totalItems: 0, percentage: 0 };
     }
     
-    const totalItems = workout.warmupSnapshot.length;
-    const completedItems = workout.warmupCompletion.completedItems;
+    const totalItems = workout.warmupSnapshot?.length || 0;
+    const completedItems = workout.warmupCompletion?.completedItems || [];
     const percentage = totalItems > 0 ? Math.round((completedItems.length / totalItems) * 100) : 0;
     
     return {

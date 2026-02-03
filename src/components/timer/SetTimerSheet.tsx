@@ -44,6 +44,8 @@ interface SetTimerSheetProps {
   isExerciseTimerPhase?: boolean; // If true, show exercise timer; if false, show rest timer
   exerciseDuration?: number; // Duration in seconds for exercise timer
   onExerciseTimerComplete?: () => void; // Callback when exercise timer completes
+  skipRestPhase?: boolean; // If true, skip rest phase after exercise timer completes
+  isPerSide?: boolean; // If true, run exercise timer twice with 10s "switch sides" countdown between
 }
 
 const REST_COLOR_YELLOW = COLORS.signalWarning;
@@ -68,7 +70,9 @@ export function SetTimerSheet({
   workoutKey,
   isExerciseTimerPhase = false,
   exerciseDuration = 0,
-  onExerciseTimerComplete
+  onExerciseTimerComplete,
+  skipRestPhase = false,
+  isPerSide = false
 }: SetTimerSheetProps) {
   const insets = useSafeAreaInsets();
   const { settings, updateSettings } = useStore();
@@ -87,8 +91,9 @@ export function SetTimerSheet({
   const [isRunning, setIsRunning] = useState(false);
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [labelWidth, setLabelWidth] = useState(0);
-  const [currentPhase, setCurrentPhase] = useState<'exercise' | 'rest'>(isExerciseTimerPhase ? 'exercise' : 'rest'); // Track phase internally
-  const [preCountdown, setPreCountdown] = useState(0);
+  const [currentPhase, setCurrentPhase] = useState<'exercise' | 'rest' | 'switchSides'>(isExerciseTimerPhase ? 'exercise' : 'rest'); // Track phase internally
+  const [preCountdown, setPreCountdown] = useState(-1);
+  const [currentSide, setCurrentSide] = useState<'first' | 'second'>('first'); // Track which side we're on for per-side exercises
   const countdownOpacityAnim = useRef(new Animated.Value(1)).current;
   const countdownTextScaleAnim = useRef(new Animated.Value(1)).current;
   const exerciseEntryOpacity = useRef(new Animated.Value(1)).current;
@@ -393,7 +398,7 @@ export function SetTimerSheet({
     t,
   ]);
 
-  // Breathing animation for rest phase only (not exercise phase)
+  // Breathing animation for rest and switchSides phases only (not exercise phase)
   useEffect(() => {
     if (!isRunning || currentPhase === 'exercise') {
       breathingAnim.stopAnimation(() => {
@@ -402,7 +407,7 @@ export function SetTimerSheet({
       return;
     }
 
-    // Start breathing animation during rest timer - breathe IN (contract, never expand beyond 100%)
+    // Start breathing animation during rest/switchSides timer - breathe IN (contract, never expand beyond 100%)
     Animated.loop(
       Animated.sequence([
         Animated.timing(breathingAnim, {
@@ -427,9 +432,9 @@ export function SetTimerSheet({
     };
   }, [isRunning, currentPhase, breathingAnim]);
 
-  // Yellow to red color transition when 5 seconds or less remain (rest phase only)
+  // Yellow to red color transition when 5 seconds or less remain (rest and switch sides phases)
   useEffect(() => {
-    if (currentPhase === 'rest' && timeLeft <= 5 && timeLeft > 0) {
+    if ((currentPhase === 'rest' || currentPhase === 'switchSides') && timeLeft <= 5 && timeLeft > 0) {
       // Transition from yellow (0) to red (1)
       Animated.timing(restColorAnim, {
         toValue: 1,
@@ -443,7 +448,7 @@ export function SetTimerSheet({
     }
   }, [timeLeft, currentPhase, restColorAnim]);
 
-  // Border radius animation: squircle for exercise, circle for rest
+  // Border radius animation: squircle for exercise, circle for rest and switchSides
   useEffect(() => {
     const targetRadius = currentPhase === 'exercise' ? CONTAINER_WIDTH * 0.24 : CONTAINER_WIDTH / 2;
     Animated.timing(borderRadiusAnim, {
@@ -512,26 +517,7 @@ export function SetTimerSheet({
         setIsRunning(true);
       } else {
         // Start 5-second pre-countdown before exercise timer
-        if (preCountdownIntervalRef.current) {
-          clearInterval(preCountdownIntervalRef.current);
-        }
         setPreCountdown(PRE_EXERCISE_COUNTDOWN);
-        preCountdownIntervalRef.current = setInterval(() => {
-          setPreCountdown(prev => {
-            const next = prev - 1;
-            if (next < 0) {
-              if (preCountdownIntervalRef.current) {
-                clearInterval(preCountdownIntervalRef.current);
-                preCountdownIntervalRef.current = null;
-              }
-              setPreCountdown(-1);
-              startExerciseTimer();
-              return -1;
-            }
-            playCountdownTick(next);
-            return next;
-          });
-        }, 1000);
       }
       
       // Reset and animate in
@@ -557,6 +543,7 @@ export function SetTimerSheet({
       setPreCountdown(0);
       endTimeRef.current = null;
       setCurrentPhase('rest'); // Reset phase
+      setCurrentSide('first'); // Reset side for per-side exercises
       
       // Stop animations
       breathingAnim.stopAnimation(() => {
@@ -597,6 +584,29 @@ export function SetTimerSheet({
     promptNotificationPermissions,
   ]);
 
+  // Pre-countdown timer (5-4-3-2-1-GO) using useEffect with timeout
+  useEffect(() => {
+    if (!visible || currentPhase !== 'exercise' || preCountdown < 0) {
+      return;
+    }
+    
+    if (preCountdown === 0) {
+      // Countdown complete, start exercise timer
+      setPreCountdown(-1);
+      startExerciseTimer();
+      return;
+    }
+    
+    // Play tick sound for 3, 2, 1
+    playCountdownTick(preCountdown - 1);
+    
+    // Schedule next tick
+    const timer = setTimeout(() => {
+      setPreCountdown(prev => prev - 1);
+    }, 1000);
+    
+    return () => clearTimeout(timer);
+  }, [preCountdown, visible, currentPhase, startExerciseTimer, playCountdownTick]);
 
   // Timer logic
   useEffect(() => {
@@ -634,19 +644,47 @@ export function SetTimerSheet({
         playCompletionAlert();
         
         if (currentPhase === 'exercise') {
-          // Exercise phase completed - transition to rest phase (same drawer)
-          if (onExerciseTimerComplete) {
-            onExerciseTimerComplete(); // Notify parent that set is complete
+          // Exercise phase completed
+          
+          // Check if this is a per-side exercise and we're on the first side
+          if (isPerSide && currentSide === 'first') {
+            // Transition to switch sides countdown (10 seconds)
+            setCurrentPhase('switchSides');
+            const switchTime = 10;
+            setTimeLeft(switchTime);
+            endTimeRef.current = Date.now() + switchTime * 1000;
+            setIsRunning(true);
+            lastPlayedSecondRef.current = null;
+          } else {
+            // Either not per-side, or we just finished the second side
+            if (onExerciseTimerComplete) {
+              onExerciseTimerComplete(); // Notify parent that set is complete
+            }
+            
+            // If skipRestPhase is true, close drawer immediately instead of transitioning to rest
+            if (skipRestPhase) {
+              cancelTimerNotification();
+              animateOutAndClose(onComplete);
+            } else {
+              // Transition to rest phase internally
+              setCurrentPhase('rest');
+              const newTime = restTime;
+              setTimeLeft(newTime);
+              endTimeRef.current = Date.now() + newTime * 1000;
+              setIsRunning(true);
+              lastPlayedSecondRef.current = null;
+            }
           }
           
-          // Transition to rest phase internally
-          setCurrentPhase('rest');
-          const newTime = restTime;
-          setTimeLeft(newTime);
-          endTimeRef.current = Date.now() + newTime * 1000;
+        } else if (currentPhase === 'switchSides') {
+          // Switch sides countdown completed - start second side immediately (no pre-countdown)
+          setCurrentSide('second');
+          setCurrentPhase('exercise');
+          setPreCountdown(-1); // No pre-countdown for second side
+          setTimeLeft(exerciseDuration);
+          endTimeRef.current = Date.now() + exerciseDuration * 1000;
           setIsRunning(true);
           lastPlayedSecondRef.current = null;
-          
         } else {
           // Rest phase completed - close drawer
           restColorAnim.setValue(1);
@@ -669,9 +707,13 @@ export function SetTimerSheet({
     isRunning,
     visible,
     currentPhase,
+    currentSide,
     restTime,
+    exerciseDuration,
     onComplete,
     onExerciseTimerComplete,
+    skipRestPhase,
+    isPerSide,
     soundEnabled,
     animateOutAndClose,
     playCompletionAlert,
@@ -708,18 +750,23 @@ export function SetTimerSheet({
             cancelTimerNotification();
 
             if (currentPhase === 'exercise') {
-              // Exercise phase completed - transition to rest phase (same drawer)
+              // Exercise phase completed
               if (onExerciseTimerComplete) {
                 onExerciseTimerComplete(); // Notify parent that set is complete
               }
 
-              // Transition to rest phase internally
-              setCurrentPhase('rest');
-              const newTime = restTime;
-              setTimeLeft(newTime);
-              endTimeRef.current = Date.now() + newTime * 1000;
-              setIsRunning(true);
-              lastPlayedSecondRef.current = null;
+              // If skipRestPhase is true, close drawer immediately instead of transitioning to rest
+              if (skipRestPhase) {
+                animateOutAndClose(onComplete);
+              } else {
+                // Transition to rest phase internally
+                setCurrentPhase('rest');
+                const newTime = restTime;
+                setTimeLeft(newTime);
+                endTimeRef.current = Date.now() + newTime * 1000;
+                setIsRunning(true);
+                lastPlayedSecondRef.current = null;
+              }
             } else {
               // Rest phase completed - close drawer
               restColorAnim.setValue(1);
@@ -746,6 +793,7 @@ export function SetTimerSheet({
     restTime,
     onComplete,
     onExerciseTimerComplete,
+    skipRestPhase,
     animateOutAndClose,
     playCompletionAlert,
     workoutName,
@@ -757,6 +805,12 @@ export function SetTimerSheet({
   ]);
 
   const handleTogglePause = () => {
+    // Don't allow manual start/pause during pre-countdown
+    const isPreCountdownActive = preCountdown >= 0 && currentPhase === 'exercise';
+    if (isPreCountdownActive) {
+      return;
+    }
+    
     if (isRunning) {
       const remaining = endTimeRef.current
         ? Math.max(0, Math.ceil((endTimeRef.current - Date.now()) / 1000))
@@ -789,18 +843,23 @@ export function SetTimerSheet({
     
     // Handle skip differently based on current phase
     if (currentPhase === 'exercise') {
-      // Exercise phase: mark set complete and transition to rest
+      // Exercise phase: mark set complete
       if (onExerciseTimerComplete) {
         onExerciseTimerComplete();
       }
       
-      // Transition to rest phase
-      setCurrentPhase('rest');
-      const newTime = restTime;
-      setTimeLeft(newTime);
-      endTimeRef.current = Date.now() + newTime * 1000;
-      setIsRunning(true);
-      lastPlayedSecondRef.current = null;
+      // If skipRestPhase is true, close drawer immediately
+      if (skipRestPhase) {
+        animateOutAndClose(onComplete);
+      } else {
+        // Transition to rest phase
+        setCurrentPhase('rest');
+        const newTime = restTime;
+        setTimeLeft(newTime);
+        endTimeRef.current = Date.now() + newTime * 1000;
+        setIsRunning(true);
+        lastPlayedSecondRef.current = null;
+      }
     } else {
       // Rest phase: close the timer
       animateOutAndClose(onComplete);
@@ -903,7 +962,13 @@ export function SetTimerSheet({
         <View style={[styles.timerSheet, { paddingBottom: 8 + insets.bottom }]}>
           {/* Next set indicator */}
           <View style={styles.setIndicator}>
-              {currentSet < totalSets ? (
+              {currentPhase === 'switchSides' ? (
+                <Text style={styles.nextSetText}>Switch sides</Text>
+              ) : currentPhase === 'exercise' && isPerSide ? (
+                <Text style={styles.nextSetText}>
+                  {currentSide === 'first' ? 'Left side' : 'Right side'}
+                </Text>
+              ) : currentSet < totalSets ? (
                 <Text style={styles.nextSetText}>
                   {t('nextSetOutOf')
                     .replace('{current}', String(currentSet + 1))
@@ -924,16 +989,14 @@ export function SetTimerSheet({
               style={[
                 styles.circleContainer,
                 {
-                  opacity: currentPhase === 'exercise' ? exerciseEntryOpacity : 1,
                   transform: [
                     { scale: animatedScale },
-                    { scale: currentPhase === 'exercise' ? exerciseEntryScale : 1 },
                   ],
                 },
               ]}
             >
-              {/* Circle/Squircle background */}
-              {!isPreCountdownActive && !(isExerciseTimerPhase && preCountdown >= 0) && (
+              {/* Circle/Squircle background - show when not in pre-countdown */}
+              {!isPreCountdownActive && (
                 <Animated.View
                   style={[
                     styles.circle,

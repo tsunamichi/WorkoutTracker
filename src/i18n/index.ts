@@ -473,7 +473,19 @@ type TranslationKey =
   | 'warmupNotesPlaceholder'
   | 'progressPhotos'
   | 'addPhotosAndWeight'
-  | 'createNewWorkout';
+  | 'createNewWorkout'
+  | 'partOfCycle'
+  | 'selectCycleExercises'
+  | 'cycleExercisesHint'
+  | 'addToCycle'
+  | 'cycleExercisesSelected'
+  | 'cycleExecutionHint'
+  | 'repsUnit'
+  | 'unnamed'
+  | 'cycleSetsSyncedInfo'
+  | 'addToCycle'
+  | 'search'
+  | 'change';
 
 const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
   en: {
@@ -871,6 +883,7 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     applyChangesTitle: 'Apply Changes',
     thisWorkoutOnly: 'This Workout Only',
     allFutureWorkouts: 'All Future Workouts',
+    set: 'set',
     setsUnit: 'sets',
     addFiveSeconds: '+5',
     weekCycleSingular: '1-week Cycle',
@@ -919,6 +932,8 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     betweenSets: 'between sets',
     monthlyProgressCheck: 'Monthly progress check',
     monthlyProgressReminder: 'Reminder on day {day} of each month',
+    myWorkouts: 'My Workouts',
+    viewManageTemplates: 'View and manage workout templates',
     designSystem: 'Design System',
     viewDesignSystem: 'View colors, type, and components',
     clearAllHistory: 'Clear All History',
@@ -928,6 +943,7 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     addWeightEntry: 'Add Weight Entry',
     weightPlaceholder: 'Weight ({unit})',
     cancel: 'Cancel',
+    remove: 'Remove',
     add: 'Add',
     addWorkoutFor: 'Add workout for',
     singleWorkoutDescription: 'Schedule one workout for this day',
@@ -960,7 +976,14 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     warmup: 'Warm-up',
     addWarmupItem: 'Add Item',
     noWarmupItems: 'No warm-up items yet. Tap "Add Item" to get started.',
+    completed: 'completed',
+    removeWarmup: 'Remove Warm-up',
+    removeWarmupConfirmation: 'Are you sure you want to remove the warm-up from this workout?',
     exerciseName: 'Exercise Name',
+    adjustValues: 'Adjust Values',
+    useLatestLogged: 'Use latest logged',
+    weight: 'Weight',
+    reps: 'Reps',
     seconds: 'seconds',
     optional: 'optional',
     warmupExercisePlaceholder: 'e.g., Jumping jacks, Arm circles',
@@ -968,6 +991,18 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     progressPhotos: 'Progress Photos',
     addPhotosAndWeight: 'Add photos and track your weight',
     createNewWorkout: 'Create new workout',
+    partOfCycle: 'Part of a cycle',
+    selectCycleExercises: 'Select cycle exercises',
+    cycleExercisesHint: 'Choose exercises to perform in a circuit pattern',
+    addToCycle: 'Add {count} to cycle',
+    cycleExercisesSelected: '{count} exercises in cycle',
+    cycleExecutionHint: 'Perform one set of each exercise in sequence',
+    repsUnit: 'reps',
+    unnamed: 'Unnamed',
+    cycleSetsSyncedInfo: 'Sets are synced with the first exercise in this cycle',
+    addToCycle: 'Add to cycle',
+    search: 'Search',
+    change: 'Change',
   },
   es: {
     today: 'Hoy',
@@ -1365,6 +1400,7 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     applyChangesTitle: 'Aplicar cambios',
     thisWorkoutOnly: 'Solo este entrenamiento',
     allFutureWorkouts: 'Todos los futuros entrenamientos',
+    set: 'serie',
     setsUnit: 'series',
     addFiveSeconds: '+5',
     weekCycleSingular: 'Ciclo de 1 semana',
@@ -1413,6 +1449,8 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     betweenSets: 'entre series',
     monthlyProgressCheck: 'Revision mensual',
     monthlyProgressReminder: 'Recordatorio el dia {day} de cada mes',
+    myWorkouts: 'Mis Entrenamientos',
+    viewManageTemplates: 'Ver y gestionar plantillas de entrenamiento',
     designSystem: 'Sistema de diseno',
     viewDesignSystem: 'Ver colores, tipo y componentes',
     clearAllHistory: 'Borrar historial',
@@ -1422,6 +1460,7 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     addWeightEntry: 'Agregar peso',
     weightPlaceholder: 'Peso ({unit})',
     cancel: 'Cancelar',
+    remove: 'Eliminar',
     add: 'Agregar',
     addWorkoutFor: 'Agregar entrenamiento para',
     singleWorkoutDescription: 'Programar un entrenamiento para este día',
@@ -1454,7 +1493,14 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     warmup: 'Calentamiento',
     addWarmupItem: 'Agregar',
     noWarmupItems: 'No hay calentamiento. Toca "Agregar" para comenzar.',
+    completed: 'completados',
+    removeWarmup: 'Eliminar Calentamiento',
+    removeWarmupConfirmation: '¿Estás seguro de que quieres eliminar el calentamiento de este entrenamiento?',
     exerciseName: 'Nombre del Ejercicio',
+    adjustValues: 'Ajustar Valores',
+    useLatestLogged: 'Usar último registrado',
+    weight: 'Peso',
+    reps: 'Reps',
     seconds: 'segundos',
     optional: 'opcional',
     warmupExercisePlaceholder: 'ej., Saltos, Círculos con los brazos',
@@ -1462,6 +1508,18 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     progressPhotos: 'Fotos de Progreso',
     addPhotosAndWeight: 'Agrega fotos y registra tu peso',
     createNewWorkout: 'Crear nuevo entrenamiento',
+    partOfCycle: 'Parte de un circuito',
+    selectCycleExercises: 'Seleccionar ejercicios del circuito',
+    cycleExercisesHint: 'Elige ejercicios para realizar en patrón de circuito',
+    addToCycle: 'Agregar {count} al circuito',
+    cycleExercisesSelected: '{count} ejercicios en el circuito',
+    cycleExecutionHint: 'Realiza una serie de cada ejercicio en secuencia',
+    repsUnit: 'reps',
+    unnamed: 'Sin nombre',
+    cycleSetsSyncedInfo: 'Las series están sincronizadas con el primer ejercicio de este circuito',
+    addToCycle: 'Agregar al circuito',
+    search: 'Buscar',
+    change: 'Cambiar',
   },
 };
 

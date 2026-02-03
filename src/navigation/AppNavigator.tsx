@@ -8,6 +8,9 @@ import { HistoryScreen } from '../screens/HistoryScreen';
 import { PlanHistoryDetailScreen } from '../screens/PlanHistoryDetailScreen';
 import { WorkoutBuilderScreen } from '../screens/WorkoutBuilderScreen';
 import { WorkoutTemplateDetailScreen } from '../screens/WorkoutTemplateDetailScreen';
+import { WarmupEditorScreen } from '../screens/WarmupEditorScreen';
+import { WarmupExecutionScreen } from '../screens/WarmupExecutionScreen';
+import { WorkoutsScreen } from '../screens/WorkoutsScreen';
 import { ProfileScreen } from '../screens/ProfileScreen';
 import { BodyWeightHistoryScreen } from '../screens/BodyWeightHistoryScreen';
 import { ProgressHomeScreen } from '../screens/ProgressHomeScreen';
@@ -52,7 +55,10 @@ export type RootStackParamList = {
   History: undefined;
   PlanHistoryDetail: { programId: string; programName: string };
   WorkoutBuilder: undefined;
+  Workouts: undefined;
   WorkoutTemplateDetail: { templateId: string };
+  WarmupEditor: { templateId: string };
+  WarmupExecution: { workoutKey: string; workoutTemplateId: string };
   DesignSystem: undefined;
   CycleDetail: { cycleId: string };
   CycleConflicts: { plan: any; conflicts: any[]; planId?: string };
@@ -908,7 +914,10 @@ export default function AppNavigator() {
         <Stack.Screen name="History" component={HistoryScreen} />
         <Stack.Screen name="PlanHistoryDetail" component={PlanHistoryDetailScreen} />
         <Stack.Screen name="WorkoutBuilder" component={WorkoutBuilderScreen} />
+        <Stack.Screen name="Workouts" component={WorkoutsScreen} />
         <Stack.Screen name="WorkoutTemplateDetail" component={WorkoutTemplateDetailScreen} />
+        <Stack.Screen name="WarmupEditor" component={WarmupEditorScreen} />
+        <Stack.Screen name="WarmupExecution" component={WarmupExecutionScreen} />
         <Stack.Screen name="DesignSystem" component={DesignSystemScreen} />
         <Stack.Screen name="CycleDetail" component={CycleDetailScreen} />
         <Stack.Screen name="CycleConflicts" component={CycleConflictsScreen} />
