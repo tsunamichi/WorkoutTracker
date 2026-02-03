@@ -133,25 +133,6 @@ export function ExerciseDetailScreen({ route, navigation }: ExerciseDetailScreen
   const [useLatestLogged, setUseLatestLogged] = useState(false);
   const [originalSetValues, setOriginalSetValues] = useState<{ weight: number; reps: number } | null>(null);
   
-  // Gradient border animation for active card
-  const gradientRotation = useRef(new Animated.Value(0)).current;
-  
-  useEffect(() => {
-    // Start spinning animation when component mounts
-    Animated.loop(
-      Animated.timing(gradientRotation, {
-        toValue: 1,
-        duration: 6000, // 6 seconds per rotation
-        useNativeDriver: true,
-      })
-    ).start();
-  }, []);
-  
-  const gradientSpin = gradientRotation.interpolate({
-    inputRange: [0, 1],
-    outputRange: ['0deg', '360deg'],
-  });
-  
   // Get number of sets from exercise
   const numberOfSets = exercise?.targetSets || 3;
   const workoutTemplate = useMemo(() => {
@@ -915,74 +896,16 @@ export function ExerciseDetailScreen({ route, navigation }: ExerciseDetailScreen
                           }
                         }}
                       >
-                        {/* Gradient Border Container */}
-                        <View style={styles.gradientBorderWrapper}>
-                          {/* Blur layer 1 - softest */}
-                          <Animated.View
-                            style={[
-                              styles.gradientBorderContainerBlur1,
-                              {
-                                transform: [{ rotate: gradientSpin }],
-                              },
-                            ]}
-                          >
-                            <LinearGradient
-                              colors={[
-                                COLORS.accentPrimary,
-                                COLORS.accentPrimary,
-                                COLORS.accentPrimaryDark,
-                                COLORS.accentPrimaryDark,
-                              ]}
-                              locations={[0, 0.3, 0.7, 1]}
-                              start={{ x: 0, y: 0 }}
-                              end={{ x: 1, y: 1 }}
-                              style={styles.gradientBorderBlur}
-                            />
-                          </Animated.View>
-                          {/* Blur layer 2 - medium */}
-                          <Animated.View
-                            style={[
-                              styles.gradientBorderContainerBlur2,
-                              {
-                                transform: [{ rotate: gradientSpin }],
-                              },
-                            ]}
-                          >
-                            <LinearGradient
-                              colors={[
-                                COLORS.accentPrimary,
-                                COLORS.accentPrimary,
-                                COLORS.accentPrimaryDark,
-                                COLORS.accentPrimaryDark,
-                              ]}
-                              locations={[0, 0.3, 0.7, 1]}
-                              start={{ x: 0, y: 0 }}
-                              end={{ x: 1, y: 1 }}
-                              style={styles.gradientBorderBlur}
-                            />
-                          </Animated.View>
-                          {/* Main sharp border */}
-                          <Animated.View
-                            style={[
-                              styles.gradientBorderContainer,
-                              {
-                                transform: [{ rotate: gradientSpin }],
-                              },
-                            ]}
-                          >
-                            <LinearGradient
-                              colors={[
-                                COLORS.accentPrimary,
-                                COLORS.accentPrimary,
-                                COLORS.accentPrimaryDark,
-                                COLORS.accentPrimaryDark,
-                              ]}
-                              locations={[0, 0.3, 0.7, 1]}
-                              start={{ x: 0, y: 0 }}
-                              end={{ x: 1, y: 1 }}
-                              style={styles.gradientBorder}
-                            />
-                          </Animated.View>
+                        {/* Static Gradient Border */}
+                        <LinearGradient
+                          colors={[
+                            COLORS.accentPrimary,
+                            COLORS.accentPrimaryDark,
+                          ]}
+                          start={{ x: 0, y: 0 }}
+                          end={{ x: 1, y: 1 }}
+                          style={styles.gradientBorderWrapper}
+                        >
                           <View style={styles.setCard}>
                             <View style={styles.setCardInner}>
                       {/* Expanded View - Now just shows values without controls */}
@@ -1446,47 +1369,8 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   gradientBorderWrapper: {
-    position: 'relative',
-    padding: 2, // Border width (1.5px) + blur space
+    padding: 2, // Border width
     borderRadius: 18,
-    overflow: 'hidden',
-  },
-  gradientBorderContainerBlur1: {
-    position: 'absolute',
-    top: -300,
-    left: -300,
-    right: -300,
-    bottom: -300,
-    justifyContent: 'center',
-    alignItems: 'center',
-    opacity: 0.2,
-  },
-  gradientBorderContainerBlur2: {
-    position: 'absolute',
-    top: -300,
-    left: -300,
-    right: -300,
-    bottom: -300,
-    justifyContent: 'center',
-    alignItems: 'center',
-    opacity: 0.4,
-  },
-  gradientBorderContainer: {
-    position: 'absolute',
-    top: -300,
-    left: -300,
-    right: -300,
-    bottom: -300,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  gradientBorderBlur: {
-    width: '200%',
-    height: '200%',
-  },
-  gradientBorder: {
-    width: '200%',
-    height: '200%',
   },
   setCard: {
     ...CARDS.cardDeep.outer,

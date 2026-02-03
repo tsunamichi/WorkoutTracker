@@ -1,5 +1,5 @@
-import React, { useRef, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Animated } from 'react-native';
+import React from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Path } from 'react-native-svg';
@@ -49,24 +49,6 @@ const LIGHT_COLORS = {
 
 export function DesignSystemScreen({ navigation }: DesignSystemScreenProps) {
   const { t } = useTranslation();
-  
-  // Gradient border animation
-  const gradientRotation = useRef(new Animated.Value(0)).current;
-  
-  useEffect(() => {
-    Animated.loop(
-      Animated.timing(gradientRotation, {
-        toValue: 1,
-        duration: 6000,
-        useNativeDriver: true,
-      })
-    ).start();
-  }, []);
-  
-  const gradientSpin = gradientRotation.interpolate({
-    inputRange: [0, 1],
-    outputRange: ['0deg', '360deg'],
-  });
   
   return (
     <View style={styles.gradient}>
@@ -411,73 +393,24 @@ export function DesignSystemScreen({ navigation }: DesignSystemScreenProps) {
                 </View>
               </View>
               
-              {/* Card with Animated Gradient Border */}
+              {/* Card with Static Gradient Border */}
               <View style={styles.animatedCardWrapper}>
-                <View style={styles.gradientBorderWrapper}>
-                  <Animated.View
-                    style={[
-                      styles.gradientBorderContainerBlur1,
-                      { transform: [{ rotate: gradientSpin }] },
-                    ]}
-                  >
-                    <LinearGradient
-                      colors={[
-                        COLORS.accentPrimary,
-                        COLORS.accentPrimary,
-                        COLORS.accentPrimaryDark,
-                        COLORS.accentPrimaryDark,
-                      ]}
-                      locations={[0, 0.3, 0.7, 1]}
-                      start={{ x: 0, y: 0 }}
-                      end={{ x: 1, y: 1 }}
-                      style={styles.gradientBorderBlur}
-                    />
-                  </Animated.View>
-                  <Animated.View
-                    style={[
-                      styles.gradientBorderContainerBlur2,
-                      { transform: [{ rotate: gradientSpin }] },
-                    ]}
-                  >
-                    <LinearGradient
-                      colors={[
-                        COLORS.accentPrimary,
-                        COLORS.accentPrimary,
-                        COLORS.accentPrimaryDark,
-                        COLORS.accentPrimaryDark,
-                      ]}
-                      locations={[0, 0.3, 0.7, 1]}
-                      start={{ x: 0, y: 0 }}
-                      end={{ x: 1, y: 1 }}
-                      style={styles.gradientBorderBlur}
-                    />
-                  </Animated.View>
-                  <Animated.View
-                    style={[
-                      styles.gradientBorderContainer,
-                      { transform: [{ rotate: gradientSpin }] },
-                    ]}
-                  >
-                    <LinearGradient
-                      colors={[
-                        COLORS.accentPrimary,
-                        COLORS.accentPrimary,
-                        COLORS.accentPrimaryDark,
-                        COLORS.accentPrimaryDark,
-                      ]}
-                      locations={[0, 0.3, 0.7, 1]}
-                      start={{ x: 0, y: 0 }}
-                      end={{ x: 1, y: 1 }}
-                      style={styles.gradientBorder}
-                    />
-                  </Animated.View>
+                <LinearGradient
+                  colors={[
+                    COLORS.accentPrimary,
+                    COLORS.accentPrimaryDark,
+                  ]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={styles.gradientBorderWrapper}
+                >
                   <View style={styles.animatedCardInner}>
-                    <Text style={styles.cardTitle}>Card with Animated Gradient Border</Text>
+                    <Text style={styles.cardTitle}>Card with Static Gradient Border</Text>
                     <Text style={styles.cardDescription}>
-                      Spinning gradient border with soft blur layers using accentPrimary and accentPrimaryDark
+                      Diagonal gradient border using accentPrimary and accentPrimaryDark
                     </Text>
                   </View>
-                </View>
+                </LinearGradient>
               </View>
             </View>
           </View>
@@ -854,47 +787,8 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.lg,
   },
   gradientBorderWrapper: {
-    position: 'relative',
-    padding: 2,
+    padding: 2, // Border width
     borderRadius: 18,
-    overflow: 'hidden',
-  },
-  gradientBorderContainerBlur1: {
-    position: 'absolute',
-    top: -300,
-    left: -300,
-    right: -300,
-    bottom: -300,
-    justifyContent: 'center',
-    alignItems: 'center',
-    opacity: 0.2,
-  },
-  gradientBorderContainerBlur2: {
-    position: 'absolute',
-    top: -300,
-    left: -300,
-    right: -300,
-    bottom: -300,
-    justifyContent: 'center',
-    alignItems: 'center',
-    opacity: 0.4,
-  },
-  gradientBorderContainer: {
-    position: 'absolute',
-    top: -300,
-    left: -300,
-    right: -300,
-    bottom: -300,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  gradientBorderBlur: {
-    width: '200%',
-    height: '200%',
-  },
-  gradientBorder: {
-    width: '200%',
-    height: '200%',
   },
   animatedCardInner: {
     ...CARDS.cardDeep.outer,
