@@ -730,16 +730,19 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   roundDot: {
-    width: 4,
-    height: 4,
+    width: 8,
+    height: 8,
     borderRadius: 2,
     backgroundColor: COLORS.textMeta,
+    // Use transform to make it appear as 4x4 while occupying 8x8 space
+    transform: [{ scale: 0.5 }],
   },
   roundDotCompleted: {
     width: 8,
     height: 8,
     borderRadius: 4,
     backgroundColor: COLORS.text,
+    transform: [{ scale: 1 }],
   },
   roundDotActive: {
     backgroundColor: 'transparent',
@@ -748,6 +751,7 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
+    transform: [{ scale: 1 }],
   },
   roundDotHidden: {
     opacity: 0,
