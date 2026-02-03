@@ -1279,9 +1279,6 @@ export function ExerciseDetailScreen({ route, navigation }: ExerciseDetailScreen
                               <Text style={styles.setCollapsedText}>
                                 {formatWeightForLoad(set.weight, useKg)}
                               </Text>
-                                  <Text style={styles.setCollapsedText}>
-                                    {formatWeightForLoad(set.weight, useKg)}
-                                  </Text>
                               <Text style={styles.setCollapsedUnit}>{weightUnit}</Text>
                             </View>
                             <View style={styles.historyValueColumn}>
