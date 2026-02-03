@@ -8,6 +8,7 @@ import { TimerValueSheet } from '../components/timer/TimerValueSheet';
 import { IconArrowLeft, IconTriangle } from '../components/icons';
 import { Toggle } from '../components/Toggle';
 import { useTranslation } from '../i18n/useTranslation';
+import { addFakeHistory } from '../utils/addFakeHistory';
 
 // Optional local notifications
 let Notifications: any = null;
@@ -204,6 +205,34 @@ export function ProfileScreen({ navigation }: ProfileScreenProps) {
             <Text style={styles.settingLabel}>{t('designSystem')}</Text>
             <Text style={styles.settingDescription}>
               {t('viewDesignSystem')}
+            </Text>
+          </View>
+          <IconTriangle size={16} color={COLORS.text} />
+        </TouchableOpacity>
+        
+        {/* Group 4: Add Fake History - Standalone (Dev Tool) */}
+        <TouchableOpacity 
+          style={[styles.settingCard, styles.settingCardRow]}
+          onPress={async () => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            try {
+              await addFakeHistory();
+              Alert.alert(
+                'Success!',
+                'Added fake workout history for testing. Check the exercise detail screens to see the history.',
+                [{ text: 'OK' }]
+              );
+            } catch (error) {
+              Alert.alert('Error', 'Failed to add fake history. Check console for details.');
+              console.error('Error adding fake history:', error);
+            }
+          }}
+          activeOpacity={0.7}
+        >
+          <View style={styles.settingInfo}>
+            <Text style={styles.settingLabel}>Add Fake History</Text>
+            <Text style={styles.settingDescription}>
+              Adds test workout data for the past 3 weeks
             </Text>
           </View>
           <IconTriangle size={16} color={COLORS.text} />
