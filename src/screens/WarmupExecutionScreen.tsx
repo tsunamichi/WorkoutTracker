@@ -391,30 +391,6 @@ export function WarmupExecutionScreen() {
             
             return (
               <View key={group.id} style={styles.itemRow} testID={`group-row-${index}`}>
-                {/* Round Indicator - On the left, stacked vertically */}
-                <View style={styles.roundIndicatorContainer} testID="round-indicator">
-                  {/* Always render dots to maintain space */}
-                  {Array.from({ length: group.totalRounds }).map((_, roundIndex) => (
-                    <View
-                      key={roundIndex}
-                      testID={`round-dot-${roundIndex}`}
-                      style={[
-                        styles.roundDot,
-                        roundIndex < currentRound && styles.roundDotCompleted,
-                        roundIndex === currentRound && !isCompleted && isExpanded && styles.roundDotActive,
-                        isCompleted && styles.roundDotHidden,
-                      ]}
-                    />
-                  ))}
-                  
-                  {/* Show checkmark absolutely positioned when completed */}
-                  {isCompleted && (
-                    <View style={styles.roundCheckContainer}>
-                      <IconCheck size={24} color={COLORS.signalPositive} />
-                    </View>
-                  )}
-                </View>
-                
                 {/* Exercise Cards Container */}
                 <View style={styles.exerciseCardsColumn}>
                   <View style={styles.exerciseCardsContainer}>
@@ -503,6 +479,30 @@ export function WarmupExecutionScreen() {
                       );
                     })}
                   </View>
+                </View>
+                
+                {/* Round Indicator - On the right, stacked vertically */}
+                <View style={styles.roundIndicatorContainer} testID="round-indicator">
+                  {/* Always render dots to maintain space */}
+                  {Array.from({ length: group.totalRounds }).map((_, roundIndex) => (
+                    <View
+                      key={roundIndex}
+                      testID={`round-dot-${roundIndex}`}
+                      style={[
+                        styles.roundDot,
+                        roundIndex < currentRound && styles.roundDotCompleted,
+                        roundIndex === currentRound && !isCompleted && isExpanded && styles.roundDotActive,
+                        isCompleted && styles.roundDotHidden,
+                      ]}
+                    />
+                  ))}
+                  
+                  {/* Show checkmark absolutely positioned when completed */}
+                  {isCompleted && (
+                    <View style={styles.roundCheckContainer}>
+                      <IconCheck size={24} color={COLORS.signalPositive} />
+                    </View>
+                  )}
                 </View>
               </View>
             );
