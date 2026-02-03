@@ -310,8 +310,6 @@ export function BottomDrawer({
             styles.drawerSheet,
             {
               backgroundColor,
-              borderBottomLeftRadius: deviceCornerRadius,
-              borderBottomRightRadius: deviceCornerRadius,
             },
           ]}
         >
