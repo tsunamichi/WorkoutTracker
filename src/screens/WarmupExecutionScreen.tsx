@@ -834,6 +834,8 @@ const styles = StyleSheet.create({
   },
   itemCard: {
     ...CARDS.cardDeep.outer,
+    borderWidth: 2,
+    borderColor: COLORS.accentPrimary,
   },
   itemCardInner: {
     ...CARDS.cardDeep.inner,
