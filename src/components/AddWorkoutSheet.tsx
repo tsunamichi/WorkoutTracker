@@ -141,7 +141,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    paddingBottom: SPACING.xl,
+    // paddingBottom handled by BottomDrawer
   },
   createOptionsSection: {
     gap: SPACING.md,

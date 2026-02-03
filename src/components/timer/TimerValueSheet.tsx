@@ -251,7 +251,6 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     alignItems: 'center',
     marginTop: 56,
-    marginBottom: 24,
   },
   saveButtonText: {
     fontSize: 17,
