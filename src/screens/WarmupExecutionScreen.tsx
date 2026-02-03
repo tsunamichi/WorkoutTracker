@@ -453,7 +453,10 @@ export function WarmupExecutionScreen() {
                                     isExerciseCompleted ? styles.exerciseNameRowWithIcon : styles.exerciseNameInCard,
                                     !isActive && !isExerciseCompleted && styles.exerciseNameInCardCentered
                                   ]} testID="exercise-name-header">
-                                    <Text style={styles.exerciseNameTextInCard} testID="exercise-name-text">
+                                    <Text style={[
+                                      styles.exerciseNameTextInCard,
+                                      (isExpanded || group.exercises.length === 1) && styles.exerciseNameTextActive
+                                    ]} testID="exercise-name-text">
                                       {exercise.exerciseName}
                                     </Text>
                                     
@@ -651,7 +654,7 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.backgroundCanvas,
   },
   header: {
-    paddingBottom: SPACING.md,
+    paddingBottom: 0,
   },
   topBar: {
     flexDirection: 'row',
@@ -663,6 +666,7 @@ const styles = StyleSheet.create({
   headerContent: {
     paddingHorizontal: SPACING.xxl,
     paddingTop: SPACING.md,
+    marginBottom: SPACING.xxxl,
   },
   backButton: {
     width: 48,
@@ -688,7 +692,6 @@ const styles = StyleSheet.create({
   headerTitle: {
     ...TYPOGRAPHY.h2,
     color: '#000000',
-    flex: 1,
   },
   content: {
     flex: 1,
@@ -774,6 +777,9 @@ const styles = StyleSheet.create({
   exerciseNameTextInCard: {
     ...TYPOGRAPHY.meta,
     color: COLORS.textMeta,
+  },
+  exerciseNameTextActive: {
+    color: COLORS.text,
   },
   exerciseNameRow: {
     flexDirection: 'row',

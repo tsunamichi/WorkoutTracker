@@ -117,18 +117,40 @@ export function HistoryScreen() {
       };
     });
 
-  // Sort plan cards: active/in-progress first, then completed
+  // Sort plan cards: only one active at top, then completed
   const sortedPlanCards = planCards.sort((a, b) => {
-    if (a.status === 'completed' && b.status !== 'completed') return 1;
-    if (a.status !== 'completed' && b.status === 'completed') return -1;
-    if (a.status === 'completed' && b.status === 'completed') {
-      return dayjs(b.endDate).unix() - dayjs(a.endDate).unix(); // newest completed first
+    const aIsActive = a.status === 'active' || a.status === 'in_progress';
+    const bIsActive = b.status === 'active' || b.status === 'in_progress';
+    
+    // Only one active workout should be at the top
+    if (aIsActive && !bIsActive) return -1;
+    if (!aIsActive && bIsActive) return 1;
+    
+    // Both active or both completed
+    if (aIsActive && bIsActive) {
+      // For multiple active, pick the earliest start date (only one will show)
+      return dayjs(a.startDate).unix() - dayjs(b.startDate).unix();
     }
-    return dayjs(a.startDate).unix() - dayjs(b.startDate).unix(); // earliest active first
+    
+    // Both completed - sort by most recent end date
+    return dayjs(b.endDate).unix() - dayjs(a.endDate).unix();
   });
+  
+  // Take only the first active workout (if any exist)
+  const firstActiveIndex = sortedPlanCards.findIndex(card => 
+    card.status === 'active' || card.status === 'in_progress'
+  );
+  const filteredPlanCards = firstActiveIndex >= 0 
+    ? [
+        sortedPlanCards[firstActiveIndex], // First active workout at top
+        ...sortedPlanCards.filter((card, idx) => 
+          idx !== firstActiveIndex && card.status === 'completed'
+        )
+      ]
+    : sortedPlanCards; // All completed if no active
 
   // Combine: plans first, then single workouts
-  const allCards = [...sortedPlanCards, ...singleWorkoutCards];
+  const allCards = [...filteredPlanCards, ...singleWorkoutCards];
 
   const handleBack = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -404,12 +426,11 @@ const styles = StyleSheet.create({
   workoutDate: {
     ...TYPOGRAPHY.body,
     color: COLORS.textMeta,
-    marginBottom: SPACING.md,
+    marginBottom: 20,
   },
   workoutDetails: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: SPACING.lg,
   },
   workoutDetailText: {
     ...TYPOGRAPHY.meta,
