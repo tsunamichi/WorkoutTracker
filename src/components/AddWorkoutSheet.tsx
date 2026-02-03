@@ -44,7 +44,7 @@ export function AddWorkoutSheet({
   const dateLabel = dayjs(selectedDate).format('MMM D');
 
   return (
-    <BottomDrawer visible={visible} onClose={onClose} maxHeight="80%" showHandle={false}>
+    <BottomDrawer visible={visible} onClose={onClose} maxHeight="80%">
       <View style={styles.container}>
         <Text style={styles.title}>{t('addWorkoutFor')} {dateLabel}</Text>
 
@@ -129,7 +129,7 @@ export function AddWorkoutSheet({
 const styles = StyleSheet.create({
   container: {
     paddingHorizontal: SPACING.xxl,
-    paddingTop: 24,
+    paddingTop: SPACING.lg,
     flex: 1,
   },
   title: {
