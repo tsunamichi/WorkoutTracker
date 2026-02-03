@@ -925,10 +925,9 @@ export function ExerciseDetailScreen({ route, navigation }: ExerciseDetailScreen
                           </View>
                         </View>
                       )}
-                    </View>
-                  </View>
-                </TouchableOpacity>
-              </View>
+                          </View>
+                        </View>
+                      </TouchableOpacity>
                     </View>
                   )}
                   
