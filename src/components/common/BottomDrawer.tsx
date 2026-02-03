@@ -234,16 +234,27 @@ export function BottomDrawer({
   // Only use ScrollView if content needs scrolling
   const shouldScroll = scrollable && (needsScrolling || alwaysScrollable);
   const Content = shouldScroll ? ScrollView : View;
-  const contentContainerStyle = [
+  
+  // Padding is now handled by wrapper View, not contentContainerStyle
+  const scrollViewContentStyle = [
     contentStyle,
     { 
       paddingTop: showHandle ? 16 : 0,
-      paddingBottom: 24, // Consistent bottom padding for all drawers
     },
   ];
+  
+  const viewContentStyle = [
+    contentStyle,
+    { 
+      paddingTop: showHandle ? 16 : 0,
+      flex: 1, 
+      minHeight: 0 
+    },
+  ];
+  
   const contentProps = shouldScroll
     ? {
-        contentContainerStyle,
+        contentContainerStyle: scrollViewContentStyle,
         style: { flex: 1 },
         showsVerticalScrollIndicator: true,
         bounces: true,
@@ -253,7 +264,7 @@ export function BottomDrawer({
         },
       }
     : {
-        style: [contentContainerStyle, { flex: 1, minHeight: 0 }],
+        style: viewContentStyle,
       };
 
   const requestClose = () => {
@@ -325,23 +336,25 @@ export function BottomDrawer({
             </View>
           )}
           
-          <Content {...contentProps}>
-            {shouldScroll ? (
-              typeof children === 'function' ? children({ requestClose }) : children
-            ) : (
-              <View
-                style={{
-                  ...(fixedHeight ? { flex: 1 } : { flexShrink: 0 }),
-                }}
-                onLayout={(event) => {
-                  const { height } = event.nativeEvent.layout;
-                  setContentHeight(height);
-                }}
-              >
-                {typeof children === 'function' ? children({ requestClose }) : children}
-              </View>
-            )}
-          </Content>
+          <View style={{ flex: 1, paddingBottom: 24 }}>
+            <Content {...contentProps}>
+              {shouldScroll ? (
+                typeof children === 'function' ? children({ requestClose }) : children
+              ) : (
+                <View
+                  style={{
+                    ...(fixedHeight ? { flex: 1 } : { flexShrink: 0 }),
+                  }}
+                  onLayout={(event) => {
+                    const { height } = event.nativeEvent.layout;
+                    setContentHeight(height);
+                  }}
+                >
+                  {typeof children === 'function' ? children({ requestClose }) : children}
+                </View>
+              )}
+            </Content>
+          </View>
         </View>
       </Animated.View>
     </View>
