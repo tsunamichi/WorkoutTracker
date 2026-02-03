@@ -1,9 +1,9 @@
-import React from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import React, { useRef, useEffect } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Animated } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Path } from 'react-native-svg';
-import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS, GRADIENTS, BUTTONS } from '../constants';
+import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS, GRADIENTS, BUTTONS, CARDS } from '../constants';
 import { 
   IconAdd, IconCheck, IconPlay, IconPause, IconEdit, IconTrash, 
   IconCalendar, IconWorkouts, IconUser, IconArrowLeft 
@@ -15,21 +15,59 @@ interface DesignSystemScreenProps {
 }
 
 const LIGHT_COLORS = {
+  // Backgrounds
   backgroundCanvas: COLORS.backgroundCanvas,
   backgroundContainer: COLORS.backgroundContainer,
-  secondary: '#1B1B1B',
-  textSecondary: '#3C3C43',
+  activeCard: COLORS.activeCard,
+  
+  // Text
+  text: COLORS.text,
+  textSecondary: COLORS.textSecondary,
   textMeta: COLORS.textMeta,
+  textMetaSoft: COLORS.textMetaSoft,
+  textDisabled: COLORS.textDisabled,
+  
+  // Borders
   border: COLORS.border,
+  borderDimmed: COLORS.borderDimmed,
+  disabledBorder: COLORS.disabledBorder,
+  
+  // Accent
   accentPrimary: COLORS.accentPrimary,
   accentPrimaryLight: COLORS.accentPrimaryLight,
   accentPrimaryDark: COLORS.accentPrimaryDark,
+  accentPrimaryDimmed: COLORS.accentPrimaryDimmed,
+  
+  // Signals
   signalPositive: COLORS.signalPositive,
+  signalNegative: COLORS.signalNegative,
+  signalWarning: COLORS.signalWarning,
+  
+  // Overlay
   overlay: COLORS.overlay,
 };
 
 export function DesignSystemScreen({ navigation }: DesignSystemScreenProps) {
   const { t } = useTranslation();
+  
+  // Gradient border animation
+  const gradientRotation = useRef(new Animated.Value(0)).current;
+  
+  useEffect(() => {
+    Animated.loop(
+      Animated.timing(gradientRotation, {
+        toValue: 1,
+        duration: 6000,
+        useNativeDriver: true,
+      })
+    ).start();
+  }, []);
+  
+  const gradientSpin = gradientRotation.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['0deg', '360deg'],
+  });
+  
   return (
     <View style={styles.gradient}>
       <SafeAreaView style={styles.container} edges={['top']}>
@@ -134,9 +172,23 @@ export function DesignSystemScreen({ navigation }: DesignSystemScreenProps) {
             </View>
             <View style={styles.divider} />
             <View style={styles.typographyRow}>
+              <Text style={[styles.typographyLabel, TYPOGRAPHY.bodyBold]}>Body Bold {t('typographyTitle')}</Text>
+              <Text style={styles.typographyMeta}>
+                {TYPOGRAPHY.bodyBold.fontSize}px / {TYPOGRAPHY.bodyBold.fontWeight}
+              </Text>
+            </View>
+            <View style={styles.divider} />
+            <View style={styles.typographyRow}>
               <Text style={[styles.typographyLabel, TYPOGRAPHY.meta]}>Meta {t('typographyTitle')}</Text>
               <Text style={styles.typographyMeta}>
                 {TYPOGRAPHY.meta.fontSize}px / {TYPOGRAPHY.meta.fontWeight}
+              </Text>
+            </View>
+            <View style={styles.divider} />
+            <View style={styles.typographyRow}>
+              <Text style={[styles.typographyLabel, TYPOGRAPHY.metaBold]}>Meta Bold {t('typographyTitle')}</Text>
+              <Text style={styles.typographyMeta}>
+                {TYPOGRAPHY.metaBold.fontSize}px / {TYPOGRAPHY.metaBold.fontWeight}
               </Text>
             </View>
           </View>
@@ -329,6 +381,75 @@ export function DesignSystemScreen({ navigation }: DesignSystemScreenProps) {
                         Black (-1,-1, 8%) and white (1,1, 100%) shadows with border token and inner borders for depth
                       </Text>
                     </View>
+                  </View>
+                </View>
+              </View>
+              
+              {/* Card with Animated Gradient Border */}
+              <View style={styles.animatedCardWrapper}>
+                <View style={styles.gradientBorderWrapper}>
+                  <Animated.View
+                    style={[
+                      styles.gradientBorderContainerBlur1,
+                      { transform: [{ rotate: gradientSpin }] },
+                    ]}
+                  >
+                    <LinearGradient
+                      colors={[
+                        COLORS.accentPrimary,
+                        COLORS.accentPrimary,
+                        COLORS.accentPrimaryDark,
+                        COLORS.accentPrimaryDark,
+                      ]}
+                      locations={[0, 0.3, 0.7, 1]}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 1 }}
+                      style={styles.gradientBorderBlur}
+                    />
+                  </Animated.View>
+                  <Animated.View
+                    style={[
+                      styles.gradientBorderContainerBlur2,
+                      { transform: [{ rotate: gradientSpin }] },
+                    ]}
+                  >
+                    <LinearGradient
+                      colors={[
+                        COLORS.accentPrimary,
+                        COLORS.accentPrimary,
+                        COLORS.accentPrimaryDark,
+                        COLORS.accentPrimaryDark,
+                      ]}
+                      locations={[0, 0.3, 0.7, 1]}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 1 }}
+                      style={styles.gradientBorderBlur}
+                    />
+                  </Animated.View>
+                  <Animated.View
+                    style={[
+                      styles.gradientBorderContainer,
+                      { transform: [{ rotate: gradientSpin }] },
+                    ]}
+                  >
+                    <LinearGradient
+                      colors={[
+                        COLORS.accentPrimary,
+                        COLORS.accentPrimary,
+                        COLORS.accentPrimaryDark,
+                        COLORS.accentPrimaryDark,
+                      ]}
+                      locations={[0, 0.3, 0.7, 1]}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 1 }}
+                      style={styles.gradientBorder}
+                    />
+                  </Animated.View>
+                  <View style={styles.animatedCardInner}>
+                    <Text style={styles.cardTitle}>Card with Animated Gradient Border</Text>
+                    <Text style={styles.cardDescription}>
+                      Spinning gradient border with soft blur layers using accentPrimary and accentPrimaryDark
+                    </Text>
                   </View>
                 </View>
               </View>
@@ -660,6 +781,60 @@ const styles = StyleSheet.create({
   cardDescription: {
     ...TYPOGRAPHY.meta,
     color: LIGHT_COLORS.textMeta,
+  },
+  
+  // Animated Gradient Border Card
+  animatedCardWrapper: {
+    marginBottom: SPACING.lg,
+  },
+  gradientBorderWrapper: {
+    position: 'relative',
+    padding: 2,
+    borderRadius: 18,
+    overflow: 'hidden',
+  },
+  gradientBorderContainerBlur1: {
+    position: 'absolute',
+    top: -300,
+    left: -300,
+    right: -300,
+    bottom: -300,
+    justifyContent: 'center',
+    alignItems: 'center',
+    opacity: 0.2,
+  },
+  gradientBorderContainerBlur2: {
+    position: 'absolute',
+    top: -300,
+    left: -300,
+    right: -300,
+    bottom: -300,
+    justifyContent: 'center',
+    alignItems: 'center',
+    opacity: 0.4,
+  },
+  gradientBorderContainer: {
+    position: 'absolute',
+    top: -300,
+    left: -300,
+    right: -300,
+    bottom: -300,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  gradientBorderBlur: {
+    width: '200%',
+    height: '200%',
+  },
+  gradientBorder: {
+    width: '200%',
+    height: '200%',
+  },
+  animatedCardInner: {
+    ...CARDS.cardDeep.outer,
+    position: 'relative',
+    zIndex: 1,
+    padding: SPACING.lg,
   },
 });
 
