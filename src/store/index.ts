@@ -120,6 +120,10 @@ interface WorkoutStore {
   // Warm-up Completion (independent from workout completion)
   updateWarmupCompletion: (workoutId: string, warmupItemId: string, completed: boolean) => Promise<void>;
   getWarmupCompletion: (workoutId: string) => { completedItems: string[]; totalItems: number; percentage: number };
+  
+  // Accessory Completion (independent from workout completion)
+  updateAccessoryCompletion: (workoutId: string, accessoryItemId: string, completed: boolean) => Promise<void>;
+  getAccessoryCompletion: (workoutId: string) => { completedItems: string[]; totalItems: number; percentage: number };
 }
 
 const DEFAULT_SETTINGS: AppSettings = {
@@ -629,13 +633,14 @@ export const useStore = create<WorkoutStore>((set, get) => ({
       let plansMigrationNeeded = false;
       let scheduledMigrationNeeded = false;
       
-      // Migrate WorkoutTemplates: add lastUsedAt, usageCount, warmupItems, kind
+      // Migrate WorkoutTemplates: add lastUsedAt, usageCount, warmupItems, accessoryItems, kind
       if (workoutTemplates.length > 0) {
         finalWorkoutTemplates = workoutTemplates.map((template: any) => {
           const needsMigration = 
             template.lastUsedAt === undefined ||
             template.usageCount === undefined ||
             template.warmupItems === undefined ||
+            template.accessoryItems === undefined ||
             template.kind === undefined;
           
           // Migrate warmup items from old format to new format
@@ -672,12 +677,14 @@ export const useStore = create<WorkoutStore>((set, get) => ({
               lastUsedAt: template.lastUsedAt ?? null,
               usageCount: template.usageCount ?? 0,
               warmupItems: migratedWarmupItems,
+              accessoryItems: template.accessoryItems ?? [],
               source: template.source ?? 'user',
             };
           }
           return {
             ...template,
             warmupItems: migratedWarmupItems,
+            accessoryItems: template.accessoryItems ?? [],
           };
         });
       }
@@ -708,8 +715,10 @@ export const useStore = create<WorkoutStore>((set, get) => ({
             sw.titleSnapshot === undefined ||
             sw.warmupSnapshot === undefined ||
             sw.exercisesSnapshot === undefined ||
+            sw.accessorySnapshot === undefined ||
             sw.warmupCompletion === undefined ||
             sw.workoutCompletion === undefined ||
+            sw.accessoryCompletion === undefined ||
             sw.isLocked === undefined ||
             sw.programId === undefined;
           
@@ -724,8 +733,10 @@ export const useStore = create<WorkoutStore>((set, get) => ({
               titleSnapshot: sw.titleSnapshot ?? (template?.name || 'Workout'),
               warmupSnapshot: sw.warmupSnapshot ?? (template?.warmupItems || []).map((item: any) => ({ ...item })),
               exercisesSnapshot: sw.exercisesSnapshot ?? (template?.items || []).map((item: any) => ({ ...item })),
+              accessorySnapshot: sw.accessorySnapshot ?? (template?.accessoryItems || []).map((item: any) => ({ ...item })),
               warmupCompletion: sw.warmupCompletion ?? { completedItems: [] },
               workoutCompletion: sw.workoutCompletion ?? { completedExercises: {}, completedSets: {} },
+              accessoryCompletion: sw.accessoryCompletion ?? { completedItems: [] },
               isLocked: sw.isLocked ?? (sw.status === 'completed'),
               programId: sw.programId ?? (sw.cyclePlanId || null),
               programName: sw.programName ?? null,
@@ -851,6 +862,7 @@ export const useStore = create<WorkoutStore>((set, get) => ({
             { id: 'ex-1', exerciseId: 'bench-press', order: 1, sets: 4, reps: 8, weight: 135 },
             { id: 'ex-2', exerciseId: 'incline-press', order: 2, sets: 3, reps: 10, weight: 100 },
           ],
+          accessoryItems: [],
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
           lastUsedAt: null,
@@ -1768,8 +1780,10 @@ export const useStore = create<WorkoutStore>((set, get) => ({
             titleSnapshot: template.name,
             warmupSnapshot: (template.warmupItems || []).map(item => ({ ...item })),
             exercisesSnapshot: (template.items || []).map(item => ({ ...item })),
+            accessorySnapshot: (template.accessoryItems || []).map(item => ({ ...item })),
             warmupCompletion: { completedItems: [] },
             workoutCompletion: { completedExercises: {}, completedSets: {} },
+            accessoryCompletion: { completedItems: [] },
             status: 'planned',
             startedAt: null,
             completedAt: null,
@@ -1796,8 +1810,10 @@ export const useStore = create<WorkoutStore>((set, get) => ({
           titleSnapshot: template.name,
           warmupSnapshot: (template.warmupItems || []).map(item => ({ ...item })),
           exercisesSnapshot: (template.items || []).map(item => ({ ...item })),
+          accessorySnapshot: (template.accessoryItems || []).map(item => ({ ...item })),
           warmupCompletion: { completedItems: [] },
           workoutCompletion: { completedExercises: {}, completedSets: {} },
+          accessoryCompletion: { completedItems: [] },
           status: 'planned',
           startedAt: null,
           completedAt: null,
@@ -2019,9 +2035,11 @@ export const useStore = create<WorkoutStore>((set, get) => ({
                 titleSnapshot: template.name,
                 warmupSnapshot: (template.warmupItems || []).map(item => ({ ...item })),
                 exercisesSnapshot: (template.items || []).map(item => ({ ...item })),
+                accessorySnapshot: (template.accessoryItems || []).map(item => ({ ...item })),
                 
                 warmupCompletion: { completedItems: [] },
                 workoutCompletion: { completedExercises: {}, completedSets: {} },
+                accessoryCompletion: { completedItems: [] },
                 status: 'planned',
                 startedAt: null,
                 completedAt: null,
@@ -2091,10 +2109,12 @@ export const useStore = create<WorkoutStore>((set, get) => ({
                   titleSnapshot: template.name,
                   warmupSnapshot: (template.warmupItems || []).map(item => ({ ...item })),
                   exercisesSnapshot: (template.items || []).map(item => ({ ...item })),
+                  accessorySnapshot: (template.accessoryItems || []).map(item => ({ ...item })),
                   
                   // Initialize completion states
                   warmupCompletion: { completedItems: [] },
                   workoutCompletion: { completedExercises: {}, completedSets: {} },
+                  accessoryCompletion: { completedItems: [] },
                   status: 'planned',
                   startedAt: null,
                   completedAt: null,
@@ -2172,10 +2192,12 @@ export const useStore = create<WorkoutStore>((set, get) => ({
                   titleSnapshot: template.name,
                   warmupSnapshot: (template.warmupItems || []).map(item => ({ ...item })),
                   exercisesSnapshot: (template.items || []).map(item => ({ ...item })),
+                  accessorySnapshot: (template.accessoryItems || []).map(item => ({ ...item })),
                   
                   // Initialize completion states
                   warmupCompletion: { completedItems: [] },
                   workoutCompletion: { completedExercises: {}, completedSets: {} },
+                  accessoryCompletion: { completedItems: [] },
                   status: 'planned',
                   startedAt: null,
                   completedAt: null,
@@ -2253,10 +2275,12 @@ export const useStore = create<WorkoutStore>((set, get) => ({
       titleSnapshot: template.name,
       warmupSnapshot: (template.warmupItems || []).map(item => ({ ...item })),
       exercisesSnapshot: (template.items || []).map(item => ({ ...item })),
+      accessorySnapshot: (template.accessoryItems || []).map(item => ({ ...item })),
       
       // Initialize completion states
       warmupCompletion: { completedItems: [] },
       workoutCompletion: { completedExercises: {}, completedSets: {} },
+      accessoryCompletion: { completedItems: [] },
       status: 'planned',
       startedAt: null,
       completedAt: null,
@@ -2389,6 +2413,53 @@ export const useStore = create<WorkoutStore>((set, get) => ({
     
     const totalItems = workout.warmupSnapshot?.length || 0;
     const completedItems = workout.warmupCompletion?.completedItems || [];
+    const percentage = totalItems > 0 ? Math.round((completedItems.length / totalItems) * 100) : 0;
+    
+    return {
+      completedItems,
+      totalItems,
+      percentage,
+    };
+  },
+  
+  // Accessory Completion (independent from workout completion)
+  updateAccessoryCompletion: async (workoutId, accessoryItemId, completed) => {
+    const scheduledWorkouts = get().scheduledWorkouts.map(sw => {
+      if (sw.id === workoutId) {
+        // Initialize accessoryCompletion if it doesn't exist
+        const existingCompletion = sw.accessoryCompletion || { completedItems: [] };
+        const existingCompletedItems = existingCompletion.completedItems || [];
+        
+        const completedItems = completed
+          ? [...new Set([...existingCompletedItems, accessoryItemId])]
+          : existingCompletedItems.filter(id => id !== accessoryItemId);
+        
+        return {
+          ...sw,
+          accessoryCompletion: {
+            ...existingCompletion,
+            completedItems,
+          },
+        };
+      }
+      return sw;
+    });
+    
+    set({ scheduledWorkouts });
+    await storage.saveScheduledWorkouts(scheduledWorkouts);
+    
+    console.log('✅ Accessory item updated:', { workoutId, accessoryItemId, completed });
+  },
+  
+  getAccessoryCompletion: (workoutId) => {
+    const workout = get().scheduledWorkouts.find(sw => sw.id === workoutId);
+    
+    if (!workout) {
+      return { completedItems: [], totalItems: 0, percentage: 0 };
+    }
+    
+    const totalItems = workout.accessorySnapshot?.length || 0;
+    const completedItems = workout.accessoryCompletion?.completedItems || [];
     const percentage = totalItems > 0 ? Math.round((completedItems.length / totalItems) * 100) : 0;
     
     return {

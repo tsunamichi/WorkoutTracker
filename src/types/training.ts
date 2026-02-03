@@ -64,6 +64,9 @@ export type WarmUpSetTemplate = {
 // This allows gradual migration
 export type WarmupItem = ExerciseInstance;
 
+// Accessories use the same structure as warmups
+export type AccessoryItem = ExerciseInstance;
+
 // ============================================
 // WORKOUT TEMPLATES (Reusable Definitions)
 // ============================================
@@ -87,6 +90,7 @@ export type WorkoutTemplate = {
   name: string;
   warmupItems: WarmupItem[]; // optional array; can be empty
   items: WorkoutTemplateExercise[]; // formerly "exercises"; can be empty only during draft
+  accessoryItems: AccessoryItem[]; // optional array; can be empty
   createdAt: string; // ISO
   updatedAt: string; // ISO
   lastUsedAt: string | null; // updates ONLY when applied to schedule
@@ -106,6 +110,10 @@ export type WarmupCompletionState = {
   completedItems: string[]; // warmup item IDs
 };
 
+export type AccessoryCompletionState = {
+  completedItems: string[]; // accessory item IDs
+};
+
 export type WorkoutCompletionState = {
   completedExercises: Record<string, boolean>; // exerciseId -> completed
   completedSets: Record<string, number[]>; // exerciseId -> array of completed set indices
@@ -120,10 +128,12 @@ export type ScheduledWorkout = {
   titleSnapshot: string; // copy of template name
   warmupSnapshot: WarmupItem[]; // copy at time of scheduling
   exercisesSnapshot: WorkoutTemplateExercise[]; // copy at time of scheduling
+  accessorySnapshot: AccessoryItem[]; // copy at time of scheduling
   
   // Completion state
   warmupCompletion: WarmupCompletionState;
   workoutCompletion: WorkoutCompletionState;
+  accessoryCompletion: AccessoryCompletionState;
   status: ScheduledWorkoutStatus;
   startedAt: string | null;
   completedAt: string | null;
