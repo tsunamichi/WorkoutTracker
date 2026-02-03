@@ -130,7 +130,6 @@ const styles = StyleSheet.create({
   container: {
     paddingHorizontal: SPACING.xxl,
     paddingTop: 24,
-    paddingBottom: 32,
     flex: 1,
   },
   title: {
