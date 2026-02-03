@@ -63,8 +63,8 @@ export function BottomDrawer({
     }
     return 0.9;
   })();
-  // Margin from screen edges (8px on each side)
-  const drawerMargin = 8;
+  // Margin from screen edges (16px on each side for clear floating effect)
+  const drawerMargin = 16;
   const maxDrawerHeight = (SCREEN_HEIGHT - insets.bottom - drawerMargin) * maxHeightRatio;
   
   // Handle height (if showHandle is true)
@@ -358,9 +358,9 @@ const styles = StyleSheet.create({
   },
   drawerContainer: {
     position: 'absolute',
-    bottom: 8,
-    left: 8,
-    right: 8,
+    left: 16,
+    right: 16,
+    // bottom is set dynamically based on safe area insets
   },
   drawerSheet: {
     flex: 1, // Fill parent's maxHeight constraint
