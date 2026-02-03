@@ -63,9 +63,10 @@ export function BottomDrawer({
     }
     return 0.9;
   })();
-  // Margin from screen edges (16px on each side for clear floating effect)
-  const drawerMargin = 16;
-  const maxDrawerHeight = (SCREEN_HEIGHT - insets.bottom - drawerMargin) * maxHeightRatio;
+  // Margin from screen edges
+  const drawerBottomMargin = 16; // Bottom margin for clear floating effect
+  const drawerSideMargin = 8; // Left/right margins
+  const maxDrawerHeight = (SCREEN_HEIGHT - insets.bottom - drawerBottomMargin) * maxHeightRatio;
   
   // Handle height (if showHandle is true)
   const handleHeight = showHandle ? 28 : 0; // ~12px padding top + 4px handle + 12px padding bottom
@@ -301,7 +302,7 @@ export function BottomDrawer({
         {
           maxHeight: fixedHeight ? undefined : currentMaxHeight,
           height: fixedHeight ? currentMaxHeight : (shouldScroll ? currentMaxHeight : undefined),
-          bottom: drawerMargin + insets.bottom,
+          bottom: drawerBottomMargin + insets.bottom,
           transform: [{ translateY }],
         }
       ]}>
@@ -358,8 +359,8 @@ const styles = StyleSheet.create({
   },
   drawerContainer: {
     position: 'absolute',
-    left: 16,
-    right: 16,
+    left: 8,
+    right: 8,
     // bottom is set dynamically based on safe area insets
   },
   drawerSheet: {
