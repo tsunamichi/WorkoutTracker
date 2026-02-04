@@ -408,10 +408,13 @@ export function ExerciseExecutionScreen() {
         <View style={styles.topBar}>
           <TouchableOpacity
             style={styles.backButton}
-            onPress={() => navigation.goBack()}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              navigation.goBack();
+            }}
             activeOpacity={1}
           >
-            <IconArrowLeft size={24} color={COLORS.text} />
+            <IconArrowLeft size={24} color="#000000" />
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.removeButton}
@@ -419,7 +422,7 @@ export function ExerciseExecutionScreen() {
             activeOpacity={1}
           >
             <Text style={styles.removeButtonText}>{t('remove')}</Text>
-            <IconTrash size={16} color={COLORS.signalNegative} />
+            <IconTrash size={16} color={COLORS.error} />
           </TouchableOpacity>
         </View>
         
@@ -742,39 +745,51 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.backgroundCanvas,
   },
   header: {
-    paddingHorizontal: SPACING.lg,
-    paddingBottom: SPACING.md,
+    paddingBottom: 0,
   },
   topBar: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: SPACING.lg,
+    minHeight: 48,
+    paddingHorizontal: SPACING.xxl,
   },
   backButton: {
-    padding: 4,
+    width: 48,
+    height: 48,
+    justifyContent: 'center',
+    alignItems: 'flex-start',
+    marginLeft: -4,
   },
   removeButton: {
+    height: 48,
     flexDirection: 'row',
+    justifyContent: 'center',
     alignItems: 'center',
+    paddingHorizontal: 4,
     gap: 6,
   },
   removeButtonText: {
     ...TYPOGRAPHY.body,
-    color: COLORS.signalNegative,
+    fontSize: 15,
+    fontWeight: '500',
+    color: COLORS.error,
   },
   headerContent: {
-    paddingBottom: SPACING.sm,
+    paddingHorizontal: SPACING.xxl,
+    paddingTop: SPACING.md,
+    marginBottom: SPACING.xxxl,
   },
   headerTitle: {
-    ...TYPOGRAPHY.h1,
-    color: COLORS.text,
+    ...TYPOGRAPHY.h2,
+    color: '#000000',
   },
   content: {
     flex: 1,
   },
   scrollContent: {
-    paddingHorizontal: SPACING.lg,
+    paddingHorizontal: SPACING.xxl,
+    paddingTop: SPACING.md,
     paddingBottom: 120,
   },
   itemsAccordion: {
