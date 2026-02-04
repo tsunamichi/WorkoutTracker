@@ -284,8 +284,6 @@ export function ExerciseExecutionScreen() {
   const handleComplete = async () => {
     if (expandedGroupIndex < 0) return;
     
-    setShowTimer(false);
-    
     const currentGroup = exerciseGroups[expandedGroupIndex];
     const currentRound = currentRounds[currentGroup.id] || 0;
     const currentExercise = currentGroup.exercises[activeExerciseIndex];
@@ -311,6 +309,29 @@ export function ExerciseExecutionScreen() {
       const exSetId = `${ex.id}-set-${currentRound}`;
       return newCompletedSets.has(exSetId);
     });
+    
+    // Check if this is the last set of the last group
+    const isLastGroup = expandedGroupIndex === exerciseGroups.length - 1;
+    const isLastRound = currentRound + 1 >= currentGroup.totalRounds;
+    const isLastExercise = activeExerciseIndex === currentGroup.exercises.length - 1;
+    const isVeryLastSet = isLastGroup && isLastRound && (allExercisesComplete || isLastExercise);
+    
+    // For strength (main) workouts, show rest timer after completing a set (except for the very last set)
+    if (type === 'main' && !isVeryLastSet) {
+      setIsExerciseTimerPhase(false);
+      setShowTimer(true);
+      return;
+    }
+    
+    // Otherwise, advance immediately
+    advanceToNext(allExercisesComplete, newCompletedSets);
+  };
+  
+  const advanceToNext = async (allExercisesComplete: boolean, newCompletedSets: Set<string>) => {
+    setShowTimer(false);
+    
+    const currentGroup = exerciseGroups[expandedGroupIndex];
+    const currentRound = currentRounds[currentGroup.id] || 0;
     
     if (allExercisesComplete) {
       // Move to next round
@@ -357,10 +378,12 @@ export function ExerciseExecutionScreen() {
     
     setShowAdjustmentDrawer(false);
     
+    // For time-based exercises, show exercise timer first
     if (currentExercise.isTimeBased) {
       setIsExerciseTimerPhase(true);
       setShowTimer(true);
     } else {
+      // For reps-based exercises, mark as complete immediately
       handleComplete();
     }
   };
@@ -611,7 +634,19 @@ export function ExerciseExecutionScreen() {
       {expandedGroupIndex >= 0 && exerciseGroups[expandedGroupIndex] && (
         <SetTimerSheet
           visible={showTimer}
-          onComplete={handleComplete}
+          onComplete={() => {
+            const currentGroup = exerciseGroups[expandedGroupIndex];
+            const currentRound = currentRounds[currentGroup.id] || 0;
+            const newCompletedSets = new Set(completedSets);
+            
+            // Check if all exercises in this round are complete
+            const allExercisesComplete = currentGroup.exercises.every(ex => {
+              const exSetId = `${ex.id}-set-${currentRound}`;
+              return newCompletedSets.has(exSetId);
+            });
+            
+            advanceToNext(allExercisesComplete, newCompletedSets);
+          }}
           onClose={() => setShowTimer(false)}
           workoutName={template?.name}
           exerciseName={exerciseGroups[expandedGroupIndex].exercises[activeExerciseIndex]?.exerciseName}
@@ -620,7 +655,7 @@ export function ExerciseExecutionScreen() {
           isExerciseTimerPhase={isExerciseTimerPhase}
           exerciseDuration={localValues[exerciseGroups[expandedGroupIndex].exercises[activeExerciseIndex]?.id]?.reps ?? exerciseGroups[expandedGroupIndex].exercises[activeExerciseIndex]?.reps ?? 30}
           onExerciseTimerComplete={handleComplete}
-          skipRestPhase={true}
+          skipRestPhase={type !== 'main'}
           isPerSide={exerciseGroups[expandedGroupIndex].exercises[activeExerciseIndex]?.isPerSide}
         />
       )}
