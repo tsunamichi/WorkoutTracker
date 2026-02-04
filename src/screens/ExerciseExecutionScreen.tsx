@@ -782,6 +782,12 @@ export function ExerciseExecutionScreen() {
         onClose={() => setShowMenu(false)}
         items={[
           {
+            icon: <IconCheck size={24} color="#000000" />,
+            label: t('complete'),
+            onPress: handleCompleteAll,
+            featured: true,
+          },
+          {
             icon: <IconHistory size={24} color="#000000" />,
             label: t('history'),
             onPress: handleHistory,
@@ -790,11 +796,6 @@ export function ExerciseExecutionScreen() {
             icon: <IconRestart size={24} color="#000000" />,
             label: t('rest'),
             onPress: handleRest,
-          },
-          {
-            icon: <IconCheck size={24} color="#000000" />,
-            label: t('complete'),
-            onPress: handleCompleteAll,
           },
           {
             icon: <IconSkip size={24} color={COLORS.signalNegative} />,
