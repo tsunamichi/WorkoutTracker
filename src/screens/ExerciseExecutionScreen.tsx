@@ -1005,8 +1005,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   startButtonText: {
-    ...TYPOGRAPHY.h3,
-    color: COLORS.buttonText,
+    ...TYPOGRAPHY.meta,
+    color: '#FFFFFF',
   },
   adjustmentDrawerContent: {
     paddingHorizontal: SPACING.lg,
