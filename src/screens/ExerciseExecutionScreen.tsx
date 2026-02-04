@@ -151,6 +151,27 @@ export function ExerciseExecutionScreen() {
   const [isExerciseTimerPhase, setIsExerciseTimerPhase] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
   
+  // Sort groups to put expanded group first
+  const sortedExerciseGroups = useMemo(() => {
+    if (expandedGroupIndex < 0 || expandedGroupIndex >= exerciseGroups.length) {
+      return exerciseGroups;
+    }
+    
+    const expandedGroup = exerciseGroups[expandedGroupIndex];
+    const otherGroups = exerciseGroups.filter((_, idx) => idx !== expandedGroupIndex);
+    
+    return [expandedGroup, ...otherGroups];
+  }, [exerciseGroups, expandedGroupIndex]);
+  
+  // Map to track original indices for group IDs
+  const groupIdToOriginalIndex = useMemo(() => {
+    const map = new Map<string, number>();
+    exerciseGroups.forEach((group, index) => {
+      map.set(group.id, index);
+    });
+    return map;
+  }, [exerciseGroups]);
+  
   // Initialize local values from items
   useEffect(() => {
     const initial: Record<string, { weight: number; reps: number }> = {};
@@ -512,8 +533,9 @@ export function ExerciseExecutionScreen() {
         bounces={false}
       >
         <View style={styles.itemsAccordion}>
-          {exerciseGroups.map((group, index) => {
-            const isExpanded = expandedGroupIndex === index;
+          {sortedExerciseGroups.map((group) => {
+            const originalIndex = groupIdToOriginalIndex.get(group.id) ?? -1;
+            const isExpanded = expandedGroupIndex === originalIndex;
             const currentRound = currentRounds[group.id] || 0;
             const isCompleted = currentRound >= group.totalRounds;
             
@@ -544,7 +566,7 @@ export function ExerciseExecutionScreen() {
                               if (!hasLoggedAnySet && !isExpanded && !isCompleted) {
                                 // Before logging first set: allow selecting any GROUP (not individual exercise)
                                 LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-                                setExpandedGroupIndex(index);
+                                setExpandedGroupIndex(originalIndex);
                                 setActiveExerciseIndex(0); // Start with first exercise in group
                               } else if (isActive && !isExerciseCompleted) {
                                 // Active card opens adjustment drawer
