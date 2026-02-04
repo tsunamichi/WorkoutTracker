@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, LayoutAnimation, Platform, UIManager, Alert } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
@@ -53,7 +53,7 @@ export function ExerciseExecutionScreen() {
   const weightStep = useKg ? 0.5 : 5;
   
   // Get the appropriate items based on type
-  const items = (() => {
+  const items = useMemo(() => {
     if (type === 'warmup') return template?.warmupItems || [];
     if (type === 'core') return template?.accessoryItems || [];
     // For main workout, convert WorkoutTemplateExercise to WarmupItem format
@@ -74,10 +74,10 @@ export function ExerciseExecutionScreen() {
       });
     }
     return [];
-  })();
+  }, [type, template, exercisesLibrary]);
   
   // Group items into groups (supersets or single exercises)
-  const exerciseGroups = (() => {
+  const exerciseGroups = useMemo(() => {
     const result: Array<{
       id: string;
       isCycle: boolean;
@@ -136,7 +136,7 @@ export function ExerciseExecutionScreen() {
     });
     
     return result;
-  })();
+  }, [items]);
   
   // State
   const [expandedGroupIndex, setExpandedGroupIndex] = useState(-1);
@@ -205,7 +205,7 @@ export function ExerciseExecutionScreen() {
   
   // Auto-set active exercise when expanding a group
   useEffect(() => {
-    if (expandedGroupIndex >= 0) {
+    if (expandedGroupIndex >= 0 && exerciseGroups[expandedGroupIndex]) {
       const group = exerciseGroups[expandedGroupIndex];
       const currentRound = currentRounds[group.id] || 0;
       
@@ -221,7 +221,7 @@ export function ExerciseExecutionScreen() {
       }
       setActiveExerciseIndex(firstIncompleteExIdx);
     }
-  }, [expandedGroupIndex]);
+  }, [expandedGroupIndex, exerciseGroups, currentRounds, completedSets]);
   
   const saveSession = async () => {
     if (type === 'warmup') {

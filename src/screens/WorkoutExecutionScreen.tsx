@@ -847,7 +847,6 @@ export function WorkoutExecutionScreen({ route, navigation }: WorkoutExecutionSc
             )}
             
           </View>
-            {(() => {
         </ScrollView>
         
       
