@@ -165,6 +165,8 @@ export function ExerciseExecutionScreen() {
   
   // Load completion state
   useEffect(() => {
+    if (exerciseGroups.length === 0) return; // Wait for groups to be populated
+    
     const completion = type === 'warmup' 
       ? getWarmupCompletion(workoutKey)
       : type === 'core'
@@ -205,7 +207,7 @@ export function ExerciseExecutionScreen() {
     } else {
       setExpandedGroupIndex(0); // Expand first group by default
     }
-  }, [workoutKey, type]);
+  }, [workoutKey, type, exerciseGroups, getWarmupCompletion, getAccessoryCompletion]);
   
   // Auto-set active exercise when expanding a group (only after first set is logged)
   useEffect(() => {
