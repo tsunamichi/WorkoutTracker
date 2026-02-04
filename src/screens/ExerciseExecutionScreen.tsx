@@ -5,9 +5,10 @@ import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import * as Haptics from 'expo-haptics';
 import { useStore } from '../store';
 import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS, CARDS } from '../constants';
-import { IconArrowLeft, IconCheck, IconAddLine, IconMinusLine, IconTrash, IconEdit } from '../components/icons';
+import { IconArrowLeft, IconCheck, IconAddLine, IconMinusLine, IconTrash, IconEdit, IconMenu, IconHistory, IconRestart, IconSkip } from '../components/icons';
 import { BottomDrawer } from '../components/common/BottomDrawer';
 import { SetTimerSheet } from '../components/timer/SetTimerSheet';
+import { ActionSheet } from '../components/common/ActionSheet';
 import { useTranslation } from '../i18n/useTranslation';
 import { formatWeightForLoad, toDisplayWeight, fromDisplayWeight } from '../utils/weight';
 import type { WarmupItem_DEPRECATED as WarmupItem, AccessoryItem_DEPRECATED as AccessoryItem, WorkoutTemplateExercise } from '../types/training';
@@ -147,6 +148,7 @@ export function ExerciseExecutionScreen() {
   const [showAdjustmentDrawer, setShowAdjustmentDrawer] = useState(false);
   const [showTimer, setShowTimer] = useState(false);
   const [isExerciseTimerPhase, setIsExerciseTimerPhase] = useState(false);
+  const [showMenu, setShowMenu] = useState(false);
   
   // Initialize local values from items
   useEffect(() => {
@@ -363,34 +365,73 @@ export function ExerciseExecutionScreen() {
     }
   };
   
-  const handleRemove = () => {
-    const title = type === 'warmup' ? 'Remove Warm-up' : type === 'core' ? 'Remove Core' : 'Remove Workout';
-    const message = `Are you sure you want to remove this ${type === 'warmup' ? 'warm-up' : type === 'core' ? 'core workout' : 'workout'}?`;
-    
-    Alert.alert(title, message, [
-      { text: t('cancel'), style: 'cancel' },
-      {
-        text: 'Remove',
-        style: 'destructive',
-        onPress: async () => {
-          // Clear the appropriate items from template
-          if (!template) return;
-          
-          const updatedTemplate = { ...template };
-          if (type === 'warmup') {
-            updatedTemplate.warmupItems = [];
-          } else if (type === 'core') {
-            updatedTemplate.accessoryItems = [];
-          } else if (type === 'main') {
-            updatedTemplate.items = [];
-          }
-          
-          await updateWorkoutTemplate(updatedTemplate);
-          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-          navigation.goBack();
+  const handleHistory = () => {
+    setShowMenu(false);
+    // TODO: Navigate to history screen for this exercise type
+    Alert.alert('History', 'Exercise history coming soon!');
+  };
+
+  const handleRest = () => {
+    setShowMenu(false);
+    // Show rest timer
+    setShowTimer(true);
+  };
+
+  const handleCompleteAll = () => {
+    setShowMenu(false);
+    Alert.alert(
+      t('completeAll'),
+      `Mark all ${type === 'warmup' ? 'warm-up' : type === 'core' ? 'core' : 'workout'} exercises as complete?`,
+      [
+        { text: t('cancel'), style: 'cancel' },
+        {
+          text: t('complete'),
+          onPress: async () => {
+            // Mark all exercises as complete
+            const allSetIds: string[] = [];
+            exerciseGroups.forEach(group => {
+              group.exercises.forEach(exercise => {
+                for (let round = 0; round < group.totalRounds; round++) {
+                  allSetIds.push(`${exercise.id}-set-${round}`);
+                }
+              });
+            });
+            
+            setCompletedSets(new Set(allSetIds));
+            
+            // Update completion state
+            if (type === 'warmup') {
+              updateWarmupCompletion(workoutKey, allSetIds);
+            } else if (type === 'core') {
+              updateAccessoryCompletion(workoutKey, allSetIds);
+            }
+            
+            await saveSession();
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            navigation.goBack();
+          },
         },
-      },
-    ]);
+      ]
+    );
+  };
+
+  const handleSkip = () => {
+    setShowMenu(false);
+    Alert.alert(
+      t('skipWorkout'),
+      `Skip all ${type === 'warmup' ? 'warm-up' : type === 'core' ? 'core' : 'workout'} exercises?`,
+      [
+        { text: t('cancel'), style: 'cancel' },
+        {
+          text: t('skip'),
+          style: 'destructive',
+          onPress: () => {
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+            navigation.goBack();
+          },
+        },
+      ]
+    );
   };
   
   const getTitle = () => {
@@ -417,12 +458,11 @@ export function ExerciseExecutionScreen() {
             <IconArrowLeft size={24} color="#000000" />
           </TouchableOpacity>
           <TouchableOpacity
-            style={styles.removeButton}
-            onPress={handleRemove}
+            style={styles.menuButton}
+            onPress={() => setShowMenu(true)}
             activeOpacity={1}
           >
-            <Text style={styles.removeButtonText}>{t('remove')}</Text>
-            <IconTrash size={16} color={COLORS.error} />
+            <IconMenu size={24} color="#000000" />
           </TouchableOpacity>
         </View>
         
@@ -735,6 +775,35 @@ export function ExerciseExecutionScreen() {
           )}
         </View>
       </BottomDrawer>
+
+      {/* Action Sheet Menu */}
+      <ActionSheet
+        visible={showMenu}
+        onClose={() => setShowMenu(false)}
+        items={[
+          {
+            icon: <IconHistory size={24} color="#000000" />,
+            label: t('history'),
+            onPress: handleHistory,
+          },
+          {
+            icon: <IconRestart size={24} color="#000000" />,
+            label: t('rest'),
+            onPress: handleRest,
+          },
+          {
+            icon: <IconCheck size={24} color="#000000" />,
+            label: t('complete'),
+            onPress: handleCompleteAll,
+          },
+          {
+            icon: <IconSkip size={24} color={COLORS.signalNegative} />,
+            label: t('skip'),
+            onPress: handleSkip,
+            destructive: true,
+          },
+        ]}
+      />
     </View>
   );
 }
@@ -761,19 +830,12 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     marginLeft: -4,
   },
-  removeButton: {
+  menuButton: {
+    width: 48,
     height: 48,
-    flexDirection: 'row',
     justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 4,
-    gap: 6,
-  },
-  removeButtonText: {
-    ...TYPOGRAPHY.body,
-    fontSize: 15,
-    fontWeight: '500',
-    color: COLORS.error,
+    alignItems: 'flex-end',
+    marginRight: -4,
   },
   headerContent: {
     paddingHorizontal: SPACING.xxl,
