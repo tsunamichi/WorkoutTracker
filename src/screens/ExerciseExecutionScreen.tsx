@@ -998,7 +998,7 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   startButtonInner: {
-    backgroundColor: COLORS.button,
+    backgroundColor: COLORS.accentPrimary,
     paddingVertical: 16,
     paddingHorizontal: 24,
     borderRadius: BORDER_RADIUS.lg,
