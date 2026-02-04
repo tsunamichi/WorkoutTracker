@@ -434,9 +434,304 @@ export function ExerciseExecutionScreen() {
         bounces={false}
       >
         <View style={styles.itemsAccordion}>
-          <Text style={styles.placeholderText}>Exercise execution cards will go here...</Text>
+          {exerciseGroups.map((group, index) => {
+            const isExpanded = expandedGroupIndex === index;
+            const currentRound = currentRounds[group.id] || 0;
+            const isCompleted = currentRound >= group.totalRounds;
+            
+            return (
+              <View key={group.id} style={styles.itemRow}>
+                {/* Exercise Cards Container */}
+                <View style={styles.exerciseCardsColumn}>
+                  <View style={styles.exerciseCardsContainer}>
+                    {group.exercises.map((exercise, exIndex) => {
+                      const displayWeight = localValues[exercise.id]?.weight ?? exercise.weight ?? 0;
+                      const displayReps = localValues[exercise.id]?.reps ?? exercise.reps ?? 0;
+                      const showWeight = displayWeight > 0;
+                      const isActive = isExpanded && exIndex === activeExerciseIndex;
+                      const setId = `${exercise.id}-set-${currentRound}`;
+                      const isExerciseCompleted = completedSets.has(setId);
+                      const repsUnit = exercise.isTimeBased ? 'secs' : 'reps';
+                      
+                      // Determine card style based on state
+                      const cardStyle = isExerciseCompleted ? styles.itemCardDimmed : (isActive ? styles.itemCard : styles.itemCardInactive);
+                      const cardInnerStyle = isExerciseCompleted ? styles.itemCardInnerDimmed : (isActive ? styles.itemCardInner : styles.itemCardInnerInactive);
+                      
+                      return (
+                        <View key={exercise.id} style={styles.exerciseCardWrapper}>
+                          <TouchableOpacity
+                            activeOpacity={1}
+                            onPress={() => {
+                              if (isActive && !isExerciseCompleted) {
+                                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                                setShowAdjustmentDrawer(true);
+                              }
+                            }}
+                          >
+                            <View style={cardStyle}>
+                              <View style={cardInnerStyle}>
+                                <View style={styles.itemCardExpanded}>
+                                  {/* Exercise Name Row */}
+                                  <View style={[
+                                    isExerciseCompleted ? styles.exerciseNameRowWithIcon : styles.exerciseNameInCard,
+                                    !isActive && !isExerciseCompleted && styles.exerciseNameInCardCentered
+                                  ]}>
+                                    <Text style={[
+                                      styles.exerciseNameText,
+                                      (isExpanded || group.exercises.length === 1) && styles.exerciseNameTextActive
+                                    ]}>
+                                      {exercise.exerciseName}
+                                    </Text>
+                                    
+                                    {isExerciseCompleted && (
+                                      <View style={styles.checkIconContainer}>
+                                        <IconCheck size={24} color={COLORS.signalPositive} />
+                                      </View>
+                                    )}
+                                  </View>
+                                  
+                                  {/* Values Row - Only show for active card */}
+                                  {isActive && (
+                                    <View style={styles.valuesDisplayRow}>
+                                      <View style={styles.valuesDisplayLeft}>
+                                        <View style={styles.valueRow}>
+                                          <Text style={styles.largeValue}>{displayReps}</Text>
+                                          <Text style={styles.unit}>{repsUnit}</Text>
+                                        </View>
+                                        
+                                        {showWeight && (
+                                          <View style={styles.valueRow}>
+                                            <Text style={styles.largeValue}>
+                                              {formatWeightForLoad(displayWeight, useKg)}
+                                            </Text>
+                                            <Text style={styles.unit}>{weightUnit}</Text>
+                                          </View>
+                                        )}
+                                      </View>
+                                      
+                                      <View style={styles.checkIconContainer}>
+                                        <IconEdit size={20} color={COLORS.textMeta} />
+                                      </View>
+                                    </View>
+                                  )}
+                                </View>
+                              </View>
+                            </View>
+                          </TouchableOpacity>
+                        </View>
+                      );
+                    })}
+                  </View>
+                </View>
+                
+                {/* Round Indicator - Dots on the right */}
+                <View style={styles.roundIndicatorContainer}>
+                  {Array.from({ length: group.totalRounds }).map((_, roundIndex) => (
+                    <View
+                      key={roundIndex}
+                      style={[
+                        styles.roundDot,
+                        roundIndex < currentRound && styles.roundDotCompleted,
+                        roundIndex === currentRound && !isCompleted && isExpanded && styles.roundDotActive,
+                      ]}
+                    />
+                  ))}
+                  
+                  {isCompleted && (
+                    <View style={styles.roundCheckContainer}>
+                      <IconCheck size={24} color={COLORS.signalPositive} />
+                    </View>
+                  )}
+                </View>
+              </View>
+            );
+          })}
         </View>
       </ScrollView>
+      
+      {/* Start Button - Fixed at Bottom */}
+      {expandedGroupIndex !== -1 && (
+        <View style={[styles.startButtonContainer, { paddingBottom: insets.bottom + 16 }]}>
+          <TouchableOpacity
+            style={styles.startButton}
+            onPress={handleStart}
+            activeOpacity={1}
+          >
+            <View style={styles.startButtonInner}>
+              <Text style={styles.startButtonText}>{t('start')}</Text>
+            </View>
+          </TouchableOpacity>
+        </View>
+      )}
+      
+      {/* Timer Sheet */}
+      {expandedGroupIndex >= 0 && exerciseGroups[expandedGroupIndex] && (
+        <SetTimerSheet
+          visible={showTimer}
+          onComplete={handleComplete}
+          onClose={() => setShowTimer(false)}
+          workoutName={template?.name}
+          exerciseName={exerciseGroups[expandedGroupIndex].exercises[activeExerciseIndex]?.exerciseName}
+          currentSet={currentRounds[exerciseGroups[expandedGroupIndex].id] + 1}
+          totalSets={exerciseGroups[expandedGroupIndex].totalRounds}
+          isExerciseTimerPhase={isExerciseTimerPhase}
+          exerciseDuration={localValues[exerciseGroups[expandedGroupIndex].exercises[activeExerciseIndex]?.id]?.reps ?? exerciseGroups[expandedGroupIndex].exercises[activeExerciseIndex]?.reps ?? 30}
+          onExerciseTimerComplete={handleComplete}
+          skipRestPhase={true}
+          isPerSide={exerciseGroups[expandedGroupIndex].exercises[activeExerciseIndex]?.isPerSide}
+        />
+      )}
+      
+      {/* Adjustment Drawer */}
+      <BottomDrawer
+        visible={showAdjustmentDrawer}
+        onClose={() => setShowAdjustmentDrawer(false)}
+        maxHeight="50%"
+      >
+        <View style={styles.adjustmentDrawerContent}>
+          <Text style={styles.adjustmentDrawerTitle}>{t('adjustValues')}</Text>
+          
+          {expandedGroupIndex >= 0 && exerciseGroups[expandedGroupIndex] && (
+            <View style={styles.drawerValuesCard}>
+              {(() => {
+                const currentGroup = exerciseGroups[expandedGroupIndex];
+                const activeExercise = currentGroup.exercises[activeExerciseIndex];
+                if (!activeExercise) return null;
+                
+                const displayWeight = localValues[activeExercise.id]?.weight ?? activeExercise.weight ?? 0;
+                const displayReps = localValues[activeExercise.id]?.reps ?? activeExercise.reps ?? 0;
+                const repsUnit = activeExercise.isTimeBased ? 'secs' : 'reps';
+                
+                return (
+                  <>
+                    {/* Weight Row */}
+                    <View style={styles.drawerAdjustRow}>
+                      <View style={styles.drawerAdjustValue}>
+                        <Text style={styles.drawerAdjustValueText}>
+                          {formatWeightForLoad(displayWeight, useKg)}
+                        </Text>
+                        <Text style={styles.drawerAdjustUnit}>{weightUnit}</Text>
+                      </View>
+                      <View style={styles.drawerAdjustButtons}>
+                        <TouchableOpacity 
+                          onPress={() => {
+                            setLocalValues(prev => {
+                              const current = prev[activeExercise.id];
+                              if (!current) return prev;
+                              const currentDisplay = toDisplayWeight(current.weight, useKg);
+                              const nextDisplay = Math.max(0, currentDisplay - weightStep);
+                              return {
+                                ...prev,
+                                [activeExercise.id]: {
+                                  ...current,
+                                  weight: fromDisplayWeight(nextDisplay, useKg),
+                                },
+                              };
+                            });
+                          }}
+                          activeOpacity={1}
+                          style={styles.adjustButtonTapTarget}
+                        >
+                          <View style={styles.adjustButton}>
+                            <View style={styles.adjustButtonInner}>
+                              <IconMinusLine size={24} color={COLORS.accentPrimary} />
+                            </View>
+                          </View>
+                        </TouchableOpacity>
+                        <TouchableOpacity 
+                          onPress={() => {
+                            setLocalValues(prev => {
+                              const current = prev[activeExercise.id];
+                              if (!current) return prev;
+                              const currentDisplay = toDisplayWeight(current.weight, useKg);
+                              const nextDisplay = currentDisplay + weightStep;
+                              return {
+                                ...prev,
+                                [activeExercise.id]: {
+                                  ...current,
+                                  weight: fromDisplayWeight(nextDisplay, useKg),
+                                },
+                              };
+                            });
+                          }}
+                          activeOpacity={1}
+                          style={styles.adjustButtonTapTarget}
+                        >
+                          <View style={styles.adjustButton}>
+                            <View style={styles.adjustButtonInner}>
+                              <IconAddLine size={24} color={COLORS.accentPrimary} />
+                            </View>
+                          </View>
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                    
+                    <View style={styles.drawerAdjustDivider} />
+                    
+                    {/* Reps Row */}
+                    <View style={styles.drawerAdjustRow}>
+                      <View style={styles.drawerAdjustValue}>
+                        <Text style={styles.drawerAdjustValueText}>
+                          {displayReps}
+                        </Text>
+                        <Text style={styles.drawerAdjustUnit}>{repsUnit}</Text>
+                      </View>
+                      <View style={styles.drawerAdjustButtons}>
+                        <TouchableOpacity 
+                          onPress={() => {
+                            setLocalValues(prev => {
+                              const current = prev[activeExercise.id];
+                              if (!current) return prev;
+                              return {
+                                ...prev,
+                                [activeExercise.id]: {
+                                  ...current,
+                                  reps: Math.max(1, current.reps - 1),
+                                },
+                              };
+                            });
+                          }}
+                          activeOpacity={1}
+                          style={styles.adjustButtonTapTarget}
+                        >
+                          <View style={styles.adjustButton}>
+                            <View style={styles.adjustButtonInner}>
+                              <IconMinusLine size={24} color={COLORS.accentPrimary} />
+                            </View>
+                          </View>
+                        </TouchableOpacity>
+                        <TouchableOpacity 
+                          onPress={() => {
+                            setLocalValues(prev => {
+                              const current = prev[activeExercise.id];
+                              if (!current) return prev;
+                              return {
+                                ...prev,
+                                [activeExercise.id]: {
+                                  ...current,
+                                  reps: current.reps + 1,
+                                },
+                              };
+                            });
+                          }}
+                          activeOpacity={1}
+                          style={styles.adjustButtonTapTarget}
+                        >
+                          <View style={styles.adjustButton}>
+                            <View style={styles.adjustButtonInner}>
+                              <IconAddLine size={24} color={COLORS.accentPrimary} />
+                            </View>
+                          </View>
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  </>
+                );
+              })()}
+            </View>
+          )}
+        </View>
+      </BottomDrawer>
     </View>
   );
 }
@@ -485,10 +780,213 @@ const styles = StyleSheet.create({
   itemsAccordion: {
     gap: 24,
   },
-  placeholderText: {
+  itemRow: {
+    flexDirection: 'row',
+    gap: 12,
+    alignItems: 'flex-start',
+  },
+  exerciseCardsColumn: {
+    flex: 1,
+  },
+  exerciseCardsContainer: {
+    gap: 8,
+  },
+  exerciseCardWrapper: {
+    width: '100%',
+  },
+  itemCard: {
+    ...CARDS.cardDeep.outer,
+    backgroundColor: COLORS.activeCard,
+  },
+  itemCardInner: {
+    ...CARDS.cardDeep.inner,
+    backgroundColor: COLORS.activeCard,
+  },
+  itemCardInactive: {
+    ...CARDS.cardDeep.outer,
+    backgroundColor: COLORS.activeCard,
+    opacity: 0.5,
+  },
+  itemCardInnerInactive: {
+    ...CARDS.cardDeep.inner,
+    backgroundColor: COLORS.activeCard,
+  },
+  itemCardDimmed: {
+    ...CARDS.cardDeep.outer,
+    backgroundColor: COLORS.activeCard,
+    opacity: 0.4,
+  },
+  itemCardInnerDimmed: {
+    ...CARDS.cardDeep.inner,
+    backgroundColor: COLORS.activeCard,
+  },
+  itemCardExpanded: {
+    gap: 12,
+  },
+  exerciseNameInCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  exerciseNameInCardCentered: {
+    justifyContent: 'center',
+  },
+  exerciseNameRowWithIcon: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  exerciseNameText: {
     ...TYPOGRAPHY.body,
     color: COLORS.textMeta,
-    textAlign: 'center',
-    paddingVertical: SPACING.xl,
+    flex: 1,
+  },
+  exerciseNameTextActive: {
+    ...TYPOGRAPHY.h3,
+    color: COLORS.text,
+  },
+  checkIconContainer: {
+    flexShrink: 0,
+  },
+  valuesDisplayRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 16,
+  },
+  valuesDisplayLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 24,
+  },
+  valueRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: 4,
+  },
+  largeValue: {
+    fontSize: 32,
+    fontWeight: '600',
+    color: COLORS.text,
+    lineHeight: 38,
+  },
+  unit: {
+    ...TYPOGRAPHY.caption,
+    color: COLORS.textMeta,
+  },
+  roundIndicatorContainer: {
+    flexDirection: 'column',
+    alignItems: 'center',
+    gap: 6,
+    paddingTop: 8,
+    position: 'relative',
+    minWidth: 32,
+  },
+  roundCheckContainer: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  roundDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: COLORS.backgroundDisabled,
+  },
+  roundDotCompleted: {
+    backgroundColor: COLORS.text,
+  },
+  roundDotActive: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    borderWidth: 2,
+    borderColor: COLORS.text,
+    backgroundColor: 'transparent',
+  },
+  startButtonContainer: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    paddingHorizontal: SPACING.lg,
+    paddingTop: SPACING.md,
+    backgroundColor: COLORS.backgroundCanvas,
+  },
+  startButton: {
+    width: '100%',
+  },
+  startButtonInner: {
+    backgroundColor: COLORS.button,
+    paddingVertical: 16,
+    paddingHorizontal: 24,
+    borderRadius: BORDER_RADIUS.lg,
+    alignItems: 'center',
+  },
+  startButtonText: {
+    ...TYPOGRAPHY.h3,
+    color: COLORS.buttonText,
+  },
+  adjustmentDrawerContent: {
+    paddingHorizontal: SPACING.lg,
+    paddingBottom: SPACING.xl,
+  },
+  adjustmentDrawerTitle: {
+    ...TYPOGRAPHY.h3,
+    color: COLORS.text,
+    marginBottom: SPACING.md,
+  },
+  drawerValuesCard: {
+    ...CARDS.cardDeep.outer,
+    backgroundColor: COLORS.activeCard,
+  },
+  drawerAdjustRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: SPACING.md,
+  },
+  drawerAdjustValue: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: 6,
+  },
+  drawerAdjustValueText: {
+    fontSize: 32,
+    fontWeight: '600',
+    color: COLORS.text,
+  },
+  drawerAdjustUnit: {
+    ...TYPOGRAPHY.caption,
+    color: COLORS.textMeta,
+  },
+  drawerAdjustButtons: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  adjustButtonTapTarget: {
+    padding: 4,
+  },
+  adjustButton: {
+    ...CARDS.cardDeep.outer,
+    backgroundColor: COLORS.backgroundAlt,
+  },
+  adjustButtonInner: {
+    ...CARDS.cardDeep.inner,
+    backgroundColor: COLORS.backgroundAlt,
+    width: 48,
+    height: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  drawerAdjustDivider: {
+    height: 1,
+    backgroundColor: COLORS.border,
+    marginVertical: SPACING.sm,
   },
 });
