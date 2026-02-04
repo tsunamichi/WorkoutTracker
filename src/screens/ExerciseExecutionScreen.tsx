@@ -143,7 +143,7 @@ export function ExerciseExecutionScreen() {
   const [expandedGroupIndex, setExpandedGroupIndex] = useState(-1);
   const [currentRounds, setCurrentRounds] = useState<Record<string, number>>({});
   const [completedSets, setCompletedSets] = useState<Set<string>>(new Set());
-  const [activeExerciseIndex, setActiveExerciseIndex] = useState(-1); // Start with no active exercise
+  const [activeExerciseIndex, setActiveExerciseIndex] = useState(0); // Start with first exercise when group is expanded
   const [hasLoggedAnySet, setHasLoggedAnySet] = useState(false); // Track if any set has been logged
   const [localValues, setLocalValues] = useState<Record<string, { weight: number; reps: number }>>({});
   const [showAdjustmentDrawer, setShowAdjustmentDrawer] = useState(false);
@@ -209,23 +209,28 @@ export function ExerciseExecutionScreen() {
     }
   }, [workoutKey, type, exerciseGroups, getWarmupCompletion, getAccessoryCompletion]);
   
-  // Auto-set active exercise when expanding a group (only after first set is logged)
+  // Auto-set active exercise when expanding a group
   useEffect(() => {
-    if (hasLoggedAnySet && expandedGroupIndex >= 0 && exerciseGroups[expandedGroupIndex]) {
+    if (expandedGroupIndex >= 0 && exerciseGroups[expandedGroupIndex]) {
       const group = exerciseGroups[expandedGroupIndex];
       const currentRound = currentRounds[group.id] || 0;
       
-      // Find first incomplete exercise in current round
-      let firstIncompleteExIdx = 0;
-      for (let exIdx = 0; exIdx < group.exercises.length; exIdx++) {
-        const exercise = group.exercises[exIdx];
-        const setId = `${exercise.id}-set-${currentRound}`;
-        if (!completedSets.has(setId)) {
-          firstIncompleteExIdx = exIdx;
-          break;
+      if (hasLoggedAnySet) {
+        // After logging: find first incomplete exercise in current round
+        let firstIncompleteExIdx = 0;
+        for (let exIdx = 0; exIdx < group.exercises.length; exIdx++) {
+          const exercise = group.exercises[exIdx];
+          const setId = `${exercise.id}-set-${currentRound}`;
+          if (!completedSets.has(setId)) {
+            firstIncompleteExIdx = exIdx;
+            break;
+          }
         }
+        setActiveExerciseIndex(firstIncompleteExIdx);
+      } else {
+        // Before logging: activate first exercise in expanded group
+        setActiveExerciseIndex(0);
       }
-      setActiveExerciseIndex(firstIncompleteExIdx);
     }
   }, [hasLoggedAnySet, expandedGroupIndex, exerciseGroups, currentRounds, completedSets]);
   
@@ -286,7 +291,7 @@ export function ExerciseExecutionScreen() {
   };
   
   const handleComplete = async () => {
-    if (expandedGroupIndex < 0 || activeExerciseIndex < 0) return;
+    if (expandedGroupIndex < 0) return;
     
     const currentGroup = exerciseGroups[expandedGroupIndex];
     const currentRound = currentRounds[currentGroup.id] || 0;
@@ -536,11 +541,13 @@ export function ExerciseExecutionScreen() {
                             activeOpacity={1}
                             onPress={() => {
                               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                              if (!hasLoggedAnySet && !isExerciseCompleted) {
-                                // Before logging first set: allow selecting any exercise
-                                setActiveExerciseIndex(exIndex);
+                              if (!hasLoggedAnySet && !isExpanded && !isCompleted) {
+                                // Before logging first set: allow selecting any GROUP (not individual exercise)
+                                LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+                                setExpandedGroupIndex(index);
+                                setActiveExerciseIndex(0); // Start with first exercise in group
                               } else if (isActive && !isExerciseCompleted) {
-                                // After logging: only active card opens adjustment drawer
+                                // Active card opens adjustment drawer
                                 setShowAdjustmentDrawer(true);
                               }
                             }}
@@ -627,7 +634,7 @@ export function ExerciseExecutionScreen() {
       </ScrollView>
       
       {/* Start Button - Fixed at Bottom */}
-      {expandedGroupIndex !== -1 && activeExerciseIndex !== -1 && (
+      {expandedGroupIndex !== -1 && (
         <View style={[styles.startButtonContainer, { paddingBottom: insets.bottom + 16 }]}>
           <TouchableOpacity
             style={styles.startButton}
@@ -642,7 +649,7 @@ export function ExerciseExecutionScreen() {
       )}
       
       {/* Timer Sheet */}
-      {expandedGroupIndex >= 0 && activeExerciseIndex >= 0 && exerciseGroups[expandedGroupIndex] && (
+      {expandedGroupIndex >= 0 && exerciseGroups[expandedGroupIndex] && (
         <SetTimerSheet
           visible={showTimer}
           onComplete={() => {
