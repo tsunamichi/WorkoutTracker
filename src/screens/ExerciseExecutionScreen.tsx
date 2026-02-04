@@ -548,7 +548,8 @@ export function ExerciseExecutionScreen() {
                       const displayWeight = localValues[exercise.id]?.weight ?? exercise.weight ?? 0;
                       const displayReps = localValues[exercise.id]?.reps ?? exercise.reps ?? 0;
                       const showWeight = displayWeight > 0;
-                      const isActive = isExpanded && exIndex === activeExerciseIndex;
+                      const isCurrentExercise = isExpanded && exIndex === activeExerciseIndex;
+                      const isActive = isCurrentExercise && hasLoggedAnySet; // Only active after logging first set
                       const setId = `${exercise.id}-set-${currentRound}`;
                       const isExerciseCompleted = completedSets.has(setId);
                       const repsUnit = exercise.isTimeBased ? 'secs' : 'reps';
@@ -568,8 +569,8 @@ export function ExerciseExecutionScreen() {
                                 LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
                                 setExpandedGroupIndex(originalIndex);
                                 setActiveExerciseIndex(0); // Start with first exercise in group
-                              } else if (isActive && !isExerciseCompleted) {
-                                // Active card opens adjustment drawer
+                              } else if (isCurrentExercise && !isExerciseCompleted) {
+                                // Current exercise card opens adjustment drawer
                                 setShowAdjustmentDrawer(true);
                               }
                             }}
@@ -580,7 +581,7 @@ export function ExerciseExecutionScreen() {
                                   {/* Exercise Name Row */}
                                   <View style={[
                                     isExerciseCompleted ? styles.exerciseNameRowWithIcon : styles.exerciseNameInCard,
-                                    !isActive && !isExerciseCompleted && styles.exerciseNameInCardCentered
+                                    !isCurrentExercise && !isExerciseCompleted && styles.exerciseNameInCardCentered
                                   ]}>
                                     <Text style={[
                                       styles.exerciseNameText,
@@ -596,8 +597,8 @@ export function ExerciseExecutionScreen() {
                                     )}
                                   </View>
                                   
-                                  {/* Values Row - Only show for active card */}
-                                  {isActive && (
+                                  {/* Values Row - Show for current exercise in expanded group */}
+                                  {isCurrentExercise && (
                                     <View style={styles.valuesDisplayRow}>
                                       <View style={styles.valuesDisplayLeft}>
                                         <View style={styles.valueRow}>
