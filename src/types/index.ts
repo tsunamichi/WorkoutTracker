@@ -108,6 +108,30 @@ export interface WorkoutSession {
   endTime?: string;
   notes?: string;
   sets: WorkoutSet[];
+  warmupSets?: WarmupSet[]; // NEW: Warmup exercise sets
+  accessorySets?: AccessorySet[]; // NEW: Accessory/core exercise sets
+}
+
+export interface WarmupSet {
+  id: string;
+  exerciseName: string;
+  setIndex: number; // which round/set
+  weight?: number; // in lbs (internal storage)
+  reps?: number; // reps or seconds depending on isTimeBased
+  isTimeBased: boolean;
+  isPerSide?: boolean;
+  completedAt: string; // ISO timestamp
+}
+
+export interface AccessorySet {
+  id: string;
+  exerciseName: string;
+  setIndex: number; // which round/set
+  weight?: number; // in lbs (internal storage)
+  reps?: number; // reps or seconds depending on isTimeBased
+  isTimeBased: boolean;
+  isPerSide?: boolean;
+  completedAt: string; // ISO timestamp
 }
 
 export interface WorkoutSet {

@@ -475,7 +475,7 @@ export function SetTimerSheetLegacy({ visible, onComplete, onClose, workoutName,
 export function WorkoutExecutionScreen({ route, navigation }: WorkoutExecutionScreenProps) {
   const insets = useSafeAreaInsets();
   const { cycleId, workoutTemplateId, date } = route.params;
-  const { cycles, exercises, addSession, getWorkoutCompletionPercentage, getExerciseProgress, saveExerciseProgress, clearWorkoutProgress, skipExercise, getWorkoutTemplate, getWarmupCompletion, settings } = useStore();
+  const { cycles, exercises, addSession, getWorkoutCompletionPercentage, getExerciseProgress, saveExerciseProgress, clearWorkoutProgress, skipExercise, getWorkoutTemplate, getWarmupCompletion, getAccessoryCompletion, settings } = useStore();
   const { t } = useTranslation();
   const useKg = settings.useKg;
   const weightUnit = useKg ? 'kg' : 'lb';
@@ -1022,7 +1022,7 @@ export function WorkoutExecutionScreen({ route, navigation }: WorkoutExecutionSc
           
           {/* Accessories Section */}
           {template?.accessoryItems && template.accessoryItems.length > 0 && (() => {
-            const accessoryCompletion = { percentage: 0, completedCount: 0, totalCount: 0 }; // TODO: implement getAccessoryCompletion
+            const accessoryCompletion = getAccessoryCompletion(workoutKey);
             const allComplete = accessoryCompletion.percentage === 100;
             
             // Check if any exercise has been started

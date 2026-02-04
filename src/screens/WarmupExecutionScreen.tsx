@@ -31,7 +31,7 @@ export function WarmupExecutionScreen() {
   const { t } = useTranslation();
   
   const { workoutKey, workoutTemplateId } = route.params;
-  const { getWorkoutTemplate, updateWarmupCompletion, getWarmupCompletion, updateWorkoutTemplate, settings } = useStore();
+  const { getWorkoutTemplate, updateWarmupCompletion, getWarmupCompletion, updateWorkoutTemplate, settings, addWarmupToSession } = useStore();
   const template = getWorkoutTemplate(workoutTemplateId);
   const warmupItems = template?.warmupItems || [];
   const useKg = settings.useKg;
@@ -232,6 +232,37 @@ export function WarmupExecutionScreen() {
     });
   };
   
+  const saveWarmupSession = async () => {
+    // Collect all completed warmup sets
+    const warmupSets: import('../types').WarmupSet[] = [];
+    
+    warmupGroups.forEach(group => {
+      const rounds = currentRounds[group.id] || 0;
+      group.exercises.forEach((exercise) => {
+        for (let round = 0; round < rounds; round++) {
+          const setId = `${exercise.id}-set-${round}`;
+          if (completedSets.has(setId)) {
+            const values = localValues[exercise.id] || {};
+            warmupSets.push({
+              id: setId,
+              exerciseName: exercise.exerciseName,
+              setIndex: round,
+              weight: values.weight ?? exercise.weight ?? 0,
+              reps: values.reps ?? exercise.reps ?? 0,
+              isTimeBased: exercise.isTimeBased || false,
+              isPerSide: exercise.isPerSide,
+              completedAt: new Date().toISOString(),
+            });
+          }
+        }
+      });
+    });
+    
+    if (warmupSets.length > 0) {
+      await addWarmupToSession(workoutKey, warmupSets);
+    }
+  };
+
   const handleStart = () => {
     if (expandedGroupIndex < 0) return;
     
@@ -310,7 +341,8 @@ export function WarmupExecutionScreen() {
             setExpandedGroupIndex(nextIncompleteIndex);
             setActiveExerciseIndex(0);
           } else {
-            // All done, navigate back
+            // All done, save warmup session and navigate back
+            await saveWarmupSession();
             navigation.goBack();
           }
         } else {

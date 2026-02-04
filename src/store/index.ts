@@ -31,6 +31,8 @@ interface WorkoutStore {
   addExercise: (exercise: Exercise) => Promise<void>;
   updateExercise: (exerciseId: string, updates: Partial<Exercise>) => Promise<void>;
   addSession: (session: WorkoutSession) => Promise<void>;
+  addWarmupToSession: (workoutKey: string, warmupSets: import('../types').WarmupSet[]) => Promise<void>;
+  addAccessoryToSession: (workoutKey: string, accessorySets: import('../types').AccessorySet[]) => Promise<void>;
   addBodyWeightEntry: (entry: BodyWeightEntry) => Promise<void>;
   addProgressLog: (params: { photoUris: string[]; weightLbs?: number }) => Promise<{ success: boolean; error?: string }>;
   deleteProgressLog: (progressLogId: string) => Promise<void>;
@@ -957,6 +959,72 @@ export const useStore = create<WorkoutStore>((set, get) => ({
     const sessions = [...get().sessions, session];
     set({ sessions });
     await storage.saveSessions(sessions);
+  },
+  
+  addWarmupToSession: async (workoutKey, warmupSets) => {
+    const [workoutTemplateId, date] = workoutKey.split('-');
+    const sessions = get().sessions;
+    
+    // Find existing session for this workout
+    let session = sessions.find(s => s.workoutTemplateId === workoutTemplateId && s.date === date);
+    
+    if (session) {
+      // Update existing session with warmup data
+      const updatedSessions = sessions.map(s => 
+        s.id === session.id
+          ? { ...s, warmupSets: [...(s.warmupSets || []), ...warmupSets] }
+          : s
+      );
+      set({ sessions: updatedSessions });
+      await storage.saveSessions(updatedSessions);
+    } else {
+      // Create new session for warmup only
+      const newSession: WorkoutSession = {
+        id: `warmup-${Date.now()}`,
+        workoutTemplateId,
+        date,
+        startTime: new Date().toISOString(),
+        endTime: new Date().toISOString(),
+        sets: [],
+        warmupSets,
+      };
+      const updatedSessions = [...sessions, newSession];
+      set({ sessions: updatedSessions });
+      await storage.saveSessions(updatedSessions);
+    }
+  },
+  
+  addAccessoryToSession: async (workoutKey, accessorySets) => {
+    const [workoutTemplateId, date] = workoutKey.split('-');
+    const sessions = get().sessions;
+    
+    // Find existing session for this workout
+    let session = sessions.find(s => s.workoutTemplateId === workoutTemplateId && s.date === date);
+    
+    if (session) {
+      // Update existing session with accessory data
+      const updatedSessions = sessions.map(s => 
+        s.id === session.id
+          ? { ...s, accessorySets: [...(s.accessorySets || []), ...accessorySets] }
+          : s
+      );
+      set({ sessions: updatedSessions });
+      await storage.saveSessions(updatedSessions);
+    } else {
+      // Create new session for accessories only
+      const newSession: WorkoutSession = {
+        id: `accessory-${Date.now()}`,
+        workoutTemplateId,
+        date,
+        startTime: new Date().toISOString(),
+        endTime: new Date().toISOString(),
+        sets: [],
+        accessorySets,
+      };
+      const updatedSessions = [...sessions, newSession];
+      set({ sessions: updatedSessions });
+      await storage.saveSessions(updatedSessions);
+    }
   },
   
   addBodyWeightEntry: async (entry) => {

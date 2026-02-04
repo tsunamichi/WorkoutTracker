@@ -31,7 +31,7 @@ export function AccessoriesExecutionScreen() {
   const { t } = useTranslation();
   
   const { workoutKey, workoutTemplateId } = route.params;
-  const { getWorkoutTemplate, updateAccessoryCompletion, getAccessoryCompletion, updateWorkoutTemplate, settings } = useStore();
+  const { getWorkoutTemplate, updateAccessoryCompletion, getAccessoryCompletion, updateWorkoutTemplate, settings, addAccessoryToSession } = useStore();
   const template = getWorkoutTemplate(workoutTemplateId);
   const accessoryItems = template?.accessoryItems || [];
   const useKg = settings.useKg;
@@ -232,6 +232,37 @@ export function AccessoriesExecutionScreen() {
     });
   };
   
+  const saveAccessorySession = async () => {
+    // Collect all completed accessory sets
+    const accessorySets: import('../types').AccessorySet[] = [];
+    
+    accessoryGroups.forEach(group => {
+      const rounds = currentRounds[group.id] || 0;
+      group.exercises.forEach((exercise) => {
+        for (let round = 0; round < rounds; round++) {
+          const setId = `${exercise.id}-set-${round}`;
+          if (completedSets.has(setId)) {
+            const values = localValues[exercise.id] || {};
+            accessorySets.push({
+              id: setId,
+              exerciseName: exercise.exerciseName,
+              setIndex: round,
+              weight: values.weight ?? exercise.weight ?? 0,
+              reps: values.reps ?? exercise.reps ?? 0,
+              isTimeBased: exercise.isTimeBased || false,
+              isPerSide: exercise.isPerSide,
+              completedAt: new Date().toISOString(),
+            });
+          }
+        }
+      });
+    });
+    
+    if (accessorySets.length > 0) {
+      await addAccessoryToSession(workoutKey, accessorySets);
+    }
+  };
+
   const handleStart = () => {
     if (expandedGroupIndex < 0) return;
     
@@ -310,7 +341,8 @@ export function AccessoriesExecutionScreen() {
             setExpandedGroupIndex(nextIncompleteIndex);
             setActiveExerciseIndex(0);
           } else {
-            // All done, navigate back
+            // All done, save accessory session and navigate back
+            await saveAccessorySession();
             navigation.goBack();
           }
         } else {
