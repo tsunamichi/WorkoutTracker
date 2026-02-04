@@ -747,334 +747,107 @@ export function WorkoutExecutionScreen({ route, navigation }: WorkoutExecutionSc
         </View>
         
         <ScrollView style={styles.content} contentContainerStyle={styles.scrollContent} bounces={false}>
-          {/* Warm-up Section */}
-          {template?.warmupItems && template.warmupItems.length > 0 && (() => {
-            const warmupCompletion = getWarmupCompletion(workoutKey);
-            const allComplete = warmupCompletion.percentage === 100;
+          {/* 3 Summary Cards */}
+          <View style={styles.summaryCardsContainer}>
             
-            // Check if any exercise has been started
-            const isAnyExerciseStarted = workout?.exercises.some(ex => {
-              const progress = getExerciseProgress(workoutKey, ex.id);
-              return progress?.sets.some(set => set.completed) || false;
-            }) || false;
-            
-            return (
-              <View style={styles.warmupSection}>
-                <TouchableOpacity
-                  style={[
-                    styles.warmupCard, 
-                    allComplete && styles.warmupCardComplete,
-                    isAnyExerciseStarted && styles.warmupCardDisabled
-                  ]}
-                  onPress={() => {
-                    if (isAnyExerciseStarted) return;
-                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                    (navigation as any).navigate('WarmupExecution', { 
-                      workoutKey, 
-                      workoutTemplateId 
-                    });
-                  }}
-                  activeOpacity={1}
-                  disabled={isAnyExerciseStarted}
-                >
-                  <View style={styles.warmupCardContent}>
-                    <Text style={[styles.warmupCardTitle, isAnyExerciseStarted && styles.warmupCardTitleDisabled]}>{t('warmup')}</Text>
-                    {!isAnyExerciseStarted && <Text style={styles.warmupStartText}>{t('start')}</Text>}
-                  </View>
-                </TouchableOpacity>
-              </View>
-            );
-          })()}
-          
-          {/* Add Warmup Button (when no warmup exists) */}
-          {template && (!template.warmupItems || template.warmupItems.length === 0) && (
-            <View style={styles.warmupSection}>
+            {/* Warm-up Card */}
+            {template?.warmupItems && template.warmupItems.length > 0 ? (
               <TouchableOpacity
-                style={styles.addWarmupButton}
+                style={styles.summaryCard}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  (navigation as any).navigate('ExerciseExecution', { 
+                    workoutKey, 
+                    workoutTemplateId,
+                    type: 'warmup'
+                  });
+                }}
+                activeOpacity={0.7}
+              >
+                <View style={styles.summaryCardContent}>
+                  <Text style={styles.summaryCardTitle}>{t('warmup')}</Text>
+                  <Text style={styles.summaryCardSubtitle}>
+                    {template.warmupItems.length} {template.warmupItems.length === 1 ? 'exercise' : 'exercises'}
+                  </Text>
+                </View>
+                <Text style={styles.summaryCardAction}>{t('start')}</Text>
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity
+                style={styles.addCardButton}
                 onPress={() => {
                   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                   (navigation as any).navigate('WarmupEditor', { templateId: workoutTemplateId });
                 }}
-                activeOpacity={1}
+                activeOpacity={0.7}
               >
                 <IconAdd size={20} color={COLORS.text} />
-                <Text style={styles.addWarmupText}>{t('warmup')}</Text>
+                <Text style={styles.addCardText}>{t('warmup')}</Text>
               </TouchableOpacity>
-            </View>
-          )}
-          
-          {/* Exercises List */}
-          <View style={styles.exercisesList}>
-            {(() => {
-              // First, map and sort exercises
-              const sortedExercises = workout.exercises
-                .map((exercise, originalIndex) => ({ exercise, originalIndex }))
-                .reduce((acc: any[], { exercise, originalIndex }) => {
-                  const savedProgress = getExerciseProgress(workoutKey, exercise.id);
-                  const isSkipped = savedProgress?.skipped || false;
-                  
-                  if (isSkipped) {
-                    acc.push({ exercise, originalIndex, group: 'skipped' });
-                  } else {
-                    acc.push({ exercise, originalIndex, group: 'active' });
-                  }
-                  return acc;
-                }, [])
-                .sort((a, b) => {
-                  // Separate active and skipped exercises
-                  if (a.group !== b.group) {
-                    return a.group === 'active' ? -1 : 1;
-                  }
-                  
-                  // For active exercises, sort by completion state
-                  if (a.group === 'active') {
-                    const progressA = getExerciseProgress(workoutKey, a.exercise.id);
-                    const progressB = getExerciseProgress(workoutKey, b.exercise.id);
-                    
-                    const completedSetsA = progressA?.sets.filter(set => set.completed).length || 0;
-                    const completedSetsB = progressB?.sets.filter(set => set.completed).length || 0;
-                    const totalSetsA = a.exercise.targetSets;
-                    const totalSetsB = b.exercise.targetSets;
-                    const isFullyCompletedA = completedSetsA === totalSetsA && totalSetsA > 0;
-                    const isFullyCompletedB = completedSetsB === totalSetsB && totalSetsB > 0;
-                    
-                    // Determine sort order: completed (0), in-progress (1) - completed at top
-                    const orderA = isFullyCompletedA ? 0 : 1;
-                    const orderB = isFullyCompletedB ? 0 : 1;
-                    
-                    // If same order, maintain original order
-                    if (orderA === orderB) return a.originalIndex - b.originalIndex;
-                    
-                    return orderA - orderB;
-                  }
-                  
-                  // For skipped exercises, maintain original order
-                  return a.originalIndex - b.originalIndex;
-                });
-              
-              // Find the first in-progress exercise (has started but not completed)
-              const inProgressExerciseId = sortedExercises.find(({ exercise, group }) => {
-                if (group === 'skipped') return false;
-                const savedProgress = getExerciseProgress(workoutKey, exercise.id);
-                const completedSets = savedProgress?.sets.filter(set => set.completed).length || 0;
-                const totalSets = exercise.targetSets;
-                return completedSets > 0 && completedSets < totalSets;
-              })?.exercise.id;
-              
-              return sortedExercises.map(({ exercise, originalIndex: index, group }, arrayIndex, array) => {
-                // Add section header for skipped exercises
-                const prevGroup = arrayIndex > 0 ? array[arrayIndex - 1].group : null;
-                const showSkippedHeader = group === 'skipped' && prevGroup !== 'skipped';
-                const exerciseData = exercises.find(e => e.id === exercise.exerciseId);
-                
-                // Get saved exercise progress to check completion
-                const savedProgress = getExerciseProgress(workoutKey, exercise.id);
-                
-                // Debug: Log what we're checking
-                console.log(`🔍 Checking ${exerciseData?.name}:`, {
-                  exerciseId: exercise.id,
-                  workoutKey,
-                  hasProgress: !!savedProgress,
-                  isSkipped: savedProgress?.skipped,
-                });
-                
-                const isSkipped = savedProgress?.skipped || false;
-                const completedSets = savedProgress?.sets.filter(set => set.completed).length || 0;
-                const totalSets = exercise.targetSets;
-                const isFullyCompleted = (completedSets === totalSets && totalSets > 0) || isSkipped;
-                const isCurrentlyInProgress = exercise.id === inProgressExerciseId;
-                const exerciseCompletionPercentage = totalSets > 0 ? Math.round((completedSets / totalSets) * 100) : 0;
-                
-                // Check if any other exercise is in progress
-                const isAnyExerciseInProgress = workout.exercises.some((ex, idx) => {
-                  if (idx === index) return false; // Don't check current exercise
-                  const prog = getExerciseProgress(workoutKey, ex.id);
-                  if (prog?.skipped) return false; // Skipped exercises don't block others
-                  const completed = prog?.sets.filter(set => set.completed).length || 0;
-                  const total = ex.targetSets;
-                  return completed > 0 && completed < total;
-                });
-                
-                const isDisabled = isAnyExerciseInProgress && !isCurrentlyInProgress && !isFullyCompleted;
-                
-                const handleExerciseTap = () => {
-                  if (isDisabled && !isSkipped) return;
-                  
-                  // If exercise is skipped, show dialog to activate it
-                  if (isSkipped) {
-                    Alert.alert(
-                      t('reactivateExerciseTitle'),
-                      t('reactivateExerciseMessage').replace(
-                        '{name}',
-                        exerciseData?.name || t('unknownExercise')
-                      ),
-                      [
-                        {
-                          text: t('cancel'),
-                          style: 'cancel',
-                        },
-                        {
-                          text: t('reactivate'),
-                          onPress: async () => {
-                            console.log('🔄 Reactivating exercise:', exercise.id);
-                            // Clear the entire progress for this exercise to reset it
-                            const allProgress = useStore.getState().detailedWorkoutProgress;
-                            const currentProgress = allProgress[workoutKey];
-                            if (currentProgress) {
-                              const { [exercise.id]: _, ...remainingExercises } = currentProgress.exercises;
-                              const updatedProgress = {
-                                ...currentProgress,
-                                exercises: remainingExercises,
-                                lastUpdated: new Date().toISOString(),
-                              };
-                              const newDetailedProgress = {
-                                ...allProgress,
-                                [workoutKey]: updatedProgress,
-                              };
-                              useStore.setState({ detailedWorkoutProgress: newDetailedProgress });
-                              await storage.saveDetailedWorkoutProgress(newDetailedProgress);
-                            }
-                            console.log('✅ Exercise reactivated');
-                          },
-                        },
-                      ]
-                    );
-                    return;
-                  }
-                  
-                  // Normal navigation for non-skipped exercises
-                  setCurrentExerciseIndex(index);
-                  navigation.navigate('ExerciseDetail', {
-                    exercise,
-                    exerciseName: exerciseData?.name || t('unknownExercise'),
-                    workoutName: workout.name,
-                    workoutKey: `${workoutTemplateId}-${date}`,
-                    cycleId,
-                    workoutTemplateId,
-                  });
-                };
-                
-                return (
-                  <React.Fragment key={exercise.id}>
-                    {/* Skipped Section Header */}
-                    {showSkippedHeader && (
-                      <View style={styles.sectionHeader}>
-                        <Text style={styles.sectionHeaderText}>{t('skipped')}</Text>
-                      </View>
-                    )}
-                    
-                    {/* Exercise Card */}
-                    <View style={styles.exerciseCardWrapper}>
-                      <View style={
-                        isSkipped ? CARDS.cardDeepDisabled.outer : isCurrentlyInProgress ? CARDS.cardDeep.outer : CARDS.cardDeepDimmed.outer
-                      }>
-                            <TouchableOpacity
-                          style={[
-                            isSkipped ? { ...CARDS.cardDeepDisabled.inner, ...styles.exerciseCardInnerBase } : 
-                            isCurrentlyInProgress ? { ...CARDS.cardDeep.inner, ...styles.exerciseCardInnerBase } : 
-                            { ...CARDS.cardDeepDimmed.inner, ...styles.exerciseCardInnerBase }
-                          ]}
-                              onPress={handleExerciseTap}
-                              activeOpacity={1}
-                              disabled={isDisabled && !isSkipped}
-                            >
-                              <View style={styles.exerciseInfo}>
-                                <View style={styles.exerciseNameContainer}>
-                              <Text style={[styles.exerciseName, isSkipped && styles.exerciseNameSkipped]}>
-                                    {exerciseData?.name || 'Unknown Exercise'}
-                                  </Text>
-                                  {exercise.cycleId && exercise.cycleOrder !== undefined && (
-                                    <View style={styles.cycleBadge}>
-                                      <Text style={styles.cycleBadgeText}>
-                                        {String.fromCharCode(65 + exercise.cycleOrder)}
-                                      </Text>
-                                    </View>
-                                  )}
-                                </View>
-                                {exercise.cycleId && (
-                                  <Text style={styles.cycleHintText}>{t('partOfCycle')}</Text>
-                                )}
-                              </View>
-                              {isSkipped ? (
-                                <View style={styles.exerciseCheckIcon}>
-                              <IconRestart size={24} color={COLORS.text} />
-                                </View>
-                              ) : isFullyCompleted ? (
-                                <View style={styles.exerciseCheckIcon}>
-                                  <IconCheck size={24} color={COLORS.signalPositive} />
-                                </View>
-                              ) : (
-                                <View style={styles.exerciseStatusContainer}>
-                                  {isCurrentlyInProgress && exerciseCompletionPercentage > 0 && (
-                                    <Text style={styles.inProgressLabel}>{exerciseCompletionPercentage}%</Text>
-                                  )}
-                                  <IconPlay size={10} color={isCurrentlyInProgress ? COLORS.accentPrimary : COLORS.textMeta} />
-                                </View>
-                              )}
-                            </TouchableOpacity>
-                      </View>
-                    </View>
-                  </React.Fragment>
-                );
-              });
-            })()}
-          </View>
-          
-          {/* Accessories Section */}
-          {template?.accessoryItems && template.accessoryItems.length > 0 && (() => {
-            const accessoryCompletion = { percentage: 0, completedCount: 0, totalCount: 0 }; // TODO: implement getAccessoryCompletion
-            const allComplete = accessoryCompletion.percentage === 100;
+            )}
             
-            // Check if any exercise has been started
-            const isAnyExerciseStarted = workout?.exercises.some(ex => {
-              const progress = getExerciseProgress(workoutKey, ex.id);
-              return progress?.sets.some(set => set.completed) || false;
-            }) || false;
-            
-            return (
-              <View style={styles.accessorySection}>
-                <TouchableOpacity
-                  style={[
-                    styles.accessoryCard, 
-                    allComplete && styles.accessoryCardComplete,
-                    isAnyExerciseStarted && styles.accessoryCardDisabled
-                  ]}
-                  onPress={() => {
-                    if (isAnyExerciseStarted) return;
-                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                    (navigation as any).navigate('AccessoriesExecution', { 
-                      workoutKey, 
-                      workoutTemplateId 
-                    });
-                  }}
-                  activeOpacity={1}
-                  disabled={isAnyExerciseStarted}
-                >
-                  <View style={styles.accessoryCardContent}>
-                    <Text style={[styles.accessoryCardTitle, isAnyExerciseStarted && styles.accessoryCardTitleDisabled]}>{t('core')}</Text>
-                    {!isAnyExerciseStarted && <Text style={styles.accessoryStartText}>{t('start')}</Text>}
-                  </View>
-                </TouchableOpacity>
-              </View>
-            );
-          })()}
-          
-          {/* Add Accessories Button (when no accessories exist) */}
-          {template && (!template.accessoryItems || template.accessoryItems.length === 0) && (
-            <View style={styles.accessorySection}>
+            {/* Main Workout Card */}
+            {template?.items && template.items.length > 0 && (
               <TouchableOpacity
-                style={styles.addAccessoryButton}
+                style={styles.summaryCard}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  (navigation as any).navigate('ExerciseExecution', { 
+                    workoutKey, 
+                    workoutTemplateId,
+                    type: 'main'
+                  });
+                }}
+                activeOpacity={0.7}
+              >
+                <View style={styles.summaryCardContent}>
+                  <Text style={styles.summaryCardTitle}>{workout?.name || template.name}</Text>
+                  <Text style={styles.summaryCardSubtitle}>
+                    {template.items.length} {template.items.length === 1 ? 'exercise' : 'exercises'}
+                  </Text>
+                </View>
+                <Text style={styles.summaryCardAction}>{t('start')}</Text>
+              </TouchableOpacity>
+            )}
+            
+            {/* Core Card */}
+            {template?.accessoryItems && template.accessoryItems.length > 0 ? (
+              <TouchableOpacity
+                style={styles.summaryCard}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  (navigation as any).navigate('ExerciseExecution', { 
+                    workoutKey, 
+                    workoutTemplateId,
+                    type: 'core'
+                  });
+                }}
+                activeOpacity={0.7}
+              >
+                <View style={styles.summaryCardContent}>
+                  <Text style={styles.summaryCardTitle}>{t('core')}</Text>
+                  <Text style={styles.summaryCardSubtitle}>
+                    {template.accessoryItems.length} {template.accessoryItems.length === 1 ? 'exercise' : 'exercises'}
+                  </Text>
+                </View>
+                <Text style={styles.summaryCardAction}>{t('start')}</Text>
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity
+                style={styles.addCardButton}
                 onPress={() => {
                   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                   (navigation as any).navigate('AccessoriesEditor', { templateId: workoutTemplateId });
                 }}
-                activeOpacity={1}
+                activeOpacity={0.7}
               >
                 <IconAdd size={20} color={COLORS.text} />
-                <Text style={styles.addAccessoryText}>{t('core')}</Text>
+                <Text style={styles.addCardText}>{t('core')}</Text>
               </TouchableOpacity>
-            </View>
-          )}
+            )}
+            
+          </View>
+            {(() => {
         </ScrollView>
         
       
@@ -1196,12 +969,51 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingHorizontal: 24,
-    paddingBottom: 100, // Extra padding for fixed Add Exercise button
+    paddingBottom: 100,
     paddingTop: SPACING.md,
   },
-  exercisesList: {
-    backgroundColor: 'transparent',
-    gap: 12, // Space between cards
+  // Summary Cards
+  summaryCardsContainer: {
+    gap: SPACING.lg,
+  },
+  summaryCard: {
+    ...CARDS.cardDeep.outer,
+    padding: SPACING.lg,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  summaryCardContent: {
+    flex: 1,
+  },
+  summaryCardTitle: {
+    ...TYPOGRAPHY.bodyBold,
+    color: COLORS.text,
+    marginBottom: 4,
+  },
+  summaryCardSubtitle: {
+    ...TYPOGRAPHY.meta,
+    color: COLORS.textMeta,
+  },
+  summaryCardAction: {
+    ...TYPOGRAPHY.metaBold,
+    color: COLORS.accentPrimary,
+    marginLeft: SPACING.md,
+  },
+  addCardButton: {
+    height: 56,
+    borderRadius: BORDER_RADIUS.lg,
+    borderWidth: 2,
+    borderColor: COLORS.borderDimmed,
+    borderStyle: 'dashed',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: SPACING.sm,
+  },
+  addCardText: {
+    ...TYPOGRAPHY.metaBold,
+    color: COLORS.text,
   },
   warmupSection: {
     marginBottom: SPACING.xxxl,

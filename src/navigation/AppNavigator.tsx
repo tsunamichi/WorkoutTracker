@@ -12,6 +12,7 @@ import { WarmupEditorScreen } from '../screens/WarmupEditorScreen';
 import { WarmupExecutionScreen } from '../screens/WarmupExecutionScreen';
 import { AccessoriesEditorScreen } from '../screens/AccessoriesEditorScreen';
 import { AccessoriesExecutionScreen } from '../screens/AccessoriesExecutionScreen';
+import { ExerciseExecutionScreen } from '../screens/ExerciseExecutionScreen';
 import { WorkoutsScreen } from '../screens/WorkoutsScreen';
 import { ProfileScreen } from '../screens/ProfileScreen';
 import { BodyWeightHistoryScreen } from '../screens/BodyWeightHistoryScreen';
@@ -63,6 +64,7 @@ export type RootStackParamList = {
   WarmupExecution: { workoutKey: string; workoutTemplateId: string };
   AccessoriesEditor: { templateId: string };
   AccessoriesExecution: { workoutKey: string; workoutTemplateId: string };
+  ExerciseExecution: { workoutKey: string; workoutTemplateId: string; type: 'warmup' | 'main' | 'core' };
   DesignSystem: undefined;
   CycleDetail: { cycleId: string };
   CycleConflicts: { plan: any; conflicts: any[]; planId?: string };
@@ -924,6 +926,7 @@ export default function AppNavigator() {
         <Stack.Screen name="WarmupExecution" component={WarmupExecutionScreen} />
         <Stack.Screen name="AccessoriesEditor" component={AccessoriesEditorScreen} />
         <Stack.Screen name="AccessoriesExecution" component={AccessoriesExecutionScreen} />
+        <Stack.Screen name="ExerciseExecution" component={ExerciseExecutionScreen} />
         <Stack.Screen name="DesignSystem" component={DesignSystemScreen} />
         <Stack.Screen name="CycleDetail" component={CycleDetailScreen} />
         <Stack.Screen name="CycleConflicts" component={CycleConflictsScreen} />
