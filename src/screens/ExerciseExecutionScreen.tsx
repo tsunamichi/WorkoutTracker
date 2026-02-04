@@ -1005,7 +1005,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   startButtonText: {
-    ...TYPOGRAPHY.meta,
+    ...TYPOGRAPHY.metaBold,
     color: '#FFFFFF',
   },
   adjustmentDrawerContent: {
