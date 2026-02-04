@@ -509,7 +509,7 @@ export function ExerciseExecutionScreen() {
                                         )}
                                       </View>
                                       
-                                      <View style={styles.checkIconContainer}>
+                                      <View style={styles.editIconContainer}>
                                         <IconEdit size={20} color={COLORS.textMeta} />
                                       </View>
                                     </View>
@@ -781,9 +781,10 @@ const styles = StyleSheet.create({
     gap: 24,
   },
   itemRow: {
+    width: '100%',
     flexDirection: 'row',
-    gap: 12,
-    alignItems: 'flex-start',
+    alignItems: 'center',
+    gap: 16,
   },
   exerciseCardsColumn: {
     flex: 1,
@@ -796,58 +797,51 @@ const styles = StyleSheet.create({
   },
   itemCard: {
     ...CARDS.cardDeep.outer,
-    backgroundColor: COLORS.activeCard,
+    borderWidth: 2,
+    borderColor: COLORS.accentPrimary,
   },
   itemCardInner: {
     ...CARDS.cardDeep.inner,
-    backgroundColor: COLORS.activeCard,
   },
   itemCardInactive: {
     ...CARDS.cardDeep.outer,
-    backgroundColor: COLORS.activeCard,
-    opacity: 0.5,
   },
   itemCardInnerInactive: {
     ...CARDS.cardDeep.inner,
-    backgroundColor: COLORS.activeCard,
   },
   itemCardDimmed: {
-    ...CARDS.cardDeep.outer,
-    backgroundColor: COLORS.activeCard,
-    opacity: 0.4,
+    ...CARDS.cardDeepDimmed.outer,
   },
   itemCardInnerDimmed: {
-    ...CARDS.cardDeep.inner,
-    backgroundColor: COLORS.activeCard,
+    ...CARDS.cardDeepDimmed.inner,
   },
   itemCardExpanded: {
-    gap: 12,
+    padding: 16,
   },
   exerciseNameInCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    marginBottom: 4,
   },
   exerciseNameInCardCentered: {
-    justifyContent: 'center',
+    marginBottom: 0,
   },
   exerciseNameRowWithIcon: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: 8,
+    marginBottom: 0,
   },
   exerciseNameText: {
-    ...TYPOGRAPHY.body,
+    ...TYPOGRAPHY.meta,
     color: COLORS.textMeta,
-    flex: 1,
   },
   exerciseNameTextActive: {
-    ...TYPOGRAPHY.h3,
     color: COLORS.text,
   },
   checkIconContainer: {
-    flexShrink: 0,
+    marginLeft: SPACING.md,
+  },
+  editIconContainer: {
+    marginLeft: SPACING.md,
   },
   valuesDisplayRow: {
     flexDirection: 'row',
@@ -857,7 +851,8 @@ const styles = StyleSheet.create({
   },
   valuesDisplayLeft: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'baseline',
+    flex: 1,
     gap: 24,
   },
   valueRow: {
@@ -866,22 +861,19 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   largeValue: {
-    fontSize: 32,
-    fontWeight: '600',
-    color: COLORS.text,
-    lineHeight: 38,
+    ...TYPOGRAPHY.h1,
+    color: '#000000',
   },
   unit: {
-    ...TYPOGRAPHY.caption,
+    ...TYPOGRAPHY.body,
     color: COLORS.textMeta,
   },
   roundIndicatorContainer: {
     flexDirection: 'column',
     alignItems: 'center',
     gap: 6,
-    paddingTop: 8,
+    paddingTop: 4,
     position: 'relative',
-    minWidth: 32,
   },
   roundCheckContainer: {
     position: 'absolute',
@@ -895,19 +887,25 @@ const styles = StyleSheet.create({
   roundDot: {
     width: 8,
     height: 8,
-    borderRadius: 4,
-    backgroundColor: COLORS.backgroundDisabled,
+    borderRadius: 2,
+    backgroundColor: COLORS.textMeta,
+    transform: [{ scale: 0.5 }],
   },
   roundDotCompleted: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
     backgroundColor: COLORS.text,
+    transform: [{ scale: 1 }],
   },
   roundDotActive: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
+    backgroundColor: 'transparent',
     borderWidth: 2,
     borderColor: COLORS.text,
-    backgroundColor: 'transparent',
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    transform: [{ scale: 1 }],
   },
   startButtonContainer: {
     position: 'absolute',
