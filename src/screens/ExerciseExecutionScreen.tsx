@@ -592,21 +592,21 @@ export function ExerciseExecutionScreen() {
                 
                 {/* Round Indicator - Dots on the right */}
                 <View style={styles.roundIndicatorContainer}>
-                  {Array.from({ length: group.totalRounds }).map((_, roundIndex) => (
-                    <View
-                      key={roundIndex}
-                      style={[
-                        styles.roundDot,
-                        roundIndex < currentRound && styles.roundDotCompleted,
-                        roundIndex === currentRound && !isCompleted && isExpanded && styles.roundDotActive,
-                      ]}
-                    />
-                  ))}
-                  
-                  {isCompleted && (
+                  {isCompleted ? (
                     <View style={styles.roundCheckContainer}>
                       <IconCheck size={24} color={COLORS.signalPositive} />
                     </View>
+                  ) : (
+                    Array.from({ length: group.totalRounds }).map((_, roundIndex) => (
+                      <View
+                        key={roundIndex}
+                        style={[
+                          styles.roundDot,
+                          roundIndex < currentRound && styles.roundDotCompleted,
+                          roundIndex === currentRound && isExpanded && styles.roundDotActive,
+                        ]}
+                      />
+                    ))
                   )}
                 </View>
               </View>
