@@ -151,9 +151,10 @@ export function ExerciseExecutionScreen() {
   const [isExerciseTimerPhase, setIsExerciseTimerPhase] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
   
-  // Sort groups to put expanded group first
+  // Sort groups to put active group first (only after logging first set)
   const sortedExerciseGroups = useMemo(() => {
-    if (expandedGroupIndex < 0 || expandedGroupIndex >= exerciseGroups.length) {
+    // Only reorder if user has logged at least one set
+    if (!hasLoggedAnySet || expandedGroupIndex < 0 || expandedGroupIndex >= exerciseGroups.length) {
       return exerciseGroups;
     }
     
@@ -161,7 +162,7 @@ export function ExerciseExecutionScreen() {
     const otherGroups = exerciseGroups.filter((_, idx) => idx !== expandedGroupIndex);
     
     return [expandedGroup, ...otherGroups];
-  }, [exerciseGroups, expandedGroupIndex]);
+  }, [exerciseGroups, expandedGroupIndex, hasLoggedAnySet]);
   
   // Map to track original indices for group IDs
   const groupIdToOriginalIndex = useMemo(() => {
