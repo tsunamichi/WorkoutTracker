@@ -251,15 +251,33 @@ export function ProfileScreen({ navigation }: ProfileScreenProps) {
                 if (result) {
                   // Get more detailed info from the result
                   const store = useStore.getState();
-                  Alert.alert(
-                    'Storage Check',
-                    `Storage: ${result.allKeys.length} keys\n\n` +
-                    `App State:\n` +
+                  
+                  const storageInfo = `📦 STORAGE (${result.allKeys.length} keys):\n` +
+                    `- Sessions: ${result.sessionsCount}\n` +
+                    `- Templates: ${result.templatesCount}\n` +
+                    `- Plans: ${result.plansCount}\n` +
+                    `- Progress: ${result.progressCount} workouts\n\n`;
+                  
+                  const appInfo = `📱 APP STATE:\n` +
                     `- Sessions: ${store.sessions?.length || 0}\n` +
                     `- Templates: ${store.workoutTemplates?.length || 0}\n` +
                     `- Plans: ${store.cyclePlans?.length || 0}\n` +
-                    `- Scheduled: ${store.scheduledWorkouts?.length || 0}\n\n` +
-                    `Check console for full details.`,
+                    `- Scheduled: ${store.scheduledWorkouts?.length || 0}\n\n`;
+                  
+                  const keysList = `🔑 KEYS:\n${result.allKeys.map(k => {
+                    const shortKey = k.replace('@workout_tracker_', '');
+                    const info = result.keySummary[k];
+                    if (info?.type === 'array') {
+                      return `- ${shortKey}: ${info.count} items`;
+                    } else if (info?.type === 'object') {
+                      return `- ${shortKey}: ${info.keys} keys`;
+                    }
+                    return `- ${shortKey}`;
+                  }).join('\n')}`;
+                  
+                  Alert.alert(
+                    'Storage Debug Info',
+                    storageInfo + appInfo + keysList,
                     [{ text: 'OK' }]
                   );
                 }
