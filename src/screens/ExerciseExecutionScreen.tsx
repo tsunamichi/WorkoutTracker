@@ -635,20 +635,26 @@ export function ExerciseExecutionScreen() {
                 {/* Round Indicator - Dots on the right */}
                 <View style={styles.roundIndicatorContainer}>
                   {isCompleted ? (
-                    <View style={styles.roundCheckContainer}>
-                      <IconCheck size={24} color={COLORS.signalPositive} />
-                    </View>
+                    <IconCheck size={20} color={COLORS.text} />
                   ) : (
-                    Array.from({ length: group.totalRounds }).map((_, roundIndex) => (
-                      <View
-                        key={roundIndex}
-                        style={[
-                          styles.roundDot,
-                          roundIndex < currentRound && styles.roundDotCompleted,
-                          roundIndex === currentRound && isExpanded && styles.roundDotActive,
-                        ]}
-                      />
-                    ))
+                    Array.from({ length: group.totalRounds }).map((_, roundIndex) => {
+                      const isRoundCompleted = roundIndex < currentRound;
+                      const isRoundActive = roundIndex === currentRound && isExpanded;
+                      
+                      if (isRoundCompleted) {
+                        return <IconCheck key={roundIndex} size={20} color={COLORS.text} />;
+                      }
+                      
+                      return (
+                        <View
+                          key={roundIndex}
+                          style={[
+                            styles.roundDot,
+                            isRoundActive && styles.roundDotActive,
+                          ]}
+                        />
+                      );
+                    })
                   )}
                 </View>
               </View>
@@ -1030,37 +1036,17 @@ const styles = StyleSheet.create({
     paddingTop: 4,
     position: 'relative',
   },
-  roundCheckContainer: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   roundDot: {
     width: 8,
     height: 8,
-    borderRadius: 2,
-    backgroundColor: COLORS.textMeta,
-    transform: [{ scale: 0.5 }],
-  },
-  roundDotCompleted: {
-    width: 8,
-    height: 8,
     borderRadius: 4,
-    backgroundColor: COLORS.text,
-    transform: [{ scale: 1 }],
+    backgroundColor: COLORS.textMeta,
   },
   roundDotActive: {
-    backgroundColor: 'transparent',
-    borderWidth: 2,
-    borderColor: COLORS.text,
     width: 8,
     height: 8,
     borderRadius: 4,
-    transform: [{ scale: 1 }],
+    backgroundColor: COLORS.accentPrimary,
   },
   startButtonContainer: {
     position: 'absolute',
