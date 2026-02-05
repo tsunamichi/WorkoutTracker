@@ -1039,7 +1039,7 @@ const styles = StyleSheet.create({
   roundIndicatorContainer: {
     flexDirection: 'column',
     alignItems: 'center',
-    gap: 6,
+    gap: 2,
     paddingTop: 4,
     position: 'relative',
     width: 16,
