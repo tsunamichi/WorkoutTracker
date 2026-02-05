@@ -1042,6 +1042,7 @@ const styles = StyleSheet.create({
     gap: 6,
     paddingTop: 4,
     position: 'relative',
+    width: 16,
   },
   roundDot: {
     width: 6,
