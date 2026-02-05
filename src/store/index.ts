@@ -7,6 +7,7 @@ import type { ProgressLog } from '../types/progress';
 import * as storage from '../storage';
 import { SEED_EXERCISES } from '../constants';
 import { kgToLbs } from '../utils/weight';
+import { cloudBackupService } from '../services/cloudBackup';
 
 dayjs.extend(isoWeek);
 
@@ -919,6 +920,13 @@ export const useStore = create<WorkoutStore>((set, get) => ({
         scheduledWorkouts: finalScheduledWorkouts,
         isLoading: false,
       });
+      
+      // Initialize cloud backup service (after data is loaded)
+      try {
+        await cloudBackupService.initialize();
+      } catch (error) {
+        console.error('Error initializing cloud backup:', error);
+      }
     } catch (error) {
       console.error('Error initializing store:', error);
       set({ isLoading: false });

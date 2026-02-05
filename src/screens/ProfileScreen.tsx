@@ -10,6 +10,7 @@ import { Toggle } from '../components/Toggle';
 import { useTranslation } from '../i18n/useTranslation';
 import { addFakeHistory } from '../utils/addFakeHistory';
 import { debugStorageContents, backupAllData } from '../utils/debugStorage';
+import { cloudBackupService } from '../services/cloudBackup';
 
 // Optional local notifications
 let Notifications: any = null;
@@ -28,6 +29,7 @@ export function ProfileScreen({ navigation }: ProfileScreenProps) {
   const { settings, updateSettings, clearAllHistory, initialize } = useStore();
   const [showRestTimePicker, setShowRestTimePicker] = useState(false);
   const [notificationsSystemEnabled, setNotificationsSystemEnabled] = useState<boolean | null>(null);
+  const [cloudBackupInfo, setCloudBackupInfo] = useState<{ exists: boolean; timestamp?: string } | null>(null);
   const { t, language } = useTranslation();
   const notificationsEnabled = settings.notificationsEnabled !== false;
 
@@ -45,6 +47,14 @@ export function ProfileScreen({ navigation }: ProfileScreenProps) {
       } catch (e) {
         setNotificationsSystemEnabled(null);
       }
+    })();
+  }, []);
+
+  useEffect(() => {
+    // Load cloud backup info
+    (async () => {
+      const info = await cloudBackupService.getBackupInfo();
+      setCloudBackupInfo(info);
     })();
   }, []);
 
@@ -240,6 +250,138 @@ export function ProfileScreen({ navigation }: ProfileScreenProps) {
             <IconTriangle size={16} color={COLORS.text} />
           </TouchableOpacity>
         )}
+
+        {/* iCloud Backup Section */}
+        <TouchableOpacity 
+          style={[styles.settingCard, styles.settingCardRow]}
+          onPress={async () => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            const info = await cloudBackupService.getBackupInfo();
+            const timestamp = info.timestamp 
+              ? new Date(info.timestamp).toLocaleString()
+              : 'Never';
+            
+            Alert.alert(
+              'iCloud Backup Status',
+              info.exists
+                ? `✅ Backup exists\n\nLast backup: ${timestamp}\n\nYour workout data is automatically backed up to iCloud every 5 minutes.`
+                : `No backup found\n\nBackups will start automatically. Your first backup will happen within 5 minutes.`,
+              [{ text: 'OK' }]
+            );
+          }}
+          activeOpacity={0.7}
+        >
+          <View style={styles.settingInfo}>
+            <Text style={styles.settingLabel}>
+              ☁️ iCloud Backup Status
+            </Text>
+            <Text style={styles.settingDescription}>
+              {cloudBackupInfo?.exists 
+                ? `Last backup: ${cloudBackupInfo.timestamp ? new Date(cloudBackupInfo.timestamp).toLocaleDateString() : 'Unknown'}`
+                : 'Automatic backup enabled'}
+            </Text>
+          </View>
+          <IconTriangle size={16} color={COLORS.text} />
+        </TouchableOpacity>
+
+        <TouchableOpacity 
+          style={[styles.settingCard, styles.settingCardRow]}
+          onPress={async () => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            Alert.alert(
+              'Backup to iCloud Now',
+              'Create a backup of all your workout data to iCloud?',
+              [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                  text: 'Backup Now',
+                  onPress: async () => {
+                    const result = await cloudBackupService.manualBackup();
+                    if (result.success) {
+                      const newInfo = await cloudBackupService.getBackupInfo();
+                      setCloudBackupInfo(newInfo);
+                      Alert.alert(
+                        'Success',
+                        'Your workout data has been backed up to iCloud!',
+                        [{ text: 'OK' }]
+                      );
+                    } else {
+                      Alert.alert(
+                        'Error',
+                        result.error || 'Failed to backup. Please try again.',
+                        [{ text: 'OK' }]
+                      );
+                    }
+                  }
+                }
+              ]
+            );
+          }}
+          activeOpacity={0.7}
+        >
+          <View style={styles.settingInfo}>
+            <Text style={styles.settingLabel}>☁️ Backup Now</Text>
+            <Text style={styles.settingDescription}>
+              Manually create an iCloud backup
+            </Text>
+          </View>
+          <IconTriangle size={16} color={COLORS.text} />
+        </TouchableOpacity>
+
+        <TouchableOpacity 
+          style={[styles.settingCard, styles.settingCardRow]}
+          onPress={async () => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            const hasBackup = await cloudBackupService.hasCloudBackup();
+            if (!hasBackup) {
+              Alert.alert(
+                'No Backup Found',
+                'There is no iCloud backup to restore from.',
+                [{ text: 'OK' }]
+              );
+              return;
+            }
+            
+            Alert.alert(
+              'Restore from iCloud',
+              'This will restore your workout data from your iCloud backup. Current data will be replaced.',
+              [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                  text: 'Restore',
+                  style: 'destructive',
+                  onPress: async () => {
+                    const result = await cloudBackupService.restoreFromCloud();
+                    if (result.success) {
+                      // Reload the store
+                      await initialize();
+                      Alert.alert(
+                        'Success',
+                        `Restored ${result.restoredKeys} items from iCloud backup!`,
+                        [{ text: 'OK' }]
+                      );
+                    } else {
+                      Alert.alert(
+                        'Error',
+                        result.error || 'Failed to restore. Please try again.',
+                        [{ text: 'OK' }]
+                      );
+                    }
+                  }
+                }
+              ]
+            );
+          }}
+          activeOpacity={0.7}
+        >
+          <View style={styles.settingInfo}>
+            <Text style={styles.settingLabel}>☁️ Restore from iCloud</Text>
+            <Text style={styles.settingDescription}>
+              Restore data from iCloud backup
+            </Text>
+          </View>
+          <IconTriangle size={16} color={COLORS.text} />
+        </TouchableOpacity>
 
         {/* Debug Storage - Available in all builds for data recovery */}
         <>
