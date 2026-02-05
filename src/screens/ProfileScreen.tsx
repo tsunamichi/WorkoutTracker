@@ -402,53 +402,19 @@ export function ProfileScreen({ navigation }: ProfileScreenProps) {
                       const scanResult = await scanForOldData();
                       console.log('Scan result:', scanResult);
                       
-                      if (scanResult.potentialOldKeys.length === 0) {
-                        Alert.alert(
-                          'No Old Data Found',
-                          'No workout data from old versions was found.',
-                          [{ text: 'OK' }]
-                        );
-                        return;
-                      }
-                      
-                      // Show what was found
+                      // Show ALL keys found
                       const keysList = scanResult.potentialOldKeys
                         .map(k => `- ${k.key}: ${k.preview}`)
                         .join('\n');
                       
+                      const sessionsText = scanResult.sessionsInfo
+                        ? `\n🎯 SESSIONS FOUND!\nKey: ${scanResult.sessionsInfo.key}\nCount: ${scanResult.sessionsInfo.count} workouts\n\n`
+                        : '\n❌ No sessions data found\n\n';
+                      
                       Alert.alert(
-                        'Old Data Found!',
-                        `Found ${scanResult.potentialOldKeys.length} old keys:\n\n${keysList.substring(0, 300)}`,
-                        [
-                          { text: 'Cancel', style: 'cancel' },
-                          {
-                            text: 'Migrate',
-                            onPress: async () => {
-                              const result = await migrateOldStorageKeys();
-                              if (result.success && result.migratedKeys.length > 0) {
-                                // Reload the app
-                                await initialize();
-                                Alert.alert(
-                                  'Success!',
-                                  `Migrated ${result.migratedKeys.length} keys from old version!\n\n${result.migratedKeys.join(', ')}\n\nYour history should now be restored.`,
-                                  [{ text: 'OK' }]
-                                );
-                              } else if (result.migratedKeys.length === 0) {
-                                Alert.alert(
-                                  'Already Migrated',
-                                  'Old data was found but it looks like it has already been migrated.',
-                                  [{ text: 'OK' }]
-                                );
-                              } else {
-                                Alert.alert(
-                                  'Error',
-                                  `Migration failed: ${result.errors.join(', ')}`,
-                                  [{ text: 'OK' }]
-                                );
-                              }
-                            }
-                          }
-                        ]
+                        'Storage Scan Results',
+                        `Total keys: ${scanResult.potentialOldKeys.length}\n${sessionsText}All keys:\n${keysList.substring(0, 500)}`,
+                        [{ text: 'OK' }]
                       );
                     } catch (error) {
                       Alert.alert(

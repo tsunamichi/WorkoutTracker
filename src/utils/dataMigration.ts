@@ -116,25 +116,27 @@ export async function migrateOldStorageKeys(): Promise<{
 }
 
 /**
- * Scan for ALL possible old keys (not just known ones)
+ * Scan ALL keys and show detailed info about sessions data
  */
 export async function scanForOldData(): Promise<{
   potentialOldKeys: Array<{ key: string; size: number; preview: string }>;
+  sessionsInfo: {
+    key: string;
+    count: number;
+    sample?: any;
+  } | null;
 }> {
   try {
-    console.log('🔍 Scanning for potential old data keys...');
+    console.log('🔍 Scanning ALL storage keys...');
     
     const allKeys = await AsyncStorage.getAllKeys();
     const newKeyPrefix = '@workout_tracker_';
     
-    // Find keys that don't start with the new prefix
+    // Check ALL keys and show their content
     const potentialOldKeys: Array<{ key: string; size: number; preview: string }> = [];
+    let sessionsInfo: { key: string; count: number; sample?: any } | null = null;
     
     for (const key of allKeys) {
-      if (key.startsWith(newKeyPrefix)) {
-        continue; // Skip new format keys
-      }
-      
       const value = await AsyncStorage.getItem(key);
       if (!value) {
         continue;
@@ -146,6 +148,20 @@ export async function scanForOldData(): Promise<{
         
         if (Array.isArray(parsed)) {
           preview = `Array with ${parsed.length} items`;
+          
+          // Special handling for sessions keys
+          if (key.includes('session') || key.includes('Session')) {
+            sessionsInfo = {
+              key,
+              count: parsed.length,
+              sample: parsed[0],
+            };
+            console.log(`🎯 FOUND SESSIONS DATA in ${key}:`, {
+              count: parsed.length,
+              sample: parsed[0],
+            });
+          }
+          
           if (parsed.length > 0 && parsed[0]) {
             preview += ` (first: ${JSON.stringify(parsed[0]).substring(0, 50)}...)`;
           }
@@ -164,21 +180,31 @@ export async function scanForOldData(): Promise<{
           size: value.length,
           preview,
         });
+        
+        console.log(`📦 ${key}:`, preview);
       } catch (e) {
         // Not JSON
+        const preview = value.substring(0, 100);
         potentialOldKeys.push({
           key,
           size: value.length,
-          preview: value.substring(0, 100),
+          preview,
         });
+        console.log(`📦 ${key}: Raw string (${value.length} bytes)`);
       }
     }
     
-    console.log(`Found ${potentialOldKeys.length} potential old keys:`, potentialOldKeys);
+    console.log(`\n📊 Summary:`);
+    console.log(`  Total keys: ${allKeys.length}`);
+    console.log(`  Keys with data: ${potentialOldKeys.length}`);
+    console.log(`  Sessions found: ${sessionsInfo ? 'YES' : 'NO'}`);
+    if (sessionsInfo) {
+      console.log(`  Sessions count: ${sessionsInfo.count}`);
+    }
     
-    return { potentialOldKeys };
+    return { potentialOldKeys, sessionsInfo };
   } catch (error) {
     console.error('Error scanning for old data:', error);
-    return { potentialOldKeys: [] };
+    return { potentialOldKeys: [], sessionsInfo: null };
   }
 }
