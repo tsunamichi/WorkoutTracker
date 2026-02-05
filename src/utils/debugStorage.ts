@@ -21,19 +21,28 @@ export async function debugStorageContents() {
       if (value) {
         const size = value.length;
         const sizeKB = (size / 1024).toFixed(2);
-        console.log(`  ${key}: ${sizeKB} KB`);
+        console.log(`\n📦 ${key}: ${sizeKB} KB`);
         
         // Show preview of data
         try {
           const parsed = JSON.parse(value);
           if (Array.isArray(parsed)) {
             console.log(`    -> Array with ${parsed.length} items`);
+            if (parsed.length > 0) {
+              console.log(`    -> First item preview:`, JSON.stringify(parsed[0], null, 2).substring(0, 200));
+            }
           } else if (typeof parsed === 'object') {
             const objKeys = Object.keys(parsed);
             console.log(`    -> Object with ${objKeys.length} keys`);
+            console.log(`    -> Keys:`, objKeys.slice(0, 5).join(', '));
+            if (objKeys.length > 0) {
+              console.log(`    -> First entry:`, JSON.stringify(parsed[objKeys[0]], null, 2).substring(0, 200));
+            }
+          } else {
+            console.log(`    -> Value:`, parsed);
           }
         } catch (e) {
-          console.log(`    -> Raw string data`);
+          console.log(`    -> Raw string data (first 100 chars):`, value.substring(0, 100));
         }
       }
     }

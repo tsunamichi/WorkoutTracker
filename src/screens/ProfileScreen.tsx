@@ -243,15 +243,23 @@ export function ProfileScreen({ navigation }: ProfileScreenProps) {
 
         {/* Debug Storage - Available in all builds for data recovery */}
         <>
-          <TouchableOpacity 
+            <TouchableOpacity 
               style={[styles.settingCard, styles.settingCardRow]}
               onPress={async () => {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                 const result = await debugStorageContents();
                 if (result) {
+                  // Get more detailed info from the result
+                  const store = useStore.getState();
                   Alert.alert(
-                    'Storage Check Complete',
-                    `Found ${result.allKeys.length} keys in storage.\nCheck console for details.`,
+                    'Storage Check',
+                    `Storage: ${result.allKeys.length} keys\n\n` +
+                    `App State:\n` +
+                    `- Sessions: ${store.sessions?.length || 0}\n` +
+                    `- Templates: ${store.workoutTemplates?.length || 0}\n` +
+                    `- Plans: ${store.cyclePlans?.length || 0}\n` +
+                    `- Scheduled: ${store.scheduledWorkouts?.length || 0}\n\n` +
+                    `Check console for full details.`,
                     [{ text: 'OK' }]
                   );
                 }
@@ -302,10 +310,26 @@ export function ProfileScreen({ navigation }: ProfileScreenProps) {
                       text: 'Reload',
                       onPress: async () => {
                         try {
+                          console.log('🔄 Starting force reload...');
                           await initialize();
+                          
+                          // Check what was loaded
+                          const store = useStore.getState();
+                          console.log('✅ Reload complete. Current state:');
+                          console.log(`  - Sessions: ${store.sessions?.length || 0}`);
+                          console.log(`  - Workout Templates: ${store.workoutTemplates?.length || 0}`);
+                          console.log(`  - Cycle Plans: ${store.cyclePlans?.length || 0}`);
+                          console.log(`  - Scheduled Workouts: ${store.scheduledWorkouts?.length || 0}`);
+                          console.log(`  - Exercises: ${store.exercises?.length || 0}`);
+                          
                           Alert.alert(
                             'Success',
-                            'All data has been reloaded from storage!',
+                            `Data reloaded!\n\n` +
+                            `Sessions: ${store.sessions?.length || 0}\n` +
+                            `Templates: ${store.workoutTemplates?.length || 0}\n` +
+                            `Plans: ${store.cyclePlans?.length || 0}\n` +
+                            `Scheduled: ${store.scheduledWorkouts?.length || 0}\n\n` +
+                            `Check console for details.`,
                             [{ text: 'OK' }]
                           );
                         } catch (error) {
@@ -314,7 +338,7 @@ export function ProfileScreen({ navigation }: ProfileScreenProps) {
                             'Failed to reload data. Check console for details.',
                             [{ text: 'OK' }]
                           );
-                          console.error('Error reloading data:', error);
+                          console.error('❌ Error reloading data:', error);
                         }
                       }
                     }
