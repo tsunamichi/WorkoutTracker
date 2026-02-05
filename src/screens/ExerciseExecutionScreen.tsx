@@ -5,7 +5,7 @@ import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import * as Haptics from 'expo-haptics';
 import { useStore } from '../store';
 import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS, CARDS } from '../constants';
-import { IconArrowLeft, IconCheck, IconCheckmark, IconAddLine, IconMinusLine, IconTrash, IconEdit, IconMenu, IconHistory, IconRestart, IconSkip } from '../components/icons';
+import { IconArrowLeft, IconCheck, IconCheckmark, IconTriangle, IconAddLine, IconMinusLine, IconTrash, IconEdit, IconMenu, IconHistory, IconRestart, IconSkip } from '../components/icons';
 import { BottomDrawer } from '../components/common/BottomDrawer';
 import { SetTimerSheet } from '../components/timer/SetTimerSheet';
 import { ActionSheet } from '../components/common/ActionSheet';
@@ -635,23 +635,26 @@ export function ExerciseExecutionScreen() {
                 {/* Round Indicator - Dots on the right */}
                 <View style={styles.roundIndicatorContainer}>
                   {isCompleted ? (
-                    <IconCheckmark size={16} color={COLORS.text} />
+                    <IconCheckmark size={8} color="#000000" />
                   ) : (
                     Array.from({ length: group.totalRounds }).map((_, roundIndex) => {
                       const isRoundCompleted = roundIndex < currentRound;
                       const isRoundActive = roundIndex === currentRound && isExpanded;
                       
                       if (isRoundCompleted) {
-                        return <IconCheckmark key={roundIndex} size={16} color={COLORS.text} />;
+                        return <IconCheckmark key={roundIndex} size={8} color="#000000" />;
+                      }
+                      
+                      if (isRoundActive) {
+                        return (
+                          <View key={roundIndex} style={styles.activeTriangle} />
+                        );
                       }
                       
                       return (
                         <View
                           key={roundIndex}
-                          style={[
-                            styles.roundDot,
-                            isRoundActive && styles.roundDotActive,
-                          ]}
+                          style={styles.roundDot}
                         />
                       );
                     })
@@ -1042,11 +1045,19 @@ const styles = StyleSheet.create({
     borderRadius: 2,
     backgroundColor: COLORS.textMeta,
   },
-  roundDotActive: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: COLORS.accentPrimary,
+  activeTriangle: {
+    width: 0,
+    height: 0,
+    backgroundColor: 'transparent',
+    borderStyle: 'solid',
+    borderLeftWidth: 4,
+    borderRightWidth: 0,
+    borderTopWidth: 4,
+    borderBottomWidth: 4,
+    borderLeftColor: COLORS.accentPrimary,
+    borderRightColor: 'transparent',
+    borderTopColor: 'transparent',
+    borderBottomColor: 'transparent',
   },
   startButtonContainer: {
     position: 'absolute',
