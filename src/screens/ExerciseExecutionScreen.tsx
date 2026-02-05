@@ -145,24 +145,40 @@ export function ExerciseExecutionScreen() {
   const [completedSets, setCompletedSets] = useState<Set<string>>(new Set());
   const [activeExerciseIndex, setActiveExerciseIndex] = useState(0); // Start with first exercise when group is expanded
   const [hasLoggedAnySet, setHasLoggedAnySet] = useState(false); // Track if any set has been logged
+  const [completionTimestamps, setCompletionTimestamps] = useState<Record<string, number>>({}); // Track when groups were completed
   const [localValues, setLocalValues] = useState<Record<string, { weight: number; reps: number }>>({});
   const [showAdjustmentDrawer, setShowAdjustmentDrawer] = useState(false);
   const [showTimer, setShowTimer] = useState(false);
   const [isExerciseTimerPhase, setIsExerciseTimerPhase] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
   
-  // Sort groups to put active group first (only after logging first set)
+  // Sort groups: completed first (by completion order), then active, then remaining
   const sortedExerciseGroups = useMemo(() => {
-    // Only reorder if user has logged at least one set
-    if (!hasLoggedAnySet || expandedGroupIndex < 0 || expandedGroupIndex >= exerciseGroups.length) {
-      return exerciseGroups;
+    const groupsWithInfo = exerciseGroups.map((group, index) => {
+      const currentRound = currentRounds[group.id] || 0;
+      const isCompleted = currentRound >= group.totalRounds;
+      const completionTime = completionTimestamps[group.id] || 0;
+      return { group, index, isCompleted, completionTime };
+    });
+    
+    // Separate into completed and incomplete
+    const completed = groupsWithInfo.filter(g => g.isCompleted);
+    const incomplete = groupsWithInfo.filter(g => !g.isCompleted);
+    
+    // Sort completed by completion time
+    completed.sort((a, b) => a.completionTime - b.completionTime);
+    
+    // For incomplete, put active group first (only after logging first set)
+    let sortedIncomplete = incomplete;
+    if (hasLoggedAnySet && expandedGroupIndex >= 0) {
+      const activeGroup = incomplete.find(g => g.index === expandedGroupIndex);
+      const others = incomplete.filter(g => g.index !== expandedGroupIndex);
+      sortedIncomplete = activeGroup ? [activeGroup, ...others] : incomplete;
     }
     
-    const expandedGroup = exerciseGroups[expandedGroupIndex];
-    const otherGroups = exerciseGroups.filter((_, idx) => idx !== expandedGroupIndex);
-    
-    return [expandedGroup, ...otherGroups];
-  }, [exerciseGroups, expandedGroupIndex, hasLoggedAnySet]);
+    // Combine: completed first, then incomplete
+    return [...completed.map(g => g.group), ...sortedIncomplete.map(g => g.group)];
+  }, [exerciseGroups, expandedGroupIndex, hasLoggedAnySet, currentRounds, completionTimestamps]);
   
   // Map to track original indices for group IDs
   const groupIdToOriginalIndex = useMemo(() => {
@@ -373,11 +389,19 @@ export function ExerciseExecutionScreen() {
       setCurrentRounds(prev => ({ ...prev, [currentGroup.id]: nextRound }));
       
       if (nextRound >= currentGroup.totalRounds) {
-        // This group is complete
-        const nextGroupIndex = expandedGroupIndex + 1;
-        if (nextGroupIndex < exerciseGroups.length) {
+        // This group is complete - record completion timestamp
+        setCompletionTimestamps(prev => ({ ...prev, [currentGroup.id]: Date.now() }));
+        
+        // Find the next incomplete group in the original order
+        const nextIncompleteIndex = exerciseGroups.findIndex((group, idx) => {
+          if (idx <= expandedGroupIndex) return false; // Must be after current
+          const rounds = currentRounds[group.id] || 0;
+          return rounds < group.totalRounds;
+        });
+        
+        if (nextIncompleteIndex >= 0) {
           LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-          setExpandedGroupIndex(nextGroupIndex);
+          setExpandedGroupIndex(nextIncompleteIndex);
           setActiveExerciseIndex(0);
         } else {
           // All done!
