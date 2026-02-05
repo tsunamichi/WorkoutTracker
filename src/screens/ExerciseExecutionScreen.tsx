@@ -635,9 +635,7 @@ export function ExerciseExecutionScreen() {
                 {/* Round Indicator - Dots on the right */}
                 <View style={styles.roundIndicatorContainer}>
                   {isCompleted ? (
-                    <View style={styles.completedCircle}>
-                      <IconCheckmark size={5} color="#FFFFFF" />
-                    </View>
+                    <View style={styles.completedCircle} />
                   ) : (
                     Array.from({ length: group.totalRounds }).map((_, roundIndex) => {
                       const isRoundCompleted = roundIndex < currentRound;
@@ -645,9 +643,7 @@ export function ExerciseExecutionScreen() {
                       
                       if (isRoundCompleted) {
                         return (
-                          <View key={roundIndex} style={styles.completedCircle}>
-                            <IconCheckmark size={5} color="#FFFFFF" />
-                          </View>
+                          <View key={roundIndex} style={styles.completedCircle} />
                         );
                       }
                       
