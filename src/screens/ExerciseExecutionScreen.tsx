@@ -635,7 +635,7 @@ export function ExerciseExecutionScreen() {
                 {/* Round Indicator - Dots on the right */}
                 <View style={styles.roundIndicatorContainer}>
                   {isCompleted ? (
-                    <View style={styles.completedCircle} />
+                    <IconCheckmark size={12} color={COLORS.text} />
                   ) : (
                     Array.from({ length: group.totalRounds }).map((_, roundIndex) => {
                       const isRoundCompleted = roundIndex < currentRound;
@@ -643,7 +643,7 @@ export function ExerciseExecutionScreen() {
                       
                       if (isRoundCompleted) {
                         return (
-                          <View key={roundIndex} style={styles.completedCircle} />
+                          <IconCheckmark key={roundIndex} size={12} color={COLORS.text} />
                         );
                       }
                       
@@ -1049,14 +1049,6 @@ const styles = StyleSheet.create({
     backgroundColor: 'transparent',
     borderWidth: 1,
     borderColor: COLORS.text,
-  },
-  completedCircle: {
-    width: 4,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: COLORS.text,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   activeDot: {
     width: 8,
