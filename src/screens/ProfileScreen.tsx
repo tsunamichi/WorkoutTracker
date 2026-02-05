@@ -11,6 +11,7 @@ import { useTranslation } from '../i18n/useTranslation';
 import { addFakeHistory } from '../utils/addFakeHistory';
 import { debugStorageContents, backupAllData } from '../utils/debugStorage';
 import { cloudBackupService } from '../services/cloudBackup';
+import { migrateOldStorageKeys, scanForOldData } from '../utils/dataMigration';
 
 // Optional local notifications
 let Notifications: any = null;
@@ -383,9 +384,98 @@ export function ProfileScreen({ navigation }: ProfileScreenProps) {
           <IconTriangle size={16} color={COLORS.text} />
         </TouchableOpacity>
 
+        {/* Data Recovery - Migration from old versions */}
+        <TouchableOpacity 
+          style={[styles.settingCard, styles.settingCardRow]}
+          onPress={async () => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            Alert.alert(
+              'Recover Old Data',
+              'This will scan for workout data from older app versions and migrate it to the new format.',
+              [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                  text: 'Scan & Migrate',
+                  onPress: async () => {
+                    try {
+                      // First scan for old data
+                      const scanResult = await scanForOldData();
+                      console.log('Scan result:', scanResult);
+                      
+                      if (scanResult.potentialOldKeys.length === 0) {
+                        Alert.alert(
+                          'No Old Data Found',
+                          'No workout data from old versions was found.',
+                          [{ text: 'OK' }]
+                        );
+                        return;
+                      }
+                      
+                      // Show what was found
+                      const keysList = scanResult.potentialOldKeys
+                        .map(k => `- ${k.key}: ${k.preview}`)
+                        .join('\n');
+                      
+                      Alert.alert(
+                        'Old Data Found!',
+                        `Found ${scanResult.potentialOldKeys.length} old keys:\n\n${keysList.substring(0, 300)}`,
+                        [
+                          { text: 'Cancel', style: 'cancel' },
+                          {
+                            text: 'Migrate',
+                            onPress: async () => {
+                              const result = await migrateOldStorageKeys();
+                              if (result.success && result.migratedKeys.length > 0) {
+                                // Reload the app
+                                await initialize();
+                                Alert.alert(
+                                  'Success!',
+                                  `Migrated ${result.migratedKeys.length} keys from old version!\n\n${result.migratedKeys.join(', ')}\n\nYour history should now be restored.`,
+                                  [{ text: 'OK' }]
+                                );
+                              } else if (result.migratedKeys.length === 0) {
+                                Alert.alert(
+                                  'Already Migrated',
+                                  'Old data was found but it looks like it has already been migrated.',
+                                  [{ text: 'OK' }]
+                                );
+                              } else {
+                                Alert.alert(
+                                  'Error',
+                                  `Migration failed: ${result.errors.join(', ')}`,
+                                  [{ text: 'OK' }]
+                                );
+                              }
+                            }
+                          }
+                        ]
+                      );
+                    } catch (error) {
+                      Alert.alert(
+                        'Error',
+                        `Failed to scan for old data: ${error}`,
+                        [{ text: 'OK' }]
+                      );
+                    }
+                  }
+                }
+              ]
+            );
+          }}
+          activeOpacity={0.7}
+        >
+          <View style={styles.settingInfo}>
+            <Text style={styles.settingLabel}>🔄 Recover Old Data</Text>
+            <Text style={styles.settingDescription}>
+              Migrate workout data from older app versions
+            </Text>
+          </View>
+          <IconTriangle size={16} color={COLORS.text} />
+        </TouchableOpacity>
+
         {/* Debug Storage - Available in all builds for data recovery */}
         <>
-            <TouchableOpacity 
+          <TouchableOpacity
               style={[styles.settingCard, styles.settingCardRow]}
               onPress={async () => {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);

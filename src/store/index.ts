@@ -8,6 +8,7 @@ import * as storage from '../storage';
 import { SEED_EXERCISES } from '../constants';
 import { kgToLbs } from '../utils/weight';
 import { cloudBackupService } from '../services/cloudBackup';
+import { migrateOldStorageKeys } from '../utils/dataMigration';
 
 dayjs.extend(isoWeek);
 
@@ -230,6 +231,16 @@ export const useStore = create<WorkoutStore>((set, get) => ({
   
   initialize: async () => {
     try {
+      // Try to migrate old data first (before loading)
+      try {
+        const migrationResult = await migrateOldStorageKeys();
+        if (migrationResult.migratedKeys.length > 0) {
+          console.log(`✅ Auto-migrated ${migrationResult.migratedKeys.length} keys from old version`);
+        }
+      } catch (error) {
+        console.error('Error during auto-migration:', error);
+      }
+      
       const [
         cycles,
         exercises,
