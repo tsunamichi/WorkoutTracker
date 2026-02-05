@@ -879,8 +879,19 @@ export function ExerciseExecutionScreen() {
                 if (!activeExercise) return null;
                 
                 const displayWeight = localValues[activeExercise.id]?.weight ?? activeExercise.weight ?? 0;
-                const displayReps = localValues[activeExercise.id]?.reps ?? activeExercise.reps ?? 0;
+                const displayReps = localValues[activeExercise.id]?.reps ?? Number(activeExercise.reps) ?? 0;
                 const repsUnit = activeExercise.isTimeBased ? 'secs' : 'reps';
+                
+                // Ensure localValues is initialized for this exercise
+                if (!localValues[activeExercise.id]) {
+                  setLocalValues(prev => ({
+                    ...prev,
+                    [activeExercise.id]: {
+                      weight: activeExercise.weight ?? 0,
+                      reps: Number(activeExercise.reps) ?? 0,
+                    },
+                  }));
+                }
                 
                 return (
                   <>
@@ -966,7 +977,7 @@ export function ExerciseExecutionScreen() {
                                 ...prev,
                                 [activeExercise.id]: {
                                   ...current,
-                                  reps: Math.max(1, current.reps - 1),
+                                  reps: Math.max(1, Number(current.reps) - 1),
                                 },
                               };
                             });
@@ -989,7 +1000,7 @@ export function ExerciseExecutionScreen() {
                                 ...prev,
                                 [activeExercise.id]: {
                                   ...current,
-                                  reps: current.reps + 1,
+                                  reps: Number(current.reps) + 1,
                                 },
                               };
                             });
