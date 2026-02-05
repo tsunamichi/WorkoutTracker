@@ -1050,9 +1050,9 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.textMeta,
   },
   completedCircle: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+    width: 4,
+    height: 4,
+    borderRadius: 2,
     backgroundColor: COLORS.signalPositive,
     alignItems: 'center',
     justifyContent: 'center',
