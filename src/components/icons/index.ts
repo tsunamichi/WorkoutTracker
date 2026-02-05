@@ -6,6 +6,7 @@ export { IconArrowLeft } from './IconArrowLeft';
 export { IconArrowRight } from './IconArrowRight';
 export { IconCalendar } from './IconCalendar';
 export { IconCheck } from './IconCheck';
+export { IconCheckmark } from './IconCheckmark';
 export { IconChevronDown } from './IconChevronDown';
 export { IconClose } from './IconClose';
 export { IconMinus } from './IconMinus';

@@ -5,7 +5,7 @@ import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import * as Haptics from 'expo-haptics';
 import { useStore } from '../store';
 import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS, CARDS } from '../constants';
-import { IconArrowLeft, IconCheck, IconAddLine, IconMinusLine, IconTrash, IconEdit, IconMenu, IconHistory, IconRestart, IconSkip } from '../components/icons';
+import { IconArrowLeft, IconCheck, IconCheckmark, IconAddLine, IconMinusLine, IconTrash, IconEdit, IconMenu, IconHistory, IconRestart, IconSkip } from '../components/icons';
 import { BottomDrawer } from '../components/common/BottomDrawer';
 import { SetTimerSheet } from '../components/timer/SetTimerSheet';
 import { ActionSheet } from '../components/common/ActionSheet';
@@ -635,14 +635,14 @@ export function ExerciseExecutionScreen() {
                 {/* Round Indicator - Dots on the right */}
                 <View style={styles.roundIndicatorContainer}>
                   {isCompleted ? (
-                    <IconCheck size={20} color={COLORS.text} />
+                    <IconCheckmark size={16} color={COLORS.text} />
                   ) : (
                     Array.from({ length: group.totalRounds }).map((_, roundIndex) => {
                       const isRoundCompleted = roundIndex < currentRound;
                       const isRoundActive = roundIndex === currentRound && isExpanded;
                       
                       if (isRoundCompleted) {
-                        return <IconCheck key={roundIndex} size={20} color={COLORS.text} />;
+                        return <IconCheckmark key={roundIndex} size={16} color={COLORS.text} />;
                       }
                       
                       return (
