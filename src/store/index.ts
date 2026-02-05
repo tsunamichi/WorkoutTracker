@@ -124,6 +124,10 @@ interface WorkoutStore {
   // Accessory Completion (independent from workout completion)
   updateAccessoryCompletion: (workoutId: string, accessoryItemId: string, completed: boolean) => Promise<void>;
   getAccessoryCompletion: (workoutId: string) => { completedItems: string[]; totalItems: number; percentage: number };
+  
+  // Main Exercise Completion (independent from workout completion)
+  updateMainCompletion: (workoutId: string, mainItemId: string, completed: boolean) => Promise<void>;
+  getMainCompletion: (workoutId: string) => { completedItems: string[]; totalItems: number; percentage: number };
 }
 
 const DEFAULT_SETTINGS: AppSettings = {
@@ -2456,6 +2460,53 @@ export const useStore = create<WorkoutStore>((set, get) => ({
     
     const totalItems = workout.accessorySnapshot?.length || 0;
     const completedItems = workout.accessoryCompletion?.completedItems || [];
+    const percentage = totalItems > 0 ? Math.round((completedItems.length / totalItems) * 100) : 0;
+    
+    return {
+      completedItems,
+      totalItems,
+      percentage,
+    };
+  },
+  
+  // Main Exercise Completion (independent from workout completion)
+  updateMainCompletion: async (workoutId, mainItemId, completed) => {
+    const scheduledWorkouts = get().scheduledWorkouts.map(sw => {
+      if (sw.id === workoutId) {
+        // Initialize mainCompletion if it doesn't exist
+        const existingCompletion = sw.mainCompletion || { completedItems: [] };
+        const existingCompletedItems = existingCompletion.completedItems || [];
+        
+        const completedItems = completed
+          ? [...new Set([...existingCompletedItems, mainItemId])]
+          : existingCompletedItems.filter(id => id !== mainItemId);
+        
+        return {
+          ...sw,
+          mainCompletion: {
+            ...existingCompletion,
+            completedItems,
+          },
+        };
+      }
+      return sw;
+    });
+    
+    set({ scheduledWorkouts });
+    await storage.saveScheduledWorkouts(scheduledWorkouts);
+    
+    console.log('✅ Main exercise item updated:', { workoutId, mainItemId, completed });
+  },
+  
+  getMainCompletion: (workoutId) => {
+    const workout = get().scheduledWorkouts.find(sw => sw.id === workoutId);
+    
+    if (!workout) {
+      return { completedItems: [], totalItems: 0, percentage: 0 };
+    }
+    
+    const totalItems = workout.workoutSnapshot?.exercises?.length || 0;
+    const completedItems = workout.mainCompletion?.completedItems || [];
     const percentage = totalItems > 0 ? Math.round((completedItems.length / totalItems) * 100) : 0;
     
     return {

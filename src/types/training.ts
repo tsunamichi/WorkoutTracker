@@ -114,6 +114,10 @@ export type AccessoryCompletionState = {
   completedItems: string[]; // accessory item IDs
 };
 
+export type MainCompletionState = {
+  completedItems: string[]; // main exercise set IDs
+};
+
 export type WorkoutCompletionState = {
   completedExercises: Record<string, boolean>; // exerciseId -> completed
   completedSets: Record<string, number[]>; // exerciseId -> array of completed set indices
@@ -132,6 +136,7 @@ export type ScheduledWorkout = {
   
   // Completion state
   warmupCompletion: WarmupCompletionState;
+  mainCompletion?: MainCompletionState;
   workoutCompletion: WorkoutCompletionState;
   accessoryCompletion: AccessoryCompletionState;
   status: ScheduledWorkoutStatus;

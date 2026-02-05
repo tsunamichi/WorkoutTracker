@@ -41,6 +41,8 @@ export function ExerciseExecutionScreen() {
     getWarmupCompletion, 
     updateAccessoryCompletion, 
     getAccessoryCompletion,
+    updateMainCompletion,
+    getMainCompletion,
     updateWorkoutTemplate, 
     settings,
     addWarmupToSession,
@@ -209,6 +211,8 @@ export function ExerciseExecutionScreen() {
       ? getWarmupCompletion(workoutKey)
       : type === 'core'
       ? getAccessoryCompletion(workoutKey)
+      : type === 'main'
+      ? getMainCompletion(workoutKey)
       : null;
       
     if (completion && completion.completedItems.length > 0) {
@@ -245,7 +249,7 @@ export function ExerciseExecutionScreen() {
     } else {
       setExpandedGroupIndex(0); // Expand first group by default
     }
-  }, [workoutKey, type, exerciseGroups, getWarmupCompletion, getAccessoryCompletion]);
+  }, [workoutKey, type, exerciseGroups, getWarmupCompletion, getAccessoryCompletion, getMainCompletion]);
   
   // Auto-set active exercise when expanding a group
   useEffect(() => {
@@ -346,12 +350,13 @@ export function ExerciseExecutionScreen() {
     newCompletedSets.add(setId);
     setCompletedSets(newCompletedSets);
     
-    // Save to store
-    const completedArray = Array.from(newCompletedSets);
+    // Save to store (individual set completion)
     if (type === 'warmup') {
-      updateWarmupCompletion(workoutKey, completedArray);
+      await updateWarmupCompletion(workoutKey, setId, true);
     } else if (type === 'core') {
-      updateAccessoryCompletion(workoutKey, completedArray);
+      await updateAccessoryCompletion(workoutKey, setId, true);
+    } else if (type === 'main') {
+      await updateMainCompletion(workoutKey, setId, true);
     }
     
     // Check if all exercises in this round are complete
