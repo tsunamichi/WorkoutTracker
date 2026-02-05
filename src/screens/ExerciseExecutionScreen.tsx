@@ -969,7 +969,7 @@ const styles = StyleSheet.create({
   },
   itemCard: {
     ...CARDS.cardDeep.outer,
-    borderWidth: 2,
+    borderWidth: 1,
     borderColor: COLORS.accentPrimary,
   },
   itemCardInner: {
