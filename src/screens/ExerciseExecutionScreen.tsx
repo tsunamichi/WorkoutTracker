@@ -647,7 +647,9 @@ export function ExerciseExecutionScreen() {
                       
                       if (isRoundActive) {
                         return (
-                          <View key={roundIndex} style={styles.activeTriangle} />
+                          <View key={roundIndex} style={styles.activeTriangleContainer}>
+                            <IconTriangle size={16} color={COLORS.accentPrimary} />
+                          </View>
                         );
                       }
                       
@@ -1045,19 +1047,8 @@ const styles = StyleSheet.create({
     borderRadius: 2,
     backgroundColor: COLORS.textMeta,
   },
-  activeTriangle: {
-    width: 0,
-    height: 0,
-    backgroundColor: 'transparent',
-    borderStyle: 'solid',
-    borderLeftWidth: 4,
-    borderRightWidth: 0,
-    borderTopWidth: 4,
-    borderBottomWidth: 4,
-    borderLeftColor: COLORS.accentPrimary,
-    borderRightColor: 'transparent',
-    borderTopColor: 'transparent',
-    borderBottomColor: 'transparent',
+  activeTriangleContainer: {
+    transform: [{ rotate: '180deg' }],
   },
   startButtonContainer: {
     position: 'absolute',
