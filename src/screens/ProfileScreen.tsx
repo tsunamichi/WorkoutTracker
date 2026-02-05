@@ -239,10 +239,9 @@ export function ProfileScreen({ navigation }: ProfileScreenProps) {
           <IconTriangle size={16} color={COLORS.text} />
         </TouchableOpacity>
 
-        {/* Dev Only: Debug Storage */}
-        {__DEV__ && (
-          <>
-            <TouchableOpacity 
+        {/* Debug Storage - Available in all builds for data recovery */}
+        <>
+          <TouchableOpacity 
               style={[styles.settingCard, styles.settingCardRow]}
               onPress={async () => {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -258,7 +257,7 @@ export function ProfileScreen({ navigation }: ProfileScreenProps) {
               activeOpacity={0.7}
             >
               <View style={styles.settingInfo}>
-                <Text style={styles.settingLabel}>🔍 Check Storage (Dev)</Text>
+                <Text style={styles.settingLabel}>🔍 Check Storage</Text>
                 <Text style={styles.settingDescription}>
                   See what data is in storage (check console)
                 </Text>
@@ -273,7 +272,7 @@ export function ProfileScreen({ navigation }: ProfileScreenProps) {
                 if (backup) {
                   Alert.alert(
                     'Backup Created',
-                    'Full backup logged to console. Check React Native Debugger or terminal.',
+                    'Full backup logged to console. Copy the JSON data if needed.',
                     [{ text: 'OK' }]
                   );
                 }
@@ -281,43 +280,45 @@ export function ProfileScreen({ navigation }: ProfileScreenProps) {
               activeOpacity={0.7}
             >
               <View style={styles.settingInfo}>
-                <Text style={styles.settingLabel}>💾 Backup Data (Dev)</Text>
+                <Text style={styles.settingLabel}>💾 Backup Data</Text>
                 <Text style={styles.settingDescription}>
                   Export all data to console
                 </Text>
               </View>
             </TouchableOpacity>
-
-            <TouchableOpacity 
-              style={[styles.settingCard, styles.settingCardRow]}
-              onPress={() => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                Alert.alert(
-                  'Clear All Data',
-                  'This will delete all workouts, templates, plans, and scheduled workouts. This cannot be undone.',
-                  [
-                    { text: 'Cancel', style: 'cancel' },
-                    { 
-                      text: 'Clear All', 
-                      style: 'destructive',
-                      onPress: async () => {
-                        await clearAllHistory();
-                        Alert.alert('Done', 'All data has been cleared!');
-                      }
-                    }
-                  ]
-                );
-              }}
-              activeOpacity={0.7}
-            >
-              <View style={styles.settingInfo}>
-                <Text style={[styles.settingLabel, { color: COLORS.signalNegative }]}>Clear All Data (Dev)</Text>
-                <Text style={styles.settingDescription}>
-                  Delete all workouts and templates
-                </Text>
-              </View>
-            </TouchableOpacity>
           </>
+        
+        {/* Dev Only: Clear All Data */}
+        {__DEV__ && (
+          <TouchableOpacity 
+            style={[styles.settingCard, styles.settingCardRow]}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              Alert.alert(
+                'Clear All Data',
+                'This will delete all workouts, templates, plans, and scheduled workouts. This cannot be undone.',
+                [
+                  { text: 'Cancel', style: 'cancel' },
+                  { 
+                    text: 'Clear All', 
+                    style: 'destructive',
+                    onPress: async () => {
+                      await clearAllHistory();
+                      Alert.alert('Done', 'All data has been cleared!');
+                    }
+                  }
+                ]
+              );
+            }}
+            activeOpacity={0.7}
+          >
+            <View style={styles.settingInfo}>
+              <Text style={[styles.settingLabel, { color: COLORS.signalNegative }]}>Clear All Data (Dev)</Text>
+              <Text style={styles.settingDescription}>
+                Delete all workouts and templates
+              </Text>
+            </View>
+          </TouchableOpacity>
         )}
       </ScrollView>
 
