@@ -1049,7 +1049,7 @@ const styles = StyleSheet.create({
     height: 6,
     borderRadius: 3,
     backgroundColor: 'transparent',
-    borderWidth: 2,
+    borderWidth: 1,
     borderColor: COLORS.textMeta,
   },
   completedCircle: {
