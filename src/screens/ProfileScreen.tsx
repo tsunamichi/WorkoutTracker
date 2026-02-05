@@ -25,7 +25,7 @@ interface ProfileScreenProps {
 
 export function ProfileScreen({ navigation }: ProfileScreenProps) {
   const insets = useSafeAreaInsets();
-  const { settings, updateSettings, clearAllHistory } = useStore();
+  const { settings, updateSettings, clearAllHistory, initialize } = useStore();
   const [showRestTimePicker, setShowRestTimePicker] = useState(false);
   const [notificationsSystemEnabled, setNotificationsSystemEnabled] = useState<boolean | null>(null);
   const { t, language } = useTranslation();
@@ -211,33 +211,35 @@ export function ProfileScreen({ navigation }: ProfileScreenProps) {
           <IconTriangle size={16} color={COLORS.text} />
         </TouchableOpacity>
         
-        {/* Group 4: Add Fake History - Standalone (Dev Tool) */}
-        <TouchableOpacity 
-          style={[styles.settingCard, styles.settingCardRow]}
-          onPress={async () => {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-            try {
-              await addFakeHistory();
-              Alert.alert(
-                'Success!',
-                'Added fake workout history for testing. Check the exercise detail screens to see the history.',
-                [{ text: 'OK' }]
-              );
-            } catch (error) {
-              Alert.alert('Error', 'Failed to add fake history. Check console for details.');
-              console.error('Error adding fake history:', error);
-            }
-          }}
-          activeOpacity={0.7}
-        >
-          <View style={styles.settingInfo}>
-            <Text style={styles.settingLabel}>Add Fake History</Text>
-            <Text style={styles.settingDescription}>
-              Adds test workout data for the past 3 weeks
-            </Text>
-          </View>
-          <IconTriangle size={16} color={COLORS.text} />
-        </TouchableOpacity>
+        {/* Group 4: Add Fake History - Dev Only */}
+        {__DEV__ && (
+          <TouchableOpacity 
+            style={[styles.settingCard, styles.settingCardRow]}
+            onPress={async () => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              try {
+                await addFakeHistory();
+                Alert.alert(
+                  'Success!',
+                  'Added fake workout history for testing. Check the exercise detail screens to see the history.',
+                  [{ text: 'OK' }]
+                );
+              } catch (error) {
+                Alert.alert('Error', 'Failed to add fake history. Check console for details.');
+                console.error('Error adding fake history:', error);
+              }
+            }}
+            activeOpacity={0.7}
+          >
+            <View style={styles.settingInfo}>
+              <Text style={styles.settingLabel}>Add Fake History (Dev)</Text>
+              <Text style={styles.settingDescription}>
+                Adds test workout data for the past 3 weeks
+              </Text>
+            </View>
+            <IconTriangle size={16} color={COLORS.text} />
+          </TouchableOpacity>
+        )}
 
         {/* Debug Storage - Available in all builds for data recovery */}
         <>
@@ -283,6 +285,48 @@ export function ProfileScreen({ navigation }: ProfileScreenProps) {
                 <Text style={styles.settingLabel}>💾 Backup Data</Text>
                 <Text style={styles.settingDescription}>
                   Export all data to console
+                </Text>
+              </View>
+            </TouchableOpacity>
+
+            <TouchableOpacity 
+              style={[styles.settingCard, styles.settingCardRow]}
+              onPress={async () => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                Alert.alert(
+                  'Force Reload Data',
+                  'This will reload all data from storage. Use this if your workouts or history disappeared.',
+                  [
+                    { text: 'Cancel', style: 'cancel' },
+                    {
+                      text: 'Reload',
+                      onPress: async () => {
+                        try {
+                          await initialize();
+                          Alert.alert(
+                            'Success',
+                            'All data has been reloaded from storage!',
+                            [{ text: 'OK' }]
+                          );
+                        } catch (error) {
+                          Alert.alert(
+                            'Error',
+                            'Failed to reload data. Check console for details.',
+                            [{ text: 'OK' }]
+                          );
+                          console.error('Error reloading data:', error);
+                        }
+                      }
+                    }
+                  ]
+                );
+              }}
+              activeOpacity={0.7}
+            >
+              <View style={styles.settingInfo}>
+                <Text style={styles.settingLabel}>🔄 Force Reload Data</Text>
+                <Text style={styles.settingDescription}>
+                  Reload all data from storage
                 </Text>
               </View>
             </TouchableOpacity>
