@@ -634,7 +634,11 @@ export function ExerciseExecutionScreen() {
                 
                 {/* Round Indicator - Dots on the right (only for expanded group) */}
                 <View style={styles.roundIndicatorContainer}>
-                  {isExpanded && !isCompleted && (
+                  {isCompleted ? (
+                    <View style={styles.completedCheckContainer}>
+                      <IconCheck size={20} color={COLORS.signalPositive} />
+                    </View>
+                  ) : isExpanded && (
                     Array.from({ length: group.totalRounds }).map((_, roundIndex) => {
                       const isRoundCompleted = roundIndex < currentRound;
                       const isRoundActive = roundIndex === currentRound;
@@ -1059,6 +1063,10 @@ const styles = StyleSheet.create({
     height: 4,
     borderRadius: 2,
     backgroundColor: COLORS.accentPrimary,
+  },
+  completedCheckContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   startButtonContainer: {
     position: 'absolute',
