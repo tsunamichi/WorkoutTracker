@@ -5,7 +5,7 @@ import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import * as Haptics from 'expo-haptics';
 import { useStore } from '../store';
 import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS, CARDS } from '../constants';
-import { IconArrowLeft, IconCheck, IconCheckmark, IconTriangle, IconAddLine, IconMinusLine, IconTrash, IconEdit, IconMenu, IconHistory, IconRestart, IconSkip } from '../components/icons';
+import { IconArrowLeft, IconCheck, IconCheckmark, IconAddLine, IconMinusLine, IconTrash, IconEdit, IconMenu, IconHistory, IconRestart, IconSkip } from '../components/icons';
 import { BottomDrawer } from '../components/common/BottomDrawer';
 import { SetTimerSheet } from '../components/timer/SetTimerSheet';
 import { ActionSheet } from '../components/common/ActionSheet';
@@ -649,9 +649,7 @@ export function ExerciseExecutionScreen() {
                       
                       if (isRoundActive) {
                         return (
-                          <View key={roundIndex} style={styles.activeTriangleContainer}>
-                            <IconTriangle size={16} color={COLORS.accentPrimary} />
-                          </View>
+                          <View key={roundIndex} style={styles.activeDot} />
                         );
                       }
                       
@@ -1060,8 +1058,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  activeTriangleContainer: {
-    transform: [{ rotate: '180deg' }],
+  activeDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: COLORS.accentPrimary,
   },
   startButtonContainer: {
     position: 'absolute',
