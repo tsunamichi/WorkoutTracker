@@ -133,6 +133,8 @@ type TranslationKey =
   | 'reset'
   | 'complete'
   | 'skip'
+  | 'viewHistory'
+  | 'hideHistory'
   | 'noHistoryRecordedYet'
   | 'alertCompleteExerciseTitle'
   | 'alertCompleteExerciseMessage'
@@ -640,6 +642,8 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     reset: 'Reset',
     complete: 'Complete',
     skip: 'Skip',
+    viewHistory: 'View history',
+    hideHistory: 'Hide history',
     noHistoryRecordedYet: 'No history recorded yet',
     alertCompleteExerciseTitle: 'Complete Exercise',
     alertCompleteExerciseMessage: 'Mark all sets as complete?',
@@ -1160,6 +1164,8 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     reset: 'Reiniciar',
     complete: 'Completar',
     skip: 'Omitir',
+    viewHistory: 'Ver historial',
+    hideHistory: 'Ocultar historial',
     noHistoryRecordedYet: 'Sin historial',
     alertCompleteExerciseTitle: 'Completar ejercicio',
     alertCompleteExerciseMessage: 'Marcar todas las series como completas?',

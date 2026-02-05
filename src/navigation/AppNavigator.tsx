@@ -68,7 +68,7 @@ export type RootStackParamList = {
   DesignSystem: undefined;
   CycleDetail: { cycleId: string };
   CycleConflicts: { plan: any; conflicts: any[]; planId?: string };
-  WorkoutExecution: { workoutId?: string; templateId?: string; workoutTemplateId?: string; date: string; isLocked?: boolean };
+  WorkoutExecution: { workoutId?: string; cycleId?: string; templateId?: string; workoutTemplateId?: string; date: string; isLocked?: boolean };
   WorkoutEdit: { cycleId: string; workoutTemplateId: string; date: string };
   ExerciseDetail: { exerciseId: string; workoutKey: string };
   HIITTimerList: undefined;

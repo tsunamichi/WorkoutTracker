@@ -48,6 +48,7 @@ export function TodayScreen({ onDateChange, onOpenSwapDrawer, onOpenAddWorkout }
     scheduledWorkouts,
     getScheduledWorkout,
     getWarmupCompletion,
+    getMainCompletion,
   } = useStore();
   const { t } = useTranslation();
   const today = dayjs();
@@ -101,22 +102,12 @@ export function TodayScreen({ onDateChange, onOpenSwapDrawer, onOpenAddWorkout }
     // SCHEDULE-FIRST: Only check scheduledWorkouts (single source of truth)
     const scheduledWorkout = getScheduledWorkout(dateStr);
     
-    // Calculate completion percentage using snapshot data
+    // Calculate completion percentage using mainCompletion (only strength workout, not warmup/core)
     let completionPercentage = 0;
-    let totalSets = 0;
     
-    if (scheduledWorkout && scheduledWorkout.exercisesSnapshot) {
-      // Use exercisesSnapshot (not template) for completion calculation
-      const workoutKey = `${scheduledWorkout.templateId}-${dateStr}`;
-      
-      scheduledWorkout.exercisesSnapshot.forEach(ex => {
-        const progress = getExerciseProgress(workoutKey, ex.id);
-        if (!progress?.skipped) {
-          totalSets += ex.sets || 0;
-        }
-      });
-      
-      completionPercentage = totalSets > 0 ? getWorkoutCompletionPercentage(workoutKey, totalSets) : 0;
+    if (scheduledWorkout) {
+      const mainCompletion = getMainCompletion(scheduledWorkout.id);
+      completionPercentage = mainCompletion.percentage;
     }
     
     const isCompleted = scheduledWorkout?.status === 'completed' || completionPercentage === 100;
@@ -137,8 +128,7 @@ export function TodayScreen({ onDateChange, onOpenSwapDrawer, onOpenAddWorkout }
     weekStart, 
     scheduledWorkouts, 
     getScheduledWorkout, 
-    getExerciseProgress, 
-    getWorkoutCompletionPercentage,
+    getMainCompletion,
     refreshTrigger
   ]);
   
@@ -357,20 +347,10 @@ export function TodayScreen({ onDateChange, onOpenSwapDrawer, onOpenAddWorkout }
                       >
                     {(() => {
                       const sw = selectedDay.scheduledWorkout;
-                      const workoutKey = `${sw.templateId}-${selectedDay.date}`;
                       
-                      // Calculate total sets from snapshot (not template)
-                      let totalSets = 0;
-                      if (sw.exercisesSnapshot) {
-                        sw.exercisesSnapshot.forEach(ex => {
-                          const progress = getExerciseProgress(workoutKey, ex.id);
-                          if (!progress?.skipped) {
-                            totalSets += ex.sets || 0;
-                          }
-                        });
-                      }
-                      
-                      const completionPercentage = totalSets > 0 ? getWorkoutCompletionPercentage(workoutKey, totalSets) : 0;
+                      // Calculate completion percentage using mainCompletion (only strength workout, not warmup/core)
+                      const mainCompletion = getMainCompletion(sw.id);
+                      const completionPercentage = mainCompletion.percentage;
                       
                       // Determine button state
                       let buttonState = t('start');

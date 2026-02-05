@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Animated, Easing,
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
+import Svg, { Circle, Path } from 'react-native-svg';
 import { useStore } from '../store';
 import * as storage from '../storage';
 import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS, CARDS } from '../constants';
@@ -19,9 +20,11 @@ import { useTranslation } from '../i18n/useTranslation';
 interface WorkoutExecutionScreenProps {
   route: {
     params: {
-      cycleId: string;
+      workoutId?: string; // Scheduled workout ID
+      cycleId?: string;
       workoutTemplateId: string;
       date: string;
+      isLocked?: boolean;
     };
   };
   navigation: any;
@@ -474,28 +477,43 @@ export function SetTimerSheetLegacy({ visible, onComplete, onClose, workoutName,
 
 export function WorkoutExecutionScreen({ route, navigation }: WorkoutExecutionScreenProps) {
   const insets = useSafeAreaInsets();
-  const { cycleId, workoutTemplateId, date } = route.params;
-  const { cycles, exercises, addSession, getWorkoutCompletionPercentage, getExerciseProgress, saveExerciseProgress, clearWorkoutProgress, skipExercise, getWorkoutTemplate, getWarmupCompletion, settings } = useStore();
+  const { workoutId, cycleId, workoutTemplateId, date } = route.params;
+  const { cycles, exercises, addSession, getWorkoutCompletionPercentage, getExerciseProgress, saveExerciseProgress, clearWorkoutProgress, skipExercise, getWorkoutTemplate, getWarmupCompletion, getMainCompletion, getAccessoryCompletion, settings } = useStore();
   const { t } = useTranslation();
   const useKg = settings.useKg;
   const weightUnit = useKg ? 'kg' : 'lb';
   
-  // Subscribe to detailedWorkoutProgress for this specific workout
-  const workoutKey = `${workoutTemplateId}-${date}`;
+  // Use scheduled workout ID if available, otherwise construct legacy key from template+date
+  const workoutKey = workoutId || `${workoutTemplateId}-${date}`;
   const currentWorkoutProgress = useStore(state => state.detailedWorkoutProgress[workoutKey]);
+  
+  console.log('🔑 WorkoutExecutionScreen workoutKey:', {
+    workoutId,
+    workoutKey,
+    isScheduledWorkout: workoutKey?.startsWith('sw-'),
+    date,
+    workoutTemplateId,
+  });
   
   const [completedExercises, setCompletedExercises] = useState<string[]>([]);
   const [showTimer, setShowTimer] = useState(false);
   const [currentExerciseIndex, setCurrentExerciseIndex] = useState(0);
   const [showMenu, setShowMenu] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
   
   // Force refresh when screen comes into focus OR when workout progress changes
   useFocusEffect(
     useCallback(() => {
       console.log('📱 Workout screen focused - refreshing exercise states');
       console.log('📊 Current workout progress:', currentWorkoutProgress);
+      setRefreshKey(prev => prev + 1); // Force refresh of completion status
     }, [currentWorkoutProgress])
   );
+  
+  // Get completion status for each section (re-calculated when refreshKey changes)
+  const warmupCompletion = React.useMemo(() => getWarmupCompletion(workoutKey), [workoutKey, refreshKey, getWarmupCompletion]);
+  const mainCompletion = React.useMemo(() => getMainCompletion(workoutKey), [workoutKey, refreshKey, getMainCompletion]);
+  const coreCompletion = React.useMemo(() => getAccessoryCompletion(workoutKey), [workoutKey, refreshKey, getAccessoryCompletion]);
   
   // Log when workout progress changes
   useEffect(() => {
@@ -693,6 +711,9 @@ export function WorkoutExecutionScreen({ route, navigation }: WorkoutExecutionSc
             // Clear the entire workout progress so exercises reinitialize with default values
             await clearWorkoutProgress(workoutKey);
             
+            // Force refresh of completion status
+            setRefreshKey(prev => prev + 1);
+            
             // Show feedback
             await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
           },
@@ -770,7 +791,28 @@ export function WorkoutExecutionScreen({ route, navigation }: WorkoutExecutionSc
                     {template.warmupItems.length} {template.warmupItems.length === 1 ? 'exercise' : 'exercises'}
                   </Text>
                 </View>
-                <Text style={styles.summaryCardAction}>{t('start')}</Text>
+                {warmupCompletion.percentage === 100 ? (
+                  <View style={styles.summaryCardCompleteIcon}>
+                    <IconCheck size={20} color={COLORS.success} />
+                  </View>
+                ) : warmupCompletion.percentage > 0 ? (
+                  <View style={styles.progressIndicator}>
+                    <Text style={styles.progressText}>{warmupCompletion.percentage}%</Text>
+                    <Svg height="16" width="16" viewBox="0 0 16 16" style={styles.progressCircle}>
+                      <Circle cx="8" cy="8" r="8" fill={COLORS.backgroundCanvas} />
+                      <Path
+                        d={`M 8 8 L 8 0 A 8 8 0 ${warmupCompletion.percentage / 100 > 0.5 ? 1 : 0} 1 ${
+                          8 + 8 * Math.sin(2 * Math.PI * (warmupCompletion.percentage / 100))
+                        } ${
+                          8 - 8 * Math.cos(2 * Math.PI * (warmupCompletion.percentage / 100))
+                        } Z`}
+                        fill={COLORS.signalWarning}
+                      />
+                    </Svg>
+                  </View>
+                ) : (
+                  <Text style={styles.summaryCardAction}>{t('start')}</Text>
+                )}
               </TouchableOpacity>
             ) : (
               <TouchableOpacity
@@ -806,7 +848,28 @@ export function WorkoutExecutionScreen({ route, navigation }: WorkoutExecutionSc
                     {template.items.length} {template.items.length === 1 ? 'exercise' : 'exercises'}
                   </Text>
                 </View>
-                <Text style={styles.summaryCardAction}>{t('start')}</Text>
+                {mainCompletion.percentage === 100 ? (
+                  <View style={styles.summaryCardCompleteIcon}>
+                    <IconCheck size={20} color={COLORS.success} />
+                  </View>
+                ) : mainCompletion.percentage > 0 ? (
+                  <View style={styles.progressIndicator}>
+                    <Text style={styles.progressText}>{mainCompletion.percentage}%</Text>
+                    <Svg height="16" width="16" viewBox="0 0 16 16" style={styles.progressCircle}>
+                      <Circle cx="8" cy="8" r="8" fill={COLORS.backgroundCanvas} />
+                      <Path
+                        d={`M 8 8 L 8 0 A 8 8 0 ${mainCompletion.percentage / 100 > 0.5 ? 1 : 0} 1 ${
+                          8 + 8 * Math.sin(2 * Math.PI * (mainCompletion.percentage / 100))
+                        } ${
+                          8 - 8 * Math.cos(2 * Math.PI * (mainCompletion.percentage / 100))
+                        } Z`}
+                        fill={COLORS.signalWarning}
+                      />
+                    </Svg>
+                  </View>
+                ) : (
+                  <Text style={styles.summaryCardAction}>{t('start')}</Text>
+                )}
               </TouchableOpacity>
             )}
             
@@ -830,7 +893,28 @@ export function WorkoutExecutionScreen({ route, navigation }: WorkoutExecutionSc
                     {template.accessoryItems.length} {template.accessoryItems.length === 1 ? 'exercise' : 'exercises'}
                   </Text>
                 </View>
-                <Text style={styles.summaryCardAction}>{t('start')}</Text>
+                {coreCompletion.percentage === 100 ? (
+                  <View style={styles.summaryCardCompleteIcon}>
+                    <IconCheck size={20} color={COLORS.success} />
+                  </View>
+                ) : coreCompletion.percentage > 0 ? (
+                  <View style={styles.progressIndicator}>
+                    <Text style={styles.progressText}>{coreCompletion.percentage}%</Text>
+                    <Svg height="16" width="16" viewBox="0 0 16 16" style={styles.progressCircle}>
+                      <Circle cx="8" cy="8" r="8" fill={COLORS.backgroundCanvas} />
+                      <Path
+                        d={`M 8 8 L 8 0 A 8 8 0 ${coreCompletion.percentage / 100 > 0.5 ? 1 : 0} 1 ${
+                          8 + 8 * Math.sin(2 * Math.PI * (coreCompletion.percentage / 100))
+                        } ${
+                          8 - 8 * Math.cos(2 * Math.PI * (coreCompletion.percentage / 100))
+                        } Z`}
+                        fill={COLORS.signalWarning}
+                      />
+                    </Svg>
+                  </View>
+                ) : (
+                  <Text style={styles.summaryCardAction}>{t('start')}</Text>
+                )}
               </TouchableOpacity>
             ) : (
               <TouchableOpacity
@@ -986,7 +1070,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   summaryCardTitle: {
-    ...TYPOGRAPHY.bodyBold,
+    ...TYPOGRAPHY.body,
     color: COLORS.text,
     marginBottom: 4,
   },
@@ -998,6 +1082,27 @@ const styles = StyleSheet.create({
     ...TYPOGRAPHY.metaBold,
     color: COLORS.accentPrimary,
     marginLeft: SPACING.md,
+  },
+  summaryCardProgress: {
+    ...TYPOGRAPHY.metaBold,
+    color: COLORS.accentPrimary,
+    marginLeft: SPACING.md,
+  },
+  summaryCardCompleteIcon: {
+    marginLeft: SPACING.md,
+  },
+  progressIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginLeft: SPACING.md,
+  },
+  progressCircle: {
+    // No additional styling needed
+  },
+  progressText: {
+    ...TYPOGRAPHY.meta,
+    color: COLORS.textMeta,
   },
   addCardButton: {
     height: 56,

@@ -128,6 +128,11 @@ interface WorkoutStore {
   // Main Exercise Completion (independent from workout completion)
   updateMainCompletion: (workoutId: string, mainItemId: string, completed: boolean) => Promise<void>;
   getMainCompletion: (workoutId: string) => { completedItems: string[]; totalItems: number; percentage: number };
+  
+  // Reset specific completion types
+  resetWarmupCompletion: (workoutId: string) => Promise<void>;
+  resetMainCompletion: (workoutId: string) => Promise<void>;
+  resetAccessoryCompletion: (workoutId: string) => Promise<void>;
 }
 
 const DEFAULT_SETTINGS: AppSettings = {
@@ -739,6 +744,7 @@ export const useStore = create<WorkoutStore>((set, get) => ({
               exercisesSnapshot: sw.exercisesSnapshot ?? (template?.items || []).map((item: any) => ({ ...item })),
               accessorySnapshot: sw.accessorySnapshot ?? (template?.accessoryItems || []).map((item: any) => ({ ...item })),
               warmupCompletion: sw.warmupCompletion ?? { completedItems: [] },
+              mainCompletion: sw.mainCompletion ?? { completedItems: [] },
               workoutCompletion: sw.workoutCompletion ?? { completedExercises: {}, completedSets: {} },
               accessoryCompletion: sw.accessoryCompletion ?? { completedItems: [] },
               isLocked: sw.isLocked ?? (sw.status === 'completed'),
@@ -1309,19 +1315,41 @@ export const useStore = create<WorkoutStore>((set, get) => ({
   },
   
   clearWorkoutProgress: async (workoutId) => {
+    console.log('🧹 clearWorkoutProgress called with workoutId:', workoutId);
+    
+    // Clear old progress tracking
     const newProgress = { ...get().workoutProgress };
     delete newProgress[workoutId];
     
     const newDetailedProgress = { ...get().detailedWorkoutProgress };
     delete newDetailedProgress[workoutId];
     
+    // Reset scheduled workout completion states if this is a scheduled workout ID
+    const scheduledWorkouts = get().scheduledWorkouts.map(sw => {
+      if (sw.id === workoutId) {
+        console.log('🔄 Resetting completion states for scheduled workout:', sw.id);
+        return {
+          ...sw,
+          warmupCompletion: { completedItems: [] },
+          mainCompletion: { completedItems: [] },
+          workoutCompletion: { completedExercises: {}, completedSets: {} },
+          accessoryCompletion: { completedItems: [] },
+        };
+      }
+      return sw;
+    });
+    
     set({ 
       workoutProgress: newProgress,
-      detailedWorkoutProgress: newDetailedProgress 
+      detailedWorkoutProgress: newDetailedProgress,
+      scheduledWorkouts,
     });
     
     await storage.saveWorkoutProgressToStorage(newProgress);
     await storage.saveDetailedWorkoutProgress(newDetailedProgress);
+    await storage.saveScheduledWorkouts(scheduledWorkouts);
+    
+    console.log('✅ Workout progress cleared and saved');
   },
   
   clearAllHistory: async () => {
@@ -1782,6 +1810,7 @@ export const useStore = create<WorkoutStore>((set, get) => ({
             exercisesSnapshot: (template.items || []).map(item => ({ ...item })),
             accessorySnapshot: (template.accessoryItems || []).map(item => ({ ...item })),
             warmupCompletion: { completedItems: [] },
+            mainCompletion: { completedItems: [] },
             workoutCompletion: { completedExercises: {}, completedSets: {} },
             accessoryCompletion: { completedItems: [] },
             status: 'planned',
@@ -2279,6 +2308,7 @@ export const useStore = create<WorkoutStore>((set, get) => ({
       
       // Initialize completion states
       warmupCompletion: { completedItems: [] },
+      mainCompletion: { completedItems: [] },
       workoutCompletion: { completedExercises: {}, completedSets: {} },
       accessoryCompletion: { completedItems: [] },
       status: 'planned',
@@ -2405,19 +2435,42 @@ export const useStore = create<WorkoutStore>((set, get) => ({
   },
   
   getWarmupCompletion: (workoutId) => {
+    console.log('📂 getWarmupCompletion called with workoutId:', workoutId);
     const workout = get().scheduledWorkouts.find(sw => sw.id === workoutId);
     
+    console.log('🔍 Found workout:', workout ? `Yes (id: ${workout.id})` : 'No');
+    
     if (!workout) {
+      console.log('⚠️ No workout found, returning empty completion');
       return { completedItems: [], totalItems: 0, percentage: 0 };
     }
     
-    const totalItems = workout.warmupSnapshot?.length || 0;
+    // Calculate total sets across all warmup items
+    // Support both old format (sets: number) and new format (sets: ExerciseInstanceSet[])
+    let totalSets = 0;
+    (workout.warmupSnapshot || []).forEach((item: any) => {
+      if (Array.isArray(item.sets)) {
+        // New format: sets is an array
+        totalSets += item.sets.length;
+      } else if (typeof item.sets === 'number') {
+        // Old format: sets is a number
+        totalSets += item.sets;
+      }
+    });
+    
     const completedItems = workout.warmupCompletion?.completedItems || [];
-    const percentage = totalItems > 0 ? Math.round((completedItems.length / totalItems) * 100) : 0;
+    const percentage = totalSets > 0 ? Math.round((completedItems.length / totalSets) * 100) : 0;
+    
+    console.log('📊 Warmup completion:', { 
+      totalSets, 
+      completedCount: completedItems.length, 
+      percentage,
+      items: workout.warmupSnapshot?.length || 0
+    });
     
     return {
       completedItems,
-      totalItems,
+      totalItems: totalSets,
       percentage,
     };
   },
@@ -2458,28 +2511,49 @@ export const useStore = create<WorkoutStore>((set, get) => ({
       return { completedItems: [], totalItems: 0, percentage: 0 };
     }
     
-    const totalItems = workout.accessorySnapshot?.length || 0;
+    // Calculate total sets across all accessory items
+    // Support both old format (sets: number) and new format (sets: ExerciseInstanceSet[])
+    let totalSets = 0;
+    (workout.accessorySnapshot || []).forEach((item: any) => {
+      if (Array.isArray(item.sets)) {
+        // New format: sets is an array
+        totalSets += item.sets.length;
+      } else if (typeof item.sets === 'number') {
+        // Old format: sets is a number
+        totalSets += item.sets;
+      }
+    });
+    
     const completedItems = workout.accessoryCompletion?.completedItems || [];
-    const percentage = totalItems > 0 ? Math.round((completedItems.length / totalItems) * 100) : 0;
+    const percentage = totalSets > 0 ? Math.round((completedItems.length / totalSets) * 100) : 0;
     
     return {
       completedItems,
-      totalItems,
+      totalItems: totalSets,
       percentage,
     };
   },
   
   // Main Exercise Completion (independent from workout completion)
   updateMainCompletion: async (workoutId, mainItemId, completed) => {
+    console.log('💾 updateMainCompletion called:', { workoutId, mainItemId, completed });
+    
+    const foundWorkout = get().scheduledWorkouts.find(sw => sw.id === workoutId);
+    console.log('🔍 Found workout:', foundWorkout ? `Yes (id: ${foundWorkout.id})` : 'No');
+    
     const scheduledWorkouts = get().scheduledWorkouts.map(sw => {
       if (sw.id === workoutId) {
         // Initialize mainCompletion if it doesn't exist
         const existingCompletion = sw.mainCompletion || { completedItems: [] };
         const existingCompletedItems = existingCompletion.completedItems || [];
         
+        console.log('📋 Before update - completedItems:', existingCompletedItems);
+        
         const completedItems = completed
           ? [...new Set([...existingCompletedItems, mainItemId])]
           : existingCompletedItems.filter(id => id !== mainItemId);
+        
+        console.log('📋 After update - completedItems:', completedItems);
         
         return {
           ...sw,
@@ -2495,23 +2569,42 @@ export const useStore = create<WorkoutStore>((set, get) => ({
     set({ scheduledWorkouts });
     await storage.saveScheduledWorkouts(scheduledWorkouts);
     
-    console.log('✅ Main exercise item updated:', { workoutId, mainItemId, completed });
+    console.log('✅ Main exercise item updated and saved:', { workoutId, mainItemId, completed });
   },
   
   getMainCompletion: (workoutId) => {
+    console.log('📂 getMainCompletion called with workoutId:', workoutId);
     const workout = get().scheduledWorkouts.find(sw => sw.id === workoutId);
     
+    console.log('🔍 Found workout:', workout ? `Yes (id: ${workout.id})` : 'No');
+    
     if (!workout) {
+      console.log('⚠️ No workout found, returning empty completion');
       return { completedItems: [], totalItems: 0, percentage: 0 };
     }
     
-    const totalItems = workout.workoutSnapshot?.exercises?.length || 0;
+    // Calculate total sets across all main exercises
+    // exercisesSnapshot uses WorkoutTemplateExercise format where sets is always a number
+    let totalSets = 0;
+    (workout.exercisesSnapshot || []).forEach((item: any) => {
+      if (typeof item.sets === 'number') {
+        totalSets += item.sets;
+      }
+    });
+    
     const completedItems = workout.mainCompletion?.completedItems || [];
-    const percentage = totalItems > 0 ? Math.round((completedItems.length / totalItems) * 100) : 0;
+    const percentage = totalSets > 0 ? Math.round((completedItems.length / totalSets) * 100) : 0;
+    
+    console.log('📊 Main completion:', { 
+      totalSets, 
+      completedCount: completedItems.length, 
+      percentage,
+      exercises: workout.exercisesSnapshot?.length || 0
+    });
     
     return {
       completedItems,
-      totalItems,
+      totalItems: totalSets,
       percentage,
     };
   },
@@ -2589,7 +2682,9 @@ export const useStore = create<WorkoutStore>((set, get) => ({
       completedAt: null,
       isLocked: false,
       warmupCompletion: { completedItems: [] },
+      mainCompletion: { completedItems: [] },
       workoutCompletion: { completedExercises: {}, completedSets: {} },
+      accessoryCompletion: { completedItems: [] },
     };
     
     const scheduledWorkouts = [...get().scheduledWorkouts, newWorkout];
@@ -2612,6 +2707,58 @@ export const useStore = create<WorkoutStore>((set, get) => ({
     
     console.log('✅ Workout duplicated:', { from: workout.date, to: toDate, newId: newWorkout.id });
     return { success: true };
+  },
+  
+  // Reset specific completion types
+  resetWarmupCompletion: async (workoutId) => {
+    console.log('🧹 Resetting warmup completion for workout:', workoutId);
+    const scheduledWorkouts = get().scheduledWorkouts.map(sw => {
+      if (sw.id === workoutId) {
+        return {
+          ...sw,
+          warmupCompletion: { completedItems: [] },
+        };
+      }
+      return sw;
+    });
+    
+    set({ scheduledWorkouts });
+    await storage.saveScheduledWorkouts(scheduledWorkouts);
+    console.log('✅ Warmup completion reset');
+  },
+  
+  resetMainCompletion: async (workoutId) => {
+    console.log('🧹 Resetting main completion for workout:', workoutId);
+    const scheduledWorkouts = get().scheduledWorkouts.map(sw => {
+      if (sw.id === workoutId) {
+        return {
+          ...sw,
+          mainCompletion: { completedItems: [] },
+        };
+      }
+      return sw;
+    });
+    
+    set({ scheduledWorkouts });
+    await storage.saveScheduledWorkouts(scheduledWorkouts);
+    console.log('✅ Main completion reset');
+  },
+  
+  resetAccessoryCompletion: async (workoutId) => {
+    console.log('🧹 Resetting accessory completion for workout:', workoutId);
+    const scheduledWorkouts = get().scheduledWorkouts.map(sw => {
+      if (sw.id === workoutId) {
+        return {
+          ...sw,
+          accessoryCompletion: { completedItems: [] },
+        };
+      }
+      return sw;
+    });
+    
+    set({ scheduledWorkouts });
+    await storage.saveScheduledWorkouts(scheduledWorkouts);
+    console.log('✅ Accessory completion reset');
   },
 }));
 

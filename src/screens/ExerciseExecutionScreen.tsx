@@ -1,17 +1,18 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, LayoutAnimation, Platform, UIManager, Alert } from 'react-native';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, LayoutAnimation, Platform, UIManager, Alert, Animated } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import * as Haptics from 'expo-haptics';
 import { useStore } from '../store';
 import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS, CARDS } from '../constants';
-import { IconArrowLeft, IconCheck, IconCheckmark, IconAddLine, IconMinusLine, IconTrash, IconEdit, IconMenu, IconHistory, IconRestart, IconSkip } from '../components/icons';
+import { IconArrowLeft, IconCheck, IconCheckmark, IconAddLine, IconMinusLine, IconTrash, IconEdit, IconMenu, IconHistory, IconRestart, IconSkip, IconSwap } from '../components/icons';
 import { BottomDrawer } from '../components/common/BottomDrawer';
 import { SetTimerSheet } from '../components/timer/SetTimerSheet';
 import { ActionSheet } from '../components/common/ActionSheet';
 import { useTranslation } from '../i18n/useTranslation';
 import { formatWeightForLoad, toDisplayWeight, fromDisplayWeight } from '../utils/weight';
 import type { WarmupItem_DEPRECATED as WarmupItem, AccessoryItem_DEPRECATED as AccessoryItem, WorkoutTemplateExercise } from '../types/training';
+import dayjs from 'dayjs';
 
 // Enable LayoutAnimation on Android
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -35,19 +36,32 @@ export function ExerciseExecutionScreen() {
   const { t } = useTranslation();
   
   const { workoutKey, workoutTemplateId, type } = route.params;
-  const { 
-    getWorkoutTemplate, 
-    updateWarmupCompletion, 
-    getWarmupCompletion, 
-    updateAccessoryCompletion, 
+  
+  console.log('🚀 ExerciseExecutionScreen initialized:', {
+    workoutKey,
+    workoutTemplateId,
+    type,
+    isScheduledWorkout: workoutKey?.startsWith('sw-'),
+  });
+  
+  const {
+    getWorkoutTemplate,
+    updateWarmupCompletion,
+    getWarmupCompletion,
+    updateAccessoryCompletion,
     getAccessoryCompletion,
     updateMainCompletion,
     getMainCompletion,
-    updateWorkoutTemplate, 
+    updateWorkoutTemplate,
     settings,
     addWarmupToSession,
     addAccessoryToSession,
     exercises: exercisesLibrary,
+    resetWarmupCompletion,
+    resetMainCompletion,
+    resetAccessoryCompletion,
+    sessions,
+    detailedWorkoutProgress,
   } = useStore();
   
   const template = getWorkoutTemplate(workoutTemplateId);
@@ -153,6 +167,17 @@ export function ExerciseExecutionScreen() {
   const [showTimer, setShowTimer] = useState(false);
   const [isExerciseTimerPhase, setIsExerciseTimerPhase] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
+  const [showExerciseHistory, setShowExerciseHistory] = useState(false);
+  const historyOpacity = useRef(new Animated.Value(0)).current;
+  
+  // Animate history visibility
+  useEffect(() => {
+    Animated.timing(historyOpacity, {
+      toValue: showExerciseHistory ? 1 : 0,
+      duration: 300,
+      useNativeDriver: true,
+    }).start();
+  }, [showExerciseHistory]);
   
   // Sort groups: completed first (by completion order), then active, then remaining
   const sortedExerciseGroups = useMemo(() => {
@@ -207,6 +232,7 @@ export function ExerciseExecutionScreen() {
   useEffect(() => {
     if (exerciseGroups.length === 0) return; // Wait for groups to be populated
     
+    console.log('📂 Loading completion state:', { type, workoutKey });
     const completion = type === 'warmup' 
       ? getWarmupCompletion(workoutKey)
       : type === 'core'
@@ -214,6 +240,8 @@ export function ExerciseExecutionScreen() {
       : type === 'main'
       ? getMainCompletion(workoutKey)
       : null;
+    
+    console.log('📊 Loaded completion:', completion);
       
     if (completion && completion.completedItems.length > 0) {
       setCompletedSets(new Set(completion.completedItems));
@@ -351,6 +379,7 @@ export function ExerciseExecutionScreen() {
     setCompletedSets(newCompletedSets);
     
     // Save to store (individual set completion)
+    console.log('💾 Saving set completion:', { type, workoutKey, setId });
     if (type === 'warmup') {
       await updateWarmupCompletion(workoutKey, setId, true);
     } else if (type === 'core') {
@@ -358,6 +387,7 @@ export function ExerciseExecutionScreen() {
     } else if (type === 'main') {
       await updateMainCompletion(workoutKey, setId, true);
     }
+    console.log('✅ Set completion saved');
     
     // Check if all exercises in this round are complete
     const allExercisesComplete = currentGroup.exercises.every(ex => {
@@ -408,6 +438,7 @@ export function ExerciseExecutionScreen() {
           LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
           setExpandedGroupIndex(nextIncompleteIndex);
           setActiveExerciseIndex(0);
+          setHasLoggedAnySet(false); // Unlock flow for next exercise selection
         } else {
           // All done!
           await saveSession();
@@ -438,6 +469,9 @@ export function ExerciseExecutionScreen() {
     const currentExercise = currentGroup.exercises[activeExerciseIndex];
     
     if (!currentExercise) return;
+    
+    // Mark that user has started working (keeps border active)
+    setHasLoggedAnySet(true);
     
     setShowAdjustmentDrawer(false);
     
@@ -519,11 +553,97 @@ export function ExerciseExecutionScreen() {
       ]
     );
   };
+
+  const handleReset = () => {
+    setShowMenu(false);
+    Alert.alert(
+      t('resetProgressTitle'),
+      `Reset all ${type === 'warmup' ? 'warm-up' : type === 'core' ? 'core' : 'workout'} progress?`,
+      [
+        { text: t('cancel'), style: 'cancel' },
+        {
+          text: t('reset'),
+          style: 'destructive',
+          onPress: async () => {
+            // Clear all completed sets in local state
+            setCompletedSets(new Set());
+            setCurrentRounds({});
+            setCompletionTimestamps({});
+            setExpandedGroupIndex(0);
+            setActiveExerciseIndex(0);
+            setHasLoggedAnySet(false);
+            
+            // Clear completion state in store
+            if (type === 'warmup') {
+              await resetWarmupCompletion(workoutKey);
+            } else if (type === 'core') {
+              await resetAccessoryCompletion(workoutKey);
+            } else if (type === 'main') {
+              await resetMainCompletion(workoutKey);
+            }
+            
+            // Show feedback
+            await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+          },
+        },
+      ]
+    );
+  };
+
+  const handleSwap = () => {
+    setShowMenu(false);
+    // Navigate to the appropriate editor based on type
+    if (type === 'warmup') {
+      (navigation as any).navigate('WarmupEditor', { templateId: workoutTemplateId });
+    } else if (type === 'core') {
+      (navigation as any).navigate('AccessoriesEditor', { templateId: workoutTemplateId });
+    }
+  };
   
   const getTitle = () => {
     if (type === 'warmup') return t('warmup');
     if (type === 'core') return t('core');
     return template?.name || 'Workout';
+  };
+  
+  // Helper function to get ordinal suffix for dates
+  const getOrdinalSuffix = (day: number) => {
+    if (day > 3 && day < 21) return 'th';
+    switch (day % 10) {
+      case 1: return 'st';
+      case 2: return 'nd';
+      case 3: return 'rd';
+      default: return 'th';
+    }
+  };
+  
+  // Get exercise history for the current exercise
+  const getExerciseHistoryForDrawer = (exerciseId: string) => {
+    const historyByDate = new Map<string, Array<{ setNumber: number; weight: number; reps: number }>>();
+    
+    // Get from completed sessions
+    sessions.forEach(session => {
+      session.sets.forEach(set => {
+        if (set.exerciseId === exerciseId || set.exerciseName === items.find(i => i.id === exerciseId)?.exerciseName) {
+          const date = session.date || new Date(session.startTime).toISOString().split('T')[0];
+          
+          if (!historyByDate.has(date)) {
+            historyByDate.set(date, []);
+          }
+          
+          historyByDate.get(date)!.push({
+            setNumber: set.setNumber || 1,
+            weight: set.weight || 0,
+            reps: set.reps || 0,
+          });
+        }
+      });
+    });
+    
+    // Convert to array and sort by date (newest first)
+    return Array.from(historyByDate.entries())
+      .map(([date, sets]) => ({ date, sets }))
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   };
   
   // Rest of the render logic from WarmupExecutionScreen...
@@ -579,10 +699,13 @@ export function ExerciseExecutionScreen() {
                       const displayReps = localValues[exercise.id]?.reps ?? exercise.reps ?? 0;
                       const showWeight = displayWeight > 0;
                       const isCurrentExercise = isExpanded && exIndex === activeExerciseIndex;
-                      const isActive = isCurrentExercise && hasLoggedAnySet; // Only active after logging first set
                       const setId = `${exercise.id}-set-${currentRound}`;
                       const isExerciseCompleted = completedSets.has(setId);
                       const repsUnit = exercise.isTimeBased ? 'secs' : 'reps';
+                      
+                      // Card is active when it's the current exercise AND user has started working on it
+                      // (either logged a set, timer is showing, or adjustment drawer is open)
+                      const isActive = isCurrentExercise && (hasLoggedAnySet || showTimer || showAdjustmentDrawer);
                       
                       // Determine card style based on state
                       const cardStyle = isExerciseCompleted ? styles.itemCardDimmed : (isActive ? styles.itemCard : styles.itemCardInactive);
@@ -613,18 +736,12 @@ export function ExerciseExecutionScreen() {
                                     isExerciseCompleted ? styles.exerciseNameRowWithIcon : styles.exerciseNameInCard,
                                     !isCurrentExercise && !isExerciseCompleted && styles.exerciseNameInCardCentered
                                   ]}>
-                                    <Text style={[
-                                      styles.exerciseNameText,
-                                      (isExpanded || group.exercises.length === 1) && styles.exerciseNameTextActive
-                                    ]}>
-                                      {exercise.exerciseName}
-                                    </Text>
-                                    
-                                    {isExerciseCompleted && (
-                                      <View style={styles.checkIconContainer}>
-                                        <IconCheck size={24} color={COLORS.signalPositive} />
-                                      </View>
-                                    )}
+                                  <Text style={[
+                                    styles.exerciseNameText,
+                                    (isExpanded || group.exercises.length === 1) && styles.exerciseNameTextActive
+                                  ]}>
+                                    {exercise.exerciseName}
+                                  </Text>
                                   </View>
                                   
                                   {/* Values Row - Show for current exercise in expanded group */}
@@ -748,7 +865,8 @@ export function ExerciseExecutionScreen() {
       <BottomDrawer
         visible={showAdjustmentDrawer}
         onClose={() => setShowAdjustmentDrawer(false)}
-        maxHeight="50%"
+        maxHeight="80%"
+        scrollable={false}
       >
         <View style={styles.adjustmentDrawerContent}>
           <Text style={styles.adjustmentDrawerTitle}>{t('adjustValues')}</Text>
@@ -892,6 +1010,82 @@ export function ExerciseExecutionScreen() {
               })()}
             </View>
           )}
+          
+          {/* View History Button and Exercise History */}
+          {expandedGroupIndex >= 0 && exerciseGroups[expandedGroupIndex] && (() => {
+            const activeExercise = exerciseGroups[expandedGroupIndex].exercises[activeExerciseIndex];
+            if (!activeExercise) return null;
+            
+            // Get exercise history for this exercise
+            const exerciseHistory = getExerciseHistoryForDrawer(activeExercise.id);
+            
+            // Only show button if there's history
+            if (exerciseHistory.length === 0) return null;
+            
+            return (
+              <>
+                {/* View History Button */}
+                <TouchableOpacity
+                  style={styles.viewHistoryButton}
+                  onPress={() => setShowExerciseHistory(!showExerciseHistory)}
+                  activeOpacity={0.7}
+                >
+                  <IconHistory size={20} color={COLORS.text} />
+                  <Text style={styles.viewHistoryButtonText}>
+                    {showExerciseHistory ? t('hideHistory') : t('viewHistory')}
+                  </Text>
+                </TouchableOpacity>
+                
+                {/* Exercise History - Always rendered but hidden with opacity */}
+                <Animated.View style={[
+                  styles.historySection,
+                  {
+                    opacity: historyOpacity,
+                    height: showExerciseHistory ? undefined : 0,
+                    overflow: 'hidden',
+                  }
+                ]}>
+                  {exerciseHistory.slice(0, 3).map((workout, workoutIndex) => (
+                    <View key={workout.date}>
+                      <View style={styles.historyWorkoutGroup}>
+                        {/* Date column on the left */}
+                        <View style={styles.historyDateColumn}>
+                          <Text style={styles.historyDateText}>
+                            {dayjs(workout.date).format('MMMM')}
+                          </Text>
+                          <Text style={styles.historyDateText}>
+                            {dayjs(workout.date).date()}{getOrdinalSuffix(dayjs(workout.date).date())}
+                          </Text>
+                        </View>
+                        
+                        {/* Sets column on the right */}
+                        <View style={styles.historySetsColumn}>
+                          {workout.sets.slice().reverse().map((set, setIndex) => (
+                            <View key={setIndex} style={styles.historySetRow}>
+                              <View style={styles.historyValueColumn}>
+                                <Text style={styles.historySetText}>
+                                  {formatWeightForLoad(set.weight, useKg)}
+                                </Text>
+                                <Text style={styles.historySetUnit}>{weightUnit}</Text>
+                              </View>
+                              <View style={styles.historyValueColumn}>
+                                <Text style={styles.historySetText}>{set.reps}</Text>
+                                <Text style={styles.historySetUnit}>reps</Text>
+                              </View>
+                            </View>
+                          ))}
+                        </View>
+                      </View>
+                      
+                      {workoutIndex < Math.min(2, exerciseHistory.length - 1) && (
+                        <View style={styles.historyDivider} />
+                      )}
+                    </View>
+                  ))}
+                </Animated.View>
+              </>
+            );
+          })()}
         </View>
       </BottomDrawer>
 
@@ -899,30 +1093,35 @@ export function ExerciseExecutionScreen() {
       <ActionSheet
         visible={showMenu}
         onClose={() => setShowMenu(false)}
-        items={[
-          {
-            icon: <IconCheck size={24} color="#000000" />,
-            label: t('complete'),
-            onPress: handleCompleteAll,
-            featured: true,
-          },
-          {
-            icon: <IconHistory size={24} color="#000000" />,
-            label: t('history'),
-            onPress: handleHistory,
-          },
-          {
-            icon: <IconRestart size={24} color="#000000" />,
-            label: t('rest'),
-            onPress: handleRest,
-          },
-          {
-            icon: <IconSkip size={24} color={COLORS.signalNegative} />,
-            label: t('skip'),
-            onPress: handleSkip,
-            destructive: true,
-          },
-        ]}
+        items={
+          type === 'main' ? [
+            // Main workout: Reset and Complete side by side
+            {
+              icon: <IconRestart size={24} color={COLORS.signalNegative} />,
+              label: t('reset'),
+              onPress: handleReset,
+              destructive: true,
+            },
+            {
+              icon: <IconCheck size={24} color="#000000" />,
+              label: t('complete'),
+              onPress: handleCompleteAll,
+            },
+          ] : [
+            // Warmup/Core: Swap and Reset side by side
+            {
+              icon: <IconSwap size={24} color="#000000" />,
+              label: t('swap'),
+              onPress: handleSwap,
+            },
+            {
+              icon: <IconRestart size={24} color={COLORS.signalNegative} />,
+              label: t('reset'),
+              onPress: handleReset,
+              destructive: true,
+            },
+          ]
+        }
       />
     </View>
   );
@@ -1002,12 +1201,16 @@ const styles = StyleSheet.create({
   },
   itemCardInactive: {
     ...CARDS.cardDeep.outer,
+    borderWidth: 1,
+    borderColor: COLORS.activeCard, // Same as card background, invisible but prevents layout jump
   },
   itemCardInnerInactive: {
     ...CARDS.cardDeep.inner,
   },
   itemCardDimmed: {
     ...CARDS.cardDeepDimmed.outer,
+    borderWidth: 1,
+    borderColor: COLORS.activeCard, // Same as card background, invisible but prevents layout jump
   },
   itemCardInnerDimmed: {
     ...CARDS.cardDeepDimmed.inner,
@@ -1025,7 +1228,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 0,
+    marginBottom: 4, // Match exerciseNameInCard to prevent jump
   },
   exerciseNameText: {
     ...TYPOGRAPHY.meta,
@@ -1033,9 +1236,6 @@ const styles = StyleSheet.create({
   },
   exerciseNameTextActive: {
     color: COLORS.text,
-  },
-  checkIconContainer: {
-    marginLeft: SPACING.md,
   },
   editIconContainer: {
     marginLeft: SPACING.md,
@@ -1121,7 +1321,7 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
   },
   adjustmentDrawerContent: {
-    paddingHorizontal: SPACING.lg,
+    paddingHorizontal: SPACING.xxl,
     paddingBottom: SPACING.xl,
   },
   adjustmentDrawerTitle: {
@@ -1132,6 +1332,8 @@ const styles = StyleSheet.create({
   drawerValuesCard: {
     ...CARDS.cardDeep.outer,
     backgroundColor: COLORS.activeCard,
+    paddingVertical: 8,
+    paddingHorizontal: 24,
   },
   drawerAdjustRow: {
     flexDirection: 'row',
@@ -1145,12 +1347,11 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   drawerAdjustValueText: {
-    fontSize: 32,
-    fontWeight: '600',
+    ...TYPOGRAPHY.h1,
     color: COLORS.text,
   },
   drawerAdjustUnit: {
-    ...TYPOGRAPHY.caption,
+    ...TYPOGRAPHY.body,
     color: COLORS.textMeta,
   },
   drawerAdjustButtons: {
@@ -1162,11 +1363,11 @@ const styles = StyleSheet.create({
   },
   adjustButton: {
     ...CARDS.cardDeep.outer,
-    backgroundColor: COLORS.backgroundAlt,
+    backgroundColor: COLORS.accentPrimaryDimmed,
   },
   adjustButtonInner: {
     ...CARDS.cardDeep.inner,
-    backgroundColor: COLORS.backgroundAlt,
+    backgroundColor: COLORS.accentPrimaryDimmed,
     width: 48,
     height: 48,
     alignItems: 'center',
@@ -1175,6 +1376,65 @@ const styles = StyleSheet.create({
   drawerAdjustDivider: {
     height: 1,
     backgroundColor: COLORS.border,
-    marginVertical: SPACING.sm,
+    marginVertical: 16,
+  },
+  viewHistoryButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 12,
+    marginTop: SPACING.md,
+  },
+  viewHistoryButtonText: {
+    ...TYPOGRAPHY.metaBold,
+    color: COLORS.text,
+  },
+  historySection: {
+    marginTop: SPACING.md,
+  },
+  historyEmptyText: {
+    ...TYPOGRAPHY.meta,
+    color: COLORS.textMeta,
+  },
+  historyWorkoutGroup: {
+    flexDirection: 'row',
+    paddingVertical: SPACING.md,
+  },
+  historyDateColumn: {
+    width: 80,
+    paddingRight: SPACING.md,
+  },
+  historyDateText: {
+    ...TYPOGRAPHY.meta,
+    color: COLORS.textMeta,
+    textAlign: 'left',
+  },
+  historySetsColumn: {
+    flex: 1,
+  },
+  historySetRow: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: SPACING.lg,
+    paddingVertical: 2,
+  },
+  historyValueColumn: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: 4,
+  },
+  historySetText: {
+    ...TYPOGRAPHY.body,
+    color: COLORS.text,
+  },
+  historySetUnit: {
+    ...TYPOGRAPHY.caption,
+    color: COLORS.textMeta,
+  },
+  historyDivider: {
+    height: 1,
+    backgroundColor: COLORS.border,
+    marginVertical: SPACING.md,
   },
 });
