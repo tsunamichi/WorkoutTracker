@@ -1037,9 +1037,9 @@ const styles = StyleSheet.create({
     position: 'relative',
   },
   roundDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+    width: 4,
+    height: 4,
+    borderRadius: 2,
     backgroundColor: COLORS.textMeta,
   },
   roundDotActive: {
