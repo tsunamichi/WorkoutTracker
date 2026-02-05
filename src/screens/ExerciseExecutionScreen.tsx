@@ -632,18 +632,16 @@ export function ExerciseExecutionScreen() {
                   </View>
                 </View>
                 
-                {/* Round Indicator - Dots on the right */}
+                {/* Round Indicator - Dots on the right (only for expanded group) */}
                 <View style={styles.roundIndicatorContainer}>
-                  {isCompleted ? (
-                    <IconCheckmark size={12} color={COLORS.text} />
-                  ) : (
+                  {isExpanded && !isCompleted && (
                     Array.from({ length: group.totalRounds }).map((_, roundIndex) => {
                       const isRoundCompleted = roundIndex < currentRound;
-                      const isRoundActive = roundIndex === currentRound && isExpanded;
+                      const isRoundActive = roundIndex === currentRound;
                       
                       if (isRoundCompleted) {
                         return (
-                          <IconCheckmark key={roundIndex} size={12} color={COLORS.text} />
+                          <View key={roundIndex} style={styles.completedDot} />
                         );
                       }
                       
@@ -656,7 +654,7 @@ export function ExerciseExecutionScreen() {
                       return (
                         <View
                           key={roundIndex}
-                          style={styles.roundDot}
+                          style={styles.inactiveDot}
                         />
                       );
                     })
@@ -1042,18 +1040,24 @@ const styles = StyleSheet.create({
     position: 'relative',
     width: 16,
   },
-  roundDot: {
+  inactiveDot: {
     width: 4,
     height: 4,
     borderRadius: 2,
     backgroundColor: 'transparent',
     borderWidth: 1,
-    borderColor: COLORS.text,
+    borderColor: COLORS.accentPrimary,
   },
   activeDot: {
     width: 8,
     height: 8,
     borderRadius: 4,
+    backgroundColor: COLORS.accentPrimary,
+  },
+  completedDot: {
+    width: 4,
+    height: 4,
+    borderRadius: 2,
     backgroundColor: COLORS.accentPrimary,
   },
   startButtonContainer: {
