@@ -62,6 +62,8 @@ export function ExerciseExecutionScreen() {
     resetAccessoryCompletion,
     sessions,
     detailedWorkoutProgress,
+    cycles,
+    workoutTemplates,
   } = useStore();
   
   const template = getWorkoutTemplate(workoutTemplateId);
@@ -621,7 +623,65 @@ export function ExerciseExecutionScreen() {
   const getExerciseHistoryForDrawer = (exerciseId: string) => {
     const historyByDate = new Map<string, Array<{ setNumber: number; weight: number; reps: number }>>();
     
-    // Get from completed sessions
+    // Create a map of workoutTemplateId -> workout template for quick lookup
+    const workoutTemplateMap = new Map<string, any>();
+    workoutTemplates.forEach(template => {
+      workoutTemplateMap.set(template.id, template);
+    });
+    
+    // 1. Get from detailed workout progress (includes in-progress workouts with completed sets)
+    Object.entries(detailedWorkoutProgress).forEach(([workoutKey, workoutProgress]) => {
+      // Extract workoutTemplateId from workoutKey
+      const workoutTemplateId = workoutKey.split('-').slice(0, -3).join('-');
+      const workoutTemplate = workoutTemplateMap.get(workoutTemplateId);
+      
+      if (!workoutTemplate) return;
+      
+      // Check all exercises in this workout progress
+      Object.entries(workoutProgress.exercises).forEach(([templateExerciseId, exerciseProgress]) => {
+        const templateExercise = workoutTemplate.exercises?.find((ex: any) => ex.id === templateExerciseId);
+        
+        if (!templateExercise) return;
+        
+        // Match by exerciseId
+        const exerciseDataById = exercisesLibrary.find(e => e.id === templateExercise.exerciseId);
+        const exerciseDataForCurrent = exercisesLibrary.find(e => e.id === exerciseId);
+        
+        const matchesById = templateExercise.exerciseId === exerciseId;
+        const matchesByName = exerciseDataById?.name.toLowerCase().trim() === exerciseDataForCurrent?.name.toLowerCase().trim();
+        
+        if (matchesById || matchesByName) {
+          // Skip if this exercise was marked as skipped
+          if (exerciseProgress.skipped) return;
+          
+          // Include completed sets
+          const hasCompletedSets = exerciseProgress.sets.some(set => set.completed);
+          
+          if (hasCompletedSets) {
+            // Extract date from workoutKey
+            const dateMatch = workoutKey.match(/(\d{4}-\d{2}-\d{2})/);
+            const date = dateMatch ? dateMatch[1] : new Date().toISOString().split('T')[0];
+            
+            const completedSets = exerciseProgress.sets
+              .filter(set => set.completed)
+              .map(set => ({
+                setNumber: set.setNumber,
+                weight: set.weight,
+                reps: set.reps,
+              }));
+            
+            if (historyByDate.has(date)) {
+              const existing = historyByDate.get(date)!;
+              historyByDate.set(date, [...existing, ...completedSets]);
+            } else {
+              historyByDate.set(date, completedSets);
+            }
+          }
+        }
+      });
+    });
+    
+    // 2. Get from completed sessions
     sessions.forEach(session => {
       session.sets.forEach(set => {
         if (set.exerciseId === exerciseId || set.exerciseName === items.find(i => i.id === exerciseId)?.exerciseName) {
