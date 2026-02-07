@@ -19,6 +19,7 @@ interface TimerControlsProps {
   showRestart?: boolean;
   onRestart?: () => void;
   hideControlsWhenPaused?: boolean;
+  disablePlayPause?: boolean;
 }
 
 export function TimerControls({
@@ -31,6 +32,7 @@ export function TimerControls({
   showRestart = false,
   onRestart,
   hideControlsWhenPaused = false,
+  disablePlayPause = false,
 }: TimerControlsProps) {
   const sideButtonsAnim = useRef(new Animated.Value(hideControlsWhenPaused ? 0 : 1)).current;
 
@@ -95,14 +97,15 @@ export function TimerControls({
       <TouchableOpacity
         onPress={showRestart && onRestart ? onRestart : onTogglePause}
         activeOpacity={1}
-        style={styles.playPauseButton}
+        style={[styles.playPauseButton, disablePlayPause && styles.playPauseButtonDisabled]}
+        disabled={disablePlayPause}
       >
         {showRestart ? (
-          <IconRestart size={24} color={COLORS.accentPrimary} />
+          <IconRestart size={24} color={disablePlayPause ? COLORS.textMeta : COLORS.accentPrimary} />
         ) : isRunning ? (
-          <IconPause size={24} color={COLORS.accentPrimary} />
+          <IconPause size={24} color={disablePlayPause ? COLORS.textMeta : COLORS.accentPrimary} />
         ) : (
-          <IconPlay size={24} color={COLORS.accentPrimary} />
+          <IconPlay size={24} color={disablePlayPause ? COLORS.textMeta : COLORS.accentPrimary} />
         )}
       </TouchableOpacity>
 
@@ -153,6 +156,9 @@ const styles = StyleSheet.create({
     borderCurve: 'continuous',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  playPauseButtonDisabled: {
+    opacity: 0.5,
   },
   sideButtonContainer: {
     width: 56,

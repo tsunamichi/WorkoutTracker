@@ -2466,8 +2466,22 @@ export const useStore = create<WorkoutStore>((set, get) => ({
     
     // Calculate total sets across all warmup items
     // Support both old format (sets: number) and new format (sets: ExerciseInstanceSet[])
+    // Fallback to template warmupItems if snapshot is empty
+    let warmupItems = workout.warmupSnapshot || [];
+    
+    // If snapshot is empty, try to get from template
+    // Check both templateId (cycle workouts) and workoutTemplateId (standalone workouts)
+    const templateId = (workout as any).templateId || (workout as any).workoutTemplateId;
+    if (warmupItems.length === 0 && templateId) {
+      const template = get().workoutTemplates.find(t => t.id === templateId);
+      if (template && template.warmupItems) {
+        warmupItems = template.warmupItems;
+        console.log('⚠️ Using template warmupItems as fallback:', warmupItems.length);
+      }
+    }
+    
     let totalSets = 0;
-    (workout.warmupSnapshot || []).forEach((item: any) => {
+    warmupItems.forEach((item: any) => {
       if (Array.isArray(item.sets)) {
         // New format: sets is an array
         totalSets += item.sets.length;
@@ -2478,13 +2492,22 @@ export const useStore = create<WorkoutStore>((set, get) => ({
     });
     
     const completedItems = workout.warmupCompletion?.completedItems || [];
-    const percentage = totalSets > 0 ? Math.round((completedItems.length / totalSets) * 100) : 0;
+    // Calculate percentage, ensuring it reaches 100% when all sets are complete
+    let percentage = 0;
+    if (totalSets > 0) {
+      if (completedItems.length >= totalSets) {
+        // Safeguard: if completed items >= total sets, always show 100%
+        percentage = 100;
+      } else {
+        percentage = Math.round((completedItems.length / totalSets) * 100);
+      }
+    }
     
     console.log('📊 Warmup completion:', { 
       totalSets, 
       completedCount: completedItems.length, 
       percentage,
-      items: workout.warmupSnapshot?.length || 0
+      items: warmupItems.length
     });
     
     return {
@@ -2524,16 +2547,34 @@ export const useStore = create<WorkoutStore>((set, get) => ({
   },
   
   getAccessoryCompletion: (workoutId) => {
+    console.log('📂 getAccessoryCompletion called with workoutId:', workoutId);
     const workout = get().scheduledWorkouts.find(sw => sw.id === workoutId);
     
+    console.log('🔍 Found workout:', workout ? `Yes (id: ${workout.id})` : 'No');
+    
     if (!workout) {
+      console.log('⚠️ No workout found, returning empty completion');
       return { completedItems: [], totalItems: 0, percentage: 0 };
     }
     
     // Calculate total sets across all accessory items
     // Support both old format (sets: number) and new format (sets: ExerciseInstanceSet[])
+    // Fallback to template accessoryItems if snapshot is empty
+    let accessoryItems = workout.accessorySnapshot || [];
+    
+    // If snapshot is empty, try to get from template
+    // Check both templateId (cycle workouts) and workoutTemplateId (standalone workouts)
+    const templateId = (workout as any).templateId || (workout as any).workoutTemplateId;
+    if (accessoryItems.length === 0 && templateId) {
+      const template = get().workoutTemplates.find(t => t.id === templateId);
+      if (template && template.accessoryItems) {
+        accessoryItems = template.accessoryItems;
+        console.log('⚠️ Using template accessoryItems as fallback:', accessoryItems.length);
+      }
+    }
+    
     let totalSets = 0;
-    (workout.accessorySnapshot || []).forEach((item: any) => {
+    accessoryItems.forEach((item: any) => {
       if (Array.isArray(item.sets)) {
         // New format: sets is an array
         totalSets += item.sets.length;
@@ -2544,7 +2585,23 @@ export const useStore = create<WorkoutStore>((set, get) => ({
     });
     
     const completedItems = workout.accessoryCompletion?.completedItems || [];
-    const percentage = totalSets > 0 ? Math.round((completedItems.length / totalSets) * 100) : 0;
+    // Calculate percentage, ensuring it reaches 100% when all sets are complete
+    let percentage = 0;
+    if (totalSets > 0) {
+      if (completedItems.length >= totalSets) {
+        // Safeguard: if completed items >= total sets, always show 100%
+        percentage = 100;
+      } else {
+        percentage = Math.round((completedItems.length / totalSets) * 100);
+      }
+    }
+    
+    console.log('📊 Accessory completion:', { 
+      totalSets, 
+      completedCount: completedItems.length, 
+      percentage,
+      items: accessoryItems.length
+    });
     
     return {
       completedItems,
@@ -2612,7 +2669,16 @@ export const useStore = create<WorkoutStore>((set, get) => ({
     });
     
     const completedItems = workout.mainCompletion?.completedItems || [];
-    const percentage = totalSets > 0 ? Math.round((completedItems.length / totalSets) * 100) : 0;
+    // Calculate percentage, ensuring it reaches 100% when all sets are complete
+    let percentage = 0;
+    if (totalSets > 0) {
+      if (completedItems.length >= totalSets) {
+        // Safeguard: if completed items >= total sets, always show 100%
+        percentage = 100;
+      } else {
+        percentage = Math.round((completedItems.length / totalSets) * 100);
+      }
+    }
     
     console.log('📊 Main completion:', { 
       totalSets, 

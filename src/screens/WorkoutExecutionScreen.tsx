@@ -478,7 +478,7 @@ export function SetTimerSheetLegacy({ visible, onComplete, onClose, workoutName,
 export function WorkoutExecutionScreen({ route, navigation }: WorkoutExecutionScreenProps) {
   const insets = useSafeAreaInsets();
   const { workoutId, cycleId, workoutTemplateId, date } = route.params;
-  const { cycles, exercises, addSession, getWorkoutCompletionPercentage, getExerciseProgress, saveExerciseProgress, clearWorkoutProgress, skipExercise, getWorkoutTemplate, getWarmupCompletion, getMainCompletion, getAccessoryCompletion, settings } = useStore();
+  const { cycles, exercises, addSession, getWorkoutCompletionPercentage, getExerciseProgress, saveExerciseProgress, clearWorkoutProgress, skipExercise, getWorkoutTemplate, getWarmupCompletion, getMainCompletion, getAccessoryCompletion, settings, completeWorkout } = useStore();
   const { t } = useTranslation();
   const useKg = settings.useKg;
   const weightUnit = useKg ? 'kg' : 'lb';
@@ -511,9 +511,10 @@ export function WorkoutExecutionScreen({ route, navigation }: WorkoutExecutionSc
   );
   
   // Get completion status for each section (re-calculated when refreshKey changes)
-  const warmupCompletion = React.useMemo(() => getWarmupCompletion(workoutKey), [workoutKey, refreshKey, getWarmupCompletion]);
-  const mainCompletion = React.useMemo(() => getMainCompletion(workoutKey), [workoutKey, refreshKey, getMainCompletion]);
-  const coreCompletion = React.useMemo(() => getAccessoryCompletion(workoutKey), [workoutKey, refreshKey, getAccessoryCompletion]);
+  // Don't memoize - always get fresh values to ensure progress updates
+  const warmupCompletion = getWarmupCompletion(workoutKey);
+  const mainCompletion = getMainCompletion(workoutKey);
+  const coreCompletion = getAccessoryCompletion(workoutKey);
   
   // Log when workout progress changes
   useEffect(() => {
@@ -551,21 +552,9 @@ export function WorkoutExecutionScreen({ route, navigation }: WorkoutExecutionSc
     }
   }
   
-  // Calculate completion percentage, excluding skipped exercises
-  let totalSets = 0;
-  let completedSets = 0;
-  
-  workout?.exercises.forEach(ex => {
-    const progress = getExerciseProgress(workoutKey, ex.id);
-    if (progress?.skipped) {
-      // Skip this exercise entirely - don't count its sets in total
-      return;
-    }
-    totalSets += ex.targetSets || 0;
-    completedSets += progress?.sets.filter(set => set.completed).length || 0;
-  });
-  
-  const completionPercentage = totalSets > 0 ? Math.round((completedSets / totalSets) * 100) : 0;
+  // Calculate completion percentage - ONLY main strength exercises count
+  // Warmup and core/accessory exercises don't affect completion percentage
+  const completionPercentage = mainCompletion.percentage;
   
   if (!workout) {
     return (
@@ -639,6 +628,11 @@ export function WorkoutExecutionScreen({ route, navigation }: WorkoutExecutionSc
   const handleCompleteWorkout = async () => {
     setShowMenu(false);
     
+    console.log('🎯 handleCompleteWorkout called');
+    console.log('   workout:', workout ? 'exists' : 'UNDEFINED');
+    console.log('   workoutKey:', workoutKey);
+    console.log('   template:', template ? 'exists' : 'undefined');
+    
     Alert.alert(
       t('completeWorkoutTitle'),
       t('completeWorkoutMessage'),
@@ -651,7 +645,16 @@ export function WorkoutExecutionScreen({ route, navigation }: WorkoutExecutionSc
           text: t('complete'),
           style: 'default',
           onPress: async () => {
-            if (!workout) return;
+            console.log('🔵 Complete button pressed in alert');
+            console.log('   workout at callback:', workout ? 'exists' : 'UNDEFINED');
+            
+            if (!workout) {
+              console.error('❌ Workout is undefined, cannot complete');
+              Alert.alert('Error', 'Cannot complete workout: workout data not found');
+              return;
+            }
+            
+            console.log('🏁 Completing workout:', workoutKey);
             
             // Mark all exercises and all their sets as completed
             for (const exercise of workout.exercises) {
@@ -683,8 +686,60 @@ export function WorkoutExecutionScreen({ route, navigation }: WorkoutExecutionSc
               });
             }
             
+            // Collect all completed sets for session (including warmup/core that were saved earlier)
+            const allSets: any[] = [];
+            
+            // Get main exercise sets
+            workout.exercises.forEach((exercise) => {
+              const progress = getExerciseProgress(workoutKey, exercise.id);
+              if (progress && progress.sets && !progress.skipped) {
+                const completedSets = progress.sets.filter(set => set.completed);
+                console.log(`   Exercise ${exercise.exerciseId}: ${completedSets.length} completed sets`);
+                
+                completedSets.forEach((set) => {
+                  allSets.push({
+                    id: `${Date.now()}-${exercise.id}-${set.setNumber}`,
+                    sessionId: Date.now().toString(),
+                    exerciseId: exercise.exerciseId,
+                    setNumber: set.setNumber,
+                    weight: set.weight,
+                    reps: set.reps,
+                    isCompleted: true,
+                  });
+                });
+              }
+            });
+            
+            console.log(`   Total main sets: ${allSets.length}`);
+            
+            // Create workout session with all completed sets
+            if (allSets.length > 0) {
+              const session = {
+                id: Date.now().toString(),
+                cycleId,
+                workoutTemplateId,
+                date,
+                startTime: new Date().toISOString(),
+                endTime: new Date().toISOString(),
+                sets: allSets,
+              };
+              
+              await addSession(session);
+              console.log('✅ Session saved with', allSets.length, 'sets');
+            }
+            
+            // Mark workout as complete (keep progress data for viewing)
+            if (workoutKey?.startsWith('sw-')) {
+              console.log('🎉 Marking workout as complete:', workoutKey);
+              await completeWorkout(workoutKey);
+              console.log('✅ Workout marked as complete (progress preserved)');
+            }
+            
             // Show success feedback
             await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            
+            // Navigate back
+            navigation.goBack();
           },
         },
       ]

@@ -94,6 +94,8 @@ export function ExerciseDetailScreen({ route, navigation }: ExerciseDetailScreen
     sessions,
     detailedWorkoutProgress,
     settings,
+    completeWorkout,
+    addSession,
   } = useStore();
   const { t, language } = useTranslation();
   const [showTimer, setShowTimer] = useState(false);
@@ -172,6 +174,58 @@ export function ExerciseDetailScreen({ route, navigation }: ExerciseDetailScreen
       return target > 0 && completed >= target;
     });
   }, [workoutKey, exercise, workoutTemplate, getExerciseProgress, detailedWorkoutProgress]);
+
+  // Helper function to save workout session when auto-completing
+  const saveWorkoutSession = useCallback(async () => {
+    if (!workoutKey || !workoutTemplate) return;
+
+    console.log('💾 Auto-saving workout session...');
+    
+    // Collect ALL completed sets from detailedWorkoutProgress (main, warmup, core)
+    const allSets: any[] = [];
+    const workoutProgress = detailedWorkoutProgress[workoutKey];
+    
+    if (workoutProgress?.exercises) {
+      Object.entries(workoutProgress.exercises).forEach(([exerciseId, progress]: [string, any]) => {
+        if (progress.skipped) {
+          console.log(`⏭️ Exercise ${exerciseId} was skipped`);
+          return;
+        }
+        
+        if (progress.sets && Array.isArray(progress.sets)) {
+          const completedSets = progress.sets.filter((set: any) => set.completed);
+          completedSets.forEach((set: any) => {
+            allSets.push({
+              exerciseId: exerciseId,
+              weight: set.weight || 0,
+              reps: set.reps || 0,
+              rpe: set.rpe,
+              tempo: set.tempo,
+              timestamp: set.timestamp || new Date().toISOString(),
+            });
+          });
+        }
+      });
+    }
+
+    // Create workout session with all collected sets
+    if (allSets.length > 0) {
+      const session = {
+        id: Date.now().toString(),
+        cycleId: cycleId || undefined,
+        workoutTemplateId: workoutTemplateId,
+        date: workoutKey.split('-')[1] || dayjs().format('YYYY-MM-DD'),
+        startTime: new Date().toISOString(),
+        endTime: new Date().toISOString(),
+        sets: allSets,
+      };
+      await addSession(session);
+      console.log('✅ Auto-saved session with', allSets.length, 'sets');
+    } else {
+      console.log('⚠️ No completed sets to save');
+    }
+  }, [workoutKey, workoutTemplate, detailedWorkoutProgress, cycleId, workoutTemplateId, addSession]);
+
   const [setsData, setSetsData] = useState(() => {
     // Try to load saved progress first
     if (workoutKey && exercise) {
@@ -361,6 +415,20 @@ export function ExerciseDetailScreen({ route, navigation }: ExerciseDetailScreen
         setIsExerciseTimerPhase(false);
         setShowTimer(false);
         setRecordingSetIndex(null);
+        
+        // Mark workout as complete if this is a scheduled workout
+        if (workoutKey?.startsWith('sw-')) {
+          console.log('🎉 Workout complete! Marking as finished:', workoutKey);
+          
+          // Save session with all completed sets
+          await saveWorkoutSession();
+          
+          // Mark workout as complete (keep progress data for viewing)
+          await completeWorkout(workoutKey);
+          console.log('✅ Workout marked as complete (progress preserved)');
+        }
+        
+        await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         navigation?.goBack();
         return;
       }
@@ -415,6 +483,20 @@ export function ExerciseDetailScreen({ route, navigation }: ExerciseDetailScreen
       setShowTimer(false);
       setIsExerciseTimerPhase(false);
       setRecordingSetIndex(null);
+      
+      // Mark workout as complete if this is a scheduled workout
+      if (workoutKey?.startsWith('sw-')) {
+        console.log('🎉 Workout complete! Marking as finished:', workoutKey);
+        
+        // Save session with all completed sets
+        await saveWorkoutSession();
+        
+        // Mark workout as complete (keep progress data for viewing)
+        await completeWorkout(workoutKey);
+        console.log('✅ Workout marked as complete (progress preserved)');
+      }
+      
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       navigation?.goBack();
       return;
     }

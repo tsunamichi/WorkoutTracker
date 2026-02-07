@@ -343,7 +343,6 @@ export function TodayScreen({ onDateChange, onOpenSwapDrawer, onOpenAddWorkout }
                         style={styles.workoutCardInner}
                         onPress={handleWorkoutPress}
                         activeOpacity={1}
-                        disabled={selectedDay.isLocked} // Disable if locked (completed)
                       >
                     {(() => {
                       const sw = selectedDay.scheduledWorkout;
@@ -353,46 +352,42 @@ export function TodayScreen({ onDateChange, onOpenSwapDrawer, onOpenAddWorkout }
                       const completionPercentage = mainCompletion.percentage;
                       
                       // Determine button state
+                      const progress = completionPercentage / 100;
+                      const isCompleted = sw.isLocked || completionPercentage === 100;
+                      
                       let buttonState = t('start');
-                      if (sw.isLocked) {
-                        buttonState = t('completed'); // Show "Completed" for locked workouts
-                      } else if (completionPercentage === 100) {
-                        buttonState = t('edit');
+                      if (isCompleted) {
+                        buttonState = 'Completed'; // Show "Completed" for locked or 100% workouts
                       } else if (completionPercentage > 0) {
                         buttonState = t('resume');
                       }
                       
-                      const progress = completionPercentage / 100;
-                      
                       return (
                         <>
                           <View style={styles.workoutCardContent}>
-                            {progress >= 0.999 && (
-                              <View style={styles.progressCheckBadge}>
-                                <IconCheck size={24} color={COLORS.signalPositive} />
-                              </View>
-                            )}
-                          {/* Top Row: Workout Name + Progress */}
+                          {/* Top Row: Workout Name + Progress/Checkmark */}
                           <View style={styles.workoutCardHeader}>
                             <Text style={styles.workoutName}>{sw.titleSnapshot}</Text>
-                            {progress < 0.999 && (
+                            {isCompleted ? (
+                              <View style={styles.completedCheckBadge}>
+                                <IconCheck size={20} color={COLORS.success} />
+                              </View>
+                            ) : progress > 0 ? (
                               <View style={styles.progressIndicator}>
                                 <Text style={styles.progressText}>{completionPercentage}%</Text>
                                 <Svg height="16" width="16" viewBox="0 0 16 16" style={styles.progressCircle}>
                                   <Circle cx="8" cy="8" r="8" fill={COLORS.backgroundCanvas} />
-                                  {progress > 0 ? (
-                                    <Path
-                                      d={`M 8 8 L 8 0 A 8 8 0 ${progress > 0.5 ? 1 : 0} 1 ${
-                                        8 + 8 * Math.sin(2 * Math.PI * progress)
-                                      } ${
-                                        8 - 8 * Math.cos(2 * Math.PI * progress)
-                                      } Z`}
-                                      fill={COLORS.signalWarning}
-                                    />
-                                  ) : null}
+                                  <Path
+                                    d={`M 8 8 L 8 0 A 8 8 0 ${progress > 0.5 ? 1 : 0} 1 ${
+                                      8 + 8 * Math.sin(2 * Math.PI * progress)
+                                    } ${
+                                      8 - 8 * Math.cos(2 * Math.PI * progress)
+                                    } Z`}
+                                    fill={COLORS.signalWarning}
+                                  />
                                 </Svg>
                               </View>
-                            )}
+                            ) : null}
                           </View>
                           
                           {/* Exercises Count and Program Name */}
@@ -409,8 +404,8 @@ export function TodayScreen({ onDateChange, onOpenSwapDrawer, onOpenAddWorkout }
                           
                           {/* Footer: Action Button */}
                           <View style={styles.workoutCardFooter} pointerEvents="none">
-                            <View style={[styles.startButton, sw.isLocked && styles.startButtonCompleted]}>
-                              <Text style={[styles.startButtonText, sw.isLocked && styles.startButtonTextCompleted]}>{buttonState}</Text>
+                            <View style={[styles.startButton, isCompleted && styles.startButtonCompleted]}>
+                              <Text style={[styles.startButtonText, isCompleted && styles.startButtonTextCompleted]}>{buttonState}</Text>
                             </View>
                           </View>
                         </>
@@ -760,6 +755,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 6,
   },
+  completedIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
   progressCircle: {
     // No additional styling needed
   },
@@ -774,6 +773,11 @@ const styles = StyleSheet.create({
     top: 0,
     right: 16,
   },
+  completedCheckBadge: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+  },
   progressText: {
     ...TYPOGRAPHY.meta,
     color: COLORS.textMeta,
@@ -787,7 +791,7 @@ const styles = StyleSheet.create({
   startButton: {
     width: '100%',
     height: 48,
-    backgroundColor: COLORS.accentPrimaryDimmed,
+    backgroundColor: COLORS.accentPrimary,
     paddingHorizontal: 20,
     borderTopLeftRadius: 0,
     borderTopRightRadius: 0,
@@ -798,16 +802,15 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   startButtonCompleted: {
-    backgroundColor: COLORS.signalPositive,
-    opacity: 0.2,
+    backgroundColor: '#E8F5E9', // Light green background
   },
   startButtonText: {
     ...TYPOGRAPHY.metaBold,
-    color: COLORS.accentPrimary,
+    color: '#FFFFFF',
     textAlign: 'left',
   },
   startButtonTextCompleted: {
-    color: COLORS.signalPositive,
+    color: COLORS.success,
   },
   
   // Completed Badge

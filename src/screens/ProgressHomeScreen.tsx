@@ -135,14 +135,14 @@ export function ProgressHomeScreen({ navigation }: ProgressHomeScreenProps) {
     if (sessions.length === 0) return 0;
     
     const sortedSessions = [...sessions].sort((a, b) => 
-      dayjs(b.startedAt).valueOf() - dayjs(a.startedAt).valueOf()
+      dayjs(b.startTime).valueOf() - dayjs(a.startTime).valueOf()
     );
     
     let streak = 0;
     let currentDate = dayjs().startOf('day');
     
     const sessionDates = new Set(
-      sortedSessions.map(s => dayjs(s.startedAt).startOf('day').format('YYYY-MM-DD'))
+      sortedSessions.map(s => dayjs(s.startTime).startOf('day').format('YYYY-MM-DD'))
     );
     
     if (!sessionDates.has(currentDate.format('YYYY-MM-DD'))) {

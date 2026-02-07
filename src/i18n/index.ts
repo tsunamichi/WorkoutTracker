@@ -491,7 +491,11 @@ type TranslationKey =
   | 'cycleSetsSyncedInfo'
   | 'addToCycle'
   | 'search'
-  | 'change';
+  | 'change'
+  | 'resetRequired'
+  | 'resetRequiredMessage'
+  | 'completeAll'
+  | 'skipWorkout';
 
 const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
   en: {
@@ -1015,6 +1019,10 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     addToCycle: 'Add to cycle',
     search: 'Search',
     change: 'Change',
+    resetRequired: 'Reset Required',
+    resetRequiredMessage: 'You must reset your progress before swapping exercises. This will clear all logged sets.',
+    completeAll: 'Complete All',
+    skipWorkout: 'Skip Workout',
   },
   es: {
     today: 'Hoy',
@@ -1538,6 +1546,10 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     addToCycle: 'Agregar al circuito',
     search: 'Buscar',
     change: 'Cambiar',
+    resetRequired: 'Reinicio Requerido',
+    resetRequiredMessage: 'Debes reiniciar tu progreso antes de cambiar ejercicios. Esto borrará todos los sets registrados.',
+    completeAll: 'Completar Todo',
+    skipWorkout: 'Omitir Entrenamiento',
   },
 };
 

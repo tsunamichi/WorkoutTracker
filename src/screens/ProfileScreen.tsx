@@ -8,10 +8,8 @@ import { TimerValueSheet } from '../components/timer/TimerValueSheet';
 import { IconArrowLeft, IconTriangle } from '../components/icons';
 import { Toggle } from '../components/Toggle';
 import { useTranslation } from '../i18n/useTranslation';
-import { addFakeHistory } from '../utils/addFakeHistory';
-import { debugStorageContents, backupAllData } from '../utils/debugStorage';
 import { cloudBackupService } from '../services/cloudBackup';
-import { migrateOldStorageKeys, scanForOldData } from '../utils/dataMigration';
+import { migrateOldStorageKeys, scanForOldData, validateAndRepairSessions, convertPartialWorkoutsToSessions } from '../utils/dataMigration';
 
 // Optional local notifications
 let Notifications: any = null;
@@ -27,10 +25,12 @@ interface ProfileScreenProps {
 
 export function ProfileScreen({ navigation }: ProfileScreenProps) {
   const insets = useSafeAreaInsets();
-  const { settings, updateSettings, clearAllHistory, initialize } = useStore();
+  const { settings, updateSettings, initialize } = useStore();
   const [showRestTimePicker, setShowRestTimePicker] = useState(false);
   const [notificationsSystemEnabled, setNotificationsSystemEnabled] = useState<boolean | null>(null);
   const [cloudBackupInfo, setCloudBackupInfo] = useState<{ exists: boolean; timestamp?: string } | null>(null);
+  const [showBackupOptions, setShowBackupOptions] = useState(false);
+  const [showAdvancedRecovery, setShowAdvancedRecovery] = useState(false);
   const { t, language } = useTranslation();
   const notificationsEnabled = settings.notificationsEnabled !== false;
 
@@ -204,187 +204,153 @@ export function ProfileScreen({ navigation }: ProfileScreenProps) {
           </View>
         </View>
 
-        {/* Group 3: Design System - Standalone */}
+        {/* iCloud Backup Section - Collapsible */}
         <TouchableOpacity 
           style={[styles.settingCard, styles.settingCardRow]}
           onPress={() => {
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-            navigation.navigate('DesignSystem');
+            setShowBackupOptions(!showBackupOptions);
           }}
           activeOpacity={0.7}
         >
           <View style={styles.settingInfo}>
-            <Text style={styles.settingLabel}>{t('designSystem')}</Text>
-            <Text style={styles.settingDescription}>
-              {t('viewDesignSystem')}
-            </Text>
-          </View>
-          <IconTriangle size={16} color={COLORS.text} />
-        </TouchableOpacity>
-        
-        {/* Group 4: Add Fake History - Dev Only */}
-        {__DEV__ && (
-          <TouchableOpacity 
-            style={[styles.settingCard, styles.settingCardRow]}
-            onPress={async () => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              try {
-                await addFakeHistory();
-                Alert.alert(
-                  'Success!',
-                  'Added fake workout history for testing. Check the exercise detail screens to see the history.',
-                  [{ text: 'OK' }]
-                );
-              } catch (error) {
-                Alert.alert('Error', 'Failed to add fake history. Check console for details.');
-                console.error('Error adding fake history:', error);
-              }
-            }}
-            activeOpacity={0.7}
-          >
-            <View style={styles.settingInfo}>
-              <Text style={styles.settingLabel}>Add Fake History (Dev)</Text>
-              <Text style={styles.settingDescription}>
-                Adds test workout data for the past 3 weeks
-              </Text>
-            </View>
-            <IconTriangle size={16} color={COLORS.text} />
-          </TouchableOpacity>
-        )}
-
-        {/* iCloud Backup Section */}
-        <TouchableOpacity 
-          style={[styles.settingCard, styles.settingCardRow]}
-          onPress={async () => {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-            const info = await cloudBackupService.getBackupInfo();
-            const timestamp = info.timestamp 
-              ? new Date(info.timestamp).toLocaleString()
-              : 'Never';
-            
-            Alert.alert(
-              'iCloud Backup Status',
-              info.exists
-                ? `✅ Backup exists\n\nLast backup: ${timestamp}\n\nYour workout data is automatically backed up to iCloud every 5 minutes.`
-                : `No backup found\n\nBackups will start automatically. Your first backup will happen within 5 minutes.`,
-              [{ text: 'OK' }]
-            );
-          }}
-          activeOpacity={0.7}
-        >
-          <View style={styles.settingInfo}>
-            <Text style={styles.settingLabel}>
-              ☁️ iCloud Backup Status
-            </Text>
+            <Text style={styles.settingLabel}>☁️ iCloud Backup</Text>
             <Text style={styles.settingDescription}>
               {cloudBackupInfo?.exists 
                 ? `Last backup: ${cloudBackupInfo.timestamp ? new Date(cloudBackupInfo.timestamp).toLocaleDateString() : 'Unknown'}`
                 : 'Automatic backup enabled'}
             </Text>
           </View>
-          <IconTriangle size={16} color={COLORS.text} />
+          <IconTriangle 
+            size={16} 
+            color={COLORS.text} 
+            style={{ transform: [{ rotate: showBackupOptions ? '90deg' : '0deg' }] }}
+          />
         </TouchableOpacity>
 
-        <TouchableOpacity 
-          style={[styles.settingCard, styles.settingCardRow]}
-          onPress={async () => {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-            Alert.alert(
-              'Backup to iCloud Now',
-              'Create a backup of all your workout data to iCloud?',
-              [
-                { text: 'Cancel', style: 'cancel' },
-                {
-                  text: 'Backup Now',
-                  onPress: async () => {
-                    const result = await cloudBackupService.manualBackup();
-                    if (result.success) {
-                      const newInfo = await cloudBackupService.getBackupInfo();
-                      setCloudBackupInfo(newInfo);
-                      Alert.alert(
-                        'Success',
-                        'Your workout data has been backed up to iCloud!',
-                        [{ text: 'OK' }]
-                      );
-                    } else {
-                      Alert.alert(
-                        'Error',
-                        result.error || 'Failed to backup. Please try again.',
-                        [{ text: 'OK' }]
-                      );
+        {showBackupOptions && (
+          <View style={styles.nestedOptionsContainer}>
+            <TouchableOpacity 
+              style={[styles.settingCard, styles.settingCardRow, styles.nestedOption]}
+              onPress={async () => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                const info = await cloudBackupService.getBackupInfo();
+                const timestamp = info.timestamp 
+                  ? new Date(info.timestamp).toLocaleString()
+                  : 'Never';
+                
+                Alert.alert(
+                  'iCloud Backup Status',
+                  info.exists
+                    ? `✅ Backup exists\n\nLast backup: ${timestamp}\n\nYour workout data is automatically backed up to iCloud every 5 minutes.`
+                    : `No backup found\n\nBackups will start automatically. Your first backup will happen within 5 minutes.`,
+                  [{ text: 'OK' }]
+                );
+              }}
+              activeOpacity={0.7}
+            >
+              <View style={styles.settingInfo}>
+                <Text style={styles.settingLabel}>View Status</Text>
+                <Text style={styles.settingDescription}>Check backup details</Text>
+              </View>
+            </TouchableOpacity>
+
+            <TouchableOpacity 
+              style={[styles.settingCard, styles.settingCardRow, styles.nestedOption]}
+              onPress={async () => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                Alert.alert(
+                  'Backup to iCloud Now',
+                  'Create a backup of all your workout data to iCloud?',
+                  [
+                    { text: 'Cancel', style: 'cancel' },
+                    {
+                      text: 'Backup Now',
+                      onPress: async () => {
+                        const result = await cloudBackupService.manualBackup();
+                        if (result.success) {
+                          const newInfo = await cloudBackupService.getBackupInfo();
+                          setCloudBackupInfo(newInfo);
+                          Alert.alert(
+                            'Success',
+                            'Your workout data has been backed up to iCloud!',
+                            [{ text: 'OK' }]
+                          );
+                        } else {
+                          Alert.alert(
+                            'Error',
+                            result.error || 'Failed to backup. Please try again.',
+                            [{ text: 'OK' }]
+                          );
+                        }
+                      }
                     }
-                  }
-                }
-              ]
-            );
-          }}
-          activeOpacity={0.7}
-        >
-          <View style={styles.settingInfo}>
-            <Text style={styles.settingLabel}>☁️ Backup Now</Text>
-            <Text style={styles.settingDescription}>
-              Manually create an iCloud backup
-            </Text>
-          </View>
-          <IconTriangle size={16} color={COLORS.text} />
-        </TouchableOpacity>
+                  ]
+                );
+              }}
+              activeOpacity={0.7}
+            >
+              <View style={styles.settingInfo}>
+                <Text style={styles.settingLabel}>Backup Now</Text>
+                <Text style={styles.settingDescription}>Create manual backup</Text>
+              </View>
+            </TouchableOpacity>
 
-        <TouchableOpacity 
-          style={[styles.settingCard, styles.settingCardRow]}
-          onPress={async () => {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-            const hasBackup = await cloudBackupService.hasCloudBackup();
-            if (!hasBackup) {
-              Alert.alert(
-                'No Backup Found',
-                'There is no iCloud backup to restore from.',
-                [{ text: 'OK' }]
-              );
-              return;
-            }
-            
-            Alert.alert(
-              'Restore from iCloud',
-              'This will restore your workout data from your iCloud backup. Current data will be replaced.',
-              [
-                { text: 'Cancel', style: 'cancel' },
-                {
-                  text: 'Restore',
-                  style: 'destructive',
-                  onPress: async () => {
-                    const result = await cloudBackupService.restoreFromCloud();
-                    if (result.success) {
-                      // Reload the store
-                      await initialize();
-                      Alert.alert(
-                        'Success',
-                        `Restored ${result.restoredKeys} items from iCloud backup!`,
-                        [{ text: 'OK' }]
-                      );
-                    } else {
-                      Alert.alert(
-                        'Error',
-                        result.error || 'Failed to restore. Please try again.',
-                        [{ text: 'OK' }]
-                      );
+            <TouchableOpacity 
+              style={[styles.settingCard, styles.settingCardRow, styles.nestedOption]}
+              onPress={async () => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                const hasBackup = await cloudBackupService.hasCloudBackup();
+                if (!hasBackup) {
+                  Alert.alert(
+                    'No Backup Found',
+                    'There is no iCloud backup to restore from.',
+                    [{ text: 'OK' }]
+                  );
+                  return;
+                }
+                
+                Alert.alert(
+                  'Restore from iCloud',
+                  'This will restore your workout data from your iCloud backup. Current data will be replaced.',
+                  [
+                    { text: 'Cancel', style: 'cancel' },
+                    {
+                      text: 'Restore',
+                      style: 'destructive',
+                      onPress: async () => {
+                        const result = await cloudBackupService.restoreFromCloud();
+                        if (result.success) {
+                          // Reload the store
+                          await initialize();
+                          Alert.alert(
+                            'Success',
+                            `Restored ${result.restoredKeys} items from iCloud backup!`,
+                            [{ text: 'OK' }]
+                          );
+                        } else {
+                          Alert.alert(
+                            'Error',
+                            result.error || 'Failed to restore. Please try again.',
+                            [{ text: 'OK' }]
+                          );
+                        }
+                      }
                     }
-                  }
-                }
-              ]
-            );
-          }}
-          activeOpacity={0.7}
-        >
-          <View style={styles.settingInfo}>
-            <Text style={styles.settingLabel}>☁️ Restore from iCloud</Text>
-            <Text style={styles.settingDescription}>
-              Restore data from iCloud backup
-            </Text>
+                  ]
+                );
+              }}
+              activeOpacity={0.7}
+            >
+              <View style={styles.settingInfo}>
+                <Text style={styles.settingLabel}>Restore from Backup</Text>
+                <Text style={styles.settingDescription}>Replace current data</Text>
+              </View>
+            </TouchableOpacity>
           </View>
-          <IconTriangle size={16} color={COLORS.text} />
-        </TouchableOpacity>
+        )}
 
-        {/* Data Recovery - Migration from old versions */}
+        {/* Data Recovery Section */}
         <TouchableOpacity 
           style={[styles.settingCard, styles.settingCardRow]}
           onPress={async () => {
@@ -398,28 +364,99 @@ export function ProfileScreen({ navigation }: ProfileScreenProps) {
                   text: 'Scan & Migrate',
                   onPress: async () => {
                     try {
+                      console.log('🔍 Starting data recovery...');
+                      
                       // First scan for old data
                       const scanResult = await scanForOldData();
-                      console.log('Scan result:', scanResult);
+                      console.log('📊 Scan result:', scanResult);
                       
-                      // Show ALL keys found
-                      const keysList = scanResult.potentialOldKeys
-                        .map(k => `- ${k.key}: ${k.preview}`)
-                        .join('\n');
+                      if (scanResult.potentialOldKeys.length === 0) {
+                        Alert.alert(
+                          'No Old Data Found',
+                          'No workout data from older app versions was found.',
+                          [{ text: 'OK' }]
+                        );
+                        return;
+                      }
                       
+                      // Convert partial workouts to sessions
+                      console.log('💾 Converting partial workouts to sessions...');
+                      const conversionResult = await convertPartialWorkoutsToSessions();
+                      console.log('✅ Conversion result:', conversionResult);
+                      
+                      // Validate and repair sessions data
+                      console.log('🔧 Validating and repairing sessions data...');
+                      const repairResult = await validateAndRepairSessions();
+                      console.log('✅ Repair result:', repairResult);
+                      
+                      // Now migrate the data (for old keys)
+                      console.log('🔄 Migrating old data...');
+                      const migrationResult = await migrateOldStorageKeys();
+                      console.log('✅ Migration result:', migrationResult);
+                      
+                      // Reload store to load the migrated/repaired data
+                      console.log('♻️  Reloading store...');
+                      await initialize();
+                      
+                      // Check what was loaded
+                      const store = useStore.getState();
+                      const sessionsCount = store.sessions?.length || 0;
+                      
+                      // Build success message
                       const sessionsText = scanResult.sessionsInfo
-                        ? `\n🎯 SESSIONS FOUND!\nKey: ${scanResult.sessionsInfo.key}\nCount: ${scanResult.sessionsInfo.count} workouts\n\n`
-                        : '\n❌ No sessions data found\n\n';
+                        ? `\n🎯 Sessions found in storage: ${scanResult.sessionsInfo.count} workouts`
+                        : '';
                       
-                      Alert.alert(
-                        'Storage Scan Results',
-                        `Total keys: ${scanResult.potentialOldKeys.length}\n${sessionsText}All keys:\n${keysList.substring(0, 500)}`,
-                        [{ text: 'OK' }]
-                      );
+                      const convertedText = conversionResult.sessionsCreated > 0
+                        ? `\n💾 Recovered ${conversionResult.sessionsCreated} partial workouts (${conversionResult.workoutsProcessed} processed)`
+                        : '';
+                      
+                      const repairText = repairResult.repaired
+                        ? `\n🔧 Repaired ${repairResult.sessionsCount} sessions`
+                        : '';
+                      
+                      const migratedText = migrationResult.migratedKeys.length > 0
+                        ? `\n✅ Migrated ${migrationResult.migratedKeys.length} storage keys`
+                        : '';
+                      
+                      const currentStateText = `\n\n📱 Current state:\n- Sessions loaded in app: ${sessionsCount}`;
+                      
+                      if (sessionsCount > 0) {
+                        Alert.alert(
+                          'Recovery Successful! 🎉',
+                          `Your workout data has been recovered!${sessionsText}${convertedText}${repairText}${migratedText}${currentStateText}\n\nYou can now view your workout history in any exercise detail screen!`,
+                          [{ text: 'OK' }]
+                        );
+                      } else if (conversionResult.sessionsCreated > 0) {
+                        Alert.alert(
+                          'Partial Recovery',
+                          `Recovered ${conversionResult.sessionsCreated} workouts from progress data!${convertedText}${currentStateText}\n\nTap "Force Reload" in Advanced Options to load them into the app.`,
+                          [{ text: 'OK' }]
+                        );
+                      } else if (repairResult.success && repairResult.sessionsCount > 0) {
+                        Alert.alert(
+                          'Data Found But Not Loading',
+                          `Found ${repairResult.sessionsCount} sessions in storage, but they're not loading into the app.${repairText}${currentStateText}\n\nTry the "Advanced Options" below for more troubleshooting.`,
+                          [{ text: 'OK' }]
+                        );
+                      } else if (repairResult.error) {
+                        Alert.alert(
+                          'Data Format Issue',
+                          `Found sessions data but there was an error:\n${repairResult.error}\n\nThe data may be corrupted or in an incompatible format.`,
+                          [{ text: 'OK' }]
+                        );
+                      } else {
+                        Alert.alert(
+                          'Migration Complete',
+                          `Data scan complete.${sessionsText}${convertedText}${repairText}${migratedText}${currentStateText}\n\n${migrationResult.errors.length > 0 ? `Errors: ${migrationResult.errors.join(', ')}` : 'No errors.'}`,
+                          [{ text: 'OK' }]
+                        );
+                      }
                     } catch (error) {
+                      console.error('❌ Error during data recovery:', error);
                       Alert.alert(
                         'Error',
-                        `Failed to scan for old data: ${error}`,
+                        `Failed to recover data: ${error}`,
                         [{ text: 'OK' }]
                       );
                     }
@@ -433,88 +470,38 @@ export function ProfileScreen({ navigation }: ProfileScreenProps) {
           <View style={styles.settingInfo}>
             <Text style={styles.settingLabel}>🔄 Recover Old Data</Text>
             <Text style={styles.settingDescription}>
-              Migrate workout data from older app versions
+              Scan and migrate old workout history
             </Text>
           </View>
           <IconTriangle size={16} color={COLORS.text} />
         </TouchableOpacity>
 
-        {/* Debug Storage - Available in all builds for data recovery */}
-        <>
-          <TouchableOpacity
-              style={[styles.settingCard, styles.settingCardRow]}
-              onPress={async () => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                const result = await debugStorageContents();
-                if (result) {
-                  // Get more detailed info from the result
-                  const store = useStore.getState();
-                  
-                  const storageInfo = `📦 STORAGE (${result.allKeys.length} keys):\n` +
-                    `- Sessions: ${result.sessionsCount}\n` +
-                    `- Templates: ${result.templatesCount}\n` +
-                    `- Plans: ${result.plansCount}\n` +
-                    `- Progress: ${result.progressCount} workouts\n\n`;
-                  
-                  const appInfo = `📱 APP STATE:\n` +
-                    `- Sessions: ${store.sessions?.length || 0}\n` +
-                    `- Templates: ${store.workoutTemplates?.length || 0}\n` +
-                    `- Plans: ${store.cyclePlans?.length || 0}\n` +
-                    `- Scheduled: ${store.scheduledWorkouts?.length || 0}\n\n`;
-                  
-                  const keysList = `🔑 KEYS:\n${result.allKeys.map(k => {
-                    const shortKey = k.replace('@workout_tracker_', '');
-                    const info = result.keySummary[k];
-                    if (info?.type === 'array') {
-                      return `- ${shortKey}: ${info.count} items`;
-                    } else if (info?.type === 'object') {
-                      return `- ${shortKey}: ${info.keys} keys`;
-                    }
-                    return `- ${shortKey}`;
-                  }).join('\n')}`;
-                  
-                  Alert.alert(
-                    'Storage Debug Info',
-                    storageInfo + appInfo + keysList,
-                    [{ text: 'OK' }]
-                  );
-                }
-              }}
-              activeOpacity={0.7}
-            >
-              <View style={styles.settingInfo}>
-                <Text style={styles.settingLabel}>🔍 Check Storage</Text>
-                <Text style={styles.settingDescription}>
-                  See what data is in storage (check console)
-                </Text>
-              </View>
-            </TouchableOpacity>
+        {/* Advanced Recovery Options - Collapsible */}
+        <TouchableOpacity 
+          style={[styles.settingCard, styles.settingCardRow]}
+          onPress={() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            setShowAdvancedRecovery(!showAdvancedRecovery);
+          }}
+          activeOpacity={0.7}
+        >
+          <View style={styles.settingInfo}>
+            <Text style={styles.settingLabel}>⚙️ Advanced Options</Text>
+            <Text style={styles.settingDescription}>
+              Additional troubleshooting tools
+            </Text>
+          </View>
+          <IconTriangle 
+            size={16} 
+            color={COLORS.text} 
+            style={{ transform: [{ rotate: showAdvancedRecovery ? '90deg' : '0deg' }] }}
+          />
+        </TouchableOpacity>
 
+        {showAdvancedRecovery && (
+          <View style={styles.nestedOptionsContainer}>
             <TouchableOpacity 
-              style={[styles.settingCard, styles.settingCardRow]}
-              onPress={async () => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                const backup = await backupAllData();
-                if (backup) {
-                  Alert.alert(
-                    'Backup Created',
-                    'Full backup logged to console. Copy the JSON data if needed.',
-                    [{ text: 'OK' }]
-                  );
-                }
-              }}
-              activeOpacity={0.7}
-            >
-              <View style={styles.settingInfo}>
-                <Text style={styles.settingLabel}>💾 Backup Data</Text>
-                <Text style={styles.settingDescription}>
-                  Export all data to console
-                </Text>
-              </View>
-            </TouchableOpacity>
-
-            <TouchableOpacity 
-              style={[styles.settingCard, styles.settingCardRow]}
+              style={[styles.settingCard, styles.settingCardRow, styles.nestedOption]}
               onPress={async () => {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                 Alert.alert(
@@ -564,45 +551,11 @@ export function ProfileScreen({ navigation }: ProfileScreenProps) {
               activeOpacity={0.7}
             >
               <View style={styles.settingInfo}>
-                <Text style={styles.settingLabel}>🔄 Force Reload Data</Text>
-                <Text style={styles.settingDescription}>
-                  Reload all data from storage
-                </Text>
+                <Text style={styles.settingLabel}>Force Reload</Text>
+                <Text style={styles.settingDescription}>Reload all data from storage</Text>
               </View>
             </TouchableOpacity>
-          </>
-        
-        {/* Dev Only: Clear All Data */}
-        {__DEV__ && (
-          <TouchableOpacity 
-            style={[styles.settingCard, styles.settingCardRow]}
-            onPress={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              Alert.alert(
-                'Clear All Data',
-                'This will delete all workouts, templates, plans, and scheduled workouts. This cannot be undone.',
-                [
-                  { text: 'Cancel', style: 'cancel' },
-                  { 
-                    text: 'Clear All', 
-                    style: 'destructive',
-                    onPress: async () => {
-                      await clearAllHistory();
-                      Alert.alert('Done', 'All data has been cleared!');
-                    }
-                  }
-                ]
-              );
-            }}
-            activeOpacity={0.7}
-          >
-            <View style={styles.settingInfo}>
-              <Text style={[styles.settingLabel, { color: COLORS.signalNegative }]}>Clear All Data (Dev)</Text>
-              <Text style={styles.settingDescription}>
-                Delete all workouts and templates
-              </Text>
-            </View>
-          </TouchableOpacity>
+          </View>
         )}
       </ScrollView>
 
@@ -701,6 +654,19 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+  },
+  // Nested Options Container
+  nestedOptionsContainer: {
+    marginTop: -SPACING.md,
+    marginBottom: SPACING.lg,
+    paddingLeft: SPACING.md,
+  },
+  nestedOption: {
+    marginLeft: SPACING.lg,
+    marginBottom: SPACING.sm,
+    backgroundColor: COLORS.backgroundCanvas,
+    borderLeftWidth: 2,
+    borderLeftColor: COLORS.borderDimmed,
   },
   settingRow: {
     flexDirection: 'row',

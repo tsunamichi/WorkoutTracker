@@ -938,6 +938,14 @@ export function SetTimerSheet({
     ]).start();
   }, [preCountdown, isPreCountdownActive, countdownOpacityAnim, countdownTextScaleAnim]);
 
+  const handleTogglePauseWrapper = () => {
+    // Disable play/pause during pre-countdown
+    if (isPreCountdownActive) {
+      return;
+    }
+    handleTogglePause();
+  };
+
   // Removed wedge color animation for split pentagon.
 
   if (!visible) return null;
@@ -1043,12 +1051,13 @@ export function SetTimerSheet({
 
           {/* Controls */}
           <TimerControls
-            isRunning={isRunning}
+            isRunning={isRunning || isPreCountdownActive}
             soundEnabled={soundEnabled}
-            onTogglePause={handleTogglePause}
+            onTogglePause={handleTogglePauseWrapper}
             onToggleSound={handleToggleSound}
             onSkip={handleSkip}
-            hideControlsWhenPaused={true}
+            hideControlsWhenPaused={!isPreCountdownActive}
+            disablePlayPause={isPreCountdownActive}
           />
         </View>
       </Animated.View>

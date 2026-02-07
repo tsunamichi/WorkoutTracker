@@ -65,9 +65,31 @@ export async function saveExercises(exercises: Exercise[]): Promise<void> {
 export async function loadSessions(): Promise<WorkoutSession[]> {
   try {
     const data = await AsyncStorage.getItem(STORAGE_KEYS.SESSIONS);
-    return data ? JSON.parse(data) : [];
+    if (!data) {
+      console.log('📦 No sessions data found in storage');
+      return [];
+    }
+    
+    try {
+      const parsed = JSON.parse(data);
+      console.log(`✅ Sessions loaded: ${parsed.length} sessions found`);
+      if (parsed.length > 0) {
+        console.log('  Sample session:', {
+          id: parsed[0].id,
+          date: parsed[0].date,
+          setsCount: parsed[0].sets?.length || 0,
+          hasDate: !!parsed[0].date,
+          hasStartTime: !!parsed[0].startTime,
+        });
+      }
+      return Array.isArray(parsed) ? parsed : [];
+    } catch (parseError) {
+      console.error('❌ Error parsing sessions JSON:', parseError);
+      console.error('  Raw data preview:', data.substring(0, 200));
+      return [];
+    }
   } catch (error) {
-    console.error('Error loading sessions:', error);
+    console.error('❌ Error loading sessions:', error);
     return [];
   }
 }

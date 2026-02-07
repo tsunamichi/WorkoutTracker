@@ -5,7 +5,7 @@ import { useNavigation } from '@react-navigation/native';
 import * as Haptics from 'expo-haptics';
 import { useStore } from '../store';
 import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS, CARDS } from '../constants';
-import { IconArrowLeft, IconCheck, IconPlay } from '../components/icons';
+import { IconArrowLeft, IconCheck } from '../components/icons';
 import { useTranslation } from '../i18n/useTranslation';
 import dayjs from 'dayjs';
 
@@ -22,26 +22,31 @@ interface PlanHistoryDetailScreenProps {
 export function PlanHistoryDetailScreen({ route, navigation }: PlanHistoryDetailScreenProps) {
   const insets = useSafeAreaInsets();
   const { programId, programName } = route.params;
-  const { scheduledWorkouts, getWorkoutCompletionPercentage } = useStore();
+  const { scheduledWorkouts, getWorkoutCompletionPercentage, detailedWorkoutProgress } = useStore();
   const { t } = useTranslation();
 
-  // Get all workouts for this plan
+  // Get all workouts for this plan, with active at the top
   const planWorkouts = scheduledWorkouts
     .filter(sw => sw.programId === programId)
-    .sort((a, b) => dayjs(a.date).unix() - dayjs(b.date).unix());
+    .sort((a, b) => {
+      // Sort: active/in-progress first, then by date
+      const aIsActive = a.status !== 'completed';
+      const bIsActive = b.status !== 'completed';
+      if (aIsActive && !bIsActive) return -1;
+      if (!aIsActive && bIsActive) return 1;
+      return dayjs(a.date).unix() - dayjs(b.date).unix();
+    });
 
   const handleBack = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     navigation.goBack();
   };
 
-  const handleWorkoutPress = (workout: any) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    navigation.navigate('WorkoutExecution', {
-      cycleId: workout.programId,
-      workoutTemplateId: workout.templateId,
-      date: workout.date,
-    });
+  const getExerciseProgress = (workout: any, exerciseId: string) => {
+    const workoutKey = workout.id; // Use scheduled workout ID
+    const progress = detailedWorkoutProgress[workoutKey];
+    if (!progress || !progress.exercises) return null;
+    return progress.exercises[exerciseId];
   };
 
   const formatWorkoutDate = (date: string) => {
@@ -104,67 +109,89 @@ export function PlanHistoryDetailScreen({ route, navigation }: PlanHistoryDetail
           </View>
         </View>
 
-        {/* Workouts List */}
+        {/* Workouts List - Expanded with All Exercises */}
         <ScrollView 
           style={styles.scrollView}
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
         >
-          {planWorkouts.map((workout, index) => {
-            const completion = getWorkoutCompletion(workout);
+          {planWorkouts.map((workout, workoutIndex) => {
             const isCompleted = workout.status === 'completed';
-            const isInProgress = workout.status === 'in_progress';
-            const isPending = workout.status === 'planned';
+            const isActive = workout.status !== 'completed';
+            const exercises = workout.exercisesSnapshot || [];
 
             return (
-              <TouchableOpacity
-                key={workout.id}
-                style={styles.workoutCard}
-                onPress={() => handleWorkoutPress(workout)}
-                activeOpacity={1}
-              >
-                <View style={styles.workoutCardInner}>
-                  {/* Workout Header */}
-                  <View style={styles.workoutHeader}>
-                    <View style={styles.workoutTitleContainer}>
-                      <Text style={styles.dayLabel}>
-                        {t('dayNumber').replace('{number}', String(index + 1))}
-                      </Text>
-                      <Text style={styles.workoutName}>{workout.titleSnapshot}</Text>
-                    </View>
-                    {isCompleted && (
-                      <View style={styles.completedBadge}>
-                        <IconCheck size={16} color={COLORS.backgroundCanvas} />
-                      </View>
-                    )}
-                    {isInProgress && (
-                      <View style={styles.inProgressBadge}>
-                        <IconPlay size={14} color={COLORS.backgroundCanvas} />
-                      </View>
-                    )}
+              <View key={workout.id} style={styles.workoutSection}>
+                {/* Workout Header */}
+                <View style={styles.workoutHeaderSection}>
+                  <View style={styles.workoutHeaderLeft}>
+                    <Text style={styles.workoutDayLabel}>
+                      {t('dayNumber').replace('{number}', String(workoutIndex + 1))}
+                    </Text>
+                    <Text style={styles.workoutTitle}>{workout.titleSnapshot}</Text>
+                    <Text style={styles.workoutDate}>
+                      {formatWorkoutDate(workout.date)}
+                    </Text>
                   </View>
-
-                  {/* Date */}
-                  <Text style={styles.workoutDate}>
-                    {formatWorkoutDate(workout.date)}
-                  </Text>
-
-                  {/* Exercise Count */}
-                  <Text style={styles.exerciseCount}>
-                    {workout.exercisesSnapshot?.length || 0} {t('exercises')}
-                  </Text>
-
-                  {/* Progress Bar (only for completed or in-progress) */}
-                  {(isCompleted || isInProgress) && (
-                    <View style={styles.progressContainer}>
-                      <View style={styles.progressBar}>
-                        <View style={[styles.progressFill, { width: `${completion}%` }]} />
-                      </View>
-                      <Text style={styles.progressText}>{completion}%</Text>
+                  {isCompleted && (
+                    <View style={styles.statusBadge}>
+                      <IconCheck size={16} color={COLORS.backgroundCanvas} />
                     </View>
                   )}
                 </View>
-              </TouchableOpacity>
+
+                {/* All Exercises for this Workout */}
+                {exercises.map((exercise: any, exerciseIndex: number) => {
+                  const exerciseProgress = getExerciseProgress(workout, exercise.id);
+                  const completedSets = exerciseProgress?.sets?.filter((s: any) => s.completed) || [];
+                  const totalSets = exercise.sets || 0;
+                  const setsCompleted = completedSets.length;
+                  const undoneSets = totalSets - setsCompleted;
+
+                  return (
+                    <View key={exercise.id} style={styles.exerciseRow}>
+                      {/* Exercise Name Column */}
+                      <View style={styles.exerciseNameColumn}>
+                        <Text style={styles.exerciseName} numberOfLines={2}>
+                          {exercise.name}
+                        </Text>
+                        <Text style={styles.exerciseSetsInfo}>
+                          {setsCompleted}/{totalSets} {t('sets')}
+                        </Text>
+                      </View>
+
+                      {/* Exercise Data Column */}
+                      <View style={styles.exerciseDataColumn}>
+                        {completedSets.length > 0 ? (
+                          <>
+                            {completedSets.map((set: any, setIndex: number) => (
+                              <View key={setIndex} style={styles.setDataRow}>
+                                <Text style={styles.setData}>
+                                  {set.weight}lb × {set.reps}
+                                </Text>
+                              </View>
+                            ))}
+                            {undoneSets > 0 && (
+                              <View style={styles.setDataRow}>
+                                <Text style={styles.undoneText}>
+                                  +{undoneSets} not logged
+                                </Text>
+                              </View>
+                            )}
+                          </>
+                        ) : (
+                          <Text style={styles.noDataText}>Not logged</Text>
+                        )}
+                      </View>
+                    </View>
+                  );
+                })}
+
+                {/* Divider between workouts */}
+                {workoutIndex < planWorkouts.length - 1 && (
+                  <View style={styles.workoutDivider} />
+                )}
+              </View>
             );
           })}
 
@@ -247,87 +274,88 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingHorizontal: SPACING.xxl,
+    paddingTop: SPACING.lg,
     paddingBottom: SPACING.xxxl,
   },
-  workoutCard: {
-    marginBottom: SPACING.lg,
-    backgroundColor: CARDS.cardDeepDimmed.outer.backgroundColor,
-    borderRadius: CARDS.cardDeepDimmed.outer.borderRadius,
-    borderCurve: CARDS.cardDeepDimmed.outer.borderCurve as any,
-    borderWidth: CARDS.cardDeepDimmed.outer.borderWidth,
-    borderColor: CARDS.cardDeepDimmed.outer.borderColor,
-    overflow: CARDS.cardDeepDimmed.outer.overflow as any,
+  workoutSection: {
+    marginBottom: SPACING.xxxl,
   },
-  workoutCardInner: {
-    ...CARDS.cardDeepDimmed.inner,
-    padding: SPACING.xl,
-  },
-  workoutHeader: {
+  workoutHeaderSection: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
     justifyContent: 'space-between',
-    marginBottom: SPACING.sm,
+    alignItems: 'flex-start',
+    marginBottom: SPACING.xl,
   },
-  workoutTitleContainer: {
+  workoutHeaderLeft: {
     flex: 1,
-    marginRight: SPACING.md,
   },
-  dayLabel: {
+  workoutDayLabel: {
     ...TYPOGRAPHY.meta,
     color: COLORS.textMeta,
-    marginBottom: SPACING.xs,
     textTransform: 'uppercase',
+    letterSpacing: 1,
+    marginBottom: SPACING.xs,
   },
-  workoutName: {
+  workoutTitle: {
     ...TYPOGRAPHY.h3,
     color: COLORS.text,
-  },
-  completedBadge: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: COLORS.signalPositive,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  inProgressBadge: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#007AFF',
-    alignItems: 'center',
-    justifyContent: 'center',
+    marginBottom: SPACING.xs,
   },
   workoutDate: {
     ...TYPOGRAPHY.body,
     color: COLORS.textMeta,
+  },
+  statusBadge: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: COLORS.signalPositive,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  exerciseRow: {
+    flexDirection: 'row',
+    paddingVertical: SPACING.md,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.borderDimmed,
+  },
+  exerciseNameColumn: {
+    flex: 1,
+    paddingRight: SPACING.lg,
+  },
+  exerciseName: {
+    ...TYPOGRAPHY.body,
+    color: COLORS.text,
     marginBottom: SPACING.xs,
   },
-  exerciseCount: {
+  exerciseSetsInfo: {
     ...TYPOGRAPHY.meta,
     color: COLORS.textMeta,
-    marginBottom: SPACING.md,
   },
-  progressContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING.md,
+  exerciseDataColumn: {
+    minWidth: 120,
+    alignItems: 'flex-end',
   },
-  progressBar: {
-    flex: 1,
-    height: 8,
-    backgroundColor: COLORS.borderDimmed,
-    borderRadius: BORDER_RADIUS.sm,
-    overflow: 'hidden',
+  setDataRow: {
+    paddingVertical: 2,
   },
-  progressFill: {
-    height: '100%',
-    backgroundColor: COLORS.signalPositive,
-  },
-  progressText: {
-    ...TYPOGRAPHY.metaBold,
+  setData: {
+    ...TYPOGRAPHY.body,
     color: COLORS.text,
-    minWidth: 40,
-    textAlign: 'right',
+    fontVariant: ['tabular-nums'],
+  },
+  noDataText: {
+    ...TYPOGRAPHY.body,
+    color: COLORS.textMeta,
+  },
+  undoneText: {
+    ...TYPOGRAPHY.meta,
+    color: COLORS.textMeta,
+    fontStyle: 'italic',
+  },
+  workoutDivider: {
+    height: 1,
+    backgroundColor: COLORS.border,
+    marginTop: SPACING.xl,
   },
 });

@@ -54,8 +54,6 @@ export function ExerciseExecutionScreen() {
     getMainCompletion,
     updateWorkoutTemplate,
     settings,
-    addWarmupToSession,
-    addAccessoryToSession,
     exercises: exercisesLibrary,
     resetWarmupCompletion,
     resetMainCompletion,
@@ -307,59 +305,10 @@ export function ExerciseExecutionScreen() {
   }, [hasLoggedAnySet, expandedGroupIndex, exerciseGroups, currentRounds, completedSets]);
   
   const saveSession = async () => {
-    if (type === 'warmup') {
-      const warmupSets: any[] = [];
-      exerciseGroups.forEach(group => {
-        const rounds = currentRounds[group.id] || 0;
-        group.exercises.forEach((exercise) => {
-          for (let round = 0; round < rounds; round++) {
-            const setId = `${exercise.id}-set-${round}`;
-            if (completedSets.has(setId)) {
-              const values = localValues[exercise.id] || {};
-              warmupSets.push({
-                id: setId,
-                exerciseName: exercise.exerciseName,
-                setIndex: round,
-                weight: values.weight ?? exercise.weight ?? 0,
-                reps: values.reps ?? exercise.reps ?? 0,
-                isTimeBased: exercise.isTimeBased || false,
-                isPerSide: exercise.isPerSide,
-                completedAt: new Date().toISOString(),
-              });
-            }
-          }
-        });
-      });
-      if (warmupSets.length > 0) {
-        await addWarmupToSession(workoutKey, warmupSets);
-      }
-    } else if (type === 'core') {
-      const accessorySets: any[] = [];
-      exerciseGroups.forEach(group => {
-        const rounds = currentRounds[group.id] || 0;
-        group.exercises.forEach((exercise) => {
-          for (let round = 0; round < rounds; round++) {
-            const setId = `${exercise.id}-set-${round}`;
-            if (completedSets.has(setId)) {
-              const values = localValues[exercise.id] || {};
-              accessorySets.push({
-                id: setId,
-                exerciseName: exercise.exerciseName,
-                setIndex: round,
-                weight: values.weight ?? exercise.weight ?? 0,
-                reps: values.reps ?? exercise.reps ?? 0,
-                isTimeBased: exercise.isTimeBased || false,
-                isPerSide: exercise.isPerSide,
-                completedAt: new Date().toISOString(),
-              });
-            }
-          }
-        });
-      });
-      if (accessorySets.length > 0) {
-        await addAccessoryToSession(workoutKey, accessorySets);
-      }
-    }
+    // Warmup and core sets are tracked via completion state
+    // They will be saved to a session when the entire workout is completed
+    // This function is kept for compatibility but doesn't need to do anything
+    console.log('✅ Completion saved for', type, 'section');
   };
   
   const handleComplete = async () => {
@@ -423,26 +372,38 @@ export function ExerciseExecutionScreen() {
     if (allExercisesComplete) {
       // Move to next round
       const nextRound = currentRound + 1;
-      setCurrentRounds(prev => ({ ...prev, [currentGroup.id]: nextRound }));
       
       if (nextRound >= currentGroup.totalRounds) {
-        // This group is complete - record completion timestamp
+        // This group is complete - update state with new round count
+        const updatedRounds = { ...currentRounds, [currentGroup.id]: nextRound };
+        setCurrentRounds(updatedRounds);
         setCompletionTimestamps(prev => ({ ...prev, [currentGroup.id]: Date.now() }));
         
         // Find the next incomplete group in the original order
+        // Use updatedRounds to check completion, not the old currentRounds state
         const nextIncompleteIndex = exerciseGroups.findIndex((group, idx) => {
           if (idx <= expandedGroupIndex) return false; // Must be after current
-          const rounds = currentRounds[group.id] || 0;
+          const rounds = updatedRounds[group.id] || 0;
           return rounds < group.totalRounds;
         });
         
+        console.log('🔍 Looking for next incomplete group:', { 
+          currentGroupId: currentGroup.id, 
+          expandedGroupIndex, 
+          nextIncompleteIndex,
+          totalGroups: exerciseGroups.length,
+          updatedRounds 
+        });
+        
         if (nextIncompleteIndex >= 0) {
+          console.log('➡️ Moving to next group:', nextIncompleteIndex);
           LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
           setExpandedGroupIndex(nextIncompleteIndex);
           setActiveExerciseIndex(0);
           setHasLoggedAnySet(false); // Unlock flow for next exercise selection
         } else {
           // All done!
+          console.log('✅ All groups complete! Saving session...');
           await saveSession();
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
           Alert.alert(t('workoutComplete'), t('niceWork'), [
@@ -451,6 +412,7 @@ export function ExerciseExecutionScreen() {
         }
       } else {
         // Same group, next round
+        setCurrentRounds(prev => ({ ...prev, [currentGroup.id]: nextRound }));
         setActiveExerciseIndex(0);
       }
     } else {
@@ -521,11 +483,15 @@ export function ExerciseExecutionScreen() {
             
             setCompletedSets(new Set(allSetIds));
             
-            // Update completion state
+            // Update completion state - call for each set individually
             if (type === 'warmup') {
-              updateWarmupCompletion(workoutKey, allSetIds);
+              for (const setId of allSetIds) {
+                await updateWarmupCompletion(workoutKey, setId, true);
+              }
             } else if (type === 'core') {
-              updateAccessoryCompletion(workoutKey, allSetIds);
+              for (const setId of allSetIds) {
+                await updateAccessoryCompletion(workoutKey, setId, true);
+              }
             }
             
             await saveSession();
@@ -594,11 +560,56 @@ export function ExerciseExecutionScreen() {
 
   const handleSwap = () => {
     setShowMenu(false);
-    // Navigate to the appropriate editor based on type
-    if (type === 'warmup') {
-      (navigation as any).navigate('WarmupEditor', { templateId: workoutTemplateId });
-    } else if (type === 'core') {
-      (navigation as any).navigate('AccessoriesEditor', { templateId: workoutTemplateId });
+    
+    // Check if any sets have been logged
+    const hasLoggedSets = completedSets.size > 0;
+    
+    if (hasLoggedSets) {
+      // Show alert that requires reset first
+      Alert.alert(
+        t('resetRequired'),
+        t('resetRequiredMessage'),
+        [
+          { text: t('cancel'), style: 'cancel' },
+          {
+            text: t('reset'),
+            style: 'destructive',
+            onPress: async () => {
+              // Clear all completed sets
+              setCompletedSets(new Set());
+              setCurrentRounds({});
+              setCompletionTimestamps({});
+              setExpandedGroupIndex(0);
+              setActiveExerciseIndex(0);
+              setHasLoggedAnySet(false);
+              
+              // Clear completion state in store
+              if (type === 'warmup') {
+                await resetWarmupCompletion(workoutKey);
+              } else if (type === 'core') {
+                await resetAccessoryCompletion(workoutKey);
+              }
+              
+              // Show feedback
+              await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+              
+              // Now navigate to editor
+              if (type === 'warmup') {
+                (navigation as any).navigate('WarmupEditor', { templateId: workoutTemplateId });
+              } else if (type === 'core') {
+                (navigation as any).navigate('AccessoriesEditor', { templateId: workoutTemplateId });
+              }
+            },
+          },
+        ]
+      );
+    } else {
+      // No sets logged, allow swap directly
+      if (type === 'warmup') {
+        (navigation as any).navigate('WarmupEditor', { templateId: workoutTemplateId });
+      } else if (type === 'core') {
+        (navigation as any).navigate('AccessoriesEditor', { templateId: workoutTemplateId });
+      }
     }
   };
   
