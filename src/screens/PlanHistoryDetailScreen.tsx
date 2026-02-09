@@ -22,8 +22,10 @@ interface PlanHistoryDetailScreenProps {
 export function PlanHistoryDetailScreen({ route, navigation }: PlanHistoryDetailScreenProps) {
   const insets = useSafeAreaInsets();
   const { programId, programName } = route.params;
-  const { scheduledWorkouts, getWorkoutCompletionPercentage, detailedWorkoutProgress } = useStore();
+  const { scheduledWorkouts, getWorkoutCompletionPercentage, sessions, settings, exercises: exercisesLibrary } = useStore();
   const { t } = useTranslation();
+  const useKg = settings.useKg;
+  const [expandedWorkouts, setExpandedWorkouts] = React.useState<Set<string>>(new Set());
 
   // Get all workouts for this plan, with active at the top
   const planWorkouts = scheduledWorkouts
@@ -42,11 +44,37 @@ export function PlanHistoryDetailScreen({ route, navigation }: PlanHistoryDetail
     navigation.goBack();
   };
 
+  const toggleWorkoutExpansion = (workoutId: string) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setExpandedWorkouts(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(workoutId)) {
+        newSet.delete(workoutId);
+      } else {
+        newSet.add(workoutId);
+      }
+      return newSet;
+    });
+  };
+
   const getExerciseProgress = (workout: any, exerciseId: string) => {
-    const workoutKey = workout.id; // Use scheduled workout ID
-    const progress = detailedWorkoutProgress[workoutKey];
-    if (!progress || !progress.exercises) return null;
-    return progress.exercises[exerciseId];
+    // Find session(s) for this workout date and exercise
+    const workoutDate = workout.date;
+    const completedSets = sessions
+      .filter(session => session.date === workoutDate)
+      .flatMap(session => session.sets)
+      .filter(set => set.exerciseId === exerciseId && set.isCompleted);
+    
+    return completedSets.length > 0 
+      ? { 
+          exerciseId, 
+          sets: completedSets.map(set => ({
+            weight: set.weight,
+            reps: set.reps,
+            completed: set.isCompleted
+          }))
+        } 
+      : null;
   };
 
   const formatWorkoutDate = (date: string) => {
@@ -92,13 +120,8 @@ export function PlanHistoryDetailScreen({ route, navigation }: PlanHistoryDetail
           <View style={styles.summaryCard}>
             <View style={styles.summaryRow}>
               <View style={styles.summaryItem}>
-                <Text style={styles.summaryValue}>{totalWorkouts}</Text>
-                <Text style={styles.summaryLabel}>{t('workouts')}</Text>
-              </View>
-              <View style={styles.summaryDivider} />
-              <View style={styles.summaryItem}>
-                <Text style={styles.summaryValue}>{completedWorkouts}</Text>
-                <Text style={styles.summaryLabel}>{t('completed')}</Text>
+                <Text style={styles.summaryValue}>{completedWorkouts}/{totalWorkouts}</Text>
+                <Text style={styles.summaryLabel}>Completed workouts</Text>
               </View>
               <View style={styles.summaryDivider} />
               <View style={styles.summaryItem}>
@@ -120,43 +143,61 @@ export function PlanHistoryDetailScreen({ route, navigation }: PlanHistoryDetail
             const isActive = workout.status !== 'completed';
             const exercises = workout.exercisesSnapshot || [];
 
+            // Check if workout has any completed sets
+            const workoutHasLogs = exercises.some((ex: any) => {
+              const progress = getExerciseProgress(workout, ex.exerciseId);
+              return progress?.sets?.some((s: any) => s.completed);
+            });
+            
+            const isExpanded = expandedWorkouts.has(workout.id);
+            const shouldShowExercises = workoutHasLogs || isExpanded;
+
             return (
               <View key={workout.id} style={styles.workoutSection}>
                 {/* Workout Header */}
-                <View style={styles.workoutHeaderSection}>
+                <TouchableOpacity 
+                  style={styles.workoutHeaderSection}
+                  onPress={() => toggleWorkoutExpansion(workout.id)}
+                  activeOpacity={0.7}
+                >
                   <View style={styles.workoutHeaderLeft}>
-                    <Text style={styles.workoutDayLabel}>
-                      {t('dayNumber').replace('{number}', String(workoutIndex + 1))}
-                    </Text>
                     <Text style={styles.workoutTitle}>{workout.titleSnapshot}</Text>
-                    <Text style={styles.workoutDate}>
-                      {formatWorkoutDate(workout.date)}
-                    </Text>
+                    <View style={styles.workoutMetaRow}>
+                      <Text style={styles.workoutDayLabel}>
+                        {t('dayNumber').replace('{number}', String(workoutIndex + 1))}
+                      </Text>
+                      <Text style={styles.workoutMetaDot}>·</Text>
+                      <Text style={styles.workoutDate}>
+                        {formatWorkoutDate(workout.date).toUpperCase()}
+                      </Text>
+                    </View>
                   </View>
                   {isCompleted && (
-                    <View style={styles.statusBadge}>
-                      <IconCheck size={16} color={COLORS.backgroundCanvas} />
+                    <View style={styles.completedBadge}>
+                      <Text style={styles.completedText}>{t('completed')}</Text>
+                      <IconCheck size={24} color={COLORS.signalPositive} />
                     </View>
                   )}
-                </View>
+                </TouchableOpacity>
 
                 {/* All Exercises for this Workout */}
-                {exercises.map((exercise: any, exerciseIndex: number) => {
-                  const exerciseProgress = getExerciseProgress(workout, exercise.id);
+                {shouldShowExercises && exercises.map((exercise: any, exerciseIndex: number) => {
+                  const exerciseProgress = getExerciseProgress(workout, exercise.exerciseId);
                   const completedSets = exerciseProgress?.sets?.filter((s: any) => s.completed) || [];
                   const totalSets = exercise.sets || 0;
                   const setsCompleted = completedSets.length;
                   const undoneSets = totalSets - setsCompleted;
+                  
+                  // Look up exercise name from library
+                  const exerciseData = exercisesLibrary.find(e => e.id === exercise.exerciseId);
+                  const exerciseName = exerciseData?.name || 'Unknown Exercise';
 
                   return (
                     <View key={exercise.id} style={styles.exerciseRow}>
                       {/* Exercise Name Column */}
                       <View style={styles.exerciseNameColumn}>
                         <Text style={styles.exerciseName} numberOfLines={2}>
-                          {exercise.name}
-                        </Text>
-                        <Text style={styles.exerciseSetsInfo}>
-                          {setsCompleted}/{totalSets} {t('sets')}
+                          {exerciseName}
                         </Text>
                       </View>
 
@@ -166,9 +207,14 @@ export function PlanHistoryDetailScreen({ route, navigation }: PlanHistoryDetail
                           <>
                             {completedSets.map((set: any, setIndex: number) => (
                               <View key={setIndex} style={styles.setDataRow}>
-                                <Text style={styles.setData}>
-                                  {set.weight}lb × {set.reps}
-                                </Text>
+                                <View style={styles.setValueGroup}>
+                                  <Text style={styles.setValue}>{set.weight}</Text>
+                                  <Text style={styles.setUnit}>{useKg ? 'kg' : 'lb'}</Text>
+                                </View>
+                                <View style={styles.setValueGroup}>
+                                  <Text style={styles.setValue}>{set.reps}</Text>
+                                  <Text style={styles.setUnit}>reps</Text>
+                                </View>
                               </View>
                             ))}
                             {undoneSets > 0 && (
@@ -289,35 +335,47 @@ const styles = StyleSheet.create({
   workoutHeaderLeft: {
     flex: 1,
   },
-  workoutDayLabel: {
-    ...TYPOGRAPHY.meta,
-    color: COLORS.textMeta,
-    textTransform: 'uppercase',
-    letterSpacing: 1,
-    marginBottom: SPACING.xs,
-  },
   workoutTitle: {
     ...TYPOGRAPHY.h3,
     color: COLORS.text,
     marginBottom: SPACING.xs,
   },
-  workoutDate: {
-    ...TYPOGRAPHY.body,
+  workoutMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.xs,
+  },
+  workoutDayLabel: {
+    ...TYPOGRAPHY.meta,
+    color: COLORS.textMeta,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+  },
+  workoutMetaDot: {
+    ...TYPOGRAPHY.meta,
     color: COLORS.textMeta,
   },
-  statusBadge: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: COLORS.signalPositive,
+  workoutDate: {
+    ...TYPOGRAPHY.meta,
+    color: COLORS.textMeta,
+    letterSpacing: 1,
+  },
+  completedBadge: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    gap: SPACING.xs,
+  },
+  completedText: {
+    ...TYPOGRAPHY.meta,
+    color: COLORS.signalPositive,
+    textTransform: 'capitalize',
   },
   exerciseRow: {
     flexDirection: 'row',
     paddingVertical: SPACING.md,
     borderBottomWidth: 1,
     borderBottomColor: COLORS.borderDimmed,
+    alignItems: 'flex-start',
   },
   exerciseNameColumn: {
     flex: 1,
@@ -326,7 +384,6 @@ const styles = StyleSheet.create({
   exerciseName: {
     ...TYPOGRAPHY.body,
     color: COLORS.text,
-    marginBottom: SPACING.xs,
   },
   exerciseSetsInfo: {
     ...TYPOGRAPHY.meta,
@@ -337,12 +394,24 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
   },
   setDataRow: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: SPACING.lg,
     paddingVertical: 2,
   },
-  setData: {
+  setValueGroup: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: 4,
+  },
+  setValue: {
     ...TYPOGRAPHY.body,
     color: COLORS.text,
     fontVariant: ['tabular-nums'],
+  },
+  setUnit: {
+    ...TYPOGRAPHY.meta,
+    color: COLORS.textMeta,
   },
   noDataText: {
     ...TYPOGRAPHY.body,
@@ -357,5 +426,6 @@ const styles = StyleSheet.create({
     height: 1,
     backgroundColor: COLORS.border,
     marginTop: SPACING.xl,
+    marginHorizontal: -SPACING.xxl,
   },
 });
