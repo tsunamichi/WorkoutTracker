@@ -57,6 +57,7 @@ interface WorkoutStore {
   getWorkoutProgress: (workoutId: string) => { completedExercises: string[]; completedSets: Record<string, number[]> } | undefined;
   clearWorkoutProgress: (workoutId: string) => Promise<void>;
   clearAllHistory: () => Promise<void>;
+  recoverCompletedWorkouts: () => Promise<{ success: boolean; sessionsCreated: number; workoutsProcessed: number; error?: string }>;
   
   // NEW: Detailed workout progress
   detailedWorkoutProgress: Record<string, WorkoutProgress>;
@@ -328,7 +329,248 @@ export const useStore = create<WorkoutStore>((set, get) => ({
           isCustom: false,
         }));
         await storage.saveExercises(finalExercises);
-      } else {
+      }
+
+      // Seed workout sessions for demo/testing if none exist - will be assigned to finalSessions later
+      let seedSessions: WorkoutSession[] = [];
+      
+      if (sessions.length === 0 && finalExercises.length > 0) {
+        // Find some exercises to use for demo sessions
+        const benchPress = finalExercises.find(e => e.name.toLowerCase().includes('bench press'));
+        const squat = finalExercises.find(e => e.name.toLowerCase().includes('squat'));
+        const deadlift = finalExercises.find(e => e.name.toLowerCase().includes('deadlift'));
+        const row = finalExercises.find(e => e.name.toLowerCase().includes('row'));
+        const shoulderPress = finalExercises.find(e => e.name.toLowerCase().includes('shoulder press') || e.name.toLowerCase().includes('overhead press'));
+        
+        const now = dayjs();
+        
+        // Create 5 demo sessions over the past 2 weeks
+        if (benchPress) {
+          // Session 1: Bench Press - 5 days ago
+          const session1Date = now.subtract(5, 'day');
+          const session1: WorkoutSession = {
+            id: `seed-session-${session1Date.valueOf()}`,
+            date: session1Date.format('YYYY-MM-DD'),
+            startTime: session1Date.hour(10).minute(0).toISOString(),
+            endTime: session1Date.hour(11).minute(15).toISOString(),
+            sets: [
+              {
+                id: `seed-set-1-1`,
+                sessionId: `seed-session-${session1Date.valueOf()}`,
+                exerciseId: benchPress.id,
+                setIndex: 0,
+                weight: 135,
+                reps: 10,
+                isCompleted: true,
+              },
+              {
+                id: `seed-set-1-2`,
+                sessionId: `seed-session-${session1Date.valueOf()}`,
+                exerciseId: benchPress.id,
+                setIndex: 1,
+                weight: 155,
+                reps: 8,
+                isCompleted: true,
+              },
+              {
+                id: `seed-set-1-3`,
+                sessionId: `seed-session-${session1Date.valueOf()}`,
+                exerciseId: benchPress.id,
+                setIndex: 2,
+                weight: 165,
+                reps: 6,
+                isCompleted: true,
+              },
+              {
+                id: `seed-set-1-4`,
+                sessionId: `seed-session-${session1Date.valueOf()}`,
+                exerciseId: benchPress.id,
+                setIndex: 3,
+                weight: 155,
+                reps: 8,
+                isCompleted: true,
+              },
+            ],
+          };
+          seedSessions.push(session1);
+        }
+        
+        if (squat && exercises.length > 0) {
+          // Session 2: Squat - 4 days ago
+          const session2Date = now.subtract(4, 'day');
+          const session2: WorkoutSession = {
+            id: `seed-session-${session2Date.valueOf()}`,
+            date: session2Date.format('YYYY-MM-DD'),
+            startTime: session2Date.hour(15).minute(30).toISOString(),
+            endTime: session2Date.hour(16).minute(45).toISOString(),
+            sets: [
+              {
+                id: `seed-set-2-1`,
+                sessionId: `seed-session-${session2Date.valueOf()}`,
+                exerciseId: squat.id,
+                setIndex: 0,
+                weight: 185,
+                reps: 8,
+                isCompleted: true,
+              },
+              {
+                id: `seed-set-2-2`,
+                sessionId: `seed-session-${session2Date.valueOf()}`,
+                exerciseId: squat.id,
+                setIndex: 1,
+                weight: 205,
+                reps: 6,
+                isCompleted: true,
+              },
+              {
+                id: `seed-set-2-3`,
+                sessionId: `seed-session-${session2Date.valueOf()}`,
+                exerciseId: squat.id,
+                setIndex: 2,
+                weight: 225,
+                reps: 5,
+                isCompleted: true,
+              },
+            ],
+          };
+          seedSessions.push(session2);
+        }
+        
+        if (deadlift) {
+          // Session 3: Deadlift - 3 days ago
+          const session3Date = now.subtract(3, 'day');
+          const session3: WorkoutSession = {
+            id: `seed-session-${session3Date.valueOf()}`,
+            date: session3Date.format('YYYY-MM-DD'),
+            startTime: session3Date.hour(9).minute(0).toISOString(),
+            endTime: session3Date.hour(10).minute(30).toISOString(),
+            sets: [
+              {
+                id: `seed-set-3-1`,
+                sessionId: `seed-session-${session3Date.valueOf()}`,
+                exerciseId: deadlift.id,
+                setIndex: 0,
+                weight: 225,
+                reps: 5,
+                isCompleted: true,
+              },
+              {
+                id: `seed-set-3-2`,
+                sessionId: `seed-session-${session3Date.valueOf()}`,
+                exerciseId: deadlift.id,
+                setIndex: 1,
+                weight: 245,
+                reps: 5,
+                isCompleted: true,
+              },
+              {
+                id: `seed-set-3-3`,
+                sessionId: `seed-session-${session3Date.valueOf()}`,
+                exerciseId: deadlift.id,
+                setIndex: 2,
+                weight: 265,
+                reps: 3,
+                isCompleted: true,
+              },
+            ],
+          };
+          seedSessions.push(session3);
+        }
+        
+        if (row && benchPress) {
+          // Session 4: Bench + Row - 2 days ago
+          const session4Date = now.subtract(2, 'day');
+          const session4: WorkoutSession = {
+            id: `seed-session-${session4Date.valueOf()}`,
+            date: session4Date.format('YYYY-MM-DD'),
+            startTime: session4Date.hour(14).minute(0).toISOString(),
+            endTime: session4Date.hour(15).minute(45).toISOString(),
+            sets: [
+              {
+                id: `seed-set-4-1`,
+                sessionId: `seed-session-${session4Date.valueOf()}`,
+                exerciseId: benchPress.id,
+                setIndex: 0,
+                weight: 145,
+                reps: 8,
+                isCompleted: true,
+              },
+              {
+                id: `seed-set-4-2`,
+                sessionId: `seed-session-${session4Date.valueOf()}`,
+                exerciseId: benchPress.id,
+                setIndex: 1,
+                weight: 165,
+                reps: 6,
+                isCompleted: true,
+              },
+              {
+                id: `seed-set-4-3`,
+                sessionId: `seed-session-${session4Date.valueOf()}`,
+                exerciseId: row.id,
+                setIndex: 0,
+                weight: 115,
+                reps: 10,
+                isCompleted: true,
+              },
+              {
+                id: `seed-set-4-4`,
+                sessionId: `seed-session-${session4Date.valueOf()}`,
+                exerciseId: row.id,
+                setIndex: 1,
+                weight: 135,
+                reps: 8,
+                isCompleted: true,
+              },
+            ],
+          };
+          seedSessions.push(session4);
+        }
+        
+        if (shoulderPress) {
+          // Session 5: Shoulder Press - yesterday
+          const session5Date = now.subtract(1, 'day');
+          const session5: WorkoutSession = {
+            id: `seed-session-${session5Date.valueOf()}`,
+            date: session5Date.format('YYYY-MM-DD'),
+            startTime: session5Date.hour(11).minute(0).toISOString(),
+            endTime: session5Date.hour(12).minute(15).toISOString(),
+            sets: [
+              {
+                id: `seed-set-5-1`,
+                sessionId: `seed-session-${session5Date.valueOf()}`,
+                exerciseId: shoulderPress.id,
+                setIndex: 0,
+                weight: 95,
+                reps: 8,
+                isCompleted: true,
+              },
+              {
+                id: `seed-set-5-2`,
+                sessionId: `seed-session-${session5Date.valueOf()}`,
+                exerciseId: shoulderPress.id,
+                setIndex: 1,
+                weight: 105,
+                reps: 6,
+                isCompleted: true,
+              },
+              {
+                id: `seed-set-5-3`,
+                sessionId: `seed-session-${session5Date.valueOf()}`,
+                exerciseId: shoulderPress.id,
+                setIndex: 2,
+                weight: 115,
+                reps: 5,
+                isCompleted: true,
+              },
+            ],
+          };
+          seedSessions.push(session5);
+        }
+      }
+      
+      // Continue with exercise migrations if exercises already existed
+      if (finalExercises.length > 0 && exercises.length > 0) {
         // Migration: Add equipment field to existing exercises that don't have it
         let needsMigration = false;
         const migratedExercises = exercises.map(ex => {
@@ -440,7 +682,13 @@ export const useStore = create<WorkoutStore>((set, get) => ({
         console.log('✅ Cycle duplicate templates migration complete');
       }
 
-      let finalSessions = sessions;
+      // Use seed sessions if they were created, otherwise use loaded sessions
+      let finalSessions = seedSessions.length > 0 ? seedSessions : sessions;
+      if (seedSessions.length > 0) {
+        await storage.saveSessions(finalSessions);
+        console.log(`✅ Seeded ${seedSessions.length} demo workout sessions`);
+      }
+      
       let finalExercisePRs = exercisePRs;
       let finalWorkoutProgress = workoutProgress;
       let finalSettings = { ...DEFAULT_SETTINGS, ...(loadedSettings || {}) };
@@ -983,9 +1231,28 @@ export const useStore = create<WorkoutStore>((set, get) => ({
   },
   
   addSession: async (session) => {
-    const sessions = [...get().sessions, session];
+    console.log('💾 addSession called with:', {
+      sessionId: session.id,
+      date: session.date,
+      setsCount: session.sets?.length || 0,
+      workoutTemplateId: session.workoutTemplateId,
+    });
+    
+    const currentSessions = get().sessions;
+    console.log(`   Current sessions count: ${currentSessions.length}`);
+    
+    const sessions = [...currentSessions, session];
+    console.log(`   New sessions count: ${sessions.length}`);
+    
     set({ sessions });
+    console.log('   ✅ Session added to store');
+    
     await storage.saveSessions(sessions);
+    console.log('   ✅ Sessions saved to storage');
+    
+    // Verify it was saved
+    const verifyCount = get().sessions.length;
+    console.log(`   ✅ Verification: store now has ${verifyCount} sessions`);
   },
   
   addBodyWeightEntry: async (entry) => {
@@ -1395,6 +1662,29 @@ export const useStore = create<WorkoutStore>((set, get) => ({
     await storage.saveScheduledWorkouts([]);
     
     console.log('✅ All history cleared!');
+  },
+  
+  recoverCompletedWorkouts: async () => {
+    console.log('🔄 Starting workout recovery process...');
+    
+    // Import the recovery function
+    const { recoverSessionsFromCompletionStates } = await import('../utils/dataMigration');
+    
+    // Run the recovery
+    const result = await recoverSessionsFromCompletionStates();
+    
+    if (result.success && result.sessionsCreated > 0) {
+      // Reload sessions from storage to update the store
+      const updatedSessions = await storage.loadSessions();
+      set({ sessions: updatedSessions });
+      console.log(`✅ Recovery complete! Created ${result.sessionsCreated} sessions from ${result.workoutsProcessed} workouts`);
+    } else if (result.success) {
+      console.log('ℹ️ No new sessions to recover');
+    } else {
+      console.error('❌ Recovery failed:', result.error);
+    }
+    
+    return result;
   },
   
   getExercisePR: (exerciseId) => {

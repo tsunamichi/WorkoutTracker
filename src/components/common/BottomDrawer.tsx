@@ -64,9 +64,10 @@ export function BottomDrawer({
     return 0.9;
   })();
   // Margin from screen edges
-  const drawerBottomMargin = 16; // Bottom margin for clear floating effect
+  const drawerBottomMargin = 24; // Bottom margin for clear floating effect (from absolute screen bottom)
   const drawerSideMargin = 8; // Left/right margins
-  const maxDrawerHeight = (SCREEN_HEIGHT - insets.bottom - drawerBottomMargin) * maxHeightRatio;
+  // Calculate max height: we need space for the gap + home indicator
+  const maxDrawerHeight = (SCREEN_HEIGHT - drawerBottomMargin - insets.bottom) * maxHeightRatio;
   
   // Handle height (if showHandle is true)
   const handleHeight = showHandle ? 28 : 0; // ~12px padding top + 4px handle + 12px padding bottom
@@ -313,7 +314,7 @@ export function BottomDrawer({
         {
           maxHeight: fixedHeight ? undefined : currentMaxHeight,
           height: fixedHeight ? currentMaxHeight : (shouldScroll ? currentMaxHeight : undefined),
-          bottom: drawerBottomMargin + insets.bottom,
+          bottom: drawerBottomMargin,
           transform: [{ translateY }],
         }
       ]}>
@@ -336,7 +337,7 @@ export function BottomDrawer({
             </View>
           )}
           
-          <View style={{ flex: 1, paddingBottom: 24 }}>
+          <View style={{ flex: 1 }}>
             <Content {...contentProps}>
               {shouldScroll ? (
                 typeof children === 'function' ? children({ requestClose }) : children

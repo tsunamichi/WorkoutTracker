@@ -7,6 +7,7 @@ import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { useStore } from '../store';
 import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS, CARDS } from '../constants';
 import { IconCheck, IconSwap, IconAdd, IconSettings, IconHistory } from '../components/icons';
+import { DiagonalLinePattern } from '../components/common/DiagonalLinePattern';
 import dayjs from 'dayjs';
 import isoWeek from 'dayjs/plugin/isoWeek';
 import { useTranslation } from '../i18n/useTranslation';
@@ -475,6 +476,7 @@ export function TodayScreen({ onDateChange, onOpenSwapDrawer, onOpenAddWorkout }
                           onPress={() => navigation.navigate('HIITTimerList' as never)}
                           activeOpacity={0.7}
                         >
+                          <DiagonalLinePattern width="100%" height={56} borderRadius={16} />
                           <IconAdd size={24} color={COLORS.text} />
                         <Text style={styles.addIntervalCardText}>{t('addIntervalTimer')}</Text>
                         </TouchableOpacity>
@@ -908,15 +910,12 @@ const styles = StyleSheet.create({
     width: '100%',
     height: 56,
     borderRadius: 16,
-    borderWidth: 1,
-    borderColor: COLORS.textMeta,
-    borderStyle: 'dashed',
-    backgroundColor: 'transparent',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
     marginTop: SPACING.sm,
+    overflow: 'hidden',
   },
   addIntervalCardText: {
     ...TYPOGRAPHY.metaBold,

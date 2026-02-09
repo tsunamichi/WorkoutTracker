@@ -495,7 +495,12 @@ type TranslationKey =
   | 'resetRequired'
   | 'resetRequiredMessage'
   | 'completeAll'
-  | 'skipWorkout';
+  | 'skipWorkout'
+  | 'adjustValues'
+  | 'swapExercise'
+  | 'weightPerSide'
+  | 'viewAllHistory'
+  | 'showLess';
 
 const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
   en: {
@@ -997,6 +1002,13 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     removeWarmupConfirmation: 'Are you sure you want to remove the warm-up from this workout?',
     exerciseName: 'Exercise Name',
     adjustValues: 'Adjust Values',
+    swapExercise: 'Swap Exercise',
+    weightPerSide: 'Weight per side',
+    barbellMode: 'Barbell Mode',
+    latestExerciseLog: 'Latest exercise log',
+    viewAll: 'View all',
+    viewAllHistory: 'View all history',
+    showLess: 'Show less',
     useLatestLogged: 'Use latest logged',
     weight: 'Weight',
     reps: 'Reps',
@@ -1524,6 +1536,13 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     removeWarmupConfirmation: '¿Estás seguro de que quieres eliminar el calentamiento de este entrenamiento?',
     exerciseName: 'Nombre del Ejercicio',
     adjustValues: 'Ajustar Valores',
+    swapExercise: 'Cambiar Ejercicio',
+    weightPerSide: 'Peso por lado',
+    barbellMode: 'Modo Barra',
+    latestExerciseLog: 'Último registro del ejercicio',
+    viewAll: 'Ver todo',
+    viewAllHistory: 'Ver todo el historial',
+    showLess: 'Mostrar menos',
     useLatestLogged: 'Usar último registrado',
     weight: 'Peso',
     reps: 'Reps',

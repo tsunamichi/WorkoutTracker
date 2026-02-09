@@ -8,6 +8,7 @@ import { IconAdd, IconSettings } from '../components/icons';
 import dayjs from 'dayjs';
 import { formatWeight, fromDisplayWeight } from '../utils/weight';
 import { BottomDrawer } from '../components/common/BottomDrawer';
+import { DiagonalLinePattern } from '../components/common/DiagonalLinePattern';
 import { useTranslation } from '../i18n/useTranslation';
 import isoWeek from 'dayjs/plugin/isoWeek';
 import * as ImagePicker from 'expo-image-picker';
@@ -199,6 +200,7 @@ export function ProgressHomeScreen({ navigation }: ProgressHomeScreenProps) {
             activeOpacity={1}
             style={styles.addProgressButton}
           >
+            <DiagonalLinePattern width="100%" height={56} borderRadius={BORDER_RADIUS.lg} />
             <IconAdd size={20} color={COLORS.text} />
             <Text style={styles.addProgressButtonText}>
               {t('add')}
@@ -414,14 +416,12 @@ const styles = StyleSheet.create({
     width: '100%',
     height: 56,
     borderRadius: BORDER_RADIUS.lg,
-    borderWidth: 1,
-    borderColor: COLORS.textMeta,
-    borderStyle: 'dashed',
     backgroundColor: 'transparent',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: SPACING.sm,
+    overflow: 'hidden',
   },
   addProgressButtonText: {
     ...TYPOGRAPHY.metaBold,
