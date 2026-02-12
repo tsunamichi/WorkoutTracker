@@ -193,6 +193,35 @@ export function ExerciseExecutionScreen() {
   const [activeExerciseIndex, setActiveExerciseIndex] = useState(0); // Start with first exercise when group is expanded
   const [hasLoggedAnySet, setHasLoggedAnySet] = useState(false); // Track if any set has been logged
   const [completionTimestamps, setCompletionTimestamps] = useState<Record<string, number>>({}); // Track when groups were completed
+
+  // Staggered indicator animation using Animated.View (independent of LayoutAnimation)
+  const indicatorWidthAnim = useRef(new Animated.Value(0)).current;
+  const indicatorTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (indicatorTimerRef.current) {
+      clearTimeout(indicatorTimerRef.current);
+      indicatorTimerRef.current = null;
+    }
+
+    // Instantly collapse the indicator (no animation)
+    indicatorWidthAnim.setValue(0);
+
+    if (expandedGroupIndex >= 0) {
+      // Phase 2: after delay, indicator slides in from right
+      indicatorTimerRef.current = setTimeout(() => {
+        Animated.timing(indicatorWidthAnim, {
+          toValue: 1,
+          duration: 250,
+          useNativeDriver: false,
+        }).start();
+      }, 250);
+    }
+
+    return () => {
+      if (indicatorTimerRef.current) clearTimeout(indicatorTimerRef.current);
+    };
+  }, [expandedGroupIndex]);
   const [localValues, setLocalValues] = useState<Record<string, { weight: number; reps: number }>>({});
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null); // Track session ID for updates
   const [showAdjustmentDrawer, setShowAdjustmentDrawer] = useState(false);
@@ -653,7 +682,9 @@ export function ExerciseExecutionScreen() {
         if (nextIncompleteIndex >= 0) {
           console.log('➡️ Group complete, letting user pick next exercise');
           await saveSession(newCompletedSets);
-          LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+          LayoutAnimation.configureNext(
+            LayoutAnimation.create(250, LayoutAnimation.Types.easeInEaseOut, LayoutAnimation.Properties.opacity)
+          );
           // Don't auto-expand the next group - let the user choose freely
           setExpandedGroupIndex(-1);
           setActiveExerciseIndex(0);
@@ -846,6 +877,9 @@ export function ExerciseExecutionScreen() {
             }
             
             // Clear all completed sets in local state
+            LayoutAnimation.configureNext(
+              LayoutAnimation.create(250, LayoutAnimation.Types.easeInEaseOut, LayoutAnimation.Properties.opacity)
+            );
             setCompletedSets(new Set());
             setCurrentRounds({});
             setCompletionTimestamps({});
@@ -901,6 +935,9 @@ export function ExerciseExecutionScreen() {
               }
               
               // Clear all completed sets
+              LayoutAnimation.configureNext(
+                LayoutAnimation.create(250, LayoutAnimation.Types.easeInEaseOut, LayoutAnimation.Properties.opacity)
+              );
               setCompletedSets(new Set());
               setCurrentRounds({});
               setCompletionTimestamps({});
@@ -1272,79 +1309,90 @@ export function ExerciseExecutionScreen() {
             const currentRound = currentRounds[group.id] || 0;
             const isCompleted = currentRound >= group.totalRounds;
             
+            // Whether the indicator column is active for this group
+            const indicatorActive = isExpanded && !isCompleted;
+            // Flatten right border radius when group is active (instant, before indicator slides in)
+            const flatRightOuter = indicatorActive ? { borderTopRightRadius: 0, borderBottomRightRadius: 0 } : undefined;
+            const flatRightInner = indicatorActive ? { borderTopRightRadius: 0, borderBottomRightRadius: 0 } : undefined;
+
+            // Group-level card style
+            const groupCardBg = isCompleted ? styles.itemCardDimmed : (isExpanded ? styles.itemCardBorder : styles.itemCardInactive);
+            const groupCardFg = isCompleted ? styles.itemCardInnerDimmed : (isExpanded ? styles.itemCardFill : styles.itemCardInnerInactive);
+
             return (
               <View key={group.id} testID={`exercise-group-${originalIndex}`} style={styles.itemRow}>
-                {/* Exercise Cards Container - Full width */}
-                <View style={styles.exerciseCardsContainer}>
-                    {group.exercises.map((exercise, exIndex) => {
-                      // For completed groups, show the last completed round's values
-                      const displayRound = isCompleted ? Math.max(0, currentRound - 1) : currentRound;
-                      const setId = `${exercise.id}-set-${displayRound}`;
-                      const displayWeight = localValues[setId]?.weight ?? exercise.weight ?? 0;
-                      const displayReps = localValues[setId]?.reps ?? exercise.reps ?? 0;
-                      const showWeight = displayWeight > 0;
-                      const isCurrentExercise = isExpanded && exIndex === activeExerciseIndex;
-                      const isExerciseCompleted = completedSets.has(setId);
-                      const repsUnit = exercise.isTimeBased ? 'secs' : 'reps';
-                      
-                      // Card is active when it's the current exercise in an expanded group
-                      // (showing the set indicator means it should have the active style)
-                      const isActive = isCurrentExercise;
-                      
-                      // Determine card style based on state
-                      const cardBgStyle = isExerciseCompleted ? styles.itemCardDimmed : (isActive ? styles.itemCardBorder : styles.itemCardInactive);
-                      const cardFgStyle = isExerciseCompleted ? styles.itemCardInnerDimmed : (isActive ? styles.itemCardFill : styles.itemCardInnerInactive);
-                      
-                      return (
-                        <View key={exercise.id} style={styles.exerciseCardWrapper}>
-                          <TouchableOpacity
-                            activeOpacity={1}
-                            onPress={() => {
-                              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                              console.log('👆 Card tapped:', {
-                                exerciseName: exercise.exerciseName,
-                                exIndex,
-                                originalIndex,
-                                isExpanded,
-                                isCurrentExercise,
-                                hasLoggedAnySet,
-                                isCompleted,
-                              });
-                              if (isCompleted || isExerciseCompleted) {
-                                // Completed group/exercise - open drawer without expanding inline
-                                console.log('📝 Opening adjustment drawer for completed exercise');
-                                setDrawerGroupIndex(originalIndex);
-                                setDrawerExerciseIndex(exIndex);
-                                const lastRound = Math.max(0, (currentRounds[group.id] || 0) - 1);
-                                setExpandedSetInDrawer(lastRound);
-                                setShowAdjustmentDrawer(true);
-                              } else if (isCurrentExercise) {
-                                // Current exercise card opens adjustment drawer
-                                console.log('📝 Opening adjustment drawer');
-                                setDrawerGroupIndex(null);
-                                setDrawerExerciseIndex(null);
-                                const currentRound = currentRounds[group.id] || 0;
-                                setExpandedSetInDrawer(currentRound);
-                                setShowAdjustmentDrawer(true);
-                              } else if (!hasLoggedAnySet && !isExpanded) {
-                                // Before logging first set: allow selecting any GROUP (not individual exercise)
-                                console.log('📂 Expanding group and selecting first exercise');
-                                LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-                                setExpandedGroupIndex(originalIndex);
-                                setActiveExerciseIndex(0); // Start with first exercise in group
-                              } else {
-                                console.log('❌ Card tap did nothing (condition not met)');
-                              }
-                            }}
-                          >
-                            <View style={cardBgStyle}>
-                              <View style={cardFgStyle}>
-                                <View style={styles.itemCardExpanded}>
-                                  {/* Exercise Name Row */}
-                                  <View style={[
-                                    styles.exerciseNameRowWithIcon,
-                                    !isCurrentExercise && !isExerciseCompleted && !isCompleted && styles.exerciseNameInCardCentered
-                                  ]}>
+                {/* Single card wrapping all exercises in the group */}
+                <View style={styles.exerciseCardsColumn}>
+                  <View style={[groupCardBg, flatRightOuter]}>
+                    <View style={[groupCardFg, flatRightInner]}>
+                      {group.exercises.map((exercise, exIndex) => {
+                        // For completed groups, show the last completed round's values
+                        const displayRound = isCompleted ? Math.max(0, currentRound - 1) : currentRound;
+                        const setId = `${exercise.id}-set-${displayRound}`;
+                        const displayWeight = localValues[setId]?.weight ?? exercise.weight ?? 0;
+                        const displayReps = localValues[setId]?.reps ?? exercise.reps ?? 0;
+                        const showWeight = displayWeight > 0;
+                        const isCurrentExercise = isExpanded && exIndex === activeExerciseIndex;
+                        const isExerciseCompleted = completedSets.has(setId);
+                        const repsUnit = exercise.isTimeBased ? 'secs' : 'reps';
+
+                        return (
+                          <React.Fragment key={exercise.id}>
+                            {/* Divider between exercises in a superset */}
+                            {exIndex > 0 && <View style={styles.supersetDivider} />}
+                            <TouchableOpacity
+                              activeOpacity={1}
+                              onPress={() => {
+                                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                                console.log('👆 Card tapped:', {
+                                  exerciseName: exercise.exerciseName,
+                                  exIndex,
+                                  originalIndex,
+                                  isExpanded,
+                                  isCurrentExercise,
+                                  hasLoggedAnySet,
+                                  isCompleted,
+                                });
+                                if (isCompleted || isExerciseCompleted) {
+                                  console.log('📝 Opening adjustment drawer for completed exercise');
+                                  setDrawerGroupIndex(originalIndex);
+                                  setDrawerExerciseIndex(exIndex);
+                                  const lastRound = Math.max(0, (currentRounds[group.id] || 0) - 1);
+                                  setExpandedSetInDrawer(lastRound);
+                                  setShowAdjustmentDrawer(true);
+                                } else if (isCurrentExercise) {
+                                  console.log('📝 Opening adjustment drawer');
+                                  setDrawerGroupIndex(null);
+                                  setDrawerExerciseIndex(null);
+                                  const currentRound = currentRounds[group.id] || 0;
+                                  setExpandedSetInDrawer(currentRound);
+                                  setShowAdjustmentDrawer(true);
+                                } else if (!hasLoggedAnySet && !isExpanded) {
+                                  console.log('📂 Expanding group and selecting first exercise');
+                                  // Animate card height/style changes; indicator is Animated.View so unaffected
+                                  LayoutAnimation.configureNext(
+                                    LayoutAnimation.create(
+                                      250,
+                                      LayoutAnimation.Types.easeInEaseOut,
+                                      LayoutAnimation.Properties.opacity
+                                    )
+                                  );
+                                  setExpandedGroupIndex(originalIndex);
+                                  setActiveExerciseIndex(0);
+                                } else {
+                                  console.log('❌ Card tap did nothing (condition not met)');
+                                }
+                              }}
+                            >
+                              <View style={[
+                                styles.itemCardExpanded,
+                                isExerciseCompleted && styles.exerciseContentDimmed,
+                              ]}>
+                                {/* Exercise Name Row */}
+                                <View style={[
+                                  styles.exerciseNameRowWithIcon,
+                                  !isCurrentExercise && !isExerciseCompleted && !isCompleted && styles.exerciseNameInCardCentered
+                                ]}>
                                   <Text style={[
                                     styles.exerciseNameText,
                                     (isExpanded || group.exercises.length === 1) && styles.exerciseNameTextActive
@@ -1354,60 +1402,77 @@ export function ExerciseExecutionScreen() {
                                   {(isCompleted || isExerciseCompleted) && (
                                     <IconCheck size={20} color={COLORS.signalPositive} />
                                   )}
-                                  </View>
-                                  
-                                  {/* Values Row - Show for current exercise in expanded group */}
-                                  {isCurrentExercise && (
-                                    <View style={styles.valuesDisplayRow}>
-                                      <View style={styles.valuesDisplayLeft}>
-                                        {showWeight && (
-                                          <View style={styles.valueColumn}>
-                                            <View style={styles.valueRow}>
-                                              <Text style={styles.largeValue}>
-                                                {formatWeightForLoad(displayWeight, useKg)}
-                                              </Text>
-                                              <Text style={styles.unit}>{weightUnit}</Text>
-                                            </View>
-                                            {(() => {
-                                              const isBarbellMode = getBarbellMode(exercise.id);
-                                              const barbellWeight = useKg ? 20 : 45;
-                                              const weightPerSide = (displayWeight - barbellWeight) / 2;
-                                              return isBarbellMode && weightPerSide > 0 ? (
-                                                <Text style={styles.weightPerSideText}>
-                                                  {formatWeightForLoad(weightPerSide, useKg)} {weightUnit} per side
-                                                </Text>
-                                              ) : null;
-                                            })()}
+                                </View>
+
+                                {/* Values Row - Show for current exercise in expanded group */}
+                                {isCurrentExercise && (
+                                  <View style={styles.valuesDisplayRow}>
+                                    <View style={styles.valuesDisplayLeft}>
+                                      {showWeight && (
+                                        <View style={styles.valueColumn}>
+                                          <View style={styles.valueRow}>
+                                            <Text style={styles.largeValue}>
+                                              {formatWeightForLoad(displayWeight, useKg)}
+                                            </Text>
+                                            <Text style={styles.unit}>{weightUnit}</Text>
                                           </View>
-                                        )}
-                                        
-                                        <View style={styles.valueRow}>
-                                          <Text style={styles.largeValue}>{displayReps}</Text>
-                                          <Text style={styles.unit}>{repsUnit}</Text>
+                                          {(() => {
+                                            const isBarbellMode = getBarbellMode(exercise.id);
+                                            const barbellWeight = useKg ? 20 : 45;
+                                            const weightPerSide = (displayWeight - barbellWeight) / 2;
+                                            return isBarbellMode && weightPerSide > 0 ? (
+                                              <Text style={styles.weightPerSideText}>
+                                                {formatWeightForLoad(weightPerSide, useKg)} {weightUnit} per side
+                                              </Text>
+                                            ) : null;
+                                          })()}
                                         </View>
-                                      </View>
-                                      
-                                      <View style={styles.editIconContainer}>
-                                        <IconEdit size={20} color={COLORS.textMeta} />
+                                      )}
+
+                                      <View style={styles.valueRow}>
+                                        <Text style={styles.largeValue}>{displayReps}</Text>
+                                        <Text style={styles.unit}>{repsUnit}</Text>
                                       </View>
                                     </View>
-                                  )}
-                                </View>
+
+                                    <View style={styles.editIconContainer}>
+                                      <IconEdit size={20} color={COLORS.textMeta} />
+                                    </View>
+                                  </View>
+                                )}
                               </View>
-                            </View>
-                          </TouchableOpacity>
-                          {/* Set count badge overlay - only on active card */}
-                          {isActive && !isCompleted && (
-                            <View style={styles.setCountBadgeOverlay}>
-                              <Text style={styles.setCountText} numberOfLines={1}>
-                                {currentRound + 1}/{group.totalRounds}
-                              </Text>
-                            </View>
-                          )}
-                        </View>
-                      );
-                    })}
+                            </TouchableOpacity>
+                          </React.Fragment>
+                        );
+                      })}
+                    </View>
+                  </View>
                 </View>
+
+                {/* Set Indicator - Animated.View, independent of LayoutAnimation */}
+                <Animated.View style={[
+                  styles.setCountIndicator,
+                  {
+                    width: indicatorActive
+                      ? indicatorWidthAnim.interpolate({
+                          inputRange: [0, 1],
+                          outputRange: [0, 48],
+                        })
+                      : 0,
+                    marginLeft: indicatorActive
+                      ? indicatorWidthAnim.interpolate({
+                          inputRange: [0, 1],
+                          outputRange: [0, 4],
+                        })
+                      : 0,
+                  },
+                ]}>
+                  {indicatorActive && (
+                    <Text style={styles.setCountText} numberOfLines={1}>
+                      {currentRound + 1}/{group.totalRounds}
+                    </Text>
+                  )}
+                </Animated.View>
               </View>
             );
           })}
@@ -2079,12 +2144,19 @@ const styles = StyleSheet.create({
   },
   itemRow: {
     width: '100%',
+    flexDirection: 'row',
+    alignItems: 'stretch',
   },
-  exerciseCardsContainer: {
-    gap: 8,
+  exerciseCardsColumn: {
+    flex: 1,
   },
-  exerciseCardWrapper: {
-    position: 'relative',
+  supersetDivider: {
+    height: 1,
+    backgroundColor: COLORS.border,
+    marginHorizontal: 16,
+  },
+  exerciseContentDimmed: {
+    opacity: 0.5,
   },
   // Active card: use background color as "border" with padding to simulate border width
   itemCardBorder: {
@@ -2179,40 +2251,16 @@ const styles = StyleSheet.create({
     ...TYPOGRAPHY.body,
     color: COLORS.textMeta,
   },
-  roundIndicatorContainer: {
-    flexDirection: 'column',
-    alignItems: 'center',
-    justifyContent: 'center',
-    position: 'relative',
-    width: 48,
-  },
-  setCountBadgeOverlay: {
-    position: 'absolute',
-    right: 0,
-    top: 0,
-    bottom: 0,
-    backgroundColor: COLORS.text,
-    borderTopLeftRadius: 0,
-    borderTopRightRadius: 16,
-    borderBottomLeftRadius: 0,
-    borderBottomRightRadius: 16,
-    paddingHorizontal: SPACING.sm,
-    alignItems: 'center',
-    justifyContent: 'center',
-    minWidth: 44,
-  },
-  setCountBadge: {
+  setCountIndicator: {
     backgroundColor: COLORS.text,
     borderTopLeftRadius: 0,
     borderTopRightRadius: BORDER_RADIUS.sm,
     borderBottomLeftRadius: 0,
     borderBottomRightRadius: BORDER_RADIUS.sm,
-    paddingHorizontal: SPACING.sm,
-    paddingVertical: SPACING.xs,
     alignItems: 'center',
     justifyContent: 'center',
-    flex: 1,
-    width: '100%',
+    alignSelf: 'stretch',
+    overflow: 'hidden',
   },
   setCountText: {
     ...TYPOGRAPHY.meta,
