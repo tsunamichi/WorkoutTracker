@@ -32,9 +32,8 @@ export const formatWeight = (weightLbs: number, useKg: boolean): string => {
 
 export const formatWeightForLoad = (weightLbs: number, useKg: boolean): string => {
   const value = toDisplayWeight(weightLbs, useKg);
-  const increment = useKg ? 0.5 : 2.5;
+  const increment = 0.5;
   const rounded = roundToIncrement(value, increment);
-  const decimals = getIncrementDecimals(increment);
-  const asString = rounded.toFixed(rounded % 1 === 0 ? 0 : decimals);
+  const asString = rounded.toFixed(rounded % 1 === 0 ? 0 : 1);
   return asString;
 };

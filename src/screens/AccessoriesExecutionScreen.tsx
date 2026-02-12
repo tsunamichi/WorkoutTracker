@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, LayoutAnimation, Platform, UIManager, Alert, Animated } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, LayoutAnimation, Platform, UIManager, Alert, Animated, TextInput, InputAccessoryView, Keyboard } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import * as Haptics from 'expo-haptics';
@@ -575,7 +575,9 @@ export function AccessoriesExecutionScreen() {
         maxHeight="50%"
       >
         <View style={styles.adjustmentDrawerContent}>
-          <Text style={styles.adjustmentDrawerTitle}>{t('adjustValues')}</Text>
+          <Text style={styles.adjustmentDrawerTitle} numberOfLines={2}>
+            {expandedGroupIndex >= 0 && accessoryGroups[expandedGroupIndex]?.exercises[activeExerciseIndex]?.exerciseName || t('adjustValues')}
+          </Text>
           
           {/* Get active exercise */}
           {expandedGroupIndex >= 0 && accessoryGroups[expandedGroupIndex] && (
@@ -588,86 +590,79 @@ export function AccessoriesExecutionScreen() {
                 const displayWeight = localValues[activeExercise.id]?.weight ?? activeExercise.weight ?? 0;
                 const displayReps = localValues[activeExercise.id]?.reps ?? activeExercise.reps ?? 0;
                 const repsUnit = activeExercise.isTimeBased ? 'secs' : 'reps';
-                const showWeightControl = displayWeight > 0 || true; // Always show weight control
                 
                 return (
-                  <>
-                    {/* Weight Row */}
-                    <View style={styles.drawerAdjustRow}>
-                      <View style={styles.drawerAdjustValue}>
-                        <Text style={styles.drawerAdjustValueText}>
-                          {formatWeightForLoad(displayWeight, useKg)}
-                        </Text>
-                        <Text style={styles.drawerAdjustUnit}>{weightUnit}</Text>
-                      </View>
-                      <View style={styles.drawerAdjustButtons}>
-                        <TouchableOpacity 
-                          onPress={() => handleWeightChange(activeExercise.id, -weightStep)}
-                          activeOpacity={1}
-                          style={styles.adjustButtonTapTarget}
-                        >
-                          <View style={styles.adjustButton}>
-                            <View style={styles.adjustButtonInner}>
-                              <IconMinusLine size={24} color={COLORS.accentPrimary} />
-                            </View>
-                          </View>
-                        </TouchableOpacity>
-                        <TouchableOpacity 
-                          onPress={() => handleWeightChange(activeExercise.id, weightStep)}
-                          activeOpacity={1}
-                          style={styles.adjustButtonTapTarget}
-                        >
-                          <View style={styles.adjustButton}>
-                            <View style={styles.adjustButtonInner}>
-                              <IconAddLine size={24} color={COLORS.accentPrimary} />
-                            </View>
-                          </View>
-                        </TouchableOpacity>
-                      </View>
+                  <View style={styles.drawerInputRow}>
+                    {/* Weight Input */}
+                    <View style={styles.drawerInputGroup}>
+                      <TextInput
+                        style={styles.drawerInput}
+                        defaultValue={formatWeightForLoad(displayWeight, useKg)}
+                        keyboardType="decimal-pad"
+                        inputAccessoryViewID="drawerInputAccessory"
+                        selectTextOnFocus
+                        onEndEditing={(e) => {
+                          const text = e.nativeEvent.text.trim();
+                          const parsed = parseFloat(text);
+                          if (text === '' || isNaN(parsed) || parsed < 0) return;
+                          const rounded = Math.round(parsed * 2) / 2; // snap to nearest 0.5
+                          const newWeight = fromDisplayWeight(rounded, useKg);
+                          setLocalValues(prev => ({
+                            ...prev,
+                            [activeExercise.id]: {
+                              ...prev[activeExercise.id],
+                              reps: prev[activeExercise.id]?.reps ?? displayReps,
+                              weight: newWeight,
+                            },
+                          }));
+                        }}
+                      />
+                      <Text style={styles.drawerInputUnit}>{weightUnit}</Text>
                     </View>
-                    
-                    <View style={styles.drawerAdjustDivider} />
-                    
-                    {/* Reps Row */}
-                    <View style={styles.drawerAdjustRow}>
-                      <View style={styles.drawerAdjustValue}>
-                        <Text style={styles.drawerAdjustValueText}>
-                          {displayReps}
-                        </Text>
-                        <Text style={styles.drawerAdjustUnit}>{repsUnit}</Text>
-                      </View>
-                      <View style={styles.drawerAdjustButtons}>
-                        <TouchableOpacity 
-                          onPress={() => handleRepsChange(activeExercise.id, -1)}
-                          activeOpacity={1}
-                          style={styles.adjustButtonTapTarget}
-                        >
-                          <View style={styles.adjustButton}>
-                            <View style={styles.adjustButtonInner}>
-                              <IconMinusLine size={24} color={COLORS.accentPrimary} />
-                            </View>
-                          </View>
-                        </TouchableOpacity>
-                        <TouchableOpacity 
-                          onPress={() => handleRepsChange(activeExercise.id, 1)}
-                          activeOpacity={1}
-                          style={styles.adjustButtonTapTarget}
-                        >
-                          <View style={styles.adjustButton}>
-                            <View style={styles.adjustButtonInner}>
-                              <IconAddLine size={24} color={COLORS.accentPrimary} />
-                            </View>
-                          </View>
-                        </TouchableOpacity>
-                      </View>
+                    {/* Reps Input */}
+                    <View style={styles.drawerInputGroup}>
+                      <TextInput
+                        style={styles.drawerInput}
+                        defaultValue={String(displayReps)}
+                        keyboardType="number-pad"
+                        inputAccessoryViewID="drawerInputAccessory"
+                        selectTextOnFocus
+                        onEndEditing={(e) => {
+                          const text = e.nativeEvent.text.trim();
+                          const parsed = parseInt(text, 10);
+                          if (text === '' || isNaN(parsed) || parsed < 1) return;
+                          setLocalValues(prev => ({
+                            ...prev,
+                            [activeExercise.id]: {
+                              ...prev[activeExercise.id],
+                              weight: prev[activeExercise.id]?.weight ?? displayWeight,
+                              reps: parsed,
+                            },
+                          }));
+                        }}
+                      />
+                      <Text style={styles.drawerInputUnit}>{repsUnit}</Text>
                     </View>
-                  </>
+                  </View>
                 );
               })()}
             </View>
           )}
         </View>
       </BottomDrawer>
+
+      {/* Keyboard Accessory for number inputs */}
+      <InputAccessoryView nativeID="drawerInputAccessory">
+        <View style={styles.keyboardAccessory}>
+          <TouchableOpacity
+            style={styles.keyboardDoneButton}
+            onPress={() => Keyboard.dismiss()}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.keyboardDoneText}>Done</Text>
+          </TouchableOpacity>
+        </View>
+      </InputAccessoryView>
     </View>
   );
 }
@@ -1123,8 +1118,9 @@ const styles = StyleSheet.create({
   },
   adjustmentDrawerTitle: {
     ...TYPOGRAPHY.h3,
-    color: '#000000',
+    color: COLORS.text,
     marginBottom: SPACING.lg,
+    flex: 1,
   },
   drawerValuesCard: {
     backgroundColor: COLORS.activeCard,
@@ -1137,6 +1133,46 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingVertical: SPACING.lg,
     paddingHorizontal: SPACING.xl,
+  },
+  drawerInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+    paddingVertical: SPACING.lg,
+    paddingHorizontal: SPACING.xl,
+  },
+  drawerInputGroup: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: 4,
+  },
+  drawerInput: {
+    ...TYPOGRAPHY.h1,
+    color: COLORS.text,
+    padding: 0,
+    minWidth: 30,
+  },
+  drawerInputUnit: {
+    ...TYPOGRAPHY.body,
+    color: COLORS.textMeta,
+  },
+  keyboardAccessory: {
+    backgroundColor: COLORS.backgroundCanvas,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border,
+  },
+  keyboardDoneButton: {
+    backgroundColor: COLORS.accentPrimary,
+    borderRadius: BORDER_RADIUS.md,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  keyboardDoneText: {
+    ...TYPOGRAPHY.body,
+    color: '#FFFFFF',
+    fontWeight: '600',
   },
   drawerAdjustValue: {
     flexDirection: 'row',

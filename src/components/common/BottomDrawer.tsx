@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useLayoutEffect, useMemo } from 'react';
-import { View, StyleSheet, TouchableOpacity, ScrollView, ViewStyle, Animated, PanResponder, Dimensions, LayoutAnimation, Platform, UIManager } from 'react-native';
+import { View, StyleSheet, TouchableOpacity, ScrollView, ViewStyle, Animated, PanResponder, Dimensions, LayoutAnimation, Platform, UIManager, Keyboard, KeyboardEvent } from 'react-native';
 
 // Enable LayoutAnimation on Android
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -98,6 +98,25 @@ export function BottomDrawer({
 
   const translateY = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
   const overlayOpacity = useRef(new Animated.Value(0)).current;
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+
+  // Track keyboard to shift drawer up so focused field stays visible
+  useEffect(() => {
+    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+
+    const onShow = (e: KeyboardEvent) => {
+      const offset = e.endCoordinates.height - insets.bottom;
+      setKeyboardHeight(Math.max(0, offset));
+    };
+    const onHide = () => {
+      setKeyboardHeight(0);
+    };
+
+    const sub1 = Keyboard.addListener(showEvent, onShow);
+    const sub2 = Keyboard.addListener(hideEvent, onHide);
+    return () => { sub1.remove(); sub2.remove(); };
+  }, [insets.bottom]);
 
   // Single effect to handle all visibility changes
   useEffect(() => {
@@ -134,6 +153,7 @@ export function BottomDrawer({
         ]).start();
       }, 10);
     } else if (!visible && isVisible) {
+      Keyboard.dismiss();
       // Start close animation
       Animated.parallel([
         Animated.timing(translateY, {
@@ -152,6 +172,7 @@ export function BottomDrawer({
       closeTimeoutRef.current = setTimeout(() => {
         setIsVisible(false);
         setContentHeight(0);
+        setKeyboardHeight(0);
       }, 260); // Slightly longer than animation duration
     }
     
@@ -260,6 +281,7 @@ export function BottomDrawer({
         showsVerticalScrollIndicator: true,
         bounces: true,
         stickyHeaderIndices,
+        keyboardShouldPersistTaps: 'handled' as const,
         onContentSizeChange: (_width: number, height: number) => {
           setContentHeight(height);
         },
@@ -269,6 +291,7 @@ export function BottomDrawer({
       };
 
   const requestClose = () => {
+    Keyboard.dismiss();
     // Animate first
     Animated.parallel([
       Animated.timing(translateY, {
@@ -314,7 +337,7 @@ export function BottomDrawer({
         {
           maxHeight: fixedHeight ? undefined : currentMaxHeight,
           height: fixedHeight ? currentMaxHeight : (shouldScroll ? currentMaxHeight : undefined),
-          bottom: drawerBottomMargin,
+          bottom: drawerBottomMargin + keyboardHeight,
           transform: [{ translateY }],
         }
       ]}>

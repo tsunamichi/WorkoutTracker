@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, LayoutAnimation, Platform, UIManager, Alert, Animated, Modal, FlatList } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, LayoutAnimation, Platform, UIManager, Alert, Animated, Modal, FlatList, TextInput, InputAccessoryView, Keyboard } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, RouteProp, useFocusEffect } from '@react-navigation/native';
 import Svg, { Circle, Path } from 'react-native-svg';
@@ -295,16 +295,20 @@ export function ExerciseExecutionScreen() {
     return map;
   }, [exerciseGroups]);
   
-  // Initialize local values from items
+  // Initialize local values from items (merge, don't overwrite restored session values)
   useEffect(() => {
-    const initial: Record<string, { weight: number; reps: number }> = {};
-    items.forEach(item => {
-      initial[item.id] = {
-        weight: item.weight || 0,
-        reps: item.reps || 0,
-      };
+    setLocalValues(prev => {
+      const merged = { ...prev };
+      items.forEach(item => {
+        if (!merged[item.id]) {
+          merged[item.id] = {
+            weight: item.weight || 0,
+            reps: item.reps || 0,
+          };
+        }
+      });
+      return merged;
     });
-    setLocalValues(initial);
   }, [items]);
   
   // Load completion state
@@ -401,7 +405,7 @@ export function ExerciseExecutionScreen() {
         console.log('📂 Restoring session:', existingSession.id);
         setCurrentSessionId(existingSession.id);
         
-        // Restore localValues from session sets
+        // Restore localValues from session sets — merge INTO existing values
         const restoredValues: Record<string, { weight: number; reps: number }> = {};
         existingSession.sets.forEach((set: any) => {
           // Map session set back to localValues key format
@@ -422,7 +426,7 @@ export function ExerciseExecutionScreen() {
         
         if (Object.keys(restoredValues).length > 0) {
           console.log('📂 Restored localValues for', Object.keys(restoredValues).length, 'sets');
-          setLocalValues(restoredValues);
+          setLocalValues(prev => ({ ...prev, ...restoredValues }));
         }
       }
     } else {
@@ -1582,7 +1586,9 @@ export function ExerciseExecutionScreen() {
         <View style={styles.adjustmentDrawerContent}>
           {/* Title Row with Action Buttons */}
           <View style={styles.drawerTitleRow}>
-            <Text style={styles.adjustmentDrawerTitle}>{t('adjustValues')}</Text>
+            <Text style={styles.adjustmentDrawerTitle} numberOfLines={2}>
+              {drawerGrpIdx >= 0 && exerciseGroups[drawerGrpIdx]?.exercises[drawerExIdx]?.exerciseName || t('adjustValues')}
+            </Text>
             {drawerGrpIdx >= 0 && exerciseGroups[drawerGrpIdx] && exerciseGroups[drawerGrpIdx].exercises[drawerExIdx] && (
               <View style={styles.drawerActionButtons}>
                 <TouchableOpacity
@@ -1663,7 +1669,6 @@ export function ExerciseExecutionScreen() {
                         </View>
                         {isCompleted && (
                           <View style={styles.completedBadge}>
-                            <Text style={styles.completedText}>{t('completed')}</Text>
                             <IconCheck size={20} color={COLORS.signalPositive} />
                           </View>
                         )}
@@ -1672,160 +1677,75 @@ export function ExerciseExecutionScreen() {
                       {/* Set Controls - Only visible when expanded */}
                       {isExpanded && (
                         <View style={styles.setControls}>
-                          {/* Weight Row */}
-                          <View style={styles.drawerAdjustRow}>
-                            <View style={styles.drawerAdjustValueColumn}>
-                              <View style={styles.drawerAdjustValue}>
-                                <Text style={styles.drawerAdjustValueText}>
-                                  {formatWeightForLoad(displayWeight, useKg)}
-                                </Text>
-                                <Text style={styles.drawerAdjustUnit}>{weightUnit}</Text>
-                              </View>
+                          <View style={styles.drawerInputRow}>
+                            {/* Weight Input */}
+                            <View style={styles.drawerInputGroup}>
+                              <TextInput
+                                style={styles.drawerInput}
+                                defaultValue={formatWeightForLoad(displayWeight, useKg)}
+                                keyboardType="decimal-pad"
+                                inputAccessoryViewID="drawerInputAccessory"
+                                selectTextOnFocus
+                                onEndEditing={(e) => {
+                                  const text = e.nativeEvent.text.trim();
+                                  const parsed = parseFloat(text);
+                                  if (text === '' || isNaN(parsed) || parsed < 0) return;
+                                  const rounded = Math.round(parsed * 2) / 2; // snap to nearest 0.5
+                                  const newWeight = fromDisplayWeight(rounded, useKg);
+                                  setLocalValues(prev => {
+                                    const current = prev[setId];
+                                    if (!current) return prev;
+                                    const updated = { ...prev };
+                                    for (let i = setIndex; i < currentGroup.totalRounds; i++) {
+                                      const futureSetId = `${activeExercise.id}-set-${i}`;
+                                      updated[futureSetId] = {
+                                        reps: updated[futureSetId]?.reps ?? current.reps,
+                                        weight: newWeight,
+                                      };
+                                    }
+                                    return updated;
+                                  });
+                                }}
+                              />
+                              <Text style={styles.drawerInputUnit}>{weightUnit}</Text>
                               {isBarbellMode && (() => {
                                 const barbellWeight = useKg ? 20 : 45;
                                 const weightPerSide = (displayWeight - barbellWeight) / 2;
                                 return weightPerSide > 0 ? (
                                   <Text style={styles.weightPerSideText}>
-                                    {formatWeightForLoad(weightPerSide, useKg)} {weightUnit} per side
+                                    {formatWeightForLoad(weightPerSide, useKg)} per side
                                   </Text>
                                 ) : null;
                               })()}
                             </View>
-                            <View style={styles.drawerAdjustButtons}>
-                              <TouchableOpacity 
-                                onPress={() => {
+                            {/* Reps Input */}
+                            <View style={styles.drawerInputGroup}>
+                              <TextInput
+                                style={styles.drawerInput}
+                                defaultValue={String(displayReps)}
+                                keyboardType="number-pad"
+                                inputAccessoryViewID="drawerInputAccessory"
+                                selectTextOnFocus
+                                onEndEditing={(e) => {
+                                  const text = e.nativeEvent.text.trim();
+                                  const parsed = parseInt(text, 10);
+                                  if (text === '' || isNaN(parsed) || parsed < 1) return;
                                   setLocalValues(prev => {
                                     const current = prev[setId];
                                     if (!current) return prev;
-                                    const currentDisplay = toDisplayWeight(current.weight, useKg);
-                                    const nextDisplay = Math.max(0, currentDisplay - weightStep);
-                                    const newWeight = fromDisplayWeight(nextDisplay, useKg);
                                     const updated = { ...prev };
-                                    
-                                    // Update current set and all future sets
-                                    for (let i = setIndex; i < currentGroup.totalRounds; i++) {
-                                      const futureSetId = `${activeExercise.id}-set-${i}`;
-                                      updated[futureSetId] = {
-                                        reps: updated[futureSetId]?.reps ?? current.reps,
-                                        weight: newWeight,
-                                      };
-                                    }
-                                    
-                                    return updated;
-                                  });
-                                }}
-                                activeOpacity={1}
-                                style={styles.adjustButtonTapTarget}
-                              >
-                                <View style={styles.adjustButton}>
-                                  <View style={styles.adjustButtonInner}>
-                                    <IconMinusLine size={24} color={COLORS.accentPrimary} />
-                                  </View>
-                                </View>
-                              </TouchableOpacity>
-                              <TouchableOpacity 
-                                onPress={() => {
-                                  setLocalValues(prev => {
-                                    const current = prev[setId];
-                                    if (!current) return prev;
-                                    const currentDisplay = toDisplayWeight(current.weight, useKg);
-                                    const nextDisplay = currentDisplay + weightStep;
-                                    const newWeight = fromDisplayWeight(nextDisplay, useKg);
-                                    const updated = { ...prev };
-                                    
-                                    // Update current set and all future sets
-                                    for (let i = setIndex; i < currentGroup.totalRounds; i++) {
-                                      const futureSetId = `${activeExercise.id}-set-${i}`;
-                                      updated[futureSetId] = {
-                                        reps: updated[futureSetId]?.reps ?? current.reps,
-                                        weight: newWeight,
-                                      };
-                                    }
-                                    
-                                    return updated;
-                                  });
-                                }}
-                                activeOpacity={1}
-                                style={styles.adjustButtonTapTarget}
-                              >
-                                <View style={styles.adjustButton}>
-                                  <View style={styles.adjustButtonInner}>
-                                    <IconAddLine size={24} color={COLORS.accentPrimary} />
-                                  </View>
-                                </View>
-                              </TouchableOpacity>
-                            </View>
-                          </View>
-                          
-                          <View style={styles.drawerAdjustDivider} />
-                          
-                          {/* Reps Row */}
-                          <View style={styles.drawerAdjustRow}>
-                            <View style={styles.drawerAdjustValue}>
-                              <Text style={styles.drawerAdjustValueText}>
-                                {displayReps}
-                              </Text>
-                              <Text style={styles.drawerAdjustUnit}>{repsUnit}</Text>
-                            </View>
-                            <View style={styles.drawerAdjustButtons}>
-                              <TouchableOpacity 
-                                onPress={() => {
-                                  setLocalValues(prev => {
-                                    const current = prev[setId];
-                                    if (!current) return prev;
-                                    const newReps = Math.max(1, Number(current.reps) - 1);
-                                    const updated = { ...prev };
-                                    
-                                    // Update current set and all future sets
                                     for (let i = setIndex; i < currentGroup.totalRounds; i++) {
                                       const futureSetId = `${activeExercise.id}-set-${i}`;
                                       updated[futureSetId] = {
                                         weight: updated[futureSetId]?.weight ?? current.weight,
-                                        reps: newReps,
+                                        reps: parsed,
                                       };
                                     }
-                                    
                                     return updated;
                                   });
                                 }}
-                                activeOpacity={1}
-                                style={styles.adjustButtonTapTarget}
-                              >
-                                <View style={styles.adjustButton}>
-                                  <View style={styles.adjustButtonInner}>
-                                    <IconMinusLine size={24} color={COLORS.accentPrimary} />
-                                  </View>
-                                </View>
-                              </TouchableOpacity>
-                              <TouchableOpacity 
-                                onPress={() => {
-                                  setLocalValues(prev => {
-                                    const current = prev[setId];
-                                    if (!current) return prev;
-                                    const newReps = Number(current.reps) + 1;
-                                    const updated = { ...prev };
-                                    
-                                    // Update current set and all future sets
-                                    for (let i = setIndex; i < currentGroup.totalRounds; i++) {
-                                      const futureSetId = `${activeExercise.id}-set-${i}`;
-                                      updated[futureSetId] = {
-                                        weight: updated[futureSetId]?.weight ?? current.weight,
-                                        reps: newReps,
-                                      };
-                                    }
-                                    
-                                    return updated;
-                                  });
-                                }}
-                                activeOpacity={1}
-                                style={styles.adjustButtonTapTarget}
-                              >
-                                <View style={styles.adjustButton}>
-                                  <View style={styles.adjustButtonInner}>
-                                    <IconAddLine size={24} color={COLORS.accentPrimary} />
-                                  </View>
-                                </View>
-                              </TouchableOpacity>
+                              />
+                              <Text style={styles.drawerInputUnit}>{repsUnit}</Text>
                             </View>
                           </View>
                         </View>
@@ -2089,6 +2009,19 @@ export function ExerciseExecutionScreen() {
           />
         );
       })()}
+
+      {/* Keyboard Accessory for number inputs */}
+      <InputAccessoryView nativeID="drawerInputAccessory">
+        <View style={styles.keyboardAccessory}>
+          <TouchableOpacity
+            style={styles.keyboardDoneButton}
+            onPress={() => Keyboard.dismiss()}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.keyboardDoneText}>Done</Text>
+          </TouchableOpacity>
+        </View>
+      </InputAccessoryView>
     </View>
   );
 }
@@ -2302,6 +2235,7 @@ const styles = StyleSheet.create({
   adjustmentDrawerTitle: {
     ...TYPOGRAPHY.h3,
     color: COLORS.text,
+    flex: 1,
   },
   drawerValuesCard: {
     ...CARDS.cardDeep.outer,
@@ -2313,6 +2247,44 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+  },
+  drawerInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+  },
+  drawerInputGroup: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: 4,
+  },
+  drawerInput: {
+    ...TYPOGRAPHY.h1,
+    color: COLORS.text,
+    padding: 0,
+    minWidth: 30,
+  },
+  drawerInputUnit: {
+    ...TYPOGRAPHY.body,
+    color: COLORS.textMeta,
+  },
+  keyboardAccessory: {
+    backgroundColor: COLORS.backgroundCanvas,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border,
+  },
+  keyboardDoneButton: {
+    backgroundColor: COLORS.accentPrimary,
+    borderRadius: BORDER_RADIUS.md,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  keyboardDoneText: {
+    ...TYPOGRAPHY.body,
+    color: '#FFFFFF',
+    fontWeight: '600',
   },
   drawerTitleRow: {
     flexDirection: 'row',
@@ -2353,13 +2325,9 @@ const styles = StyleSheet.create({
     color: COLORS.textMeta,
   },
   completedBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  completedText: {
-    ...TYPOGRAPHY.meta,
-    color: COLORS.signalPositive,
+    position: 'absolute',
+    top: 12,
+    right: 12,
   },
   setPreviewRow: {
     flexDirection: 'row',
