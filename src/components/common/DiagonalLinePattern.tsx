@@ -5,7 +5,7 @@ import { COLORS } from '../../constants';
 
 interface DiagonalLinePatternProps {
   width: number | string;
-  height: number;
+  height: number | string;
   borderRadius?: number;
 }
 
@@ -29,9 +29,9 @@ export function DiagonalLinePattern({ width, height, borderRadius = 0 }: Diagona
         y1="0"
         x2={offset + maxDimension}
         y2={maxDimension}
-        stroke={COLORS.disabledBorder}
+        stroke={COLORS.activeCard}
         strokeWidth={lineWidth}
-        strokeOpacity={1}
+        strokeOpacity={0.8}
       />
     );
   }

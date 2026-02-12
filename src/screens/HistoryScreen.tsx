@@ -167,11 +167,11 @@ export function HistoryScreen() {
         programName: card.name
       });
     } else {
-      // For single workouts, navigate directly to workout execution
-      (navigation as any).navigate('WorkoutExecution', { 
-        cycleId: card.workout.programId || undefined,
+      // For single workouts, navigate directly to exercise execution (main)
+      (navigation as any).navigate('ExerciseExecution', { 
+        workoutKey: card.workout.id, // Use workout ID as workoutKey
         workoutTemplateId: card.workout.templateId,
-        date: card.workout.date 
+        type: 'main', // Go directly to main exercises page
       });
     }
   };

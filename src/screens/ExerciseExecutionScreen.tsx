@@ -1,15 +1,17 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, LayoutAnimation, Platform, UIManager, Alert, Animated, Modal, FlatList } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
+import { useNavigation, useRoute, RouteProp, useFocusEffect } from '@react-navigation/native';
+import Svg, { Circle, Path } from 'react-native-svg';
 import * as Haptics from 'expo-haptics';
 import { useStore } from '../store';
 import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS, CARDS } from '../constants';
-import { IconArrowLeft, IconCheck, IconCheckmark, IconAddLine, IconMinusLine, IconTrash, IconEdit, IconMenu, IconHistory, IconRestart, IconSkip, IconSwap, IconSettings, IconArrowRight } from '../components/icons';
+import { IconArrowLeft, IconCheck, IconCheckmark, IconAddLine, IconMinusLine, IconTrash, IconEdit, IconMenu, IconHistory, IconRestart, IconSkip, IconSwap, IconSettings, IconArrowRight, IconAdd } from '../components/icons';
 import { BottomDrawer } from '../components/common/BottomDrawer';
 import { SetTimerSheet } from '../components/timer/SetTimerSheet';
 import { ActionSheet } from '../components/common/ActionSheet';
 import { Toggle } from '../components/Toggle';
+import { DiagonalLinePattern } from '../components/common/DiagonalLinePattern';
 import { useTranslation } from '../i18n/useTranslation';
 import { formatWeightForLoad, toDisplayWeight, fromDisplayWeight } from '../utils/weight';
 import type { WarmupItem_DEPRECATED as WarmupItem, AccessoryItem_DEPRECATED as AccessoryItem, WorkoutTemplateExercise } from '../types/training';
@@ -62,7 +64,10 @@ export function ExerciseExecutionScreen() {
     getBarbellMode,
     setBarbellMode,
     addSession,
+    updateSession,
+    deleteSession,
     completeWorkout,
+    uncompleteWorkout,
   } = useStore();
   
   // Get these once without subscribing to avoid re-renders
@@ -71,10 +76,29 @@ export function ExerciseExecutionScreen() {
   const sessions = useStore.getState().sessions;
   const workoutTemplates = useStore.getState().workoutTemplates;
   
+  const [refreshKey, setRefreshKey] = useState(0);
   const template = getWorkoutTemplate(workoutTemplateId);
   const useKg = settings.useKg;
   const weightUnit = useKg ? 'kg' : 'lb';
   const weightStep = useKg ? 0.5 : 5;
+  
+  // Refresh template when screen comes into focus (to show newly added warmup/core items)
+  useFocusEffect(
+    React.useCallback(() => {
+      setRefreshKey(prev => prev + 1);
+    }, [])
+  );
+  
+  // Debug: Log template info
+  console.log('🔍 ExerciseExecutionScreen template:', {
+    type,
+    templateId: workoutTemplateId,
+    hasTemplate: !!template,
+    warmupItems: template?.warmupItems?.length || 0,
+    accessoryItems: template?.accessoryItems?.length || 0,
+    mainItems: template?.items?.length || 0,
+    refreshKey,
+  });
   
   // Get the appropriate items based on type
   const items = useMemo(() => {
@@ -98,7 +122,7 @@ export function ExerciseExecutionScreen() {
       });
     }
     return [];
-  }, [type, template, exercisesLibrary]);
+  }, [type, template, exercisesLibrary, refreshKey]);
   
   // Group items into groups (supersets or single exercises)
   const exerciseGroups = useMemo(() => {
@@ -170,14 +194,18 @@ export function ExerciseExecutionScreen() {
   const [hasLoggedAnySet, setHasLoggedAnySet] = useState(false); // Track if any set has been logged
   const [completionTimestamps, setCompletionTimestamps] = useState<Record<string, number>>({}); // Track when groups were completed
   const [localValues, setLocalValues] = useState<Record<string, { weight: number; reps: number }>>({});
+  const [currentSessionId, setCurrentSessionId] = useState<string | null>(null); // Track session ID for updates
   const [showAdjustmentDrawer, setShowAdjustmentDrawer] = useState(false);
   const [expandedSetInDrawer, setExpandedSetInDrawer] = useState<number>(0); // Track which set is expanded in drawer
+  const [drawerGroupIndex, setDrawerGroupIndex] = useState<number | null>(null); // Override group index for drawer (completed cards)
+  const [drawerExerciseIndex, setDrawerExerciseIndex] = useState<number | null>(null); // Override exercise index for drawer (completed cards)
   const [showTimer, setShowTimer] = useState(false);
   const [isExerciseTimerPhase, setIsExerciseTimerPhase] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
   const [showExerciseHistory, setShowExerciseHistory] = useState(false);
   const [showSwapModal, setShowSwapModal] = useState(false);
   const [showExerciseSettingsMenu, setShowExerciseSettingsMenu] = useState(false);
+  const [isAccessoriesCollapsed, setIsAccessoriesCollapsed] = useState(true);
   const historyOpacity = useRef(new Animated.Value(0)).current;
   
   // Use refs to avoid stale closures in timer callbacks
@@ -266,7 +294,8 @@ export function ExerciseExecutionScreen() {
     console.log('📊 Loaded completion:', completion);
       
     if (completion && completion.completedItems.length > 0) {
-      setCompletedSets(new Set(completion.completedItems));
+      const completedItemsSet = new Set(completion.completedItems);
+      setCompletedSets(completedItemsSet);
       setHasLoggedAnySet(true); // User has already logged sets
       
       // Calculate current rounds for each group
@@ -276,7 +305,7 @@ export function ExerciseExecutionScreen() {
         for (let round = 0; round < group.totalRounds; round++) {
           const allExercisesComplete = group.exercises.every(ex => {
             const setId = `${ex.id}-set-${round}`;
-            return completion.completedItems.includes(setId);
+            return completedItemsSet.has(setId);
           });
           if (allExercisesComplete) {
             completedRounds = round + 1;
@@ -288,13 +317,84 @@ export function ExerciseExecutionScreen() {
       });
       setCurrentRounds(rounds);
       
-      // Auto-expand first incomplete group
-      const firstIncompleteIndex = exerciseGroups.findIndex(group => {
-        const currentRound = rounds[group.id] || 0;
-        return currentRound < group.totalRounds;
+      // Find the last group that has ANY progress (where user was working)
+      // This is better than "first incomplete" because user may have skipped ahead
+      let lastActiveGroupIndex = -1;
+      exerciseGroups.forEach((group, idx) => {
+        const hasAnyProgress = group.exercises.some(ex => {
+          for (let round = 0; round < group.totalRounds; round++) {
+            if (completedItemsSet.has(`${ex.id}-set-${round}`)) return true;
+          }
+          return false;
+        });
+        if (hasAnyProgress) {
+          lastActiveGroupIndex = idx;
+        }
       });
-      if (firstIncompleteIndex >= 0) {
-        setExpandedGroupIndex(firstIncompleteIndex);
+      
+      // If the last active group is fully complete, find the next incomplete group
+      if (lastActiveGroupIndex >= 0) {
+        const lastActiveRounds = rounds[exerciseGroups[lastActiveGroupIndex].id] || 0;
+        const lastActiveTotal = exerciseGroups[lastActiveGroupIndex].totalRounds;
+        
+        if (lastActiveRounds >= lastActiveTotal) {
+          // Last active group is done - find next incomplete (with wrap-around)
+          let nextIncomplete = exerciseGroups.findIndex((group, idx) => {
+            if (idx <= lastActiveGroupIndex) return false;
+            return (rounds[group.id] || 0) < group.totalRounds;
+          });
+          if (nextIncomplete < 0) {
+            nextIncomplete = exerciseGroups.findIndex((group, idx) => {
+              if (idx >= lastActiveGroupIndex) return false;
+              return (rounds[group.id] || 0) < group.totalRounds;
+            });
+          }
+          setExpandedGroupIndex(nextIncomplete >= 0 ? nextIncomplete : lastActiveGroupIndex);
+        } else {
+          // Last active group still has sets to do - resume there
+          setExpandedGroupIndex(lastActiveGroupIndex);
+        }
+      } else {
+        setExpandedGroupIndex(0);
+      }
+      
+      // Restore localValues and currentSessionId from existing session
+      const allSessions = useStore.getState().sessions;
+      const existingSession = allSessions.find(s => 
+        (s as any).workoutKey === workoutKey
+      ) || allSessions.find(s => {
+        const dateMatch = workoutKey?.match(/(\d{4}-\d{2}-\d{2})/);
+        const sessionDate = dateMatch ? dateMatch[1] : null;
+        return s.workoutTemplateId === workoutTemplateId && sessionDate && s.date === sessionDate;
+      });
+      
+      if (existingSession) {
+        console.log('📂 Restoring session:', existingSession.id);
+        setCurrentSessionId(existingSession.id);
+        
+        // Restore localValues from session sets
+        const restoredValues: Record<string, { weight: number; reps: number }> = {};
+        existingSession.sets.forEach((set: any) => {
+          // Map session set back to localValues key format
+          // Find which exercise group/exercise this set belongs to
+          exerciseGroups.forEach(group => {
+            group.exercises.forEach(ex => {
+              const exerciseIdToMatch = ex.exerciseId || ex.id;
+              if (set.exerciseId === exerciseIdToMatch || set.exerciseId === ex.id) {
+                const setId = `${ex.id}-set-${set.setIndex}`;
+                restoredValues[setId] = {
+                  weight: set.weight,
+                  reps: set.reps,
+                };
+              }
+            });
+          });
+        });
+        
+        if (Object.keys(restoredValues).length > 0) {
+          console.log('📂 Restored localValues for', Object.keys(restoredValues).length, 'sets');
+          setLocalValues(restoredValues);
+        }
       }
     } else {
       setExpandedGroupIndex(0); // Expand first group by default
@@ -336,6 +436,26 @@ export function ExerciseExecutionScreen() {
     }
   }, [hasLoggedAnySet, expandedGroupIndex, exerciseGroups, currentRounds, completedSets]);
   
+  // Check if ALL sections of the workout are complete (warmup, main, accessories)
+  const isEntireWorkoutComplete = () => {
+    const warmupCompletion = getWarmupCompletion(workoutKey);
+    const mainCompletion = getMainCompletion(workoutKey);
+    const accessoryCompletion = getAccessoryCompletion(workoutKey);
+    
+    // A section is "done" if it has no items OR if its percentage is 100%
+    const warmupDone = warmupCompletion.totalItems === 0 || warmupCompletion.percentage >= 100;
+    const mainDone = mainCompletion.totalItems === 0 || mainCompletion.percentage >= 100;
+    const accessoryDone = accessoryCompletion.totalItems === 0 || accessoryCompletion.percentage >= 100;
+    
+    console.log('🔍 Checking entire workout completion:', {
+      warmup: { total: warmupCompletion.totalItems, pct: warmupCompletion.percentage, done: warmupDone },
+      main: { total: mainCompletion.totalItems, pct: mainCompletion.percentage, done: mainDone },
+      accessory: { total: accessoryCompletion.totalItems, pct: accessoryCompletion.percentage, done: accessoryDone },
+    });
+    
+    return warmupDone && mainDone && accessoryDone;
+  };
+
   const saveSession = async (completedSetIds?: Set<string>) => {
     console.log('💾 Saving workout session for', type, 'section');
     console.log('   workoutTemplateId:', workoutTemplateId);
@@ -345,9 +465,12 @@ export function ExerciseExecutionScreen() {
     const setsToSave = completedSetIds || completedSets;
     console.log('   Total sets to check:', setsToSave.size);
     
+    // Use existing session ID or create a new one (only once per workout)
+    const sessionId = currentSessionId || Date.now().toString();
+    const isUpdate = !!currentSessionId;
+    
     // Collect all completed sets for the session
     const allSets: any[] = [];
-    const sessionId = Date.now().toString();
     
     exerciseGroups.forEach(group => {
       group.exercises.forEach(exercise => {
@@ -381,21 +504,33 @@ export function ExerciseExecutionScreen() {
     
     console.log(`   Collected ${allSets.length} completed sets`);
     
-    // Only create a session if there are completed sets
+    // Only create/update a session if there are completed sets
     if (allSets.length > 0) {
+      // Extract the scheduled date from workoutKey (format: sw-{planId}-{YYYY-MM-DD})
+      // Fall back to today's date if workoutKey doesn't contain a date
+      const dateMatch = workoutKey?.match(/(\d{4}-\d{2}-\d{2})/);
+      const sessionDate = dateMatch ? dateMatch[1] : dayjs().format('YYYY-MM-DD');
+      
       const session = {
         id: sessionId,
         workoutTemplateId,
-        date: dayjs().format('YYYY-MM-DD'),
+        workoutKey: workoutKey || '',
+        date: sessionDate,
         startTime: new Date().toISOString(),
         endTime: new Date().toISOString(),
         sets: allSets,
       };
       
-      console.log('💾 Creating session:', JSON.stringify(session, null, 2));
-      await addSession(session);
-      console.log('✅ Session saved successfully!');
-      console.log('   Check Progress tab and History page to verify');
+      if (isUpdate) {
+        console.log('💾 Updating existing session:', sessionId);
+        await updateSession(sessionId, session);
+        console.log('✅ Session updated successfully!');
+      } else {
+        console.log('💾 Creating new session:', sessionId);
+        setCurrentSessionId(sessionId);
+        await addSession(session);
+        console.log('✅ Session created successfully!');
+      }
     } else {
       console.log('⚠️ No completed sets to save - session not created');
     }
@@ -490,13 +625,22 @@ export function ExerciseExecutionScreen() {
         setCurrentRounds(updatedRounds);
         setCompletionTimestamps(prev => ({ ...prev, [currentGroup.id]: Date.now() }));
         
-        // Find the next incomplete group in the original order
+        // Find the next incomplete group - first look after current, then wrap around to before
         // Use updatedRounds to check completion, not the old currentRounds state
-        const nextIncompleteIndex = exerciseGroups.findIndex((group, idx) => {
-          if (idx <= expandedGroupIndex) return false; // Must be after current
+        let nextIncompleteIndex = exerciseGroups.findIndex((group, idx) => {
+          if (idx <= expandedGroupIndex) return false; // First: look after current
           const rounds = updatedRounds[group.id] || 0;
           return rounds < group.totalRounds;
         });
+        
+        // If nothing found after current, wrap around and look before current
+        if (nextIncompleteIndex < 0) {
+          nextIncompleteIndex = exerciseGroups.findIndex((group, idx) => {
+            if (idx >= expandedGroupIndex) return false; // Only look before current
+            const rounds = updatedRounds[group.id] || 0;
+            return rounds < group.totalRounds;
+          });
+        }
         
         console.log('🔍 Looking for next incomplete group:', { 
           currentGroupId: currentGroup.id, 
@@ -507,21 +651,25 @@ export function ExerciseExecutionScreen() {
         });
         
         if (nextIncompleteIndex >= 0) {
-          console.log('➡️ Moving to next group:', nextIncompleteIndex);
+          console.log('➡️ Group complete, letting user pick next exercise');
+          await saveSession(newCompletedSets);
           LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-          setExpandedGroupIndex(nextIncompleteIndex);
+          // Don't auto-expand the next group - let the user choose freely
+          setExpandedGroupIndex(-1);
           setActiveExerciseIndex(0);
           setHasLoggedAnySet(false); // Unlock flow for next exercise selection
         } else {
-          // All done!
-          console.log('✅ All groups complete! Saving session...');
-          await saveSession();
+          // All groups in this section complete!
+          console.log('✅ All groups in this section complete! Saving session...');
+          await saveSession(newCompletedSets);
           
-          // Mark workout as completed if it's a scheduled workout
-          if (workoutKey.startsWith('sw-')) {
-            console.log('🎉 Marking workout as complete:', workoutKey);
+          // Only mark workout as completed if ALL sections (warmup, main, accessories) are done
+          if (workoutKey.startsWith('sw-') && isEntireWorkoutComplete()) {
+            console.log('🎉 All sections done - marking workout as complete:', workoutKey);
             await completeWorkout(workoutKey);
             console.log('✅ Workout marked as complete');
+          } else {
+            console.log('📋 Section complete but other sections remain');
           }
           
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -534,6 +682,24 @@ export function ExerciseExecutionScreen() {
         console.log('➡️ Moving to next round:', nextRound);
         setCurrentRounds(prev => ({ ...prev, [currentGroup.id]: nextRound }));
         setActiveExerciseIndex(0);
+        
+        // Copy values from completed sets to next round sets
+        setLocalValues(prev => {
+          const updated = { ...prev };
+          currentGroup.exercises.forEach(exercise => {
+            const currentSetId = `${exercise.id}-set-${currentRound}`;
+            const nextSetId = `${exercise.id}-set-${nextRound}`;
+            
+            // If current set has adjusted values, copy them to next set
+            if (prev[currentSetId]) {
+              updated[nextSetId] = {
+                weight: prev[currentSetId].weight,
+                reps: prev[currentSetId].reps,
+              };
+            }
+          });
+          return updated;
+        });
       }
     } else {
       // Move to next exercise in same round
@@ -625,11 +791,13 @@ export function ExerciseExecutionScreen() {
             // Pass the completed sets directly to avoid state timing issues
             await saveSession(completedSetsSet);
             
-            // Mark workout as completed if it's a scheduled workout
-            if (workoutKey.startsWith('sw-')) {
-              console.log('🎉 Marking workout as complete:', workoutKey);
+            // Only mark workout as completed if ALL sections are done
+            if (workoutKey.startsWith('sw-') && isEntireWorkoutComplete()) {
+              console.log('🎉 All sections done - marking workout as complete:', workoutKey);
               await completeWorkout(workoutKey);
               console.log('✅ Workout marked as complete');
+            } else {
+              console.log('📋 Section complete but other sections remain');
             }
             
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -670,6 +838,13 @@ export function ExerciseExecutionScreen() {
           text: t('reset'),
           style: 'destructive',
           onPress: async () => {
+            // Delete the saved session for this workout (if any)
+            if (currentSessionId) {
+              console.log('🗑️ Deleting session on reset:', currentSessionId);
+              await deleteSession(currentSessionId);
+              setCurrentSessionId(null);
+            }
+            
             // Clear all completed sets in local state
             setCompletedSets(new Set());
             setCurrentRounds({});
@@ -677,6 +852,7 @@ export function ExerciseExecutionScreen() {
             setExpandedGroupIndex(0);
             setActiveExerciseIndex(0);
             setHasLoggedAnySet(false);
+            setLocalValues({}); // Reset adjusted values back to template defaults
             
             // Clear completion state in store
             if (type === 'warmup') {
@@ -685,6 +861,11 @@ export function ExerciseExecutionScreen() {
               await resetAccessoryCompletion(workoutKey);
             } else if (type === 'main') {
               await resetMainCompletion(workoutKey);
+            }
+            
+            // Revert workout status from completed back to planned
+            if (workoutKey.startsWith('sw-')) {
+              await uncompleteWorkout(workoutKey);
             }
             
             // Show feedback
@@ -712,6 +893,13 @@ export function ExerciseExecutionScreen() {
             text: t('reset'),
             style: 'destructive',
             onPress: async () => {
+              // Delete the saved session for this workout (if any)
+              if (currentSessionId) {
+                console.log('🗑️ Deleting session on swap-reset:', currentSessionId);
+                await deleteSession(currentSessionId);
+                setCurrentSessionId(null);
+              }
+              
               // Clear all completed sets
               setCompletedSets(new Set());
               setCurrentRounds({});
@@ -719,6 +907,7 @@ export function ExerciseExecutionScreen() {
               setExpandedGroupIndex(0);
               setActiveExerciseIndex(0);
               setHasLoggedAnySet(false);
+              setLocalValues({});
               
               // Clear completion state in store
               if (type === 'warmup') {
@@ -732,9 +921,9 @@ export function ExerciseExecutionScreen() {
               
               // Now navigate to editor
               if (type === 'warmup') {
-                (navigation as any).navigate('WarmupEditor', { templateId: workoutTemplateId });
+                (navigation as any).navigate('WarmupEditor', { templateId: workoutTemplateId, workoutKey });
               } else if (type === 'core') {
-                (navigation as any).navigate('AccessoriesEditor', { templateId: workoutTemplateId });
+                (navigation as any).navigate('AccessoriesEditor', { templateId: workoutTemplateId, workoutKey });
               }
             },
           },
@@ -743,9 +932,9 @@ export function ExerciseExecutionScreen() {
     } else {
       // No sets logged, allow swap directly
       if (type === 'warmup') {
-        (navigation as any).navigate('WarmupEditor', { templateId: workoutTemplateId });
+        (navigation as any).navigate('WarmupEditor', { templateId: workoutTemplateId, workoutKey });
       } else if (type === 'core') {
-        (navigation as any).navigate('AccessoriesEditor', { templateId: workoutTemplateId });
+        (navigation as any).navigate('AccessoriesEditor', { templateId: workoutTemplateId, workoutKey });
       }
     }
   };
@@ -830,23 +1019,53 @@ export function ExerciseExecutionScreen() {
       });
     });
     
-    // 2. Get from completed sessions
+    // 2. Get from completed sessions (only for dates not already covered by progress data)
+    // For each date, only use the LATEST session to avoid duplicates from old saves
+    const datesFromProgress = new Set(historyByDate.keys());
+    const latestSessionByDate = new Map<string, typeof sessions[0]>();
+    
     sessions.forEach(session => {
+      const date = session.date || new Date(session.startTime).toISOString().split('T')[0];
+      // Skip dates already populated from workout progress
+      if (datesFromProgress.has(date)) return;
+      
+      // Only check sessions that contain this exercise
+      const hasExercise = session.sets.some(set => 
+        set.exerciseId === exerciseId || set.exerciseName === items.find(i => i.id === exerciseId)?.exerciseName
+      );
+      if (!hasExercise) return;
+      
+      // Keep only the latest session per date (highest ID = most recent)
+      const existing = latestSessionByDate.get(date);
+      if (!existing || session.id > existing.id) {
+        latestSessionByDate.set(date, session);
+      }
+    });
+    
+    // Now collect sets only from the latest session per date
+    latestSessionByDate.forEach((session, date) => {
       session.sets.forEach(set => {
         if (set.exerciseId === exerciseId || set.exerciseName === items.find(i => i.id === exerciseId)?.exerciseName) {
-          const date = session.date || new Date(session.startTime).toISOString().split('T')[0];
-          
           if (!historyByDate.has(date)) {
             historyByDate.set(date, []);
           }
           
           historyByDate.get(date)!.push({
-            setNumber: set.setNumber || 1,
+            setNumber: set.setNumber || set.setIndex || 0,
             weight: set.weight || 0,
             reps: set.reps || 0,
           });
         }
       });
+    });
+    
+    // Deduplicate sets within each date by setNumber (keep the latest entry for each set)
+    historyByDate.forEach((sets, date) => {
+      const uniqueSets = new Map<number, typeof sets[0]>();
+      sets.forEach(set => {
+        uniqueSets.set(set.setNumber, set); // Last write wins
+      });
+      historyByDate.set(date, Array.from(uniqueSets.values()).sort((a, b) => a.setNumber - b.setNumber));
     });
     
     // Convert to array and sort by date (newest first)
@@ -863,6 +1082,7 @@ export function ExerciseExecutionScreen() {
       <View style={styles.header}>
         <View style={styles.topBar}>
           <TouchableOpacity
+            testID="back-button"
             style={styles.backButton}
             onPress={() => {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -873,6 +1093,7 @@ export function ExerciseExecutionScreen() {
             <IconArrowLeft size={24} color="#000000" />
           </TouchableOpacity>
           <TouchableOpacity
+            testID="menu-button"
             style={styles.menuButton}
             onPress={() => setShowMenu(true)}
             activeOpacity={1}
@@ -882,7 +1103,7 @@ export function ExerciseExecutionScreen() {
         </View>
         
         <View style={styles.headerContent}>
-          <Text style={styles.headerTitle}>{getTitle()}</Text>
+          <Text testID="header-title" style={styles.headerTitle}>{getTitle()}</Text>
         </View>
       </View>
       
@@ -891,6 +1112,159 @@ export function ExerciseExecutionScreen() {
         contentContainerStyle={styles.scrollContent}
         bounces={false}
       >
+        {/* Warm-up and Core Cards - Only show when type is 'main' */}
+        {type === 'main' && template && (
+          <View style={styles.accessoriesContainer}>
+            <TouchableOpacity 
+              style={styles.accessoriesLabelContainer}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                setIsAccessoriesCollapsed(!isAccessoriesCollapsed);
+              }}
+              activeOpacity={0.7}
+            >
+              <Text testID="accessories-label" style={styles.accessoriesLabel}>Accessories</Text>
+              <Animated.View style={{
+                transform: [{ rotate: isAccessoriesCollapsed ? '0deg' : '90deg' }]
+              }}>
+                <IconArrowRight size={16} color={COLORS.textMeta} />
+              </Animated.View>
+            </TouchableOpacity>
+            {!isAccessoriesCollapsed && (
+              <View style={[styles.topCardsRow, { marginTop: SPACING.md }]}>
+            {/* Warm-up Card */}
+            {template.warmupItems && template.warmupItems.length > 0 ? (
+              <TouchableOpacity
+                style={styles.halfWidthCard}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  (navigation as any).push('ExerciseExecution', { 
+                    workoutKey, 
+                    workoutTemplateId,
+                    type: 'warmup'
+                  });
+                }}
+                activeOpacity={0.7}
+              >
+                <View>
+                  <Text style={styles.halfWidthCardTitle}>{t('warmup')}</Text>
+                  {(() => {
+                    const completion = getWarmupCompletion(workoutKey);
+                    if (completion.percentage === 100) {
+                      return (
+                        <View style={styles.halfWidthCardProgressRow}>
+                          <IconCheck size={20} color={COLORS.success} />
+                        </View>
+                      );
+                    } else if (completion.percentage > 0) {
+                      return (
+                        <View style={styles.halfWidthCardProgressRow}>
+                          <Text style={styles.halfWidthProgressText}>{completion.percentage}%</Text>
+                          <Svg height="16" width="16" viewBox="0 0 16 16" style={styles.progressCircle}>
+                            <Circle cx="8" cy="8" r="8" fill={COLORS.backgroundCanvas} />
+                            <Path
+                              d={`M 8 8 L 8 0 A 8 8 0 ${completion.percentage / 100 > 0.5 ? 1 : 0} 1 ${
+                                8 + 8 * Math.sin(2 * Math.PI * (completion.percentage / 100))
+                              } ${
+                                8 - 8 * Math.cos(2 * Math.PI * (completion.percentage / 100))
+                              } Z`}
+                              fill={COLORS.signalWarning}
+                            />
+                          </Svg>
+                        </View>
+                      );
+                    } else {
+                      return <Text style={styles.halfWidthCardAction}>{t('start')}</Text>;
+                    }
+                  })()}
+                </View>
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity
+                style={styles.halfWidthAddButton}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  (navigation as any).navigate('WarmupEditor', { templateId: workoutTemplateId, workoutKey });
+                }}
+                activeOpacity={0.7}
+              >
+                <DiagonalLinePattern width="100%" height="100%" borderRadius={BORDER_RADIUS.lg} />
+                <IconAdd size={20} color={COLORS.text} />
+                <Text style={styles.halfWidthAddText}>Add {t('warmup')}</Text>
+              </TouchableOpacity>
+            )}
+            
+            {/* Core Card */}
+            {template.accessoryItems && template.accessoryItems.length > 0 ? (
+              <TouchableOpacity
+                style={styles.halfWidthCard}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  (navigation as any).push('ExerciseExecution', { 
+                    workoutKey, 
+                    workoutTemplateId,
+                    type: 'core'
+                  });
+                }}
+                activeOpacity={0.7}
+              >
+                <View>
+                  <Text style={styles.halfWidthCardTitle}>{t('core')}</Text>
+                  {(() => {
+                    const completion = getAccessoryCompletion(workoutKey);
+                    if (completion.percentage === 100) {
+                      return (
+                        <View style={styles.halfWidthCardProgressRow}>
+                          <IconCheck size={20} color={COLORS.success} />
+                        </View>
+                      );
+                    } else if (completion.percentage > 0) {
+                      return (
+                        <View style={styles.halfWidthCardProgressRow}>
+                          <Text style={styles.halfWidthProgressText}>{completion.percentage}%</Text>
+                          <Svg height="16" width="16" viewBox="0 0 16 16" style={styles.progressCircle}>
+                            <Circle cx="8" cy="8" r="8" fill={COLORS.backgroundCanvas} />
+                            <Path
+                              d={`M 8 8 L 8 0 A 8 8 0 ${completion.percentage / 100 > 0.5 ? 1 : 0} 1 ${
+                                8 + 8 * Math.sin(2 * Math.PI * (completion.percentage / 100))
+                              } ${
+                                8 - 8 * Math.cos(2 * Math.PI * (completion.percentage / 100))
+                              } Z`}
+                              fill={COLORS.signalWarning}
+                            />
+                          </Svg>
+                        </View>
+                      );
+                    } else {
+                      return <Text style={styles.halfWidthCardAction}>{t('start')}</Text>;
+                    }
+                  })()}
+                </View>
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity
+                style={styles.halfWidthAddButton}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  (navigation as any).navigate('AccessoriesEditor', { templateId: workoutTemplateId, workoutKey });
+                }}
+                activeOpacity={0.7}
+              >
+                <DiagonalLinePattern width="100%" height="100%" borderRadius={BORDER_RADIUS.lg} />
+                <IconAdd size={20} color={COLORS.text} />
+                <Text style={styles.halfWidthAddText}>Add {t('core')}</Text>
+              </TouchableOpacity>
+            )}
+              </View>
+            )}
+          </View>
+        )}
+        
+        {/* Strength Workout Label - Only show when type is 'main' */}
+        {type === 'main' && (
+          <Text style={styles.sectionLabel}>Strength Workout</Text>
+        )}
+        
         <View style={styles.itemsAccordion}>
           {sortedExerciseGroups.map((group) => {
             const originalIndex = groupIdToOriginalIndex.get(group.id) ?? -1;
@@ -899,12 +1273,13 @@ export function ExerciseExecutionScreen() {
             const isCompleted = currentRound >= group.totalRounds;
             
             return (
-              <View key={group.id} style={styles.itemRow}>
-                {/* Exercise Cards Container */}
-                <View style={styles.exerciseCardsColumn}>
-                  <View style={styles.exerciseCardsContainer}>
+              <View key={group.id} testID={`exercise-group-${originalIndex}`} style={styles.itemRow}>
+                {/* Exercise Cards Container - Full width */}
+                <View style={styles.exerciseCardsContainer}>
                     {group.exercises.map((exercise, exIndex) => {
-                      const setId = `${exercise.id}-set-${currentRound}`;
+                      // For completed groups, show the last completed round's values
+                      const displayRound = isCompleted ? Math.max(0, currentRound - 1) : currentRound;
+                      const setId = `${exercise.id}-set-${displayRound}`;
                       const displayWeight = localValues[setId]?.weight ?? exercise.weight ?? 0;
                       const displayReps = localValues[setId]?.reps ?? exercise.reps ?? 0;
                       const showWeight = displayWeight > 0;
@@ -912,13 +1287,13 @@ export function ExerciseExecutionScreen() {
                       const isExerciseCompleted = completedSets.has(setId);
                       const repsUnit = exercise.isTimeBased ? 'secs' : 'reps';
                       
-                      // Card is active when it's the current exercise AND user has started working on it
-                      // (either logged a set, timer is showing, or adjustment drawer is open)
-                      const isActive = isCurrentExercise && (hasLoggedAnySet || showTimer || showAdjustmentDrawer);
+                      // Card is active when it's the current exercise in an expanded group
+                      // (showing the set indicator means it should have the active style)
+                      const isActive = isCurrentExercise;
                       
                       // Determine card style based on state
-                      const cardStyle = isExerciseCompleted ? styles.itemCardDimmed : (isActive ? styles.itemCard : styles.itemCardInactive);
-                      const cardInnerStyle = isExerciseCompleted ? styles.itemCardInnerDimmed : (isActive ? styles.itemCardInner : styles.itemCardInnerInactive);
+                      const cardBgStyle = isExerciseCompleted ? styles.itemCardDimmed : (isActive ? styles.itemCardBorder : styles.itemCardInactive);
+                      const cardFgStyle = isExerciseCompleted ? styles.itemCardInnerDimmed : (isActive ? styles.itemCardFill : styles.itemCardInnerInactive);
                       
                       return (
                         <View key={exercise.id} style={styles.exerciseCardWrapper}>
@@ -935,30 +1310,40 @@ export function ExerciseExecutionScreen() {
                                 hasLoggedAnySet,
                                 isCompleted,
                               });
-                              if (!hasLoggedAnySet && !isExpanded && !isCompleted) {
+                              if (isCompleted || isExerciseCompleted) {
+                                // Completed group/exercise - open drawer without expanding inline
+                                console.log('📝 Opening adjustment drawer for completed exercise');
+                                setDrawerGroupIndex(originalIndex);
+                                setDrawerExerciseIndex(exIndex);
+                                const lastRound = Math.max(0, (currentRounds[group.id] || 0) - 1);
+                                setExpandedSetInDrawer(lastRound);
+                                setShowAdjustmentDrawer(true);
+                              } else if (isCurrentExercise) {
+                                // Current exercise card opens adjustment drawer
+                                console.log('📝 Opening adjustment drawer');
+                                setDrawerGroupIndex(null);
+                                setDrawerExerciseIndex(null);
+                                const currentRound = currentRounds[group.id] || 0;
+                                setExpandedSetInDrawer(currentRound);
+                                setShowAdjustmentDrawer(true);
+                              } else if (!hasLoggedAnySet && !isExpanded) {
                                 // Before logging first set: allow selecting any GROUP (not individual exercise)
                                 console.log('📂 Expanding group and selecting first exercise');
                                 LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
                                 setExpandedGroupIndex(originalIndex);
                                 setActiveExerciseIndex(0); // Start with first exercise in group
-                              } else if (isCurrentExercise && !isExerciseCompleted) {
-                                // Current exercise card opens adjustment drawer
-                                console.log('📝 Opening adjustment drawer');
-                                const currentRound = currentRounds[group.id] || 0;
-                                setExpandedSetInDrawer(currentRound);
-                                setShowAdjustmentDrawer(true);
                               } else {
                                 console.log('❌ Card tap did nothing (condition not met)');
                               }
                             }}
                           >
-                            <View style={cardStyle}>
-                              <View style={cardInnerStyle}>
+                            <View style={cardBgStyle}>
+                              <View style={cardFgStyle}>
                                 <View style={styles.itemCardExpanded}>
                                   {/* Exercise Name Row */}
                                   <View style={[
-                                    isExerciseCompleted ? styles.exerciseNameRowWithIcon : styles.exerciseNameInCard,
-                                    !isCurrentExercise && !isExerciseCompleted && styles.exerciseNameInCardCentered
+                                    styles.exerciseNameRowWithIcon,
+                                    !isCurrentExercise && !isExerciseCompleted && !isCompleted && styles.exerciseNameInCardCentered
                                   ]}>
                                   <Text style={[
                                     styles.exerciseNameText,
@@ -966,25 +1351,40 @@ export function ExerciseExecutionScreen() {
                                   ]}>
                                     {exercise.exerciseName}
                                   </Text>
+                                  {(isCompleted || isExerciseCompleted) && (
+                                    <IconCheck size={20} color={COLORS.signalPositive} />
+                                  )}
                                   </View>
                                   
                                   {/* Values Row - Show for current exercise in expanded group */}
                                   {isCurrentExercise && (
                                     <View style={styles.valuesDisplayRow}>
                                       <View style={styles.valuesDisplayLeft}>
+                                        {showWeight && (
+                                          <View style={styles.valueColumn}>
+                                            <View style={styles.valueRow}>
+                                              <Text style={styles.largeValue}>
+                                                {formatWeightForLoad(displayWeight, useKg)}
+                                              </Text>
+                                              <Text style={styles.unit}>{weightUnit}</Text>
+                                            </View>
+                                            {(() => {
+                                              const isBarbellMode = getBarbellMode(exercise.id);
+                                              const barbellWeight = useKg ? 20 : 45;
+                                              const weightPerSide = (displayWeight - barbellWeight) / 2;
+                                              return isBarbellMode && weightPerSide > 0 ? (
+                                                <Text style={styles.weightPerSideText}>
+                                                  {formatWeightForLoad(weightPerSide, useKg)} {weightUnit} per side
+                                                </Text>
+                                              ) : null;
+                                            })()}
+                                          </View>
+                                        )}
+                                        
                                         <View style={styles.valueRow}>
                                           <Text style={styles.largeValue}>{displayReps}</Text>
                                           <Text style={styles.unit}>{repsUnit}</Text>
                                         </View>
-                                        
-                                        {showWeight && (
-                                          <View style={styles.valueRow}>
-                                            <Text style={styles.largeValue}>
-                                              {formatWeightForLoad(displayWeight, useKg)}
-                                            </Text>
-                                            <Text style={styles.unit}>{weightUnit}</Text>
-                                          </View>
-                                        )}
                                       </View>
                                       
                                       <View style={styles.editIconContainer}>
@@ -996,23 +1396,17 @@ export function ExerciseExecutionScreen() {
                               </View>
                             </View>
                           </TouchableOpacity>
+                          {/* Set count badge overlay - only on active card */}
+                          {isActive && !isCompleted && (
+                            <View style={styles.setCountBadgeOverlay}>
+                              <Text style={styles.setCountText} numberOfLines={1}>
+                                {currentRound + 1}/{group.totalRounds}
+                              </Text>
+                            </View>
+                          )}
                         </View>
                       );
                     })}
-                  </View>
-                </View>
-                
-                {/* Round Indicator - Set count format (only for expanded group) */}
-                <View style={styles.roundIndicatorContainer}>
-                  {isCompleted ? (
-                    <View style={styles.completedCheckContainer}>
-                      <IconCheck size={20} color={COLORS.signalPositive} />
-                    </View>
-                  ) : isExpanded && (
-                    <Text style={styles.setCountText} numberOfLines={1}>
-                      {currentRound + 1}/{group.totalRounds}
-                    </Text>
-                  )}
                 </View>
               </View>
             );
@@ -1024,6 +1418,7 @@ export function ExerciseExecutionScreen() {
       {expandedGroupIndex !== -1 && (
         <View style={[styles.startButtonContainer, { paddingBottom: insets.bottom + 16 }]}>
           <TouchableOpacity
+            testID="start-button"
             style={styles.startButton}
             onPress={handleStart}
             activeOpacity={1}
@@ -1064,8 +1459,36 @@ export function ExerciseExecutionScreen() {
           onClose={() => setShowTimer(false)}
           workoutName={template?.name}
           exerciseName={exerciseGroups[expandedGroupIndex].exercises[activeExerciseIndex]?.exerciseName}
-          currentSet={currentRounds[exerciseGroups[expandedGroupIndex].id] + 1}
+          currentSet={(currentRounds[exerciseGroups[expandedGroupIndex].id] || 0) + 1}
           totalSets={exerciseGroups[expandedGroupIndex].totalRounds}
+          nextExerciseName={(() => {
+            // Find the next exercise that will come after the current group completes
+            const currentGroup = exerciseGroups[expandedGroupIndex];
+            const currentRound = currentRounds[currentGroup.id] || 0;
+            const isLastRound = (currentRound + 1) >= currentGroup.totalRounds;
+            
+            if (!isLastRound) return undefined; // Not the last set, no need for next exercise
+            
+            // Find the next incomplete group (after current, then wrap around)
+            let nextGroupIndex = exerciseGroups.findIndex((group, idx) => {
+              if (idx <= expandedGroupIndex) return false;
+              const rounds = currentRounds[group.id] || 0;
+              return rounds < group.totalRounds;
+            });
+            
+            if (nextGroupIndex < 0) {
+              nextGroupIndex = exerciseGroups.findIndex((group, idx) => {
+                if (idx >= expandedGroupIndex) return false;
+                const rounds = currentRounds[group.id] || 0;
+                return rounds < group.totalRounds;
+              });
+            }
+            
+            if (nextGroupIndex >= 0) {
+              return exerciseGroups[nextGroupIndex].exercises[0]?.exerciseName;
+            }
+            return undefined; // No next exercise (workout complete)
+          })()}
           isExerciseTimerPhase={isExerciseTimerPhase}
           exerciseDuration={localValues[exerciseGroups[expandedGroupIndex].exercises[activeExerciseIndex]?.id]?.reps ?? exerciseGroups[expandedGroupIndex].exercises[activeExerciseIndex]?.reps ?? 30}
           onExerciseTimerComplete={handleComplete}
@@ -1075,9 +1498,19 @@ export function ExerciseExecutionScreen() {
       )}
       
       {/* Adjustment Drawer */}
+      {(() => {
+        const drawerGrpIdx = drawerGroupIndex ?? expandedGroupIndex;
+        const drawerExIdx = drawerExerciseIndex ?? activeExerciseIndex;
+        return (
       <BottomDrawer
         visible={showAdjustmentDrawer}
-        onClose={() => setShowAdjustmentDrawer(false)}
+        onClose={() => {
+          setShowAdjustmentDrawer(false);
+          setDrawerGroupIndex(null);
+          setDrawerExerciseIndex(null);
+          // Re-save session to persist any value changes made in the drawer
+          saveSession();
+        }}
         maxHeight="90%"
         scrollable={true}
       >
@@ -1085,7 +1518,7 @@ export function ExerciseExecutionScreen() {
           {/* Title Row with Action Buttons */}
           <View style={styles.drawerTitleRow}>
             <Text style={styles.adjustmentDrawerTitle}>{t('adjustValues')}</Text>
-            {expandedGroupIndex >= 0 && exerciseGroups[expandedGroupIndex] && exerciseGroups[expandedGroupIndex].exercises[activeExerciseIndex] && (
+            {drawerGrpIdx >= 0 && exerciseGroups[drawerGrpIdx] && exerciseGroups[drawerGrpIdx].exercises[drawerExIdx] && (
               <View style={styles.drawerActionButtons}>
                 <TouchableOpacity
                   style={styles.drawerIconButton}
@@ -1098,11 +1531,11 @@ export function ExerciseExecutionScreen() {
             )}
           </View>
           
-          {expandedGroupIndex >= 0 && exerciseGroups[expandedGroupIndex] && exerciseGroups[expandedGroupIndex].exercises[activeExerciseIndex] ? (
+          {drawerGrpIdx >= 0 && exerciseGroups[drawerGrpIdx] && exerciseGroups[drawerGrpIdx].exercises[drawerExIdx] ? (
             <View style={styles.allSetsContainer}>
-              {Array.from({ length: exerciseGroups[expandedGroupIndex].totalRounds }, (_, setIndex) => {
-                const currentGroup = exerciseGroups[expandedGroupIndex];
-                const activeExercise = currentGroup.exercises[activeExerciseIndex];
+              {Array.from({ length: exerciseGroups[drawerGrpIdx].totalRounds }, (_, setIndex) => {
+                const currentGroup = exerciseGroups[drawerGrpIdx];
+                const activeExercise = currentGroup.exercises[drawerExIdx];
                 const isBarbellMode = getBarbellMode(activeExercise.id);
                 const repsUnit = activeExercise.isTimeBased ? 'secs' : 'reps';
                 const setId = `${activeExercise.id}-set-${setIndex}`;
@@ -1118,11 +1551,23 @@ export function ExerciseExecutionScreen() {
                 
                 // Initialize localValues for this set if needed
                 if (!localValues[setId]) {
+                  // Try to get values from the previous set
+                  let weightToUse = activeExercise.weight ?? 0;
+                  let repsToUse = Number(activeExercise.reps) ?? 0;
+                  
+                  if (setIndex > 0) {
+                    const prevSetId = `${activeExercise.id}-set-${setIndex - 1}`;
+                    if (localValues[prevSetId]) {
+                      weightToUse = localValues[prevSetId].weight;
+                      repsToUse = localValues[prevSetId].reps;
+                    }
+                  }
+                  
                   setLocalValues(prev => ({
                     ...prev,
                     [setId]: {
-                      weight: activeExercise.weight ?? 0,
-                      reps: Number(activeExercise.reps) ?? 0,
+                      weight: weightToUse,
+                      reps: repsToUse,
                     },
                   }));
                 }
@@ -1139,14 +1584,14 @@ export function ExerciseExecutionScreen() {
                           {!isExpanded && (
                             <View style={styles.setPreviewRow}>
                               <View style={styles.setPreviewValue}>
-                                <Text style={styles.setPreviewValueText}>{displayReps}</Text>
-                                <Text style={styles.setPreviewUnit}>{repsUnit}</Text>
-                              </View>
-                              <View style={styles.setPreviewValue}>
                                 <Text style={styles.setPreviewValueText}>
                                   {formatWeightForLoad(displayWeight, useKg)}
                                 </Text>
                                 <Text style={styles.setPreviewUnit}>{weightUnit}</Text>
+                              </View>
+                              <View style={styles.setPreviewValue}>
+                                <Text style={styles.setPreviewValueText}>{displayReps}</Text>
+                                <Text style={styles.setPreviewUnit}>{repsUnit}</Text>
                               </View>
                             </View>
                           )}
@@ -1162,66 +1607,6 @@ export function ExerciseExecutionScreen() {
                       {/* Set Controls - Only visible when expanded */}
                       {isExpanded && (
                         <View style={styles.setControls}>
-                          {/* Reps Row */}
-                          <View style={styles.drawerAdjustRow}>
-                            <View style={styles.drawerAdjustValue}>
-                              <Text style={styles.drawerAdjustValueText}>
-                                {displayReps}
-                              </Text>
-                              <Text style={styles.drawerAdjustUnit}>{repsUnit}</Text>
-                            </View>
-                            <View style={styles.drawerAdjustButtons}>
-                              <TouchableOpacity 
-                                onPress={() => {
-                                  setLocalValues(prev => {
-                                    const current = prev[setId];
-                                    if (!current) return prev;
-                                    return {
-                                      ...prev,
-                                      [setId]: {
-                                        ...current,
-                                        reps: Math.max(1, Number(current.reps) - 1),
-                                      },
-                                    };
-                                  });
-                                }}
-                                activeOpacity={1}
-                                style={styles.adjustButtonTapTarget}
-                              >
-                                <View style={styles.adjustButton}>
-                                  <View style={styles.adjustButtonInner}>
-                                    <IconMinusLine size={24} color={COLORS.accentPrimary} />
-                                  </View>
-                                </View>
-                              </TouchableOpacity>
-                              <TouchableOpacity 
-                                onPress={() => {
-                                  setLocalValues(prev => {
-                                    const current = prev[setId];
-                                    if (!current) return prev;
-                                    return {
-                                      ...prev,
-                                      [setId]: {
-                                        ...current,
-                                        reps: Number(current.reps) + 1,
-                                      },
-                                    };
-                                  });
-                                }}
-                                activeOpacity={1}
-                                style={styles.adjustButtonTapTarget}
-                              >
-                                <View style={styles.adjustButton}>
-                                  <View style={styles.adjustButtonInner}>
-                                    <IconAddLine size={24} color={COLORS.accentPrimary} />
-                                  </View>
-                                </View>
-                              </TouchableOpacity>
-                            </View>
-                          </View>
-                          
-                          <View style={styles.drawerAdjustDivider} />
-                          
                           {/* Weight Row */}
                           <View style={styles.drawerAdjustRow}>
                             <View style={styles.drawerAdjustValueColumn}>
@@ -1249,13 +1634,19 @@ export function ExerciseExecutionScreen() {
                                     if (!current) return prev;
                                     const currentDisplay = toDisplayWeight(current.weight, useKg);
                                     const nextDisplay = Math.max(0, currentDisplay - weightStep);
-                                    return {
-                                      ...prev,
-                                      [setId]: {
-                                        ...current,
-                                        weight: fromDisplayWeight(nextDisplay, useKg),
-                                      },
-                                    };
+                                    const newWeight = fromDisplayWeight(nextDisplay, useKg);
+                                    const updated = { ...prev };
+                                    
+                                    // Update current set and all future sets
+                                    for (let i = setIndex; i < currentGroup.totalRounds; i++) {
+                                      const futureSetId = `${activeExercise.id}-set-${i}`;
+                                      updated[futureSetId] = {
+                                        reps: updated[futureSetId]?.reps ?? current.reps,
+                                        weight: newWeight,
+                                      };
+                                    }
+                                    
+                                    return updated;
                                   });
                                 }}
                                 activeOpacity={1}
@@ -1274,13 +1665,91 @@ export function ExerciseExecutionScreen() {
                                     if (!current) return prev;
                                     const currentDisplay = toDisplayWeight(current.weight, useKg);
                                     const nextDisplay = currentDisplay + weightStep;
-                                    return {
-                                      ...prev,
-                                      [setId]: {
-                                        ...current,
-                                        weight: fromDisplayWeight(nextDisplay, useKg),
-                                      },
-                                    };
+                                    const newWeight = fromDisplayWeight(nextDisplay, useKg);
+                                    const updated = { ...prev };
+                                    
+                                    // Update current set and all future sets
+                                    for (let i = setIndex; i < currentGroup.totalRounds; i++) {
+                                      const futureSetId = `${activeExercise.id}-set-${i}`;
+                                      updated[futureSetId] = {
+                                        reps: updated[futureSetId]?.reps ?? current.reps,
+                                        weight: newWeight,
+                                      };
+                                    }
+                                    
+                                    return updated;
+                                  });
+                                }}
+                                activeOpacity={1}
+                                style={styles.adjustButtonTapTarget}
+                              >
+                                <View style={styles.adjustButton}>
+                                  <View style={styles.adjustButtonInner}>
+                                    <IconAddLine size={24} color={COLORS.accentPrimary} />
+                                  </View>
+                                </View>
+                              </TouchableOpacity>
+                            </View>
+                          </View>
+                          
+                          <View style={styles.drawerAdjustDivider} />
+                          
+                          {/* Reps Row */}
+                          <View style={styles.drawerAdjustRow}>
+                            <View style={styles.drawerAdjustValue}>
+                              <Text style={styles.drawerAdjustValueText}>
+                                {displayReps}
+                              </Text>
+                              <Text style={styles.drawerAdjustUnit}>{repsUnit}</Text>
+                            </View>
+                            <View style={styles.drawerAdjustButtons}>
+                              <TouchableOpacity 
+                                onPress={() => {
+                                  setLocalValues(prev => {
+                                    const current = prev[setId];
+                                    if (!current) return prev;
+                                    const newReps = Math.max(1, Number(current.reps) - 1);
+                                    const updated = { ...prev };
+                                    
+                                    // Update current set and all future sets
+                                    for (let i = setIndex; i < currentGroup.totalRounds; i++) {
+                                      const futureSetId = `${activeExercise.id}-set-${i}`;
+                                      updated[futureSetId] = {
+                                        weight: updated[futureSetId]?.weight ?? current.weight,
+                                        reps: newReps,
+                                      };
+                                    }
+                                    
+                                    return updated;
+                                  });
+                                }}
+                                activeOpacity={1}
+                                style={styles.adjustButtonTapTarget}
+                              >
+                                <View style={styles.adjustButton}>
+                                  <View style={styles.adjustButtonInner}>
+                                    <IconMinusLine size={24} color={COLORS.accentPrimary} />
+                                  </View>
+                                </View>
+                              </TouchableOpacity>
+                              <TouchableOpacity 
+                                onPress={() => {
+                                  setLocalValues(prev => {
+                                    const current = prev[setId];
+                                    if (!current) return prev;
+                                    const newReps = Number(current.reps) + 1;
+                                    const updated = { ...prev };
+                                    
+                                    // Update current set and all future sets
+                                    for (let i = setIndex; i < currentGroup.totalRounds; i++) {
+                                      const futureSetId = `${activeExercise.id}-set-${i}`;
+                                      updated[futureSetId] = {
+                                        weight: updated[futureSetId]?.weight ?? current.weight,
+                                        reps: newReps,
+                                      };
+                                    }
+                                    
+                                    return updated;
                                   });
                                 }}
                                 activeOpacity={1}
@@ -1303,8 +1772,8 @@ export function ExerciseExecutionScreen() {
           ) : null}
           
           {/* Exercise History */}
-          {expandedGroupIndex >= 0 && exerciseGroups[expandedGroupIndex] && (() => {
-            const activeExercise = exerciseGroups[expandedGroupIndex].exercises[activeExerciseIndex];
+          {drawerGrpIdx >= 0 && exerciseGroups[drawerGrpIdx] && (() => {
+            const activeExercise = exerciseGroups[drawerGrpIdx].exercises[drawerExIdx];
             if (!activeExercise) return null;
             
             // Get exercise history for this exercise
@@ -1378,6 +1847,8 @@ export function ExerciseExecutionScreen() {
           })()}
         </View>
       </BottomDrawer>
+      );
+      })()}
 
       {/* Swap Exercise Modal */}
       <Modal
@@ -1469,7 +1940,7 @@ export function ExerciseExecutionScreen() {
               onPress: handleCompleteAll,
             },
           ] : [
-            // Warmup/Core: Swap and Reset side by side
+            // Warmup/Core: Swap, Reset, and Remove
             {
               icon: <IconSwap size={24} color="#000000" />,
               label: t('swap'),
@@ -1479,6 +1950,40 @@ export function ExerciseExecutionScreen() {
               icon: <IconRestart size={24} color={COLORS.signalNegative} />,
               label: t('reset'),
               onPress: handleReset,
+              destructive: true,
+            },
+            {
+              icon: <IconTrash size={24} color={COLORS.error} />,
+              label: t('remove'),
+              onPress: () => {
+                setShowMenu(false);
+                setTimeout(() => {
+                  Alert.alert(
+                    type === 'warmup' ? t('removeWarmup') : 'Remove Core',
+                    type === 'warmup' ? t('removeWarmupConfirmation') : 'Are you sure you want to remove the core exercises from this workout?',
+                    [
+                      {
+                        text: t('cancel'),
+                        style: 'cancel',
+                      },
+                      {
+                        text: t('remove'),
+                        style: 'destructive',
+                        onPress: async () => {
+                          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                          // Update the template to remove items
+                          if (type === 'warmup') {
+                            await updateWorkoutTemplate(workoutTemplateId, { warmupItems: [] });
+                          } else if (type === 'core') {
+                            await updateWorkoutTemplate(workoutTemplateId, { accessoryItems: [] });
+                          }
+                          navigation.goBack();
+                        },
+                      },
+                    ]
+                  );
+                }, 300);
+              },
               destructive: true,
             },
           ]
@@ -1570,43 +2075,52 @@ const styles = StyleSheet.create({
     paddingBottom: 120,
   },
   itemsAccordion: {
-    gap: 24,
+    gap: 16,
   },
   itemRow: {
     width: '100%',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 16,
-  },
-  exerciseCardsColumn: {
-    flex: 1,
   },
   exerciseCardsContainer: {
     gap: 8,
   },
   exerciseCardWrapper: {
-    width: '100%',
+    position: 'relative',
   },
-  itemCard: {
-    ...CARDS.cardDeep.outer,
-    borderWidth: 1,
-    borderColor: COLORS.accentPrimary,
+  // Active card: use background color as "border" with padding to simulate border width
+  itemCardBorder: {
+    backgroundColor: COLORS.text,
+    borderRadius: 16,
+    borderCurve: 'continuous' as const,
+    paddingTop: 1,
+    paddingBottom: 1,
+    paddingLeft: 1,
+    paddingRight: 1,
+    overflow: 'hidden',
   },
-  itemCardInner: {
-    ...CARDS.cardDeep.inner,
+  itemCardFill: {
+    backgroundColor: COLORS.activeCard,
+    borderRadius: 15,
+    borderCurve: 'continuous' as const,
   },
   itemCardInactive: {
     ...CARDS.cardDeep.outer,
-    borderWidth: 1,
-    borderColor: COLORS.activeCard, // Same as card background, invisible but prevents layout jump
+    // 1px transparent padding to match active card size and prevent layout jump
+    paddingTop: 1,
+    paddingBottom: 1,
+    paddingLeft: 1,
+    paddingRight: 1,
+    borderWidth: 0,
   },
   itemCardInnerInactive: {
     ...CARDS.cardDeep.inner,
   },
   itemCardDimmed: {
     ...CARDS.cardDeepDimmed.outer,
-    borderWidth: 1,
-    borderColor: COLORS.activeCard, // Same as card background, invisible but prevents layout jump
+    paddingTop: 1,
+    paddingBottom: 1,
+    paddingLeft: 1,
+    paddingRight: 1,
+    borderWidth: 0,
   },
   itemCardInnerDimmed: {
     ...CARDS.cardDeepDimmed.inner,
@@ -1653,6 +2167,10 @@ const styles = StyleSheet.create({
     alignItems: 'baseline',
     gap: 4,
   },
+  valueColumn: {
+    flexDirection: 'column',
+    gap: 4,
+  },
   largeValue: {
     ...TYPOGRAPHY.h1,
     color: '#000000',
@@ -1664,15 +2182,41 @@ const styles = StyleSheet.create({
   roundIndicatorContainer: {
     flexDirection: 'column',
     alignItems: 'center',
-    gap: 8,
-    paddingTop: 4,
+    justifyContent: 'center',
     position: 'relative',
     width: 48,
   },
+  setCountBadgeOverlay: {
+    position: 'absolute',
+    right: 0,
+    top: 0,
+    bottom: 0,
+    backgroundColor: COLORS.text,
+    borderTopLeftRadius: 0,
+    borderTopRightRadius: 16,
+    borderBottomLeftRadius: 0,
+    borderBottomRightRadius: 16,
+    paddingHorizontal: SPACING.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minWidth: 44,
+  },
+  setCountBadge: {
+    backgroundColor: COLORS.text,
+    borderTopLeftRadius: 0,
+    borderTopRightRadius: BORDER_RADIUS.sm,
+    borderBottomLeftRadius: 0,
+    borderBottomRightRadius: BORDER_RADIUS.sm,
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: SPACING.xs,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flex: 1,
+    width: '100%',
+  },
   setCountText: {
     ...TYPOGRAPHY.meta,
-    color: COLORS.accentPrimary,
-    width: 48,
+    color: COLORS.backgroundCanvas,
     textAlign: 'center',
   },
   completedCheckContainer: {
@@ -1738,7 +2282,7 @@ const styles = StyleSheet.create({
   },
   setCardActive: {
     borderWidth: 1,
-    borderColor: COLORS.accentPrimary,
+    borderColor: COLORS.text,
   },
   setHeader: {
     flexDirection: 'row',
@@ -1971,5 +2515,94 @@ const styles = StyleSheet.create({
   exerciseOptionText: {
     ...TYPOGRAPHY.body,
     color: COLORS.text,
+  },
+  // Warm-up and Core Cards (when shown on main exercise screen)
+  accessoriesContainer: {
+    backgroundColor: COLORS.containerBackground,
+    borderRadius: BORDER_RADIUS.lg,
+    padding: SPACING.lg,
+    marginBottom: SPACING.lg,
+  },
+  topCardsRow: {
+    flexDirection: 'row',
+    gap: SPACING.lg,
+    width: '100%',
+  },
+  halfWidthCard: {
+    flex: 1,
+    flexBasis: 0,
+    flexGrow: 1,
+    flexShrink: 1,
+    height: 80,
+    ...CARDS.cardDeep.outer,
+    padding: SPACING.lg,
+    flexDirection: 'column',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+  },
+  halfWidthCardTitle: {
+    ...TYPOGRAPHY.body,
+    color: COLORS.text,
+    marginBottom: 4,
+  },
+  halfWidthCardSubtitle: {
+    ...TYPOGRAPHY.meta,
+    color: COLORS.textMeta,
+  },
+  halfWidthCardAction: {
+    ...TYPOGRAPHY.metaBold,
+    color: COLORS.accentPrimary,
+  },
+  halfWidthCardCompleteIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: COLORS.success,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  halfWidthCardProgressRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  halfWidthProgressText: {
+    ...TYPOGRAPHY.meta,
+    color: COLORS.textMeta,
+  },
+  progressCircle: {
+    // SVG styling handled inline
+  },
+  halfWidthAddButton: {
+    flex: 1,
+    flexBasis: 0,
+    flexGrow: 1,
+    flexShrink: 1,
+    height: 80,
+    borderRadius: BORDER_RADIUS.lg,
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: SPACING.sm,
+    overflow: 'hidden',
+  },
+  halfWidthAddText: {
+    ...TYPOGRAPHY.meta,
+    color: COLORS.text,
+  },
+  accessoriesLabelContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.xs,
+  },
+  accessoriesLabel: {
+    ...TYPOGRAPHY.meta,
+    color: COLORS.text,
+  },
+  sectionLabel: {
+    ...TYPOGRAPHY.meta,
+    color: COLORS.text,
+    marginTop: 24,
+    marginBottom: SPACING.md,
   },
 });

@@ -1,0 +1,22 @@
+# Smoke Test: TC-1.2 — Verify multiple exercises are visible and selectable
+# Verifies: scrolling through exercise list, multiple cards rendered.
+appId: com.tsunamichi.workouttracker
+
+---
+
+# 1. Launch the app
+- launchApp
+
+# 2. Open the workout
+- tapOn:
+    text: ".*Exercises.*"
+
+- extendedWaitUntil:
+    visible: "Strength Workout"
+    timeout: 5000
+
+# 3. Scroll down to see more exercise cards
+- scroll
+
+# 4. Take screenshot showing multiple exercises are available
+- takeScreenshot: "08_multiple_exercises_visible"

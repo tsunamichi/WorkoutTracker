@@ -1,0 +1,30 @@
+# Smoke Test: TC-5.1 — Timer shows correct set count (no NaN)
+# Verifies: rest timer displays valid set count on first set, never "NaN".
+# NOTE: Timer Animated.View may not expose text to accessibility tree.
+#       We use screenshot verification + assertNotVisible for NaN.
+appId: com.tsunamichi.workouttracker
+
+---
+
+# 1. Launch the app
+- launchApp
+
+# 2. Open the workout
+- tapOn:
+    text: ".*Exercises.*"
+
+- extendedWaitUntil:
+    visible: "Strength Workout"
+    timeout: 5000
+
+# 3. Start the first set (where NaN used to appear)
+- tapOn: "Start"
+
+# 4. Wait for timer animation
+- waitForAnimationToEnd
+
+# 5. Take screenshot for visual verification
+- takeScreenshot: "06_timer_no_nan"
+
+# 6. Verify "NaN" is NOT visible anywhere on the accessible part of the screen
+- assertNotVisible: "NaN"

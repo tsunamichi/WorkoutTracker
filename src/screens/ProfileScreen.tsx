@@ -9,7 +9,7 @@ import { IconArrowLeft, IconTriangle } from '../components/icons';
 import { Toggle } from '../components/Toggle';
 import { useTranslation } from '../i18n/useTranslation';
 import { cloudBackupService } from '../services/cloudBackup';
-import { migrateOldStorageKeys, scanForOldData, validateAndRepairSessions, convertPartialWorkoutsToSessions } from '../utils/dataMigration';
+import { migrateOldStorageKeys, scanForOldData, validateAndRepairSessions, convertPartialWorkoutsToSessions, recoverSessionsFromCompletionStates } from '../utils/dataMigration';
 
 // Optional local notifications
 let Notifications: any = null;
@@ -553,6 +553,58 @@ export function ProfileScreen({ navigation }: ProfileScreenProps) {
               <View style={styles.settingInfo}>
                 <Text style={styles.settingLabel}>Force Reload</Text>
                 <Text style={styles.settingDescription}>Reload all data from storage</Text>
+              </View>
+            </TouchableOpacity>
+
+            <TouchableOpacity 
+              style={[styles.settingCard, styles.settingCardRow, styles.nestedOption]}
+              onPress={async () => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                Alert.alert(
+                  'Recover Completed Workouts',
+                  'This will scan your completed exercises and create workout sessions for your history. This is useful if your previously completed workouts are not showing up in the progress tab.',
+                  [
+                    { text: 'Cancel', style: 'cancel' },
+                    {
+                      text: 'Recover',
+                      onPress: async () => {
+                        try {
+                          console.log('🔄 Starting workout recovery...');
+                          const result = await useStore.getState().recoverCompletedWorkouts();
+                          
+                          if (result.success) {
+                            Alert.alert(
+                              'Recovery Complete',
+                              result.sessionsCreated > 0
+                                ? `Successfully recovered ${result.sessionsCreated} workout session(s) from ${result.workoutsProcessed} completed workout(s)!\n\nYour history and progress should now be updated.`
+                                : `No new sessions to recover. All completed workouts already have session records.`,
+                              [{ text: 'OK' }]
+                            );
+                          } else {
+                            Alert.alert(
+                              'Recovery Failed',
+                              result.error || 'An error occurred during recovery. Check console for details.',
+                              [{ text: 'OK' }]
+                            );
+                          }
+                        } catch (error) {
+                          Alert.alert(
+                            'Error',
+                            'Failed to recover workouts. Check console for details.',
+                            [{ text: 'OK' }]
+                          );
+                          console.error('❌ Error recovering workouts:', error);
+                        }
+                      }
+                    }
+                  ]
+                );
+              }}
+              activeOpacity={0.7}
+            >
+              <View style={styles.settingInfo}>
+                <Text style={styles.settingLabel}>Recover Completed Workouts</Text>
+                <Text style={styles.settingDescription}>Create history records from completed exercises</Text>
               </View>
             </TouchableOpacity>
           </View>

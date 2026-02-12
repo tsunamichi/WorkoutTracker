@@ -1,0 +1,34 @@
+# Smoke Test: TC-1.1 — Start an exercise set, verify timer appears
+# Verifies: exercise selection, Start button, timer sheet appears.
+# NOTE: The timer sheet uses Animated.View which may not expose text to the
+#       accessibility tree. We use screenshot verification instead.
+appId: com.tsunamichi.workouttracker
+
+---
+
+# 1. Launch the app fresh
+- launchApp
+
+# 2. Navigate to the workout
+- tapOn:
+    text: ".*Exercises.*"
+
+# 3. Wait for the execution screen to load
+- extendedWaitUntil:
+    visible: "Strength Workout"
+    timeout: 5000
+
+# 4. Tap "Start" (should be visible since an exercise was previously expanded)
+- tapOn:
+    text: "Start"
+
+# 5. Wait a moment for the timer animation to complete
+- waitForAnimationToEnd
+
+# 6. Take a screenshot — the timer sheet should be visible with "Next set X out of Y"
+#    Visual verification: timer circle should be visible, no NaN text
+- takeScreenshot: "02_timer_visible"
+
+# 7. Verify the main exercise screen is still behind the timer
+#    (Strength Workout should still be partially visible behind the overlay)
+- assertVisible: "Strength Workout"

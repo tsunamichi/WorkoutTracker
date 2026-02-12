@@ -72,6 +72,7 @@ if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental
 type RouteParams = {
   AccessoriesEditor: {
     templateId: string;
+    workoutKey?: string;
   };
 };
 
@@ -86,6 +87,7 @@ export function AccessoriesEditorScreen() {
   const weightUnit = useKg ? 'kg' : 'lb';
   
   const templateId = route.params?.templateId;
+  const workoutKey = route.params?.workoutKey;
   const template = getWorkoutTemplate(templateId);
   
   const [accessoryItems, setAccessoryItems] = useState<AccessoryItem[]>(
@@ -213,6 +215,10 @@ export function AccessoriesEditorScreen() {
   const handleApplyTemplate = async (templateKey: keyof typeof ACCESSORY_TEMPLATES) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     
+    console.log('🎯 handleApplyTemplate called with:', templateKey);
+    console.log('📝 workoutKey:', workoutKey);
+    console.log('📝 templateId:', template?.id);
+    
     if (!template) return;
     
     const accessoryTemplate = ACCESSORY_TEMPLATES[templateKey];
@@ -238,16 +244,28 @@ export function AccessoriesEditorScreen() {
       };
     });
     
-    // Add template items to existing accessory items
-    const updatedAccessoryItems = [...accessoryItems, ...newItems];
+    // Replace existing accessory items with template items
+    const updatedAccessoryItems = newItems;
     
     // Save to store
     await updateWorkoutTemplate(template.id, {
       accessoryItems: updatedAccessoryItems,
     });
     
-    // Navigate back
-    navigation.goBack();
+    // Navigate to execution screen
+    // If no workoutKey provided, generate a standalone one
+    const executionWorkoutKey = workoutKey || `accessory-standalone-${Date.now()}`;
+    
+    console.log('🚀 Replacing with AccessoriesExecution:', {
+      workoutKey: executionWorkoutKey,
+      workoutTemplateId: template.id,
+    });
+    
+    // Replace current screen so back button goes to workout execution (not editor)
+    (navigation as any).replace('AccessoriesExecution', {
+      workoutKey: executionWorkoutKey,
+      workoutTemplateId: template.id,
+    });
   };
 
 

@@ -235,14 +235,11 @@ export function TodayScreen({ onDateChange, onOpenSwapDrawer, onOpenAddWorkout }
       const sw = selectedDay.scheduledWorkout;
       
       // SCHEDULE-FIRST: Pass scheduled workout data to execution screen
-      // WorkoutExecution will use snapshots from the scheduled workout
-      (navigation as any).navigate('WorkoutExecution', {
-        workoutId: sw.id, // Pass scheduled workout ID (not template ID)
-        workoutTemplateId: sw.templateId, // Must match param name in WorkoutExecutionScreen
-        cycleId: sw.programId, // Pass programId as cycleId for backward compatibility
-        templateId: sw.templateId, // Keep for backward compatibility
-        date: selectedDay.date,
-        isLocked: sw.isLocked,
+      // Navigate directly to ExerciseExecution with type='main' (skipping WOD page)
+      (navigation as any).navigate('ExerciseExecution', {
+        workoutKey: sw.id, // Pass scheduled workout ID as workoutKey
+        workoutTemplateId: sw.templateId,
+        type: 'main', // Go directly to main exercises page
       });
     }
   };
@@ -341,6 +338,7 @@ export function TodayScreen({ onDateChange, onOpenSwapDrawer, onOpenAddWorkout }
               {selectedDay?.scheduledWorkout ? (
                 <View style={styles.workoutCard}>
                       <TouchableOpacity
+                        testID="workout-card"
                         style={styles.workoutCardInner}
                         onPress={handleWorkoutPress}
                         activeOpacity={1}

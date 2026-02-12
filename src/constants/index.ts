@@ -123,6 +123,7 @@ export const COLORS = {
   borderDimmed: BORDER_DIMMED, // Dimmed dividers
   divider: BORDER_DIMMED,       // Dividers
   overlay: 'rgba(0, 0, 0, 0.2)', // Bottom sheet overlays
+  containerBackground: '#E6DFDF', // Container background
   
   // Status colors
   signalNegative: SIGNAL_NEGATIVE,

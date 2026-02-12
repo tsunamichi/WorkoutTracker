@@ -391,9 +391,8 @@ export function AccessoriesExecutionScreen() {
             
             return (
               <View key={group.id} style={styles.itemRow} testID={`group-row-${index}`}>
-                {/* Exercise Cards Container */}
-                <View style={styles.exerciseCardsColumn}>
-                  <View style={styles.exerciseCardsContainer}>
+                {/* Exercise Cards Container - Full width */}
+                <View style={styles.exerciseCardsContainer}>
                     {group.exercises.map((exercise, exIndex) => {
                       const displayWeight = localValues[exercise.id]?.weight ?? exercise.weight ?? 0;
                       const displayReps = localValues[exercise.id]?.reps ?? exercise.reps ?? 0;
@@ -426,8 +425,8 @@ export function AccessoriesExecutionScreen() {
                                 <View style={styles.itemCardExpanded}>
                                   {/* Exercise Name Row with Check Icon */}
                                   <View style={[
-                                    isExerciseCompleted ? styles.exerciseNameRowWithIcon : styles.exerciseNameInCard,
-                                    !isActive && !isExerciseCompleted && styles.exerciseNameInCardCentered
+                                    styles.exerciseNameRowWithIcon,
+                                    !isActive && !isExerciseCompleted && !isCompleted && styles.exerciseNameInCardCentered
                                   ]} testID="exercise-name-header">
                                     <Text style={[
                                       styles.exerciseNameTextInCard,
@@ -436,11 +435,9 @@ export function AccessoriesExecutionScreen() {
                                       {exercise.exerciseName}
                                     </Text>
                                     
-                                    {/* Show check icon only if completed */}
-                                    {isExerciseCompleted && (
-                                      <View style={styles.editIconContainer}>
-                                        <IconCheck size={24} color={COLORS.signalPositive} />
-                                      </View>
+                                    {/* Show check icon if exercise or group is completed */}
+                                    {(isExerciseCompleted || isCompleted) && (
+                                      <IconCheck size={20} color={COLORS.signalPositive} />
                                     )}
                                   </View>
                                   
@@ -475,34 +472,17 @@ export function AccessoriesExecutionScreen() {
                               </View>
                             </View>
                           </TouchableOpacity>
+                          {/* Set count badge overlay - only on active card */}
+                          {isActive && !isCompleted && (
+                            <View style={styles.setCountBadgeOverlay}>
+                              <Text style={styles.setCountText} numberOfLines={1}>
+                                {currentRound + 1}/{group.totalRounds}
+                              </Text>
+                            </View>
+                          )}
                         </View>
                       );
                     })}
-                  </View>
-                </View>
-                
-                {/* Round Indicator - On the right, stacked vertically */}
-                <View style={styles.roundIndicatorContainer} testID="round-indicator">
-                  {/* Always render dots to maintain space */}
-                  {Array.from({ length: group.totalRounds }).map((_, roundIndex) => (
-                    <View
-                      key={roundIndex}
-                      testID={`round-dot-${roundIndex}`}
-                      style={[
-                        styles.roundDot,
-                        roundIndex < currentRound && styles.roundDotCompleted,
-                        roundIndex === currentRound && !isCompleted && isExpanded && styles.roundDotActive,
-                        isCompleted && styles.roundDotHidden,
-                      ]}
-                    />
-                  ))}
-                  
-                  {/* Show checkmark absolutely positioned when completed */}
-                  {isCompleted && (
-                    <View style={styles.roundCheckContainer}>
-                      <IconCheck size={24} color={COLORS.signalPositive} />
-                    </View>
-                  )}
                 </View>
               </View>
             );
@@ -705,9 +685,6 @@ const styles = StyleSheet.create({
   },
   itemRow: {
     width: '100%',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 16,
   },
   roundIndicatorContainer: {
     flexDirection: 'column',
@@ -725,8 +702,28 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  exerciseCardsColumn: {
-    flex: 1,
+  exerciseCardWrapper: {
+    position: 'relative',
+  },
+  setCountBadgeOverlay: {
+    position: 'absolute',
+    right: 0,
+    top: 0,
+    bottom: 0,
+    backgroundColor: COLORS.text,
+    borderTopLeftRadius: 0,
+    borderTopRightRadius: 16,
+    borderBottomLeftRadius: 0,
+    borderBottomRightRadius: 16,
+    paddingHorizontal: SPACING.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minWidth: 44,
+  },
+  setCountText: {
+    ...TYPOGRAPHY.meta,
+    color: COLORS.backgroundCanvas,
+    textAlign: 'center',
   },
   roundDot: {
     width: 8,
@@ -757,9 +754,6 @@ const styles = StyleSheet.create({
   },
   exerciseCardsContainer: {
     gap: 12,
-  },
-  exerciseCardWrapper: {
-    width: '100%',
   },
   exerciseNameHeader: {
     paddingHorizontal: 4,

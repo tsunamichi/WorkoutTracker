@@ -33,6 +33,8 @@ interface WorkoutStore {
   addExercise: (exercise: Exercise) => Promise<void>;
   updateExercise: (exerciseId: string, updates: Partial<Exercise>) => Promise<void>;
   addSession: (session: WorkoutSession) => Promise<void>;
+  updateSession: (sessionId: string, session: WorkoutSession) => Promise<void>;
+  deleteSession: (sessionId: string) => Promise<void>;
   addBodyWeightEntry: (entry: BodyWeightEntry) => Promise<void>;
   addProgressLog: (params: { photoUris: string[]; weightLbs?: number }) => Promise<{ success: boolean; error?: string }>;
   deleteProgressLog: (progressLogId: string) => Promise<void>;
@@ -115,6 +117,7 @@ interface WorkoutStore {
   scheduleWorkout: (date: string, templateId: string, source: 'manual' | 'cycle', cyclePlanId?: string, resolution?: ConflictResolution) => Promise<{ success: boolean; conflict?: ScheduledWorkout }>;
   unscheduleWorkout: (workoutId: string) => Promise<void>;
   completeWorkout: (workoutId: string) => Promise<void>;
+  uncompleteWorkout: (workoutId: string) => Promise<void>;
   getScheduledWorkout: (date: string) => ScheduledWorkout | undefined;
   getScheduledWorkoutsForDateRange: (startDate: string, endDate: string) => ScheduledWorkout[];
   moveScheduledWorkout: (workoutId: string, toDate: string) => Promise<{ success: boolean; error?: string }>;
@@ -1253,6 +1256,24 @@ export const useStore = create<WorkoutStore>((set, get) => ({
     // Verify it was saved
     const verifyCount = get().sessions.length;
     console.log(`   ✅ Verification: store now has ${verifyCount} sessions`);
+  },
+  
+  updateSession: async (sessionId, session) => {
+    console.log('💾 updateSession called for:', sessionId);
+    const currentSessions = get().sessions;
+    const sessions = currentSessions.map(s => s.id === sessionId ? session : s);
+    set({ sessions });
+    await storage.saveSessions(sessions);
+    console.log('   ✅ Session updated');
+  },
+  
+  deleteSession: async (sessionId) => {
+    console.log('🗑️ deleteSession called for:', sessionId);
+    const currentSessions = get().sessions;
+    const sessions = currentSessions.filter(s => s.id !== sessionId);
+    set({ sessions });
+    await storage.saveSessions(sessions);
+    console.log('   ✅ Session deleted');
   },
   
   addBodyWeightEntry: async (entry) => {
@@ -2702,6 +2723,23 @@ export const useStore = create<WorkoutStore>((set, get) => ({
     await storage.saveScheduledWorkouts(scheduledWorkouts);
     
     console.log('🔒 Workout completed and locked:', workoutId);
+  },
+  
+  uncompleteWorkout: async (workoutId) => {
+    const scheduledWorkouts = get().scheduledWorkouts.map(sw =>
+      sw.id === workoutId 
+        ? { 
+            ...sw, 
+            status: 'planned' as const, 
+            completedAt: null,
+            isLocked: false,
+          }
+        : sw
+    );
+    set({ scheduledWorkouts });
+    await storage.saveScheduledWorkouts(scheduledWorkouts);
+    
+    console.log('🔓 Workout uncompleted and unlocked:', workoutId);
   },
   
   getScheduledWorkout: (date) => {

@@ -1,0 +1,17 @@
+# Helper: Opens the first workout card on the Schedule tab.
+# Assumes the app is on the Schedule tab with a workout scheduled today.
+appId: com.tsunamichi.workouttracker
+
+---
+
+# Ensure we're on the Schedule tab (it's the default)
+- assertVisible: "Schedule"
+
+# Tap the workout card — look for "Strength Workout" label or any workout title
+# The workout card is the first large tappable area on the schedule
+- tapOn:
+    text: "Strength Workout"
+    optional: true
+
+# Wait for the ExerciseExecution screen to load
+- assertVisible: "Start"

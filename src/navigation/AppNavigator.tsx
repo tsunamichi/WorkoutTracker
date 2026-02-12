@@ -21,7 +21,7 @@ import { ProgressGalleryScreen } from '../screens/ProgressGalleryScreen';
 import { ProgressLogDetailScreen } from '../screens/ProgressLogDetailScreen';
 import { CycleDetailScreen } from '../screens/CycleDetailScreen';
 import { CycleConflictsScreen } from '../screens/CycleConflictsScreen';
-import { WorkoutExecutionScreen } from '../screens/WorkoutExecutionScreen';
+// import { WorkoutExecutionScreen } from '../screens/WorkoutExecutionScreen'; // Removed - navigating directly to ExerciseExecution
 import WorkoutEditScreen from '../screens/WorkoutEditScreen';
 import { ExerciseDetailScreen } from '../screens/ExerciseDetailScreen';
 import { DesignSystemScreen } from '../screens/DesignSystemScreen';
@@ -60,9 +60,9 @@ export type RootStackParamList = {
   WorkoutBuilder: undefined;
   Workouts: undefined;
   WorkoutTemplateDetail: { templateId: string };
-  WarmupEditor: { templateId: string };
+  WarmupEditor: { templateId: string; workoutKey?: string };
   WarmupExecution: { workoutKey: string; workoutTemplateId: string };
-  AccessoriesEditor: { templateId: string };
+  AccessoriesEditor: { templateId: string; workoutKey?: string };
   AccessoriesExecution: { workoutKey: string; workoutTemplateId: string };
   ExerciseExecution: { workoutKey: string; workoutTemplateId: string; type: 'warmup' | 'main' | 'core' };
   DesignSystem: undefined;
@@ -930,7 +930,8 @@ export default function AppNavigator() {
         <Stack.Screen name="DesignSystem" component={DesignSystemScreen} />
         <Stack.Screen name="CycleDetail" component={CycleDetailScreen} />
         <Stack.Screen name="CycleConflicts" component={CycleConflictsScreen} />
-        <Stack.Screen name="WorkoutExecution" component={WorkoutExecutionScreen} />
+        {/* <Stack.Screen name="WorkoutExecution" component={WorkoutExecutionScreen} /> */}
+        {/* Removed - navigating directly to ExerciseExecution with type='main' */}
         <Stack.Screen name="WorkoutEdit" component={WorkoutEditScreen} />
         <Stack.Screen name="ExerciseDetail" component={ExerciseDetailScreen} />
         <Stack.Screen name="HIITTimerList" component={HIITTimerListScreen} />

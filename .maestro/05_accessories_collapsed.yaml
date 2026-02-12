@@ -1,0 +1,35 @@
+# Smoke Test: TC-6.2 — Accessories section collapsed by default
+# Verifies: Accessories label visible, section initially collapsed, expands on tap.
+appId: com.tsunamichi.workouttracker
+
+---
+
+# 1. Launch the app
+- launchApp
+
+# 2. Open the workout
+- tapOn:
+    text: ".*Exercises.*"
+
+- extendedWaitUntil:
+    visible: "Strength Workout"
+    timeout: 5000
+
+# 3. Scroll up to find the Accessories section (it's above Strength Workout)
+- scrollUntilVisible:
+    element:
+      text: "Accessories"
+    direction: UP
+    timeout: 5000
+
+# 4. Verify "Accessories" label is visible
+- assertVisible: "Accessories"
+
+# 5. Take screenshot showing collapsed state
+- takeScreenshot: "05_accessories_collapsed"
+
+# 6. Tap "Accessories" to expand
+- tapOn: "Accessories"
+
+# 7. Take screenshot showing expanded state
+- takeScreenshot: "05_accessories_expanded"

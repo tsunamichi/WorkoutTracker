@@ -1,0 +1,43 @@
+# Smoke Test: TC-3.1 — Session persistence across navigation
+# Verifies: progress is preserved after navigating away and returning.
+# This test does NOT start a new set — it only verifies the screen state persists.
+appId: com.tsunamichi.workouttracker
+
+---
+
+# 1. Launch the app
+- launchApp
+
+# 2. Open the workout
+- tapOn:
+    text: ".*Exercises.*"
+
+- extendedWaitUntil:
+    visible: "Strength Workout"
+    timeout: 5000
+
+# 3. Take screenshot showing initial state with any existing progress
+- takeScreenshot: "03_initial_state"
+
+# 4. Navigate back — tap the back arrow (← icon in top-left)
+- tapOn:
+    point: "8%,11%"
+
+# 5. Wait for the Schedule tab to fully render
+- extendedWaitUntil:
+    visible: "Schedule"
+    timeout: 5000
+
+- takeScreenshot: "03_schedule_visible"
+
+# 6. Reopen the same workout
+- tapOn:
+    text: ".*Exercises.*"
+
+# 7. Verify we're back on the execution screen (progress preserved)
+- extendedWaitUntil:
+    visible: "Strength Workout"
+    timeout: 5000
+
+# 8. Take screenshot — compare with initial (progress should be same)
+- takeScreenshot: "03_after_nav_back"

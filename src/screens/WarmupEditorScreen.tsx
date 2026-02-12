@@ -49,6 +49,7 @@ if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental
 type RouteParams = {
   WarmupEditor: {
     templateId: string;
+    workoutKey?: string;
   };
 };
 
@@ -63,6 +64,7 @@ export function WarmupEditorScreen() {
   const weightUnit = useKg ? 'kg' : 'lb';
   
   const templateId = route.params?.templateId;
+  const workoutKey = route.params?.workoutKey;
   const template = getWorkoutTemplate(templateId);
   
   const [warmupItems, setWarmupItems] = useState<WarmupItem[]>(
@@ -215,16 +217,28 @@ export function WarmupEditorScreen() {
       };
     });
     
-    // Add template items to existing warmup items
-    const updatedWarmupItems = [...warmupItems, ...newItems];
+    // Replace existing warmup items with template items
+    const updatedWarmupItems = newItems;
     
     // Save to store
     await updateWorkoutTemplate(template.id, {
       warmupItems: updatedWarmupItems,
     });
     
-    // Navigate back
-    navigation.goBack();
+    // Navigate to execution screen
+    // If no workoutKey provided, generate a standalone one
+    const executionWorkoutKey = workoutKey || `warmup-standalone-${Date.now()}`;
+    
+    console.log('🚀 Replacing with WarmupExecution:', {
+      workoutKey: executionWorkoutKey,
+      workoutTemplateId: template.id,
+    });
+    
+    // Replace current screen so back button goes to workout execution (not editor)
+    (navigation as any).replace('WarmupExecution', {
+      workoutKey: executionWorkoutKey,
+      workoutTemplateId: template.id,
+    });
   };
 
 

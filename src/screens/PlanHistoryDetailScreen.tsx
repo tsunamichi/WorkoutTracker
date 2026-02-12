@@ -22,7 +22,7 @@ interface PlanHistoryDetailScreenProps {
 export function PlanHistoryDetailScreen({ route, navigation }: PlanHistoryDetailScreenProps) {
   const insets = useSafeAreaInsets();
   const { programId, programName } = route.params;
-  const { scheduledWorkouts, getWorkoutCompletionPercentage, sessions, settings, exercises: exercisesLibrary } = useStore();
+  const { scheduledWorkouts, getWorkoutCompletionPercentage, sessions, settings, exercises: exercisesLibrary, detailedWorkoutProgress } = useStore();
   const { t } = useTranslation();
   const useKg = settings.useKg;
   const [expandedWorkouts, setExpandedWorkouts] = React.useState<Set<string>>(new Set());
@@ -58,10 +58,69 @@ export function PlanHistoryDetailScreen({ route, navigation }: PlanHistoryDetail
   };
 
   const getExerciseProgress = (workout: any, exerciseId: string) => {
-    // Find session(s) for this workout date and exercise
     const workoutDate = workout.date;
-    const completedSets = sessions
-      .filter(session => session.date === workoutDate)
+    
+    // 1. PRIMARY SOURCE: detailedWorkoutProgress (keyed by scheduled workout ID)
+    // This is the most reliable source as it's saved during workout execution
+    const workoutKey = workout.id; // scheduledWorkout ID, e.g. sw-planId-2026-02-12
+    const detailedProgress = detailedWorkoutProgress[workoutKey];
+    
+    if (detailedProgress) {
+      // Find matching exercise in detailed progress
+      // exercisesSnapshot uses template exercise IDs, detailedWorkoutProgress uses library exercise IDs
+      // Try matching by the exerciseId directly, or by looking through all exercises
+      let exerciseProgress = detailedProgress.exercises[exerciseId];
+      
+      if (!exerciseProgress) {
+        // Try matching: the snapshot has template item IDs, detailed progress might use exerciseId
+        const templateExercise = (workout.exercisesSnapshot || []).find(
+          (ex: any) => ex.exerciseId === exerciseId
+        );
+        if (templateExercise) {
+          exerciseProgress = detailedProgress.exercises[templateExercise.id] || 
+                            detailedProgress.exercises[templateExercise.exerciseId];
+        }
+      }
+      
+      if (exerciseProgress && !exerciseProgress.skipped) {
+        const completedSets = exerciseProgress.sets.filter((s: any) => s.completed);
+        if (completedSets.length > 0) {
+          return {
+            exerciseId,
+            sets: completedSets.map((set: any) => ({
+              weight: set.weight,
+              reps: set.reps,
+              completed: set.completed,
+            })),
+          };
+        }
+      }
+    }
+    
+    // 2. FALLBACK: Check sessions (for backward compatibility)
+    let matchingSessions = sessions.filter(session => 
+      (session as any).workoutKey === workout.id
+    );
+    
+    if (matchingSessions.length === 0) {
+      matchingSessions = sessions.filter(session => 
+        session.workoutTemplateId === workout.templateId && session.date === workoutDate
+      );
+    }
+    
+    if (matchingSessions.length === 0) {
+      // Broader fallback: match by templateId only (handles date mismatch from old bug)
+      matchingSessions = sessions.filter(session => 
+        session.workoutTemplateId === workout.templateId
+      );
+    }
+    
+    // Use only the latest session to avoid duplicates
+    if (matchingSessions.length > 1) {
+      matchingSessions = [matchingSessions.reduce((latest, s) => s.id > latest.id ? s : latest)];
+    }
+    
+    const completedSets = matchingSessions
       .flatMap(session => session.sets)
       .filter(set => set.exerciseId === exerciseId && set.isCompleted);
     

@@ -1,0 +1,22 @@
+# Smoke Test: TC-7.1 — Visual verification that exercise cards render correctly
+# Full completion flow requires timer waits; this validates the execution screen loads.
+appId: com.tsunamichi.workouttracker
+
+---
+
+# 1. Launch the app
+- launchApp
+
+# 2. Open the workout
+- tapOn:
+    text: ".*Exercises.*"
+
+- extendedWaitUntil:
+    visible: "Strength Workout"
+    timeout: 5000
+
+# 3. Verify the exercise section is rendered
+- assertVisible: "Strength Workout"
+
+# 4. Capture screenshot
+- takeScreenshot: "07_exercise_cards_visible"

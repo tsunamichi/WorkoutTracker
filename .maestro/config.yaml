@@ -1,0 +1,4 @@
+# Maestro configuration
+# See https://maestro.mobile.dev/reference/configuration
+appId: com.tsunamichi.workouttracker
+name: WorkoutTracker Smoke Tests

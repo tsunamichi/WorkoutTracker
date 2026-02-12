@@ -1,0 +1,26 @@
+# Smoke Test: TC-1.1 — Open a workout from the Schedule tab
+# Verifies the app launches, the Schedule tab shows a workout, and it can be opened.
+appId: com.tsunamichi.workouttracker
+
+---
+
+# 1. Launch the app
+- launchApp
+
+# 2. Wait for the Schedule tab to be visible
+- assertVisible: "Schedule"
+
+# 3. Tap the workout card area
+#    The workout card sits roughly in the center-top of the screen
+#    Using "Exercises" text as an anchor (always visible on the card)
+- tapOn:
+    text: ".*Exercises.*"
+
+# 4. Verify we landed on the ExerciseExecution screen
+#    "Strength Workout" is the section label inside the execution screen
+- extendedWaitUntil:
+    visible: "Strength Workout"
+    timeout: 5000
+
+# 5. Take screenshot for verification
+- takeScreenshot: "01_workout_opened"

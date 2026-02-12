@@ -39,6 +39,7 @@ interface SetTimerSheetProps {
   exerciseName?: string;
   currentSet?: number;
   totalSets?: number;
+  nextExerciseName?: string; // Name of the next exercise (shown on last set)
   exerciseId?: string;
   workoutKey?: string;
   isExerciseTimerPhase?: boolean; // If true, show exercise timer; if false, show rest timer
@@ -66,6 +67,7 @@ export function SetTimerSheet({
   exerciseName, 
   currentSet = 1, 
   totalSets = 1,
+  nextExerciseName,
   exerciseId,
   workoutKey,
   isExerciseTimerPhase = false,
@@ -982,6 +984,11 @@ export function SetTimerSheet({
                     .replace('{current}', String(currentSet + 1))
                     .replace('{total}', String(totalSets))}
                 </Text>
+              ) : nextExerciseName ? (
+                <Text style={styles.nextSetText}>
+                  Next exercise{' '}
+                  <Text style={styles.nextExerciseNameText}>{nextExerciseName}</Text>
+                </Text>
               ) : (
                 <Text style={styles.nextSetText}>
                   {t('setOf')
@@ -1104,6 +1111,10 @@ const styles = StyleSheet.create({
   nextSetText: {
     ...TYPOGRAPHY.body,
     color: COLORS.textMeta,
+  },
+  nextExerciseNameText: {
+    ...TYPOGRAPHY.body,
+    color: COLORS.text,
   },
   nextSetNumber: {
     ...TYPOGRAPHY.body,

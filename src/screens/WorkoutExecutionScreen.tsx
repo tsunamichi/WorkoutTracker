@@ -9,6 +9,7 @@ import * as storage from '../storage';
 import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS, CARDS } from '../constants';
 import { IconArrowLeft, IconCheck, IconPlay, IconPause, IconMenu, IconRestart, IconAdd, IconEdit } from '../components/icons';
 import { ActionSheet } from '../components/common/ActionSheet';
+import { DiagonalLinePattern } from '../components/common/DiagonalLinePattern';
 import { formatWeightForLoad } from '../utils/weight';
 import dayjs from 'dayjs';
 import { startRestTimer, updateRestTimer, endRestTimer, markRestTimerCompleted } from '../modules/RestTimerLiveActivity';
@@ -485,7 +486,6 @@ export function WorkoutExecutionScreen({ route, navigation }: WorkoutExecutionSc
   
   // Use scheduled workout ID if available, otherwise construct legacy key from template+date
   const workoutKey = workoutId || `${workoutTemplateId}-${date}`;
-  const currentWorkoutProgress = useStore(state => state.detailedWorkoutProgress[workoutKey]);
   
   console.log('🔑 WorkoutExecutionScreen workoutKey:', {
     workoutId,
@@ -501,25 +501,18 @@ export function WorkoutExecutionScreen({ route, navigation }: WorkoutExecutionSc
   const [showMenu, setShowMenu] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
   
-  // Force refresh when screen comes into focus OR when workout progress changes
+  // Force refresh when screen comes into focus (but NOT on every progress change to avoid re-renders)
   useFocusEffect(
     useCallback(() => {
       console.log('📱 Workout screen focused - refreshing exercise states');
-      console.log('📊 Current workout progress:', currentWorkoutProgress);
       setRefreshKey(prev => prev + 1); // Force refresh of completion status
-    }, [currentWorkoutProgress])
+    }, [])
   );
   
-  // Get completion status for each section (re-calculated when refreshKey changes)
-  // Don't memoize - always get fresh values to ensure progress updates
+  // Get completion status for each section (these are getters, not subscriptions, so they don't cause re-renders)
   const warmupCompletion = getWarmupCompletion(workoutKey);
   const mainCompletion = getMainCompletion(workoutKey);
   const coreCompletion = getAccessoryCompletion(workoutKey);
-  
-  // Log when workout progress changes
-  useEffect(() => {
-    console.log('🔄 Workout progress changed:', currentWorkoutProgress);
-  }, [currentWorkoutProgress]);
   
   // Support both old cycle-based workouts and new standalone workouts
   const cycle = cycleId ? cycles.find(c => c.id === cycleId) : null;
@@ -823,67 +816,8 @@ export function WorkoutExecutionScreen({ route, navigation }: WorkoutExecutionSc
         </View>
         
         <ScrollView style={styles.content} contentContainerStyle={styles.scrollContent} bounces={false}>
-          {/* 3 Summary Cards */}
+          {/* Main Workout Card */}
           <View style={styles.summaryCardsContainer}>
-            
-            {/* Warm-up Card */}
-            {template?.warmupItems && template.warmupItems.length > 0 ? (
-              <TouchableOpacity
-                style={styles.summaryCard}
-                onPress={() => {
-                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                  (navigation as any).navigate('ExerciseExecution', { 
-                    workoutKey, 
-                    workoutTemplateId,
-                    type: 'warmup'
-                  });
-                }}
-                activeOpacity={0.7}
-              >
-                <View style={styles.summaryCardContent}>
-                  <Text style={styles.summaryCardTitle}>{t('warmup')}</Text>
-                  <Text style={styles.summaryCardSubtitle}>
-                    {template.warmupItems.length} {template.warmupItems.length === 1 ? 'exercise' : 'exercises'}
-                  </Text>
-                </View>
-                {warmupCompletion.percentage === 100 ? (
-                  <View style={styles.summaryCardCompleteIcon}>
-                    <IconCheck size={20} color={COLORS.success} />
-                  </View>
-                ) : warmupCompletion.percentage > 0 ? (
-                  <View style={styles.progressIndicator}>
-                    <Text style={styles.progressText}>{warmupCompletion.percentage}%</Text>
-                    <Svg height="16" width="16" viewBox="0 0 16 16" style={styles.progressCircle}>
-                      <Circle cx="8" cy="8" r="8" fill={COLORS.backgroundCanvas} />
-                      <Path
-                        d={`M 8 8 L 8 0 A 8 8 0 ${warmupCompletion.percentage / 100 > 0.5 ? 1 : 0} 1 ${
-                          8 + 8 * Math.sin(2 * Math.PI * (warmupCompletion.percentage / 100))
-                        } ${
-                          8 - 8 * Math.cos(2 * Math.PI * (warmupCompletion.percentage / 100))
-                        } Z`}
-                        fill={COLORS.signalWarning}
-                      />
-                    </Svg>
-                  </View>
-                ) : (
-                  <Text style={styles.summaryCardAction}>{t('start')}</Text>
-                )}
-              </TouchableOpacity>
-            ) : (
-              <TouchableOpacity
-                style={styles.addCardButton}
-                onPress={() => {
-                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                  (navigation as any).navigate('WarmupEditor', { templateId: workoutTemplateId });
-                }}
-                activeOpacity={0.7}
-              >
-                <IconAdd size={20} color={COLORS.text} />
-                <Text style={styles.addCardText}>{t('warmup')}</Text>
-              </TouchableOpacity>
-            )}
-            
-            {/* Main Workout Card */}
             {template?.items && template.items.length > 0 && (
               <TouchableOpacity
                 style={styles.summaryCard}
@@ -928,63 +862,6 @@ export function WorkoutExecutionScreen({ route, navigation }: WorkoutExecutionSc
               </TouchableOpacity>
             )}
             
-            {/* Core Card */}
-            {template?.accessoryItems && template.accessoryItems.length > 0 ? (
-              <TouchableOpacity
-                style={styles.summaryCard}
-                onPress={() => {
-                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                  (navigation as any).navigate('ExerciseExecution', { 
-                    workoutKey, 
-                    workoutTemplateId,
-                    type: 'core'
-                  });
-                }}
-                activeOpacity={0.7}
-              >
-                <View style={styles.summaryCardContent}>
-                  <Text style={styles.summaryCardTitle}>{t('core')}</Text>
-                  <Text style={styles.summaryCardSubtitle}>
-                    {template.accessoryItems.length} {template.accessoryItems.length === 1 ? 'exercise' : 'exercises'}
-                  </Text>
-                </View>
-                {coreCompletion.percentage === 100 ? (
-                  <View style={styles.summaryCardCompleteIcon}>
-                    <IconCheck size={20} color={COLORS.success} />
-                  </View>
-                ) : coreCompletion.percentage > 0 ? (
-                  <View style={styles.progressIndicator}>
-                    <Text style={styles.progressText}>{coreCompletion.percentage}%</Text>
-                    <Svg height="16" width="16" viewBox="0 0 16 16" style={styles.progressCircle}>
-                      <Circle cx="8" cy="8" r="8" fill={COLORS.backgroundCanvas} />
-                      <Path
-                        d={`M 8 8 L 8 0 A 8 8 0 ${coreCompletion.percentage / 100 > 0.5 ? 1 : 0} 1 ${
-                          8 + 8 * Math.sin(2 * Math.PI * (coreCompletion.percentage / 100))
-                        } ${
-                          8 - 8 * Math.cos(2 * Math.PI * (coreCompletion.percentage / 100))
-                        } Z`}
-                        fill={COLORS.signalWarning}
-                      />
-                    </Svg>
-                  </View>
-                ) : (
-                  <Text style={styles.summaryCardAction}>{t('start')}</Text>
-                )}
-              </TouchableOpacity>
-            ) : (
-              <TouchableOpacity
-                style={styles.addCardButton}
-                onPress={() => {
-                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                  (navigation as any).navigate('AccessoriesEditor', { templateId: workoutTemplateId });
-                }}
-                activeOpacity={0.7}
-              >
-                <IconAdd size={20} color={COLORS.text} />
-                <Text style={styles.addCardText}>{t('core')}</Text>
-              </TouchableOpacity>
-            )}
-            
           </View>
         </ScrollView>
         
@@ -1004,27 +881,10 @@ export function WorkoutExecutionScreen({ route, navigation }: WorkoutExecutionSc
         onClose={() => setShowMenu(false)}
         items={[
           { 
-            icon: <IconEdit size={24} color="#000000" />,
-            label: t('edit'), 
-            onPress: () => {
-                  navigation.navigate('WorkoutEdit', {
-                    cycleId,
-                    workoutTemplateId,
-                    date,
-                  });
-            },
-            featured: true
-          },
-          { 
             icon: <IconRestart size={24} color={COLORS.signalNegative} />,
             label: t('reset'), 
             onPress: handleResetWorkout,
             destructive: true 
-          },
-          { 
-            icon: <IconCheck size={24} color="#000000" />,
-            label: t('complete'), 
-            onPress: handleCompleteWorkout
           },
         ]}
       />
@@ -1114,6 +974,29 @@ const styles = StyleSheet.create({
   summaryCardsContainer: {
     gap: SPACING.lg,
   },
+  topCardsRow: {
+    flexDirection: 'row',
+    gap: SPACING.lg,
+  },
+  halfWidthCard: {
+    flex: 1,
+    aspectRatio: 1,
+    ...CARDS.cardDeep.outer,
+    padding: SPACING.lg,
+    flexDirection: 'column',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+  },
+  halfWidthAddButton: {
+    flex: 1,
+    aspectRatio: 1,
+    borderRadius: BORDER_RADIUS.lg,
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: SPACING.sm,
+    overflow: 'hidden',
+  },
   summaryCard: {
     ...CARDS.cardDeep.outer,
     padding: SPACING.lg,
@@ -1152,6 +1035,11 @@ const styles = StyleSheet.create({
     gap: 6,
     marginLeft: SPACING.md,
   },
+  squareCardProgressRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
   progressCircle: {
     // No additional styling needed
   },
@@ -1162,13 +1050,11 @@ const styles = StyleSheet.create({
   addCardButton: {
     height: 56,
     borderRadius: BORDER_RADIUS.lg,
-    borderWidth: 2,
-    borderColor: COLORS.borderDimmed,
-    borderStyle: 'dashed',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: SPACING.sm,
+    overflow: 'hidden',
   },
   addCardText: {
     ...TYPOGRAPHY.metaBold,
@@ -1228,23 +1114,6 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.accentPrimary,
     borderColor: COLORS.accentPrimary,
   },
-  addWarmupButton: {
-    width: '100%',
-    height: 56,
-    borderRadius: BORDER_RADIUS.lg,
-    borderWidth: 1,
-    borderColor: COLORS.textMeta,
-    borderStyle: 'dashed',
-    backgroundColor: 'transparent',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: SPACING.sm,
-  },
-  addWarmupText: {
-    ...TYPOGRAPHY.metaBold,
-    color: COLORS.text,
-  },
   // Accessories Section (mirrors warmup)
   accessorySection: {
     marginTop: SPACING.xxxl,
@@ -1278,23 +1147,6 @@ const styles = StyleSheet.create({
   accessoryStartText: {
     ...TYPOGRAPHY.metaBold,
     color: COLORS.accentPrimary,
-  },
-  addAccessoryButton: {
-    width: '100%',
-    height: 56,
-    borderRadius: BORDER_RADIUS.lg,
-    borderWidth: 1,
-    borderColor: COLORS.textMeta,
-    borderStyle: 'dashed',
-    backgroundColor: 'transparent',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: SPACING.sm,
-  },
-  addAccessoryText: {
-    ...TYPOGRAPHY.metaBold,
-    color: COLORS.text,
   },
   sectionHeader: {
     marginTop: 40,

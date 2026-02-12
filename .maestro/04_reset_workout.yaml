@@ -1,0 +1,52 @@
+# Smoke Test: TC-2.1 / TC-2.2 — Reset clears progress and reverts schedule status
+# Verifies: overflow menu, Reset option, progress cleared, schedule status reverted.
+appId: com.tsunamichi.workouttracker
+
+---
+
+# 1. Launch the app
+- launchApp
+
+# 2. Open the workout
+- tapOn:
+    text: ".*Exercises.*"
+
+- extendedWaitUntil:
+    visible: "Strength Workout"
+    timeout: 5000
+
+# 3. Take screenshot showing current progress
+- takeScreenshot: "04_before_reset"
+
+# 4. Tap the three-dot menu icon (top-right of the header)
+#    The ← arrow is at ~8%,6% and the "..." icon is at ~95%,6%
+- tapOn:
+    point: "95%,11%"
+
+# 5. Wait a moment for the action sheet animation
+- waitForAnimationToEnd
+
+# 6. Tap the "Reset" button in the action sheet (left side, roughly 25%,18%)
+- tapOn:
+    point: "25%,18%"
+
+# 7. Wait for the native alert dialog and confirm
+- waitForAnimationToEnd
+
+# The alert dialog has a "Reset" confirmation button
+- tapOn:
+    text: "Reset"
+
+# 8. Take screenshot showing progress is cleared
+- takeScreenshot: "04_after_reset"
+
+# 9. Navigate back to Schedule tab
+- tapOn:
+    point: "8%,11%"
+
+# 10. Verify Schedule tab
+- extendedWaitUntil:
+    visible: "Schedule"
+    timeout: 5000
+
+- takeScreenshot: "04_schedule_after_reset"

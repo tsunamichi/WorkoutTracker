@@ -512,3 +512,163 @@ export async function convertPartialWorkoutsToSessions(): Promise<{
     };
   }
 }
+
+/**
+ * Recover workout sessions from detailedWorkoutProgress completion states
+ * This handles the new completion tracking system (warmup/main/core)
+ */
+export async function recoverSessionsFromCompletionStates(): Promise<{
+  success: boolean;
+  sessionsCreated: number;
+  workoutsProcessed: number;
+  error?: string;
+}> {
+  try {
+    console.log('🔄 Starting recovery of sessions from completion states...');
+    
+    // Load all necessary data
+    const [
+      sessionsJson,
+      detailedProgressJson,
+      templatesJson,
+      exercisesJson,
+    ] = await Promise.all([
+      AsyncStorage.getItem('@workout_tracker_sessions'),
+      AsyncStorage.getItem('@workout_tracker_detailed_progress'),
+      AsyncStorage.getItem('@workout_tracker_workout_templates'),
+      AsyncStorage.getItem('@workout_tracker_exercises'),
+    ]);
+    
+    const existingSessions = sessionsJson ? JSON.parse(sessionsJson) : [];
+    const detailedProgress = detailedProgressJson ? JSON.parse(detailedProgressJson) : {};
+    const templates = templatesJson ? JSON.parse(templatesJson) : [];
+    const exercises = exercisesJson ? JSON.parse(exercisesJson) : [];
+    
+    console.log(`📊 Found ${Object.keys(detailedProgress).length} workouts with progress data`);
+    console.log(`📊 Existing sessions: ${existingSessions.length}`);
+    
+    const newSessions: any[] = [];
+    const existingSessionDates = new Set(
+      existingSessions.map((s: any) => `${s.workoutTemplateId}-${s.date}`)
+    );
+    
+    let workoutsProcessed = 0;
+    
+    // Process each workout in detailedProgress
+    for (const [workoutKey, workoutProgress] of Object.entries(detailedProgress) as [string, any][]) {
+      // Extract date and template ID from workoutKey
+      // Format could be: "sw-{id}" for scheduled workouts or "{templateId}-{date}" for legacy
+      let date: string;
+      let workoutTemplateId: string | undefined;
+      
+      if (workoutKey.startsWith('sw-')) {
+        // This is a scheduled workout - we'd need to look it up, skip for now
+        continue;
+      } else {
+        // Legacy format: {templateId}-{date}
+        const parts = workoutKey.split('-');
+        if (parts.length >= 4) {
+          // Date is YYYY-MM-DD (last 3 parts)
+          date = parts.slice(-3).join('-');
+          workoutTemplateId = parts.slice(0, -3).join('-');
+        } else {
+          continue;
+        }
+      }
+      
+      // Skip if we already have a session for this workout
+      const sessionKey = `${workoutTemplateId}-${date}`;
+      if (existingSessionDates.has(sessionKey)) {
+        continue;
+      }
+      
+      workoutsProcessed++;
+      
+      // Collect all completed sets
+      const sessionSets: any[] = [];
+      const sessionId = `recovered-${workoutKey}`;
+      
+      // Process each exercise in the workout progress
+      for (const [exerciseId, exerciseProgress] of Object.entries(workoutProgress.exercises || {}) as [string, any][]) {
+        // Skip if skipped
+        if (exerciseProgress.skipped) {
+          continue;
+        }
+        
+        // Find the actual exercise ID (exerciseProgress might have template exercise IDs)
+        const template = templates.find((t: any) => t.id === workoutTemplateId);
+        let actualExerciseId = exerciseId;
+        
+        // Try to find the exercise in the template to get the actual exercise library ID
+        if (template) {
+          const templateExercise = template.exercises?.find((ex: any) => ex.id === exerciseId);
+          if (templateExercise?.exerciseId) {
+            actualExerciseId = templateExercise.exerciseId;
+          }
+        }
+        
+        // Add all completed sets
+        const sets = exerciseProgress.sets || [];
+        sets.forEach((set: any, index: number) => {
+          if (set.completed) {
+            sessionSets.push({
+              id: `${sessionId}-${exerciseId}-${index}`,
+              sessionId,
+              exerciseId: actualExerciseId,
+              setIndex: index,
+              weight: set.weight || 0,
+              reps: set.reps || 0,
+              isCompleted: true,
+            });
+          }
+        });
+      }
+      
+      // Only create session if we have sets
+      if (sessionSets.length > 0) {
+        const session = {
+          id: sessionId,
+          workoutTemplateId,
+          date,
+          startTime: new Date(date).toISOString(),
+          endTime: new Date(date + 'T23:59:59').toISOString(),
+          sets: sessionSets,
+        };
+        
+        newSessions.push(session);
+        console.log(`  ✅ Recovered session for ${date} with ${sessionSets.length} sets`);
+      }
+    }
+    
+    if (newSessions.length === 0) {
+      console.log('ℹ️ No new sessions to recover');
+      return { success: true, sessionsCreated: 0, workoutsProcessed };
+    }
+    
+    // Merge with existing sessions
+    const allSessions = [...existingSessions, ...newSessions];
+    
+    // Sort by date (newest first)
+    allSessions.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    
+    // Save updated sessions
+    await AsyncStorage.setItem('@workout_tracker_sessions', JSON.stringify(allSessions));
+    
+    console.log(`✅ Recovered ${newSessions.length} sessions from completion states`);
+    console.log(`📊 Total sessions now: ${allSessions.length}`);
+    
+    return {
+      success: true,
+      sessionsCreated: newSessions.length,
+      workoutsProcessed,
+    };
+  } catch (error) {
+    console.error('❌ Error recovering sessions:', error);
+    return {
+      success: false,
+      sessionsCreated: 0,
+      workoutsProcessed: 0,
+      error: String(error),
+    };
+  }
+}
