@@ -394,7 +394,7 @@ export function AccessoriesExecutionScreen() {
             }}
             activeOpacity={1}
           >
-            <IconArrowLeft size={24} color="#000000" />
+            <IconArrowLeft size={24} color="#FFFFFF" />
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.removeButton}
@@ -479,7 +479,7 @@ export function AccessoriesExecutionScreen() {
                                     {exercise.movementId}
                                   </Text>
                                   {(isExerciseCompleted || isCompleted) && (
-                                    <IconCheck size={20} color={COLORS.signalPositive} />
+                                    <IconCheck size={20} color={COLORS.successBright} />
                                   )}
                                 </View>
 
@@ -714,7 +714,7 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     ...TYPOGRAPHY.h2,
-    color: '#000000',
+    color: '#FFFFFF',
   },
   content: {
     flex: 1,
@@ -832,7 +832,7 @@ const styles = StyleSheet.create({
   },
   exerciseNameText: {
     ...TYPOGRAPHY.bodyBold,
-    color: '#000000',
+    color: '#FFFFFF',
     fontSize: 16,
     marginBottom: 8,
   },
@@ -920,7 +920,7 @@ const styles = StyleSheet.create({
   },
   itemCollapsedText: {
     ...TYPOGRAPHY.body,
-    color: '#000000',
+    color: '#FFFFFF',
   },
   itemCollapsedUnit: {
     ...TYPOGRAPHY.body,
@@ -950,7 +950,7 @@ const styles = StyleSheet.create({
   },
   largeValue: {
     ...TYPOGRAPHY.h1,
-    color: '#000000',
+    color: '#FFFFFF',
   },
   unit: {
     ...TYPOGRAPHY.body,
@@ -968,7 +968,7 @@ const styles = StyleSheet.create({
   },
   exerciseNameInCardText: {
     ...TYPOGRAPHY.body,
-    color: '#000000',
+    color: '#FFFFFF',
     flex: 1,
   },
   editButton: {
@@ -1021,7 +1021,7 @@ const styles = StyleSheet.create({
   },
   largeValue: {
     ...TYPOGRAPHY.h1,
-    color: '#000000',
+    color: '#FFFFFF',
   },
   unit: {
     ...TYPOGRAPHY.h1,
@@ -1029,7 +1029,7 @@ const styles = StyleSheet.create({
   },
   mediumValue: {
     ...TYPOGRAPHY.body,
-    color: '#000000',
+    color: '#FFFFFF',
   },
   mediumUnit: {
     ...TYPOGRAPHY.body,
@@ -1218,7 +1218,7 @@ const styles = StyleSheet.create({
   },
   drawerAdjustValueText: {
     ...TYPOGRAPHY.h1,
-    color: '#000000',
+    color: '#FFFFFF',
   },
   drawerAdjustUnit: {
     ...TYPOGRAPHY.body,

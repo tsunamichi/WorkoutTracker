@@ -37,11 +37,11 @@ if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental
 type Props = NativeStackScreenProps<RootStackParamList, 'WorkoutEdit'>;
 
 const LIGHT_COLORS = {
-  backgroundCanvas: '#E3E6E0',
-  text: '#1B1B1B',
-  secondary: '#1B1B1B',
-  textMeta: '#817B77',
-  border: '#C7C7CC',
+  backgroundCanvas: '#0D0D0D',
+  text: '#FFFFFF',
+  secondary: '#FFFFFF',
+  textMeta: '#8E8E93',
+  border: '#38383A',
 };
 
 export default function WorkoutEditScreen({ navigation, route }: Props) {
@@ -514,7 +514,7 @@ export default function WorkoutEditScreen({ navigation, route }: Props) {
               style={styles.backButton}
               activeOpacity={1}
             >
-              <IconArrowLeft size={24} color="#000000" />
+              <IconArrowLeft size={24} color="#FFFFFF" />
             </TouchableOpacity>
             <View style={{ width: 48 }} />
           </View>
@@ -618,7 +618,7 @@ export default function WorkoutEditScreen({ navigation, route }: Props) {
                       { scale: 1.02 },
                     ],
                     zIndex: 1000,
-                    shadowColor: '#000000',
+                    shadowColor: '#FFFFFF',
                     shadowOffset: { width: 0, height: 4 },
                     shadowOpacity: 0.12,
                     shadowRadius: 8,
@@ -1249,7 +1249,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'transparent',
   },
   saveButton: {
-    backgroundColor: '#000000',
+    backgroundColor: '#FFFFFF',
     paddingVertical: SPACING.lg,
     borderRadius: 12,
     borderCurve: 'continuous',
@@ -1306,7 +1306,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   modalButtonPrimary: {
-    backgroundColor: '#000000',
+    backgroundColor: '#FFFFFF',
   },
   modalButtonPrimaryText: {
     ...TYPOGRAPHY.metaBold,
@@ -1565,7 +1565,7 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.backgroundCanvas,
   },
   swapConfirmButton: {
-    backgroundColor: '#000000',
+    backgroundColor: '#FFFFFF',
     paddingVertical: SPACING.lg,
     borderRadius: BORDER_RADIUS.md,
     borderCurve: 'continuous',

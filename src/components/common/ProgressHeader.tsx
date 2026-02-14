@@ -29,7 +29,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 28,
     fontWeight: '600',
-    color: '#000000',
+    color: '#FFFFFF',
   },
 });
 

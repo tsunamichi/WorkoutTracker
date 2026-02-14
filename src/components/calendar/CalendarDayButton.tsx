@@ -8,6 +8,7 @@ interface CalendarDayButtonProps {
   isToday: boolean;
   isCompleted: boolean;
   hasWorkout: boolean;
+  cycleColor?: string;
   onPress: () => void;
 }
 
@@ -17,6 +18,7 @@ export function CalendarDayButton({
   isToday,
   isCompleted,
   hasWorkout,
+  cycleColor,
   onPress,
 }: CalendarDayButtonProps) {
   return (
@@ -28,26 +30,28 @@ export function CalendarDayButton({
       <View
         style={[
           styles.dayButton,
-          isSelected && styles.dayButtonSelected,
+          isToday && !isSelected && styles.dayButtonToday,
+          isSelected && !isToday && styles.dayButtonSelected,
+          isSelected && isToday && styles.dayButtonTodaySelected,
         ]}
       >
         <Text
           style={[
             styles.dayNumber,
-            isSelected && styles.dayNumberSelected,
+            isSelected && !isToday && styles.dayNumberSelected,
             isToday && !isSelected && styles.dayNumberToday,
+            isToday && isSelected && cycleColor ? { color: cycleColor } : isToday && isSelected ? styles.dayNumberSelected : undefined,
           ]}
         >
           {dayNumber}
         </Text>
       </View>
-      {/* Workout dot indicator */}
-      {hasWorkout && (
+      {/* Completed indicator: pill inside the card, 2px from bottom */}
+      {isCompleted && (
         <View
           style={[
-            styles.workoutDot,
-            isCompleted && styles.workoutDotCompleted,
-            isSelected && styles.workoutDotSelected,
+            styles.completedPill,
+            isSelected && styles.completedPillSelected,
           ]}
         />
       )}
@@ -68,30 +72,34 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  dayButtonToday: {
+    // No background box — just the label color changes
+  },
   dayButtonSelected: {
     backgroundColor: COLORS.accentPrimary,
   },
+  dayButtonTodaySelected: {
+    backgroundColor: COLORS.todayIndicator,
+  },
   dayNumber: {
     ...TYPOGRAPHY.metaBold,
-    color: '#1B1B1B',
-  },
-  dayNumberSelected: {
     color: '#FFFFFF',
   },
+  dayNumberSelected: {
+    color: COLORS.backgroundCanvas,
+  },
   dayNumberToday: {
-    color: COLORS.accentPrimary,
+    color: COLORS.todayIndicator,
   },
-  workoutDot: {
-    width: 4,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: '#D1D1D6',
-    marginTop: 3,
-  },
-  workoutDotCompleted: {
-    backgroundColor: '#1B1B1B',
-  },
-  workoutDotSelected: {
+  completedPill: {
+    position: 'absolute',
+    bottom: 2,
+    width: 8,
+    height: 2,
+    borderRadius: 1,
     backgroundColor: '#FFFFFF',
+  },
+  completedPillSelected: {
+    backgroundColor: COLORS.backgroundCanvas,
   },
 });

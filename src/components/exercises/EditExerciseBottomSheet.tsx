@@ -216,7 +216,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 24,
     fontWeight: '600',
-    color: '#000000',
+    color: '#FFFFFF',
     marginBottom: 24,
   },
   field: {
@@ -229,7 +229,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   textInput: {
-    backgroundColor: '#F2F2F7',
+    backgroundColor: '#2C2C2E',
     borderRadius: 10,
     paddingHorizontal: 12,
     paddingVertical: 12,
@@ -244,7 +244,7 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: '#E3E6E0',
+    backgroundColor: '#2C2C2E',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -256,7 +256,7 @@ const styles = StyleSheet.create({
   stepperValue: {
     fontSize: 20,
     fontWeight: '600',
-    color: '#000000',
+    color: '#FFFFFF',
     minWidth: 60,
     textAlign: 'center',
   },
@@ -269,7 +269,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 8,
-    backgroundColor: '#E3E6E0',
+    backgroundColor: '#2C2C2E',
   },
   presetButtonSelected: {
     backgroundColor: '#FD6B00',

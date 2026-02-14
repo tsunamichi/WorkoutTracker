@@ -26,11 +26,11 @@ interface TimerValueSheetProps {
 }
 
 const LIGHT_COLORS = {
-  backgroundCanvas: '#E3E6E0',
-  textPrimary: '#000000',
-  textSecondary: '#3C3C43',
-  textMeta: '#817B77',
-  border: '#C7C7CC',
+  backgroundCanvas: '#0D0D0D',
+  textPrimary: '#FFFFFF',
+  textSecondary: '#AEAEB2',
+  textMeta: '#8E8E93',
+  border: '#38383A',
 };
 
 const VISUAL_BAR_HEIGHT = 280;
@@ -239,7 +239,7 @@ const styles = StyleSheet.create({
   },
   progressBarFilled: {
     width: '100%',
-    backgroundColor: '#CDCABB',
+    backgroundColor: '#2C2C2E',
   },
   progressBarUnfilled: {
     width: '100%',

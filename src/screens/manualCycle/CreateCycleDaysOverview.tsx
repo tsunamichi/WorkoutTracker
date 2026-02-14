@@ -125,7 +125,7 @@ export function CreateCycleDaysOverview({ navigation }: CreateCycleDaysOverviewP
                   </View>
                   {isComplete && (
                     <View style={styles.dayCheckIcon}>
-                      <IconCheck size={24} color={COLORS.signalPositive} />
+                      <IconCheck size={24} color={COLORS.successBright} />
                     </View>
                   )}
                   {!isComplete && (

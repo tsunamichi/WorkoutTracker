@@ -194,7 +194,7 @@ const styles = StyleSheet.create({
   summaryTitle: {
     fontSize: 20,
     fontWeight: '600',
-    color: '#000000',
+    color: '#FFFFFF',
     marginBottom: 4,
   },
   summaryText: {
@@ -217,7 +217,7 @@ const styles = StyleSheet.create({
   dayTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#000000',
+    color: '#FFFFFF',
   },
   daySubtitle: {
     fontSize: 13,

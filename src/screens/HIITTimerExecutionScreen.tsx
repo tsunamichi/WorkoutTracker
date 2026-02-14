@@ -30,12 +30,12 @@ type Props = NativeStackScreenProps<RootStackParamList, 'HIITTimerExecution'>;
 type TimerPhase = 'countdown' | 'work' | 'workRest' | 'roundRest' | 'complete';
 
 const LIGHT_COLORS = {
-  backgroundCanvas: '#E3E6E0',
-  text: '#1B1B1B',
-  secondary: '#1B1B1B',
-  textSecondary: '#3C3C43',
-  textMeta: '#817B77',
-  border: '#CDCABB',
+  backgroundCanvas: '#0D0D0D',
+  text: '#FFFFFF',
+  secondary: '#FFFFFF',
+  textSecondary: '#AEAEB2',
+  textMeta: '#8E8E93',
+  border: '#38383A',
 };
 
 const PHASE_COLORS = {
@@ -912,7 +912,7 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
     
     try {
       const particleCount = 50; // More particles!
-      const colors = [COLORS.signalPositive, '#5E9EFF', COLORS.signalWarning, COLORS.signalNegative];
+      const colors = [COLORS.successBright, '#5E9EFF', COLORS.signalWarning, COLORS.signalNegative];
       
       const newParticles: Particle[] = [];
       

@@ -28,7 +28,7 @@ export function OnboardingStack() {
         headerStyle: {
           backgroundColor: '#FFFFFF',
         },
-        headerTintColor: '#000000',
+        headerTintColor: '#FFFFFF',
       }}
     >
       <Stack.Screen

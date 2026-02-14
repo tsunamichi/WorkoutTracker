@@ -80,7 +80,7 @@ const styles = StyleSheet.create({
   name: {
     fontSize: 16,
     fontWeight: '500',
-    color: '#000000',
+    color: '#FFFFFF',
     marginBottom: 4,
   },
   details: {

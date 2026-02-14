@@ -153,7 +153,7 @@ const styles = StyleSheet.create({
     flex: 1,
     padding: 16,
     fontSize: 15,
-    color: '#000000',
+    color: '#FFFFFF',
     minHeight: 300,
   },
   quickActions: {
@@ -165,7 +165,7 @@ const styles = StyleSheet.create({
   quickActionButton: {
     flex: 1,
     paddingVertical: 12,
-    backgroundColor: '#E3E6E0',
+    backgroundColor: '#2C2C2E',
     borderRadius: 8,
     alignItems: 'center',
   },

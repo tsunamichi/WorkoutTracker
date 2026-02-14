@@ -17,19 +17,19 @@ dayjs.extend(isoWeek);
 
 const DAYS_SHORT = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
 
-// Light theme colors for Today screen
+// Dark theme colors
 const LIGHT_COLORS = {
-  backgroundCanvas: '#E3E6E0',
-  backgroundContainer: '#CDCABB',
-  secondary: '#1B1B1B',
-  textSecondary: '#3C3C43',
-  textMeta: '#817B77',
-  border: '#C7C7CC',
-  accentPrimary: '#FD6B00',
-  dayButtonActive: '#007AFF',
-  dayButtonActiveText: '#FFFFFF',
-  progressDot: '#D1D1D6',
-  progressDotActive: '#000000',
+  backgroundCanvas: '#0D0D0D',
+  backgroundContainer: '#1C1C1E',
+  secondary: '#FFFFFF',
+  textSecondary: '#AEAEB2',
+  textMeta: '#8E8E93',
+  border: '#38383A',
+  accentPrimary: COLORS.accentPrimary,
+  dayButtonActive: COLORS.accentPrimary,
+  dayButtonActiveText: COLORS.backgroundCanvas,
+  progressDot: '#48484A',
+  progressDotActive: '#FFFFFF',
 };
 
 interface TodayScreenProps {
@@ -215,14 +215,14 @@ export function TodayScreen({ onDateChange, onOpenSwapDrawer, onOpenAddWorkout }
                   }}
                   activeOpacity={1}
                 >
-                  <IconCalendar size={24} color="#000000" />
+                  <IconCalendar size={24} color="#FFFFFF" />
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={styles.settingsButton}
                   onPress={() => (navigation as any).navigate('Profile')}
                   activeOpacity={1}
                 >
-                  <IconSettings size={24} color="#000000" />
+                  <IconSettings size={24} color="#FFFFFF" />
                 </TouchableOpacity>
               </View>
             </View>
@@ -278,7 +278,7 @@ export function TodayScreen({ onDateChange, onOpenSwapDrawer, onOpenAddWorkout }
                             <Text style={styles.workoutName}>{sw.titleSnapshot}</Text>
                             {isCompleted ? (
                               <View style={styles.completedCheckBadge}>
-                                <IconCheck size={20} color={COLORS.success} />
+                                <IconCheck size={20} color={COLORS.success} checkColor={COLORS.successBright} />
                               </View>
                             ) : progress > 0 ? (
                               <View style={styles.progressIndicator}>
@@ -481,7 +481,7 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.xl,
   },
   createButton: {
-    backgroundColor: '#1B1B1B',
+    backgroundColor: COLORS.accentPrimary,
     height: 56,
     paddingHorizontal: SPACING.xl,
     borderRadius: BORDER_RADIUS.md,
@@ -493,7 +493,7 @@ const styles = StyleSheet.create({
   createButtonText: {
     ...TYPOGRAPHY.meta,
     fontWeight: 'bold',
-    color: '#FFFFFF',
+    color: COLORS.backgroundCanvas,
   },
   
   // Unified header + calendar card
@@ -609,7 +609,7 @@ const styles = StyleSheet.create({
   },
   workoutProgress: {
     ...TYPOGRAPHY.body,
-    color: COLORS.signalPositive,
+    color: COLORS.successBright,
   },
   
   // Start Button
@@ -627,15 +627,15 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   startButtonCompleted: {
-    backgroundColor: '#E8F5E9', // Light green background
+    backgroundColor: COLORS.success,
   },
   startButtonText: {
     ...TYPOGRAPHY.metaBold,
-    color: '#FFFFFF',
+    color: COLORS.backgroundCanvas,
     textAlign: 'left',
   },
   startButtonTextCompleted: {
-    color: COLORS.success,
+    color: COLORS.successBright,
   },
   
   // Completed Badge

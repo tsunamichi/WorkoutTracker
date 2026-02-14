@@ -89,11 +89,11 @@ const TAB_ICON_SIZE = 24;
 const TAB_ICON_GAP = 4;
 const LABEL_CENTER_OFFSET = (TAB_ICON_SIZE + TAB_ICON_GAP) / 2;
 
-// Light theme colors for swap drawer
+// Dark theme colors for swap drawer
 const LIGHT_COLORS = {
-  secondary: '#1B1B1B',
-  textMeta: '#817B77',
-  border: '#D2D3CF',
+  secondary: '#FFFFFF',
+  textMeta: '#8E8E93',
+  border: '#38383A',
 };
 
 function TabNavigator() {
@@ -121,14 +121,14 @@ function TabNavigator() {
   const progressIconOpacity = React.useRef(new Animated.Value(0)).current;
   const [tabBarWidth, setTabBarWidth] = React.useState(0);
   
-  // Animate label colors to avoid flicker while the pill transitions
+  // Animate label colors: dark on active lime pill, muted when inactive
   const scheduleLabelColor = indicatorPosition.interpolate({
     inputRange: [0, 1],
-    outputRange: [COLORS.backgroundCanvas, COLORS.text],
+    outputRange: [COLORS.backgroundCanvas, '#8E8E93'],
   });
   const progressLabelColor = indicatorPosition.interpolate({
     inputRange: [0, 1],
-    outputRange: [COLORS.text, COLORS.backgroundCanvas],
+    outputRange: ['#8E8E93', COLORS.backgroundCanvas],
   });
   
   const switchTab = React.useCallback((tab: 'Schedule' | 'Progress') => {
@@ -390,7 +390,7 @@ function TabNavigator() {
             >
               <IconCalendar 
                 size={24} 
-                color={activeTab === 'Schedule' ? COLORS.backgroundCanvas : COLORS.text} 
+                color={activeTab === 'Schedule' ? COLORS.backgroundCanvas : '#8E8E93'} 
               />
             </Animated.View>
             <Animated.View
@@ -445,7 +445,7 @@ function TabNavigator() {
             >
               <IconHistory 
                 size={24} 
-                color={activeTab === 'Progress' ? COLORS.backgroundCanvas : COLORS.text} 
+                color={activeTab === 'Progress' ? COLORS.backgroundCanvas : '#8E8E93'} 
               />
             </Animated.View>
             <Animated.View
@@ -789,10 +789,10 @@ const styles = StyleSheet.create({
     left: 4,
     right: '50%',
     marginRight: 4,
-    backgroundColor: COLORS.text,
+    backgroundColor: COLORS.accentPrimary,
     borderRadius: 24,
-    borderWidth: 1,
-    borderColor: COLORS.text,
+    borderWidth: 0,
+    borderColor: 'transparent',
     zIndex: 0,
   },
   tab: {

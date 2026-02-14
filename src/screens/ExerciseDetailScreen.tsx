@@ -33,14 +33,14 @@ interface ExerciseDetailScreenProps {
 }
 
 const LIGHT_COLORS = {
-  backgroundCanvas: '#E3E6E0',
-  backgroundContainer: '#CDCABB',
-  secondary: '#1B1B1B',
-  textSecondary: '#3C3C43',
-  textMeta: '#817B77',
-  border: '#C7C7CC',
+  backgroundCanvas: '#0D0D0D',
+  backgroundContainer: '#1C1C1E',
+  secondary: '#FFFFFF',
+  textSecondary: '#AEAEB2',
+  textMeta: '#8E8E93',
+  border: '#38383A',
   divider: COLORS.borderDimmed,
-  buttonBg: '#1C1C1C',
+  buttonBg: '#2C2C2E',
 };
 
 // Pulsating circle component for resting indicator
@@ -888,7 +888,7 @@ export function ExerciseDetailScreen({ route, navigation }: ExerciseDetailScreen
               style={styles.backButton}
               activeOpacity={1}
             >
-              <IconArrowLeft size={24} color="#000000" />
+              <IconArrowLeft size={24} color="#FFFFFF" />
             </TouchableOpacity>
             
             <TouchableOpacity 
@@ -896,7 +896,7 @@ export function ExerciseDetailScreen({ route, navigation }: ExerciseDetailScreen
               style={styles.menuButton}
               activeOpacity={1}
             >
-              <IconMenu size={24} color="#000000" />
+              <IconMenu size={24} color="#FFFFFF" />
             </TouchableOpacity>
           </View>
           
@@ -1059,7 +1059,7 @@ export function ExerciseDetailScreen({ route, navigation }: ExerciseDetailScreen
                                   <PulsatingCircle />
                                 ) : isCompleted ? (
                                   <View style={styles.setCheckIcon}>
-                                    <IconCheck size={24} color={COLORS.signalPositive} />
+                                    <IconCheck size={24} color={COLORS.successBright} />
                                   </View>
                                 ) : null}
                               </View>
@@ -1346,7 +1346,7 @@ export function ExerciseDetailScreen({ route, navigation }: ExerciseDetailScreen
         onClose={() => setShowMenu(false)}
         items={[
           { 
-            icon: <IconHistory size={24} color="#000000" />,
+            icon: <IconHistory size={24} color="#FFFFFF" />,
             label: t('history'), 
             onPress: handleHistory,
             featured: true
@@ -1358,12 +1358,12 @@ export function ExerciseDetailScreen({ route, navigation }: ExerciseDetailScreen
             destructive: true 
           },
           { 
-            icon: <IconCheck size={24} color="#000000" />,
+            icon: <IconCheck size={24} color="#FFFFFF" />,
             label: t('complete'), 
             onPress: handleCompleteExercise
           },
           { 
-            icon: <IconSkip size={24} color="#000000" />,
+            icon: <IconSkip size={24} color="#FFFFFF" />,
             label: t('skip'), 
             onPress: handleSkipExercise 
           },
@@ -1418,7 +1418,7 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     ...TYPOGRAPHY.h2,
-    color: '#000000',
+    color: '#FFFFFF',
     flex: 1,
   },
   content: {
@@ -1485,7 +1485,7 @@ const styles = StyleSheet.create({
   },
   setCollapsedText: {
     ...TYPOGRAPHY.body,
-    color: '#000000',
+    color: '#FFFFFF',
   },
   setCollapsedUnit: {
     ...TYPOGRAPHY.body,
@@ -1531,7 +1531,7 @@ const styles = StyleSheet.create({
   },
   largeValue: {
     ...TYPOGRAPHY.h1,
-    color: '#000000',
+    color: '#FFFFFF',
   },
   unit: {
     ...TYPOGRAPHY.body,
@@ -1569,7 +1569,7 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     // Shadow 2: black, opacity 0.16, blur 3, offset -2, -2
-    shadowColor: '#000000',
+    shadowColor: '#FFFFFF',
     shadowOffset: { width: -2, height: -2 },
     shadowOpacity: 0.16,
     shadowRadius: 3,

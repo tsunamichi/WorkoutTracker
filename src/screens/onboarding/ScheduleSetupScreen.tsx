@@ -116,7 +116,7 @@ const styles = StyleSheet.create({
   sectionLabel: {
     fontSize: 17,
     fontWeight: '500',
-    color: '#000000',
+    color: '#FFFFFF',
     marginBottom: 16,
   },
   chipContainer: {
@@ -128,7 +128,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 12,
     borderRadius: 20,
-    backgroundColor: '#E3E6E0',
+    backgroundColor: '#2C2C2E',
     minWidth: 50,
     alignItems: 'center',
   },

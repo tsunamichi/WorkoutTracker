@@ -24,15 +24,15 @@ interface CycleDetailScreenProps {
   navigation: any;
 }
 
-// Light theme colors
+// Dark theme colors
 const LIGHT_COLORS = {
-  backgroundCanvas: '#E3E6E0',
-  backgroundContainer: '#CDCABB',
-  secondary: '#1B1B1B',
-  textSecondary: '#3C3C43',
-  textMeta: '#817B77',
-  border: '#C7C7CC',
-  accentPrimary: '#FF6B35',
+  backgroundCanvas: '#0D0D0D',
+  backgroundContainer: '#1C1C1E',
+  secondary: '#FFFFFF',
+  textSecondary: '#AEAEB2',
+  textMeta: '#8E8E93',
+  border: '#38383A',
+  accentPrimary: COLORS.accentPrimary,
   success: COLORS.signalPositive,
   error: COLORS.signalNegative,
 };
@@ -328,7 +328,7 @@ export function CycleDetailScreen({ route, navigation }: CycleDetailScreenProps)
                               <View style={styles.progressIndicator}>
                                 {progress >= 0.999 ? (
                                   <View style={styles.progressCheckCircle}>
-                                    <IconCheck size={24} color={COLORS.signalPositive} />
+                                    <IconCheck size={24} color={COLORS.successBright} />
                                   </View>
                                 ) : (
                                   <>
@@ -402,7 +402,7 @@ export function CycleDetailScreen({ route, navigation }: CycleDetailScreenProps)
                   <View style={styles.progressIndicator}>
                     {progress >= 0.999 ? (
                       <View style={styles.progressCheckCircle}>
-                        <IconCheck size={24} color={COLORS.signalPositive} />
+                        <IconCheck size={24} color={COLORS.successBright} />
                       </View>
                     ) : (
                       <>

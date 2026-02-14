@@ -1158,7 +1158,7 @@ export function ExerciseExecutionScreen() {
             }}
             activeOpacity={1}
           >
-            <IconArrowLeft size={24} color="#000000" />
+            <IconArrowLeft size={24} color="#FFFFFF" />
           </TouchableOpacity>
           <TouchableOpacity
             testID="menu-button"
@@ -1166,7 +1166,7 @@ export function ExerciseExecutionScreen() {
             onPress={() => setShowMenu(true)}
             activeOpacity={1}
           >
-            <IconMenu size={24} color="#000000" />
+            <IconMenu size={24} color="#FFFFFF" />
           </TouchableOpacity>
         </View>
         
@@ -1397,7 +1397,7 @@ export function ExerciseExecutionScreen() {
                       {/* Completed check icon */}
                       {isCompleted && (
                         <View style={styles.completedCardBadge}>
-                          <IconCheck size={20} color={COLORS.signalPositive} />
+                          <IconCheck size={20} color={COLORS.successBright} />
                         </View>
                       )}
 
@@ -1454,7 +1454,7 @@ export function ExerciseExecutionScreen() {
                     if (completion.percentage === 100) {
                       return (
                         <View style={styles.halfWidthCardProgressRow}>
-                          <IconCheck size={20} color={COLORS.success} />
+                          <IconCheck size={20} color={COLORS.successBright} />
                         </View>
                       );
                     } else if (completion.percentage > 0) {
@@ -1516,7 +1516,7 @@ export function ExerciseExecutionScreen() {
                     if (completion.percentage === 100) {
                       return (
                         <View style={styles.halfWidthCardProgressRow}>
-                          <IconCheck size={20} color={COLORS.success} />
+                          <IconCheck size={20} color={COLORS.successBright} />
                         </View>
                       );
                     } else if (completion.percentage > 0) {
@@ -1736,7 +1736,7 @@ export function ExerciseExecutionScreen() {
                         </View>
                         {isCompleted && (
                           <View style={styles.completedBadge}>
-                            <IconCheck size={20} color={COLORS.signalPositive} />
+                            <IconCheck size={20} color={COLORS.successBright} />
                           </View>
                         )}
                       </TouchableOpacity>
@@ -1987,14 +1987,14 @@ export function ExerciseExecutionScreen() {
               destructive: true,
             },
             {
-              icon: <IconCheck size={24} color="#000000" />,
+              icon: <IconCheck size={24} color="#FFFFFF" />,
               label: t('complete'),
               onPress: handleCompleteAll,
             },
           ] : [
             // Warmup/Core: Swap, Reset, and Remove
             {
-              icon: <IconSwap size={24} color="#000000" />,
+              icon: <IconSwap size={24} color="#FFFFFF" />,
               label: t('swap'),
               onPress: handleSwap,
             },
@@ -2055,7 +2055,7 @@ export function ExerciseExecutionScreen() {
             onClose={() => setShowExerciseSettingsMenu(false)}
             items={[
               {
-                icon: <IconSwap size={24} color="#000000" />,
+                icon: <IconSwap size={24} color="#FFFFFF" />,
                 label: t('swapExercise'),
                 onPress: () => {
                   setShowExerciseSettingsMenu(false);
@@ -2065,7 +2065,7 @@ export function ExerciseExecutionScreen() {
                 },
               },
               ...(showBarbellOption ? [{
-                icon: <IconCheck size={24} color={isBarbellMode ? COLORS.accentPrimary : "#000000"} />,
+                icon: <IconCheck size={24} color={isBarbellMode ? COLORS.accentPrimary : "#FFFFFF"} />,
                 label: t('barbellMode'),
                 onPress: () => {
                   setBarbellMode(activeExercise.id, !isBarbellMode);
@@ -2129,7 +2129,7 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     ...TYPOGRAPHY.h2,
-    color: '#000000',
+    color: '#FFFFFF',
   },
   content: {
     flex: 1,
@@ -2244,7 +2244,7 @@ const styles = StyleSheet.create({
   },
   largeValue: {
     ...TYPOGRAPHY.h1,
-    color: '#000000',
+    color: '#FFFFFF',
   },
   unit: {
     ...TYPOGRAPHY.body,
@@ -2254,10 +2254,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     paddingHorizontal: 4,
     paddingBottom: 4,
-    gap: 2,
+    gap: 0,
   },
   setCountIndicator: {
     backgroundColor: COLORS.accentPrimaryDimmed,
+    borderWidth: 1,
+    borderColor: COLORS.accentPrimary,
     borderTopLeftRadius: 0,
     borderTopRightRadius: 0,
     borderBottomLeftRadius: 0,
@@ -2283,7 +2285,7 @@ const styles = StyleSheet.create({
   },
   cardStartButtonText: {
     ...TYPOGRAPHY.metaBold,
-    color: '#FFFFFF',
+    color: COLORS.backgroundCanvas,
   },
   setCountText: {
     ...TYPOGRAPHY.meta,
@@ -2316,7 +2318,7 @@ const styles = StyleSheet.create({
   },
   startButtonText: {
     ...TYPOGRAPHY.metaBold,
-    color: '#FFFFFF',
+    color: COLORS.backgroundCanvas,
   },
   adjustmentDrawerContent: {
     paddingHorizontal: SPACING.xxl,

@@ -22,7 +22,7 @@ export function Toggle({ label, value, onValueChange, disabled = false }: Toggle
 
   const trackColor = animatedValue.interpolate({
     inputRange: [0, 1],
-    outputRange: disabled ? ['#E5E5EA', '#E5E5EA'] : ['#D1D1D6', '#000000'], // Lighter gray when disabled
+    outputRange: disabled ? ['#38383A', '#38383A'] : ['#48484A', COLORS.accentPrimary], // Track: dark when off, lime when on
   });
 
   const thumbTranslateX = animatedValue.interpolate({
@@ -32,7 +32,7 @@ export function Toggle({ label, value, onValueChange, disabled = false }: Toggle
 
   const thumbColor = animatedValue.interpolate({
     inputRange: [0, 1],
-    outputRange: disabled ? ['#C7C7CC', '#C7C7CC'] : ['#000000', '#FFFFFF'], // Lighter gray when disabled
+    outputRange: disabled ? ['#48484A', '#48484A'] : ['#FFFFFF', COLORS.backgroundCanvas], // Thumb: white when off, dark canvas when on
   });
 
   return (

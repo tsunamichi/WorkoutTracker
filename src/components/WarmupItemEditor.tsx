@@ -6,10 +6,10 @@ import { useTranslation } from '../i18n/useTranslation';
 import { WarmupItem } from '../types/training';
 import * as Haptics from 'expo-haptics';
 
-// Light theme colors
+// Dark theme colors
 const LIGHT_COLORS = {
-  secondary: '#1B1B1B',
-  textMeta: '#817B77',
+  secondary: '#FFFFFF',
+  textMeta: '#8E8E93',
 };
 
 interface WarmupItemEditorProps {

@@ -22,11 +22,11 @@ import { useTranslation } from '../i18n/useTranslation';
 type Props = NativeStackScreenProps<RootStackParamList, 'HIITTimerForm'>;
 
 const LIGHT_COLORS = {
-  backgroundCanvas: '#E3E6E0',
-  text: '#1B1B1B',
-  secondary: '#1B1B1B',
-  textSecondary: '#3C3C43',
-  textMeta: '#817B77',
+  backgroundCanvas: '#0D0D0D',
+  text: '#FFFFFF',
+  secondary: '#FFFFFF',
+  textSecondary: '#AEAEB2',
+  textMeta: '#8E8E93',
 };
 
 type SheetType = 'work' | 'workRest' | 'sets' | 'rounds' | 'roundRest' | null;

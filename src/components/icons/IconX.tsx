@@ -6,7 +6,7 @@ interface IconXProps {
   color?: string;
 }
 
-export function IconX({ size = 24, color = '#000000' }: IconXProps) {
+export function IconX({ size = 24, color = '#FFFFFF' }: IconXProps) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
       <Path

@@ -60,7 +60,7 @@ const styles = StyleSheet.create({
   name: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#000000',
+    color: '#FFFFFF',
   },
   checkmark: {
     width: 24,
@@ -83,7 +83,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   tag: {
-    backgroundColor: '#E3E6E0',
+    backgroundColor: '#2C2C2E',
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 6,

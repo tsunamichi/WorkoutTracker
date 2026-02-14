@@ -20,9 +20,9 @@ interface CustomSliderProps {
 }
 
 const LIGHT_COLORS = {
-  text: '#1B1B1B',
-  textPrimary: '#000000',
-  textSecondary: '#3C3C43',
+  text: '#FFFFFF',
+  textPrimary: '#FFFFFF',
+  textSecondary: '#AEAEB2',
 };
 
 const CIRCLE_SIZE = 40;

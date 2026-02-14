@@ -6,7 +6,7 @@ interface IconSearchProps {
   color?: string;
 }
 
-export function IconSearch({ size = 24, color = '#000000' }: IconSearchProps) {
+export function IconSearch({ size = 24, color = '#FFFFFF' }: IconSearchProps) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
       <Path

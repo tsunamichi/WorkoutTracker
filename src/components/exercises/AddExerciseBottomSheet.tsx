@@ -191,11 +191,11 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 24,
     fontWeight: '600',
-    color: '#000000',
+    color: '#FFFFFF',
     marginBottom: 16,
   },
   searchInput: {
-    backgroundColor: '#F2F2F7',
+    backgroundColor: '#2C2C2E',
     borderRadius: 10,
     paddingHorizontal: 12,
     paddingVertical: 12,
@@ -218,7 +218,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 16,
-    backgroundColor: '#E3E6E0',
+    backgroundColor: '#2C2C2E',
     marginRight: 8,
   },
   filterChipSelected: {
@@ -245,7 +245,7 @@ const styles = StyleSheet.create({
   exerciseName: {
     fontSize: 16,
     fontWeight: '500',
-    color: '#000000',
+    color: '#FFFFFF',
     marginBottom: 4,
   },
   exerciseTags: {

@@ -6,7 +6,7 @@ interface IconCloseProps {
   color?: string;
 }
 
-export function IconClose({ size = 24, color = '#000000' }: IconCloseProps) {
+export function IconClose({ size = 24, color = '#FFFFFF' }: IconCloseProps) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
       <Path

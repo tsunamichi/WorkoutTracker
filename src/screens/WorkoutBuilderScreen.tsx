@@ -12,14 +12,14 @@ import { useTranslation } from '../i18n/useTranslation';
 import type { Exercise, ExerciseCategory } from '../types';
 import type { WorkoutTemplate, WarmupItem } from '../types/training';
 
-// Light theme colors
+// Dark theme colors
 const LIGHT_COLORS = {
-  backgroundCanvas: '#E3E6E0',
-  secondary: '#1B1B1B',
-  textMeta: '#817B77',
-  border: '#C7C7CC',
-  accentPrimary: '#FD6B00',
-  buttonBg: '#F2F2F7',
+  backgroundCanvas: '#0D0D0D',
+  secondary: '#FFFFFF',
+  textMeta: '#8E8E93',
+  border: '#38383A',
+  accentPrimary: COLORS.accentPrimary,
+  buttonBg: '#2C2C2E',
 };
 
 const MUSCLE_GROUPS: ExerciseCategory[] = [

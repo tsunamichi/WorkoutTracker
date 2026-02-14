@@ -43,7 +43,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   buttonDisabled: {
-    backgroundColor: '#CDCABB',
+    backgroundColor: '#38383A',
   },
   buttonText: {
     fontSize: 17,

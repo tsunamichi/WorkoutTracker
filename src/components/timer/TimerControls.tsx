@@ -4,9 +4,9 @@ import { IconPlay, IconPause, IconSoundOn, IconSoundOff, IconSkip, IconRestart }
 import { COLORS } from '../../constants';
 
 const LIGHT_COLORS = {
-  backgroundCanvas: '#E3E6E0',
-  textSecondary: '#3C3C43',
-  secondary: '#1B1B1B',
+  backgroundCanvas: '#0D0D0D',
+  textSecondary: '#AEAEB2',
+  secondary: '#FFFFFF',
 };
 
 interface TimerControlsProps {

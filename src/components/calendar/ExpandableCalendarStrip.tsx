@@ -228,6 +228,7 @@ export function ExpandableCalendarStrip({
               isToday={day.isToday}
               isCompleted={day.isCompleted}
               hasWorkout={day.hasWorkout}
+              cycleColor={bandColor}
               onPress={() => handleSelectDate(day.date)}
             />
           </View>
@@ -277,7 +278,7 @@ const styles = StyleSheet.create({
   },
   monthLabel: {
     ...TYPOGRAPHY.metaBold,
-    color: '#1B1B1B',
+    color: '#FFFFFF',
     textAlign: 'center',
     marginBottom: SPACING.xs,
   },
@@ -302,8 +303,8 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: 0,
     right: 0,
-    top: 4,
-    bottom: 4,
+    top: 5,
+    bottom: 5,
     borderRadius: 14,
     borderCurve: 'continuous' as any,
   },

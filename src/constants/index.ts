@@ -79,57 +79,60 @@ function adjustLightness(hex: string, amount: number): string {
   return hslToHex(hsl.h, hsl.s, hsl.l);
 }
 
-// Base accent color
-const ACCENT_PRIMARY = '#2F06FF';
-const SIGNAL_NEGATIVE = '#FF0651';
-const SIGNAL_POSITIVE = '#1CAA00';
-const SIGNAL_WARNING = '#FFBD06';
-const BORDER_DIMMED = 'rgba(0, 0, 0, 0.08)';
+// Base accent color — vivid lime, used sparingly for CTAs & highlights
+const ACCENT_PRIMARY = '#FFD500';
+const SIGNAL_NEGATIVE = '#FF453A';
+const BASE_GREEN = '#0D1916';
+const SIGNAL_POSITIVE = BASE_GREEN;
+const SIGNAL_WARNING = '#FFD60A';
+const BORDER_DIMMED = 'rgba(255, 255, 255, 0.06)';
 
 export const COLORS = {
-  // Core colors
-  background: '#E3E6E0',    // Default background
-  backgroundCanvas: '#EFEAEA',  // Page background (like Today tab)
-  backgroundContainer: '#D0D1CD', // Bottom nav background
-  canvas: '#1C1C1E',        // Card/container background (dark mode)
-  container: '#2C2C2E',     // Secondary container
-  cardBackground: '#E3E3DE', // Card background (light)
-  activeCard: '#FBF7F7',    // Active/default card state
+  // Core colors — dark palette
+  background: '#121212',         // Default background
+  backgroundCanvas: '#0D0D0D',   // Page/canvas background
+  backgroundContainer: '#1C1C1E', // Header/nav/card containers
+  canvas: '#1C1C1E',             // Card/container background
+  container: '#2C2C2E',          // Elevated secondary container
+  cardBackground: '#1C1C1E',     // Card background
+  activeCard: '#252528',         // Active/selected card state
   
   // Primary actions
-  primary: SIGNAL_POSITIVE,       // Green for actions
-  primarySoft: adjustLightness(SIGNAL_POSITIVE, -35),   // Soft green background
+  primary: ACCENT_PRIMARY,              // Lime for CTAs
+  primarySoft: '#1A1C0D',              // Very dark lime tint
   
   // Secondary/accent
-  secondary: '#007AFF',     // Blue
-  secondarySoft: '#1C2A3A', // Soft blue background
-  accentPrimary: ACCENT_PRIMARY,        // Orange for highlights (gradient start)
-  accentPrimaryLight: adjustLightness(ACCENT_PRIMARY, 30), // 30% lighter
-  accentPrimaryDark: adjustLightness(ACCENT_PRIMARY, -8),  // 8% darker
-  accentPrimaryDimmed: '#CDD5FF',       // Light blue background for selected states
-  accentSecondary: '#E3E3E3',           // Secondary accent color for buttons
+  secondary: '#007AFF',          // Blue
+  secondarySoft: '#1C2A3A',      // Soft blue background
+  accentPrimary: ACCENT_PRIMARY,
+  accentPrimaryLight: adjustLightness(ACCENT_PRIMARY, 15),
+  accentPrimaryDark: adjustLightness(ACCENT_PRIMARY, -15),
+  todayIndicator: '#C417B0',              // Current day highlight when not selected
+  accentPrimaryDimmed: '#2A2B1A',       // Subtle lime tint bg for selected states
+  accentSecondary: '#2C2C2E',           // Secondary accent color for buttons
   
-  // Text
-  text: '#1B1B1B',              // Default text color (dark)
-  textPrimary: '#FFFFFF',          // Primary text (white)
-  textSecondary: '#3C3C43', // Secondary text
-  textMeta: '#817B77',          // Metadata/labels
-  textMetaSoft: '#CBC8C7',      // Soft metadata/dividers
-  textDisabled: '#C7C7CC',      // Disabled text
+  // Text — white on dark
+  text: '#FFFFFF',                  // Default text color
+  textPrimary: '#FFFFFF',           // Primary text
+  textSecondary: '#AEAEB2',        // Secondary text
+  textMeta: '#8E8E93',             // Metadata/labels
+  textMetaSoft: '#48484A',         // Soft metadata/dividers
+  textDisabled: '#48484A',         // Disabled text
   
-  // Borders & dividers
-  border: '#D2D3CF',        // Subtle borders
-  disabledBorder: '#D2D2D2', // Disabled button border
-  borderDimmed: BORDER_DIMMED, // Dimmed dividers
-  divider: BORDER_DIMMED,       // Dividers
-  overlay: 'rgba(0, 0, 0, 0.2)', // Bottom sheet overlays
-  containerBackground: '#E6DFDF', // Container background
+  // Borders & dividers — very subtle on dark
+  border: '#38383A',               // Subtle borders
+  disabledBorder: '#38383A',       // Disabled button border
+  borderDimmed: BORDER_DIMMED,     // Dimmed dividers
+  divider: BORDER_DIMMED,          // Dividers
+  overlay: 'rgba(0, 0, 0, 0.5)',   // Bottom sheet overlays
+  containerBackground: '#1C1C1E',  // Container background
   
   // Status colors
   signalNegative: SIGNAL_NEGATIVE,
   signalPositive: SIGNAL_POSITIVE,
   signalWarning: SIGNAL_WARNING,
   success: SIGNAL_POSITIVE,
+  successBright: adjustLightness(BASE_GREEN, 40),
   warning: SIGNAL_WARNING,
   error: SIGNAL_NEGATIVE,
   
@@ -142,24 +145,24 @@ export const COLORS = {
   core: '#C7CEEA',
 };
 
-// Muted background colors for cycle/plan grouping on the calendar
+// Muted background colors for cycle/plan grouping on the calendar (dark theme)
 export const CYCLE_COLORS = [
-  '#D6E4F0', // soft blue
-  '#D9F0D6', // soft green
-  '#F0E8D6', // soft amber
-  '#F0D6DE', // soft rose
-  '#E0D6F0', // soft violet
-  '#D6F0EC', // soft teal
+  '#250321', // dark plum
+  '#1A3A1A', // dark green
+  '#3A2A1A', // dark amber
+  '#3A1A2A', // dark rose
+  '#2A1A3A', // dark violet
+  '#1A3A34', // dark teal
 ];
 
 export const GRADIENTS = {
   accentPrimary: {
-    colors: [ACCENT_PRIMARY, '#FF8C38'] as const,
+    colors: [ACCENT_PRIMARY, '#A8C41A'] as const,
     start: { x: 0.42, y: 0.42 },
     end: { x: 1, y: 1 },
   },
   backgroundLight: {
-    colors: ['#E3E6E0', '#D4D6D1'] as const,
+    colors: ['#121212', '#0D0D0D'] as const,
     start: { x: 0, y: 0 },
     end: { x: 0, y: 1 },
   },
@@ -254,83 +257,76 @@ export const SHADOW = {
   sm: {
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.2,
-    shadowRadius: 1.41,
+    shadowOpacity: 0.4,
+    shadowRadius: 2,
     elevation: 2,
   },
   md: {
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.23,
-    shadowRadius: 2.62,
+    shadowOpacity: 0.5,
+    shadowRadius: 4,
     elevation: 4,
   },
   lg: {
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4.65,
+    shadowOpacity: 0.6,
+    shadowRadius: 8,
     elevation: 8,
   },
 };
 
 export const CARDS = {
   cardFlat: {
-    backgroundColor: '#FBF7F7', // activeCard
-    borderRadius: 16,  // Squircle-friendly
+    backgroundColor: '#1C1C1E',
+    borderRadius: 16,
     borderCurve: 'continuous' as const,
     borderWidth: 0,
     borderColor: 'transparent',
   },
   cardDeep: {
-    // Outer card container (no external shadows)
     outer: {
-      backgroundColor: '#FBF7F7', // activeCard
-      borderRadius: 16,  // Squircle-friendly
+      backgroundColor: '#1C1C1E',
+      borderRadius: 16,
       borderCurve: 'continuous' as const,
       overflow: 'hidden' as const,
       borderWidth: 0,
       borderColor: 'transparent',
     },
-    // Inner card without borders (flat)
     inner: {
-      backgroundColor: '#FBF7F7', // activeCard
-      borderRadius: 16,  // Squircle-friendly
+      backgroundColor: '#1C1C1E',
+      borderRadius: 16,
       borderCurve: 'continuous' as const,
     },
   },
   cardDeepDimmed: {
-    // No external shadows (dimmed state)
     outer: {
-      backgroundColor: '#FBF7F7', // activeCard
-      borderRadius: 16,  // Squircle-friendly
+      backgroundColor: '#1C1C1E',
+      borderRadius: 16,
       borderCurve: 'continuous' as const,
       overflow: 'hidden' as const,
       borderWidth: 0,
       borderColor: 'transparent',
     },
-    // Inner card WITHOUT borders (dimmed state)
     inner: {
-      backgroundColor: '#FBF7F7', // activeCard
-      borderRadius: 16,  // Squircle-friendly
+      backgroundColor: '#1C1C1E',
+      borderRadius: 16,
       borderCurve: 'continuous' as const,
     },
   },
   cardDeepDisabled: {
-    // No external shadows (disabled state)
-    // Outer card with disabled border color
     outer: {
-      backgroundColor: '#E3E3DE',
-      borderRadius: 16,  // Squircle-friendly
+      backgroundColor: '#2C2C2E',
+      borderRadius: 16,
       borderCurve: 'continuous' as const,
       overflow: 'hidden' as const,
       borderWidth: 0,
       borderColor: 'transparent',
     },
-    // Inner card without borders (disabled state)
     inner: {
-      backgroundColor: '#E2E3DF',
-      borderRadius: 16,  // Squircle-friendly
+      backgroundColor: '#2C2C2E',
+      borderRadius: 16,
       borderCurve: 'continuous' as const,
     },
   },
@@ -341,17 +337,17 @@ export const BUTTONS = {
   primaryButtonNoLabel: {
     width: 80,
     height: 80,
-    borderRadius: 20,  // Squircle-friendly (25% of 80 for true squircle proportion)
+    borderRadius: 20,
     borderCurve: 'continuous' as const,
-    backgroundColor: '#1B1B1B',
+    backgroundColor: ACCENT_PRIMARY,
     alignItems: 'center' as const,
     justifyContent: 'center' as const,
   },
   primaryButtonLabeled: {
     height: 56,
-    borderRadius: 16,  // md (16px)
+    borderRadius: 16,
     borderCurve: 'continuous' as const,
-    backgroundColor: '#1B1B1B',
+    backgroundColor: ACCENT_PRIMARY,
     alignItems: 'center' as const,
     justifyContent: 'center' as const,
     paddingHorizontal: 24,

@@ -20,13 +20,13 @@ interface ExercisePickerModalProps {
 }
 
 const LIGHT_COLORS = {
-  backgroundCanvas: '#E3E6E0',
-  backgroundContainer: '#FFFFFF',
-  textPrimary: '#000000',
-  textSecondary: '#3C3C43',
-  textMeta: '#817B77',
-  accent: '#FD6B00',
-  border: '#C7C7CC',
+  backgroundCanvas: '#0D0D0D',
+  backgroundContainer: '#1C1C1E',
+  textPrimary: '#FFFFFF',
+  textSecondary: '#AEAEB2',
+  textMeta: '#8E8E93',
+  accent: COLORS.accentPrimary,
+  border: '#38383A',
 };
 
 export function ExercisePickerModal({

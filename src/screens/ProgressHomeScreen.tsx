@@ -20,8 +20,8 @@ interface ProgressHomeScreenProps {
 }
 
 const LIGHT_COLORS = {
-  secondary: '#1B1B1B',
-  textMeta: '#817B77',
+  secondary: '#FFFFFF',
+  textMeta: '#8E8E93',
 };
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
@@ -175,7 +175,7 @@ export function ProgressHomeScreen({ navigation }: ProgressHomeScreenProps) {
                 onPress={() => navigation.navigate('Profile')}
                 activeOpacity={1}
               >
-                <IconSettings size={24} color="#000000" />
+                <IconSettings size={24} color="#FFFFFF" />
               </TouchableOpacity>
             </View>
           </View>

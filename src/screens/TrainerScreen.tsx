@@ -440,7 +440,7 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     ...TYPOGRAPHY.h1,
-    color: '#000000',
+    color: '#FFFFFF',
     marginBottom: SPACING.xs,
   },
   headerSubtitle: {
@@ -524,7 +524,7 @@ const styles = StyleSheet.create({
   },
   transcriptTitle: {
     ...TYPOGRAPHY.h2,
-    color: '#000000',
+    color: '#FFFFFF',
     marginBottom: SPACING.xl,
   },
   messageContainer: {
@@ -544,11 +544,11 @@ const styles = StyleSheet.create({
   messageLabel: {
     ...TYPOGRAPHY.metaBold,
     marginBottom: SPACING.xs,
-    color: '#000000',
+    color: '#FFFFFF',
   },
   messageText: {
     ...TYPOGRAPHY.body,
-    color: '#000000',
+    color: '#FFFFFF',
     lineHeight: 22,
   },
 });

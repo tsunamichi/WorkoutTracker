@@ -148,7 +148,7 @@ const styles = StyleSheet.create({
     color: COLORS.signalNegative,
   },
   entryDeltaDown: {
-    color: COLORS.signalPositive,
+    color: COLORS.successBright,
   },
   entryDeltaNeutral: {
     color: COLORS.textMeta,

@@ -8,10 +8,10 @@ import { WorkoutTemplate } from '../types/training';
 import dayjs from 'dayjs';
 import * as Haptics from 'expo-haptics';
 
-// Light theme colors
+// Dark theme colors
 const LIGHT_COLORS = {
-  secondary: '#1B1B1B',
-  textMeta: '#817B77',
+  secondary: '#FFFFFF',
+  textMeta: '#8E8E93',
 };
 
 interface AddWorkoutSheetProps {

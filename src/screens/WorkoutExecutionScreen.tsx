@@ -783,7 +783,7 @@ export function WorkoutExecutionScreen({ route, navigation }: WorkoutExecutionSc
               style={styles.backButton}
               activeOpacity={1}
             >
-              <IconArrowLeft size={24} color="#000000" />
+              <IconArrowLeft size={24} color="#FFFFFF" />
             </TouchableOpacity>
             
             {completionPercentage === 100 ? (
@@ -800,7 +800,7 @@ export function WorkoutExecutionScreen({ route, navigation }: WorkoutExecutionSc
                 style={styles.menuButton}
                 activeOpacity={1}
               >
-                <IconMenu size={24} color="#000000" />
+                <IconMenu size={24} color="#FFFFFF" />
               </TouchableOpacity>
             )}
           </View>
@@ -839,7 +839,7 @@ export function WorkoutExecutionScreen({ route, navigation }: WorkoutExecutionSc
                 </View>
                 {mainCompletion.percentage === 100 ? (
                   <View style={styles.summaryCardCompleteIcon}>
-                    <IconCheck size={20} color={COLORS.success} />
+                    <IconCheck size={20} color={COLORS.successBright} />
                   </View>
                 ) : mainCompletion.percentage > 0 ? (
                   <View style={styles.progressIndicator}>
@@ -894,12 +894,12 @@ export function WorkoutExecutionScreen({ route, navigation }: WorkoutExecutionSc
 }
 
 const LIGHT_COLORS = {
-  backgroundCanvas: '#E3E6E0',
-  backgroundContainer: '#CDCABB',
-  secondary: '#1B1B1B',
-  textSecondary: '#3C3C43',
-  textMeta: '#817B77',
-  border: '#C7C7CC',
+  backgroundCanvas: '#0D0D0D',
+  backgroundContainer: '#1C1C1E',
+  secondary: '#FFFFFF',
+  textSecondary: '#AEAEB2',
+  textMeta: '#8E8E93',
+  border: '#38383A',
   divider: COLORS.borderDimmed,
 };
 
@@ -1242,7 +1242,7 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.overlay,
   },
   timerSheet: {
-    backgroundColor: '#E3E6E0', // backgroundCanvas
+    backgroundColor: '#0D0D0D', // backgroundCanvas
     paddingTop: 4,
     paddingHorizontal: 4,
     paddingBottom: 24,
@@ -1266,7 +1266,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     overflow: 'hidden',
     borderTopWidth: 3,
-    borderTopColor: '#000000',
+    borderTopColor: '#FFFFFF',
   },
   decorativeShape: {
     position: 'absolute',

@@ -234,7 +234,7 @@ export function PlanHistoryDetailScreen({ route, navigation }: PlanHistoryDetail
                   {isCompleted && (
                     <View style={styles.completedBadge}>
                       <Text style={styles.completedText}>{t('completed')}</Text>
-                      <IconCheck size={24} color={COLORS.signalPositive} />
+                      <IconCheck size={24} color={COLORS.successBright} />
                     </View>
                   )}
                 </TouchableOpacity>
@@ -426,7 +426,7 @@ const styles = StyleSheet.create({
   },
   completedText: {
     ...TYPOGRAPHY.meta,
-    color: COLORS.signalPositive,
+    color: COLORS.successBright,
     textTransform: 'capitalize',
   },
   exerciseRow: {

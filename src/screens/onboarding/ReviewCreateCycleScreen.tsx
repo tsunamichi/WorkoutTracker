@@ -236,7 +236,7 @@ const styles = StyleSheet.create({
   summaryTitle: {
     fontSize: 20,
     fontWeight: '600',
-    color: '#000000',
+    color: '#FFFFFF',
     marginBottom: 12,
   },
   summaryRow: {
@@ -251,7 +251,7 @@ const styles = StyleSheet.create({
   summaryValue: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#000000',
+    color: '#FFFFFF',
   },
   sectionHeader: {
     paddingHorizontal: 24,
@@ -260,7 +260,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#000000',
+    color: '#FFFFFF',
   },
   chipContainer: {
     flexDirection: 'row',
@@ -272,7 +272,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 12,
     borderRadius: 20,
-    backgroundColor: '#E3E6E0',
+    backgroundColor: '#2C2C2E',
   },
   chipSelected: {
     backgroundColor: '#FD6B00',
@@ -301,7 +301,7 @@ const styles = StyleSheet.create({
   dayCardTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#000000',
+    color: '#FFFFFF',
   },
   editLink: {
     fontSize: 15,
@@ -327,7 +327,7 @@ const styles = StyleSheet.create({
   exerciseName: {
     fontSize: 15,
     fontWeight: '500',
-    color: '#000000',
+    color: '#FFFFFF',
     marginBottom: 2,
   },
   exerciseDetails: {
