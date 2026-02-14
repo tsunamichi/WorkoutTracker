@@ -38,9 +38,8 @@ export function CalendarDayButton({
         <Text
           style={[
             styles.dayNumber,
-            isSelected && !isToday && styles.dayNumberSelected,
             isToday && !isSelected && styles.dayNumberToday,
-            isToday && isSelected && cycleColor ? { color: cycleColor } : isToday && isSelected ? styles.dayNumberSelected : undefined,
+            isToday && isSelected && styles.dayNumberSelected,
           ]}
         >
           {dayNumber}
@@ -76,10 +75,10 @@ const styles = StyleSheet.create({
     // No background box — just the label color changes
   },
   dayButtonSelected: {
-    backgroundColor: COLORS.accentPrimary,
+    backgroundColor: COLORS.info,
   },
   dayButtonTodaySelected: {
-    backgroundColor: COLORS.todayIndicator,
+    backgroundColor: COLORS.accentPrimary,
   },
   dayNumber: {
     ...TYPOGRAPHY.metaBold,
@@ -89,7 +88,7 @@ const styles = StyleSheet.create({
     color: COLORS.backgroundCanvas,
   },
   dayNumberToday: {
-    color: COLORS.todayIndicator,
+    color: '#FFFFFF',
   },
   completedPill: {
     position: 'absolute',

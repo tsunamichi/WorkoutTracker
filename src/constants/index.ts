@@ -84,6 +84,8 @@ const ACCENT_PRIMARY = '#FFD500';
 const SIGNAL_NEGATIVE = '#FF453A';
 const BASE_GREEN = '#0D1916';
 const SIGNAL_POSITIVE = BASE_GREEN;
+const BASE_FAILURE = '#FF005B';
+const BASE_INFO = '#062FFF';
 const SIGNAL_WARNING = '#FFD60A';
 const BORDER_DIMMED = 'rgba(255, 255, 255, 0.06)';
 
@@ -107,7 +109,7 @@ export const COLORS = {
   accentPrimary: ACCENT_PRIMARY,
   accentPrimaryLight: adjustLightness(ACCENT_PRIMARY, 15),
   accentPrimaryDark: adjustLightness(ACCENT_PRIMARY, -15),
-  todayIndicator: '#C417B0',              // Current day highlight when not selected
+  todayIndicator: BASE_INFO,  // Current day label & selected box
   accentPrimaryDimmed: '#2A2B1A',       // Subtle lime tint bg for selected states
   accentSecondary: '#2C2C2E',           // Secondary accent color for buttons
   
@@ -133,6 +135,10 @@ export const COLORS = {
   signalWarning: SIGNAL_WARNING,
   success: SIGNAL_POSITIVE,
   successBright: adjustLightness(BASE_GREEN, 40),
+  failure: BASE_FAILURE,
+  failureBright: adjustLightness(BASE_FAILURE, 40),
+  info: BASE_INFO,
+  infoBright: adjustLightness(BASE_INFO, 40),
   warning: SIGNAL_WARNING,
   error: SIGNAL_NEGATIVE,
   
@@ -147,7 +153,7 @@ export const COLORS = {
 
 // Muted background colors for cycle/plan grouping on the calendar (dark theme)
 export const CYCLE_COLORS = [
-  '#250321', // dark plum
+  `${BASE_INFO}29`, // info at 16% opacity — cycle strip background
   '#1A3A1A', // dark green
   '#3A2A1A', // dark amber
   '#3A1A2A', // dark rose

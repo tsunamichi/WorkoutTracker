@@ -15,7 +15,6 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.tsunamichi.workouttracker",
       "buildNumber": "96",
-      "deploymentTarget": "16.1",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "NSSupportsLiveActivities": true,
@@ -31,7 +30,6 @@
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false,
       "package": "com.tsunamichi.workouttracker"
     },
     "web": {
