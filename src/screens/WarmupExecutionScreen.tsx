@@ -10,7 +10,8 @@ import { BottomDrawer } from '../components/common/BottomDrawer';
 import { SetTimerSheet } from '../components/timer/SetTimerSheet';
 import { useTranslation } from '../i18n/useTranslation';
 import { formatWeightForLoad, toDisplayWeight, fromDisplayWeight } from '../utils/weight';
-import type { WarmupItem_DEPRECATED as WarmupItem } from '../types/training';
+import type { WarmupItem } from '../types/training';
+import { migrateItemsArray } from '../utils/exerciseMigration';
 
 // Enable LayoutAnimation on Android
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -33,7 +34,9 @@ export function WarmupExecutionScreen() {
   const { workoutKey, workoutTemplateId } = route.params;
   const { getWorkoutTemplate, updateWarmupCompletion, getWarmupCompletion, updateWorkoutTemplate, settings } = useStore();
   const template = getWorkoutTemplate(workoutTemplateId);
-  const warmupItems = template?.warmupItems || [];
+  // Migrate old items to new structure on load
+  const rawWarmupItems = template?.warmupItems || [];
+  const warmupItems = migrateItemsArray(rawWarmupItems as any);
   const useKg = settings.useKg;
   const weightUnit = useKg ? 'kg' : 'lb';
   const weightStep = useKg ? 0.5 : 5;
@@ -73,7 +76,7 @@ export function WarmupExecutionScreen() {
       if (item.cycleId && cycleGroups[item.cycleId]) {
         // Create a single group for the entire cycle
         const cycleItems = cycleGroups[item.cycleId];
-        const maxSets = Math.max(...cycleItems.map(i => i.sets));
+        const maxSets = Math.max(...cycleItems.map(i => i.sets.length));
         
         result.push({
           id: item.cycleId,
@@ -90,7 +93,7 @@ export function WarmupExecutionScreen() {
         result.push({
           id: item.id,
           isCycle: false,
-          totalRounds: item.sets,
+          totalRounds: item.sets.length,
           exercises: [item],
         });
         processedItems.add(item.id);
@@ -182,9 +185,10 @@ export function WarmupExecutionScreen() {
       const roundIndex = rounds[group.id] || 0;
       const values: Record<string, { weight: number; reps: number }> = {};
       group.exercises.forEach(ex => {
+        const firstSet = ex.sets[0];
         values[ex.id] = {
-          weight: ex.weight || 0,
-          reps: ex.reps || 0,
+          weight: firstSet?.weight || 0,
+          reps: ex.mode === 'time' ? (firstSet?.durationSec || 0) : (firstSet?.reps || 0),
         };
       });
       setLocalValues(values);
@@ -209,9 +213,10 @@ export function WarmupExecutionScreen() {
       const roundIndex = currentRounds[group.id] || 0;
       const values: Record<string, { weight: number; reps: number }> = {};
       group.exercises.forEach(ex => {
+        const firstSet = ex.sets[0];
         values[ex.id] = {
-          weight: ex.weight || 0,
-          reps: ex.reps || 0,
+          weight: firstSet?.weight || 0,
+          reps: ex.mode === 'time' ? (firstSet?.durationSec || 0) : (firstSet?.reps || 0),
         };
       });
       setLocalValues(values);
@@ -273,8 +278,9 @@ export function WarmupExecutionScreen() {
     setShowAdjustmentDrawer(false);
     
     // If time-based, show timer
-    if (currentExercise.isTimeBased) {
-      const duration = localValues[currentExercise.id]?.reps ?? currentExercise.reps ?? 30;
+    if (currentExercise.mode === 'time') {
+      const firstSet = currentExercise.sets[0];
+      const duration = localValues[currentExercise.id]?.reps ?? firstSet?.durationSec ?? 30;
       setIsExerciseTimerPhase(true);
       setShowTimer(true);
     } else {
@@ -432,13 +438,16 @@ export function WarmupExecutionScreen() {
                   <View style={[groupCardBg, flatRightOuter]}>
                     <View style={[groupCardFg, flatRightInner]}>
                       {group.exercises.map((exercise, exIndex) => {
-                        const displayWeight = localValues[exercise.id]?.weight ?? exercise.weight ?? 0;
-                        const displayReps = localValues[exercise.id]?.reps ?? exercise.reps ?? 0;
+                        const firstSet = exercise.sets[0];
+                        const defaultWeight = firstSet?.weight ?? 0;
+                        const defaultReps = exercise.mode === 'time' ? (firstSet?.durationSec ?? 0) : (firstSet?.reps ?? 0);
+                        const displayWeight = localValues[exercise.id]?.weight ?? defaultWeight;
+                        const displayReps = localValues[exercise.id]?.reps ?? defaultReps;
                         const showWeight = displayWeight > 0;
                         const isActive = isExpanded && exIndex === activeExerciseIndex;
                         const setId = `${exercise.id}-set-${currentRound}`;
                         const isExerciseCompleted = completedSets.has(setId);
-                        const repsUnit = exercise.isTimeBased ? 'secs' : 'reps';
+                        const repsUnit = exercise.mode === 'time' ? 'secs' : 'reps';
 
                         return (
                           <React.Fragment key={exercise.id}>
@@ -467,7 +476,7 @@ export function WarmupExecutionScreen() {
                                     styles.exerciseNameTextInCard,
                                     (isExpanded || group.exercises.length === 1) && styles.exerciseNameTextActive
                                   ]} testID="exercise-name-text">
-                                    {exercise.exerciseName}
+                                    {exercise.movementId}
                                   </Text>
                                   {(isExerciseCompleted || isCompleted) && (
                                     <IconCheck size={20} color={COLORS.signalPositive} />
@@ -505,68 +514,60 @@ export function WarmupExecutionScreen() {
                   </View>
                 </View>
 
-                {/* Set Indicator - Animated.View, independent of LayoutAnimation */}
-                <Animated.View style={[
-                  styles.setCountIndicator,
-                  {
-                    width: indicatorActive
-                      ? indicatorWidthAnim.interpolate({
-                          inputRange: [0, 1],
-                          outputRange: [0, 48],
-                        })
-                      : 0,
-                    marginLeft: indicatorActive
-                      ? indicatorWidthAnim.interpolate({
-                          inputRange: [0, 1],
-                          outputRange: [0, 4],
-                        })
-                      : 0,
-                  },
-                ]}>
-                  {indicatorActive && (
-                    <Text style={styles.setCountText} numberOfLines={1}>
-                      {currentRound + 1}/{group.totalRounds}
-                    </Text>
-                  )}
-                </Animated.View>
+                {/* Set Indicator with Inline Start Button */}
+                {indicatorActive ? (
+                  <TouchableOpacity
+                    style={styles.inlineStartButton}
+                    onPress={handleStart}
+                    activeOpacity={1}
+                  >
+                    <View style={styles.inlineStartButtonInner}>
+                      <Text style={styles.inlineStartButtonText}>{t('start')}</Text>
+                    </View>
+                    <View style={styles.inlineSetIndicator}>
+                      <Text style={styles.setCountText} numberOfLines={1}>
+                        {currentRound + 1}/{group.totalRounds}
+                      </Text>
+                    </View>
+                  </TouchableOpacity>
+                ) : (
+                  <Animated.View style={[
+                    styles.setCountIndicator,
+                    {
+                      width: 0,
+                      marginLeft: 0,
+                    },
+                  ]} />
+                )}
               </View>
             );
           })}
         </View>
       </ScrollView>
       
-      {/* Start Button - Fixed at Bottom */}
-      {expandedGroupIndex !== -1 && !allComplete && (
-        <View style={[styles.markAsDoneContainer, { paddingBottom: insets.bottom + 16 }]}>
-          <TouchableOpacity
-            style={styles.markAsDoneButton}
-            onPress={handleStart}
-            activeOpacity={1}
-          >
-            <View style={[styles.markAsDoneButtonInner, styles.markAsDoneButtonBackground]}>
-              <Text style={styles.markAsDoneButtonText}>{t('start')}</Text>
-            </View>
-          </TouchableOpacity>
-        </View>
-      )}
-      
       {/* Exercise Timer */}
-      {expandedGroupIndex >= 0 && warmupGroups[expandedGroupIndex] && (
-        <SetTimerSheet
-          visible={showTimer}
-          onComplete={handleComplete}
-          onClose={() => setShowTimer(false)}
-          workoutName={template?.name}
-          exerciseName={warmupGroups[expandedGroupIndex].exercises[activeExerciseIndex]?.exerciseName}
-          currentSet={currentRounds[warmupGroups[expandedGroupIndex].id] + 1}
-          totalSets={warmupGroups[expandedGroupIndex].totalRounds}
-          isExerciseTimerPhase={isExerciseTimerPhase}
-          exerciseDuration={localValues[warmupGroups[expandedGroupIndex].exercises[activeExerciseIndex]?.id]?.reps ?? warmupGroups[expandedGroupIndex].exercises[activeExerciseIndex]?.reps ?? 30}
-          onExerciseTimerComplete={handleComplete}
-          skipRestPhase={true}
-          isPerSide={warmupGroups[expandedGroupIndex].exercises[activeExerciseIndex]?.isPerSide}
-        />
-      )}
+      {expandedGroupIndex >= 0 && warmupGroups[expandedGroupIndex] && (() => {
+        const activeEx = warmupGroups[expandedGroupIndex].exercises[activeExerciseIndex];
+        const firstSet = activeEx?.sets[0];
+        const defaultDuration = activeEx?.mode === 'time' ? (firstSet?.durationSec ?? 30) : 30;
+        
+        return (
+          <SetTimerSheet
+            visible={showTimer}
+            onComplete={handleComplete}
+            onClose={() => setShowTimer(false)}
+            workoutName={template?.name}
+            exerciseName={activeEx?.movementId}
+            currentSet={currentRounds[warmupGroups[expandedGroupIndex].id] + 1}
+            totalSets={warmupGroups[expandedGroupIndex].totalRounds}
+            isExerciseTimerPhase={isExerciseTimerPhase}
+            exerciseDuration={localValues[activeEx?.id]?.reps ?? defaultDuration}
+            onExerciseTimerComplete={handleComplete}
+            skipRestPhase={true}
+            isPerSide={activeEx?.isPerSide}
+          />
+        );
+      })()}
       
       {/* Adjustment Drawer */}
       <BottomDrawer
@@ -576,7 +577,7 @@ export function WarmupExecutionScreen() {
       >
         <View style={styles.adjustmentDrawerContent}>
           <Text style={styles.adjustmentDrawerTitle} numberOfLines={2}>
-            {expandedGroupIndex >= 0 && warmupGroups[expandedGroupIndex]?.exercises[activeExerciseIndex]?.exerciseName || t('adjustValues')}
+            {expandedGroupIndex >= 0 && warmupGroups[expandedGroupIndex]?.exercises[activeExerciseIndex]?.movementId || t('adjustValues')}
           </Text>
           
           {/* Get active exercise */}
@@ -587,9 +588,12 @@ export function WarmupExecutionScreen() {
                 const activeExercise = currentGroup.exercises[activeExerciseIndex];
                 if (!activeExercise) return null;
                 
-                const displayWeight = localValues[activeExercise.id]?.weight ?? activeExercise.weight ?? 0;
-                const displayReps = localValues[activeExercise.id]?.reps ?? activeExercise.reps ?? 0;
-                const repsUnit = activeExercise.isTimeBased ? 'secs' : 'reps';
+                const firstSet = activeExercise.sets[0];
+                const defaultWeight = firstSet?.weight ?? 0;
+                const defaultReps = activeExercise.mode === 'time' ? (firstSet?.durationSec ?? 0) : (firstSet?.reps ?? 0);
+                const displayWeight = localValues[activeExercise.id]?.weight ?? defaultWeight;
+                const displayReps = localValues[activeExercise.id]?.reps ?? defaultReps;
+                const repsUnit = activeExercise.mode === 'time' ? 'secs' : 'reps';
                 
                 return (
                   <View style={styles.drawerInputRow}>
@@ -1097,6 +1101,39 @@ const styles = StyleSheet.create({
     ...TYPOGRAPHY.bodyBold,
     color: COLORS.backgroundCanvas,
     fontSize: 18,
+  },
+  inlineStartButton: {
+    marginLeft: 4,
+    flexDirection: 'column',
+    gap: 4,
+    alignSelf: 'stretch',
+  },
+  inlineStartButtonInner: {
+    backgroundColor: COLORS.accentPrimary,
+    borderTopLeftRadius: 0,
+    borderTopRightRadius: BORDER_RADIUS.sm,
+    borderBottomLeftRadius: 0,
+    borderBottomRightRadius: 0,
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flex: 1,
+  },
+  inlineStartButtonText: {
+    ...TYPOGRAPHY.bodyBold,
+    color: COLORS.backgroundCanvas,
+    fontSize: 16,
+  },
+  inlineSetIndicator: {
+    backgroundColor: COLORS.text,
+    borderTopLeftRadius: 0,
+    borderTopRightRadius: 0,
+    borderBottomLeftRadius: 0,
+    borderBottomRightRadius: BORDER_RADIUS.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 8,
   },
   exerciseSeparator: {
     height: 1,

@@ -48,24 +48,31 @@ export type ExerciseInstance = {
   mode: ExerciseInstanceMode;
   sets: ExerciseInstanceSet[];
   restSec?: number;
+  isPerSide?: boolean; // if true, timer runs for one side, then switches to other side
+};
+
+// Extended version with cycle/superset support
+export type ExerciseInstanceWithCycle = ExerciseInstance & {
+  cycleId?: string; // optional ID to group exercises in a cycle/circuit
+  cycleOrder?: number; // order within the cycle (0-indexed)
 };
 
 // Warm Up Set Template (reusable warmup routine)
 export type WarmUpSetTemplate = {
   id: string;
   name: string;
-  items: ExerciseInstance[];
+  items: ExerciseInstanceWithCycle[];
   createdAt: number;
   updatedAt: number;
   lastUsedAt: number | null;
 };
 
-// For backward compatibility, alias WarmupItem to ExerciseInstance
-// This allows gradual migration
-export type WarmupItem = ExerciseInstance;
+// For backward compatibility, alias WarmupItem to ExerciseInstanceWithCycle
+// This allows cycle/superset support for warmups and accessories
+export type WarmupItem = ExerciseInstanceWithCycle;
 
 // Accessories use the same structure as warmups
-export type AccessoryItem = ExerciseInstance;
+export type AccessoryItem = ExerciseInstanceWithCycle;
 
 // ============================================
 // WORKOUT TEMPLATES (Reusable Definitions)

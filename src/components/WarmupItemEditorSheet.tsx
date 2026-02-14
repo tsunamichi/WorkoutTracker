@@ -9,7 +9,8 @@ import { IconAddLine, IconMinusLine } from './icons';
 import { useTranslation } from '../i18n/useTranslation';
 import { formatWeightForLoad, toDisplayWeight, fromDisplayWeight } from '../utils/weight';
 import { useStore } from '../store';
-import type { WarmupItem_DEPRECATED as WarmupItem } from '../types/training';
+import type { WarmupItem } from '../types/training';
+import { getDisplayValuesFromItem } from '../utils/exerciseMigration';
 
 interface WarmupItemEditorSheetProps {
   item: WarmupItem;
@@ -33,12 +34,15 @@ export function WarmupItemEditorSheet({
   const weightUnit = useKg ? 'kg' : 'lb';
   const weightStep = useKg ? 0.5 : 5;
   
-  const [exerciseName, setExerciseName] = useState(item.exerciseName);
-  const [sets, setSets] = useState(item.sets || 1);
-  const [reps, setReps] = useState(item.reps || 10);
-  const [weight, setWeight] = useState(item.weight || 0);
-  const [isTimeBased, setIsTimeBased] = useState(item.isTimeBased || false);
-  const [isPerSide, setIsPerSide] = useState(item.isPerSide || false);
+  // Extract display values from new structure
+  const displayValues = getDisplayValuesFromItem(item);
+  
+  const [exerciseName, setExerciseName] = useState(displayValues.exerciseName);
+  const [sets, setSets] = useState(displayValues.sets || 1);
+  const [reps, setReps] = useState(displayValues.reps || 10);
+  const [weight, setWeight] = useState(displayValues.weight || 0);
+  const [isTimeBased, setIsTimeBased] = useState(displayValues.isTimeBased || false);
+  const [isPerSide, setIsPerSide] = useState(displayValues.isPerSide || false);
   
   // Check if item is part of a cycle (to disable sets control)
   const isPartOfCycle = !!item.cycleId;
@@ -46,12 +50,13 @@ export function WarmupItemEditorSheet({
 
   // Reset form when item changes
   useEffect(() => {
-    setExerciseName(item.exerciseName);
-    setSets(item.sets || 1);
-    setReps(item.reps || 10);
-    setWeight(item.weight || 0);
-    setIsTimeBased(item.isTimeBased || false);
-    setIsPerSide(item.isPerSide || false);
+    const newDisplayValues = getDisplayValuesFromItem(item);
+    setExerciseName(newDisplayValues.exerciseName);
+    setSets(newDisplayValues.sets || 1);
+    setReps(newDisplayValues.reps || 10);
+    setWeight(newDisplayValues.weight || 0);
+    setIsTimeBased(newDisplayValues.isTimeBased || false);
+    setIsPerSide(newDisplayValues.isPerSide || false);
   }, [item]);
 
   const handleSave = () => {

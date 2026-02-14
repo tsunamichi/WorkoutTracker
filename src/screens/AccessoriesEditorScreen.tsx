@@ -11,6 +11,7 @@ import { formatWeightForLoad } from '../utils/weight';
 import { AccessoryItemEditorSheet } from '../components/AccessoryItemEditorSheet';
 import { AddAccessoryToCycleSheet } from '../components/AddAccessoryToCycleSheet';
 import type { AccessoryItem } from '../types/training';
+import { createNewExerciseItem, getDisplayValuesFromItem, migrateItemsArray } from '../utils/exerciseMigration';
 
 // Accessory Templates (Core work)
 const ACCESSORY_TEMPLATES = {
@@ -90,8 +91,9 @@ export function AccessoriesEditorScreen() {
   const workoutKey = route.params?.workoutKey;
   const template = getWorkoutTemplate(templateId);
   
+  // Migrate old items to new structure on load
   const [accessoryItems, setAccessoryItems] = useState<AccessoryItem[]>(
-    template?.accessoryItems || []
+    migrateItemsArray((template?.accessoryItems || []) as any)
   );
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
   const [addToCycleItemId, setAddToCycleItemId] = useState<string | null>(null);
@@ -116,14 +118,13 @@ export function AccessoriesEditorScreen() {
   const handleAddItem = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     
-    const newItem: AccessoryItem = {
-      id: `accessory-${Date.now()}-${Math.random()}`,
+    const newItem = createNewExerciseItem({
       exerciseName: '',
-      sets: 1,
-      reps: 10,
-      weight: 0,
+      totalSets: 1,
+      repsPerSet: 10,
+      weightPerSet: 0,
       isTimeBased: false,
-    };
+    });
     
     setAccessoryItems([...accessoryItems, newItem]);
     setEditingItemId(newItem.id);
@@ -134,11 +135,74 @@ export function AccessoriesEditorScreen() {
     setEditingItemId(itemId);
   };
 
-  const handleSaveItem = (itemId: string, updates: Partial<AccessoryItem>) => {
+  const handleSaveItem = (itemId: string, updates: any) => {
     setAccessoryItems(prev =>
-      prev.map(item =>
-        item.id === itemId ? { ...item, ...updates } : item
-      )
+      prev.map(item => {
+        if (item.id !== itemId) return item;
+        
+        // Convert old-style updates to new structure
+        const newSets = [...item.sets];
+        
+        // If exerciseName changed, update movementId
+        if (updates.exerciseName !== undefined) {
+          item = { ...item, movementId: updates.exerciseName };
+        }
+        
+        // If mode-related fields changed
+        if (updates.isTimeBased !== undefined) {
+          item = { ...item, mode: updates.isTimeBased ? 'time' : 'reps' };
+        }
+        
+        // If isPerSide changed
+        if (updates.isPerSide !== undefined) {
+          item = { ...item, isPerSide: updates.isPerSide };
+        }
+        
+        // If sets count changed, add/remove set objects
+        if (updates.sets !== undefined && updates.sets !== item.sets.length) {
+          const targetCount = updates.sets;
+          const currentCount = newSets.length;
+          
+          if (targetCount > currentCount) {
+            // Add more sets
+            const template = newSets[0] || { id: '', reps: 10, weight: 0 };
+            for (let i = currentCount; i < targetCount; i++) {
+              newSets.push({
+                id: `${item.id}-set-${i}-${Date.now()}`,
+                reps: template.reps,
+                durationSec: template.durationSec,
+                weight: template.weight,
+              });
+            }
+          } else {
+            // Remove excess sets
+            newSets.length = targetCount;
+          }
+        }
+        
+        // Update values in all sets if reps/weight changed
+        if (updates.reps !== undefined || updates.weight !== undefined) {
+          newSets.forEach(set => {
+            if (updates.reps !== undefined) {
+              if (item.mode === 'time') {
+                set.durationSec = updates.reps;
+                set.reps = undefined;
+              } else {
+                set.reps = updates.reps;
+                set.durationSec = undefined;
+              }
+            }
+            if (updates.weight !== undefined) {
+              set.weight = updates.weight > 0 ? updates.weight : undefined;
+            }
+          });
+        }
+        
+        return {
+          ...item,
+          sets: newSets,
+        };
+      })
     );
     setEditingItemId(null);
   };
@@ -167,7 +231,7 @@ export function AccessoriesEditorScreen() {
     setAddToCycleItemId(itemId);
   };
 
-  const handleAddItemToCycle = (itemId: string, newItem: Omit<AccessoryItem, 'id'>) => {
+  const handleAddItemToCycle = (itemId: string, newItemParams: any) => {
     const targetIndex = accessoryItems.findIndex(item => item.id === itemId);
     if (targetIndex === -1) return;
     
@@ -193,13 +257,17 @@ export function AccessoriesEditorScreen() {
       cycleOrder = Math.max(...cycleItems.map(item => item.cycleOrder ?? 0)) + 1;
     }
     
-    // Create the new item with cycle info
-    const newAccessoryItem: AccessoryItem = {
-      id: `accessory-${Date.now()}-${Math.random()}`,
-      ...newItem,
+    // Create the new item with cycle info using the helper
+    const newAccessoryItem = createNewExerciseItem({
+      exerciseName: newItemParams.exerciseName || '',
+      totalSets: newItemParams.sets || 1,
+      repsPerSet: newItemParams.reps || 10,
+      weightPerSet: newItemParams.weight || 0,
+      isTimeBased: newItemParams.isTimeBased || false,
+      isPerSide: newItemParams.isPerSide,
       cycleId,
       cycleOrder,
-    };
+    });
     
     // Insert the new item right after the target
     const updatedItems = [
@@ -237,11 +305,17 @@ export function AccessoriesEditorScreen() {
         cycleId = cycleIdMap.get(cycleId);
       }
       
-      return {
-        id: `accessory-${Date.now()}-${Math.random()}`,
-        ...item,
+      // Create using new structure
+      return createNewExerciseItem({
+        exerciseName: item.exerciseName,
+        totalSets: item.sets,
+        repsPerSet: item.reps,
+        weightPerSet: item.weight,
+        isTimeBased: item.isTimeBased,
+        isPerSide: item.isPerSide,
         cycleId,
-      };
+        cycleOrder: item.cycleOrder,
+      });
     });
     
     // Replace existing accessory items with template items
@@ -256,15 +330,16 @@ export function AccessoriesEditorScreen() {
     // If no workoutKey provided, generate a standalone one
     const executionWorkoutKey = workoutKey || `accessory-standalone-${Date.now()}`;
     
-    console.log('🚀 Replacing with AccessoriesExecution:', {
+    console.log('🚀 Replacing with ExerciseExecution (core):', {
       workoutKey: executionWorkoutKey,
       workoutTemplateId: template.id,
     });
     
     // Replace current screen so back button goes to workout execution (not editor)
-    (navigation as any).replace('AccessoriesExecution', {
+    (navigation as any).replace('ExerciseExecution', {
       workoutKey: executionWorkoutKey,
       workoutTemplateId: template.id,
+      type: 'core',
     });
   };
 
@@ -343,6 +418,7 @@ export function AccessoriesEditorScreen() {
 
         {accessoryItems.length === 0 ? null : (
           accessoryItems.map((item, index) => {
+            const displayValues = getDisplayValuesFromItem(item);
             const isPartOfCycle = !!item.cycleId;
             const isNextInCycle = index < accessoryItems.length - 1 && 
               item.cycleId && 
@@ -364,7 +440,7 @@ export function AccessoriesEditorScreen() {
                       <View style={styles.accessoryItemInfo}>
                         <View style={styles.accessoryItemNameRow}>
                           <Text style={styles.accessoryItemName}>
-                            {item.exerciseName || t('exerciseName')}
+                            {displayValues.exerciseName || t('exerciseName')}
                           </Text>
                           {isPartOfCycle && item.cycleOrder !== undefined && (
                             <View style={styles.cycleBadge}>
@@ -375,7 +451,7 @@ export function AccessoriesEditorScreen() {
                           )}
                         </View>
                         <Text style={styles.accessoryItemDetails}>
-                          {formatWeightForLoad(item.weight || 0, useKg)} {weightUnit} • {item.sets} {item.sets === 1 ? t('set') : t('setsUnit')} × {item.reps} {item.isTimeBased ? 'sec' : 'reps'}
+                          {formatWeightForLoad(displayValues.weight || 0, useKg)} {weightUnit} • {displayValues.sets} {displayValues.sets === 1 ? t('set') : t('setsUnit')} × {displayValues.reps} {displayValues.isTimeBased ? 'sec' : 'reps'}
                         </Text>
                       </View>
                       <TouchableOpacity

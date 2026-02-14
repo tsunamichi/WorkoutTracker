@@ -16,6 +16,7 @@ import { DiagonalLinePattern } from '../components/common/DiagonalLinePattern';
 import { useTranslation } from '../i18n/useTranslation';
 import { formatWeightForLoad, toDisplayWeight, fromDisplayWeight } from '../utils/weight';
 import type { WarmupItem_DEPRECATED as WarmupItem, AccessoryItem_DEPRECATED as AccessoryItem, WorkoutTemplateExercise } from '../types/training';
+import { isDeprecatedItem, getDisplayValuesFromItem } from '../utils/exerciseMigration';
 import dayjs from 'dayjs';
 
 // Enable LayoutAnimation on Android
@@ -101,10 +102,35 @@ export function ExerciseExecutionScreen() {
     refreshKey,
   });
   
+  // Helper: normalize any item (old or new format) to the deprecated WarmupItem shape
+  // that the rest of this screen expects
+  const normalizeToDeprecated = (item: any): WarmupItem => {
+    if (isDeprecatedItem(item)) {
+      return item as WarmupItem;
+    }
+    // New ExerciseInstanceWithCycle format → convert to deprecated shape
+    const display = getDisplayValuesFromItem(item);
+    return {
+      id: item.id,
+      exerciseName: display.exerciseName,
+      sets: display.sets,
+      reps: display.reps,
+      weight: display.weight,
+      isTimeBased: display.isTimeBased,
+      isPerSide: display.isPerSide ?? false,
+      cycleId: display.cycleId,
+      cycleOrder: display.cycleOrder,
+    } as WarmupItem;
+  };
+
   // Get the appropriate items based on type
   const items = useMemo(() => {
-    if (type === 'warmup') return template?.warmupItems || [];
-    if (type === 'core') return template?.accessoryItems || [];
+    if (type === 'warmup') {
+      return (template?.warmupItems || []).map(normalizeToDeprecated);
+    }
+    if (type === 'core') {
+      return (template?.accessoryItems || []).map(normalizeToDeprecated);
+    }
     // For main workout, convert WorkoutTemplateExercise to WarmupItem format
     if (type === 'main') {
       return (template?.items || []).map(item => {
@@ -2099,7 +2125,7 @@ const styles = StyleSheet.create({
   headerContent: {
     paddingHorizontal: SPACING.xxl,
     paddingTop: SPACING.md,
-    marginBottom: SPACING.xxxl,
+    marginBottom: SPACING.md,
   },
   headerTitle: {
     ...TYPOGRAPHY.h2,
@@ -2711,7 +2737,7 @@ const styles = StyleSheet.create({
   sectionLabel: {
     ...TYPOGRAPHY.meta,
     color: COLORS.text,
-    marginTop: 24,
+    marginTop: SPACING.xs,
     marginBottom: SPACING.md,
   },
 });

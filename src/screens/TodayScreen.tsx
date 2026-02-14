@@ -1,12 +1,13 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Animated, Modal, ScrollView } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Modal, ScrollView } from 'react-native';
 import Svg, { Circle, Path } from 'react-native-svg';
 import * as Haptics from 'expo-haptics';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { useStore } from '../store';
 import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS, CARDS } from '../constants';
-import { IconCheck, IconSwap, IconAdd, IconSettings, IconHistory } from '../components/icons';
+import { IconCheck, IconSwap, IconAdd, IconSettings, IconCalendar } from '../components/icons';
+import { ExpandableCalendarStrip } from '../components/calendar/ExpandableCalendarStrip';
 import { DiagonalLinePattern } from '../components/common/DiagonalLinePattern';
 import dayjs from 'dayjs';
 import isoWeek from 'dayjs/plugin/isoWeek';
@@ -50,13 +51,13 @@ export function TodayScreen({ onDateChange, onOpenSwapDrawer, onOpenAddWorkout }
     getScheduledWorkout,
     getWarmupCompletion,
     getMainCompletion,
+    cyclePlans,
   } = useStore();
   const { t } = useTranslation();
   const today = dayjs();
   
   // State for selected date (defaults to today)
   const [selectedDate, setSelectedDate] = useState(today.format('YYYY-MM-DD'));
-  const [weekOffset, setWeekOffset] = useState(0); // 0 = current week, -1 = last week, 1 = next week, etc.
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   
   // Force refresh when screen comes into focus (e.g., after scheduling a workout)
@@ -65,11 +66,6 @@ export function TodayScreen({ onDateChange, onOpenSwapDrawer, onOpenAddWorkout }
       setRefreshTrigger(prev => prev + 1);
     }, [scheduledWorkouts])
   );
-  
-  // Animation values
-  const dayScales = useRef(DAYS_SHORT.map(() => new Animated.Value(1))).current;
-  const [dayPositions, setDayPositions] = useState<number[]>([]);
-  const previousDayIndex = useRef<number>(-1);
   
   // Initialize selected date to today
   useEffect(() => {
@@ -88,8 +84,8 @@ export function TodayScreen({ onDateChange, onOpenSwapDrawer, onOpenAddWorkout }
   
   // (debug logging removed)
   
-  // Get start of week based on offset (Monday)
-  const weekStart = today.startOf('isoWeek').add(weekOffset, 'week');
+  // Get start of week based on selected date (Monday)
+  const weekStart = dayjs(selectedDate).startOf('isoWeek');
   
   // Always show "Schedule" - plan info is shown on individual cards
   const currentWeekLabel = t('schedule');
@@ -133,55 +129,8 @@ export function TodayScreen({ onDateChange, onOpenSwapDrawer, onOpenAddWorkout }
     refreshTrigger
   ]);
   
-  // Get selected day's workout
+  // Get selected day's workout (weekDays always covers the selected date's week)
   const selectedDay = weekDays.find(d => d.date === selectedDate);
-  const selectedDayIndex = weekDays.findIndex(d => d.date === selectedDate);
-  
-
-  // Animate button press effect when day changes
-  useEffect(() => {
-    if (selectedDayIndex !== -1) {
-      // Unpress previous day (scale up slightly, then back to normal)
-      if (previousDayIndex.current !== -1 && previousDayIndex.current !== selectedDayIndex) {
-        Animated.sequence([
-          Animated.spring(dayScales[previousDayIndex.current], {
-            toValue: 1.05,
-            useNativeDriver: true,
-            tension: 200,
-            friction: 25,
-          }),
-          Animated.spring(dayScales[previousDayIndex.current], {
-            toValue: 1,
-            useNativeDriver: true,
-            tension: 200,
-            friction: 25,
-          }),
-        ]).start();
-      }
-      
-      // Press effect on new day: scale down then back up (subtle, starts fast, slows down)
-      Animated.sequence([
-        Animated.spring(dayScales[selectedDayIndex], {
-          toValue: 0.95,
-          useNativeDriver: true,
-          tension: 200,
-          friction: 25,
-        }),
-        Animated.spring(dayScales[selectedDayIndex], {
-          toValue: 1,
-          useNativeDriver: true,
-          tension: 200,
-          friction: 25,
-        }),
-      ]).start();
-      
-      // Update previous index
-      previousDayIndex.current = selectedDayIndex;
-      
-      // Haptic feedback
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    }
-  }, [selectedDayIndex]);
   
   // Check if there are eligible workouts to swap with (using new architecture)
   const hasEligibleWorkoutsToSwap = (currentDate: string) => {
@@ -250,8 +199,9 @@ export function TodayScreen({ onDateChange, onOpenSwapDrawer, onOpenAddWorkout }
   return (
       <View style={styles.gradient}>
         <SafeAreaView style={[styles.container, { paddingBottom: 88 }]} edges={[]}>
-          {/* Header with Schedule Info and Avatar - Fixed - Always shown */}
-          <View style={[styles.header, { paddingTop: insets.top }]}>
+          {/* Unified header + calendar card */}
+          <View style={[styles.calendarCard, { paddingTop: insets.top }]}>
+            {/* Header row: title + icons */}
             <View style={styles.topBar}>
               <Text style={styles.headerTitle}>
                 {currentWeekLabel}
@@ -259,10 +209,13 @@ export function TodayScreen({ onDateChange, onOpenSwapDrawer, onOpenAddWorkout }
               <View style={styles.headerRight}>
                 <TouchableOpacity
                   style={styles.settingsButton}
-                  onPress={() => (navigation as any).navigate('History')}
+                  onPress={() => {
+                    setSelectedDate(today.format('YYYY-MM-DD'));
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  }}
                   activeOpacity={1}
                 >
-                  <IconHistory size={24} color="#000000" />
+                  <IconCalendar size={24} color="#000000" />
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={styles.settingsButton}
@@ -273,60 +226,16 @@ export function TodayScreen({ onDateChange, onOpenSwapDrawer, onOpenAddWorkout }
                 </TouchableOpacity>
               </View>
             </View>
+
+            {/* Calendar strip */}
+            <ExpandableCalendarStrip
+              selectedDate={selectedDate}
+              onSelectDate={handleDayChange}
+              cyclePlans={cyclePlans}
+              getScheduledWorkout={getScheduledWorkout}
+              getMainCompletion={getMainCompletion}
+            />
           </View>
-          
-          {/* Week Calendar - Always shown and interactive */}
-          <View style={styles.weekCalendar}>
-            {weekDays.map((day, index) => {
-              const isSelected = day.date === selectedDate;
-              const isToday = day.isToday;
-              const isCompleted = day.isCompleted;
-                
-                return (
-                  <View
-                    key={index}
-                    style={styles.dayContainer}
-                  >
-                  <TouchableOpacity
-                    style={styles.dayTouchable}
-                    onPress={() => handleDayChange(day.date)}
-                    activeOpacity={1}
-                  >
-                    <View style={styles.dayButtonWrapper}>
-                      {isToday && (
-                        <View style={styles.dayLabelContainer}>
-                          <Text style={styles.dayLabel}>{day.dateObj.format('ddd')}</Text>
-                        </View>
-                      )}
-                      <Animated.View
-                        style={{
-                          transform: [{ scale: dayScales[index] }]
-                        }}
-                      >
-                        <View
-                          style={[
-                            styles.dayButton,
-                            { backgroundColor: COLORS.activeCard },
-                            isSelected && {
-                              backgroundColor: COLORS.text,
-                              borderWidth: 1,
-                              borderColor: COLORS.text,
-                            }
-                          ]}
-                        >
-                          <View style={[styles.dayButtonBorder, isSelected && styles.dayButtonBorderActive]}>
-                            <Text style={isSelected ? styles.dayNumberToday : styles.dayNumber}>
-                              {day.dayNumber}
-                            </Text>
-                          </View>
-                        </View>
-                      </Animated.View>
-                    </View>
-                  </TouchableOpacity>
-                  </View>
-                );
-              })}
-            </View>
             
             {/* Day Detail Content */}
             {(
@@ -587,9 +496,13 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
   },
   
-  // Header
-  header: {
-    marginBottom: SPACING.xl,
+  // Unified header + calendar card
+  calendarCard: {
+    backgroundColor: COLORS.backgroundContainer,
+    borderBottomLeftRadius: 24,
+    borderBottomRightRadius: 24,
+    paddingBottom: SPACING.xs,
+    marginBottom: SPACING.md,
   },
   topBar: {
     flexDirection: 'row',
@@ -612,94 +525,6 @@ const styles = StyleSheet.create({
     height: 40,
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  
-  // Week Calendar
-  weekCalendar: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: SPACING.xl,
-    gap: SPACING.sm,
-    paddingHorizontal: 24,
-    position: 'relative',
-  },
-  weekCalendarDisabled: {
-    opacity: 0.5,
-  },
-  dayContainer: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  dayTouchable: {
-    alignItems: 'center',
-    zIndex: 1,
-  },
-  dayButtonWrapper: {
-    position: 'relative',
-    alignItems: 'center',
-  },
-  dayLabelContainer: {
-    position: 'absolute',
-    top: 48,
-    left: 0,
-    right: 0,
-    alignItems: 'center',
-    justifyContent: 'center',
-    zIndex: 2,
-  },
-  dayLabel: {
-    ...TYPOGRAPHY.note,
-    color: '#1B1B1B',
-  },
-  dayButtonBlackShadow: {
-    // Black shadow: -1, -1, 8% opacity, 1px blur
-    shadowColor: '#000000',
-    shadowOffset: { width: -1, height: -1 },
-    shadowOpacity: 0.08,
-    shadowRadius: 1,
-    elevation: 2,
-  },
-  dayButtonOuterShadow: {
-    // White shadow: 1, 1, 1px blur
-    shadowColor: '#FFFFFF',
-    shadowOffset: { width: 1, height: 1 },
-    shadowOpacity: 1,
-    shadowRadius: 1,
-    elevation: 1,
-  },
-  dayButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    borderCurve: 'continuous',
-    alignItems: 'center',
-    justifyContent: 'center',
-    overflow: 'hidden',
-  },
-  dayButtonWithShadow: {
-    // Dark shadow (inset appearance)
-    shadowColor: '#000',
-    shadowOffset: { width: -2, height: -2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 6,
-    elevation: 3,
-  },
-  dayButtonBorder: {
-    width: '100%',
-    height: '100%',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  dayButtonBorderActive: {
-    // No inner border on active state
-  },
-  dayNumber: {
-    ...TYPOGRAPHY.metaBold,
-    color: LIGHT_COLORS.secondary,
-  },
-  dayNumberToday: {
-    ...TYPOGRAPHY.metaBold,
-    color: COLORS.backgroundCanvas,
   },
   
   // Workout Card

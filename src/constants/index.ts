@@ -142,6 +142,16 @@ export const COLORS = {
   core: '#C7CEEA',
 };
 
+// Muted background colors for cycle/plan grouping on the calendar
+export const CYCLE_COLORS = [
+  '#D6E4F0', // soft blue
+  '#D9F0D6', // soft green
+  '#F0E8D6', // soft amber
+  '#F0D6DE', // soft rose
+  '#E0D6F0', // soft violet
+  '#D6F0EC', // soft teal
+];
+
 export const GRADIENTS = {
   accentPrimary: {
     colors: [ACCENT_PRIMARY, '#FF8C38'] as const,
