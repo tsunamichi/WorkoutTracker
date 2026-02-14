@@ -11,7 +11,7 @@ import Animated, {
 import * as Haptics from 'expo-haptics';
 import dayjs from 'dayjs';
 import isoWeek from 'dayjs/plugin/isoWeek';
-import { COLORS, SPACING, TYPOGRAPHY, CYCLE_COLORS } from '../../constants';
+import { COLORS, SPACING, TYPOGRAPHY } from '../../constants';
 import { CalendarDayButton } from './CalendarDayButton';
 import { DragHandle } from './DragHandle';
 import type { CyclePlan, ScheduledWorkout } from '../../types/training';
@@ -46,6 +46,7 @@ type DayData = {
   hasWorkout: boolean;
   isCompleted: boolean;
   cycleColor?: string;
+  isInActiveCycle: boolean;
 };
 
 export function ExpandableCalendarStrip({
@@ -62,26 +63,36 @@ export function ExpandableCalendarStrip({
   const expansion = useSharedValue(0);
   const isExpanded = useSharedValue(false);
 
-  // Build cycle color map: date -> color
-  const cycleColorMap = useMemo(() => {
-    const map: Record<string, string> = {};
-    const sortedPlans = [...cyclePlans]
-      .filter(p => p.active || !p.archivedAt)
+  // Build cycle color map and plan ID map: date -> color, date -> planId
+  // Active cycles use info color, past (archived) cycles use failure color
+  const { cycleColorMap, dateToPlanId } = useMemo(() => {
+    const colorMap: Record<string, string> = {};
+    const planIdMap: Record<string, string> = {};
+    const allPlans = [...cyclePlans]
+      .filter(p => p.active || p.archivedAt)
       .sort((a, b) => b.startDate.localeCompare(a.startDate));
 
-    sortedPlans.forEach((plan, planIndex) => {
-      const colorIndex = planIndex % CYCLE_COLORS.length;
-      const color = CYCLE_COLORS[colorIndex];
+    allPlans.forEach((plan) => {
+      const color = plan.active ? COLORS.success : `${COLORS.failure}29`;
       const start = dayjs(plan.startDate);
       const totalDays = plan.weeks * 7;
       for (let d = 0; d < totalDays; d++) {
         const dateStr = start.add(d, 'day').format('YYYY-MM-DD');
-        if (!map[dateStr]) {
-          map[dateStr] = color;
+        if (!colorMap[dateStr]) {
+          colorMap[dateStr] = color;
+          planIdMap[dateStr] = plan.id;
         }
       }
     });
-    return map;
+    return { cycleColorMap: colorMap, dateToPlanId: planIdMap };
+  }, [cyclePlans]);
+
+  // Which cycle plan does the selected date belong to?
+  const selectedPlanId = dateToPlanId[selectedDate] || null;
+
+  // Set of active plan IDs for quick lookup
+  const activePlanIds = useMemo(() => {
+    return new Set(cyclePlans.filter(p => p.active).map(p => p.id));
   }, [cyclePlans]);
 
   // Build 5 weeks of data
@@ -104,6 +115,7 @@ export function ExpandableCalendarStrip({
           hasWorkout: !!sw,
           isCompleted,
           cycleColor: cycleColorMap[dateStr],
+          isInActiveCycle: activePlanIds.has(dateToPlanId[dateStr]),
         });
       }
       weeks.push(days);
@@ -111,13 +123,14 @@ export function ExpandableCalendarStrip({
     return weeks;
   }, [centerWeekStart, today, getScheduledWorkout, getMainCompletion, cycleColorMap]);
 
-  // Compute row-level cycle band color: if any day in the week is in a cycle, use that color
+  // Compute row-level cycle band color: only show for weeks belonging to the selected date's cycle
   const weekBandColors = useMemo(() => {
     return weeksData.map((weekDays) => {
-      const firstCycleDay = weekDays.find(d => d.cycleColor);
-      return firstCycleDay?.cycleColor || null;
+      if (!selectedPlanId) return null;
+      const matchingDay = weekDays.find(d => d.cycleColor && dateToPlanId[d.date] === selectedPlanId);
+      return matchingDay?.cycleColor || null;
     });
-  }, [weeksData]);
+  }, [weeksData, dateToPlanId, selectedPlanId]);
 
   // Month/year label
   const expandedLabel = useMemo(() => {
@@ -229,6 +242,7 @@ export function ExpandableCalendarStrip({
               isCompleted={day.isCompleted}
               hasWorkout={day.hasWorkout}
               cycleColor={bandColor}
+              isInActiveCycle={day.isInActiveCycle}
               onPress={() => handleSelectDate(day.date)}
             />
           </View>

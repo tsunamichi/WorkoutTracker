@@ -9,6 +9,7 @@ interface CalendarDayButtonProps {
   isCompleted: boolean;
   hasWorkout: boolean;
   cycleColor?: string;
+  isInActiveCycle?: boolean;
   onPress: () => void;
 }
 
@@ -19,6 +20,7 @@ export function CalendarDayButton({
   isCompleted,
   hasWorkout,
   cycleColor,
+  isInActiveCycle,
   onPress,
 }: CalendarDayButtonProps) {
   return (
@@ -32,14 +34,14 @@ export function CalendarDayButton({
           styles.dayButton,
           isToday && !isSelected && styles.dayButtonToday,
           isSelected && !isToday && styles.dayButtonSelected,
-          isSelected && isToday && styles.dayButtonTodaySelected,
+          isSelected && isToday && (isInActiveCycle ? styles.dayButtonSelected : styles.dayButtonTodaySelected),
         ]}
       >
         <Text
           style={[
             styles.dayNumber,
             isToday && !isSelected && styles.dayNumberToday,
-            isToday && isSelected && styles.dayNumberSelected,
+            isSelected && styles.dayNumberSelected,
           ]}
         >
           {dayNumber}
@@ -72,10 +74,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   dayButtonToday: {
-    // No background box — just the label color changes
+    borderWidth: 1.5,
+    borderColor: COLORS.successBright,
   },
   dayButtonSelected: {
-    backgroundColor: COLORS.info,
+    backgroundColor: COLORS.successBright,
   },
   dayButtonTodaySelected: {
     backgroundColor: COLORS.accentPrimary,

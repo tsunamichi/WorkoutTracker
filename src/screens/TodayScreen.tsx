@@ -312,8 +312,18 @@ export function TodayScreen({ onDateChange, onOpenSwapDrawer, onOpenAddWorkout }
                           
                           {/* Footer: Action Button */}
                           <View style={styles.workoutCardFooter} pointerEvents="none">
-                            <View style={[styles.startButton, isCompleted && styles.startButtonCompleted]}>
-                              <Text style={[styles.startButtonText, isCompleted && styles.startButtonTextCompleted]}>{buttonState}</Text>
+                            <View style={[
+                              styles.startButton,
+                              isCompleted && styles.startButtonCompleted,
+                              !isCompleted && selectedDate !== today.format('YYYY-MM-DD') && dayjs(selectedDate).isBefore(today, 'day') && styles.startButtonPast,
+                              !isCompleted && dayjs(selectedDate).isAfter(today, 'day') && styles.startButtonFuture,
+                            ]}>
+                              <Text style={[
+                                styles.startButtonText,
+                                isCompleted && styles.startButtonTextCompleted,
+                                !isCompleted && selectedDate !== today.format('YYYY-MM-DD') && dayjs(selectedDate).isBefore(today, 'day') && styles.startButtonTextPast,
+                                !isCompleted && dayjs(selectedDate).isAfter(today, 'day') && styles.startButtonTextFuture,
+                              ]}>{buttonState}</Text>
                             </View>
                           </View>
                         </>
@@ -629,6 +639,12 @@ const styles = StyleSheet.create({
   startButtonCompleted: {
     backgroundColor: COLORS.success,
   },
+  startButtonPast: {
+    backgroundColor: COLORS.accentPrimaryDimmed,
+  },
+  startButtonFuture: {
+    backgroundColor: 'transparent',
+  },
   startButtonText: {
     ...TYPOGRAPHY.metaBold,
     color: COLORS.backgroundCanvas,
@@ -636,6 +652,12 @@ const styles = StyleSheet.create({
   },
   startButtonTextCompleted: {
     color: COLORS.successBright,
+  },
+  startButtonTextPast: {
+    color: COLORS.accentPrimary,
+  },
+  startButtonTextFuture: {
+    color: COLORS.textMeta,
   },
   
   // Completed Badge

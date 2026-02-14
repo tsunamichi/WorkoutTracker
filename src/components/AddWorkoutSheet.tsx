@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
 import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS, CARDS } from '../constants';
 import { IconAdd } from './icons';
@@ -14,6 +14,14 @@ const LIGHT_COLORS = {
   textMeta: '#8E8E93',
 };
 
+interface LatestCycleInfo {
+  planId: string;
+  planName: string;
+  workoutCount: number;
+  templateNames: string[];
+  finishedLabel: string;
+}
+
 interface AddWorkoutSheetProps {
   visible: boolean;
   onClose: () => void;
@@ -22,6 +30,8 @@ interface AddWorkoutSheetProps {
   onSelectTemplate: (templateId: string) => void;
   onCreateBlank: () => void;
   onCreateWithAI: () => void;
+  latestCycleInfo?: LatestCycleInfo | null;
+  onRepeatCycle?: () => void;
 }
 
 /**
@@ -39,6 +49,8 @@ export function AddWorkoutSheet({
   onSelectTemplate,
   onCreateBlank,
   onCreateWithAI,
+  latestCycleInfo,
+  onRepeatCycle,
 }: AddWorkoutSheetProps) {
   const { t } = useTranslation();
   const dateLabel = dayjs(selectedDate).format('MMM D');
@@ -74,7 +86,7 @@ export function AddWorkoutSheet({
 
               {/* AI Generation */}
               <TouchableOpacity
-                style={styles.aiCard}
+                style={styles.optionCard}
                 onPress={() => {
                   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                   onCreateWithAI();
@@ -82,12 +94,34 @@ export function AddWorkoutSheet({
                 activeOpacity={0.85}
               >
                 <View style={styles.optionCardInner}>
-                  <IconAdd size={24} color={COLORS.accentPrimary} />
-                  <Text style={[styles.optionTitle, { color: COLORS.accentPrimary }]}>{t('generateWithAI')}</Text>
+                  <IconAdd size={24} color={COLORS.text} />
+                  <Text style={styles.optionTitle}>{t('generateWithAI')}</Text>
                   <Text style={styles.optionSubtitle}>{t('singleOrMultiDay')}</Text>
                 </View>
               </TouchableOpacity>
             </View>
+
+            {/* Repeat Latest Cycle */}
+            {latestCycleInfo && onRepeatCycle && (
+              <TouchableOpacity
+                style={styles.repeatCycleButton}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  onRepeatCycle();
+                }}
+                activeOpacity={0.85}
+              >
+                <Text style={styles.repeatCycleTitle}>{t('repeatCycle')}</Text>
+                {latestCycleInfo.templateNames.length > 0 && (
+                  <Text style={styles.repeatCycleTemplates} numberOfLines={2}>
+                    {latestCycleInfo.templateNames.join('  ·  ')}
+                  </Text>
+                )}
+                <Text style={styles.repeatCycleSubtitle}>
+                  {latestCycleInfo.workoutCount} {t('workoutsCountLabel')} - {latestCycleInfo.finishedLabel}
+                </Text>
+              </TouchableOpacity>
+            )}
           </View>
 
           {/* Part 2: Existing Templates */}
@@ -162,10 +196,32 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     gap: SPACING.sm,
   },
-  aiCard: {
-    flex: 1,
+  repeatCycleButton: {
     backgroundColor: COLORS.accentPrimaryDimmed,
-    borderRadius: BORDER_RADIUS.lg,
+    borderRadius: BORDER_RADIUS.md,
+    borderWidth: 1,
+    borderColor: COLORS.accentPrimary,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+    paddingVertical: SPACING.lg,
+    paddingHorizontal: 24,
+    marginTop: SPACING.md,
+  },
+  repeatCycleTitle: {
+    ...TYPOGRAPHY.bodyBold,
+    color: COLORS.accentPrimary,
+  },
+  repeatCycleTemplates: {
+    ...TYPOGRAPHY.meta,
+    color: COLORS.text,
+    marginTop: 4,
+    textAlign: 'center',
+  },
+  repeatCycleSubtitle: {
+    ...TYPOGRAPHY.meta,
+    color: COLORS.accentPrimary,
+    opacity: 0.7,
+    marginTop: 4,
   },
   optionTitle: {
     ...TYPOGRAPHY.bodyBold,

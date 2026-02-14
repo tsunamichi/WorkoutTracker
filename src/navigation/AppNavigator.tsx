@@ -100,7 +100,7 @@ function TabNavigator() {
   const navigation = useNavigation();
   const route = useRoute();
   const insets = useSafeAreaInsets();
-  const { cycles, cyclePlans, getActiveCyclePlan, swapWorkoutAssignments, workoutTemplates, scheduleWorkout, detectCycleConflicts, applyCyclePlan, updateCyclePlan } = useStore();
+  const { cycles, cyclePlans, getActiveCyclePlan, swapWorkoutAssignments, workoutTemplates, scheduleWorkout, detectCycleConflicts, applyCyclePlan, updateCyclePlan, repeatCyclePlan } = useStore();
   const { t } = useTranslation();
   const [activeTab, setActiveTab] = React.useState<'Schedule' | 'Progress'>('Schedule');
   const [isViewingToday, setIsViewingToday] = React.useState(true);
@@ -248,6 +248,76 @@ function TabNavigator() {
   const handleCreateWithAI = () => {
     setAddWorkoutSheetVisible(false);
     (navigation as any).navigate('AIWorkoutCreation', { mode: 'plan' });
+  };
+  
+  // Compute latest archived cycle plan info for "Repeat cycle" button
+  const latestCycleInfo = React.useMemo(() => {
+    const archivedPlans = cyclePlans
+      .filter(p => !p.active && p.archivedAt)
+      .sort((a, b) => (b.archivedAt || '').localeCompare(a.archivedAt || ''));
+    const latestPlan = archivedPlans[0];
+    if (!latestPlan) return null;
+
+    const daysPerWeek = Object.values(latestPlan.templateIdsByWeekday).filter(Boolean).length;
+    const workoutCount = daysPerWeek * latestPlan.weeks;
+
+    // Collect unique template names for the cycle
+    const uniqueTemplateIds = [...new Set(Object.values(latestPlan.templateIdsByWeekday).filter(Boolean))] as string[];
+    const templateNames = uniqueTemplateIds
+      .map(id => workoutTemplates.find(wt => wt.id === id)?.name)
+      .filter(Boolean) as string[];
+
+    const archivedDate = dayjs(latestPlan.archivedAt);
+    const now = dayjs();
+    const daysAgo = now.diff(archivedDate, 'day');
+
+    let finishedLabel: string;
+    if (daysAgo === 0) finishedLabel = t('finishedToday');
+    else if (daysAgo === 1) finishedLabel = t('finishedYesterday');
+    else finishedLabel = t('finishedDaysAgo').replace('{n}', String(daysAgo));
+
+    return {
+      planId: latestPlan.id,
+      planName: latestPlan.name,
+      workoutCount,
+      templateNames,
+      finishedLabel,
+    };
+  }, [cyclePlans, workoutTemplates, t]);
+
+  // Filter out templates that belong to cycle plans so the drawer only shows standalone workouts
+  const standaloneTemplates = React.useMemo(() => {
+    const cycleTemplateIds = new Set<string>();
+    for (const plan of cyclePlans) {
+      for (const templateId of Object.values(plan.templateIdsByWeekday)) {
+        if (templateId) cycleTemplateIds.add(templateId);
+      }
+    }
+    return workoutTemplates.filter(t => !cycleTemplateIds.has(t.id));
+  }, [workoutTemplates, cyclePlans]);
+
+  // Handler for repeating the latest archived cycle with latest exercise logs
+  const handleRepeatCycle = async () => {
+    setAddWorkoutSheetVisible(false);
+    if (!latestCycleInfo) return;
+
+    const newPlanId = await repeatCyclePlan(latestCycleInfo.planId, addWorkoutDate);
+    if (!newPlanId) return;
+
+    // Try to apply the new plan
+    const result = await applyCyclePlan(newPlanId);
+
+    if (result.success) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } else if ('conflicts' in result && result.conflicts.length > 0) {
+      // Navigate to conflict resolution screen
+      const newPlan = useStore.getState().cyclePlans.find(p => p.id === newPlanId);
+      (navigation as any).navigate('CycleConflicts', {
+        plan: newPlan,
+        conflicts: result.conflicts,
+        planId: newPlanId,
+      });
+    }
   };
   
   // NEW: Handler for extracting a specific day from a plan
@@ -734,10 +804,12 @@ function TabNavigator() {
         visible={addWorkoutSheetVisible}
         onClose={() => setAddWorkoutSheetVisible(false)}
         selectedDate={addWorkoutDate}
-        workoutTemplates={workoutTemplates}
+        workoutTemplates={standaloneTemplates}
         onSelectTemplate={handleSelectTemplate}
         onCreateBlank={handleCreateBlank}
         onCreateWithAI={handleCreateWithAI}
+        latestCycleInfo={latestCycleInfo}
+        onRepeatCycle={handleRepeatCycle}
       />
       
       {/* NEW: Plan Selection Sheet - Choose cycle plan and start date */}

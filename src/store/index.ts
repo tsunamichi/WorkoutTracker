@@ -107,6 +107,7 @@ interface WorkoutStore {
   archiveCyclePlan: (planId: string) => Promise<void>;
   applyCyclePlan: (planId: string, resolutionMap?: ConflictResolutionMap) => Promise<PlanApplySummary | { success: false; conflicts: ConflictItem[] }>;
   duplicateCyclePlan: (planId: string) => Promise<string | null>;
+  repeatCyclePlan: (planId: string, startDate: string) => Promise<string | null>;
   getActiveCyclePlan: () => CyclePlan | undefined;
   generateScheduledWorkoutsFromCycle: (planId: string) => Promise<void>;
   detectCycleConflicts: (plan: CyclePlan) => import('../types/training').ConflictItem[];
@@ -2298,6 +2299,100 @@ export const useStore = create<WorkoutStore>((set, get) => ({
       archivedAt: undefined,
       createdAt: nowIso,
       updatedAt: nowIso,
+      templateIdsByWeekday: newTemplateIdsByWeekday,
+    };
+
+    const plans = [newPlan, ...get().cyclePlans];
+    set({ cyclePlans: plans });
+    await storage.saveCyclePlans(plans);
+
+    return newPlanId;
+  },
+
+  repeatCyclePlan: async (planId, startDate) => {
+    const plan = get().cyclePlans.find(p => p.id === planId);
+    if (!plan) return null;
+
+    const nowIso = new Date().toISOString();
+    const newPlanId = `cp-${Date.now()}`;
+    const detailedProgress = get().detailedWorkoutProgress;
+
+    // Helper: find latest logged weight for an exercise from all workout progress records
+    const getLatestWeight = (exerciseId: string): number | undefined => {
+      let latestDate = '';
+      let latestWeight: number | undefined;
+
+      for (const wp of Object.values(detailedProgress)) {
+        for (const ep of Object.values(wp.exercises)) {
+          if (ep.exerciseId === exerciseId && !ep.skipped) {
+            const completedSets = ep.sets.filter(s => s.completed && s.weight > 0);
+            if (completedSets.length > 0 && wp.lastUpdated > latestDate) {
+              latestDate = wp.lastUpdated;
+              // Use the last completed set's weight (working weight)
+              latestWeight = completedSets[completedSets.length - 1].weight;
+            }
+          }
+        }
+      }
+
+      return latestWeight;
+    };
+
+    // Duplicate templates with pre-filled weights from latest logs
+    const oldToNew = new Map<string, string>();
+    const newTemplates: WorkoutTemplate[] = [];
+
+    Object.values(plan.templateIdsByWeekday).forEach((templateId) => {
+      if (!templateId) return;
+      if (oldToNew.has(templateId)) return;
+      const existingTemplate = get().workoutTemplates.find(t => t.id === templateId);
+      if (!existingTemplate) return;
+
+      const newTemplateId = `wt-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
+      oldToNew.set(templateId, newTemplateId);
+
+      newTemplates.push({
+        ...existingTemplate,
+        id: newTemplateId,
+        name: existingTemplate.name.replace(/ Copy$/, ''),
+        createdAt: nowIso,
+        updatedAt: nowIso,
+        lastUsedAt: null,
+        usageCount: 0,
+        items: existingTemplate.items.map(item => {
+          const latestWeight = getLatestWeight(item.exerciseId);
+          return {
+            ...item,
+            weight: latestWeight ?? item.weight,
+          };
+        }),
+        warmupItems: existingTemplate.warmupItems.map(item => ({ ...item })),
+        accessoryItems: existingTemplate.accessoryItems.map(item => ({ ...item })),
+      });
+    });
+
+    const templates = [...newTemplates, ...get().workoutTemplates];
+    set({ workoutTemplates: templates });
+    await storage.saveWorkoutTemplates(templates);
+
+    const newTemplateIdsByWeekday: Partial<Record<number, string>> = {};
+    Object.entries(plan.templateIdsByWeekday).forEach(([weekdayStr, templateId]) => {
+      if (!templateId) return;
+      const newId = oldToNew.get(templateId);
+      if (newId) newTemplateIdsByWeekday[Number(weekdayStr)] = newId;
+    });
+
+    const newPlan: CyclePlan = {
+      ...plan,
+      id: newPlanId,
+      name: plan.name.replace(/ Copy$/, ''),
+      startDate,
+      active: false,
+      archivedAt: undefined,
+      createdAt: nowIso,
+      updatedAt: nowIso,
+      lastUsedAt: null,
+      usageCount: 0,
       templateIdsByWeekday: newTemplateIdsByWeekday,
     };
 

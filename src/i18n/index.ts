@@ -500,7 +500,11 @@ type TranslationKey =
   | 'swapExercise'
   | 'weightPerSide'
   | 'viewAllHistory'
-  | 'showLess';
+  | 'showLess'
+  | 'repeatCycle'
+  | 'finishedToday'
+  | 'finishedYesterday'
+  | 'finishedDaysAgo';
 
 const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
   en: {
@@ -1035,6 +1039,10 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     resetRequiredMessage: 'You must reset your progress before swapping exercises. This will clear all logged sets.',
     completeAll: 'Complete All',
     skipWorkout: 'Skip Workout',
+    repeatCycle: 'Repeat cycle',
+    finishedToday: 'finished today',
+    finishedYesterday: 'finished yesterday',
+    finishedDaysAgo: 'finished {n} days ago',
   },
   es: {
     today: 'Hoy',
@@ -1569,6 +1577,10 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     resetRequiredMessage: 'Debes reiniciar tu progreso antes de cambiar ejercicios. Esto borrará todos los sets registrados.',
     completeAll: 'Completar Todo',
     skipWorkout: 'Omitir Entrenamiento',
+    repeatCycle: 'Repetir ciclo',
+    finishedToday: 'terminado hoy',
+    finishedYesterday: 'terminado ayer',
+    finishedDaysAgo: 'terminado hace {n} días',
   },
 };
 

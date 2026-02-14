@@ -82,7 +82,7 @@ function adjustLightness(hex: string, amount: number): string {
 // Base accent color — vivid lime, used sparingly for CTAs & highlights
 const ACCENT_PRIMARY = '#FFD500';
 const SIGNAL_NEGATIVE = '#FF453A';
-const BASE_GREEN = '#0D1916';
+const BASE_GREEN = '#00351D';
 const SIGNAL_POSITIVE = BASE_GREEN;
 const BASE_FAILURE = '#FF005B';
 const BASE_INFO = '#062FFF';
@@ -134,7 +134,9 @@ export const COLORS = {
   signalPositive: SIGNAL_POSITIVE,
   signalWarning: SIGNAL_WARNING,
   success: SIGNAL_POSITIVE,
-  successBright: adjustLightness(BASE_GREEN, 40),
+  successBright: '#06FF8F',
+  successDark: adjustLightness(BASE_GREEN, 10),
+  successDimmed: '#142A22',
   failure: BASE_FAILURE,
   failureBright: adjustLightness(BASE_FAILURE, 40),
   info: BASE_INFO,
