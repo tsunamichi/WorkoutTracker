@@ -9,6 +9,10 @@ import { IconArrowLeft, IconTriangle } from '../components/icons';
 import { Toggle } from '../components/Toggle';
 import { useTranslation } from '../i18n/useTranslation';
 import { cloudBackupService } from '../services/cloudBackup';
+import { exportDataToFile, importDataFromFile } from '../services/dataExportImport';
+import { signInWithApple, getCurrentUser, signOut, isAppleSignInAvailable, AuthUser } from '../services/authService';
+import { uploadBackup, downloadBackup, getCloudBackupInfo } from '../services/cloudSync';
+import { isSupabaseConfigured } from '../services/supabase';
 import { migrateOldStorageKeys, scanForOldData, validateAndRepairSessions, convertPartialWorkoutsToSessions, recoverSessionsFromCompletionStates } from '../utils/dataMigration';
 
 // Optional local notifications
@@ -31,6 +35,10 @@ export function ProfileScreen({ navigation }: ProfileScreenProps) {
   const [cloudBackupInfo, setCloudBackupInfo] = useState<{ exists: boolean; timestamp?: string } | null>(null);
   const [showBackupOptions, setShowBackupOptions] = useState(false);
   const [showAdvancedRecovery, setShowAdvancedRecovery] = useState(false);
+  const [authUser, setAuthUser] = useState<AuthUser | null>(null);
+  const [appleSignInAvailable, setAppleSignInAvailable] = useState(false);
+  const [cloudSyncInfo, setCloudSyncInfo] = useState<{ exists: boolean; syncedAt?: string } | null>(null);
+  const [isSyncing, setIsSyncing] = useState(false);
   const { t, language } = useTranslation();
   const notificationsEnabled = settings.notificationsEnabled !== false;
 
@@ -56,6 +64,22 @@ export function ProfileScreen({ navigation }: ProfileScreenProps) {
     (async () => {
       const info = await cloudBackupService.getBackupInfo();
       setCloudBackupInfo(info);
+    })();
+  }, []);
+
+  useEffect(() => {
+    // Check Apple Sign-In availability and current auth state
+    (async () => {
+      const available = await isAppleSignInAvailable();
+      setAppleSignInAvailable(available);
+      if (isSupabaseConfigured()) {
+        const user = await getCurrentUser();
+        setAuthUser(user);
+        if (user) {
+          const syncInfo = await getCloudBackupInfo();
+          setCloudSyncInfo(syncInfo);
+        }
+      }
     })();
   }, []);
 
@@ -204,6 +228,198 @@ export function ProfileScreen({ navigation }: ProfileScreenProps) {
           </View>
         </View>
 
+        {/* Account & Cloud Sync Section */}
+        {isSupabaseConfigured() && (
+          <View style={styles.settingCard}>
+            {authUser ? (
+              <>
+                {/* Signed in state */}
+                <View style={styles.settingRow}>
+                  <View style={styles.settingInfo}>
+                    <Text style={styles.settingLabel}>Signed in with Apple</Text>
+                    <Text style={styles.settingDescription}>
+                      {authUser.email || 'Private email relay'}
+                      {cloudSyncInfo?.syncedAt
+                        ? `\nLast sync: ${new Date(cloudSyncInfo.syncedAt).toLocaleString()}`
+                        : ''}
+                    </Text>
+                  </View>
+                </View>
+
+                <View style={styles.settingDivider} />
+
+                {/* Sync Now */}
+                <TouchableOpacity
+                  style={styles.settingRow}
+                  onPress={async () => {
+                    if (isSyncing) return;
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    setIsSyncing(true);
+                    const result = await uploadBackup();
+                    setIsSyncing(false);
+                    if (result.success) {
+                      const info = await getCloudBackupInfo();
+                      setCloudSyncInfo(info);
+                      Alert.alert('Sync Complete', 'Your data has been backed up to the cloud.', [{ text: 'OK' }]);
+                    } else {
+                      Alert.alert('Sync Failed', result.error || 'Unknown error.', [{ text: 'OK' }]);
+                    }
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <View style={styles.settingInfo}>
+                    <Text style={styles.settingLabel}>
+                      {isSyncing ? '⏳ Syncing...' : '☁️ Sync Now'}
+                    </Text>
+                    <Text style={styles.settingDescription}>Upload your data to the cloud</Text>
+                  </View>
+                </TouchableOpacity>
+
+                <View style={styles.settingDivider} />
+
+                {/* Restore from Cloud */}
+                <TouchableOpacity
+                  style={styles.settingRow}
+                  onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    Alert.alert(
+                      'Restore from Cloud',
+                      'This will download your cloud backup and replace current local data. Use this after reinstalling the app.',
+                      [
+                        { text: 'Cancel', style: 'cancel' },
+                        {
+                          text: 'Restore',
+                          style: 'destructive',
+                          onPress: async () => {
+                            setIsSyncing(true);
+                            const result = await downloadBackup();
+                            if (result.success) {
+                              await initialize();
+                              setIsSyncing(false);
+                              Alert.alert(
+                                'Restore Complete',
+                                `Restored ${result.restoredKeys} data entries from the cloud!`,
+                                [{ text: 'OK' }]
+                              );
+                            } else {
+                              setIsSyncing(false);
+                              Alert.alert('Restore Failed', result.error || 'Unknown error.', [{ text: 'OK' }]);
+                            }
+                          },
+                        },
+                      ]
+                    );
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <View style={styles.settingInfo}>
+                    <Text style={styles.settingLabel}>📥 Restore from Cloud</Text>
+                    <Text style={styles.settingDescription}>Download backup after reinstall</Text>
+                  </View>
+                </TouchableOpacity>
+
+                <View style={styles.settingDivider} />
+
+                {/* Sign Out */}
+                <TouchableOpacity
+                  style={styles.settingRow}
+                  onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    Alert.alert(
+                      'Sign Out',
+                      'Your local data will remain. You can sign back in anytime to sync again.',
+                      [
+                        { text: 'Cancel', style: 'cancel' },
+                        {
+                          text: 'Sign Out',
+                          style: 'destructive',
+                          onPress: async () => {
+                            await signOut();
+                            setAuthUser(null);
+                            setCloudSyncInfo(null);
+                          },
+                        },
+                      ]
+                    );
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <View style={styles.settingInfo}>
+                    <Text style={[styles.settingLabel, { color: COLORS.textMeta }]}>Sign Out</Text>
+                  </View>
+                </TouchableOpacity>
+              </>
+            ) : (
+              <>
+                {/* Not signed in — show Sign In button */}
+                <TouchableOpacity
+                  style={styles.settingRow}
+                  onPress={async () => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                    try {
+                      const user = await signInWithApple();
+                      setAuthUser(user);
+                      // After sign-in, check if there's an existing cloud backup
+                      const info = await getCloudBackupInfo();
+                      setCloudSyncInfo(info);
+                      if (info.exists) {
+                        Alert.alert(
+                          'Cloud Backup Found',
+                          `A backup from ${new Date(info.syncedAt!).toLocaleDateString()} was found.\n\nWould you like to restore it or upload your current data instead?`,
+                          [
+                            {
+                              text: 'Restore Backup',
+                              onPress: async () => {
+                                const result = await downloadBackup();
+                                if (result.success) {
+                                  await initialize();
+                                  Alert.alert('Restored!', `${result.restoredKeys} data entries restored.`, [{ text: 'OK' }]);
+                                }
+                              },
+                            },
+                            {
+                              text: 'Upload Current',
+                              onPress: async () => {
+                                await uploadBackup();
+                                const newInfo = await getCloudBackupInfo();
+                                setCloudSyncInfo(newInfo);
+                              },
+                            },
+                            { text: 'Later', style: 'cancel' },
+                          ]
+                        );
+                      } else {
+                        // No backup exists — auto-upload current data
+                        await uploadBackup();
+                        const newInfo = await getCloudBackupInfo();
+                        setCloudSyncInfo(newInfo);
+                        Alert.alert(
+                          'Signed In!',
+                          'Your workout data has been backed up to the cloud. It will survive app reinstalls.',
+                          [{ text: 'OK' }]
+                        );
+                      }
+                    } catch (e: any) {
+                      // User cancelled Apple Sign-In — don't show an error
+                      if (e?.code === 'ERR_REQUEST_CANCELED') return;
+                      Alert.alert('Sign-In Failed', e?.message || 'Unknown error', [{ text: 'OK' }]);
+                    }
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <View style={styles.settingInfo}>
+                    <Text style={styles.settingLabel}> Sign in with Apple</Text>
+                    <Text style={styles.settingDescription}>
+                      Back up your data to the cloud. Survives app deletion and device changes.
+                    </Text>
+                  </View>
+                  <IconTriangle size={16} color={COLORS.text} />
+                </TouchableOpacity>
+              </>
+            )}
+          </View>
+        )}
+
         {/* iCloud Backup Section - Collapsible */}
         <TouchableOpacity 
           style={[styles.settingCard, styles.settingCardRow]}
@@ -349,6 +565,70 @@ export function ProfileScreen({ navigation }: ProfileScreenProps) {
             </TouchableOpacity>
           </View>
         )}
+
+        {/* Export / Import Data */}
+        <View style={styles.settingCard}>
+          <TouchableOpacity 
+            style={styles.settingRow}
+            onPress={async () => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              const result = await exportDataToFile();
+              if (!result.success && result.error !== undefined) {
+                Alert.alert('Export Failed', result.error, [{ text: 'OK' }]);
+              }
+            }}
+            activeOpacity={0.7}
+          >
+            <View style={styles.settingInfo}>
+              <Text style={styles.settingLabel}>📤 Export Data</Text>
+              <Text style={styles.settingDescription}>
+                Save a backup file to Files, AirDrop, etc.
+              </Text>
+            </View>
+            <IconTriangle size={16} color={COLORS.text} />
+          </TouchableOpacity>
+
+          <View style={styles.settingDivider} />
+
+          <TouchableOpacity 
+            style={styles.settingRow}
+            onPress={async () => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              Alert.alert(
+                'Import Backup',
+                'This will restore data from a backup file. Your current data will be merged with the imported data.',
+                [
+                  { text: 'Cancel', style: 'cancel' },
+                  {
+                    text: 'Choose File',
+                    onPress: async () => {
+                      const result = await importDataFromFile();
+                      if (result.success) {
+                        await initialize();
+                        Alert.alert(
+                          'Import Successful',
+                          `Restored ${result.restoredKeys} data entries from backup!\n\nYour workouts and progress have been restored.`,
+                          [{ text: 'OK' }]
+                        );
+                      } else if (result.error && result.error !== 'No file selected.') {
+                        Alert.alert('Import Failed', result.error, [{ text: 'OK' }]);
+                      }
+                    }
+                  }
+                ]
+              );
+            }}
+            activeOpacity={0.7}
+          >
+            <View style={styles.settingInfo}>
+              <Text style={styles.settingLabel}>📥 Import Data</Text>
+              <Text style={styles.settingDescription}>
+                Restore from a previously exported backup file
+              </Text>
+            </View>
+            <IconTriangle size={16} color={COLORS.text} />
+          </TouchableOpacity>
+        </View>
 
         {/* Data Recovery Section */}
         <TouchableOpacity 

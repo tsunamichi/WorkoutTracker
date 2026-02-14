@@ -15,6 +15,7 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.tsunamichi.workouttracker",
       "buildNumber": "96",
+      "usesAppleSignIn": true,
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "NSSupportsLiveActivities": true,
