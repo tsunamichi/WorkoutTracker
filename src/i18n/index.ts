@@ -194,6 +194,8 @@ type TranslationKey =
   | 'welcomeTitle'
   | 'continueWithApple'
   | 'continueAsGuest'
+  | 'loginSubtitle'
+  | 'signInFailed'
   | 'daysPerWeekQuestion'
   | 'sessionLengthQuestion'
   | 'insertExample'
@@ -714,9 +716,11 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     setOf: 'Set {current} of {total}',
     timerName: 'Timer name',
     saveAndReset: 'Save & Reset',
-    welcomeTitle: 'Welcome to\nWorkout Tracker',
+    welcomeTitle: 'Welcome to\nEquilibrium',
     continueWithApple: 'Continue with Apple',
     continueAsGuest: 'Continue as guest',
+    loginSubtitle: 'Sign in to back up your workouts\nand sync across devices.',
+    signInFailed: 'Sign-in failed. Please try again.',
     daysPerWeekQuestion: 'How many days per week can you train?',
     sessionLengthQuestion: 'How long is each session?',
     insertExample: 'Insert example',
@@ -1251,9 +1255,11 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     setOf: 'Serie {current} de {total}',
     timerName: 'Nombre del temporizador',
     saveAndReset: 'Guardar y reiniciar',
-    welcomeTitle: 'Bienvenido a\nWorkout Tracker',
+    welcomeTitle: 'Bienvenido a\nEquilibrium',
     continueWithApple: 'Continuar con Apple',
     continueAsGuest: 'Continuar como invitado',
+    loginSubtitle: 'Inicia sesion para respaldar tus entrenamientos\ny sincronizar entre dispositivos.',
+    signInFailed: 'Error al iniciar sesion. Intentalo de nuevo.',
     daysPerWeekQuestion: 'Cuantos dias por semana puedes entrenar?',
     sessionLengthQuestion: 'Cuanto dura cada sesion?',
     insertExample: 'Insertar ejemplo',
