@@ -20,9 +20,10 @@ dayjs.extend(isoWeek);
 
 const DAYS_SHORT = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
 const ROW_HEIGHT = 50;
-const COLLAPSED_HEIGHT = ROW_HEIGHT;
-const HEADER_HEIGHT = 44;
-const EXPANDED_HEIGHT = HEADER_HEIGHT + ROW_HEIGHT * 5;
+const DAY_LETTERS_HEIGHT = 24;
+const MONTH_LABEL_HEIGHT = 24;
+const COLLAPSED_HEIGHT = DAY_LETTERS_HEIGHT + ROW_HEIGHT;
+const EXPANDED_HEIGHT = DAY_LETTERS_HEIGHT + MONTH_LABEL_HEIGHT + ROW_HEIGHT * 5;
 const SNAP_THRESHOLD = 0.35;
 
 const SPRING_CONFIG = {
@@ -191,10 +192,13 @@ export function ExpandableCalendarStrip({
     height: interpolate(expansion.value, [0, 1], [COLLAPSED_HEIGHT, EXPANDED_HEIGHT]),
   }));
 
-  const expandedHeaderStyle = useAnimatedStyle(() => ({
-    opacity: interpolate(expansion.value, [0, 0.4, 1], [0, 0, 1]),
-    height: interpolate(expansion.value, [0, 1], [0, HEADER_HEIGHT]),
+  // Month label: slides in above the day letters once expansion is underway
+  const monthLabelStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(expansion.value, [0, 0.3, 0.6], [0, 0, 1]),
+    height: interpolate(expansion.value, [0, 0.5, 1], [0, 0, MONTH_LABEL_HEIGHT]),
+    overflow: 'hidden' as const,
   }));
+
 
   // All rows translate by -2*ROW_HEIGHT when collapsed to bring center row to top
   const weekRowStyle0 = useAnimatedStyle(() => ({
@@ -254,20 +258,24 @@ export function ExpandableCalendarStrip({
   return (
     <View style={styles.wrapper}>
       <Animated.View style={[styles.container, containerAnimatedStyle]}>
-        {/* Expanded header */}
-        <Animated.View style={[styles.expandedHeader, expandedHeaderStyle]}>
+        {/* Month label — grows into view at ~50% expansion */}
+        <Animated.View style={monthLabelStyle}>
           <Text style={styles.monthLabel}>{expandedLabel}</Text>
-          <View style={styles.dayOfWeekRow}>
-            {DAYS_SHORT.map((letter, i) => (
-              <View key={i} style={styles.dayCell}>
-                <Text style={styles.dayOfWeekText}>{letter}</Text>
-              </View>
-            ))}
-          </View>
         </Animated.View>
 
-        {/* Week rows */}
-        {weeksData.map((weekDays, idx) => renderWeekRow(weekDays, idx))}
+        {/* Day letters — always visible, pushed down by month label's animated height */}
+        <View style={styles.dayOfWeekRow}>
+          {DAYS_SHORT.map((letter, i) => (
+            <View key={i} style={styles.dayCell}>
+              <Text style={styles.dayOfWeekText}>{letter}</Text>
+            </View>
+          ))}
+        </View>
+
+        {/* Week rows container — isolates row animations from day letters */}
+        <View style={styles.weeksContainer}>
+          {weeksData.map((weekDays, idx) => renderWeekRow(weekDays, idx))}
+        </View>
       </Animated.View>
 
       {/* Drag handle */}
@@ -287,24 +295,26 @@ const styles = StyleSheet.create({
   container: {
     overflow: 'hidden',
   },
-  expandedHeader: {
-    overflow: 'hidden',
-  },
   monthLabel: {
     ...TYPOGRAPHY.metaBold,
     color: '#FFFFFF',
     textAlign: 'center',
-    marginBottom: SPACING.xs,
+    marginBottom: 4,
   },
   dayOfWeekRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: SPACING.xs,
+    height: DAY_LETTERS_HEIGHT,
+    alignItems: 'center',
   },
   dayOfWeekText: {
     ...TYPOGRAPHY.note,
     color: COLORS.textMeta,
     textAlign: 'center',
+  },
+  weeksContainer: {
+    flex: 1,
+    overflow: 'hidden',
   },
   weekRow: {
     flexDirection: 'row',

@@ -892,6 +892,8 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 24,
     borderBottomLeftRadius: 24,
     borderBottomRightRadius: 24,
+    borderWidth: 1,
+    borderColor: COLORS.activeCard,
   },
   handleContainer: {
     alignItems: 'center',

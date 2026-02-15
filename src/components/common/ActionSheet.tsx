@@ -164,6 +164,8 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.backgroundCanvas,
     borderRadius: 16,
     borderCurve: 'continuous' as const,
+    borderWidth: 1,
+    borderColor: COLORS.activeCard,
     overflow: 'hidden' as const,
   },
   container: {

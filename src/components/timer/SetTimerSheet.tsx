@@ -1089,6 +1089,8 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.backgroundCanvas,
     borderRadius: 40,
     borderCurve: 'continuous',
+    borderWidth: 1,
+    borderColor: COLORS.activeCard,
     paddingTop: 32,
     paddingHorizontal: 48,
     alignItems: 'center',

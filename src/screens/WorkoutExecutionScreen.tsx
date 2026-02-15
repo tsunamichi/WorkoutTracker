@@ -1247,6 +1247,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
     paddingBottom: 24,
     borderRadius: 24,
+    borderWidth: 1,
+    borderColor: COLORS.activeCard,
   },
   timerDisplayWrapper: {
     width: '100%',
