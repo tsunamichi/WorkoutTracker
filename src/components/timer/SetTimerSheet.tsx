@@ -49,9 +49,9 @@ interface SetTimerSheetProps {
   isPerSide?: boolean; // If true, run exercise timer twice with 10s "switch sides" countdown between
 }
 
-const REST_COLOR_YELLOW = COLORS.signalWarning;
-const REST_COLOR_RED = COLORS.signalNegative;
-const EXERCISE_COLOR_BLUE = '#1B1B1B'; // Black for exercise timer
+const REST_COLOR_START = COLORS.accentPrimary;
+const REST_COLOR_END = COLORS.failure;
+const EXERCISE_COLOR = COLORS.info;
 const PRE_EXERCISE_COUNTDOWN = 5;
 const MIN_SIZE = 180;
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -891,13 +891,16 @@ export function SetTimerSheet({
     outputRange: [CONTAINER_WIDTH / MIN_SIZE, 1],
   });
 
-  // Interpolate color: blue for exercise timer, yellow to red for rest timer
+  // Interpolate color: info for exercise timer, accentPrimary to failure for rest timer
   const backgroundColor = currentPhase === 'exercise'
-    ? EXERCISE_COLOR_BLUE // Solid blue for exercise timer
+    ? EXERCISE_COLOR
     : restColorAnim.interpolate({
         inputRange: [0, 1],
-        outputRange: [REST_COLOR_YELLOW, REST_COLOR_RED],
+        outputRange: [REST_COLOR_START, REST_COLOR_END],
       });
+
+  // Timer text color: white (text) for exercise, dark (canvas) for rest/switchSides
+  const timerTextColor = currentPhase === 'exercise' ? COLORS.text : COLORS.backgroundCanvas;
 
   const isPreCountdownActive = preCountdown >= 0 && currentPhase === 'exercise';
 
@@ -1050,7 +1053,7 @@ export function SetTimerSheet({
                     },
                   ]}
                 >
-                  <Text style={styles.timerText}>{formatTime()}</Text>
+                  <Text style={[styles.timerText, { color: timerTextColor }]}>{formatTime()}</Text>
                 </Animated.View>
               )}
             </Animated.View>

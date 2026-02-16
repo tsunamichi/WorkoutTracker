@@ -12,6 +12,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useStore } from '../store';
 import { COLORS, SPACING, CARDS, TYPOGRAPHY, BORDER_RADIUS, GRADIENTS } from '../constants';
 import { IconArrowLeft, IconPlay, IconAdd } from '../components/icons';
+import { DiagonalLinePattern } from '../components/common/DiagonalLinePattern';
 import type { HIITTimer } from '../types';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/AppNavigator';
@@ -157,8 +158,9 @@ export default function HIITTimerListScreen({ navigation }: Props) {
             onPress={handleCreateNew}
             activeOpacity={0.7}
           >
+            <DiagonalLinePattern width="100%" height={56} borderRadius={16} />
             <IconAdd size={24} color={COLORS.text} />
-            <Text style={styles.addTimerCardText}>{t('new')}</Text>
+            <Text style={styles.addTimerCardText}>Add timer</Text>
           </TouchableOpacity>
         </ScrollView>
       </View>
@@ -246,15 +248,12 @@ const styles = StyleSheet.create({
     width: '100%',
     height: 56,
     borderRadius: 16,
-    borderWidth: 1,
-    borderColor: COLORS.textMeta,
-    borderStyle: 'dashed',
-    backgroundColor: 'transparent',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
     marginTop: 48,
+    overflow: 'hidden',
   },
   addTimerCardText: {
     ...TYPOGRAPHY.metaBold,

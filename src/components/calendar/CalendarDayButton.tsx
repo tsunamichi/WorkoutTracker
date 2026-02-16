@@ -46,16 +46,16 @@ export function CalendarDayButton({
         >
           {dayNumber}
         </Text>
+        {/* Completed indicator: pill inside the circle, 2px below label */}
+        {isCompleted && (
+          <View
+            style={[
+              styles.completedPill,
+              isSelected && styles.completedPillSelected,
+            ]}
+          />
+        )}
       </View>
-      {/* Completed indicator: pill inside the card, 2px from bottom */}
-      {isCompleted && (
-        <View
-          style={[
-            styles.completedPill,
-            isSelected && styles.completedPillSelected,
-          ]}
-        />
-      )}
     </TouchableOpacity>
   );
 }
@@ -66,15 +66,14 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   dayButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    borderCurve: 'continuous' as any,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
     alignItems: 'center',
     justifyContent: 'center',
   },
   dayButtonToday: {
-    borderWidth: 1.5,
+    borderWidth: 1,
     borderColor: '#FFFFFF',
   },
   dayButtonSelected: {
@@ -95,8 +94,8 @@ const styles = StyleSheet.create({
   },
   completedPill: {
     position: 'absolute',
-    bottom: 2,
-    width: 8,
+    bottom: 6,
+    width: 6,
     height: 2,
     borderRadius: 1,
     backgroundColor: '#FFFFFF',

@@ -41,6 +41,9 @@
         "projectId": "cc9457fe-c6f5-45ab-9110-40b941491c17"
       }
     },
+    "plugins": [
+      "expo-apple-authentication"
+    ],
     "owner": "tsunamichi"
   }
 }

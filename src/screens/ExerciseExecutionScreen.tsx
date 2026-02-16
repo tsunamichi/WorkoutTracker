@@ -6,7 +6,7 @@ import Svg, { Circle, Path } from 'react-native-svg';
 import * as Haptics from 'expo-haptics';
 import { useStore } from '../store';
 import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS, CARDS } from '../constants';
-import { IconArrowLeft, IconCheck, IconCheckmark, IconAddLine, IconMinusLine, IconTrash, IconEdit, IconMenu, IconHistory, IconRestart, IconSkip, IconSwap, IconSettings, IconArrowRight, IconAdd } from '../components/icons';
+import { IconArrowLeft, IconCheck, IconCheckmark, IconAddLine, IconMinusLine, IconTrash, IconEdit, IconMenu, IconHistory, IconRestart, IconSkip, IconSwap, IconSettings, IconArrowRight, IconAdd, IconChevronDown } from '../components/icons';
 import { BottomDrawer } from '../components/common/BottomDrawer';
 import { NextLabel } from '../components/common/NextLabel';
 import { SetTimerSheet } from '../components/timer/SetTimerSheet';
@@ -220,6 +220,8 @@ export function ExerciseExecutionScreen() {
   const [activeExerciseIndex, setActiveExerciseIndex] = useState(0); // Start with first exercise when group is expanded
   const [hasLoggedAnySet, setHasLoggedAnySet] = useState(false); // Track if any set has been logged
   const [completionTimestamps, setCompletionTimestamps] = useState<Record<string, number>>({}); // Track when groups were completed
+  const [accessoriesCollapsed, setAccessoriesCollapsed] = useState(false); // Auto-collapse accessories on first set log
+  const [showAddExerciseDrawer, setShowAddExerciseDrawer] = useState(false); // Add exercise bottom drawer
 
   // Staggered indicator animation using Animated.View (independent of LayoutAnimation)
   const indicatorWidthAnim = useRef(new Animated.Value(0)).current;
@@ -357,6 +359,7 @@ export function ExerciseExecutionScreen() {
       const completedItemsSet = new Set(completion.completedItems);
       setCompletedSets(completedItemsSet);
       setHasLoggedAnySet(true); // User has already logged sets
+      setAccessoriesCollapsed(true); // Keep accessories collapsed if sets were previously logged
       
       // Calculate current rounds for each group
       const rounds: Record<string, number> = {};
@@ -516,6 +519,36 @@ export function ExerciseExecutionScreen() {
     return warmupDone && mainDone && accessoryDone;
   };
 
+  // Check if all exercise groups in the current section are complete
+  const allCurrentGroupsComplete = useMemo(() => {
+    if (exerciseGroups.length === 0) return false;
+    return exerciseGroups.every(group => {
+      const rounds = currentRounds[group.id] || 0;
+      return rounds >= group.totalRounds;
+    });
+  }, [exerciseGroups, currentRounds]);
+
+  // Handler for adding a new exercise to the workout template
+  const handleAddExercise = (exerciseId: string, exerciseName: string) => {
+    if (!template) return;
+    
+    const newItem: WorkoutTemplateExercise = {
+      id: `${exerciseId}-${Date.now()}`,
+      exerciseId,
+      order: template.items.length,
+      sets: 3,
+      reps: 10,
+      weight: 0,
+    };
+    
+    const updatedItems = [...template.items, newItem];
+    updateWorkoutTemplate(workoutTemplateId, { items: updatedItems });
+    setRefreshKey(prev => prev + 1);
+    setShowAddExerciseDrawer(false);
+    
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+  };
+
   const saveSession = async (completedSetIds?: Set<string>) => {
     console.log('💾 Saving workout session for', type, 'section');
     console.log('   workoutTemplateId:', workoutTemplateId);
@@ -618,6 +651,9 @@ export function ExerciseExecutionScreen() {
     }
     
     // Mark that user has logged at least one set (locks the flow)
+    if (!hasLoggedAnySet) {
+      setAccessoriesCollapsed(true);
+    }
     setHasLoggedAnySet(true);
     
     // Mark set as complete
@@ -735,9 +771,17 @@ export function ExerciseExecutionScreen() {
           }
           
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-          Alert.alert(t('workoutComplete'), t('niceWork'), [
-            { text: t('done'), onPress: () => navigation.goBack() },
-          ]);
+          
+          if (type === 'main') {
+            // For main workouts, transition to the history/summary view
+            setExpandedGroupIndex(-1);
+            setActiveExerciseIndex(0);
+          } else {
+            // For warmup/core, show alert and navigate back
+            Alert.alert(t('workoutComplete'), t('niceWork'), [
+              { text: t('done'), onPress: () => navigation.goBack() },
+            ]);
+          }
         }
       } else {
         // Same group, next round
@@ -862,8 +906,23 @@ export function ExerciseExecutionScreen() {
               console.log('📋 Section complete but other sections remain');
             }
             
+            // Update currentRounds so allCurrentGroupsComplete triggers
+            const updatedRounds: Record<string, number> = {};
+            exerciseGroups.forEach(group => {
+              updatedRounds[group.id] = group.totalRounds;
+            });
+            setCurrentRounds(prev => ({ ...prev, ...updatedRounds }));
+            setHasLoggedAnySet(true);
+            setAccessoriesCollapsed(true);
+            
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-            navigation.goBack();
+            
+            if (type === 'main') {
+              setExpandedGroupIndex(-1);
+              setActiveExerciseIndex(0);
+            } else {
+              navigation.goBack();
+            }
           },
         },
       ]
@@ -1180,6 +1239,91 @@ export function ExerciseExecutionScreen() {
         contentContainerStyle={styles.scrollContent}
         bounces={false}
       >
+        {allCurrentGroupsComplete && type === 'main' ? (
+          /* ===== COMPLETED WORKOUT - HISTORY VIEW ===== */
+          <View style={styles.historyViewContainer}>
+            <View style={styles.historyViewHeader}>
+              <IconCheck size={24} color={COLORS.successBright} />
+              <Text style={styles.historyViewTitle}>{t('workoutComplete')}</Text>
+            </View>
+            
+            {exerciseGroups.map((group) => (
+              group.exercises.map((exercise) => {
+                const exerciseName = exercise.exerciseName;
+                const totalRounds = group.totalRounds;
+                
+                return (
+                  <TouchableOpacity
+                    key={exercise.id}
+                    style={styles.historyExerciseRow}
+                    onPress={() => {
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                      const groupIdx = exerciseGroups.findIndex(g => g.id === group.id);
+                      const exIdx = group.exercises.findIndex(e => e.id === exercise.id);
+                      setDrawerGroupIndex(groupIdx);
+                      setDrawerExerciseIndex(exIdx);
+                      setExpandedSetInDrawer(0);
+                      setShowAdjustmentDrawer(true);
+                    }}
+                    activeOpacity={0.7}
+                  >
+                    <View style={styles.historyExerciseNameColumn}>
+                      <Text style={styles.historyExerciseName} numberOfLines={2}>
+                        {exerciseName}
+                      </Text>
+                    </View>
+                    <View style={styles.historyExerciseDataColumn}>
+                      {Array.from({ length: totalRounds }).map((_, roundIdx) => {
+                        const setId = `${exercise.id}-set-${roundIdx}`;
+                        const values = localValues[setId];
+                        const displayWeight = values?.weight ?? exercise.weight ?? 0;
+                        const displayReps = values?.reps ?? exercise.reps ?? 0;
+                        const showWeight = displayWeight > 0;
+                        
+                        return (
+                          <View key={roundIdx} style={styles.historySetDataRow}>
+                            {showWeight && (
+                              <View style={styles.historySetValueGroup}>
+                                <Text style={styles.historySetValue}>
+                                  {formatWeightForLoad(displayWeight, useKg)}
+                                </Text>
+                                <Text style={styles.historySetUnit}>{weightUnit}</Text>
+                              </View>
+                            )}
+                            <View style={styles.historySetValueGroup}>
+                              <Text style={styles.historySetValue}>{displayReps}</Text>
+                              <Text style={styles.historySetUnit}>
+                                {exercise.isTimeBased ? 'secs' : 'reps'}
+                              </Text>
+                            </View>
+                          </View>
+                        );
+                      })}
+                    </View>
+                  </TouchableOpacity>
+                );
+              })
+            ))}
+
+            {/* Add Exercise button in history view */}
+            <TouchableOpacity
+              style={styles.addExerciseButton}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                setShowAddExerciseDrawer(true);
+              }}
+              activeOpacity={0.7}
+            >
+              <DiagonalLinePattern width="100%" height="100%" borderRadius={BORDER_RADIUS.lg} />
+              <View style={styles.addExerciseButtonContent}>
+                <IconAdd size={20} color={COLORS.text} />
+                <Text style={styles.addExerciseButtonText}>{t('addExercise')}</Text>
+              </View>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          /* ===== IN-PROGRESS - NORMAL EXERCISE CARDS ===== */
+          <>
         {/* Strength Workout Label - Only show when type is 'main' */}
         {type === 'main' && (
           <Text style={styles.sectionLabel}>Strength Workout</Text>
@@ -1426,137 +1570,174 @@ export function ExerciseExecutionScreen() {
             );
           })}
         </View>
+
+        {/* Add Exercise button - appears after first set is logged */}
+        {hasLoggedAnySet && type === 'main' && (
+          <TouchableOpacity
+            style={styles.addExerciseButton}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              setShowAddExerciseDrawer(true);
+            }}
+            activeOpacity={0.7}
+          >
+            <DiagonalLinePattern width="100%" height="100%" borderRadius={BORDER_RADIUS.lg} />
+            <View style={styles.addExerciseButtonContent}>
+              <IconAdd size={20} color={COLORS.text} />
+              <Text style={styles.addExerciseButtonText}>{t('addExercise')}</Text>
+            </View>
+          </TouchableOpacity>
+        )}
+          </>
+        )}
       </ScrollView>
       
       {/* Accessories pinned to bottom */}
       {type === 'main' && template && (
         <View style={[styles.accessoriesBottomContainer, { paddingBottom: insets.bottom + 8 }]}>
-          <Text style={styles.accessoriesLabel}>Accessories</Text>
-          <View style={styles.accessoriesCardsRow}>
-            {/* Warm-up Card */}
-            {template.warmupItems && template.warmupItems.length > 0 ? (
-              <TouchableOpacity
-                style={styles.halfWidthCard}
-                onPress={() => {
-                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                  (navigation as any).push('ExerciseExecution', { 
-                    workoutKey, 
-                    workoutTemplateId,
-                    type: 'warmup'
-                  });
-                }}
-                activeOpacity={0.7}
-              >
-                <View>
-                  <Text style={styles.halfWidthCardTitle}>{t('warmup')}</Text>
-                  {(() => {
-                    const completion = getWarmupCompletion(workoutKey);
-                    if (completion.percentage === 100) {
-                      return (
-                        <View style={styles.halfWidthCardProgressRow}>
-                          <IconCheck size={20} color={COLORS.successBright} />
-                        </View>
-                      );
-                    } else if (completion.percentage > 0) {
-                      return (
-                        <View style={styles.halfWidthCardProgressRow}>
-                          <Text style={styles.halfWidthProgressText}>{completion.percentage}%</Text>
-                          <Svg height="16" width="16" viewBox="0 0 16 16" style={styles.progressCircle}>
-                            <Circle cx="8" cy="8" r="8" fill={COLORS.backgroundCanvas} />
-                            <Path
-                              d={`M 8 8 L 8 0 A 8 8 0 ${completion.percentage / 100 > 0.5 ? 1 : 0} 1 ${
-                                8 + 8 * Math.sin(2 * Math.PI * (completion.percentage / 100))
-                              } ${
-                                8 - 8 * Math.cos(2 * Math.PI * (completion.percentage / 100))
-                              } Z`}
-                              fill={COLORS.signalWarning}
-                            />
-                          </Svg>
-                        </View>
-                      );
-                    } else {
-                      return <Text style={styles.halfWidthCardAction}>{t('start')}</Text>;
-                    }
-                  })()}
-                </View>
-              </TouchableOpacity>
-            ) : (
-              <TouchableOpacity
-                style={styles.halfWidthAddButton}
-                onPress={() => {
-                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                  (navigation as any).navigate('WarmupEditor', { templateId: workoutTemplateId, workoutKey });
-                }}
-                activeOpacity={0.7}
-              >
-                <DiagonalLinePattern width="100%" height="100%" borderRadius={BORDER_RADIUS.lg} />
-                <IconAdd size={20} color={COLORS.text} />
-                <Text style={styles.halfWidthAddText}>Add {t('warmup')}</Text>
-              </TouchableOpacity>
-            )}
-            
-            {/* Core Card */}
-            {template.accessoryItems && template.accessoryItems.length > 0 ? (
-              <TouchableOpacity
-                style={styles.halfWidthCard}
-                onPress={() => {
-                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                  (navigation as any).push('ExerciseExecution', { 
-                    workoutKey, 
-                    workoutTemplateId,
-                    type: 'core'
-                  });
-                }}
-                activeOpacity={0.7}
-              >
-                <View>
-                  <Text style={styles.halfWidthCardTitle}>{t('core')}</Text>
-                  {(() => {
-                    const completion = getAccessoryCompletion(workoutKey);
-                    if (completion.percentage === 100) {
-                      return (
-                        <View style={styles.halfWidthCardProgressRow}>
-                          <IconCheck size={20} color={COLORS.successBright} />
-                        </View>
-                      );
-                    } else if (completion.percentage > 0) {
-                      return (
-                        <View style={styles.halfWidthCardProgressRow}>
-                          <Text style={styles.halfWidthProgressText}>{completion.percentage}%</Text>
-                          <Svg height="16" width="16" viewBox="0 0 16 16" style={styles.progressCircle}>
-                            <Circle cx="8" cy="8" r="8" fill={COLORS.backgroundCanvas} />
-                            <Path
-                              d={`M 8 8 L 8 0 A 8 8 0 ${completion.percentage / 100 > 0.5 ? 1 : 0} 1 ${
-                                8 + 8 * Math.sin(2 * Math.PI * (completion.percentage / 100))
-                              } ${
-                                8 - 8 * Math.cos(2 * Math.PI * (completion.percentage / 100))
-                              } Z`}
-                              fill={COLORS.signalWarning}
-                            />
-                          </Svg>
-                        </View>
-                      );
-                    } else {
-                      return <Text style={styles.halfWidthCardAction}>{t('start')}</Text>;
-                    }
-                  })()}
-                </View>
-              </TouchableOpacity>
-            ) : (
-              <TouchableOpacity
-                style={styles.halfWidthAddButton}
-                onPress={() => {
-                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                  (navigation as any).navigate('AccessoriesEditor', { templateId: workoutTemplateId, workoutKey });
-                }}
-                activeOpacity={0.7}
-              >
-                <DiagonalLinePattern width="100%" height="100%" borderRadius={BORDER_RADIUS.lg} />
-                <IconAdd size={20} color={COLORS.text} />
-                <Text style={styles.halfWidthAddText}>Add {t('core')}</Text>
-              </TouchableOpacity>
-            )}
-          </View>
+          <TouchableOpacity
+            style={styles.accessoriesLabelContainer}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              LayoutAnimation.configureNext(
+                LayoutAnimation.create(250, LayoutAnimation.Types.easeInEaseOut, LayoutAnimation.Properties.opacity)
+              );
+              setAccessoriesCollapsed(!accessoriesCollapsed);
+            }}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.accessoriesLabel}>Accessories</Text>
+            <View style={{ transform: [{ rotate: accessoriesCollapsed ? '180deg' : '0deg' }] }}>
+              <IconChevronDown size={16} color={COLORS.text} />
+            </View>
+          </TouchableOpacity>
+          {!accessoriesCollapsed && (
+            <View style={styles.accessoriesCardsRow}>
+              {/* Warm-up Card */}
+              {template.warmupItems && template.warmupItems.length > 0 ? (
+                <TouchableOpacity
+                  style={styles.halfWidthCard}
+                  onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    (navigation as any).push('ExerciseExecution', { 
+                      workoutKey, 
+                      workoutTemplateId,
+                      type: 'warmup'
+                    });
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <View>
+                    <Text style={styles.halfWidthCardTitle}>{t('warmup')}</Text>
+                    {(() => {
+                      const completion = getWarmupCompletion(workoutKey);
+                      if (completion.percentage === 100) {
+                        return (
+                          <View style={styles.halfWidthCardProgressRow}>
+                            <IconCheck size={20} color={COLORS.successBright} />
+                          </View>
+                        );
+                      } else if (completion.percentage > 0) {
+                        return (
+                          <View style={styles.halfWidthCardProgressRow}>
+                            <Text style={styles.halfWidthProgressText}>{completion.percentage}%</Text>
+                            <Svg height="16" width="16" viewBox="0 0 16 16" style={styles.progressCircle}>
+                              <Circle cx="8" cy="8" r="8" fill={COLORS.backgroundCanvas} />
+                              <Path
+                                d={`M 8 8 L 8 0 A 8 8 0 ${completion.percentage / 100 > 0.5 ? 1 : 0} 1 ${
+                                  8 + 8 * Math.sin(2 * Math.PI * (completion.percentage / 100))
+                                } ${
+                                  8 - 8 * Math.cos(2 * Math.PI * (completion.percentage / 100))
+                                } Z`}
+                                fill={COLORS.signalWarning}
+                              />
+                            </Svg>
+                          </View>
+                        );
+                      } else {
+                        return <Text style={styles.halfWidthCardAction}>{t('start')}</Text>;
+                      }
+                    })()}
+                  </View>
+                </TouchableOpacity>
+              ) : (
+                <TouchableOpacity
+                  style={styles.halfWidthAddButton}
+                  onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    (navigation as any).navigate('WarmupEditor', { templateId: workoutTemplateId, workoutKey });
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <DiagonalLinePattern width="100%" height="100%" borderRadius={BORDER_RADIUS.lg} />
+                  <IconAdd size={20} color={COLORS.text} />
+                  <Text style={styles.halfWidthAddText}>Add {t('warmup')}</Text>
+                </TouchableOpacity>
+              )}
+              
+              {/* Core Card */}
+              {template.accessoryItems && template.accessoryItems.length > 0 ? (
+                <TouchableOpacity
+                  style={styles.halfWidthCard}
+                  onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    (navigation as any).push('ExerciseExecution', { 
+                      workoutKey, 
+                      workoutTemplateId,
+                      type: 'core'
+                    });
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <View>
+                    <Text style={styles.halfWidthCardTitle}>{t('core')}</Text>
+                    {(() => {
+                      const completion = getAccessoryCompletion(workoutKey);
+                      if (completion.percentage === 100) {
+                        return (
+                          <View style={styles.halfWidthCardProgressRow}>
+                            <IconCheck size={20} color={COLORS.successBright} />
+                          </View>
+                        );
+                      } else if (completion.percentage > 0) {
+                        return (
+                          <View style={styles.halfWidthCardProgressRow}>
+                            <Text style={styles.halfWidthProgressText}>{completion.percentage}%</Text>
+                            <Svg height="16" width="16" viewBox="0 0 16 16" style={styles.progressCircle}>
+                              <Circle cx="8" cy="8" r="8" fill={COLORS.backgroundCanvas} />
+                              <Path
+                                d={`M 8 8 L 8 0 A 8 8 0 ${completion.percentage / 100 > 0.5 ? 1 : 0} 1 ${
+                                  8 + 8 * Math.sin(2 * Math.PI * (completion.percentage / 100))
+                                } ${
+                                  8 - 8 * Math.cos(2 * Math.PI * (completion.percentage / 100))
+                                } Z`}
+                                fill={COLORS.signalWarning}
+                              />
+                            </Svg>
+                          </View>
+                        );
+                      } else {
+                        return <Text style={styles.halfWidthCardAction}>{t('start')}</Text>;
+                      }
+                    })()}
+                  </View>
+                </TouchableOpacity>
+              ) : (
+                <TouchableOpacity
+                  style={styles.halfWidthAddButton}
+                  onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    (navigation as any).navigate('AccessoriesEditor', { templateId: workoutTemplateId, workoutKey });
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <DiagonalLinePattern width="100%" height="100%" borderRadius={BORDER_RADIUS.lg} />
+                  <IconAdd size={20} color={COLORS.text} />
+                  <Text style={styles.halfWidthAddText}>Add {t('core')}</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          )}
         </View>
       )}
       
@@ -2077,6 +2258,23 @@ export function ExerciseExecutionScreen() {
         );
       })()}
 
+      {/* Add Exercise Drawer */}
+      <BottomDrawer
+        visible={showAddExerciseDrawer}
+        onClose={() => setShowAddExerciseDrawer(false)}
+        maxHeight="70%"
+        fixedHeight={true}
+        showHandle={false}
+        scrollable={false}
+        contentStyle={{ padding: 0 }}
+      >
+        <AddExerciseDrawerContent
+          exercisesLibrary={exercisesLibrary}
+          onSelect={handleAddExercise}
+          onClose={() => setShowAddExerciseDrawer(false)}
+        />
+      </BottomDrawer>
+
       {/* Keyboard Accessory for number inputs */}
       <InputAccessoryView nativeID="drawerInputAccessory">
         <View style={styles.keyboardAccessory}>
@@ -2092,6 +2290,120 @@ export function ExerciseExecutionScreen() {
     </View>
   );
 }
+
+// Separate component to avoid re-renders on the main screen
+function AddExerciseDrawerContent({ 
+  exercisesLibrary, 
+  onSelect, 
+  onClose 
+}: { 
+  exercisesLibrary: Array<{ id: string; name: string }>; 
+  onSelect: (id: string, name: string) => void; 
+  onClose: () => void;
+}) {
+  const { t } = useTranslation();
+  const [searchQuery, setSearchQuery] = useState('');
+  
+  const filteredExercises = useMemo(() => {
+    if (!searchQuery.trim()) return exercisesLibrary;
+    const lowerQuery = searchQuery.toLowerCase();
+    return exercisesLibrary.filter(ex => ex.name.toLowerCase().includes(lowerQuery));
+  }, [searchQuery, exercisesLibrary]);
+  
+  return (
+    <View style={addExerciseStyles.container}>
+      <View style={addExerciseStyles.header}>
+        <Text style={addExerciseStyles.title}>{t('addExercise')}</Text>
+        <TouchableOpacity onPress={onClose} activeOpacity={0.7}>
+          <Text style={addExerciseStyles.cancelText}>{t('cancel')}</Text>
+        </TouchableOpacity>
+      </View>
+      
+      <View style={addExerciseStyles.searchContainer}>
+        <TextInput
+          style={addExerciseStyles.searchInput}
+          placeholder={t('searchExercisesPlaceholder')}
+          placeholderTextColor={COLORS.textMeta}
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+          autoCapitalize="none"
+          autoCorrect={false}
+        />
+      </View>
+      
+      <FlatList
+        data={filteredExercises}
+        keyExtractor={(item) => item.id}
+        style={addExerciseStyles.list}
+        keyboardShouldPersistTaps="handled"
+        renderItem={({ item }) => (
+          <TouchableOpacity
+            style={addExerciseStyles.exerciseItem}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              onSelect(item.id, item.name);
+            }}
+            activeOpacity={0.7}
+          >
+            <Text style={addExerciseStyles.exerciseName}>{item.name}</Text>
+          </TouchableOpacity>
+        )}
+        ItemSeparatorComponent={() => <View style={addExerciseStyles.separator} />}
+      />
+    </View>
+  );
+}
+
+const addExerciseStyles = StyleSheet.create({
+  container: {
+    flex: 1,
+    paddingTop: SPACING.md,
+  },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: SPACING.xxl,
+    paddingBottom: SPACING.md,
+  },
+  title: {
+    ...TYPOGRAPHY.h3,
+    color: COLORS.text,
+  },
+  cancelText: {
+    ...TYPOGRAPHY.body,
+    color: COLORS.accentPrimary,
+  },
+  searchContainer: {
+    paddingHorizontal: SPACING.xxl,
+    paddingBottom: SPACING.md,
+  },
+  searchInput: {
+    ...TYPOGRAPHY.body,
+    color: COLORS.text,
+    backgroundColor: COLORS.container,
+    borderRadius: BORDER_RADIUS.md,
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: SPACING.md,
+    borderWidth: 1,
+    borderColor: COLORS.borderDimmed,
+  },
+  list: {
+    flex: 1,
+    paddingHorizontal: SPACING.xxl,
+  },
+  exerciseItem: {
+    paddingVertical: SPACING.lg,
+  },
+  exerciseName: {
+    ...TYPOGRAPHY.body,
+    color: COLORS.text,
+  },
+  separator: {
+    height: 1,
+    backgroundColor: COLORS.borderDimmed,
+  },
+});
 
 const styles = StyleSheet.create({
   container: {
@@ -2741,5 +3053,75 @@ const styles = StyleSheet.create({
     color: COLORS.text,
     marginTop: SPACING.xs,
     marginBottom: SPACING.md,
+  },
+  // Add Exercise button
+  addExerciseButton: {
+    height: 56,
+    borderRadius: BORDER_RADIUS.lg,
+    marginTop: SPACING.xl,
+    overflow: 'hidden',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: SPACING.sm,
+  },
+  addExerciseButtonContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: SPACING.sm,
+  },
+  addExerciseButtonText: {
+    ...TYPOGRAPHY.meta,
+    color: COLORS.text,
+  },
+  // Completed workout - history view
+  historyViewContainer: {
+    paddingTop: SPACING.xs,
+  },
+  historyViewHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.md,
+    marginBottom: SPACING.xl,
+  },
+  historyViewTitle: {
+    ...TYPOGRAPHY.h3,
+    color: COLORS.successBright,
+  },
+  historyExerciseRow: {
+    flexDirection: 'row',
+    paddingVertical: SPACING.md,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.borderDimmed,
+    alignItems: 'flex-start',
+  },
+  historyExerciseNameColumn: {
+    flex: 1,
+    paddingRight: SPACING.lg,
+  },
+  historyExerciseName: {
+    ...TYPOGRAPHY.body,
+    color: COLORS.text,
+  },
+  historyExerciseDataColumn: {
+    minWidth: 120,
+    alignItems: 'flex-end',
+  },
+  historySetDataRow: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: SPACING.lg,
+    paddingVertical: 2,
+  },
+  historySetValueGroup: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: 4,
+  },
+  historySetValue: {
+    ...TYPOGRAPHY.body,
+    color: COLORS.text,
+    fontVariant: ['tabular-nums'],
   },
 });
