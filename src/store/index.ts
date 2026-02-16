@@ -9,9 +9,7 @@ import { SEED_EXERCISES } from '../constants';
 import { kgToLbs } from '../utils/weight';
 import { cloudBackupService } from '../services/cloudBackup';
 import { migrateOldStorageKeys } from '../utils/dataMigration';
-import { getCurrentUser } from '../services/authService';
-import { uploadBackup } from '../services/cloudSync';
-import { isSupabaseConfigured } from '../services/supabase';
+import { cloudSyncService } from '../services/cloudSync';
 
 dayjs.extend(isoWeek);
 
@@ -1194,17 +1192,11 @@ export const useStore = create<WorkoutStore>((set, get) => ({
         console.error('Error initializing cloud backup:', error);
       }
       
-      // Auto-sync to cloud if signed in (non-blocking)
-      if (isSupabaseConfigured()) {
-        getCurrentUser().then(user => {
-          if (user) {
-            console.log('☁️ Auto-syncing to cloud...');
-            uploadBackup().then(result => {
-              if (result.success) console.log('☁️ Auto-sync complete');
-              else console.log('☁️ Auto-sync skipped:', result.error);
-            });
-          }
-        }).catch(() => { /* silent */ });
+      // Initialize automatic Supabase cloud sync (after data is loaded)
+      try {
+        await cloudSyncService.initialize();
+      } catch (error) {
+        console.error('Error initializing Supabase sync:', error);
       }
     } catch (error) {
       console.error('Error initializing store:', error);

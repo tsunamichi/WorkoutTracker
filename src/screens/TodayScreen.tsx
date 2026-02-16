@@ -697,6 +697,7 @@ const styles = StyleSheet.create({
   },
   addWorkoutButton: {
     flexDirection: 'row',
+    width: '100%',
     height: 56,
     backgroundColor: COLORS.accentPrimaryDimmed,
     borderRadius: BORDER_RADIUS.md,

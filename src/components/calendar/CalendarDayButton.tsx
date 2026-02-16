@@ -75,13 +75,13 @@ const styles = StyleSheet.create({
   },
   dayButtonToday: {
     borderWidth: 1.5,
-    borderColor: COLORS.successBright,
+    borderColor: '#FFFFFF',
   },
   dayButtonSelected: {
-    backgroundColor: COLORS.successBright,
+    backgroundColor: '#FFFFFF',
   },
   dayButtonTodaySelected: {
-    backgroundColor: COLORS.accentPrimary,
+    backgroundColor: '#FFFFFF',
   },
   dayNumber: {
     ...TYPOGRAPHY.metaBold,

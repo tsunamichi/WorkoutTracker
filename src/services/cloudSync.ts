@@ -3,6 +3,8 @@ import { supabase, isSupabaseConfigured } from './supabase';
 import { getCurrentUser } from './authService';
 import { Platform } from 'react-native';
 
+const SUPABASE_SYNC_INTERVAL = 5 * 60 * 1000; // 5 minutes
+
 /**
  * Upload all AsyncStorage data to Supabase as a single JSON blob.
  * Uses upsert so repeated calls just update the existing row.
@@ -174,3 +176,73 @@ export async function getCloudBackupInfo(): Promise<{
     return { exists: false };
   }
 }
+
+class CloudSyncService {
+  private syncTimer: NodeJS.Timeout | null = null;
+  private isSyncing = false;
+
+  /**
+   * Initialize automatic Supabase cloud sync.
+   * Only starts if the user is signed in.
+   */
+  async initialize() {
+    try {
+      if (!isSupabaseConfigured()) return;
+
+      const user = await getCurrentUser();
+      if (!user) {
+        console.log('☁️ Supabase sync: not signed in, skipping auto-sync');
+        return;
+      }
+
+      console.log('☁️ Starting automatic Supabase sync (every 5 minutes)');
+      this.startAutoSync();
+    } catch (error) {
+      console.error('❌ Error initializing Supabase sync:', error);
+    }
+  }
+
+  /**
+   * Start the automatic sync timer.
+   */
+  startAutoSync() {
+    this.stopAutoSync();
+
+    this.syncTimer = setInterval(async () => {
+      await this.sync();
+    }, SUPABASE_SYNC_INTERVAL);
+
+    // First sync 10 seconds after init (offset from iCloud's 5s)
+    setTimeout(() => this.sync(), 10_000);
+  }
+
+  /**
+   * Stop the automatic sync timer.
+   */
+  stopAutoSync() {
+    if (this.syncTimer) {
+      clearInterval(this.syncTimer);
+      this.syncTimer = null;
+    }
+  }
+
+  /**
+   * Run a single sync (upload).
+   */
+  async sync() {
+    if (this.isSyncing) return;
+    this.isSyncing = true;
+    try {
+      const result = await uploadBackup();
+      if (!result.success) {
+        console.log('☁️ Supabase auto-sync skipped:', result.error);
+      }
+    } catch (error) {
+      console.error('❌ Supabase auto-sync error:', error);
+    } finally {
+      this.isSyncing = false;
+    }
+  }
+}
+
+export const cloudSyncService = new CloudSyncService();

@@ -74,7 +74,7 @@ export function ExpandableCalendarStrip({
       .sort((a, b) => b.startDate.localeCompare(a.startDate));
 
     allPlans.forEach((plan) => {
-      const color = plan.active ? COLORS.success : `${COLORS.failure}29`;
+      const color = plan.active ? COLORS.info : `${COLORS.failure}29`;
       const start = dayjs(plan.startDate);
       const totalDays = plan.weeks * 7;
       for (let d = 0; d < totalDays; d++) {

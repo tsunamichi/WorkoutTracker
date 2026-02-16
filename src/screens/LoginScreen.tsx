@@ -18,6 +18,8 @@ import {
   isAppleSignInAvailable,
 } from '../services/authService';
 import { isSupabaseConfigured } from '../services/supabase';
+import { getCloudBackupInfo, downloadBackup } from '../services/cloudSync';
+import { useStore } from '../store';
 
 interface LoginScreenProps {
   onAuthenticated: () => void;
@@ -28,7 +30,9 @@ export function LoginScreen({ onAuthenticated, onContinueAsGuest }: LoginScreenP
   const insets = useSafeAreaInsets();
   const { t } = useTranslation();
   const [isSigningIn, setIsSigningIn] = useState(false);
+  const [statusText, setStatusText] = useState('');
   const [appleAvailable, setAppleAvailable] = useState(false);
+  const { initialize } = useStore();
 
   // Animations
   const fadeAnim = React.useRef(new Animated.Value(0)).current;
@@ -76,16 +80,33 @@ export function LoginScreen({ onAuthenticated, onContinueAsGuest }: LoginScreenP
   const handleSignInWithApple = async () => {
     if (isSigningIn) return;
     setIsSigningIn(true);
+    setStatusText('Signing in...');
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
     try {
       await signInWithApple();
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+
+      // Check for existing cloud backup and restore automatically
+      setStatusText('Checking for backup...');
+      const backupInfo = await getCloudBackupInfo();
+
+      if (backupInfo.exists) {
+        setStatusText('Restoring your data...');
+        const result = await downloadBackup();
+        if (result.success) {
+          // Re-initialize the store so it picks up the restored data
+          await initialize();
+          console.log(`☁️ Auto-restored ${result.restoredKeys} keys from cloud backup`);
+        }
+      }
+
       onAuthenticated();
     } catch (e: any) {
       // User cancelled Apple Sign-In -- don't show an error
       if (e?.code === 'ERR_REQUEST_CANCELED') {
         setIsSigningIn(false);
+        setStatusText('');
         return;
       }
       Alert.alert(t('signInFailed'), e?.message || 'Unknown error', [
@@ -93,6 +114,7 @@ export function LoginScreen({ onAuthenticated, onContinueAsGuest }: LoginScreenP
       ]);
     } finally {
       setIsSigningIn(false);
+      setStatusText('');
     }
   };
 
@@ -142,7 +164,10 @@ export function LoginScreen({ onAuthenticated, onContinueAsGuest }: LoginScreenP
             disabled={isSigningIn}
           >
             {isSigningIn ? (
-              <ActivityIndicator size="small" color={COLORS.backgroundCanvas} />
+              <View style={styles.signingInRow}>
+                <ActivityIndicator size="small" color={COLORS.backgroundCanvas} />
+                {statusText ? <Text style={styles.statusText}>{statusText}</Text> : null}
+              </View>
             ) : (
               <>
                 <Text style={styles.appleIcon}>{'\uF8FF'}</Text>
@@ -214,6 +239,16 @@ const styles = StyleSheet.create({
     borderRadius: BORDER_RADIUS.md,
     gap: 8,
     minHeight: 54,
+  },
+  signingInRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  statusText: {
+    fontSize: 15,
+    fontWeight: '500',
+    color: '#000000',
   },
   appleIcon: {
     fontSize: 20,
