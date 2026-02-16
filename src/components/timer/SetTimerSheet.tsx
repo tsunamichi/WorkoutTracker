@@ -51,7 +51,7 @@ interface SetTimerSheetProps {
 
 const REST_COLOR_YELLOW = COLORS.signalWarning;
 const REST_COLOR_RED = COLORS.signalNegative;
-const EXERCISE_COLOR_BLUE = '#1B1B1B'; // Black for exercise timer
+const EXERCISE_COLOR_BLUE = COLORS.info;
 const PRE_EXERCISE_COUNTDOWN = 5;
 const MIN_SIZE = 180;
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -1050,7 +1050,7 @@ export function SetTimerSheet({
                     },
                   ]}
                 >
-                  <Text style={styles.timerText}>{formatTime()}</Text>
+                  <Text style={[styles.timerText, currentPhase === 'exercise' && styles.countdownText]}>{formatTime()}</Text>
                 </Animated.View>
               )}
             </Animated.View>
@@ -1147,7 +1147,7 @@ const styles = StyleSheet.create({
   },
   timerText: {
     fontSize: 56,
-    color: '#FFFFFF',
+    color: COLORS.backgroundCanvas,
     fontWeight: '300',
     fontFamily: 'System',
     textAlign: 'center',

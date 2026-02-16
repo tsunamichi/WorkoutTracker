@@ -150,6 +150,8 @@ const styles = StyleSheet.create({
   },
   playPauseButton: {
     backgroundColor: COLORS.accentPrimaryDimmed,
+    borderWidth: 1.5,
+    borderColor: COLORS.accentPrimary,
     width: 64,
     height: 64,
     borderRadius: 16,

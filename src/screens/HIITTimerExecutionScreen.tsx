@@ -40,7 +40,7 @@ const LIGHT_COLORS = {
 
 const PHASE_COLORS = {
   countdown: COLORS.signalWarning,
-  work: '#1B1B1B', // Black
+  work: COLORS.info,
   restYellow: COLORS.signalWarning,
   restRed: COLORS.signalNegative,
   complete: COLORS.signalPositive,
@@ -1477,7 +1477,7 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
                 )
               ) : currentPhase !== 'complete' ? (
                 // Work and rest phases - text stays fixed size (no scale transform)
-                <Text style={styles.timerText}>
+                <Text style={[styles.timerText, currentPhase === 'work' && { color: COLORS.text }]}>
                   {getDisplayText()}
                 </Text>
               ) : null}
@@ -1597,7 +1597,7 @@ const styles = StyleSheet.create({
   timerText: {
     fontSize: 56,
     fontWeight: '300',
-    color: '#FFFFFF',
+    color: COLORS.backgroundCanvas,
     textAlign: 'center',
   },
   completeMessageContainer: {

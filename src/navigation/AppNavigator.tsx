@@ -951,7 +951,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.xxl,
   },
   swapSheetItemTitle: {
-    ...TYPOGRAPHY.h3,
+    ...TYPOGRAPHY.body,
     color: LIGHT_COLORS.secondary,
     marginBottom: SPACING.xs,
   },
