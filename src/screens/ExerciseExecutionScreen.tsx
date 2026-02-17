@@ -70,6 +70,7 @@ export function ExerciseExecutionScreen() {
     deleteSession,
     completeWorkout,
     uncompleteWorkout,
+    updateExercisePR,
   } = useStore();
   
   // Get these once without subscribing to avoid re-renders
@@ -738,6 +739,19 @@ export function ExerciseExecutionScreen() {
       await updateMainCompletion(workoutKey, setId, true);
     }
     console.log('✅ Set completion saved');
+    
+    // Check for new PR (only for main exercises with weight > 0)
+    if (type === 'main' && !currentExercise.isTimeBased) {
+      const exerciseIdForPR = currentExercise.exerciseId || currentExercise.id;
+      const setValues = localValues[setId];
+      const liftedWeight = setValues?.weight ?? currentExercise.weight ?? 0;
+      const liftedReps = setValues?.reps ?? Number(currentExercise.reps) ?? 0;
+      if (liftedWeight > 0) {
+        const dateMatch = workoutKey?.match(/(\d{4}-\d{2}-\d{2})/);
+        const prDate = dateMatch ? dateMatch[1] : dayjs().format('YYYY-MM-DD');
+        await updateExercisePR(exerciseIdForPR, currentExercise.exerciseName, liftedWeight, liftedReps, prDate);
+      }
+    }
     
     // Check if all exercises in this round are complete
     const allExercisesComplete = currentGroup.exercises.every(ex => {

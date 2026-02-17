@@ -93,6 +93,22 @@ type TranslationKey =
   | 'addPhotos'
   | 'addWeight'
   | 'progressPhoto'
+  | 'thisWeek'
+  | 'weekOf'
+  | 'volume'
+  | 'vsLastWeek'
+  | 'vsCycleStart'
+  | 'baseline'
+  | 'workoutsCompletedCount'
+  | 'allTimeRecords'
+  | 'keyLifts'
+  | 'noRepeatExercisesYet'
+  | 'consistency'
+  | 'bodyCheckIn'
+  | 'addCheckIn'
+  | 'noDataYet'
+  | 'completeFirstWorkout'
+  | 'pr'
   | 'progressPhotoRequired'
   | 'progressWeightRequired'
   | 'progressAlreadyLoggedThisWeek'
@@ -547,6 +563,22 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     schedule: 'Schedule',
     createPlanWithAi: 'Create Plan with AI',
     progress: 'Progress',
+    thisWeek: 'This Week',
+    weekOf: 'Week {current} of {total}',
+    volume: 'Volume',
+    vsLastWeek: 'vs last week',
+    vsCycleStart: 'vs cycle start',
+    baseline: 'Baseline',
+    workoutsCompletedCount: '{count} workouts',
+    allTimeRecords: 'All-time Records',
+    keyLifts: 'Key Lifts',
+    noRepeatExercisesYet: 'Log more sessions to see trends',
+    consistency: 'Consistency',
+    bodyCheckIn: 'Body Check-in',
+    addCheckIn: 'Add Check-in',
+    noDataYet: 'No data yet',
+    completeFirstWorkout: 'Complete your first workout to see your progress here.',
+    pr: 'PR',
     progressSectionHelper: 'Check-ins unlock on Fridays',
     noProgressYet: 'No progress yet',
     seeAllProgress: 'See all progress',
@@ -1090,6 +1122,22 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     schedule: 'Programar',
     createPlanWithAi: 'Crear plan con IA',
     progress: 'Progreso',
+    thisWeek: 'Esta Semana',
+    weekOf: 'Semana {current} de {total}',
+    volume: 'Volumen',
+    vsLastWeek: 'vs semana pasada',
+    vsCycleStart: 'vs inicio del ciclo',
+    baseline: 'Base',
+    workoutsCompletedCount: '{count} entrenamientos',
+    allTimeRecords: 'Récords Históricos',
+    keyLifts: 'Levantamientos Clave',
+    noRepeatExercisesYet: 'Registra más sesiones para ver tendencias',
+    consistency: 'Consistencia',
+    bodyCheckIn: 'Check-in Corporal',
+    addCheckIn: 'Agregar Check-in',
+    noDataYet: 'Sin datos aún',
+    completeFirstWorkout: 'Completa tu primer entrenamiento para ver tu progreso aquí.',
+    pr: 'PR',
     progressSectionHelper: 'Check-ins se desbloquean los viernes',
     noProgressYet: 'Sin progreso aún',
     seeAllProgress: 'Ver todo el progreso',

@@ -124,11 +124,11 @@ function TabNavigator() {
   // Animate label colors: dark on active lime pill, muted when inactive
   const scheduleLabelColor = indicatorPosition.interpolate({
     inputRange: [0, 1],
-    outputRange: [COLORS.backgroundCanvas, '#8E8E93'],
+    outputRange: [COLORS.backgroundCanvas, COLORS.accentPrimary],
   });
   const progressLabelColor = indicatorPosition.interpolate({
     inputRange: [0, 1],
-    outputRange: ['#8E8E93', COLORS.backgroundCanvas],
+    outputRange: [COLORS.accentPrimary, COLORS.backgroundCanvas],
   });
   
   const switchTab = React.useCallback((tab: 'Schedule' | 'Progress') => {
@@ -460,7 +460,7 @@ function TabNavigator() {
             >
               <IconCalendar 
                 size={24} 
-                color={activeTab === 'Schedule' ? COLORS.backgroundCanvas : '#8E8E93'} 
+                color={activeTab === 'Schedule' ? COLORS.backgroundCanvas : COLORS.accentPrimary} 
               />
             </Animated.View>
             <Animated.View
@@ -515,7 +515,7 @@ function TabNavigator() {
             >
               <IconHistory 
                 size={24} 
-                color={activeTab === 'Progress' ? COLORS.backgroundCanvas : '#8E8E93'} 
+                color={activeTab === 'Progress' ? COLORS.backgroundCanvas : COLORS.accentPrimary} 
               />
             </Animated.View>
             <Animated.View
@@ -849,10 +849,12 @@ const styles = StyleSheet.create({
   tabBar: {
     flex: 1,
     height: 56,
-    backgroundColor: COLORS.activeCard,
+    backgroundColor: COLORS.accentPrimaryDimmed,
     borderRadius: 28,
     flexDirection: 'row',
     position: 'relative',
+    borderWidth: 1,
+    borderColor: COLORS.accentPrimary,
   },
   tabIndicator: {
     position: 'absolute',
