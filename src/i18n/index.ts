@@ -56,6 +56,8 @@ type TranslationKey =
   | 'noWorkoutPlanned'
   | 'completed'
   | 'addIntervalTimer'
+  | 'intervalTimers'
+  | 'addTimer'
   | 'templates'
   | 'noTemplatesYet'
   | 'createYourFirstWorkout'
@@ -638,6 +640,8 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     noWorkoutPlanned: 'No workout planned',
     completed: 'Completed',
     addIntervalTimer: 'Add interval timer',
+    intervalTimers: 'Interval Timers',
+    addTimer: 'Add Timer',
     addInterval: 'Add',
     new: 'New',
     inProgress: 'In progress',
@@ -1179,6 +1183,8 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     noWorkoutPlanned: 'No hay entrenamiento planeado',
     completed: 'Completado',
     addIntervalTimer: 'Agregar temporizador',
+    intervalTimers: 'Temporizadores de Intervalos',
+    addTimer: 'Agregar Temporizador',
     addInterval: 'Agregar',
     new: 'Nuevo',
     inProgress: 'En progreso',

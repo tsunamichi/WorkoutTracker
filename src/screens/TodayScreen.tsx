@@ -6,7 +6,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { useStore } from '../store';
 import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS, CARDS } from '../constants';
-import { IconCheck, IconSwap, IconAdd, IconSettings, IconCalendar } from '../components/icons';
+import { IconCheckmark, IconSwap, IconAdd, IconSettings, IconCalendar } from '../components/icons';
 import { ExpandableCalendarStrip } from '../components/calendar/ExpandableCalendarStrip';
 import { DiagonalLinePattern } from '../components/common/DiagonalLinePattern';
 import dayjs from 'dayjs';
@@ -280,7 +280,7 @@ export function TodayScreen({ onDateChange, onOpenSwapDrawer, onOpenAddWorkout }
                             <Text style={styles.workoutName}>{sw.titleSnapshot}</Text>
                             {isCompleted ? (
                               <View style={styles.completedCheckBadge}>
-                                <IconCheck size={20} color={COLORS.success} checkColor={COLORS.successBright} />
+                                <IconCheckmark size={16} color={COLORS.successBright} />
                               </View>
                             ) : progress > 0 ? (
                               <View style={styles.progressIndicator}>
@@ -388,6 +388,7 @@ export function TodayScreen({ onDateChange, onOpenSwapDrawer, onOpenAddWorkout }
                 
                 return (
                   <View style={styles.intervalsSection}>
+                    <Text style={styles.intervalsSectionTitle}>{t('intervalTimers')}</Text>
                     {/* Show explanatory text when no intervals */}
                     {completedIntervals.length === 0 && isToday && (
                         <TouchableOpacity
@@ -397,7 +398,7 @@ export function TodayScreen({ onDateChange, onOpenSwapDrawer, onOpenAddWorkout }
                         >
                           <DiagonalLinePattern width="100%" height={56} borderRadius={16} />
                           <IconAdd size={24} color={COLORS.text} />
-                        <Text style={styles.addIntervalCardText}>{t('addIntervalTimer')}</Text>
+                        <Text style={styles.addIntervalCardText}>{t('addTimer')}</Text>
                         </TouchableOpacity>
                     )}
                     
@@ -613,7 +614,7 @@ const styles = StyleSheet.create({
   completedCheckBadge: {
     position: 'absolute',
     top: 0,
-    right: 0,
+    right: -4,
   },
   progressText: {
     ...TYPOGRAPHY.meta,
@@ -740,6 +741,12 @@ const styles = StyleSheet.create({
   // Intervals Section
   intervalsSection: {
     marginTop: 56, // 56px gap from workout card
+  },
+  intervalsSectionTitle: {
+    ...TYPOGRAPHY.meta,
+    color: COLORS.text,
+    textTransform: 'uppercase',
+    marginBottom: SPACING.md,
   },
   intervalsHeader: {
     flexDirection: 'row',

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, LayoutAnimation, Platform, UIManager, Alert, Animated, Modal, FlatList, TextInput, InputAccessoryView, Keyboard, PanResponder } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, LayoutAnimation, Platform, UIManager, Alert, Animated, Modal, FlatList, TextInput, Keyboard, PanResponder } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, RouteProp, useFocusEffect } from '@react-navigation/native';
 import Svg, { Circle, Path } from 'react-native-svg';
@@ -319,6 +319,7 @@ export function ExerciseExecutionScreen() {
   const [showExerciseHistory, setShowExerciseHistory] = useState(false);
   const [showSwapModal, setShowSwapModal] = useState(false);
   const [showExerciseSettingsMenu, setShowExerciseSettingsMenu] = useState(false);
+  const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
   const [isAccessoriesCollapsed, setIsAccessoriesCollapsed] = useState(true);
   const historyOpacity = useRef(new Animated.Value(0)).current;
   
@@ -334,6 +335,13 @@ export function ExerciseExecutionScreen() {
     activeExerciseIndexRef.current = activeExerciseIndex;
   }, [completedSets, currentRounds, activeExerciseIndex]);
   
+  // Track keyboard visibility for in-drawer Save button
+  useEffect(() => {
+    const showSub = Keyboard.addListener(Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow', () => setIsKeyboardVisible(true));
+    const hideSub = Keyboard.addListener(Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide', () => setIsKeyboardVisible(false));
+    return () => { showSub.remove(); hideSub.remove(); };
+  }, []);
+
   // Animate history visibility
   useEffect(() => {
     Animated.timing(historyOpacity, {
@@ -1300,7 +1308,7 @@ export function ExerciseExecutionScreen() {
           /* ===== COMPLETED WORKOUT - HISTORY VIEW ===== */
           <View style={styles.historyViewContainer}>
             <View style={styles.historyViewHeader}>
-              <IconCheck size={24} color={COLORS.successBright} />
+              <IconCheckmark size={16} color={COLORS.successBright} />
               <Text style={styles.historyViewTitle}>{t('workoutComplete')}</Text>
             </View>
             
@@ -1598,7 +1606,7 @@ export function ExerciseExecutionScreen() {
                       {/* Completed check icon */}
                       {isCompleted && (
                         <View style={styles.completedCardBadge}>
-                          <IconCheck size={20} color={COLORS.successBright} />
+                          <IconCheckmark size={16} color={COLORS.successBright} />
                         </View>
                       )}
 
@@ -1692,7 +1700,7 @@ export function ExerciseExecutionScreen() {
                       if (completion.percentage === 100) {
                         return (
                           <View style={styles.halfWidthCardProgressRow}>
-                            <IconCheck size={20} color={COLORS.successBright} />
+                            <IconCheckmark size={16} color={COLORS.successBright} />
                           </View>
                         );
                       } else if (completion.percentage > 0) {
@@ -1754,7 +1762,7 @@ export function ExerciseExecutionScreen() {
                       if (completion.percentage === 100) {
                         return (
                           <View style={styles.halfWidthCardProgressRow}>
-                            <IconCheck size={20} color={COLORS.successBright} />
+                            <IconCheckmark size={16} color={COLORS.successBright} />
                           </View>
                         );
                       } else if (completion.percentage > 0) {
@@ -1975,7 +1983,7 @@ export function ExerciseExecutionScreen() {
                         </View>
                         {isCompleted && (
                           <View style={styles.completedBadge}>
-                            <IconCheck size={20} color={COLORS.successBright} />
+                            <IconCheckmark size={16} color={COLORS.successBright} />
                           </View>
                         )}
                       </TouchableOpacity>
@@ -1990,7 +1998,6 @@ export function ExerciseExecutionScreen() {
                                 style={styles.drawerInput}
                                 defaultValue={formatWeightForLoad(displayWeight, useKg)}
                                 keyboardType="decimal-pad"
-                                inputAccessoryViewID="drawerInputAccessory"
                                 selectTextOnFocus
                                 onEndEditing={(e) => {
                                   const text = e.nativeEvent.text.trim();
@@ -2021,7 +2028,6 @@ export function ExerciseExecutionScreen() {
                                 style={styles.drawerInput}
                                 defaultValue={String(displayReps)}
                                 keyboardType="number-pad"
-                                inputAccessoryViewID="drawerInputAccessory"
                                 selectTextOnFocus
                                 onEndEditing={(e) => {
                                   const text = e.nativeEvent.text.trim();
@@ -2131,6 +2137,19 @@ export function ExerciseExecutionScreen() {
               </>
             );
           })()}
+
+          {/* Save button - appears when keyboard is visible */}
+          {isKeyboardVisible && (
+            <View style={styles.drawerKeyboardSaveContainer}>
+              <TouchableOpacity
+                style={styles.drawerKeyboardSaveButton}
+                onPress={() => Keyboard.dismiss()}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.drawerKeyboardSaveText}>{t('save')}</Text>
+              </TouchableOpacity>
+            </View>
+          )}
         </View>
       </BottomDrawer>
       );
@@ -2221,7 +2240,7 @@ export function ExerciseExecutionScreen() {
               destructive: true,
             },
             {
-              icon: <IconCheck size={24} color="#FFFFFF" />,
+              icon: <IconCheckmark size={24} color="#FFFFFF" />,
               label: t('complete'),
               onPress: handleCompleteAll,
             },
@@ -2328,18 +2347,6 @@ export function ExerciseExecutionScreen() {
         />
       </BottomDrawer>
 
-      {/* Keyboard Accessory for number inputs */}
-      <InputAccessoryView nativeID="drawerInputAccessory">
-        <View style={styles.keyboardAccessory}>
-          <TouchableOpacity
-            style={styles.keyboardDoneButton}
-            onPress={() => Keyboard.dismiss()}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.keyboardDoneText}>Done</Text>
-          </TouchableOpacity>
-        </View>
-      </InputAccessoryView>
     </View>
   );
 }
@@ -2725,22 +2732,20 @@ const styles = StyleSheet.create({
     ...TYPOGRAPHY.body,
     color: COLORS.textMeta,
   },
-  keyboardAccessory: {
-    backgroundColor: COLORS.backgroundCanvas,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
+  drawerKeyboardSaveContainer: {
+    paddingVertical: 12,
     borderTopWidth: 1,
     borderTopColor: COLORS.border,
   },
-  keyboardDoneButton: {
-    backgroundColor: COLORS.accentPrimary,
-    borderRadius: BORDER_RADIUS.md,
+  drawerKeyboardSaveButton: {
+    backgroundColor: COLORS.accentPrimaryDimmed,
+    borderRadius: 16,
     paddingVertical: 12,
     alignItems: 'center',
   },
-  keyboardDoneText: {
+  drawerKeyboardSaveText: {
     ...TYPOGRAPHY.body,
-    color: '#FFFFFF',
+    color: COLORS.accentPrimary,
     fontWeight: '600',
   },
   drawerTitleRow: {
@@ -2804,12 +2809,12 @@ const styles = StyleSheet.create({
   completedBadge: {
     position: 'absolute',
     top: 12,
-    right: 12,
+    right: 14,
   },
   completedCardBadge: {
     position: 'absolute',
     top: 12,
-    right: 12,
+    right: 14,
   },
   setPreviewRow: {
     flexDirection: 'row',
