@@ -552,7 +552,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'transparent',
   },
   startButton: {
-    backgroundColor: '#000000',
+    backgroundColor: COLORS.accentPrimaryDimmed,
     paddingVertical: SPACING.lg,
     borderRadius: 12,
     alignItems: 'center',
@@ -561,7 +561,7 @@ const styles = StyleSheet.create({
     ...TYPOGRAPHY.meta,
     fontWeight: 'bold',
     fontWeight: '600',
-    color: '#FFFFFF',
+    color: COLORS.accentPrimary,
   },
 });
 

@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, LayoutAnimation, Platform, UIManager, Alert, Animated, Modal, FlatList, TextInput, InputAccessoryView, Keyboard } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, LayoutAnimation, Platform, UIManager, Alert, Animated, Modal, FlatList, TextInput, InputAccessoryView, Keyboard, PanResponder } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, RouteProp, useFocusEffect } from '@react-navigation/native';
 import Svg, { Circle, Path } from 'react-native-svg';
 import * as Haptics from 'expo-haptics';
 import { useStore } from '../store';
 import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS, CARDS } from '../constants';
-import { IconArrowLeft, IconCheck, IconCheckmark, IconAddLine, IconMinusLine, IconTrash, IconEdit, IconMenu, IconHistory, IconRestart, IconSkip, IconSwap, IconSettings, IconArrowRight, IconAdd, IconChevronDown } from '../components/icons';
+import { IconArrowLeft, IconCheck, IconCheckmark, IconAddLine, IconMinusLine, IconTrash, IconEdit, IconMenu, IconHistory, IconRestart, IconSkip, IconSwap, IconSettings, IconArrowRight, IconAdd } from '../components/icons';
 import { BottomDrawer } from '../components/common/BottomDrawer';
 import { NextLabel } from '../components/common/NextLabel';
 import { SetTimerSheet } from '../components/timer/SetTimerSheet';
@@ -141,7 +141,7 @@ export function ExerciseExecutionScreen() {
           sets: item.sets,
           reps: item.reps,
           weight: item.weight || 0,
-          isTimeBased: false,
+          isTimeBased: item.isTimeBased ?? exercise?.measurementType === 'time' ?? false,
           isPerSide: false,
           cycleId: item.cycleId,
           cycleOrder: item.cycleOrder,
@@ -220,7 +220,63 @@ export function ExerciseExecutionScreen() {
   const [activeExerciseIndex, setActiveExerciseIndex] = useState(0); // Start with first exercise when group is expanded
   const [hasLoggedAnySet, setHasLoggedAnySet] = useState(false); // Track if any set has been logged
   const [completionTimestamps, setCompletionTimestamps] = useState<Record<string, number>>({}); // Track when groups were completed
-  const [accessoriesCollapsed, setAccessoriesCollapsed] = useState(false); // Auto-collapse accessories on first set log
+  const accessoriesAnim = useRef(new Animated.Value(0)).current; // 0 = expanded, 1 = collapsed
+  const accessoriesIsCollapsed = useRef(false);
+  const accessoriesDragStart = useRef(0);
+  const accessoriesCurrentVal = useRef(0);
+
+  const ACCESSORIES_EXPANDED_HEIGHT = 120;
+  const SNAP_THRESHOLD = 0.35;
+
+  useEffect(() => {
+    const id = accessoriesAnim.addListener(({ value }) => {
+      accessoriesCurrentVal.current = value;
+    });
+    return () => accessoriesAnim.removeListener(id);
+  }, []);
+
+  const collapseAccessories = () => {
+    accessoriesIsCollapsed.current = true;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    Animated.spring(accessoriesAnim, { toValue: 1, useNativeDriver: false, damping: 18, stiffness: 200 }).start();
+  };
+
+  const expandAccessories = () => {
+    accessoriesIsCollapsed.current = false;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    Animated.spring(accessoriesAnim, { toValue: 0, useNativeDriver: false, damping: 18, stiffness: 200 }).start();
+  };
+
+  const accessoriesPanResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: (_, gs) => Math.abs(gs.dy) > 5,
+      onPanResponderGrant: () => {
+        accessoriesAnim.stopAnimation();
+        accessoriesDragStart.current = accessoriesCurrentVal.current;
+      },
+      onPanResponderMove: (_, gs) => {
+        const progress = accessoriesDragStart.current + (gs.dy / ACCESSORIES_EXPANDED_HEIGHT);
+        accessoriesAnim.setValue(Math.max(0, Math.min(1, progress)));
+      },
+      onPanResponderRelease: (_, gs) => {
+        const currentVal = accessoriesCurrentVal.current;
+        const isTap = Math.abs(gs.dy) < 5 && Math.abs(gs.dx) < 5;
+
+        if (isTap) {
+          if (accessoriesIsCollapsed.current) expandAccessories();
+          else collapseAccessories();
+          return;
+        }
+
+        const goingDown = gs.vy > 0;
+        const shouldCollapse = goingDown ? currentVal > SNAP_THRESHOLD : currentVal > (1 - SNAP_THRESHOLD);
+
+        if (shouldCollapse) collapseAccessories();
+        else expandAccessories();
+      },
+    })
+  ).current;
   const [showAddExerciseDrawer, setShowAddExerciseDrawer] = useState(false); // Add exercise bottom drawer
 
   // Staggered indicator animation using Animated.View (independent of LayoutAnimation)
@@ -359,7 +415,8 @@ export function ExerciseExecutionScreen() {
       const completedItemsSet = new Set(completion.completedItems);
       setCompletedSets(completedItemsSet);
       setHasLoggedAnySet(true); // User has already logged sets
-      setAccessoriesCollapsed(true); // Keep accessories collapsed if sets were previously logged
+      accessoriesIsCollapsed.current = true;
+      accessoriesAnim.setValue(1);
       
       // Calculate current rounds for each group
       const rounds: Record<string, number> = {};
@@ -652,7 +709,7 @@ export function ExerciseExecutionScreen() {
     
     // Mark that user has logged at least one set (locks the flow)
     if (!hasLoggedAnySet) {
-      setAccessoriesCollapsed(true);
+      collapseAccessories();
     }
     setHasLoggedAnySet(true);
     
@@ -913,7 +970,7 @@ export function ExerciseExecutionScreen() {
             });
             setCurrentRounds(prev => ({ ...prev, ...updatedRounds }));
             setHasLoggedAnySet(true);
-            setAccessoriesCollapsed(true);
+            collapseAccessories();
             
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
             
@@ -1554,7 +1611,9 @@ export function ExerciseExecutionScreen() {
                             onPress={handleStart}
                             activeOpacity={0.8}
                           >
-                            <Text style={styles.cardStartButtonText}>{t('start')}</Text>
+                            <Text style={styles.cardStartButtonText}>
+                              {group.exercises[activeExerciseIndex]?.isTimeBased ? t('startTimer') : t('markAsCompleted')}
+                            </Text>
                           </TouchableOpacity>
                           <View style={styles.setCountIndicator}>
                             <Text style={styles.setCountText} numberOfLines={1}>
@@ -1592,26 +1651,25 @@ export function ExerciseExecutionScreen() {
         )}
       </ScrollView>
       
-      {/* Accessories pinned to bottom */}
+      {/* Accessories slide-up drawer */}
       {type === 'main' && template && (
         <View style={[styles.accessoriesBottomContainer, { paddingBottom: insets.bottom + 8 }]}>
-          <TouchableOpacity
-            style={styles.accessoriesLabelContainer}
-            onPress={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              LayoutAnimation.configureNext(
-                LayoutAnimation.create(250, LayoutAnimation.Types.easeInEaseOut, LayoutAnimation.Properties.opacity)
-              );
-              setAccessoriesCollapsed(!accessoriesCollapsed);
-            }}
-            activeOpacity={0.7}
-          >
-            <Text style={styles.accessoriesLabel}>Accessories</Text>
-            <View style={{ transform: [{ rotate: accessoriesCollapsed ? '180deg' : '0deg' }] }}>
-              <IconChevronDown size={16} color={COLORS.text} />
+          {/* Drag handle — tap and drag handled by PanResponder */}
+          <View {...accessoriesPanResponder.panHandlers}>
+            <View style={styles.accessoriesHandleArea}>
+              <View style={styles.accessoriesHandle} />
             </View>
-          </TouchableOpacity>
-          {!accessoriesCollapsed && (
+            <View style={styles.accessoriesLabelContainer}>
+              <Text style={styles.accessoriesLabel}>Accessories</Text>
+            </View>
+          </View>
+
+          {/* Animated content */}
+          <Animated.View style={{
+            height: accessoriesAnim.interpolate({ inputRange: [0, 1], outputRange: [ACCESSORIES_EXPANDED_HEIGHT, 0] }),
+            opacity: accessoriesAnim.interpolate({ inputRange: [0, 0.5, 1], outputRange: [1, 0.3, 0] }),
+            overflow: 'hidden',
+          }}>
             <View style={styles.accessoriesCardsRow}>
               {/* Warm-up Card */}
               {template.warmupItems && template.warmupItems.length > 0 ? (
@@ -1737,7 +1795,7 @@ export function ExerciseExecutionScreen() {
                 </TouchableOpacity>
               )}
             </View>
-          )}
+          </Animated.View>
         </View>
       )}
       
@@ -2022,35 +2080,30 @@ export function ExerciseExecutionScreen() {
               <>
                 <View style={styles.historyFullBleedDivider} />
                 <View style={styles.historySection}>
-                  <View style={styles.historyHeader}>
-                    <Text style={styles.historyLabel}>{t('latestExerciseLog')}</Text>
-                    {exerciseHistory.length > 1 && (
-                      <TouchableOpacity
-                        style={styles.viewAllButton}
-                        onPress={() => setShowExerciseHistory(!showExerciseHistory)}
-                        activeOpacity={0.7}
-                      >
-                        <Text style={styles.viewAllText}>
-                          {showExerciseHistory ? t('showLess') : t('viewAll')}
-                        </Text>
-                        <IconArrowRight size={16} color={COLORS.accentPrimary} />
-                      </TouchableOpacity>
-                    )}
-                  </View>
                   {workoutsToShow.map((workout, workoutIndex) => (
                     <View key={workout.date}>
-                      <View style={styles.historyWorkoutGroup}>
-                        {/* Date column on the left */}
-                        <View style={styles.historyDateColumn}>
-                          <Text style={styles.historyDateText}>
-                            {dayjs(workout.date).format('MMMM')}
+                      <View style={styles.historyRow}>
+                        {/* Left column: label + date */}
+                        <View style={styles.historyLeftColumn}>
+                          <Text style={styles.historyLabel}>{t('latestExerciseLog')}</Text>
+                          <Text style={styles.historyDateLine}>
+                            {dayjs(workout.date).format('MMMM D')}{getOrdinalSuffix(dayjs(workout.date).date())}
                           </Text>
-                          <Text style={styles.historyDateText}>
-                            {dayjs(workout.date).date()}{getOrdinalSuffix(dayjs(workout.date).date())}
-                          </Text>
+                          {workoutIndex === 0 && exerciseHistory.length > 1 && (
+                            <TouchableOpacity
+                              style={styles.viewAllButton}
+                              onPress={() => setShowExerciseHistory(!showExerciseHistory)}
+                              activeOpacity={0.7}
+                            >
+                              <Text style={styles.viewAllText}>
+                                {showExerciseHistory ? t('showLess') : t('viewAll')}
+                              </Text>
+                              <IconArrowRight size={16} color={COLORS.accentPrimary} />
+                            </TouchableOpacity>
+                          )}
                         </View>
-                        
-                        {/* Sets column on the right */}
+
+                        {/* Right column: sets */}
                         <View style={styles.historySetsColumn}>
                           {workout.sets.slice().reverse().map((set, setIndex) => (
                             <View key={setIndex} style={styles.historySetRow}>
@@ -2062,7 +2115,7 @@ export function ExerciseExecutionScreen() {
                               </View>
                               <View style={styles.historyValueColumn}>
                                 <Text style={styles.historySetText}>{set.reps}</Text>
-                                <Text style={styles.historySetUnit}>reps</Text>
+                                <Text style={styles.historySetUnit}>{activeExercise.isTimeBased ? 'secs' : 'reps'}</Text>
                               </View>
                             </View>
                           ))}
@@ -2847,11 +2900,13 @@ const styles = StyleSheet.create({
   historySection: {
     marginTop: 40,
   },
-  historyHeader: {
+  historyRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: SPACING.md,
+    alignItems: 'flex-start',
+    paddingBottom: SPACING.md,
+  },
+  historyLeftColumn: {
+    flex: 1,
   },
   historyLabel: {
     ...TYPOGRAPHY.meta,
@@ -2870,21 +2925,13 @@ const styles = StyleSheet.create({
     ...TYPOGRAPHY.meta,
     color: COLORS.textMeta,
   },
-  historyWorkoutGroup: {
-    flexDirection: 'row',
-    paddingVertical: SPACING.md,
-  },
-  historyDateColumn: {
-    width: 80,
-    paddingRight: SPACING.md,
-  },
-  historyDateText: {
+  historyDateLine: {
     ...TYPOGRAPHY.meta,
-    color: COLORS.textMeta,
-    textAlign: 'left',
+    color: COLORS.text,
+    marginTop: 4,
   },
   historySetsColumn: {
-    flex: 1,
+    alignItems: 'flex-end',
   },
   historySetRow: {
     flexDirection: 'row',
@@ -2964,8 +3011,9 @@ const styles = StyleSheet.create({
   // Warm-up and Core Cards (when shown on main exercise screen)
   accessoriesBottomContainer: {
     paddingHorizontal: SPACING.xxl,
-    paddingTop: SPACING.sm,
-    backgroundColor: COLORS.backgroundCanvas,
+    backgroundColor: COLORS.backgroundContainer,
+    borderTopLeftRadius: BORDER_RADIUS.lg,
+    borderTopRightRadius: BORDER_RADIUS.lg,
   },
   accessoriesCardsRow: {
     flexDirection: 'row',
@@ -3039,18 +3087,33 @@ const styles = StyleSheet.create({
     ...TYPOGRAPHY.meta,
     color: COLORS.text,
   },
-  accessoriesLabelContainer: {
-    flexDirection: 'row',
+  accessoriesHandleArea: {
     alignItems: 'center',
-    gap: SPACING.xs,
+    justifyContent: 'center',
+    paddingTop: SPACING.sm,
+    paddingBottom: SPACING.xs,
+  },
+  accessoriesHandle: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: COLORS.border,
+  },
+  accessoriesLabelContainer: {
+    alignItems: 'center',
+    marginTop: 24,
+    paddingBottom: SPACING.sm,
   },
   accessoriesLabel: {
     ...TYPOGRAPHY.meta,
-    color: COLORS.text,
+    color: COLORS.textMeta,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   sectionLabel: {
     ...TYPOGRAPHY.meta,
     color: COLORS.text,
+    textTransform: 'uppercase',
     marginTop: SPACING.xs,
     marginBottom: SPACING.md,
   },

@@ -73,14 +73,13 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   dayButtonToday: {
-    borderWidth: 1,
-    borderColor: '#FFFFFF',
+    // no background or border — just text color change
   },
   dayButtonSelected: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: COLORS.accentPrimary,
   },
   dayButtonTodaySelected: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: COLORS.accentPrimary,
   },
   dayNumber: {
     ...TYPOGRAPHY.metaBold,
@@ -90,7 +89,7 @@ const styles = StyleSheet.create({
     color: COLORS.backgroundCanvas,
   },
   dayNumberToday: {
-    color: '#FFFFFF',
+    color: COLORS.accentPrimary,
   },
   completedPill: {
     position: 'absolute',

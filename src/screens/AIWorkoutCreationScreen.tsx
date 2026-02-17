@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, Alert, KeyboardAvoidingView, Platform } from 'react-native';
+import React, { useState, useRef, useEffect } from 'react';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, Alert, KeyboardAvoidingView, Platform, Modal, Animated } from 'react-native';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import * as Clipboard from 'expo-clipboard';
@@ -19,15 +20,6 @@ DAY [number] — [Workout name]
 [Exercise] — [Sets]×[Reps] @ [weight] lb
 [Exercise] — [Sets]×[Time] sec @ [weight] lb (optional)`;
 
-const WARMUP_TEMPLATE_FORMAT = `- [Exercise] x [Number] reps
-- [Exercise] x [Number] sec
-- [Exercise] [Number] sec
-repeat this superset [Number] times
-
-Example:
-- 90/90 Hip Rotations x 6 reps
-- Half-Kneeling Hip Flexor 30 sec
-repeat this superset 2 times`;
 
 type ParsedExercise = {
   name: string;
@@ -162,10 +154,50 @@ export function AIWorkoutCreationScreen() {
   const { t } = useTranslation();
   const [workoutDetails, setWorkoutDetails] = useState('');
   const [showInstructionsSheet, setShowInstructionsSheet] = useState(false);
-  const [warmupDetails, setWarmupDetails] = useState('');
-  const [showWarmupSheet, setShowWarmupSheet] = useState(false);
+  const [startDate, setStartDate] = useState(dayjs().startOf('isoWeek').format('YYYY-MM-DD'));
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [tempDate, setTempDate] = useState<Date>(new Date());
+  const slideAnim = useRef(new Animated.Value(400)).current;
+  const fadeAnim = useRef(new Animated.Value(0)).current;
 
   const mode: 'single' | 'plan' = route?.params?.mode === 'single' ? 'single' : 'plan';
+
+  useEffect(() => {
+    if (showDatePicker) {
+      Animated.parallel([
+        Animated.timing(fadeAnim, { toValue: 1, duration: 300, useNativeDriver: true }),
+        Animated.spring(slideAnim, { toValue: 0, useNativeDriver: true, bounciness: 0 }),
+      ]).start();
+    } else {
+      slideAnim.setValue(400);
+      fadeAnim.setValue(0);
+    }
+  }, [showDatePicker]);
+
+  const handleOpenDatePicker = () => {
+    setTempDate(dayjs(startDate).toDate());
+    setShowDatePicker(true);
+  };
+
+  const handleDateChange = (event: any, selectedDate?: Date) => {
+    if (Platform.OS === 'android') {
+      setShowDatePicker(false);
+      if (event.type === 'set' && selectedDate) {
+        setStartDate(dayjs(selectedDate).format('YYYY-MM-DD'));
+      }
+    } else {
+      if (selectedDate) setTempDate(selectedDate);
+    }
+  };
+
+  const handleConfirmDate = () => {
+    setStartDate(dayjs(tempDate).format('YYYY-MM-DD'));
+    setShowDatePicker(false);
+  };
+
+  const handleCancelDate = () => {
+    setShowDatePicker(false);
+  };
 
   const handleCopyTemplate = async () => {
     await Clipboard.setStringAsync(TEMPLATE_FORMAT);
@@ -173,11 +205,6 @@ export function AIWorkoutCreationScreen() {
     setShowInstructionsSheet(false);
   };
 
-  const handleCopyWarmupTemplate = async () => {
-    await Clipboard.setStringAsync(WARMUP_TEMPLATE_FORMAT);
-    Alert.alert(t('copiedTitle'), 'Warmup template copied');
-    setShowWarmupSheet(false);
-  };
 
   const handleCreateFromAiText = async () => {
     try {
@@ -185,8 +212,7 @@ export function AIWorkoutCreationScreen() {
         Alert.alert(t('alertErrorTitle'), t('enterWorkoutDetails'));
         return;
       }
-      const today = dayjs();
-      const weekStart = today.startOf('isoWeek'); // Monday
+      const weekStart = dayjs(startDate);
       
       // Parse workout details from user input
       // Expected format:
@@ -203,7 +229,7 @@ export function AIWorkoutCreationScreen() {
       
       // First, extract warmup section if it exists in the workout text
       let workoutText = workoutDetails;
-      let extractedWarmup = warmupDetails; // Start with any manually entered warmup
+      let extractedWarmup = ''; // Will be populated if warmup section found in workout text
       
       // Look for "Warm up:" section - it should end when we see "DAY" marker
       const warmupMatch = workoutDetails.match(/warm\s*up\s*:?\s*([\s\S]*?)(?=DAY\s+\d+)/i);
@@ -582,28 +608,21 @@ export function AIWorkoutCreationScreen() {
               textAlignVertical="top"
             />
 
-            {/* Warmup Section */}
-            <View style={styles.warmupSection}>
-              <TouchableOpacity
-                style={styles.instructionsButton}
-                onPress={() => setShowWarmupSheet(true)}
-                activeOpacity={1}
-              >
-                <Text style={styles.instructionsText}>Warmup (Optional)</Text>
-                <IconChevronDown size={16} color={COLORS.text} />
-              </TouchableOpacity>
-
-              <Text style={styles.sectionLabel}>Warmup</Text>
-              <TextInput
-                style={styles.warmupInput}
-                placeholder="Paste warmup routine (optional)..."
-                placeholderTextColor={COLORS.textMeta}
-                value={warmupDetails}
-                onChangeText={setWarmupDetails}
-                multiline
-                textAlignVertical="top"
-              />
-            </View>
+            {/* Start Date Picker - Plan mode only */}
+            {mode === 'plan' && (
+              <View style={styles.startDateSection}>
+                <Text style={styles.sectionLabel}>{t('startDate')}</Text>
+                <TouchableOpacity
+                  style={styles.datePickerButton}
+                  onPress={handleOpenDatePicker}
+                  activeOpacity={1}
+                >
+                  <Text style={styles.datePickerButtonText}>
+                    {dayjs(startDate).format('MMM D, YYYY')}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            )}
           </ScrollView>
 
           {/* Bottom Button */}
@@ -645,29 +664,58 @@ export function AIWorkoutCreationScreen() {
           </View>
         </BottomDrawer>
 
-        {/* Warmup Instructions Bottom Drawer */}
-        <BottomDrawer
-          visible={showWarmupSheet}
-          onClose={() => setShowWarmupSheet(false)}
-          maxHeight="80%"
-          scrollable={false}
-          showHandle={false}
-        >
-          <View style={styles.sheetContent}>
-            <Text style={styles.sheetTitle}>Warmup Format</Text>
-            <Text style={styles.sheetSubtitle}>Follow this format for warmup exercises</Text>
-            <View style={styles.templateBox}>
-              <Text style={styles.templateText}>{WARMUP_TEMPLATE_FORMAT}</Text>
-            </View>
-            <TouchableOpacity
-              style={styles.copyButton}
-              onPress={handleCopyWarmupTemplate}
-              activeOpacity={1}
-            >
-              <Text style={styles.copyButtonText}>{t('copy')}</Text>
-            </TouchableOpacity>
-          </View>
-        </BottomDrawer>
+        {/* Date Picker Modal - iOS */}
+        {Platform.OS === 'ios' && showDatePicker && (
+          <Modal
+            visible={showDatePicker}
+            transparent={true}
+            animationType="none"
+            onRequestClose={handleCancelDate}
+          >
+            <Animated.View style={[styles.modalOverlay, { opacity: fadeAnim }]}>
+              <TouchableOpacity
+                style={styles.modalBackdrop}
+                activeOpacity={1}
+                onPress={handleCancelDate}
+              />
+            </Animated.View>
+            <Animated.View style={[
+              styles.datePickerSlide,
+              { transform: [{ translateY: slideAnim }] },
+            ]}>
+              <View style={styles.datePickerModal}>
+                <View style={styles.datePickerHeader}>
+                  <TouchableOpacity onPress={handleCancelDate} activeOpacity={1}>
+                    <Text style={styles.datePickerCancelText}>{t('cancel')}</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={handleConfirmDate} activeOpacity={1}>
+                    <Text style={styles.datePickerDoneText}>{t('done')}</Text>
+                  </TouchableOpacity>
+                </View>
+                <DateTimePicker
+                  value={tempDate}
+                  mode="date"
+                  display="spinner"
+                  onChange={handleDateChange}
+                  minimumDate={new Date()}
+                  textColor={COLORS.text}
+                  themeVariant="light"
+                />
+              </View>
+            </Animated.View>
+          </Modal>
+        )}
+
+        {/* Date Picker - Android */}
+        {Platform.OS === 'android' && showDatePicker && (
+          <DateTimePicker
+            value={dayjs(startDate).toDate()}
+            mode="date"
+            display="default"
+            onChange={handleDateChange}
+            minimumDate={new Date()}
+          />
+        )}
     </View>
   );
 }
@@ -741,25 +789,13 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.sm,
     marginTop: SPACING.md,
   },
-  warmupSection: {
-    marginTop: SPACING.lg,
-  },
-  warmupInput: {
-    backgroundColor: COLORS.activeCard,
-    borderRadius: BORDER_RADIUS.md,
-    padding: SPACING.lg,
-    fontSize: 16,
-    color: COLORS.text,
-    minHeight: 200,
-    borderWidth: 0,
-  },
   bottomContainer: {
     paddingHorizontal: SPACING.xxl,
     paddingVertical: SPACING.lg,
     paddingBottom: SPACING.xl,
   },
   createButton: {
-    backgroundColor: COLORS.text,
+    backgroundColor: COLORS.accentPrimaryDimmed,
     height: 56,
     borderRadius: BORDER_RADIUS.md,
     alignItems: 'center',
@@ -773,7 +809,7 @@ const styles = StyleSheet.create({
   createButtonText: {
     ...TYPOGRAPHY.meta,
     fontWeight: 'bold',
-    color: COLORS.backgroundCanvas,
+    color: COLORS.accentPrimary,
   },
   createButtonTextDisabled: {
     color: COLORS.textMeta,
@@ -813,6 +849,56 @@ const styles = StyleSheet.create({
     ...TYPOGRAPHY.meta,
     fontWeight: 'bold',
     color: COLORS.backgroundCanvas,
+  },
+  startDateSection: {
+    marginTop: SPACING.lg,
+  },
+  datePickerButton: {
+    backgroundColor: COLORS.activeCard,
+    borderRadius: BORDER_RADIUS.md,
+    padding: SPACING.lg,
+  },
+  datePickerButtonText: {
+    fontSize: 16,
+    color: COLORS.text,
+    fontWeight: '500',
+  },
+  modalOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0, 0, 0, 0.4)',
+  },
+  modalBackdrop: {
+    flex: 1,
+  },
+  datePickerSlide: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+  },
+  datePickerModal: {
+    backgroundColor: COLORS.backgroundCanvas,
+    borderTopLeftRadius: BORDER_RADIUS.lg,
+    borderTopRightRadius: BORDER_RADIUS.lg,
+    paddingBottom: 34,
+  },
+  datePickerHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: SPACING.md,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+  },
+  datePickerCancelText: {
+    fontSize: 17,
+    color: COLORS.text,
+  },
+  datePickerDoneText: {
+    fontSize: 17,
+    fontWeight: '600',
+    color: COLORS.accentPrimary,
   },
 });
 

@@ -207,16 +207,18 @@ export function TodayScreen({ onDateChange, onOpenSwapDrawer, onOpenAddWorkout }
                 {currentWeekLabel}
               </Text>
               <View style={styles.headerRight}>
-                <TouchableOpacity
-                  style={styles.settingsButton}
-                  onPress={() => {
-                    setSelectedDate(today.format('YYYY-MM-DD'));
-                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                  }}
-                  activeOpacity={1}
-                >
-                  <IconCalendar size={24} color="#FFFFFF" />
-                </TouchableOpacity>
+                {selectedDate !== today.format('YYYY-MM-DD') && (
+                  <TouchableOpacity
+                    style={styles.settingsButton}
+                    onPress={() => {
+                      setSelectedDate(today.format('YYYY-MM-DD'));
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    }}
+                    activeOpacity={1}
+                  >
+                    <IconCalendar size={24} color="#FFFFFF" />
+                  </TouchableOpacity>
+                )}
                 <TouchableOpacity
                   style={styles.settingsButton}
                   onPress={() => (navigation as any).navigate('Profile')}
@@ -701,8 +703,6 @@ const styles = StyleSheet.create({
     height: 56,
     backgroundColor: COLORS.accentPrimaryDimmed,
     borderRadius: BORDER_RADIUS.md,
-    borderWidth: 1,
-    borderColor: COLORS.accentPrimary,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 24,

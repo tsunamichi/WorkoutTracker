@@ -683,8 +683,6 @@ const styles = StyleSheet.create({
     paddingVertical: SPACING.md,
     paddingHorizontal: SPACING.xl,
     borderRadius: BORDER_RADIUS.md,
-    borderWidth: 1,
-    borderColor: 'rgba(0, 0, 0, 0.25)',
     marginBottom: SPACING.md,
   },
   buttonSecondaryText: {

@@ -13,7 +13,7 @@ import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS, CARDS } from '../constants'
 import { IconArrowLeft } from '../components/icons';
 import { useTranslation } from '../i18n/useTranslation';
 import { useStore } from '../store';
-import type { ConflictItem, CyclePlan, CycleConflictResolution } from '../types/training';
+import type { ConflictItem, CyclePlan, CycleConflictResolution, ConflictResolutionMap } from '../types/training';
 import dayjs from 'dayjs';
 
 interface CycleConflictsScreenProps {
@@ -45,15 +45,31 @@ export function CycleConflictsScreen({ navigation, route }: CycleConflictsScreen
     if (isApplying) return;
     
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+
+    // Cancel: just go back without doing anything
+    if (selectedResolution === 'cancel') {
+      navigation.goBack();
+      return;
+    }
+
     setIsApplying(true);
 
     try {
-      const result = planId
-        ? await applyCyclePlan(planId, selectedResolution)
-        : await addCyclePlan(plan, selectedResolution);
+      let result;
+
+      if (planId) {
+        // applyCyclePlan expects a per-date ConflictResolutionMap
+        const resolutionMap: ConflictResolutionMap = {};
+        for (const conflict of conflicts) {
+          resolutionMap[conflict.date] = selectedResolution === 'replace' ? 'replace' : 'keep';
+        }
+        result = await applyCyclePlan(planId, resolutionMap);
+      } else {
+        // addCyclePlan accepts the simple resolution string
+        result = await addCyclePlan(plan, selectedResolution);
+      }
       
       if (result.success) {
-        // Navigate to Schedule (Today) with a success message
         navigation.navigate('Tabs', { 
           initialTab: 'Schedule',
           params: { 
@@ -114,7 +130,7 @@ export function CycleConflictsScreen({ navigation, route }: CycleConflictsScreen
                 <View style={styles.conflictCardInner}>
                   <View>
                     <Text style={styles.conflictDate}>{formatDate(conflict.date)}</Text>
-                    <Text style={styles.conflictWorkoutName}>{conflict.templateName}</Text>
+                    <Text style={styles.conflictWorkoutName}>{conflict.existing.titleSnapshot}</Text>
                   </View>
                   <View style={styles.sourceBadge}>
                     <Text style={styles.sourceBadgeText}>

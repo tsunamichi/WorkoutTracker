@@ -74,7 +74,7 @@ export function ExpandableCalendarStrip({
       .sort((a, b) => b.startDate.localeCompare(a.startDate));
 
     allPlans.forEach((plan) => {
-      const color = plan.active ? COLORS.info : COLORS.backgroundCanvas;
+      const color = plan.active ? COLORS.accentPrimaryDimmed : COLORS.backgroundCanvas;
       const start = dayjs(plan.startDate);
       const totalDays = plan.weeks * 7;
       for (let d = 0; d < totalDays; d++) {
@@ -124,12 +124,25 @@ export function ExpandableCalendarStrip({
     return weeks;
   }, [centerWeekStart, today, getScheduledWorkout, getMainCompletion, cycleColorMap]);
 
-  // Compute row-level cycle band color: only show for weeks belonging to the selected date's cycle
-  const weekBandColors = useMemo(() => {
+  // Compute row-level cycle band info: color + start/end day indices within the row
+  const weekBandInfo = useMemo(() => {
     return weeksData.map((weekDays) => {
       if (!selectedPlanId) return null;
-      const matchingDay = weekDays.find(d => d.cycleColor && dateToPlanId[d.date] === selectedPlanId);
-      return matchingDay?.cycleColor || null;
+
+      let firstIdx = -1;
+      let lastIdx = -1;
+      let color: string | null = null;
+
+      weekDays.forEach((d, idx) => {
+        if (d.cycleColor && dateToPlanId[d.date] === selectedPlanId) {
+          if (firstIdx === -1) firstIdx = idx;
+          lastIdx = idx;
+          color = d.cycleColor;
+        }
+      });
+
+      if (firstIdx === -1 || !color) return null;
+      return { color, startIndex: firstIdx, endIndex: lastIdx };
     });
   }, [weeksData, dateToPlanId, selectedPlanId]);
 
@@ -224,16 +237,27 @@ export function ExpandableCalendarStrip({
   const weekRowStyles = [weekRowStyle0, weekRowStyle1, weekRowStyle2, weekRowStyle3, weekRowStyle4];
 
   const renderWeekRow = (weekDays: DayData[], weekIdx: number) => {
-    const bandColor = weekBandColors[weekIdx];
+    const bandInfo = weekBandInfo[weekIdx];
 
     return (
       <Animated.View
         key={weekIdx}
         style={[styles.weekRow, weekRowStyles[weekIdx]]}
       >
-        {/* Cycle background band behind the day buttons */}
-        {bandColor && (
-          <View style={[styles.cycleBand, { backgroundColor: bandColor }]} />
+        {/* Cycle background band — sized to cover only the cycle days */}
+        {bandInfo && (
+          <View
+            style={[
+              styles.cycleBand,
+              {
+                backgroundColor: bandInfo.color,
+                left: `${(bandInfo.startIndex / 7) * 100}%`,
+                right: `${((6 - bandInfo.endIndex) / 7) * 100}%`,
+                marginLeft: 3,
+                marginRight: 3,
+              },
+            ]}
+          />
         )}
 
         {/* Day buttons on top */}
@@ -245,7 +269,7 @@ export function ExpandableCalendarStrip({
               isToday={day.isToday}
               isCompleted={day.isCompleted}
               hasWorkout={day.hasWorkout}
-              cycleColor={bandColor}
+              cycleColor={bandInfo?.color}
               isInActiveCycle={day.isInActiveCycle}
               onPress={() => handleSelectDate(day.date)}
             />
