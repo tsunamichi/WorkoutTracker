@@ -1432,15 +1432,19 @@ export function ExerciseExecutionScreen() {
               <Text style={styles.historyViewTitle}>{t('workoutComplete')}</Text>
             </View>
             
-            {exerciseGroups.map((group) => (
+            {(() => {
+              const allExercises = exerciseGroups.flatMap(g => g.exercises);
+              const lastExerciseId = allExercises[allExercises.length - 1]?.id;
+              return exerciseGroups.map((group) => (
               group.exercises.map((exercise) => {
                 const exerciseName = exercise.exerciseName;
                 const totalRounds = group.totalRounds;
+                const isLast = exercise.id === lastExerciseId;
                 
                 return (
                   <TouchableOpacity
                     key={exercise.id}
-                    style={styles.historyExerciseRow}
+                    style={[styles.historyExerciseRow, isLast && { borderBottomWidth: 0 }]}
                     onPress={() => {
                       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                       const groupIdx = exerciseGroups.findIndex(g => g.id === group.id);
@@ -1487,23 +1491,8 @@ export function ExerciseExecutionScreen() {
                   </TouchableOpacity>
                 );
               })
-            ))}
-
-            {/* Add Exercise button in history view */}
-            <TouchableOpacity
-              style={styles.addExerciseButton}
-              onPress={() => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                setShowAddExerciseDrawer(true);
-              }}
-              activeOpacity={0.7}
-            >
-              <DiagonalLinePattern width="100%" height="100%" borderRadius={BORDER_RADIUS.lg} />
-              <View style={styles.addExerciseButtonContent}>
-                <IconAdd size={20} color={COLORS.text} />
-                <Text style={styles.addExerciseButtonText}>{t('addExercise')}</Text>
-              </View>
-            </TouchableOpacity>
+            ));
+            })()}
           </View>
         ) : (
           /* ===== IN-PROGRESS - NORMAL EXERCISE CARDS ===== */
