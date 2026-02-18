@@ -1352,10 +1352,10 @@ export function ExerciseExecutionScreen() {
       historyByDate.set(date, Array.from(uniqueSets.values()).sort((a, b) => a.setNumber - b.setNumber));
     });
     
-    // Convert to array and sort by date (newest first)
+    // Convert to array and sort by date (oldest first, latest at bottom)
     return Array.from(historyByDate.entries())
       .map(([date, sets]) => ({ date, sets }))
-      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
   };
   
   // Rest of the render logic from WarmupExecutionScreen...
