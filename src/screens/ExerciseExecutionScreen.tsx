@@ -3368,7 +3368,7 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.xl,
   },
   historyViewTitle: {
-    ...TYPOGRAPHY.h3,
+    ...TYPOGRAPHY.bodyBold,
     color: COLORS.successBright,
   },
   historyExerciseRow: {
