@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, LayoutAnimation, Platform, UIManager, Alert, Animated, Modal, FlatList, TextInput, Keyboard, PanResponder } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, LayoutAnimation, Platform, UIManager, Alert, Animated, Modal, FlatList, TextInput, Keyboard, KeyboardAvoidingView, PanResponder, TouchableWithoutFeedback } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, RouteProp, useFocusEffect } from '@react-navigation/native';
 import Svg, { Circle, Path } from 'react-native-svg';
@@ -2264,148 +2264,137 @@ export function ExerciseExecutionScreen() {
       );
       })()}
 
-      {/* Swap Exercise Bottom Drawer */}
-      <BottomDrawer
+      {/* Swap Exercise: input pinned at bottom, moves with keyboard */}
+      <Modal
         visible={showSwapModal}
-        onClose={() => { setShowSwapModal(false); setSwapSearchQuery(''); }}
-        maxHeight="80%"
-        fixedHeight={true}
-        scrollable={false}
+        transparent
+        animationType="fade"
+        onRequestClose={() => { setShowSwapModal(false); setSwapSearchQuery(''); }}
       >
-        <View style={styles.adjustmentDrawerContent}>
-          <Text style={styles.adjustmentDrawerTitle}>{t('swapExercise')}</Text>
-          
-          <View style={styles.swapSearchContainer}>
-            <TextInput
-              style={styles.swapSearchInput}
-              placeholder="Search exercises..."
-              placeholderTextColor={COLORS.textSecondary}
-              value={swapSearchQuery}
-              onChangeText={setSwapSearchQuery}
-              autoFocus={true}
-              returnKeyType="done"
-            />
-          </View>
-          
-          {swapSearchQuery.trim().length > 0 && (() => {
-            const query = swapSearchQuery.trim().toLowerCase();
-            const currentExercise = expandedGroupIndex >= 0 
-              ? exerciseGroups[expandedGroupIndex]?.exercises[activeExerciseIndex]
-              : null;
-            const filtered = exercisesLibrary.filter(ex =>
-              ex.name.toLowerCase().includes(query) &&
-              (currentExercise ? ex.id !== currentExercise.id : true)
-            );
-            const exactMatch = exercisesLibrary.some(ex => ex.name.toLowerCase() === query);
-            
-            return (
-              <FlatList
-                data={filtered}
-                keyExtractor={(item) => item.id}
-                keyboardShouldPersistTaps="handled"
-                style={{ maxHeight: 300 }}
-                ListEmptyComponent={
-                  <Text style={styles.swapNoResults}>No exercises found</Text>
-                }
-                ListFooterComponent={
-                  !exactMatch && query.length >= 2 ? (
-                    <TouchableOpacity
-                      style={styles.swapAddNewRow}
-                      onPress={async () => {
-                        const newName = swapSearchQuery.trim();
-                        const newId = newName.toLowerCase().replace(/\s+/g, '-') + '-' + Date.now();
-                        const newExercise = {
-                          id: newId,
-                          name: newName,
-                          category: 'Other' as any,
-                          isCustom: true,
-                        };
-                        await addExercise(newExercise);
-                        
-                        if (currentExercise) {
-                          if (type === 'warmup' && template?.warmupItems) {
-                            const updatedItems = template.warmupItems.map(item =>
-                              item.id === currentExercise.id
-                                ? { ...item, id: newId, exerciseName: newName }
-                                : item
-                            );
-                            await updateWorkoutTemplate(workoutTemplateId, { warmupItems: updatedItems });
-                          } else if (type === 'core' && template?.accessoryItems) {
-                            const updatedItems = template.accessoryItems.map(item =>
-                              item.id === currentExercise.id
-                                ? { ...item, id: newId, exerciseName: newName }
-                                : item
-                            );
-                            await updateWorkoutTemplate(workoutTemplateId, { accessoryItems: updatedItems });
-                          } else if (type === 'main' && template?.items) {
-                            const updatedItems = template.items.map(item =>
-                              item.exerciseId === currentExercise.id
-                                ? { ...item, exerciseId: newId }
-                                : item
-                            );
-                            await updateWorkoutTemplate(workoutTemplateId, { items: updatedItems });
-                          }
-                          cleanupAfterSwap(currentExercise.id, newId);
-                        }
-                        
-                        setSwapSearchQuery('');
-                        setShowSwapModal(false);
-                        setRefreshKey(prev => prev + 1);
-                        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-                      }}
-                    >
-                      <IconAdd size={20} color={COLORS.accentPrimary} />
-                      <Text style={styles.swapAddNewText}>Add "{swapSearchQuery.trim()}"</Text>
-                    </TouchableOpacity>
-                  ) : null
-                }
-                renderItem={({ item: exercise }) => (
-                  <TouchableOpacity
-                    style={styles.exerciseOption}
-                    onPress={async () => {
+        <View style={styles.swapOverlay}>
+          <TouchableWithoutFeedback onPress={() => { setShowSwapModal(false); setSwapSearchQuery(''); }}>
+            <View style={styles.swapOverlayBackdrop} />
+          </TouchableWithoutFeedback>
+          <KeyboardAvoidingView
+            style={styles.swapBottomAvoid}
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
+          >
+            <View style={styles.swapAutocompleteContainer}>
+            {swapSearchQuery.trim().length > 0 ? (() => {
+                    const query = swapSearchQuery.trim().toLowerCase();
+                    const currentExercise = expandedGroupIndex >= 0
+                      ? exerciseGroups[expandedGroupIndex]?.exercises[activeExerciseIndex]
+                      : null;
+                    const filtered = exercisesLibrary.filter(ex =>
+                      ex.name.toLowerCase().includes(query) &&
+                      (currentExercise ? ex.id !== currentExercise.id : true)
+                    );
+                    const exactMatch = exercisesLibrary.some(ex => ex.name.toLowerCase() === query);
+                    const showAdd = !exactMatch && query.length >= 2;
+                    const optionsToShow = filtered.slice(0, 5);
+                    const updateTemplateAndSwap = async (exerciseId: string, exerciseName: string) => {
                       if (!currentExercise) return;
-                      
                       if (type === 'warmup' && template?.warmupItems) {
-                        const updatedItems = template.warmupItems.map(item => 
-                          item.id === currentExercise.id 
-                            ? { ...item, id: exercise.id, exerciseName: exercise.name }
-                            : item
+                        const updatedItems = template.warmupItems.map(item =>
+                          item.id === currentExercise.id ? { ...item, id: exerciseId, exerciseName } : item
                         );
                         await updateWorkoutTemplate(workoutTemplateId, { warmupItems: updatedItems });
                       } else if (type === 'core' && template?.accessoryItems) {
                         const updatedItems = template.accessoryItems.map(item =>
-                          item.id === currentExercise.id
-                            ? { ...item, id: exercise.id, exerciseName: exercise.name }
-                            : item
+                          item.id === currentExercise.id ? { ...item, id: exerciseId, exerciseName } : item
                         );
                         await updateWorkoutTemplate(workoutTemplateId, { accessoryItems: updatedItems });
                       } else if (type === 'main' && template?.items) {
                         const updatedItems = template.items.map(item =>
-                          item.exerciseId === currentExercise.id
-                            ? { ...item, exerciseId: exercise.id }
-                            : item
+                          item.exerciseId === currentExercise.id ? { ...item, exerciseId } : item
                         );
                         await updateWorkoutTemplate(workoutTemplateId, { items: updatedItems });
                       }
-                      
-                      cleanupAfterSwap(currentExercise.id, exercise.id);
+                      cleanupAfterSwap(currentExercise.id, exerciseId);
                       setSwapSearchQuery('');
                       setShowSwapModal(false);
                       setRefreshKey(prev => prev + 1);
                       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-                    }}
-                  >
-                    <Text style={styles.exerciseOptionText}>{exercise.name}</Text>
-                  </TouchableOpacity>
-                )}
-                initialNumToRender={20}
-                maxToRenderPerBatch={20}
-                windowSize={10}
+                    };
+                    return (
+                      <View style={styles.swapAutocompleteList}>
+                        {optionsToShow.length === 0 ? (
+                          <Text style={styles.swapNoResults}>No exercises found</Text>
+                        ) : (
+                          optionsToShow.map((exercise, index) => (
+                            <TouchableOpacity
+                              key={exercise.id}
+                              style={[
+                                styles.exerciseOption,
+                                index === optionsToShow.length - 1 ? styles.exerciseOptionLast : null,
+                              ]}
+                              onPress={() => updateTemplateAndSwap(exercise.id, exercise.name)}
+                            >
+                              <Text style={styles.exerciseOptionText}>{exercise.name}</Text>
+                            </TouchableOpacity>
+                          ))
+                        )}
+                        {showAdd && (
+                          <TouchableOpacity
+                            style={styles.swapAddNewRow}
+                            onPress={async () => {
+                              const newName = swapSearchQuery.trim();
+                              const newId = newName.toLowerCase().replace(/\s+/g, '-') + '-' + Date.now();
+                              const newExercise = {
+                                id: newId,
+                                name: newName,
+                                category: 'Other' as any,
+                                isCustom: true,
+                              };
+                              await addExercise(newExercise);
+                              if (currentExercise) {
+                                if (type === 'warmup' && template?.warmupItems) {
+                                  const updatedItems = template.warmupItems.map(item =>
+                                    item.id === currentExercise.id ? { ...item, id: newId, exerciseName: newName } : item
+                                  );
+                                  await updateWorkoutTemplate(workoutTemplateId, { warmupItems: updatedItems });
+                                } else if (type === 'core' && template?.accessoryItems) {
+                                  const updatedItems = template.accessoryItems.map(item =>
+                                    item.id === currentExercise.id ? { ...item, id: newId, exerciseName: newName } : item
+                                  );
+                                  await updateWorkoutTemplate(workoutTemplateId, { accessoryItems: updatedItems });
+                                } else if (type === 'main' && template?.items) {
+                                  const updatedItems = template.items.map(item =>
+                                    item.exerciseId === currentExercise.id ? { ...item, exerciseId: newId } : item
+                                  );
+                                  await updateWorkoutTemplate(workoutTemplateId, { items: updatedItems });
+                                }
+                                cleanupAfterSwap(currentExercise.id, newId);
+                              }
+                              setSwapSearchQuery('');
+                              setShowSwapModal(false);
+                              setRefreshKey(prev => prev + 1);
+                              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                            }}
+                          >
+                            <IconAdd size={20} color={COLORS.accentPrimary} />
+                            <Text style={styles.swapAddNewText}>Create "{swapSearchQuery.trim()}"</Text>
+                          </TouchableOpacity>
+                        )}
+                      </View>
+                    );
+                  })() : null}
+            </View>
+            <View style={[styles.swapInputRow, { paddingBottom: Math.max(insets.bottom, SPACING.md) }]}>
+              <TextInput
+                style={styles.swapSearchInputLarge}
+                placeholder="Search exercises..."
+                placeholderTextColor={COLORS.textSecondary}
+                value={swapSearchQuery}
+                onChangeText={setSwapSearchQuery}
+                autoFocus={true}
+                returnKeyType="done"
               />
-            );
-          })()}
+            </View>
+          </KeyboardAvoidingView>
         </View>
-      </BottomDrawer>
+      </Modal>
 
       {/* Action Sheet Menu */}
       <ActionSheet
@@ -3191,13 +3180,38 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: COLORS.border,
   },
+  exerciseOptionLast: {
+    borderBottomWidth: 0,
+  },
   exerciseOptionText: {
     ...TYPOGRAPHY.body,
     color: COLORS.text,
   },
-  swapSearchContainer: {
-    paddingHorizontal: SPACING.lg,
-    paddingVertical: SPACING.md,
+  swapOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+  },
+  swapOverlayBackdrop: {
+    flex: 1,
+  },
+  swapBottomAvoid: {
+    flex: 1,
+    justifyContent: 'flex-end',
+  },
+  swapAutocompleteContainer: {
+    backgroundColor: COLORS.backgroundContainer,
+    paddingHorizontal: 24,
+    paddingTop: 24,
+    paddingBottom: SPACING.sm,
+    maxHeight: 400,
+  },
+  swapAutocompleteList: {
+    marginBottom: 0,
+  },
+  swapInputRow: {
+    paddingHorizontal: SPACING.xl,
+    paddingTop: SPACING.md,
+    backgroundColor: COLORS.backgroundContainer,
   },
   swapSearchInput: {
     ...TYPOGRAPHY.body,
@@ -3206,6 +3220,18 @@ const styles = StyleSheet.create({
     borderRadius: BORDER_RADIUS.md,
     paddingHorizontal: SPACING.md,
     paddingVertical: SPACING.sm + 2,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  swapSearchInputLarge: {
+    ...TYPOGRAPHY.body,
+    fontSize: 18,
+    color: COLORS.text,
+    backgroundColor: COLORS.cardBackground,
+    borderRadius: BORDER_RADIUS.lg,
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: SPACING.lg + 4,
+    minHeight: 56,
     borderWidth: 1,
     borderColor: COLORS.border,
   },

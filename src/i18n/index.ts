@@ -57,6 +57,7 @@ type TranslationKey =
   | 'completed'
   | 'addIntervalTimer'
   | 'intervalTimers'
+  | 'noTimersPerformedThisDay'
   | 'addTimer'
   | 'templates'
   | 'noTemplatesYet'
@@ -673,6 +674,7 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     completed: 'Completed',
     addIntervalTimer: 'Add interval timer',
     intervalTimers: 'Interval Timers',
+    noTimersPerformedThisDay: 'No timers performed this day',
     addTimer: 'Add Timer',
     addInterval: 'Add',
     new: 'New',
@@ -1232,6 +1234,7 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     completed: 'Completado',
     addIntervalTimer: 'Agregar temporizador',
     intervalTimers: 'Temporizadores de Intervalos',
+    noTimersPerformedThisDay: 'No se realizaron temporizadores este día',
     addTimer: 'Agregar Temporizador',
     addInterval: 'Agregar',
     new: 'Nuevo',

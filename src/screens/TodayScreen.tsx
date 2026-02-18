@@ -267,7 +267,7 @@ export function TodayScreen({ onDateChange, onOpenSwapDrawer, onOpenAddWorkout }
                       
                       let buttonState = t('start');
                       if (isCompleted) {
-                        buttonState = 'Completed'; // Show "Completed" for locked or 100% workouts
+                        buttonState = t('workoutComplete');
                       } else if (completionPercentage > 0) {
                         buttonState = t('resume');
                       }
@@ -278,11 +278,7 @@ export function TodayScreen({ onDateChange, onOpenSwapDrawer, onOpenAddWorkout }
                           {/* Top Row: Workout Name + Progress/Checkmark */}
                           <View style={styles.workoutCardHeader}>
                             <Text style={styles.workoutName}>{sw.titleSnapshot}</Text>
-                            {isCompleted ? (
-                              <View style={styles.completedCheckBadge}>
-                                <IconCheckmark size={16} color={COLORS.successBright} />
-                              </View>
-                            ) : progress > 0 ? (
+                            {!isCompleted && progress > 0 ? (
                               <View style={styles.progressIndicator}>
                                 <Text style={styles.progressText}>{completionPercentage}%</Text>
                                 <Svg height="16" width="16" viewBox="0 0 16 16" style={styles.progressCircle}>
@@ -316,16 +312,22 @@ export function TodayScreen({ onDateChange, onOpenSwapDrawer, onOpenAddWorkout }
                           <View style={styles.workoutCardFooter} pointerEvents="none">
                             <View style={[
                               styles.startButton,
-                              isCompleted && styles.startButtonCompleted,
+                              isCompleted && styles.startButtonCompletedNoBg,
                               !isCompleted && selectedDate !== today.format('YYYY-MM-DD') && dayjs(selectedDate).isBefore(today, 'day') && styles.startButtonPast,
                               !isCompleted && dayjs(selectedDate).isAfter(today, 'day') && styles.startButtonFuture,
                             ]}>
-                              <Text style={[
-                                styles.startButtonText,
-                                isCompleted && styles.startButtonTextCompleted,
-                                !isCompleted && selectedDate !== today.format('YYYY-MM-DD') && dayjs(selectedDate).isBefore(today, 'day') && styles.startButtonTextPast,
-                                !isCompleted && dayjs(selectedDate).isAfter(today, 'day') && styles.startButtonTextFuture,
-                              ]}>{buttonState}</Text>
+                              {isCompleted ? (
+                                <View style={styles.startButtonCompletedRow}>
+                                  <IconCheckmark size={16} color={COLORS.successBright} />
+                                  <Text style={[styles.startButtonText, styles.startButtonTextCompleted]}>{buttonState}</Text>
+                                </View>
+                              ) : (
+                                <Text style={[
+                                  styles.startButtonText,
+                                  selectedDate !== today.format('YYYY-MM-DD') && dayjs(selectedDate).isBefore(today, 'day') && styles.startButtonTextPast,
+                                  dayjs(selectedDate).isAfter(today, 'day') && styles.startButtonTextFuture,
+                                ]}>{buttonState}</Text>
+                              )}
                             </View>
                           </View>
                         </>
@@ -389,7 +391,10 @@ export function TodayScreen({ onDateChange, onOpenSwapDrawer, onOpenAddWorkout }
                 return (
                   <View style={styles.intervalsSection}>
                     <Text style={styles.intervalsSectionTitle}>{t('intervalTimers')}</Text>
-                    {/* Show explanatory text when no intervals */}
+                    {completedIntervals.length === 0 && isPastDay && (
+                      <Text style={styles.noIntervalsText}>{t('noTimersPerformedThisDay')}</Text>
+                    )}
+                    {/* Show add card when no intervals and today */}
                     {completedIntervals.length === 0 && isToday && (
                         <TouchableOpacity
                         style={styles.addIntervalCardButton}
@@ -639,8 +644,14 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     justifyContent: 'center',
   },
-  startButtonCompleted: {
-    backgroundColor: COLORS.success,
+  startButtonCompletedRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  startButtonCompletedNoBg: {
+    backgroundColor: 'transparent',
   },
   startButtonPast: {
     backgroundColor: COLORS.accentPrimaryDimmed,
