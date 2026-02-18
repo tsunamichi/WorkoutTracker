@@ -2275,21 +2275,15 @@ export function ExerciseExecutionScreen() {
       );
       })()}
 
-      {/* Swap Exercise Modal */}
-      <Modal
+      {/* Swap Exercise Bottom Drawer */}
+      <BottomDrawer
         visible={showSwapModal}
-        animationType="slide"
-        presentationStyle="pageSheet"
-        onRequestClose={() => { setShowSwapModal(false); setSwapSearchQuery(''); }}
+        onClose={() => { setShowSwapModal(false); setSwapSearchQuery(''); }}
+        maxHeight="70%"
+        scrollable={false}
       >
-        <View style={styles.modalContainer}>
-          <View style={styles.modalHeader}>
-            <TouchableOpacity onPress={() => { setShowSwapModal(false); setSwapSearchQuery(''); }}>
-              <IconArrowLeft size={24} color={COLORS.text} />
-            </TouchableOpacity>
-            <Text style={styles.modalTitle}>{t('swapExercise')}</Text>
-            <View style={{ width: 24 }} />
-          </View>
+        <View style={styles.adjustmentDrawerContent}>
+          <Text style={styles.adjustmentDrawerTitle}>{t('swapExercise')}</Text>
           
           <View style={styles.swapSearchContainer}>
             <TextInput
@@ -2316,10 +2310,10 @@ export function ExerciseExecutionScreen() {
             
             return (
               <FlatList
-                style={styles.modalContent}
                 data={filtered}
                 keyExtractor={(item) => item.id}
                 keyboardShouldPersistTaps="handled"
+                style={{ maxHeight: 300 }}
                 ListEmptyComponent={
                   <Text style={styles.swapNoResults}>No exercises found</Text>
                 }
@@ -2338,7 +2332,6 @@ export function ExerciseExecutionScreen() {
                         };
                         await addExercise(newExercise);
                         
-                        // Swap to the newly created exercise
                         if (currentExercise) {
                           if (type === 'warmup' && template?.warmupItems) {
                             const updatedItems = template.warmupItems.map(item =>
@@ -2422,7 +2415,7 @@ export function ExerciseExecutionScreen() {
             );
           })()}
         </View>
-      </Modal>
+      </BottomDrawer>
 
       {/* Action Sheet Menu */}
       <ActionSheet
@@ -2510,9 +2503,10 @@ export function ExerciseExecutionScreen() {
                 label: t('swapExercise'),
                 onPress: () => {
                   setShowExerciseSettingsMenu(false);
+                  setShowAdjustmentDrawer(false);
                   setTimeout(() => {
                     setShowSwapModal(true);
-                  }, 300);
+                  }, 400);
                 },
               },
               ...(showBarbellOption ? [{
