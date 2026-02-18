@@ -1169,6 +1169,32 @@ export function ExerciseExecutionScreen() {
     );
   };
 
+  const cleanupAfterSwap = (oldExerciseId: string, newExerciseId: string) => {
+    // Migrate completedSets, localValues, and currentRounds from old exercise ID to new
+    setCompletedSets(prev => {
+      const next = new Set(prev);
+      prev.forEach(setId => {
+        if (setId.startsWith(`${oldExerciseId}-set-`)) {
+          const round = setId.replace(`${oldExerciseId}-set-`, '');
+          next.delete(setId);
+          next.add(`${newExerciseId}-set-${round}`);
+        }
+      });
+      return next;
+    });
+    setLocalValues(prev => {
+      const next = { ...prev };
+      Object.keys(prev).forEach(setId => {
+        if (setId.startsWith(`${oldExerciseId}-set-`)) {
+          const round = setId.replace(`${oldExerciseId}-set-`, '');
+          next[`${newExerciseId}-set-${round}`] = prev[setId];
+          delete next[setId];
+        }
+      });
+      return next;
+    });
+  };
+
   const handleSwap = () => {
     setShowMenu(false);
     
@@ -2336,6 +2362,7 @@ export function ExerciseExecutionScreen() {
                             );
                             await updateWorkoutTemplate(workoutTemplateId, { items: updatedItems });
                           }
+                          cleanupAfterSwap(currentExercise.id, newId);
                         }
                         
                         setSwapSearchQuery('');
@@ -2378,6 +2405,7 @@ export function ExerciseExecutionScreen() {
                         await updateWorkoutTemplate(workoutTemplateId, { items: updatedItems });
                       }
                       
+                      cleanupAfterSwap(currentExercise.id, exercise.id);
                       setSwapSearchQuery('');
                       setShowSwapModal(false);
                       setRefreshKey(prev => prev + 1);
