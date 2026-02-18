@@ -2786,7 +2786,7 @@ const styles = StyleSheet.create({
   },
   adjustmentDrawerContent: {
     paddingHorizontal: SPACING.xxl,
-    paddingBottom: SPACING.xl,
+    paddingBottom: 28,
   },
   adjustmentDrawerTitle: {
     ...TYPOGRAPHY.h3,
