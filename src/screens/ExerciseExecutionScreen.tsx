@@ -73,11 +73,7 @@ export function ExerciseExecutionScreen() {
     updateExercisePR,
   } = useStore();
   
-  // Get these once without subscribing to avoid re-renders
-  // Using useStore.getState() to read current value without creating a subscription
   const getDetailedWorkoutProgress = () => useStore.getState().detailedWorkoutProgress;
-  const sessions = useStore.getState().sessions;
-  const workoutTemplates = useStore.getState().workoutTemplates;
   
   const [refreshKey, setRefreshKey] = useState(0);
   const template = getWorkoutTemplate(workoutTemplateId);
@@ -389,21 +385,27 @@ export function ExerciseExecutionScreen() {
     return map;
   }, [exerciseGroups]);
   
-  // Initialize local values from items (merge, don't overwrite restored session values)
+  // Initialize local values at set level (merge, don't overwrite restored session values)
   useEffect(() => {
+    if (exerciseGroups.length === 0) return;
     setLocalValues(prev => {
       const merged = { ...prev };
-      items.forEach(item => {
-        if (!merged[item.id]) {
-          merged[item.id] = {
-            weight: item.weight || 0,
-            reps: item.reps || 0,
-          };
-        }
+      exerciseGroups.forEach(group => {
+        group.exercises.forEach(exercise => {
+          for (let round = 0; round < group.totalRounds; round++) {
+            const setId = `${exercise.id}-set-${round}`;
+            if (!merged[setId]) {
+              merged[setId] = {
+                weight: exercise.weight || 0,
+                reps: Number(exercise.reps) || 0,
+              };
+            }
+          }
+        });
       });
       return merged;
     });
-  }, [items]);
+  }, [exerciseGroups]);
   
   // Load completion state
   useEffect(() => {
@@ -487,46 +489,46 @@ export function ExerciseExecutionScreen() {
         setExpandedGroupIndex(0);
       }
       
-      // Restore localValues and currentSessionId from existing session
-      const allSessions = useStore.getState().sessions;
-      const existingSession = allSessions.find(s => 
-        (s as any).workoutKey === workoutKey
-      ) || allSessions.find(s => {
-        const dateMatch = workoutKey?.match(/(\d{4}-\d{2}-\d{2})/);
-        const sessionDate = dateMatch ? dateMatch[1] : null;
-        return s.workoutTemplateId === workoutTemplateId && sessionDate && s.date === sessionDate;
-      });
-      
-      if (existingSession) {
-        console.log('📂 Restoring session:', existingSession.id);
-        setCurrentSessionId(existingSession.id);
-        
-        // Restore localValues from session sets — merge INTO existing values
-        const restoredValues: Record<string, { weight: number; reps: number }> = {};
-        existingSession.sets.forEach((set: any) => {
-          // Map session set back to localValues key format
-          // Find which exercise group/exercise this set belongs to
-          exerciseGroups.forEach(group => {
-            group.exercises.forEach(ex => {
-              const exerciseIdToMatch = ex.exerciseId || ex.id;
-              if (set.exerciseId === exerciseIdToMatch || set.exerciseId === ex.id) {
-                const setId = `${ex.id}-set-${set.setIndex}`;
-                restoredValues[setId] = {
-                  weight: set.weight,
-                  reps: set.reps,
-                };
-              }
-            });
-          });
-        });
-        
-        if (Object.keys(restoredValues).length > 0) {
-          console.log('📂 Restored localValues for', Object.keys(restoredValues).length, 'sets');
-          setLocalValues(prev => ({ ...prev, ...restoredValues }));
-        }
-      }
     } else {
       setExpandedGroupIndex(0); // Expand first group by default
+    }
+
+    // Always restore localValues from session (runs regardless of completion state)
+    // Session data is the source of truth for actual logged weight/reps
+    const allSessions = useStore.getState().sessions;
+    const existingSession = allSessions.find(s => 
+      (s as any).workoutKey === workoutKey
+    ) || allSessions.find(s => {
+      const dateMatch = workoutKey?.match(/(\d{4}-\d{2}-\d{2})/);
+      const sessionDate = dateMatch ? dateMatch[1] : null;
+      return s.workoutTemplateId === workoutTemplateId && sessionDate && s.date === sessionDate;
+    });
+    
+    if (existingSession) {
+      console.log('📂 Restoring session:', existingSession.id);
+      setCurrentSessionId(existingSession.id);
+      
+      // Restore localValues from session sets — these override template values
+      const restoredValues: Record<string, { weight: number; reps: number }> = {};
+      existingSession.sets.forEach((set: any) => {
+        exerciseGroups.forEach(group => {
+          group.exercises.forEach(ex => {
+            const exerciseIdToMatch = ex.exerciseId || ex.id;
+            if (set.exerciseId === exerciseIdToMatch || set.exerciseId === ex.id) {
+              const setId = `${ex.id}-set-${set.setIndex}`;
+              restoredValues[setId] = {
+                weight: set.weight,
+                reps: set.reps,
+              };
+            }
+          });
+        });
+      });
+      
+      if (Object.keys(restoredValues).length > 0) {
+        console.log('📂 Restored localValues for', Object.keys(restoredValues).length, 'sets from session');
+        setLocalValues(prev => ({ ...prev, ...restoredValues }));
+      }
     }
   }, [workoutKey, type, exerciseGroups, getWarmupCompletion, getAccessoryCompletion, getMainCompletion]);
   
@@ -1166,28 +1168,61 @@ export function ExerciseExecutionScreen() {
   const getExerciseHistoryForDrawer = (exerciseId: string) => {
     const historyByDate = new Map<string, Array<{ setNumber: number; weight: number; reps: number }>>();
     
-    // Create a map of workoutTemplateId -> workout template for quick lookup
+    // 1. Sessions are the source of truth for actual logged weight/reps
+    // Use the LATEST session per date to avoid stale duplicates
+    const freshSessions = useStore.getState().sessions;
+    const latestSessionByDate = new Map<string, typeof freshSessions[0]>();
+    
+    freshSessions.forEach(session => {
+      const date = session.date || new Date(session.startTime).toISOString().split('T')[0];
+      
+      const hasExercise = session.sets.some(set => 
+        set.exerciseId === exerciseId || set.exerciseName === items.find(i => i.id === exerciseId)?.exerciseName
+      );
+      if (!hasExercise) return;
+      
+      const existing = latestSessionByDate.get(date);
+      if (!existing || session.id > existing.id) {
+        latestSessionByDate.set(date, session);
+      }
+    });
+    
+    latestSessionByDate.forEach((session, date) => {
+      session.sets.forEach(set => {
+        if (set.exerciseId === exerciseId || set.exerciseName === items.find(i => i.id === exerciseId)?.exerciseName) {
+          if (!historyByDate.has(date)) {
+            historyByDate.set(date, []);
+          }
+          
+          historyByDate.get(date)!.push({
+            setNumber: set.setNumber || set.setIndex || 0,
+            weight: set.weight || 0,
+            reps: set.reps || 0,
+          });
+        }
+      });
+    });
+    
+    // 2. Fill in from detailed workout progress for dates not covered by sessions
+    const datesFromSessions = new Set(historyByDate.keys());
     const workoutTemplateMap = new Map<string, any>();
-    workoutTemplates.forEach(template => {
+    const freshWorkoutTemplates = useStore.getState().workoutTemplates;
+    freshWorkoutTemplates.forEach(template => {
       workoutTemplateMap.set(template.id, template);
     });
     
-    // 1. Get from detailed workout progress (includes in-progress workouts with completed sets)
     const detailedWorkoutProgress = getDetailedWorkoutProgress();
-    Object.entries(detailedWorkoutProgress).forEach(([workoutKey, workoutProgress]) => {
-      // Extract workoutTemplateId from workoutKey
-      const workoutTemplateId = workoutKey.split('-').slice(0, -3).join('-');
-      const workoutTemplate = workoutTemplateMap.get(workoutTemplateId);
+    Object.entries(detailedWorkoutProgress).forEach(([wKey, workoutProgress]) => {
+      const wTemplateId = wKey.split('-').slice(0, -3).join('-');
+      const workoutTemplate = workoutTemplateMap.get(wTemplateId);
       
       if (!workoutTemplate) return;
       
-      // Check all exercises in this workout progress
       Object.entries(workoutProgress.exercises).forEach(([templateExerciseId, exerciseProgress]) => {
         const templateExercise = workoutTemplate.exercises?.find((ex: any) => ex.id === templateExerciseId);
         
         if (!templateExercise) return;
         
-        // Match by exerciseId
         const exerciseDataById = exercisesLibrary.find(e => e.id === templateExercise.exerciseId);
         const exerciseDataForCurrent = exercisesLibrary.find(e => e.id === exerciseId);
         
@@ -1195,16 +1230,16 @@ export function ExerciseExecutionScreen() {
         const matchesByName = exerciseDataById?.name.toLowerCase().trim() === exerciseDataForCurrent?.name.toLowerCase().trim();
         
         if (matchesById || matchesByName) {
-          // Skip if this exercise was marked as skipped
           if (exerciseProgress.skipped) return;
           
-          // Include completed sets
           const hasCompletedSets = exerciseProgress.sets.some(set => set.completed);
           
           if (hasCompletedSets) {
-            // Extract date from workoutKey
-            const dateMatch = workoutKey.match(/(\d{4}-\d{2}-\d{2})/);
+            const dateMatch = wKey.match(/(\d{4}-\d{2}-\d{2})/);
             const date = dateMatch ? dateMatch[1] : new Date().toISOString().split('T')[0];
+            
+            // Only use progress data for dates not already covered by sessions
+            if (datesFromSessions.has(date)) return;
             
             const completedSets = exerciseProgress.sets
               .filter(set => set.completed)
@@ -1221,46 +1256,6 @@ export function ExerciseExecutionScreen() {
               historyByDate.set(date, completedSets);
             }
           }
-        }
-      });
-    });
-    
-    // 2. Get from completed sessions (only for dates not already covered by progress data)
-    // For each date, only use the LATEST session to avoid duplicates from old saves
-    const datesFromProgress = new Set(historyByDate.keys());
-    const latestSessionByDate = new Map<string, typeof sessions[0]>();
-    
-    sessions.forEach(session => {
-      const date = session.date || new Date(session.startTime).toISOString().split('T')[0];
-      // Skip dates already populated from workout progress
-      if (datesFromProgress.has(date)) return;
-      
-      // Only check sessions that contain this exercise
-      const hasExercise = session.sets.some(set => 
-        set.exerciseId === exerciseId || set.exerciseName === items.find(i => i.id === exerciseId)?.exerciseName
-      );
-      if (!hasExercise) return;
-      
-      // Keep only the latest session per date (highest ID = most recent)
-      const existing = latestSessionByDate.get(date);
-      if (!existing || session.id > existing.id) {
-        latestSessionByDate.set(date, session);
-      }
-    });
-    
-    // Now collect sets only from the latest session per date
-    latestSessionByDate.forEach((session, date) => {
-      session.sets.forEach(set => {
-        if (set.exerciseId === exerciseId || set.exerciseName === items.find(i => i.id === exerciseId)?.exerciseName) {
-          if (!historyByDate.has(date)) {
-            historyByDate.set(date, []);
-          }
-          
-          historyByDate.get(date)!.push({
-            setNumber: set.setNumber || set.setIndex || 0,
-            weight: set.weight || 0,
-            reps: set.reps || 0,
-          });
         }
       });
     });
