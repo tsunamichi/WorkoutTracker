@@ -2171,8 +2171,8 @@ export function ExerciseExecutionScreen() {
             // Only show if there's history
             if (exerciseHistory.length === 0) return null;
             
-            // Show latest workout by default, or all if expanded
-            const workoutsToShow = showExerciseHistory ? exerciseHistory.slice(0, 3) : exerciseHistory.slice(0, 1);
+            // Show latest workout by default, or last 3 if expanded (oldest first, latest at bottom)
+            const workoutsToShow = showExerciseHistory ? exerciseHistory.slice(-3) : exerciseHistory.slice(-1);
             
             return (
               <>
@@ -2187,7 +2187,7 @@ export function ExerciseExecutionScreen() {
                           <Text style={styles.historyDateLine}>
                             {dayjs(workout.date).format('MMMM D')}{getOrdinalSuffix(dayjs(workout.date).date())}
                           </Text>
-                          {workoutIndex === 0 && exerciseHistory.length > 1 && (
+                          {workoutIndex === workoutsToShow.length - 1 && exerciseHistory.length > 1 && (
                             <TouchableOpacity
                               style={styles.viewAllButton}
                               onPress={() => setShowExerciseHistory(!showExerciseHistory)}
