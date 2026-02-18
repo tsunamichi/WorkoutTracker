@@ -2279,7 +2279,7 @@ export function ExerciseExecutionScreen() {
       <BottomDrawer
         visible={showSwapModal}
         onClose={() => { setShowSwapModal(false); setSwapSearchQuery(''); }}
-        maxHeight="70%"
+        maxHeight="80%"
         scrollable={false}
       >
         <View style={styles.adjustmentDrawerContent}>
