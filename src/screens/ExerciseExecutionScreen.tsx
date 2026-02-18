@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, LayoutAnimation, Platform, UIManager, Alert, Animated, Modal, FlatList, TextInput, Keyboard, PanResponder } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, RouteProp, useFocusEffect } from '@react-navigation/native';
@@ -304,7 +304,18 @@ export function ExerciseExecutionScreen() {
       if (indicatorTimerRef.current) clearTimeout(indicatorTimerRef.current);
     };
   }, [expandedGroupIndex]);
-  const [localValues, setLocalValues] = useState<Record<string, { weight: number; reps: number }>>({});
+  const [localValues, setLocalValuesState] = useState<Record<string, { weight: number; reps: number }>>({});
+  const localValuesRef = useRef(localValues);
+  localValuesRef.current = localValues;
+  
+  // Wrapper that updates both state AND ref immediately (ref avoids stale closures in saveSession)
+  const setLocalValues = useCallback((updater: React.SetStateAction<Record<string, { weight: number; reps: number }>>) => {
+    setLocalValuesState(prev => {
+      const next = typeof updater === 'function' ? updater(prev) : updater;
+      localValuesRef.current = next;
+      return next;
+    });
+  }, []);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null); // Track session ID for updates
   const [showAdjustmentDrawer, setShowAdjustmentDrawer] = useState(false);
   const [expandedSetInDrawer, setExpandedSetInDrawer] = useState<number>(0); // Track which set is expanded in drawer
@@ -493,8 +504,39 @@ export function ExerciseExecutionScreen() {
       setExpandedGroupIndex(0); // Expand first group by default
     }
 
-    // Always restore localValues from session (runs regardless of completion state)
-    // Session data is the source of truth for actual logged weight/reps
+    // Restore localValues from the best available data source
+    const restoredValues: Record<string, { weight: number; reps: number }> = {};
+    
+    // 1. First, try to restore from detailedWorkoutProgress (most reliable for actual logged values)
+    const progressData = getDetailedWorkoutProgress();
+    if (workoutKey && progressData[workoutKey]) {
+      const workoutProgress = progressData[workoutKey];
+      const freshTemplate = useStore.getState().workoutTemplates.find(t => t.id === workoutTemplateId);
+      
+      Object.entries(workoutProgress.exercises).forEach(([templateExId, exProgress]) => {
+        const templateEx = (freshTemplate?.items || (freshTemplate as any)?.exercises)?.find((ex: any) => ex.id === templateExId);
+        const libExId = templateEx?.exerciseId || templateExId;
+        
+        exerciseGroups.forEach(group => {
+          group.exercises.forEach(ex => {
+            if (ex.id === libExId || ex.id === templateExId) {
+              (exProgress as any).sets?.forEach((s: any) => {
+                if (s.completed) {
+                  const setId = `${ex.id}-set-${s.setNumber}`;
+                  restoredValues[setId] = { weight: s.weight, reps: s.reps };
+                }
+              });
+            }
+          });
+        });
+      });
+      
+      if (Object.keys(restoredValues).length > 0) {
+        console.log('📂 Restored localValues for', Object.keys(restoredValues).length, 'sets from detailedWorkoutProgress');
+      }
+    }
+    
+    // 2. Then fill in from session data for any sets not covered by progress
     const allSessions = useStore.getState().sessions;
     const existingSession = allSessions.find(s => 
       (s as any).workoutKey === workoutKey
@@ -505,30 +547,26 @@ export function ExerciseExecutionScreen() {
     });
     
     if (existingSession) {
-      console.log('📂 Restoring session:', existingSession.id);
+      console.log('📂 Found existing session:', existingSession.id);
       setCurrentSessionId(existingSession.id);
       
-      // Restore localValues from session sets — these override template values
-      const restoredValues: Record<string, { weight: number; reps: number }> = {};
       existingSession.sets.forEach((set: any) => {
         exerciseGroups.forEach(group => {
           group.exercises.forEach(ex => {
             const exerciseIdToMatch = ex.exerciseId || ex.id;
             if (set.exerciseId === exerciseIdToMatch || set.exerciseId === ex.id) {
               const setId = `${ex.id}-set-${set.setIndex}`;
-              restoredValues[setId] = {
-                weight: set.weight,
-                reps: set.reps,
-              };
+              if (!restoredValues[setId]) {
+                restoredValues[setId] = { weight: set.weight, reps: set.reps };
+              }
             }
           });
         });
       });
-      
-      if (Object.keys(restoredValues).length > 0) {
-        console.log('📂 Restored localValues for', Object.keys(restoredValues).length, 'sets from session');
-        setLocalValues(prev => ({ ...prev, ...restoredValues }));
-      }
+    }
+    
+    if (Object.keys(restoredValues).length > 0) {
+      setLocalValues(prev => ({ ...prev, ...restoredValues }));
     }
   }, [workoutKey, type, exerciseGroups, getWarmupCompletion, getAccessoryCompletion, getMainCompletion]);
   
@@ -617,6 +655,54 @@ export function ExerciseExecutionScreen() {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
   };
 
+  // Build a lookup of session values for displaying accurate logged data
+  // Falls back through: localValues → detailedWorkoutProgress → session data → template values
+  const getSetDisplayValues = useCallback((exerciseId: string, setIndex: number, templateWeight: number, templateReps: number) => {
+    const setId = `${exerciseId}-set-${setIndex}`;
+    const fallback = { weight: templateWeight, reps: Number(templateReps) || 0 };
+    
+    // First try localValues (includes session-restored and user-edited values)
+    const lv = localValuesRef.current[setId];
+    if (lv && (lv.weight !== fallback.weight || lv.reps !== fallback.reps)) {
+      return lv;
+    }
+    
+    // Then try detailedWorkoutProgress (most reliable source for completed workout data)
+    const progressData = getDetailedWorkoutProgress();
+    if (workoutKey && progressData[workoutKey]) {
+      const workoutProgress = progressData[workoutKey];
+      // Find the matching exercise in progress by checking all exercises
+      for (const [templateExId, exProgress] of Object.entries(workoutProgress.exercises)) {
+        const freshTemplate = useStore.getState().workoutTemplates.find(t => t.id === workoutTemplateId);
+        const templateExercise = (freshTemplate?.items || (freshTemplate as any)?.exercises)?.find((ex: any) => ex.id === templateExId);
+        if (templateExercise?.exerciseId === exerciseId || templateExId === exerciseId) {
+          const matchingSet = (exProgress as any).sets?.find((s: any) => s.setNumber === setIndex && s.completed);
+          if (matchingSet) {
+            return { weight: matchingSet.weight, reps: matchingSet.reps };
+          }
+        }
+      }
+    }
+    
+    // Then try reading directly from the session in the store
+    const allSessions = useStore.getState().sessions;
+    const session = allSessions.find(s => (s as any).workoutKey === workoutKey)
+      || allSessions.find(s => {
+        const dm = workoutKey?.match(/(\d{4}-\d{2}-\d{2})/);
+        const sd = dm ? dm[1] : null;
+        return s.workoutTemplateId === workoutTemplateId && sd && s.date === sd;
+      });
+    if (session) {
+      const match = session.sets.find(s =>
+        (s.exerciseId === exerciseId) && (s.setIndex === setIndex)
+      );
+      if (match) return { weight: match.weight, reps: match.reps };
+    }
+    
+    // Last resort: localValues (even if same as template) or template
+    return lv || fallback;
+  }, [workoutKey, workoutTemplateId]);
+
   const saveSession = async (completedSetIds?: Set<string>) => {
     console.log('💾 Saving workout session for', type, 'section');
     console.log('   workoutTemplateId:', workoutTemplateId);
@@ -640,8 +726,8 @@ export function ExerciseExecutionScreen() {
           
           // Only include completed sets
           if (setsToSave.has(setId)) {
-            // Get the actual values from localValues, or fall back to template values
-            const setValues = localValues[setId];
+            // Read from ref to always get the latest values (avoids stale closure)
+            const setValues = localValuesRef.current[setId];
             const weight = setValues?.weight ?? exercise.weight ?? 0;
             const reps = setValues?.reps ?? exercise.reps ?? 0;
             
@@ -745,7 +831,7 @@ export function ExerciseExecutionScreen() {
     // Check for new PR (only for main exercises with weight > 0)
     if (type === 'main' && !currentExercise.isTimeBased) {
       const exerciseIdForPR = currentExercise.exerciseId || currentExercise.id;
-      const setValues = localValues[setId];
+      const setValues = localValuesRef.current[setId];
       const liftedWeight = setValues?.weight ?? currentExercise.weight ?? 0;
       const liftedReps = setValues?.reps ?? Number(currentExercise.reps) ?? 0;
       if (liftedWeight > 0) {
@@ -1168,13 +1254,67 @@ export function ExerciseExecutionScreen() {
   const getExerciseHistoryForDrawer = (exerciseId: string) => {
     const historyByDate = new Map<string, Array<{ setNumber: number; weight: number; reps: number }>>();
     
-    // 1. Sessions are the source of truth for actual logged weight/reps
-    // Use the LATEST session per date to avoid stale duplicates
+    // 1. Get from detailed workout progress (written by ExerciseDetailScreen)
+    const workoutTemplateMap = new Map<string, any>();
+    const freshWorkoutTemplates = useStore.getState().workoutTemplates;
+    freshWorkoutTemplates.forEach(template => {
+      workoutTemplateMap.set(template.id, template);
+    });
+    
+    const detailedWorkoutProgress = getDetailedWorkoutProgress();
+    Object.entries(detailedWorkoutProgress).forEach(([wKey, workoutProgress]) => {
+      const wTemplateId = wKey.split('-').slice(0, -3).join('-');
+      const workoutTemplate = workoutTemplateMap.get(wTemplateId);
+      
+      if (!workoutTemplate) return;
+      
+      Object.entries(workoutProgress.exercises).forEach(([templateExerciseId, exerciseProgress]) => {
+        const templateExercise = (workoutTemplate.items || (workoutTemplate as any).exercises)?.find((ex: any) => ex.id === templateExerciseId);
+        
+        if (!templateExercise) return;
+        
+        const exerciseDataById = exercisesLibrary.find(e => e.id === templateExercise.exerciseId);
+        const exerciseDataForCurrent = exercisesLibrary.find(e => e.id === exerciseId);
+        
+        const matchesById = templateExercise.exerciseId === exerciseId;
+        const matchesByName = exerciseDataById?.name.toLowerCase().trim() === exerciseDataForCurrent?.name.toLowerCase().trim();
+        
+        if (matchesById || matchesByName) {
+          if (exerciseProgress.skipped) return;
+          
+          const hasCompletedSets = exerciseProgress.sets.some(set => set.completed);
+          
+          if (hasCompletedSets) {
+            const dateMatch = wKey.match(/(\d{4}-\d{2}-\d{2})/);
+            const date = dateMatch ? dateMatch[1] : new Date().toISOString().split('T')[0];
+            
+            const completedSets = exerciseProgress.sets
+              .filter(set => set.completed)
+              .map(set => ({
+                setNumber: set.setNumber,
+                weight: set.weight,
+                reps: set.reps,
+              }));
+            
+            if (historyByDate.has(date)) {
+              const existing = historyByDate.get(date)!;
+              historyByDate.set(date, [...existing, ...completedSets]);
+            } else {
+              historyByDate.set(date, completedSets);
+            }
+          }
+        }
+      });
+    });
+    
+    // 2. Get from completed sessions (fresh read, for dates not already covered)
+    const datesFromProgress = new Set(historyByDate.keys());
     const freshSessions = useStore.getState().sessions;
     const latestSessionByDate = new Map<string, typeof freshSessions[0]>();
     
     freshSessions.forEach(session => {
       const date = session.date || new Date(session.startTime).toISOString().split('T')[0];
+      if (datesFromProgress.has(date)) return;
       
       const hasExercise = session.sets.some(set => 
         set.exerciseId === exerciseId || set.exerciseName === items.find(i => i.id === exerciseId)?.exerciseName
@@ -1199,63 +1339,6 @@ export function ExerciseExecutionScreen() {
             weight: set.weight || 0,
             reps: set.reps || 0,
           });
-        }
-      });
-    });
-    
-    // 2. Fill in from detailed workout progress for dates not covered by sessions
-    const datesFromSessions = new Set(historyByDate.keys());
-    const workoutTemplateMap = new Map<string, any>();
-    const freshWorkoutTemplates = useStore.getState().workoutTemplates;
-    freshWorkoutTemplates.forEach(template => {
-      workoutTemplateMap.set(template.id, template);
-    });
-    
-    const detailedWorkoutProgress = getDetailedWorkoutProgress();
-    Object.entries(detailedWorkoutProgress).forEach(([wKey, workoutProgress]) => {
-      const wTemplateId = wKey.split('-').slice(0, -3).join('-');
-      const workoutTemplate = workoutTemplateMap.get(wTemplateId);
-      
-      if (!workoutTemplate) return;
-      
-      Object.entries(workoutProgress.exercises).forEach(([templateExerciseId, exerciseProgress]) => {
-        const templateExercise = workoutTemplate.exercises?.find((ex: any) => ex.id === templateExerciseId);
-        
-        if (!templateExercise) return;
-        
-        const exerciseDataById = exercisesLibrary.find(e => e.id === templateExercise.exerciseId);
-        const exerciseDataForCurrent = exercisesLibrary.find(e => e.id === exerciseId);
-        
-        const matchesById = templateExercise.exerciseId === exerciseId;
-        const matchesByName = exerciseDataById?.name.toLowerCase().trim() === exerciseDataForCurrent?.name.toLowerCase().trim();
-        
-        if (matchesById || matchesByName) {
-          if (exerciseProgress.skipped) return;
-          
-          const hasCompletedSets = exerciseProgress.sets.some(set => set.completed);
-          
-          if (hasCompletedSets) {
-            const dateMatch = wKey.match(/(\d{4}-\d{2}-\d{2})/);
-            const date = dateMatch ? dateMatch[1] : new Date().toISOString().split('T')[0];
-            
-            // Only use progress data for dates not already covered by sessions
-            if (datesFromSessions.has(date)) return;
-            
-            const completedSets = exerciseProgress.sets
-              .filter(set => set.completed)
-              .map(set => ({
-                setNumber: set.setNumber,
-                weight: set.weight,
-                reps: set.reps,
-              }));
-            
-            if (historyByDate.has(date)) {
-              const existing = historyByDate.get(date)!;
-              historyByDate.set(date, [...existing, ...completedSets]);
-            } else {
-              historyByDate.set(date, completedSets);
-            }
-          }
         }
       });
     });
@@ -1348,10 +1431,9 @@ export function ExerciseExecutionScreen() {
                     </View>
                     <View style={styles.historyExerciseDataColumn}>
                       {Array.from({ length: totalRounds }).map((_, roundIdx) => {
-                        const setId = `${exercise.id}-set-${roundIdx}`;
-                        const values = localValues[setId];
-                        const displayWeight = values?.weight ?? exercise.weight ?? 0;
-                        const displayReps = values?.reps ?? exercise.reps ?? 0;
+                        const vals = getSetDisplayValues(exercise.id, roundIdx, exercise.weight ?? 0, exercise.reps ?? 0);
+                        const displayWeight = vals.weight;
+                        const displayReps = vals.reps;
                         const showWeight = displayWeight > 0;
                         
                         return (
@@ -1427,8 +1509,9 @@ export function ExerciseExecutionScreen() {
                         // For completed groups, show the last completed round's values
                         const displayRound = isCompleted ? Math.max(0, currentRound - 1) : currentRound;
                         const setId = `${exercise.id}-set-${displayRound}`;
-                        const displayWeight = localValues[setId]?.weight ?? exercise.weight ?? 0;
-                        const displayReps = localValues[setId]?.reps ?? exercise.reps ?? 0;
+                        const displayVals = getSetDisplayValues(exercise.id, displayRound, exercise.weight ?? 0, exercise.reps ?? 0);
+                        const displayWeight = displayVals.weight;
+                        const displayReps = displayVals.reps;
                         const showWeight = displayWeight > 0;
                         const isCurrentExercise = isExpanded && exIndex === activeExerciseIndex;
                         const isExerciseCompleted = completedSets.has(setId);
@@ -1932,16 +2015,16 @@ export function ExerciseExecutionScreen() {
                 const currentRound = currentRounds[currentGroup.id] || 0;
                 const isActive = setIndex === currentRound;
                 
-                // Get values for this specific set
-                const displayWeight = localValues[setId]?.weight ?? activeExercise.weight ?? 0;
-                const displayReps = localValues[setId]?.reps ?? Number(activeExercise.reps) ?? 0;
+                // Get values for this specific set — read from session/store if localValues doesn't have it
+                const drawerSetVals = getSetDisplayValues(activeExercise.id, setIndex, activeExercise.weight ?? 0, activeExercise.reps ?? 0);
+                const displayWeight = drawerSetVals.weight;
+                const displayReps = drawerSetVals.reps;
                 const showBarbellToggle = displayWeight > (useKg ? 20 : 45);
                 
-                // Initialize localValues for this set if needed
+                // Initialize localValues for this set if needed (use session-aware values)
                 if (!localValues[setId]) {
-                  // Try to get values from the previous set
-                  let weightToUse = activeExercise.weight ?? 0;
-                  let repsToUse = Number(activeExercise.reps) ?? 0;
+                  let weightToUse = drawerSetVals.weight;
+                  let repsToUse = drawerSetVals.reps;
                   
                   if (setIndex > 0) {
                     const prevSetId = `${activeExercise.id}-set-${setIndex - 1}`;
