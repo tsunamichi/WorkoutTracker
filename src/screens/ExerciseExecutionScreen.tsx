@@ -2203,7 +2203,7 @@ export function ExerciseExecutionScreen() {
 
                         {/* Right column: sets */}
                         <View style={styles.historySetsColumn}>
-                          {workout.sets.slice().reverse().map((set, setIndex) => (
+                          {workout.sets.map((set, setIndex) => (
                             <View key={setIndex} style={styles.historySetRow}>
                               <View style={styles.historyValueColumn}>
                                 <Text style={styles.historySetText}>
