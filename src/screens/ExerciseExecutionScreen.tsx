@@ -3364,7 +3364,7 @@ const styles = StyleSheet.create({
   historyViewHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: SPACING.md,
+    gap: 8,
     marginBottom: SPACING.xl,
   },
   historyViewTitle: {
