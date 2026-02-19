@@ -13,7 +13,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import * as Haptics from 'expo-haptics';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS } from '../constants';
-import { IconArrowLeft, IconMenu } from '../components/icons';
+import { IconArrowLeft, IconMenu, IconTrash, IconClose, IconPause, IconPlay } from '../components/icons';
 import { ActionSheet } from '../components/common/ActionSheet';
 import { useStore } from '../store';
 import { useTranslation } from '../i18n/useTranslation';
@@ -44,6 +44,7 @@ export function CyclePlanDetailScreen() {
     deleteCyclePlan,
     pauseShiftCyclePlan,
     duplicateCyclePlan,
+    updateCyclePlan,
     getCyclePlanEffectiveEndDate,
     getCyclePlanStatus,
     getCyclePlanWeekProgress,
@@ -147,18 +148,23 @@ export function CyclePlanDetailScreen() {
     navigation.goBack();
   };
 
+  const handleResumeCycle = async () => {
+    setMenuVisible(false);
+    await updateCyclePlan(planId, { pausedUntil: undefined });
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+  };
+
   const isActiveOrPaused = status === 'active' || status === 'paused';
   const actionSheetItems = [
     ...(isActiveOrPaused
       ? [
-          { icon: <Text style={styles.actionIcon}>⊟</Text>, label: 'End cycle', onPress: handleEndCycle },
+          { icon: <IconClose size={20} color={COLORS.text} />, label: 'End', onPress: handleEndCycle },
           ...(status === 'active'
-            ? [{ icon: <Text style={styles.actionIcon}>⏸</Text>, label: 'Pause / Shift', onPress: handlePauseShift }]
-            : []),
+            ? [{ icon: <IconPause size={20} color={COLORS.text} />, label: 'Pause / Shift', onPress: handlePauseShift }]
+            : [{ icon: <IconPlay size={20} color={COLORS.text} />, label: 'Resume', onPress: handleResumeCycle }]),
         ]
       : []),
-    { icon: <Text style={styles.actionIcon}>⎘</Text>, label: t('duplicate'), onPress: handleDuplicate },
-    { icon: <Text style={styles.actionIcon}>⌫</Text>, label: t('delete'), onPress: handleDeleteCycle, destructive: true as const },
+    { icon: <IconTrash size={20} color={COLORS.error} />, label: t('delete'), onPress: handleDeleteCycle, destructive: true as const },
   ].filter(Boolean) as { icon: React.ReactNode; label: string; onPress: () => void; destructive?: boolean }[];
 
   if (!plan) {

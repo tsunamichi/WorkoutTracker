@@ -142,6 +142,7 @@ export function TodayScreen({ onDateChange, onOpenSwapDrawer, onOpenAddWorkout }
     cyclePlans,
     getActiveCyclePlan,
     getCyclePlanWeekProgress,
+    getCyclePlanEffectiveEndDate,
     pauseShiftCyclePlan,
     updateCyclePlan,
   } = useStore();
@@ -182,9 +183,7 @@ export function TodayScreen({ onDateChange, onOpenSwapDrawer, onOpenAddWorkout }
     let inactiveMatch: typeof cyclePlans[0] | null = null;
     for (const plan of cyclePlans) {
       const start = dayjs(plan.startDate);
-      const end = plan.endedAt
-        ? dayjs(plan.endedAt)
-        : start.add(plan.weeks, 'week').subtract(1, 'day');
+      const end = dayjs(getCyclePlanEffectiveEndDate(plan));
       if (!dayjs(selectedDate).isBefore(start, 'day') && !dayjs(selectedDate).isAfter(end, 'day')) {
         if (plan.active) {
           if (!activeMatch) activeMatch = plan;
@@ -332,16 +331,20 @@ export function TodayScreen({ onDateChange, onOpenSwapDrawer, onOpenAddWorkout }
     }
   };
   
+  const isInPastCycle = selectedDateCyclePlan ? !selectedDateCyclePlan.active : false;
+
   const handleWorkoutPress = () => {
     if (selectedDay?.scheduledWorkout) {
       const sw = selectedDay.scheduledWorkout;
+      const mainCompletion = getMainCompletion(sw.id);
+      const isCompleted = sw.isLocked || mainCompletion.percentage === 100;
+
+      if (isInPastCycle && !isCompleted) return;
       
-      // SCHEDULE-FIRST: Pass scheduled workout data to execution screen
-      // Navigate directly to ExerciseExecution with type='main' (skipping WOD page)
       (navigation as any).navigate('ExerciseExecution', {
-        workoutKey: sw.id, // Pass scheduled workout ID as workoutKey
+        workoutKey: sw.id,
         workoutTemplateId: sw.templateId,
-        type: 'main', // Go directly to main exercises page
+        type: 'main',
       });
     }
   };
@@ -354,43 +357,9 @@ export function TodayScreen({ onDateChange, onOpenSwapDrawer, onOpenAddWorkout }
         <SafeAreaView style={[styles.container, { paddingBottom: 88 }]} edges={[]}>
           {/* Unified header + calendar card */}
           <View style={[styles.calendarCard, { paddingTop: insets.top }]}>
-            {/* Header row: title (or cycle name) + icons — matches Progress tab layout */}
+            {/* Header row: always "Schedule" + icons */}
             <View style={styles.topBar}>
-              {selectedDateCyclePlan ? (
-                <TouchableOpacity
-                  style={styles.scheduleTitleTouchable}
-                  onPress={() => {
-                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                    (navigation as any).navigate('CyclePlanDetail', { planId: selectedDateCyclePlan.id });
-                  }}
-                  activeOpacity={0.85}
-                >
-                  <View style={styles.scheduleTitleRow}>
-                    <Text style={styles.headerTitle} numberOfLines={1}>{selectedDateCyclePlan.name}</Text>
-                    <View style={styles.scheduleTitleArrow}>
-                      <IconArrowRight size={20} color={LIGHT_COLORS.secondary} />
-                    </View>
-                  </View>
-                </TouchableOpacity>
-              ) : activeCyclePlan ? (
-                <TouchableOpacity
-                  style={styles.scheduleTitleTouchable}
-                  onPress={() => {
-                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                    (navigation as any).navigate('CyclePlanDetail', { planId: activeCyclePlan.id });
-                  }}
-                  activeOpacity={0.85}
-                >
-                  <View style={styles.scheduleTitleRow}>
-                    <Text style={styles.headerTitle} numberOfLines={1}>{activeCyclePlan.name}</Text>
-                    <View style={styles.scheduleTitleArrow}>
-                      <IconArrowRight size={20} color={LIGHT_COLORS.secondary} />
-                    </View>
-                  </View>
-                </TouchableOpacity>
-              ) : (
-                <Text style={styles.headerTitle}>{scheduleLabel}</Text>
-              )}
+              <Text style={styles.headerTitle}>{scheduleLabel}</Text>
               <View style={styles.headerRight}>
                 {selectedDate !== today.format('YYYY-MM-DD') && (
                   <TouchableOpacity
@@ -414,30 +383,35 @@ export function TodayScreen({ onDateChange, onOpenSwapDrawer, onOpenAddWorkout }
               </View>
             </View>
 
-            {/* Subtitle below title: "Week X of Y" for active cycle, "Past cycle" for past cycles */}
-            {selectedDateCyclePlan && (
-              <TouchableOpacity
-                style={styles.scheduleSubtitleTouchable}
-                onPress={() => {
-                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                  (navigation as any).navigate('CyclePlanDetail', { planId: selectedDateCyclePlan.id });
-                }}
-                activeOpacity={0.85}
-              >
-                <View style={styles.scheduleSubtitleRow}>
-                  <Text style={styles.scheduleSubtitle}>
-                    {isSelectedDateInActiveCycle && cycleWeekProgress
-                      ? `Week ${cycleWeekProgress.currentWeek} of ${cycleWeekProgress.totalWeeks}`
-                      : t('pastCycle')}
-                  </Text>
-                  {isSelectedDateInActiveCycle && isCyclePaused && (
-                    <View style={styles.scheduleSubtitlePauseIcon}>
-                      <IconPause size={14} color={LIGHT_COLORS.textMeta} />
+            {/* Subtitle: always reserve space to prevent layout jump */}
+            <View style={styles.scheduleSubtitleTouchable}>
+              {selectedDateCyclePlan ? (
+                <TouchableOpacity
+                  onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    (navigation as any).navigate('CyclePlanDetail', { planId: selectedDateCyclePlan.id });
+                  }}
+                  activeOpacity={0.85}
+                >
+                  <View style={styles.scheduleSubtitleRow}>
+                    <Text style={styles.scheduleSubtitle} numberOfLines={1}>
+                      {isSelectedDateInActiveCycle
+                        ? isCyclePaused
+                          ? `${selectedDateCyclePlan.name} · Paused (Resumes ${dayjs(activeCyclePlan!.pausedUntil).format('MMM D')})`
+                          : selectedDateCyclePlan.name
+                        : `${selectedDateCyclePlan.name} · ${t('pastCycle')}`}
+                    </Text>
+                    <View style={styles.scheduleTitleArrow}>
+                      <IconArrowRight size={16} color={LIGHT_COLORS.textMeta} />
                     </View>
-                  )}
+                  </View>
+                </TouchableOpacity>
+              ) : (
+                <View style={styles.scheduleSubtitleRow}>
+                  <Text style={styles.scheduleSubtitle}>{' '}</Text>
                 </View>
-              </TouchableOpacity>
-            )}
+              )}
+            </View>
 
             {/* Calendar strip */}
             <ExpandableCalendarStrip
@@ -463,6 +437,7 @@ export function TodayScreen({ onDateChange, onOpenSwapDrawer, onOpenAddWorkout }
                         style={styles.workoutCardInner}
                         onPress={handleWorkoutPress}
                         activeOpacity={1}
+                        disabled={isInPastCycle && !(selectedDay.scheduledWorkout.isLocked || getMainCompletion(selectedDay.scheduledWorkout.id).percentage === 100)}
                       >
                     {(() => {
                       const sw = selectedDay.scheduledWorkout;
@@ -475,8 +450,11 @@ export function TodayScreen({ onDateChange, onOpenSwapDrawer, onOpenAddWorkout }
                       const progress = completionPercentage / 100;
                       const isCompleted = sw.isLocked || completionPercentage === 100;
                       
+                      const isSkipped = isInPastCycle && !isCompleted;
                       let buttonState = t('start');
-                      if (isCompleted) {
+                      if (isSkipped) {
+                        buttonState = t('skipped');
+                      } else if (isCompleted) {
                         buttonState = t('workoutComplete');
                       } else if (completionPercentage > 0) {
                         buttonState = t('resume');
@@ -523,14 +501,17 @@ export function TodayScreen({ onDateChange, onOpenSwapDrawer, onOpenAddWorkout }
                             <View style={[
                               styles.startButton,
                               isCompleted && styles.startButtonCompletedNoBg,
-                              !isCompleted && selectedDate !== today.format('YYYY-MM-DD') && dayjs(selectedDate).isBefore(today, 'day') && styles.startButtonPast,
-                              !isCompleted && dayjs(selectedDate).isAfter(today, 'day') && styles.startButtonFuture,
+                              isSkipped && styles.startButtonCompletedNoBg,
+                              !isCompleted && !isSkipped && selectedDate !== today.format('YYYY-MM-DD') && dayjs(selectedDate).isBefore(today, 'day') && styles.startButtonPast,
+                              !isCompleted && !isSkipped && dayjs(selectedDate).isAfter(today, 'day') && styles.startButtonFuture,
                             ]}>
                               {isCompleted ? (
                                 <View style={styles.startButtonCompletedRow}>
                                   <IconCheckmark size={16} color={COLORS.successBright} />
                                   <Text style={[styles.startButtonText, styles.startButtonTextCompleted]}>{buttonState}</Text>
                                 </View>
+                              ) : isSkipped ? (
+                                <Text style={[styles.startButtonText, { color: COLORS.textMeta }]}>{buttonState}</Text>
                               ) : (
                                 <Text style={[
                                   styles.startButtonText,

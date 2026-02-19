@@ -2494,13 +2494,27 @@ export const useStore = create<WorkoutStore>((set, get) => ({
     }
 
     const asOf = dayjs(asOfDate);
-    const effectiveStart = plan.pausedUntil && dayjs(plan.pausedUntil).isAfter(startDate)
-      ? dayjs(plan.pausedUntil)
-      : startDate;
-    if (asOf.isBefore(effectiveStart, 'day')) return null;
+    if (asOf.isBefore(startDate, 'day')) return null;
     const endDate = get().getCyclePlanEffectiveEndDate(plan);
     if (asOf.isAfter(dayjs(endDate), 'day')) return { currentWeek: totalWeeks, totalWeeks };
-    const weeksElapsed = asOf.diff(effectiveStart, 'week', true);
+
+    if (plan.pausedUntil && dayjs(plan.pausedUntil).isAfter(startDate)) {
+      const pausedUntil = dayjs(plan.pausedUntil);
+      if (asOf.isBefore(pausedUntil, 'day')) {
+        // Date is before resume: compute week from original start
+        const weeksElapsed = asOf.diff(startDate, 'week', true);
+        const currentWeek = Math.max(1, Math.min(Math.floor(weeksElapsed) + 1, totalWeeks));
+        return { currentWeek, totalWeeks };
+      }
+      // Date is after resume: remaining weeks count from pausedUntil
+      const weeksElapsed = asOf.diff(pausedUntil, 'week', true);
+      const weeksBeforePause = pausedUntil.diff(startDate, 'week', true);
+      const weekOffset = Math.floor(weeksBeforePause);
+      const currentWeek = Math.min(weekOffset + Math.floor(weeksElapsed) + 1, totalWeeks);
+      return { currentWeek, totalWeeks };
+    }
+
+    const weeksElapsed = asOf.diff(startDate, 'week', true);
     const currentWeek = Math.min(Math.floor(weeksElapsed) + 1, totalWeeks);
     return { currentWeek, totalWeeks };
   },
@@ -2567,11 +2581,36 @@ export const useStore = create<WorkoutStore>((set, get) => ({
       return false;
     });
 
+    // Shift the weekday template mapping so the first workout day aligns with the resume date.
+    // E.g., if original pattern was Mon/Wed/Fri and resume is Tuesday,
+    // the first workout (originally Mon) lands on Tuesday, next (originally Wed) on Thursday, etc.
+    const originalWeekdays = Object.keys(plan.templateIdsByWeekday)
+      .map(Number)
+      .filter(d => plan.templateIdsByWeekday[d])
+      .sort((a, b) => a - b);
+    const originalStartDay = dayjs(plan.startDate).day();
+    // Find which weekday in the pattern was "first" relative to the original start
+    const sortedFromStart = [...originalWeekdays].sort((a, b) => {
+      const da = (a - originalStartDay + 7) % 7;
+      const db = (b - originalStartDay + 7) % 7;
+      return da - db;
+    });
+    const resumeDay = resume.day();
+    const shiftedTemplateIdsByWeekday: Partial<Record<number, string>> = {};
+    sortedFromStart.forEach((origDay, idx) => {
+      // Compute the offset this workout had from the first workout day in the original pattern
+      const firstOrigDay = sortedFromStart[0];
+      const offsetFromFirst = (origDay - firstOrigDay + 7) % 7;
+      const newDay = (resumeDay + offsetFromFirst) % 7;
+      shiftedTemplateIdsByWeekday[newDay] = plan.templateIdsByWeekday[origDay];
+    });
+
     const virtualPlan: CyclePlan = {
       ...plan,
       startDate: resumeDate,
       weeks: remainingWeeks,
       pausedUntil: undefined,
+      templateIdsByWeekday: shiftedTemplateIdsByWeekday,
     };
     const conflicts = get().detectCycleConflicts(virtualPlan);
     if (conflicts.length > 0 && !resolutionMap) {
