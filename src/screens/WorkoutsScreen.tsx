@@ -308,6 +308,17 @@ export function WorkoutsScreen() {
             <Text style={styles.actionSheetTitle}>{t('workoutPlans')}</Text>
             <TouchableOpacity
               style={styles.actionRow}
+              onPress={() => {
+                if (!planActionsId) return;
+                setPlanActionsId(null);
+                (navigation as any).navigate('CyclePlanDetail', { planId: planActionsId });
+              }}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.actionText}>View</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.actionRow}
               onPress={async () => {
                 if (!planActionsId) return;
                 const result = await applyCyclePlan(planActionsId);

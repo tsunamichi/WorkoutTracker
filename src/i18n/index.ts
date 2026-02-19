@@ -49,11 +49,15 @@ type TranslationKey =
   | 'resume'
   | 'edit'
   | 'restDayTitle'
+  | 'pastCycle'
   | 'noWorkoutsScheduled'
   | 'swap'
   | 'createWorkout'
   | 'addWorkout'
   | 'noWorkoutPlanned'
+  | 'noWorkoutPerformedThisDay'
+  | 'theCurrentCycleIsPaused'
+  | 'resumeCycle'
   | 'completed'
   | 'addIntervalTimer'
   | 'intervalTimers'
@@ -666,11 +670,15 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     resume: 'Resume',
     edit: 'Edit',
     restDayTitle: 'This is your rest day',
+    pastCycle: 'Past cycle',
     noWorkoutsScheduled: 'No workouts scheduled',
     swap: 'Swap',
     createWorkout: 'Create Workout',
     addWorkout: 'Add Workout',
     noWorkoutPlanned: 'No workout planned',
+    noWorkoutPerformedThisDay: 'No workout performed this day',
+    theCurrentCycleIsPaused: 'The current cycle is paused.',
+    resumeCycle: 'Resume Cycle',
     completed: 'Completed',
     addIntervalTimer: 'Add interval timer',
     intervalTimers: 'Interval Timers',
@@ -1015,7 +1023,7 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     workoutPlan: 'Workout Plan',
     workoutPlanDescription: 'Apply multiple workouts from a plan',
     createWorkoutFor: 'Create workout for',
-    blankWorkout: 'Blank Workout',
+    blankWorkout: 'Single Workout',
     startFromScratch: 'Start from scratch',
     singleDayWorkout: 'Single day workout',
     multiDayCycle: 'Multi-Day Cycle',
@@ -1083,7 +1091,7 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     resetRequiredMessage: 'You must reset your progress before swapping exercises. This will clear all logged sets.',
     completeAll: 'Complete All',
     skipWorkout: 'Skip Workout',
-    repeatCycle: 'Repeat cycle',
+    repeatCycle: 'Repeat Latest Cycle',
     finishedToday: 'finished today',
     finishedYesterday: 'finished yesterday',
     finishedDaysAgo: 'finished {n} days ago',
@@ -1226,11 +1234,15 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     resume: 'Reanudar',
     edit: 'Editar',
     restDayTitle: 'Es tu dia de descanso',
+    pastCycle: 'Ciclo anterior',
     noWorkoutsScheduled: 'No hay entrenamientos',
     swap: 'Cambiar',
     createWorkout: 'Crear entrenamiento',
     addWorkout: 'Agregar entrenamiento',
     noWorkoutPlanned: 'No hay entrenamiento planeado',
+    noWorkoutPerformedThisDay: 'No se realizó entrenamiento este día',
+    theCurrentCycleIsPaused: 'El ciclo actual está en pausa.',
+    resumeCycle: 'Reanudar ciclo',
     completed: 'Completado',
     addIntervalTimer: 'Agregar temporizador',
     intervalTimers: 'Temporizadores de Intervalos',
@@ -1576,7 +1588,7 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     workoutPlan: 'Plan de Entrenamiento',
     workoutPlanDescription: 'Aplicar múltiples entrenamientos de un plan',
     createWorkoutFor: 'Crear entrenamiento para',
-    blankWorkout: 'Entrenamiento en Blanco',
+    blankWorkout: 'Entrenamiento Individual',
     startFromScratch: 'Empezar desde cero',
     singleDayWorkout: 'Entrenamiento de un día',
     multiDayCycle: 'Ciclo Multi-Día',
@@ -1644,7 +1656,7 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     resetRequiredMessage: 'Debes reiniciar tu progreso antes de cambiar ejercicios. Esto borrará todos los sets registrados.',
     completeAll: 'Completar Todo',
     skipWorkout: 'Omitir Entrenamiento',
-    repeatCycle: 'Repetir ciclo',
+    repeatCycle: 'Repetir Último Ciclo',
     finishedToday: 'terminado hoy',
     finishedYesterday: 'terminado ayer',
     finishedDaysAgo: 'terminado hace {n} días',

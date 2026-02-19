@@ -479,7 +479,7 @@ export function SetTimerSheetLegacy({ visible, onComplete, onClose, workoutName,
 export function WorkoutExecutionScreen({ route, navigation }: WorkoutExecutionScreenProps) {
   const insets = useSafeAreaInsets();
   const { workoutId, cycleId, workoutTemplateId, date } = route.params;
-  const { cycles, exercises, addSession, getWorkoutCompletionPercentage, getExerciseProgress, saveExerciseProgress, clearWorkoutProgress, skipExercise, getWorkoutTemplate, getWarmupCompletion, getMainCompletion, getAccessoryCompletion, settings, completeWorkout } = useStore();
+  const { cycles, exercises, addSession, getWorkoutCompletionPercentage, getExerciseProgress, saveExerciseProgress, clearWorkoutProgress, skipExercise, getWorkoutTemplate, getWarmupCompletion, getMainCompletion, getAccessoryCompletion, settings, completeWorkout, scheduledWorkouts, cyclePlans } = useStore();
   const { t } = useTranslation();
   const useKg = settings.useKg;
   const weightUnit = useKg ? 'kg' : 'lb';
@@ -548,6 +548,16 @@ export function WorkoutExecutionScreen({ route, navigation }: WorkoutExecutionSc
   // Calculate completion percentage - ONLY main strength exercises count
   // Warmup and core/accessory exercises don't affect completion percentage
   const completionPercentage = mainCompletion.percentage;
+
+  // Check if this workout belongs to a past (non-active) cycle
+  const isInPastCycle = React.useMemo(() => {
+    const sw = scheduledWorkouts.find(w => w.id === workoutId);
+    if (!sw || sw.source !== 'cycle') return false;
+    const planId = sw.programId || sw.cyclePlanId;
+    if (!planId) return false;
+    const plan = cyclePlans.find(p => p.id === planId);
+    return plan ? !plan.active : false;
+  }, [scheduledWorkouts, cyclePlans, workoutId]);
   
   if (!workout) {
     return (
@@ -786,7 +796,7 @@ export function WorkoutExecutionScreen({ route, navigation }: WorkoutExecutionSc
               <IconArrowLeft size={24} color="#FFFFFF" />
             </TouchableOpacity>
             
-            {completionPercentage === 100 ? (
+            {isInPastCycle ? null : completionPercentage === 100 ? (
               <TouchableOpacity 
                 onPress={handleResetWorkout} 
                 style={styles.resetButton}

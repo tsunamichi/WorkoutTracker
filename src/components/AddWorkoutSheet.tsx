@@ -112,48 +112,14 @@ export function AddWorkoutSheet({
                 activeOpacity={0.85}
               >
                 <Text style={styles.repeatCycleTitle}>{t('repeatCycle')}</Text>
-                {latestCycleInfo.templateNames.length > 0 && (
-                  <Text style={styles.repeatCycleTemplates} numberOfLines={2}>
-                    {latestCycleInfo.templateNames.join('  ·  ')}
-                  </Text>
-                )}
+                <Text style={styles.repeatCycleName} numberOfLines={1}>{latestCycleInfo.planName}</Text>
                 <Text style={styles.repeatCycleSubtitle}>
-                  {latestCycleInfo.workoutCount} {t('workoutsCountLabel')} - {latestCycleInfo.finishedLabel}
+                  {latestCycleInfo.workoutCount} {t('workoutsCountLabel')} · {latestCycleInfo.finishedLabel}
                 </Text>
               </TouchableOpacity>
             )}
           </View>
 
-          {/* Part 2: Existing Templates */}
-          {workoutTemplates.length > 0 && (
-            <>
-              <View style={styles.sectionHeader}>
-                <Text style={styles.sectionTitle}>{t('fromTemplate')}</Text>
-              </View>
-              
-              {workoutTemplates.map((template) => (
-                <TouchableOpacity
-                  key={template.id}
-                  style={styles.templateCard}
-                  onPress={() => {
-                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                    onSelectTemplate(template.id);
-                  }}
-                  activeOpacity={0.85}
-                >
-                  <View style={styles.templateCardInner}>
-                    <View style={styles.templateTextContainer}>
-                      <Text style={styles.templateTitle}>{template.name}</Text>
-                      <Text style={styles.templateSubtitle}>
-                        {template.items.length} {template.items.length === 1 ? t('exercise') : t('exercises')}
-                        {template.usageCount > 0 && ` • ${template.usageCount}x`}
-                      </Text>
-                    </View>
-                  </View>
-                </TouchableOpacity>
-              ))}
-            </>
-          )}
         </ScrollView>
       </View>
     </BottomDrawer>
@@ -211,7 +177,7 @@ const styles = StyleSheet.create({
     ...TYPOGRAPHY.bodyBold,
     color: COLORS.accentPrimary,
   },
-  repeatCycleTemplates: {
+  repeatCycleName: {
     ...TYPOGRAPHY.meta,
     color: COLORS.text,
     marginTop: 4,

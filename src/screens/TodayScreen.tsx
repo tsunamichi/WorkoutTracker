@@ -6,7 +6,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { useStore } from '../store';
 import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS, CARDS } from '../constants';
-import { IconCheckmark, IconSwap, IconAdd, IconSettings, IconCalendar } from '../components/icons';
+import { IconCheckmark, IconSwap, IconAdd, IconSettings, IconCalendar, IconArrowRight, IconPause, IconPlay } from '../components/icons';
 import { ExpandableCalendarStrip } from '../components/calendar/ExpandableCalendarStrip';
 import { DiagonalLinePattern } from '../components/common/DiagonalLinePattern';
 import dayjs from 'dayjs';
@@ -14,6 +14,94 @@ import isoWeek from 'dayjs/plugin/isoWeek';
 import { useTranslation } from '../i18n/useTranslation';
 
 dayjs.extend(isoWeek);
+
+// TEMP SEED: set to true to re-seed, then set back to false
+const SEED_ENABLED = false;
+async function seedDevData() {
+  const store = require('../store').useStore.getState();
+  const storage = require('../storage');
+  
+  // 1. Clear everything
+  await store.clearAllHistory();
+
+  const now = new Date().toISOString();
+  const planId = 'cp-seed-001';
+
+  // 2. Create workout templates (Push, Pull, Legs)
+  const pushTemplate = {
+    id: 'wt-seed-push', kind: 'workout' as const, name: 'Push',
+    warmupItems: [], accessoryItems: [],
+    items: [
+      { id: 'ex-push-1', exerciseId: 'bench-press', order: 0, sets: 4, reps: 8, weight: 185 },
+      { id: 'ex-push-2', exerciseId: 'overhead-press', order: 1, sets: 3, reps: 10, weight: 95 },
+      { id: 'ex-push-3', exerciseId: 'incline-db-press', order: 2, sets: 3, reps: 12, weight: 60 },
+    ],
+    createdAt: now, updatedAt: now, lastUsedAt: null, usageCount: 0,
+  };
+  const pullTemplate = {
+    id: 'wt-seed-pull', kind: 'workout' as const, name: 'Pull',
+    warmupItems: [], accessoryItems: [],
+    items: [
+      { id: 'ex-pull-1', exerciseId: 'barbell-row', order: 0, sets: 4, reps: 8, weight: 155 },
+      { id: 'ex-pull-2', exerciseId: 'pull-up', order: 1, sets: 3, reps: 10, weight: 0 },
+      { id: 'ex-pull-3', exerciseId: 'face-pull', order: 2, sets: 3, reps: 15, weight: 30 },
+    ],
+    createdAt: now, updatedAt: now, lastUsedAt: null, usageCount: 0,
+  };
+  const legsTemplate = {
+    id: 'wt-seed-legs', kind: 'workout' as const, name: 'Legs',
+    warmupItems: [], accessoryItems: [],
+    items: [
+      { id: 'ex-legs-1', exerciseId: 'squat', order: 0, sets: 4, reps: 6, weight: 225 },
+      { id: 'ex-legs-2', exerciseId: 'romanian-deadlift', order: 1, sets: 3, reps: 10, weight: 185 },
+      { id: 'ex-legs-3', exerciseId: 'leg-press', order: 2, sets: 3, reps: 12, weight: 360 },
+    ],
+    createdAt: now, updatedAt: now, lastUsedAt: null, usageCount: 0,
+  };
+  const templates = [pushTemplate, pullTemplate, legsTemplate];
+
+  // 3. Create cycle plan: Feb 10 - Feb 16 (1 week)
+  // Mon=Push, Wed=Pull, Fri=Legs
+  const cyclePlan = {
+    id: planId, name: 'PPL Week', startDate: '2026-02-10', weeks: 1,
+    mapping: { kind: 'weekdays' as const, weekdays: [1, 3, 5] },
+    templateIdsByWeekday: { 1: pushTemplate.id, 3: pullTemplate.id, 5: legsTemplate.id } as Partial<Record<number, string>>,
+    active: false, endedAt: '2026-02-16',
+    createdAt: now, updatedAt: now, lastUsedAt: now, usageCount: 1,
+  };
+
+  // 4. Create scheduled workouts (Mon Feb 10 = Push, Wed Feb 12 = Pull, Fri Feb 14 = Legs)
+  const mkWorkout = (date: string, tmpl: typeof pushTemplate, completed: boolean) => ({
+    id: `sw-seed-${date}`, date, templateId: tmpl.id,
+    titleSnapshot: tmpl.name,
+    warmupSnapshot: [] as any[], exercisesSnapshot: tmpl.items.map(i => ({ ...i })), accessorySnapshot: [] as any[],
+    warmupCompletion: { completedItems: [] },
+    workoutCompletion: { completedExercises: {}, completedSets: {} },
+    accessoryCompletion: { completedItems: [] },
+    status: (completed ? 'completed' : 'planned') as any,
+    startedAt: completed ? `${date}T08:00:00.000Z` : null,
+    completedAt: completed ? `${date}T09:15:00.000Z` : null,
+    source: 'cycle' as const, programId: planId, programName: 'PPL Week',
+    weekIndex: 0, dayIndex: null, isLocked: completed, cyclePlanId: planId,
+  });
+
+  const workouts = [
+    mkWorkout('2026-02-10', pushTemplate, true),
+    mkWorkout('2026-02-12', pullTemplate, true),
+    mkWorkout('2026-02-14', legsTemplate, true),
+  ];
+
+  // 5. Save everything
+  store.workoutTemplates = templates;
+  store.cyclePlans = [cyclePlan];
+  store.scheduledWorkouts = workouts;
+  require('../store').useStore.setState({ workoutTemplates: templates, cyclePlans: [cyclePlan], scheduledWorkouts: workouts });
+  await storage.saveWorkoutTemplates(templates);
+  await storage.saveCyclePlans([cyclePlan]);
+  await storage.saveScheduledWorkouts(workouts);
+
+  console.log('🌱 Seed data created: PPL Week (Feb 10-16) with 3 completed workouts');
+}
 
 const DAYS_SHORT = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
 
@@ -52,13 +140,67 @@ export function TodayScreen({ onDateChange, onOpenSwapDrawer, onOpenAddWorkout }
     getWarmupCompletion,
     getMainCompletion,
     cyclePlans,
+    getActiveCyclePlan,
+    getCyclePlanWeekProgress,
+    pauseShiftCyclePlan,
+    updateCyclePlan,
   } = useStore();
-  const { t } = useTranslation();
+
   const today = dayjs();
-  
-  // State for selected date (defaults to today)
+  const { t } = useTranslation();
+
+  // State must be declared before any derived values that use it
   const [selectedDate, setSelectedDate] = useState(today.format('YYYY-MM-DD'));
   const [refreshTrigger, setRefreshTrigger] = useState(0);
+
+  // TEMP: Seed dev data on mount (remove after use)
+  const [seeded, setSeeded] = useState(false);
+  useEffect(() => {
+    if (SEED_ENABLED && !seeded) {
+      setSeeded(true);
+      seedDevData().then(() => console.log('🌱 Seed complete'));
+    }
+  }, []);
+
+  // Derived cycle state (depends on selectedDate)
+  const activeCyclePlan = getActiveCyclePlan();
+  const cycleWeekProgress = activeCyclePlan
+    ? getCyclePlanWeekProgress(activeCyclePlan.id, selectedDate)
+    : null;
+  const isCyclePaused =
+    !!activeCyclePlan?.pausedUntil &&
+    dayjs(activeCyclePlan.pausedUntil).isAfter(today, 'day');
+  const isPausedDay =
+    isCyclePaused &&
+    !dayjs(selectedDate).isBefore(today, 'day') &&
+    dayjs(selectedDate).isBefore(dayjs(activeCyclePlan!.pausedUntil), 'day');
+
+  // Which cycle plan does the selected date belong to?
+  // If multiple plans overlap, prefer inactive for past dates, active for today/future.
+  const selectedDateCyclePlan = React.useMemo(() => {
+    let activeMatch: typeof cyclePlans[0] | null = null;
+    let inactiveMatch: typeof cyclePlans[0] | null = null;
+    for (const plan of cyclePlans) {
+      const start = dayjs(plan.startDate);
+      const end = plan.endedAt
+        ? dayjs(plan.endedAt)
+        : start.add(plan.weeks, 'week').subtract(1, 'day');
+      if (!dayjs(selectedDate).isBefore(start, 'day') && !dayjs(selectedDate).isAfter(end, 'day')) {
+        if (plan.active) {
+          if (!activeMatch) activeMatch = plan;
+        } else {
+          if (!inactiveMatch) inactiveMatch = plan;
+        }
+      }
+    }
+    if (activeMatch && !inactiveMatch) return activeMatch;
+    if (inactiveMatch && !activeMatch) return inactiveMatch;
+    if (activeMatch && inactiveMatch) {
+      return !dayjs(selectedDate).isBefore(dayjs(), 'day') ? activeMatch : inactiveMatch;
+    }
+    return null;
+  }, [cyclePlans, selectedDate]);
+  const isSelectedDateInActiveCycle = selectedDateCyclePlan?.active === true;
   
   // Force refresh when screen comes into focus (e.g., after scheduling a workout)
   useFocusEffect(
@@ -87,8 +229,7 @@ export function TodayScreen({ onDateChange, onOpenSwapDrawer, onOpenAddWorkout }
   // Get start of week based on selected date (Monday)
   const weekStart = dayjs(selectedDate).startOf('isoWeek');
   
-  // Always show "Schedule" - plan info is shown on individual cards
-  const currentWeekLabel = t('schedule');
+  const scheduleLabel = t('schedule');
   
   // Get workouts for this week (SCHEDULE-FIRST: Only use ScheduledWorkout)
   const weekDays = React.useMemo(() => DAYS_SHORT.map((dayLetter, index) => {
@@ -166,17 +307,29 @@ export function TodayScreen({ onDateChange, onOpenSwapDrawer, onOpenAddWorkout }
   };
   
   const handleAddOrCreateWorkout = (currentDate: string) => {
-    if (hasEligibleWorkoutsToSwap(currentDate)) {
-      // Open swap drawer with current weekDays data
-      onOpenSwapDrawer?.(currentDate, weekDays);
-    } else {
-      // NEW: Open AddWorkoutSheet to choose workout or plan
-      onOpenAddWorkout?.(currentDate);
-    }
+    onOpenAddWorkout?.(currentDate);
   };
   
   const handleDayChange = (newDate: string) => {
     setSelectedDate(newDate);
+  };
+
+  const handleResumeCycleOnDay = async (resumeDateStr: string) => {
+    if (!activeCyclePlan) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    const result = await pauseShiftCyclePlan(activeCyclePlan.id, resumeDateStr);
+    if (result.success) {
+      await updateCyclePlan(activeCyclePlan.id, { pausedUntil: undefined });
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } else if (result.conflicts && result.conflicts.length > 0) {
+      (navigation as any).navigate('CycleConflicts', {
+        planId: activeCyclePlan.id,
+        plan: cyclePlans.find(p => p.id === activeCyclePlan.id),
+        conflicts: result.conflicts,
+        fromPauseShift: true,
+        resumeDate: resumeDateStr,
+      });
+    }
   };
   
   const handleWorkoutPress = () => {
@@ -201,11 +354,43 @@ export function TodayScreen({ onDateChange, onOpenSwapDrawer, onOpenAddWorkout }
         <SafeAreaView style={[styles.container, { paddingBottom: 88 }]} edges={[]}>
           {/* Unified header + calendar card */}
           <View style={[styles.calendarCard, { paddingTop: insets.top }]}>
-            {/* Header row: title + icons */}
+            {/* Header row: title (or cycle name) + icons — matches Progress tab layout */}
             <View style={styles.topBar}>
-              <Text style={styles.headerTitle}>
-                {currentWeekLabel}
-              </Text>
+              {selectedDateCyclePlan ? (
+                <TouchableOpacity
+                  style={styles.scheduleTitleTouchable}
+                  onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    (navigation as any).navigate('CyclePlanDetail', { planId: selectedDateCyclePlan.id });
+                  }}
+                  activeOpacity={0.85}
+                >
+                  <View style={styles.scheduleTitleRow}>
+                    <Text style={styles.headerTitle} numberOfLines={1}>{selectedDateCyclePlan.name}</Text>
+                    <View style={styles.scheduleTitleArrow}>
+                      <IconArrowRight size={20} color={LIGHT_COLORS.secondary} />
+                    </View>
+                  </View>
+                </TouchableOpacity>
+              ) : activeCyclePlan ? (
+                <TouchableOpacity
+                  style={styles.scheduleTitleTouchable}
+                  onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    (navigation as any).navigate('CyclePlanDetail', { planId: activeCyclePlan.id });
+                  }}
+                  activeOpacity={0.85}
+                >
+                  <View style={styles.scheduleTitleRow}>
+                    <Text style={styles.headerTitle} numberOfLines={1}>{activeCyclePlan.name}</Text>
+                    <View style={styles.scheduleTitleArrow}>
+                      <IconArrowRight size={20} color={LIGHT_COLORS.secondary} />
+                    </View>
+                  </View>
+                </TouchableOpacity>
+              ) : (
+                <Text style={styles.headerTitle}>{scheduleLabel}</Text>
+              )}
               <View style={styles.headerRight}>
                 {selectedDate !== today.format('YYYY-MM-DD') && (
                   <TouchableOpacity
@@ -228,6 +413,31 @@ export function TodayScreen({ onDateChange, onOpenSwapDrawer, onOpenAddWorkout }
                 </TouchableOpacity>
               </View>
             </View>
+
+            {/* Subtitle below title: "Week X of Y" for active cycle, "Past cycle" for past cycles */}
+            {selectedDateCyclePlan && (
+              <TouchableOpacity
+                style={styles.scheduleSubtitleTouchable}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  (navigation as any).navigate('CyclePlanDetail', { planId: selectedDateCyclePlan.id });
+                }}
+                activeOpacity={0.85}
+              >
+                <View style={styles.scheduleSubtitleRow}>
+                  <Text style={styles.scheduleSubtitle}>
+                    {isSelectedDateInActiveCycle && cycleWeekProgress
+                      ? `Week ${cycleWeekProgress.currentWeek} of ${cycleWeekProgress.totalWeeks}`
+                      : t('pastCycle')}
+                  </Text>
+                  {isSelectedDateInActiveCycle && isCyclePaused && (
+                    <View style={styles.scheduleSubtitlePauseIcon}>
+                      <IconPause size={14} color={LIGHT_COLORS.textMeta} />
+                    </View>
+                  )}
+                </View>
+              </TouchableOpacity>
+            )}
 
             {/* Calendar strip */}
             <ExpandableCalendarStrip
@@ -340,7 +550,15 @@ export function TodayScreen({ onDateChange, onOpenSwapDrawer, onOpenAddWorkout }
                 <View style={styles.restDayContainer}>
                   <View style={styles.restDayContent}>
                     <Text style={styles.restDayQuestion}>
-                      <Text style={styles.restDayQuestionGray}>{t('noWorkoutPlanned')}</Text>
+                      <Text style={styles.restDayQuestionGray}>
+                        {dayjs(selectedDate).isBefore(today, 'day')
+                          ? t('noWorkoutPerformedThisDay')
+                          : isPausedDay
+                            ? t('theCurrentCycleIsPaused')
+                            : activeCyclePlan && !dayjs(selectedDate).isBefore(dayjs(activeCyclePlan.startDate), 'day')
+                              ? t('restDayTitle')
+                              : t('noWorkoutPlanned')}
+                      </Text>
                     </Text>
                   </View>
                 </View>
@@ -349,8 +567,8 @@ export function TodayScreen({ onDateChange, onOpenSwapDrawer, onOpenAddWorkout }
               <View style={styles.cardActionsContainer}>
                 {/* Per Product Spec: Show actions based on workout existence and lock status */}
                 {selectedDay?.scheduledWorkout ? (
-                  /* Workout EXISTS: Show swap button (unless locked, completed, or in progress) */
-                  !selectedDay.isLocked && !selectedDay.isCompleted && selectedDay.completionPercentage === 0 && (
+                  /* Workout EXISTS: Show swap button only on today (not locked, completed, or in progress) */
+                  selectedDate === today.format('YYYY-MM-DD') && !selectedDay.isLocked && !selectedDay.isCompleted && selectedDay.completionPercentage === 0 && (
                     <TouchableOpacity 
                       style={styles.swapButton}
                       onPress={() => handleAddOrCreateWorkout(selectedDate)}
@@ -360,16 +578,28 @@ export function TodayScreen({ onDateChange, onOpenSwapDrawer, onOpenAddWorkout }
                       <Text style={styles.swapButtonText}>{t('swap')}</Text>
                     </TouchableOpacity>
                   )
-                ) : (
-                  /* Per Product Spec: NO workout - show ONLY "Add workout" button */
+                ) : isPausedDay && !dayjs(selectedDate).isBefore(today, 'day') ? (
+                  /* Paused (today or future only): show "Resume Cycle" */
                   <TouchableOpacity
                     style={styles.addWorkoutButton}
-                    onPress={() => handleAddOrCreateWorkout(selectedDate)}
+                    onPress={() => handleResumeCycleOnDay(selectedDate)}
                     activeOpacity={1}
                   >
-                    <IconAdd size={24} color={COLORS.accentPrimary} />
-                    <Text style={styles.addWorkoutButtonText}>{t('addWorkout')}</Text>
+                    <IconPlay size={16} color={COLORS.accentPrimary} />
+                    <Text style={styles.addWorkoutButtonText}>{t('resumeCycle')}</Text>
                   </TouchableOpacity>
+                ) : (
+                  /* NO workout: show "Add workout" only for today and future (not past days) */
+                  !dayjs(selectedDate).isBefore(today, 'day') && (
+                    <TouchableOpacity
+                      style={styles.addWorkoutButton}
+                      onPress={() => handleAddOrCreateWorkout(selectedDate)}
+                      activeOpacity={1}
+                    >
+                      <IconAdd size={24} color={COLORS.accentPrimary} />
+                      <Text style={styles.addWorkoutButtonText}>{t('addWorkout')}</Text>
+                    </TouchableOpacity>
+                  )
                 )}
               </View>
               </View>
@@ -543,6 +773,35 @@ const styles = StyleSheet.create({
     height: 40,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+
+  scheduleTitleTouchable: {
+    flex: 1,
+    minWidth: 0,
+    justifyContent: 'center',
+  },
+  scheduleTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    minWidth: 0,
+  },
+  scheduleTitleArrow: {
+    marginLeft: SPACING.xs,
+  },
+  scheduleSubtitleTouchable: {
+    paddingHorizontal: SPACING.xxl,
+    marginBottom: 12,
+  },
+  scheduleSubtitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  scheduleSubtitle: {
+    ...TYPOGRAPHY.meta,
+    color: LIGHT_COLORS.textMeta,
+  },
+  scheduleSubtitlePauseIcon: {
+    marginLeft: SPACING.xs,
   },
   
   // Workout Card

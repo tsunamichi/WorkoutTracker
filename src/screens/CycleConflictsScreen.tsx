@@ -23,6 +23,8 @@ interface CycleConflictsScreenProps {
       plan: CyclePlan;
       conflicts: ConflictItem[];
       planId?: string;
+      fromPauseShift?: boolean;
+      resumeDate?: string;
     };
   };
 }
@@ -30,8 +32,8 @@ interface CycleConflictsScreenProps {
 export function CycleConflictsScreen({ navigation, route }: CycleConflictsScreenProps) {
   const insets = useSafeAreaInsets();
   const { t } = useTranslation();
-  const { addCyclePlan, applyCyclePlan, cyclePlans } = useStore();
-  const { plan, conflicts, planId } = route.params;
+  const { addCyclePlan, applyCyclePlan, pauseShiftCyclePlan } = useStore();
+  const { plan, conflicts, planId, fromPauseShift, resumeDate } = route.params;
   
   const [selectedResolution, setSelectedResolution] = useState<CycleConflictResolution>('replace');
   const [isApplying, setIsApplying] = useState(false);
@@ -55,18 +57,19 @@ export function CycleConflictsScreen({ navigation, route }: CycleConflictsScreen
     setIsApplying(true);
 
     try {
-      let result;
+      const resolutionMap: ConflictResolutionMap = {};
+      for (const conflict of conflicts) {
+        resolutionMap[conflict.date] = selectedResolution === 'replace' ? 'replace' : 'keep';
+      }
 
-      if (planId) {
-        // applyCyclePlan expects a per-date ConflictResolutionMap
-        const resolutionMap: ConflictResolutionMap = {};
-        for (const conflict of conflicts) {
-          resolutionMap[conflict.date] = selectedResolution === 'replace' ? 'replace' : 'keep';
-        }
-        result = await applyCyclePlan(planId, resolutionMap);
+      let result: { success: boolean; conflicts?: ConflictItem[] };
+
+      if (fromPauseShift && planId && resumeDate) {
+        result = await pauseShiftCyclePlan(planId, resumeDate, resolutionMap);
+      } else if (planId) {
+        result = await applyCyclePlan(planId, resolutionMap) as { success: boolean; conflicts?: ConflictItem[] };
       } else {
-        // addCyclePlan accepts the simple resolution string
-        result = await addCyclePlan(plan, selectedResolution);
+        result = await addCyclePlan(plan, selectedResolution) as { success: boolean; conflicts?: ConflictItem[] };
       }
       
       if (result.success) {

@@ -20,6 +20,7 @@ import { ProgressHomeScreen } from '../screens/ProgressHomeScreen';
 import { ProgressGalleryScreen } from '../screens/ProgressGalleryScreen';
 import { ProgressLogDetailScreen } from '../screens/ProgressLogDetailScreen';
 import { CycleDetailScreen } from '../screens/CycleDetailScreen';
+import { CyclePlanDetailScreen } from '../screens/CyclePlanDetailScreen';
 import { CycleConflictsScreen } from '../screens/CycleConflictsScreen';
 // import { WorkoutExecutionScreen } from '../screens/WorkoutExecutionScreen'; // Removed - navigating directly to ExerciseExecution
 import WorkoutEditScreen from '../screens/WorkoutEditScreen';
@@ -67,7 +68,8 @@ export type RootStackParamList = {
   ExerciseExecution: { workoutKey: string; workoutTemplateId: string; type: 'warmup' | 'main' | 'core' };
   DesignSystem: undefined;
   CycleDetail: { cycleId: string };
-  CycleConflicts: { plan: any; conflicts: any[]; planId?: string };
+  CyclePlanDetail: { planId: string };
+  CycleConflicts: { plan: any; conflicts: any[]; planId?: string; fromPauseShift?: boolean; resumeDate?: string };
   WorkoutExecution: { workoutId?: string; cycleId?: string; templateId?: string; workoutTemplateId?: string; date: string; isLocked?: boolean };
   WorkoutEdit: { cycleId: string; workoutTemplateId: string; date: string };
   ExerciseDetail: { exerciseId: string; workoutKey: string };
@@ -250,26 +252,29 @@ function TabNavigator() {
     (navigation as any).navigate('AIWorkoutCreation', { mode: 'plan' });
   };
   
-  // Compute latest archived cycle plan info for "Repeat cycle" button
+  // Compute latest finished cycle plan info for "Repeat cycle" button
   const latestCycleInfo = React.useMemo(() => {
-    const archivedPlans = cyclePlans
-      .filter(p => !p.active && p.archivedAt)
-      .sort((a, b) => (b.archivedAt || '').localeCompare(a.archivedAt || ''));
-    const latestPlan = archivedPlans[0];
+    const finishedPlans = cyclePlans
+      .filter(p => !p.active && (p.archivedAt || p.endedAt))
+      .sort((a, b) => {
+        const dateA = a.endedAt || a.archivedAt || '';
+        const dateB = b.endedAt || b.archivedAt || '';
+        return dateB.localeCompare(dateA);
+      });
+    const latestPlan = finishedPlans[0];
     if (!latestPlan) return null;
 
     const daysPerWeek = Object.values(latestPlan.templateIdsByWeekday).filter(Boolean).length;
     const workoutCount = daysPerWeek * latestPlan.weeks;
 
-    // Collect unique template names for the cycle
     const uniqueTemplateIds = [...new Set(Object.values(latestPlan.templateIdsByWeekday).filter(Boolean))] as string[];
     const templateNames = uniqueTemplateIds
       .map(id => workoutTemplates.find(wt => wt.id === id)?.name)
       .filter(Boolean) as string[];
 
-    const archivedDate = dayjs(latestPlan.archivedAt);
+    const finishedDate = dayjs(latestPlan.endedAt || latestPlan.archivedAt);
     const now = dayjs();
-    const daysAgo = now.diff(archivedDate, 'day');
+    const daysAgo = now.diff(finishedDate, 'day');
 
     let finishedLabel: string;
     if (daysAgo === 0) finishedLabel = t('finishedToday');
@@ -1003,6 +1008,7 @@ export default function AppNavigator() {
         <Stack.Screen name="ExerciseExecution" component={ExerciseExecutionScreen} />
         <Stack.Screen name="DesignSystem" component={DesignSystemScreen} />
         <Stack.Screen name="CycleDetail" component={CycleDetailScreen} />
+        <Stack.Screen name="CyclePlanDetail" component={CyclePlanDetailScreen} />
         <Stack.Screen name="CycleConflicts" component={CycleConflictsScreen} />
         {/* <Stack.Screen name="WorkoutExecution" component={WorkoutExecutionScreen} /> */}
         {/* Removed - navigating directly to ExerciseExecution with type='main' */}

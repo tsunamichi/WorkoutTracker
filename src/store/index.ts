@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import dayjs from 'dayjs';
 import isoWeek from 'dayjs/plugin/isoWeek';
 import type { Cycle, Exercise, WorkoutSession, BodyWeightEntry, AppSettings, WorkoutAssignment, TrainerConversation, ExercisePR, WorkoutProgress, ExerciseProgress, HIITTimer, HIITTimerSession } from '../types';
-import type { WorkoutTemplate, CyclePlan, ScheduledWorkout, ConflictResolution, ConflictItem, ConflictResolutionMap, PlanApplySummary } from '../types/training';
+import type { WorkoutTemplate, CyclePlan, ScheduledWorkout, ConflictResolution, ConflictItem, ConflictResolutionMap, PlanApplySummary, CyclePlanStatus } from '../types/training';
 import type { ProgressLog } from '../types/progress';
 import * as storage from '../storage';
 import { SEED_EXERCISES } from '../constants';
@@ -114,6 +114,13 @@ interface WorkoutStore {
   detectCycleConflicts: (plan: CyclePlan) => import('../types/training').ConflictItem[];
   getCycleEndDate: (startDate: string, weeks: number) => string;
   listDatesInRange: (start: string, endExclusive: string) => string[];
+  // Cycle Management v1
+  endCyclePlan: (planId: string) => Promise<void>;
+  deleteCyclePlan: (planId: string) => Promise<void>;
+  pauseShiftCyclePlan: (planId: string, resumeDate: string, resolutionMap?: ConflictResolutionMap) => Promise<{ success: boolean; conflicts?: ConflictItem[] }>;
+  getCyclePlanEffectiveEndDate: (plan: CyclePlan) => string;
+  getCyclePlanStatus: (planId: string) => import('../types/training').CyclePlanStatus;
+  getCyclePlanWeekProgress: (planId: string, asOfDate: string) => { currentWeek: number; totalWeeks: number } | null;
   
   // Scheduled Workouts
   scheduleWorkout: (date: string, templateId: string, source: 'manual' | 'cycle', cyclePlanId?: string, resolution?: ConflictResolution) => Promise<{ success: boolean; conflict?: ScheduledWorkout }>;
@@ -2397,6 +2404,8 @@ export const useStore = create<WorkoutStore>((set, get) => ({
       startDate,
       active: false,
       archivedAt: undefined,
+      endedAt: undefined,
+      pausedUntil: undefined,
       createdAt: nowIso,
       updatedAt: nowIso,
       lastUsedAt: null,
@@ -2433,7 +2442,197 @@ export const useStore = create<WorkoutStore>((set, get) => ({
     set({ cyclePlans: plans });
     await storage.saveCyclePlans(plans);
   },
-  
+
+  getCyclePlanEffectiveEndDate: (plan) => {
+    if (plan.endedAt) return plan.endedAt;
+    const start = plan.pausedUntil ? dayjs(plan.pausedUntil) : dayjs(plan.startDate);
+    const today = dayjs().format('YYYY-MM-DD');
+    const originalEnd = dayjs(plan.startDate).add(plan.weeks, 'week');
+    if (plan.pausedUntil && dayjs(plan.pausedUntil).isAfter(dayjs(plan.startDate))) {
+      const weeksBeforePause = dayjs(plan.pausedUntil).diff(dayjs(plan.startDate), 'week', true);
+      const remainingWeeks = Math.max(0, Math.ceil(plan.weeks - weeksBeforePause));
+      return dayjs(plan.pausedUntil).add(remainingWeeks, 'week').format('YYYY-MM-DD');
+    }
+    return originalEnd.format('YYYY-MM-DD');
+  },
+
+  getCyclePlanStatus: (planId) => {
+    const plan = get().cyclePlans.find(p => p.id === planId);
+    if (!plan) return 'completed';
+    if (plan.endedAt) return 'ended_early' as CyclePlanStatus;
+    if (!plan.active) return 'completed' as CyclePlanStatus;
+    const today = dayjs().format('YYYY-MM-DD');
+    if (plan.pausedUntil && plan.pausedUntil > today) return 'paused' as CyclePlanStatus;
+    const endDate = get().getCyclePlanEffectiveEndDate(plan);
+    const hasFutureWorkouts = get().scheduledWorkouts.some(
+      sw => sw.source === 'cycle' && (sw.programId === planId || sw.cyclePlanId === planId) && sw.date >= today
+    );
+    if (!hasFutureWorkouts && endDate < today) return 'completed' as CyclePlanStatus;
+    return 'active' as CyclePlanStatus;
+  },
+
+  getCyclePlanWeekProgress: (planId, asOfDate) => {
+    const plan = get().cyclePlans.find(p => p.id === planId);
+    if (!plan) return null;
+    const totalWeeks = plan.weeks;
+    const startDate = dayjs(plan.startDate);
+
+    // When paused: freeze at the week of the last performed workout (or week 1)
+    if (plan.pausedUntil && dayjs(plan.pausedUntil).isAfter(dayjs(asOfDate), 'day')) {
+      const cycleWorkouts = get().scheduledWorkouts.filter(
+        sw => sw.source === 'cycle' &&
+          (sw.programId === planId || sw.cyclePlanId === planId) &&
+          (sw.status === 'completed' || sw.isLocked)
+      );
+      if (cycleWorkouts.length > 0) {
+        const lastDate = cycleWorkouts.sort((a, b) => b.date.localeCompare(a.date))[0].date;
+        const weeksElapsed = dayjs(lastDate).diff(startDate, 'week', true);
+        const currentWeek = Math.max(1, Math.min(Math.floor(weeksElapsed) + 1, totalWeeks));
+        return { currentWeek, totalWeeks };
+      }
+      return { currentWeek: 1, totalWeeks };
+    }
+
+    const asOf = dayjs(asOfDate);
+    const effectiveStart = plan.pausedUntil && dayjs(plan.pausedUntil).isAfter(startDate)
+      ? dayjs(plan.pausedUntil)
+      : startDate;
+    if (asOf.isBefore(effectiveStart, 'day')) return null;
+    const endDate = get().getCyclePlanEffectiveEndDate(plan);
+    if (asOf.isAfter(dayjs(endDate), 'day')) return { currentWeek: totalWeeks, totalWeeks };
+    const weeksElapsed = asOf.diff(effectiveStart, 'week', true);
+    const currentWeek = Math.min(Math.floor(weeksElapsed) + 1, totalWeeks);
+    return { currentWeek, totalWeeks };
+  },
+
+  endCyclePlan: async (planId) => {
+    const plan = get().cyclePlans.find(p => p.id === planId);
+    if (!plan) return;
+    const today = dayjs().format('YYYY-MM-DD');
+    const now = new Date().toISOString();
+    const plans = get().cyclePlans.map(p =>
+      p.id === planId ? { ...p, active: false, endedAt: today, updatedAt: now } : p
+    );
+    const scheduledWorkouts = get().scheduledWorkouts.filter(sw => {
+      const isThisPlan = sw.source === 'cycle' && (sw.programId === planId || sw.cyclePlanId === planId);
+      if (!isThisPlan) return true;
+      if (sw.date < today) return true;
+      return false;
+    });
+    set({ cyclePlans: plans, scheduledWorkouts });
+    await storage.saveCyclePlans(plans);
+    await storage.saveScheduledWorkouts(scheduledWorkouts);
+  },
+
+  deleteCyclePlan: async (planId) => {
+    const plan = get().cyclePlans.find(p => p.id === planId);
+    if (!plan) return;
+    const today = dayjs().format('YYYY-MM-DD');
+    const plans = get().cyclePlans.filter(p => p.id !== planId);
+    const scheduledWorkouts = get().scheduledWorkouts.filter(sw => {
+      if (sw.source !== 'cycle' && sw.programId !== planId && sw.cyclePlanId !== planId) return true;
+      if (sw.date < today) {
+        return true;
+      }
+      return false;
+    }).map(sw => {
+      if (sw.date < today && (sw.programId === planId || sw.cyclePlanId === planId)) {
+        return { ...sw, programId: null, programName: null, cyclePlanId: undefined };
+      }
+      return sw;
+    });
+    set({ cyclePlans: plans, scheduledWorkouts });
+    await storage.saveCyclePlans(plans);
+    await storage.saveScheduledWorkouts(scheduledWorkouts);
+  },
+
+  pauseShiftCyclePlan: async (planId, resumeDate, resolutionMap) => {
+    const plan = get().cyclePlans.find(p => p.id === planId);
+    if (!plan) return { success: false };
+    const today = dayjs().format('YYYY-MM-DD');
+    const resume = dayjs(resumeDate);
+    if (resume.isBefore(today, 'day')) return { success: false };
+
+    const weeksBeforePause = resume.diff(dayjs(plan.startDate), 'week', true);
+    const remainingWeeks = Math.max(1, Math.ceil(plan.weeks - weeksBeforePause));
+
+    const now = new Date().toISOString();
+    const plans = get().cyclePlans.map(p =>
+      p.id === planId ? { ...p, pausedUntil: resumeDate, updatedAt: now } : p
+    );
+    // Remove only future cycle workouts for this plan (keep today and past untouched)
+    let scheduledWorkouts = get().scheduledWorkouts.filter(sw => {
+      if (sw.source !== 'cycle' || (sw.programId !== planId && sw.cyclePlanId !== planId)) return true;
+      if (sw.date <= today) return true;
+      return false;
+    });
+
+    const virtualPlan: CyclePlan = {
+      ...plan,
+      startDate: resumeDate,
+      weeks: remainingWeeks,
+      pausedUntil: undefined,
+    };
+    const conflicts = get().detectCycleConflicts(virtualPlan);
+    if (conflicts.length > 0 && !resolutionMap) {
+      return { success: false, conflicts };
+    }
+
+    const effectiveResolutionMap: ConflictResolutionMap = resolutionMap || {};
+    const conflictDatesReplace = new Set(
+      conflicts.filter(c => effectiveResolutionMap[c.date] === 'replace').map(c => c.date)
+    );
+    if (conflictDatesReplace.size > 0) {
+      scheduledWorkouts = scheduledWorkouts.filter(sw => !conflictDatesReplace.has(sw.date));
+    }
+
+    const endDate = get().getCycleEndDate(resumeDate, remainingWeeks);
+    const datesInRange = get().listDatesInRange(resumeDate, endDate);
+    const templates = get().workoutTemplates;
+    const newWorkouts: ScheduledWorkout[] = [];
+
+    datesInRange.forEach(date => {
+      const dayOfWeek = dayjs(date).day();
+      const templateId = virtualPlan.templateIdsByWeekday[dayOfWeek];
+      if (!templateId) return;
+      const template = templates.find(t => t.id === templateId);
+      if (!template) return;
+      const existing = scheduledWorkouts.find(sw => sw.date === date);
+      if (existing) {
+        if (effectiveResolutionMap[date] !== 'replace') return;
+      }
+      newWorkouts.push({
+        id: `sw-${planId}-${date}`,
+        date,
+        templateId,
+        titleSnapshot: template.name,
+        warmupSnapshot: (template.warmupItems || []).map(item => ({ ...item })),
+        exercisesSnapshot: (template.items || []).map(item => ({ ...item })),
+        accessorySnapshot: (template.accessoryItems || []).map(item => ({ ...item })),
+        warmupCompletion: { completedItems: [] },
+        mainCompletion: { completedItems: [] },
+        workoutCompletion: { completedExercises: {}, completedSets: {} },
+        accessoryCompletion: { completedItems: [] },
+        status: 'planned',
+        startedAt: null,
+        completedAt: null,
+        source: 'cycle',
+        programId: planId,
+        programName: plan.name,
+        weekIndex: null,
+        dayIndex: null,
+        isLocked: false,
+        cyclePlanId: planId,
+      });
+    });
+
+    scheduledWorkouts = [...scheduledWorkouts, ...newWorkouts];
+    set({ cyclePlans: plans, scheduledWorkouts });
+    await storage.saveCyclePlans(plans);
+    await storage.saveScheduledWorkouts(scheduledWorkouts);
+    return { success: true };
+  },
+
   getActiveCyclePlan: () => {
     return get().cyclePlans.find(p => p.active);
   },

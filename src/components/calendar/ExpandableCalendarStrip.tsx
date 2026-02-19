@@ -1,6 +1,7 @@
 import React, { useMemo, useCallback } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import Svg, { Line } from 'react-native-svg';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -64,32 +65,56 @@ export function ExpandableCalendarStrip({
   const expansion = useSharedValue(0);
   const isExpanded = useSharedValue(false);
 
+  // Fingerprint to force recalc when any plan field changes
+  const cyclePlansFingerprint = cyclePlans.map(p =>
+    `${p.id}:${p.active}:${p.startDate}:${p.weeks}:${p.endedAt || ''}:${p.pausedUntil || ''}`
+  ).join('|');
+
   // Build cycle color map and plan ID map: date -> color, date -> planId
-  // Active cycles use info color, past (archived) cycles use failure color
-  const { cycleColorMap, dateToPlanId } = useMemo(() => {
+  // Process inactive plans first so active plans always take priority on overlapping dates.
+  // When a cycle is paused, the strip extends to the new effective end date and
+  // skips the paused gap (days between today and pausedUntil).
+  const { cycleColorMap, dateToPlanId, pausedDates } = useMemo(() => {
     const colorMap: Record<string, string> = {};
     const planIdMap: Record<string, string> = {};
-    const allPlans = [...cyclePlans]
-      .filter(p => p.active || p.archivedAt)
-      .sort((a, b) => b.startDate.localeCompare(a.startDate));
+    const paused = new Set<string>();
+    const inactivePlans = cyclePlans.filter(p => !p.active);
+    const activePlans = cyclePlans.filter(p => p.active);
+    const todayStr = dayjs().format('YYYY-MM-DD');
 
-    allPlans.forEach((plan) => {
+    const paintPlan = (plan: CyclePlan) => {
       const color = plan.active ? COLORS.accentPrimaryDimmed : COLORS.backgroundCanvas;
       const start = dayjs(plan.startDate);
-      const totalDays = plan.weeks * 7;
+
+      let end: dayjs.Dayjs;
+      if (plan.endedAt) {
+        end = dayjs(plan.endedAt);
+      } else if (plan.pausedUntil && dayjs(plan.pausedUntil).isAfter(start)) {
+        const weeksBeforePause = dayjs(plan.pausedUntil).diff(start, 'week', true);
+        const remainingWeeks = Math.max(0, Math.ceil(plan.weeks - weeksBeforePause));
+        end = dayjs(plan.pausedUntil).add(remainingWeeks, 'week').subtract(1, 'day');
+      } else {
+        end = start.add(plan.weeks, 'week').subtract(1, 'day');
+      }
+
+      const isPaused = plan.pausedUntil && dayjs(plan.pausedUntil).isAfter(todayStr, 'day');
+
+      const totalDays = end.diff(start, 'day') + 1;
       for (let d = 0; d < totalDays; d++) {
         const dateStr = start.add(d, 'day').format('YYYY-MM-DD');
-        if (!colorMap[dateStr]) {
-          colorMap[dateStr] = color;
-          planIdMap[dateStr] = plan.id;
+        colorMap[dateStr] = color;
+        planIdMap[dateStr] = plan.id;
+        if (isPaused && dateStr > todayStr && dateStr < plan.pausedUntil!) {
+          paused.add(dateStr);
         }
       }
-    });
-    return { cycleColorMap: colorMap, dateToPlanId: planIdMap };
-  }, [cyclePlans]);
+    };
 
-  // Which cycle plan does the selected date belong to?
-  const selectedPlanId = dateToPlanId[selectedDate] || null;
+    inactivePlans.forEach(paintPlan);
+    activePlans.forEach(paintPlan);
+
+    return { cycleColorMap: colorMap, dateToPlanId: planIdMap, pausedDates: paused };
+  }, [cyclePlansFingerprint]);
 
   // Set of active plan IDs for quick lookup
   const activePlanIds = useMemo(() => {
@@ -124,27 +149,37 @@ export function ExpandableCalendarStrip({
     return weeks;
   }, [centerWeekStart, today, getScheduledWorkout, getMainCompletion, cycleColorMap]);
 
-  // Compute row-level cycle band info: color + start/end day indices within the row
+  // Compute row-level cycle band info: show bands for ALL cycles (past and active).
+  // Each row can have multiple bands if different plans cover different date ranges.
+  // For simplicity, we render a single contiguous band per row per plan, grouped by planId.
+  type BandInfo = { color: string; startIndex: number; endIndex: number; planId: string; pausedStartIndex: number | null; pausedEndIndex: number | null };
   const weekBandInfo = useMemo(() => {
     return weeksData.map((weekDays) => {
-      if (!selectedPlanId) return null;
-
-      let firstIdx = -1;
-      let lastIdx = -1;
-      let color: string | null = null;
+      const bands: BandInfo[] = [];
+      let currentBand: BandInfo | null = null;
 
       weekDays.forEach((d, idx) => {
-        if (d.cycleColor && dateToPlanId[d.date] === selectedPlanId) {
-          if (firstIdx === -1) firstIdx = idx;
-          lastIdx = idx;
-          color = d.cycleColor;
+        const planId = dateToPlanId[d.date];
+        if (d.cycleColor && planId) {
+          if (currentBand && currentBand.planId === planId) {
+            currentBand.endIndex = idx;
+          } else {
+            if (currentBand) bands.push(currentBand);
+            currentBand = { color: d.cycleColor, startIndex: idx, endIndex: idx, planId, pausedStartIndex: null, pausedEndIndex: null };
+          }
+          if (pausedDates.has(d.date)) {
+            if (currentBand!.pausedStartIndex === null) currentBand!.pausedStartIndex = idx;
+            currentBand!.pausedEndIndex = idx;
+          }
+        } else {
+          if (currentBand) { bands.push(currentBand); currentBand = null; }
         }
       });
+      if (currentBand) bands.push(currentBand);
 
-      if (firstIdx === -1 || !color) return null;
-      return { color, startIndex: firstIdx, endIndex: lastIdx };
+      return bands.length > 0 ? bands : null;
     });
-  }, [weeksData, dateToPlanId, selectedPlanId]);
+  }, [weeksData, dateToPlanId, pausedDates]);
 
   // Month/year label
   const expandedLabel = useMemo(() => {
@@ -237,28 +272,68 @@ export function ExpandableCalendarStrip({
   const weekRowStyles = [weekRowStyle0, weekRowStyle1, weekRowStyle2, weekRowStyle3, weekRowStyle4];
 
   const renderWeekRow = (weekDays: DayData[], weekIdx: number) => {
-    const bandInfo = weekBandInfo[weekIdx];
+    const bands = weekBandInfo[weekIdx];
 
     return (
       <Animated.View
         key={weekIdx}
         style={[styles.weekRow, weekRowStyles[weekIdx]]}
       >
-        {/* Cycle background band — sized to cover only the cycle days */}
-        {bandInfo && (
-          <View
-            style={[
-              styles.cycleBand,
-              {
-                backgroundColor: bandInfo.color,
-                left: `${(bandInfo.startIndex / 7) * 100}%`,
-                right: `${((6 - bandInfo.endIndex) / 7) * 100}%`,
-                marginLeft: 3,
-                marginRight: 3,
-              },
-            ]}
-          />
-        )}
+        {/* Cycle background bands — one per plan segment in this row */}
+        {bands && bands.map((band, bIdx) => {
+          const bandLeft = `${(band.startIndex / 7) * 100}%` as const;
+          const bandRight = `${((6 - band.endIndex) / 7) * 100}%` as const;
+          return (
+            <React.Fragment key={`band-${bIdx}`}>
+              <View
+                style={[
+                  styles.cycleBand,
+                  {
+                    backgroundColor: band.color,
+                    left: bandLeft as any,
+                    right: bandRight as any,
+                    marginLeft: 3,
+                    marginRight: 3,
+                  },
+                ]}
+              />
+              {band.pausedStartIndex !== null && band.pausedEndIndex !== null && (
+                <View
+                  style={{
+                    position: 'absolute',
+                    top: 5,
+                    bottom: 5,
+                    left: `${(band.pausedStartIndex / 7) * 100}%` as any,
+                    right: `${((6 - band.pausedEndIndex) / 7) * 100}%` as any,
+                    marginLeft: 3,
+                    marginRight: 3,
+                    borderRadius: 20,
+                    overflow: 'hidden',
+                    zIndex: 1,
+                  }}
+                  pointerEvents="none"
+                >
+                  <Svg width="100%" height="100%" style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}>
+                    {Array.from({ length: 80 }, (_, i) => {
+                      const x = (i - 40) * 6;
+                      return (
+                        <Line
+                          key={i}
+                          x1={x}
+                          y1={0}
+                          x2={x + 200}
+                          y2={200}
+                          stroke={COLORS.backgroundContainer}
+                          strokeWidth={2}
+                        />
+                      );
+                    })}
+                  </Svg>
+                </View>
+              )}
+            </React.Fragment>
+          );
+        })}
 
         {/* Day buttons on top */}
         {weekDays.map((day) => (
@@ -269,7 +344,7 @@ export function ExpandableCalendarStrip({
               isToday={day.isToday}
               isCompleted={day.isCompleted}
               hasWorkout={day.hasWorkout}
-              cycleColor={bandInfo?.color}
+              cycleColor={day.cycleColor}
               isInActiveCycle={day.isInActiveCycle}
               onPress={() => handleSelectDate(day.date)}
             />

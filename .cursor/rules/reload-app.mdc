@@ -1,0 +1,21 @@
+---
+description: Run a full app reload after making code changes so the user sees updates in the simulator/device.
+globs: 
+  - "**/*.tsx"
+  - "**/*.ts"
+  - "**/*.jsx"
+  - "**/*.js"
+---
+
+# Full reload after code changes
+
+**Every time** we make a code change to the WorkoutTracker app, run a full reload so the user sees updates:
+
+1. From the **project root** (the folder that contains `package.json` and `src/`, i.e. `WorkoutTracker`), run:
+   ```bash
+   npm run reload
+   ```
+2. This kills any process on port 8082 and starts Expo with `--clear` on port 8082. Run it in the **background** so the dev server stays up.
+3. Tell the user the app has been fully reloaded and they can reload the client (e.g. press `r` in the Expo terminal or shake to reload in the simulator).
+
+If the workspace is `WorkoutTracker/ios`, use the parent directory for the command: `cd /Users/fcasanov/Projects/WorkoutTracker && npm run reload`.

@@ -208,7 +208,13 @@ export type CyclePlan = {
   updatedAt: string; // ISO
   lastUsedAt?: string | null; // NEW: updates ONLY when applied to schedule
   usageCount?: number; // NEW: increments ONLY when applied to schedule
+  // Cycle Management v1
+  endedAt?: string; // YYYY-MM-DD when user ended cycle early; plan cannot be reactivated
+  pausedUntil?: string; // YYYY-MM-DD resume date for Pause/Shift; plan extends from this date
 };
+
+/** Derived status for CyclePlan (from active, endedAt, pausedUntil, and scheduled workouts). */
+export type CyclePlanStatus = 'active' | 'paused' | 'ended_early' | 'completed';
 
 // ============================================
 // HELPER TYPES

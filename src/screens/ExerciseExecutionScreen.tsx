@@ -72,12 +72,24 @@ export function ExerciseExecutionScreen() {
     uncompleteWorkout,
     updateExercisePR,
     addExercise,
+    scheduledWorkouts,
+    cyclePlans,
   } = useStore();
   
   const getDetailedWorkoutProgress = () => useStore.getState().detailedWorkoutProgress;
   
   const [refreshKey, setRefreshKey] = useState(0);
   const template = getWorkoutTemplate(workoutTemplateId);
+
+  // Check if this workout belongs to a past (non-active) cycle
+  const isInPastCycle = React.useMemo(() => {
+    const sw = scheduledWorkouts.find(w => w.id === workoutKey);
+    if (!sw || sw.source !== 'cycle') return false;
+    const planId = sw.programId || sw.cyclePlanId;
+    if (!planId) return false;
+    const plan = cyclePlans.find(p => p.id === planId);
+    return plan ? !plan.active : false;
+  }, [scheduledWorkouts, cyclePlans, workoutKey]);
   const useKg = settings.useKg;
   const weightUnit = useKg ? 'kg' : 'lb';
   const weightStep = useKg ? 0.5 : 5;
@@ -1404,14 +1416,16 @@ export function ExerciseExecutionScreen() {
           >
             <IconArrowLeft size={24} color="#FFFFFF" />
           </TouchableOpacity>
-          <TouchableOpacity
-            testID="menu-button"
-            style={styles.menuButton}
-            onPress={() => setShowMenu(true)}
-            activeOpacity={1}
-          >
-            <IconMenu size={24} color="#FFFFFF" />
-          </TouchableOpacity>
+          {!isInPastCycle && (
+            <TouchableOpacity
+              testID="menu-button"
+              style={styles.menuButton}
+              onPress={() => setShowMenu(true)}
+              activeOpacity={1}
+            >
+              <IconMenu size={24} color="#FFFFFF" />
+            </TouchableOpacity>
+          )}
         </View>
         
         <View style={styles.headerContent}>
@@ -2401,8 +2415,16 @@ export function ExerciseExecutionScreen() {
         visible={showMenu}
         onClose={() => setShowMenu(false)}
         items={
-          type === 'main' ? [
-            // Main workout: Reset and Complete side by side
+          type === 'main' ? (allCurrentGroupsComplete ? [
+            // Main workout complete: only Reset
+            {
+              icon: <IconRestart size={24} color={COLORS.signalNegative} />,
+              label: t('reset'),
+              onPress: handleReset,
+              destructive: true,
+            },
+          ] : [
+            // Main workout in progress: Reset and Complete
             {
               icon: <IconRestart size={24} color={COLORS.signalNegative} />,
               label: t('reset'),
@@ -2414,7 +2436,7 @@ export function ExerciseExecutionScreen() {
               label: t('complete'),
               onPress: handleCompleteAll,
             },
-          ] : [
+          ]) : [
             // Warmup/Core: Swap, Reset, and Remove
             {
               icon: <IconSwap size={24} color="#FFFFFF" />,
