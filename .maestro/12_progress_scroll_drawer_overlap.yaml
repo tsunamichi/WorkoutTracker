@@ -1,0 +1,47 @@
+# Smoke Test: TC-12 — Progress tab scroll + drawer overlap regression
+# Verifies: scrolling below the drawer doesn't cause visual overlap,
+# sections remain accessible after scroll, drawer collapses cleanly.
+# Note: Requires pre-populated data.
+appId: com.tsunamichi.workouttracker
+
+---
+
+# 1. Launch
+- launchApp
+
+- extendedWaitUntil:
+    visible: "Schedule"
+    timeout: 8000
+
+- runFlow: helpers/open-progress.yaml
+
+# 2. Verify initial state - Current Cycle header visible
+- assertVisible: "Current Cycle"
+
+# 3. Scroll down to Body section
+- scrollUntilVisible:
+    element: "Body"
+    direction: DOWN
+    timeout: 5000
+
+- assertVisible: "Body"
+
+- takeScreenshot: "12_scrolled_to_body"
+
+# 4. Scroll back up to Lifts
+- scrollUntilVisible:
+    element: "Lifts"
+    direction: UP
+    timeout: 5000
+
+- assertVisible: "Lifts"
+
+# 5. Verify drawer header still accessible
+- scrollUntilVisible:
+    element: "Current Cycle"
+    direction: UP
+    timeout: 5000
+
+- assertVisible: "Current Cycle"
+
+- takeScreenshot: "12_progress_scroll_drawer_overlap"

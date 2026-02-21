@@ -87,7 +87,6 @@ type TranslationKey =
   | 'noProgressYet'
   | 'seeAllProgress'
   | 'logProgress'
-  | 'progressLogHint'
   | 'nextLogOnFriday'
   | 'progressHelperLocked'
   | 'progressHelperAvailable'
@@ -122,9 +121,6 @@ type TranslationKey =
   | 'failedToSaveProgress'
   | 'chooseFromLibrary'
   | 'takePhoto'
-  | 'progressLogNotFound'
-  | 'deleteProgressLogTitle'
-  | 'deleteProgressLogMessage'
   | 'thisWeeksWorkouts'
   | 'createOneWorkout'
   | 'weeklyPlan'
@@ -588,7 +584,6 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     noProgressYet: 'No progress yet',
     seeAllProgress: 'See all progress',
     logProgress: 'Log progress',
-    progressLogHint: 'Enabled on Friday',
     nextLogOnFriday: 'Next log on Friday',
     progressHelperLocked: 'You can log once a week. Next check-in: Friday.',
     progressHelperAvailable: 'Weekly check-in is available today.',
@@ -607,9 +602,6 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     failedToSaveProgress: 'Could not save your progress. Please try again.',
     chooseFromLibrary: 'Choose from library',
     takePhoto: 'Take photo',
-    progressLogNotFound: 'This progress entry could not be found.',
-    deleteProgressLogTitle: 'Delete progress entry?',
-    deleteProgressLogMessage: 'This cannot be undone.',
     thisWeeksWorkouts: "This Week's Workouts",
     createOneWorkout: 'Create one workout',
     weeklyPlan: 'Weekly Plan',
@@ -1152,7 +1144,6 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     noProgressYet: 'Sin progreso aún',
     seeAllProgress: 'Ver todo el progreso',
     logProgress: 'Registrar progreso',
-    progressLogHint: 'Disponible el viernes',
     nextLogOnFriday: 'Próximo registro el viernes',
     progressHelperLocked: 'Puedes registrar una vez por semana. Próximo check-in: viernes.',
     progressHelperAvailable: 'El check-in semanal está disponible hoy.',
@@ -1171,9 +1162,6 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     failedToSaveProgress: 'No se pudo guardar tu progreso. Inténtalo de nuevo.',
     chooseFromLibrary: 'Elegir de la galería',
     takePhoto: 'Tomar foto',
-    progressLogNotFound: 'No se pudo encontrar esta entrada de progreso.',
-    deleteProgressLogTitle: '¿Eliminar entrada de progreso?',
-    deleteProgressLogMessage: 'Esto no se puede deshacer.',
     thisWeeksWorkouts: 'Entrenamientos de Esta Semana',
     createOneWorkout: 'Crear un entrenamiento',
     weeklyPlan: 'Plan Semanal',

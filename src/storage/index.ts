@@ -1,14 +1,13 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import type { Cycle, Exercise, WorkoutSession, BodyWeightEntry, AppSettings, WorkoutAssignment, TrainerConversation, ExercisePR, WorkoutProgress, HIITTimer, HIITTimerSession } from '../types';
+import type { Cycle, Exercise, WorkoutSession, BodyWeightEntry, ProgressPhoto, AppSettings, WorkoutAssignment, TrainerConversation, ExercisePR, WorkoutProgress, HIITTimer, HIITTimerSession } from '../types';
 import type { WorkoutTemplate, CyclePlan, ScheduledWorkout } from '../types/training';
-import type { ProgressLog } from '../types/progress';
-
 const STORAGE_KEYS = {
   CYCLES: '@workout_tracker_cycles',
   EXERCISES: '@workout_tracker_exercises',
   SESSIONS: '@workout_tracker_sessions',
   BODY_WEIGHT: '@workout_tracker_body_weight',
-  PROGRESS_LOGS: '@workout_tracker_progress_logs',
+  PROGRESS_PHOTOS: '@workout_tracker_progress_photos',
+  PINNED_KEY_LIFTS: '@workout_tracker_pinned_key_lifts',
   SETTINGS: '@workout_tracker_settings',
   WORKOUT_ASSIGNMENTS: '@workout_tracker_assignments',
   TRAINER_CONVERSATIONS: '@workout_tracker_conversations',
@@ -121,22 +120,41 @@ export async function saveBodyWeightEntries(entries: BodyWeightEntry[]): Promise
   }
 }
 
-// Progress Logs (Weekly check-ins)
-export async function loadProgressLogs(): Promise<ProgressLog[]> {
+// Progress Photos
+export async function loadProgressPhotos(): Promise<ProgressPhoto[]> {
   try {
-    const data = await AsyncStorage.getItem(STORAGE_KEYS.PROGRESS_LOGS);
+    const data = await AsyncStorage.getItem(STORAGE_KEYS.PROGRESS_PHOTOS);
     return data ? JSON.parse(data) : [];
   } catch (error) {
-    console.error('Error loading progress logs:', error);
+    console.error('Error loading progress photos:', error);
     return [];
   }
 }
 
-export async function saveProgressLogs(logs: ProgressLog[]): Promise<void> {
+export async function saveProgressPhotos(photos: ProgressPhoto[]): Promise<void> {
   try {
-    await AsyncStorage.setItem(STORAGE_KEYS.PROGRESS_LOGS, JSON.stringify(logs));
+    await AsyncStorage.setItem(STORAGE_KEYS.PROGRESS_PHOTOS, JSON.stringify(photos));
   } catch (error) {
-    console.error('Error saving progress logs:', error);
+    console.error('Error saving progress photos:', error);
+  }
+}
+
+// Pinned Key Lifts
+export async function loadPinnedKeyLifts(): Promise<string[]> {
+  try {
+    const data = await AsyncStorage.getItem(STORAGE_KEYS.PINNED_KEY_LIFTS);
+    return data ? JSON.parse(data) : [];
+  } catch (error) {
+    console.error('Error loading pinned key lifts:', error);
+    return [];
+  }
+}
+
+export async function savePinnedKeyLifts(ids: string[]): Promise<void> {
+  try {
+    await AsyncStorage.setItem(STORAGE_KEYS.PINNED_KEY_LIFTS, JSON.stringify(ids));
+  } catch (error) {
+    console.error('Error saving pinned key lifts:', error);
   }
 }
 

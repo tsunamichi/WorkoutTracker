@@ -1,9 +1,8 @@
 import { create } from 'zustand';
 import dayjs from 'dayjs';
 import isoWeek from 'dayjs/plugin/isoWeek';
-import type { Cycle, Exercise, WorkoutSession, BodyWeightEntry, AppSettings, WorkoutAssignment, TrainerConversation, ExercisePR, WorkoutProgress, ExerciseProgress, HIITTimer, HIITTimerSession } from '../types';
+import type { Cycle, Exercise, WorkoutSession, BodyWeightEntry, ProgressPhoto, AppSettings, WorkoutAssignment, TrainerConversation, ExercisePR, WorkoutProgress, ExerciseProgress, HIITTimer, HIITTimerSession } from '../types';
 import type { WorkoutTemplate, CyclePlan, ScheduledWorkout, ConflictResolution, ConflictItem, ConflictResolutionMap, PlanApplySummary, CyclePlanStatus } from '../types/training';
-import type { ProgressLog } from '../types/progress';
 import * as storage from '../storage';
 import { SEED_EXERCISES } from '../constants';
 import { kgToLbs } from '../utils/weight';
@@ -19,7 +18,8 @@ interface WorkoutStore {
   exercises: Exercise[];
   sessions: WorkoutSession[];
   bodyWeightEntries: BodyWeightEntry[];
-  progressLogs: ProgressLog[];
+  progressPhotos: ProgressPhoto[];
+  pinnedKeyLifts: string[];
   workoutAssignments: WorkoutAssignment[]; // NEW
   trainerConversations: TrainerConversation[]; // NEW
   exercisePRs: ExercisePR[]; // NEW: Personal Records
@@ -37,8 +37,10 @@ interface WorkoutStore {
   updateSession: (sessionId: string, session: WorkoutSession) => Promise<void>;
   deleteSession: (sessionId: string) => Promise<void>;
   addBodyWeightEntry: (entry: BodyWeightEntry) => Promise<void>;
-  addProgressLog: (params: { photoUris: string[]; weightLbs?: number }) => Promise<{ success: boolean; error?: string }>;
-  deleteProgressLog: (progressLogId: string) => Promise<void>;
+  deleteBodyWeightEntry: (entryId: string) => Promise<void>;
+  addProgressPhoto: (photo: Omit<ProgressPhoto, 'id'>) => Promise<ProgressPhoto>;
+  deleteProgressPhoto: (photoId: string) => Promise<void>;
+  setPinnedKeyLifts: (exerciseIds: string[]) => Promise<void>;
   updateSettings: (settings: Partial<AppSettings>) => Promise<void>;
   setBarbellMode: (exerciseId: string, enabled: boolean) => Promise<void>;
   getBarbellMode: (exerciseId: string) => boolean;
@@ -226,7 +228,8 @@ export const useStore = create<WorkoutStore>((set, get) => ({
   exercises: [],
   sessions: [],
   bodyWeightEntries: [],
-  progressLogs: [],
+  progressPhotos: [],
+  pinnedKeyLifts: [],
   workoutAssignments: [],
   trainerConversations: [],
   exercisePRs: [],
@@ -259,7 +262,8 @@ export const useStore = create<WorkoutStore>((set, get) => ({
         exercises,
         sessions,
         bodyWeightEntries,
-        progressLogs,
+        progressPhotos,
+        pinnedKeyLifts,
         loadedSettings,
         workoutAssignments,
         trainerConversations,
@@ -276,7 +280,8 @@ export const useStore = create<WorkoutStore>((set, get) => ({
         storage.loadExercises(),
         storage.loadSessions(),
         storage.loadBodyWeightEntries(),
-        storage.loadProgressLogs(),
+        storage.loadProgressPhotos(),
+        storage.loadPinnedKeyLifts(),
         storage.loadSettings(),
         storage.loadWorkoutAssignments(),
         storage.loadTrainerConversations(),
@@ -1177,7 +1182,8 @@ export const useStore = create<WorkoutStore>((set, get) => ({
         exercises: finalExercises,
         sessions: finalSessions,
         bodyWeightEntries: finalBodyWeightEntries,
-        progressLogs,
+        progressPhotos,
+        pinnedKeyLifts,
         workoutAssignments: finalWorkoutAssignments,
         exercisePRs: finalExercisePRs,
         trainerConversations: finalConversations,
@@ -1298,39 +1304,31 @@ export const useStore = create<WorkoutStore>((set, get) => ({
     await storage.saveBodyWeightEntries(entries);
   },
 
-  addProgressLog: async ({ photoUris, weightLbs }) => {
-    const now = dayjs();
-    
-    // Validate that at least photos or weight is provided
-    const hasPhotos = photoUris && photoUris.length > 0;
-    const hasWeight = Number.isFinite(weightLbs) && weightLbs! > 0;
-    if (!hasPhotos && !hasWeight) return { success: false, error: 'data_required' };
-
-    const weekKey = `${now.isoWeekYear()}-W${String(now.isoWeek()).padStart(2, '0')}`;
-
-    const createdAt = new Date().toISOString();
-    const dateLabel = dayjs(createdAt).format('MMM D');
-    const log: ProgressLog = {
-      id: `pl-${Date.now()}`,
-      createdAt,
-      dateLabel,
-      weekKey,
-      weightLbs,
-      photoUris,
-    };
-
-    const next = [log, ...get().progressLogs].sort((a, b) => dayjs(b.createdAt).valueOf() - dayjs(a.createdAt).valueOf());
-    set({ progressLogs: next });
-    await storage.saveProgressLogs(next);
-    return { success: true };
+  deleteBodyWeightEntry: async (entryId) => {
+    const entries = get().bodyWeightEntries.filter(e => e.id !== entryId);
+    set({ bodyWeightEntries: entries });
+    await storage.saveBodyWeightEntries(entries);
   },
 
-  deleteProgressLog: async (progressLogId) => {
-    const next = get().progressLogs.filter(l => l.id !== progressLogId);
-    set({ progressLogs: next });
-    await storage.saveProgressLogs(next);
+  addProgressPhoto: async (photoData) => {
+    const photo: ProgressPhoto = { ...photoData, id: `pp-${Date.now()}` };
+    const photos = [photo, ...get().progressPhotos];
+    set({ progressPhotos: photos });
+    await storage.saveProgressPhotos(photos);
+    return photo;
   },
-  
+
+  deleteProgressPhoto: async (photoId) => {
+    const photos = get().progressPhotos.filter(p => p.id !== photoId);
+    set({ progressPhotos: photos });
+    await storage.saveProgressPhotos(photos);
+  },
+
+  setPinnedKeyLifts: async (exerciseIds) => {
+    set({ pinnedKeyLifts: exerciseIds.slice(0, 4) });
+    await storage.savePinnedKeyLifts(exerciseIds.slice(0, 4));
+  },
+
   updateSettings: async (updates) => {
     const settings = { ...get().settings, ...updates };
     console.log('📝 Updating settings:', updates);

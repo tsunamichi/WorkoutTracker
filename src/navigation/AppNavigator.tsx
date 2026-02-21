@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Animated, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Pressable, Animated, ScrollView } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
@@ -17,8 +17,9 @@ import { WorkoutsScreen } from '../screens/WorkoutsScreen';
 import { ProfileScreen } from '../screens/ProfileScreen';
 import { BodyWeightHistoryScreen } from '../screens/BodyWeightHistoryScreen';
 import { ProgressHomeScreen } from '../screens/ProgressHomeScreen';
-import { ProgressGalleryScreen } from '../screens/ProgressGalleryScreen';
-import { ProgressLogDetailScreen } from '../screens/ProgressLogDetailScreen';
+import { LiftHistoryScreen } from '../screens/LiftHistoryScreen';
+import { EditKeyLiftsScreen } from '../screens/EditKeyLiftsScreen';
+import { PhotoViewerScreen } from '../screens/PhotoViewerScreen';
 import { CycleDetailScreen } from '../screens/CycleDetailScreen';
 import { CyclePlanDetailScreen } from '../screens/CyclePlanDetailScreen';
 import { CycleConflictsScreen } from '../screens/CycleConflictsScreen';
@@ -54,8 +55,6 @@ export type RootStackParamList = {
   Tabs: { initialTab?: 'Schedule' | 'Progress' } | undefined;
   Profile: { mode?: 'settings' } | undefined;
   BodyWeightHistory: undefined;
-  ProgressGallery: undefined;
-  ProgressLogDetail: { progressLogId: string };
   History: undefined;
   PlanHistoryDetail: { programId: string; programName: string };
   WorkoutBuilder: undefined;
@@ -83,6 +82,9 @@ export type RootStackParamList = {
   CreateCycleDayEditor: { weekday: Weekday };
   AIWorkoutCreation: { mode?: 'single' | 'plan' } | undefined;
   WorkoutCreationOptions: undefined;
+  LiftHistory: { exerciseId: string; exerciseName: string };
+  PhotoViewer: { photoId: string };
+  EditKeyLifts: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -102,7 +104,7 @@ function TabNavigator() {
   const navigation = useNavigation();
   const route = useRoute();
   const insets = useSafeAreaInsets();
-  const { cycles, cyclePlans, getActiveCyclePlan, swapWorkoutAssignments, workoutTemplates, scheduleWorkout, detectCycleConflicts, applyCyclePlan, updateCyclePlan, repeatCyclePlan } = useStore();
+  const { cycles, cyclePlans, getActiveCyclePlan, getCyclePlanEffectiveEndDate, swapWorkoutAssignments, workoutTemplates, scheduleWorkout, scheduledWorkouts, getMainCompletion, detectCycleConflicts, applyCyclePlan, updateCyclePlan, repeatCyclePlan } = useStore();
   const { t } = useTranslation();
   const [activeTab, setActiveTab] = React.useState<'Schedule' | 'Progress'>('Schedule');
   const [isViewingToday, setIsViewingToday] = React.useState(true);
@@ -419,6 +421,7 @@ function TabNavigator() {
           {/* Animated Active Tab Indicator */}
           {tabBarWidth > 0 && (
             <Animated.View 
+              pointerEvents="none"
               style={[
                 styles.tabIndicator,
                 {
@@ -442,9 +445,11 @@ function TabNavigator() {
           )}
           
           {/* Schedule Tab */}
-          <TouchableOpacity
+          <Pressable
+            testID="bottom-nav-schedule"
+            accessibilityRole="button"
+            accessibilityLabel="Schedule tab"
             style={styles.tab}
-            activeOpacity={1}
             onPress={() => switchTab('Schedule')}
           >
             <Animated.View 
@@ -491,12 +496,14 @@ function TabNavigator() {
                 {t('schedule')}
               </Animated.Text>
             </Animated.View>
-          </TouchableOpacity>
+          </Pressable>
           
           {/* Progress Tab */}
-          <TouchableOpacity
+          <Pressable
+            testID="bottom-nav-progress"
+            accessibilityRole="button"
+            accessibilityLabel="Progress tab"
             style={styles.tab}
-            activeOpacity={1}
             onPress={() => {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
               switchTab('Progress');
@@ -546,7 +553,7 @@ function TabNavigator() {
                 {t('progress')}
               </Animated.Text>
             </Animated.View>
-          </TouchableOpacity>
+          </Pressable>
             </View>
             </View>
       
@@ -564,213 +571,86 @@ function TabNavigator() {
             bounces={false}
           >
           {swapDrawerData && (() => {
-            const { selectedDate, weekDays } = swapDrawerData;
-            
-            const activeCycleOld = cycles.find(c => c.isActive);
+            const { selectedDate } = swapDrawerData;
             const activeCyclePlan = getActiveCyclePlan();
-            
-            // Check if the selected day is a rest day
-            const selectedDay = weekDays.find((day: any) => day.date === selectedDate);
-            const isSelectedDayRestDay = !selectedDay?.scheduledWorkout;
-            const currentTemplateId = selectedDay?.scheduledWorkout?.templateId;
-            
-            // Filter eligible days (not completed and not the selected date)
-            const eligibleDays = weekDays.filter((day: any) => 
-              !day.isCompleted && 
-              day.date !== selectedDate
-            );
-            
-            // Filter cycle workouts (from active plan)
-            const cycleWorkoutDays = eligibleDays.filter((day: any) => {
-              if (!day.scheduledWorkout) return false;
-              
-              // Check if workout has been started (in-progress)
-              const hasStarted = day.completionPercentage > 0;
-              if (hasStarted) return false;
-              
-              // Only include cycle workouts (source is 'cycle')
-              const isFromCycle = day.scheduledWorkout.source === 'cycle';
-              
-              return isFromCycle;
-            });
-            
-            // Filter manually scheduled single workouts (separate section)
-            const scheduledSingleWorkouts = eligibleDays.filter((day: any) => {
-              if (!day.scheduledWorkout) return false;
-              
-              // Check if workout has been started (in-progress)
-              const hasStarted = day.completionPercentage > 0;
-              if (hasStarted) return false;
-              
-              // Include if it's a manually scheduled single workout (source is 'manual')
-              const isManualSingleWorkout = day.scheduledWorkout.source === 'manual';
-              
-              return isManualSingleWorkout;
-            });
-            
-            const workoutDays = cycleWorkoutDays;
-            
-            const restDays = eligibleDays.filter((day: any) => !day.scheduledWorkout);
-            
-            // If selected day is a rest day, don't show any rest days (only workouts)
-            // Otherwise, show up to 1 rest day
-            const limitedRestDays = isSelectedDayRestDay ? [] : restDays.slice(0, 1);
-            
-            // Combine: workouts first, then rest day (if any and if allowed)
-            const allDays = [...workoutDays, ...limitedRestDays];
-            
-            // Get all single workout templates, but filter out:
-            // 1. Ones already scheduled this week
-            // 2. The currently scheduled workout on the selected date (if any)
-            const scheduledTemplateIds = new Set(
-              weekDays
-                .filter((d: any) => d.scheduledWorkout?.templateId)
-                .map((d: any) => d.scheduledWorkout.templateId)
-            );
-            
-            const singleWorkouts = workoutTemplates.filter(template => 
-              !scheduledTemplateIds.has(template.id)
-            );
-            
-            if (allDays.length === 0 && singleWorkouts.length === 0) {
+
+            if (!activeCyclePlan) {
               return (
                 <View style={styles.swapSheetEmpty}>
-                  <Text style={styles.swapSheetEmptyText}>
-                    {t('noOtherDaysThisWeek')}
-                  </Text>
+                  <Text style={styles.swapSheetEmptyText}>{t('noOtherDaysThisWeek')}</Text>
                 </View>
               );
             }
-            
-            return (
-              <>
-                {/* Section 1: Cycle Workouts (no title) */}
-                {allDays.length > 0 && (
-                  <>
-                    {allDays.map((day: any, index: number) => {
+
+            const planId = activeCyclePlan.id;
+            const cycleStart = dayjs(activeCyclePlan.startDate);
+            const effectiveEnd = dayjs(getCyclePlanEffectiveEndDate(activeCyclePlan));
+
+            const cycleWorkouts = scheduledWorkouts.filter(sw => {
+              if (sw.source !== 'cycle') return false;
+              if (sw.programId !== planId && sw.cyclePlanId !== planId) return false;
+              if (sw.date === selectedDate) return false;
+              if (sw.date < selectedDate) return false;
+              if (dayjs(sw.date).isAfter(effectiveEnd, 'day')) return false;
+              const completion = getMainCompletion(sw.id);
+              if (sw.isLocked || completion.percentage === 100 || completion.percentage > 0) return false;
+              return true;
+            }).sort((a, b) => a.date.localeCompare(b.date));
+
+            // Group by week number relative to cycle start
+            const weekGroups: { weekNum: number; workouts: typeof cycleWorkouts }[] = [];
+            const weekMap = new Map<number, typeof cycleWorkouts>();
+            cycleWorkouts.forEach(sw => {
+              const weekNum = Math.floor(dayjs(sw.date).diff(cycleStart, 'day') / 7) + 1;
+              if (!weekMap.has(weekNum)) weekMap.set(weekNum, []);
+              weekMap.get(weekNum)!.push(sw);
+            });
+            Array.from(weekMap.entries())
+              .sort(([a], [b]) => a - b)
+              .forEach(([weekNum, workouts]) => weekGroups.push({ weekNum, workouts }));
+
+            if (weekGroups.length === 0) {
               return (
-                <View 
-                  key={day.date}
-                  style={styles.swapSheetItemWrapper}
-                >
-                  <View style={[
-                    styles.swapSheetItem,
-                    pressedSwapItemDate === day.date && styles.swapSheetItemPressed
-                  ]}>
-                    <TouchableOpacity
-                      style={styles.swapSheetItemInner}
-                      onPress={async () => {
-                        await swapWorkoutAssignments(selectedDate, day.date);
-                        setSwapDrawerVisible(false);
-                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                      }}
-                      onPressIn={() => setPressedSwapItemDate(day.date)}
-                      onPressOut={() => setPressedSwapItemDate(null)}
-                      activeOpacity={1}
-                    >
-                      <View>
-                        <Text style={styles.swapSheetItemTitle}>
-                          {day.scheduledWorkout?.titleSnapshot || 'Rest Day'}
-                        </Text>
-                        <Text style={styles.swapSheetItemSubtitle}>
-                          {day.dateObj.format('dddd, MMM D')}
-                        </Text>
-                      </View>
-                      <IconSwap size={24} color="#817B77" />
-                    </TouchableOpacity>
-                  </View>
+                <View style={styles.swapSheetEmpty}>
+                  <Text style={styles.swapSheetEmptyText}>{t('noOtherDaysThisWeek')}</Text>
                 </View>
               );
-            })}
-                  </>
-                )}
-                
-                {/* Spacing between sections */}
-                {allDays.length > 0 && (scheduledSingleWorkouts.length > 0 || singleWorkouts.length > 0) && (
-                  <View style={{ height: SPACING.xl }} />
-                )}
-                
-                {/* Section 2: Scheduled Single Workouts (already on schedule) */}
-                {scheduledSingleWorkouts.length > 0 && (
-                  <>
-                    <View style={styles.swapSheetSection}>
-                      <Text style={styles.swapSheetSectionTitle}>{t('scheduledSingleWorkouts')}</Text>
-                      {scheduledSingleWorkouts.map((day: any) => (
-                        <View 
-                          key={day.date}
-                          style={styles.swapSheetItemWrapper}
-                        >
-                          <View style={[
-                            styles.swapSheetItem,
-                            pressedSwapItemDate === day.date && styles.swapSheetItemPressed
-                          ]}>
-                            <TouchableOpacity
-                              style={styles.swapSheetItemInner}
-                              onPress={async () => {
-                                await swapWorkoutAssignments(selectedDate, day.date);
-                                setSwapDrawerVisible(false);
-                                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                              }}
-                              onPressIn={() => setPressedSwapItemDate(day.date)}
-                              onPressOut={() => setPressedSwapItemDate(null)}
-                              activeOpacity={1}
-                            >
-                              <View>
-                                <Text style={styles.swapSheetItemTitle}>
-                                  {day.scheduledWorkout?.titleSnapshot}
-                                </Text>
-                                <Text style={styles.swapSheetItemSubtitle}>
-                                  {day.dateObj.format('dddd, MMM D')}
-                                </Text>
-                              </View>
-                              <IconSwap size={24} color="#817B77" />
-                            </TouchableOpacity>
-                          </View>
-                        </View>
-                      ))}
-                    </View>
-                    
-                    {/* Spacing before unscheduled templates */}
-                    {singleWorkouts.length > 0 && (
-                      <View style={{ height: SPACING.xl }} />
+            }
+
+            const totalWeeks = activeCyclePlan.weeks;
+
+            return (
+              <>
+                {weekGroups.map((group, gIdx) => (
+                  <React.Fragment key={group.weekNum}>
+                    {totalWeeks > 1 && (
+                      <Text style={[styles.swapSheetSectionTitle, gIdx > 0 && { marginTop: SPACING.lg }]}>
+                        {`Week ${group.weekNum}`}
+                      </Text>
                     )}
-                  </>
-                )}
-                
-                {/* Section 3: Unscheduled Single Workout Templates */}
-                {singleWorkouts.length > 0 && (
-                  <View style={styles.swapSheetSection}>
-                    <Text style={styles.swapSheetSectionTitle}>{t('singleWorkouts')}</Text>
-                    {singleWorkouts.map((template, index) => (
-                      <View 
-                        key={template.id}
-                        style={styles.swapSheetItemWrapper}
-                      >
+                    {group.workouts.map((sw) => (
+                      <View key={sw.id} style={styles.swapSheetItemWrapper}>
                         <View style={[
                           styles.swapSheetItem,
-                          pressedSwapItemDate === template.id && styles.swapSheetItemPressed
+                          pressedSwapItemDate === sw.date && styles.swapSheetItemPressed
                         ]}>
                           <TouchableOpacity
                             style={styles.swapSheetItemInner}
                             onPress={async () => {
-                              const selectedDayData = weekDays.find((d: any) => d.date === selectedDate);
-                              
-                              // Schedule the single workout to the selected date (replaces whatever is there)
-                              const result = await scheduleWorkout(selectedDate, template.id, 'manual', undefined, 'replace');
-                              void result;
+                              await swapWorkoutAssignments(selectedDate, sw.date);
                               setSwapDrawerVisible(false);
                               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
                             }}
-                            onPressIn={() => setPressedSwapItemDate(template.id)}
+                            onPressIn={() => setPressedSwapItemDate(sw.date)}
                             onPressOut={() => setPressedSwapItemDate(null)}
                             activeOpacity={1}
                           >
-                            <View style={{ flex: 1 }}>
+                            <View>
                               <Text style={styles.swapSheetItemTitle}>
-                                {template.name}
+                                {sw.titleSnapshot}
                               </Text>
                               <Text style={styles.swapSheetItemSubtitle}>
-                                {template.items.length} {template.items.length === 1 ? t('exercise') : t('exercises')}
+                                {dayjs(sw.date).format('dddd, MMM D')}
                               </Text>
                             </View>
                             <IconSwap size={24} color="#817B77" />
@@ -778,25 +658,8 @@ function TabNavigator() {
                         </View>
                       </View>
                     ))}
-                  </View>
-                )}
-                
-                {/* Create New Workout Button */}
-                <View style={{ height: SPACING.xl }} />
-                <TouchableOpacity
-                  style={styles.createNewWorkoutButton}
-                  onPress={() => {
-                    if (swapDrawerData) {
-                      setSwapDrawerVisible(false);
-                      // Open add workout flow for the selected date
-                      handleOpenAddWorkout(swapDrawerData.selectedDate);
-                    }
-                  }}
-                  activeOpacity={0.7}
-                >
-                  <IconAdd size={20} color={COLORS.accentPrimary} />
-                  <Text style={styles.createNewWorkoutButtonText}>{t('createNewWorkout')}</Text>
-                </TouchableOpacity>
+                  </React.Fragment>
+                ))}
               </>
             );
           })()}
@@ -935,6 +798,21 @@ const styles = StyleSheet.create({
     ...TYPOGRAPHY.bodyBold,
     color: COLORS.accentPrimary,
   },
+  swapCreateButton: {
+    flexDirection: 'row',
+    width: '100%',
+    height: 56,
+    backgroundColor: COLORS.accentPrimaryDimmed,
+    borderRadius: BORDER_RADIUS.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 24,
+    gap: 8,
+  },
+  swapCreateButtonText: {
+    ...TYPOGRAPHY.meta,
+    color: COLORS.accentPrimary,
+  },
   swapSheetItemWrapper: {
     marginBottom: SPACING.md,
   },
@@ -990,12 +868,6 @@ export default function AppNavigator() {
         <Stack.Screen name="Tabs" component={TabNavigator} />
         <Stack.Screen name="Profile" component={ProfileScreen} />
         <Stack.Screen name="BodyWeightHistory" component={BodyWeightHistoryScreen} />
-        <Stack.Screen name="ProgressGallery" component={ProgressGalleryScreen} />
-        <Stack.Screen
-          name="ProgressLogDetail"
-          component={ProgressLogDetailScreen}
-          options={{ presentation: 'modal' }}
-        />
         <Stack.Screen name="History" component={HistoryScreen} />
         <Stack.Screen name="PlanHistoryDetail" component={PlanHistoryDetailScreen} />
         <Stack.Screen name="WorkoutBuilder" component={WorkoutBuilderScreen} />
@@ -1024,6 +896,9 @@ export default function AppNavigator() {
         <Stack.Screen name="CreateCycleDayEditor" component={CreateCycleDayEditor} />
         <Stack.Screen name="AIWorkoutCreation" component={AIWorkoutCreationScreen} />
         <Stack.Screen name="WorkoutCreationOptions" component={WorkoutCreationOptionsScreen} />
+        <Stack.Screen name="LiftHistory" component={LiftHistoryScreen} />
+        <Stack.Screen name="EditKeyLifts" component={EditKeyLiftsScreen} />
+        <Stack.Screen name="PhotoViewer" component={PhotoViewerScreen} />
       </Stack.Navigator>
     </View>
   );

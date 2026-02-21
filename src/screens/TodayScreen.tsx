@@ -6,7 +6,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { useStore } from '../store';
 import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS, CARDS } from '../constants';
-import { IconCheckmark, IconSwap, IconAdd, IconSettings, IconCalendar, IconArrowRight, IconPause, IconPlay } from '../components/icons';
+import { IconCheckmark, IconSwap, IconAdd, IconSettings, IconCalendar, IconPause, IconPlay } from '../components/icons';
 import { ExpandableCalendarStrip } from '../components/calendar/ExpandableCalendarStrip';
 import { DiagonalLinePattern } from '../components/common/DiagonalLinePattern';
 import dayjs from 'dayjs';
@@ -385,32 +385,19 @@ export function TodayScreen({ onDateChange, onOpenSwapDrawer, onOpenAddWorkout }
 
             {/* Subtitle: always reserve space to prevent layout jump */}
             <View style={styles.scheduleSubtitleTouchable}>
-              {selectedDateCyclePlan ? (
-                <TouchableOpacity
-                  onPress={() => {
-                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                    (navigation as any).navigate('CyclePlanDetail', { planId: selectedDateCyclePlan.id });
-                  }}
-                  activeOpacity={0.85}
-                >
-                  <View style={styles.scheduleSubtitleRow}>
-                    <Text style={styles.scheduleSubtitle} numberOfLines={1}>
-                      {isSelectedDateInActiveCycle
-                        ? isCyclePaused
-                          ? `${selectedDateCyclePlan.name} · Paused (Resumes ${dayjs(activeCyclePlan!.pausedUntil).format('MMM D')})`
+              <View style={styles.scheduleSubtitleRow}>
+                <Text style={styles.scheduleSubtitle} numberOfLines={1}>
+                  {selectedDateCyclePlan
+                    ? isSelectedDateInActiveCycle
+                      ? isCyclePaused
+                        ? `Week ${cycleWeekProgress?.currentWeek ?? '–'} of ${cycleWeekProgress?.totalWeeks ?? '–'} · Paused (Resumes ${dayjs(activeCyclePlan!.pausedUntil).format('MMM D')})`
+                        : cycleWeekProgress
+                          ? `Week ${cycleWeekProgress.currentWeek} of ${cycleWeekProgress.totalWeeks}`
                           : selectedDateCyclePlan.name
-                        : `${selectedDateCyclePlan.name} · ${t('pastCycle')}`}
-                    </Text>
-                    <View style={styles.scheduleTitleArrow}>
-                      <IconArrowRight size={16} color={LIGHT_COLORS.textMeta} />
-                    </View>
-                  </View>
-                </TouchableOpacity>
-              ) : (
-                <View style={styles.scheduleSubtitleRow}>
-                  <Text style={styles.scheduleSubtitle}>{' '}</Text>
-                </View>
-              )}
+                      : `${selectedDateCyclePlan.name} · ${t('pastCycle')}`
+                    : ' '}
+                </Text>
+              </View>
             </View>
 
             {/* Calendar strip */}
@@ -552,7 +539,7 @@ export function TodayScreen({ onDateChange, onOpenSwapDrawer, onOpenAddWorkout }
                   selectedDate === today.format('YYYY-MM-DD') && !selectedDay.isLocked && !selectedDay.isCompleted && selectedDay.completionPercentage === 0 && (
                     <TouchableOpacity 
                       style={styles.swapButton}
-                      onPress={() => handleAddOrCreateWorkout(selectedDate)}
+                      onPress={() => onOpenSwapDrawer?.(selectedDate, weekDays)}
                       activeOpacity={1}
                     >
                       <IconSwap size={24} color={COLORS.text} />
@@ -765,9 +752,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     minWidth: 0,
-  },
-  scheduleTitleArrow: {
-    marginLeft: SPACING.xs,
   },
   scheduleSubtitleTouchable: {
     paddingHorizontal: SPACING.xxl,

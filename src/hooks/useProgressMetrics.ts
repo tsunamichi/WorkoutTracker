@@ -15,10 +15,11 @@ export interface KeyLift {
   latestWeight: number;
   latestReps: number;
   previousWeight: number;
-  deltaPercent: number | null; // null = insufficient data
+  deltaPercent: number | null;
   occurrences: number;
   pr: ExercisePR | undefined;
-  isPR: boolean; // true if current PR was set in the active time window
+  isPR: boolean;
+  sparklineData: number[];
 }
 
 export interface CycleSnapshot {
@@ -31,6 +32,15 @@ export interface CycleSnapshot {
   volumeThisWeek: number;
   volumeWeekOne: number;
   volumeDeltaPercent: number | null;
+  completionPercent: number;
+  totalVolume: number;
+  previousCycleTotalVolume: number | null;
+  volumeVsPreviousCyclePercent: number | null;
+  primaryLiftName: string | null;
+  primaryLiftCurrent: string | null;
+  primaryLiftPrevious: string | null;
+  bodyweightStart: number | null;
+  bodyweightCurrent: number | null;
 }
 
 export interface WeeklySnapshot {
@@ -63,22 +73,11 @@ function getWeekRange(date: dayjs.Dayjs): { start: string; end: string } {
   return { start, end };
 }
 
-function getSessionsInRange(
-  sessions: any[],
-  start: string,
-  end: string
-): any[] {
-  return sessions.filter(s => {
-    const d = s.date;
-    return d >= start && d <= end;
-  });
+function getSessionsInRange(sessions: any[], start: string, end: string): any[] {
+  return sessions.filter(s => s.date >= start && s.date <= end);
 }
 
-function getScheduledInRange(
-  scheduled: ScheduledWorkout[],
-  start: string,
-  end: string
-): ScheduledWorkout[] {
+function getScheduledInRange(scheduled: ScheduledWorkout[], start: string, end: string): ScheduledWorkout[] {
   return scheduled.filter(sw => sw.date >= start && sw.date <= end);
 }
 
@@ -100,6 +99,31 @@ function volumeDelta(current: number, baseline: number): number | null {
   return Math.round(((current - baseline) / baseline) * 100);
 }
 
+function getTopSetWeightPerSession(
+  sessions: any[],
+  exerciseId: string,
+  maxSessions: number
+): number[] {
+  const topSets: { date: string; weight: number }[] = [];
+
+  const sorted = [...sessions].sort((a, b) => a.date.localeCompare(b.date));
+
+  for (const session of sorted) {
+    if (!session.sets) continue;
+    let maxWeight = 0;
+    for (const set of session.sets) {
+      if (set.exerciseId === exerciseId && set.isCompleted && set.weight > maxWeight) {
+        maxWeight = set.weight;
+      }
+    }
+    if (maxWeight > 0) {
+      topSets.push({ date: session.date, weight: maxWeight });
+    }
+  }
+
+  return topSets.slice(-maxSessions).map(s => s.weight);
+}
+
 // ─── Hook ────────────────────────────────────────────────────────────
 
 export function useProgressMetrics(): ProgressMetrics {
@@ -108,6 +132,8 @@ export function useProgressMetrics(): ProgressMetrics {
   const cyclePlans = useStore(s => s.cyclePlans);
   const exercisePRs = useStore(s => s.exercisePRs);
   const exercises = useStore(s => s.exercises);
+  const pinnedKeyLifts = useStore(s => s.pinnedKeyLifts);
+  const bodyWeightEntries = useStore(s => s.bodyWeightEntries);
 
   return useMemo(() => {
     const today = dayjs();
@@ -141,21 +167,100 @@ export function useProgressMetrics(): ProgressMetrics {
 
     if (activeCycle) {
       const cycleStart = dayjs(activeCycle.startDate);
-      const currentWeek = Math.min(
-        Math.max(1, Math.ceil(today.diff(cycleStart, 'day') / 7) + (today.diff(cycleStart, 'day') % 7 === 0 ? 0 : 0)),
-        activeCycle.weeks
-      );
       const weekNum = Math.floor(today.diff(cycleStart, 'day') / 7) + 1;
 
-      // Cycle-scoped data
       const cycleEnd = cycleStart.add(activeCycle.weeks * 7, 'day').format('YYYY-MM-DD');
       const cycleScheduled = getScheduledInRange(scheduledWorkouts, activeCycle.startDate, cycleEnd);
       const cycleCompleted = cycleScheduled.filter(sw => sw.status === 'completed' || sw.isLocked);
 
-      // Week 1 volume
       const week1Range = getWeekRange(cycleStart);
       const sessionsWeek1 = getSessionsInRange(sessions, week1Range.start, week1Range.end);
       const volumeWeekOne = computeVolume(sessionsWeek1);
+
+      // Total cycle volume
+      const cycleSessions = getSessionsInRange(sessions, activeCycle.startDate, cycleEnd);
+      const totalVolume = computeVolume(cycleSessions);
+
+      // Previous cycle comparison
+      const previousCycle = cyclePlans
+        .filter(p => !p.active && (p.endedAt || !p.active) && p.startDate < activeCycle.startDate)
+        .sort((a, b) => b.startDate.localeCompare(a.startDate))[0] || null;
+
+      let previousCycleTotalVolume: number | null = null;
+      let primaryLiftPrevious: string | null = null;
+
+      if (previousCycle) {
+        const prevEnd = dayjs(previousCycle.startDate).add(previousCycle.weeks * 7, 'day').format('YYYY-MM-DD');
+        const prevSessions = getSessionsInRange(sessions, previousCycle.startDate, prevEnd);
+        previousCycleTotalVolume = computeVolume(prevSessions);
+      }
+
+      const volumeVsPreviousCyclePercent = previousCycleTotalVolume !== null
+        ? volumeDelta(totalVolume, previousCycleTotalVolume)
+        : null;
+
+      // Completion percent
+      const completionPercent = cycleScheduled.length > 0
+        ? Math.round((cycleCompleted.length / cycleScheduled.length) * 100)
+        : 0;
+
+      // Primary lift (highest volume in cycle)
+      const cycleLiftVolume: Record<string, number> = {};
+      for (const session of cycleSessions) {
+        if (!session.sets) continue;
+        for (const set of session.sets) {
+          if (set.isCompleted && set.weight > 0 && set.reps > 0) {
+            cycleLiftVolume[set.exerciseId] = (cycleLiftVolume[set.exerciseId] || 0) + set.weight * set.reps;
+          }
+        }
+      }
+
+      let primaryLiftName: string | null = null;
+      let primaryLiftCurrent: string | null = null;
+      const topLiftId = Object.entries(cycleLiftVolume).sort(([, a], [, b]) => b - a)[0]?.[0];
+
+      if (topLiftId) {
+        const ex = exercises.find((e: any) => e.id === topLiftId);
+        primaryLiftName = ex?.name || null;
+
+        let bestWeight = 0;
+        let bestReps = 0;
+        for (const session of cycleSessions) {
+          if (!session.sets) continue;
+          for (const set of session.sets) {
+            if (set.exerciseId === topLiftId && set.isCompleted && set.weight > bestWeight) {
+              bestWeight = set.weight;
+              bestReps = set.reps;
+            }
+          }
+        }
+        if (bestWeight > 0) primaryLiftCurrent = `${bestWeight}×${bestReps}`;
+
+        if (previousCycle) {
+          const prevEnd = dayjs(previousCycle.startDate).add(previousCycle.weeks * 7, 'day').format('YYYY-MM-DD');
+          const prevSessions = getSessionsInRange(sessions, previousCycle.startDate, prevEnd);
+          let prevBestWeight = 0;
+          let prevBestReps = 0;
+          for (const session of prevSessions) {
+            if (!session.sets) continue;
+            for (const set of session.sets) {
+              if (set.exerciseId === topLiftId && set.isCompleted && set.weight > prevBestWeight) {
+                prevBestWeight = set.weight;
+                prevBestReps = set.reps;
+              }
+            }
+          }
+          if (prevBestWeight > 0) primaryLiftPrevious = `${prevBestWeight}×${prevBestReps}`;
+        }
+      }
+
+      // Bodyweight in cycle range
+      const cycleWeightEntries = bodyWeightEntries.filter(
+        (e: any) => e.date >= activeCycle.startDate && e.date <= cycleEnd
+      ).sort((a: any, b: any) => a.date.localeCompare(b.date));
+
+      const bodyweightStart = cycleWeightEntries.length > 0 ? cycleWeightEntries[0].weight : null;
+      const bodyweightCurrent = cycleWeightEntries.length > 0 ? cycleWeightEntries[cycleWeightEntries.length - 1].weight : null;
 
       hero = {
         type: 'cycle',
@@ -167,9 +272,17 @@ export function useProgressMetrics(): ProgressMetrics {
         volumeThisWeek,
         volumeWeekOne,
         volumeDeltaPercent: volumeDelta(volumeThisWeek, volumeWeekOne),
+        completionPercent,
+        totalVolume,
+        previousCycleTotalVolume,
+        volumeVsPreviousCyclePercent,
+        primaryLiftName,
+        primaryLiftCurrent,
+        primaryLiftPrevious,
+        bodyweightStart,
+        bodyweightCurrent,
       };
     } else {
-      // Find top lift of the week
       let topLiftName: string | null = null;
       let topLiftWeight = 0;
 
@@ -178,7 +291,7 @@ export function useProgressMetrics(): ProgressMetrics {
         for (const set of session.sets) {
           if (set.isCompleted && set.weight > topLiftWeight) {
             topLiftWeight = set.weight;
-            const ex = exercises.find(e => e.id === set.exerciseId);
+            const ex = exercises.find((e: any) => e.id === set.exerciseId);
             topLiftName = ex?.name || null;
           }
         }
@@ -197,19 +310,16 @@ export function useProgressMetrics(): ProgressMetrics {
       };
     }
 
-    // ── Key Lifts (combined with PR data) ────────────────────────
-    // Count frequency of exercises in the last 4 weeks
+    // ── Key Lifts ────────────────────────────────────────────────
     const fourWeeksAgo = today.subtract(4, 'week').format('YYYY-MM-DD');
-    const recentSessions = sessions.filter(s => s.date >= fourWeeksAgo);
+    const recentSessions = sessions.filter((s: any) => s.date >= fourWeeksAgo);
 
-    // Build per-exercise stats
     const exerciseStats: Record<string, {
       exerciseId: string;
       exerciseName: string;
       totalOccurrences: number;
       lastDate: string;
-      // Weight data bucketed by week
-      weeklyWeights: Record<string, number[]>; // weekKey -> weights
+      weeklyWeights: Record<string, number[]>;
     }> = {};
 
     for (const session of recentSessions) {
@@ -221,7 +331,7 @@ export function useProgressMetrics(): ProgressMetrics {
 
         const exId = set.exerciseId;
         if (!exerciseStats[exId]) {
-          const ex = exercises.find(e => e.id === exId);
+          const ex = exercises.find((e: any) => e.id === exId);
           exerciseStats[exId] = {
             exerciseId: exId,
             exerciseName: ex?.name || 'Unknown',
@@ -244,17 +354,16 @@ export function useProgressMetrics(): ProgressMetrics {
 
     // Rank by frequency, then recency
     const ranked = Object.values(exerciseStats)
-      .filter(s => Object.keys(s.weeklyWeights).length >= 2) // need 2+ weeks of data
+      .filter(s => Object.keys(s.weeklyWeights).length >= 2)
       .sort((a, b) => {
         if (b.totalOccurrences !== a.totalOccurrences) return b.totalOccurrences - a.totalOccurrences;
         return b.lastDate.localeCompare(a.lastDate);
       })
-      .slice(0, 5);
+      .slice(0, 8);
 
-    // Determine time window for PR detection
     const prWindowStart = activeCycle ? activeCycle.startDate : thisWeek.start;
 
-    const keyLifts: KeyLift[] = ranked.map(stat => {
+    const buildKeyLift = (stat: typeof ranked[0]): KeyLift => {
       const weekKeys = Object.keys(stat.weeklyWeights).sort();
       const latestWeekKey = weekKeys[weekKeys.length - 1];
       const previousWeekKey = weekKeys.length >= 2 ? weekKeys[weekKeys.length - 2] : null;
@@ -272,7 +381,6 @@ export function useProgressMetrics(): ProgressMetrics {
         ? Math.round(((latestWeight - previousWeight) / previousWeight) * 100)
         : null;
 
-      // Find latest reps at max weight
       let latestReps = 0;
       for (const session of [...recentSessions].reverse()) {
         if (!session.sets) continue;
@@ -285,8 +393,10 @@ export function useProgressMetrics(): ProgressMetrics {
         if (latestReps > 0) break;
       }
 
-      const pr = exercisePRs.find(p => p.exerciseId === stat.exerciseId);
+      const pr = exercisePRs.find((p: ExercisePR) => p.exerciseId === stat.exerciseId);
       const isPR = pr ? pr.date >= prWindowStart : false;
+
+      const sparklineData = getTopSetWeightPerSession(sessions, stat.exerciseId, 8);
 
       return {
         exerciseId: stat.exerciseId,
@@ -298,14 +408,41 @@ export function useProgressMetrics(): ProgressMetrics {
         occurrences: stat.totalOccurrences,
         pr,
         isPR,
+        sparklineData,
       };
-    });
+    };
+
+    let keyLifts: KeyLift[];
+
+    if (pinnedKeyLifts.length > 0) {
+      keyLifts = pinnedKeyLifts
+        .map(exId => {
+          const stat = exerciseStats[exId];
+          if (!stat) {
+            const ex = exercises.find((e: any) => e.id === exId);
+            return {
+              exerciseId: exId,
+              exerciseName: ex?.name || 'Unknown',
+              latestWeight: 0,
+              latestReps: 0,
+              previousWeight: 0,
+              deltaPercent: null,
+              occurrences: 0,
+              pr: exercisePRs.find((p: ExercisePR) => p.exerciseId === exId),
+              isPR: false,
+              sparklineData: getTopSetWeightPerSession(sessions, exId, 8),
+            } as KeyLift;
+          }
+          return buildKeyLift(stat);
+        });
+    } else {
+      keyLifts = ranked.slice(0, 4).map(buildKeyLift);
+    }
 
     // ── Recent PRs count ─────────────────────────────────────────
-    const recentPRCount = exercisePRs.filter(pr => pr.date >= prWindowStart).length;
+    const recentPRCount = exercisePRs.filter((pr: ExercisePR) => pr.date >= prWindowStart).length;
 
     // ── Adherence ────────────────────────────────────────────────
-    // Only count scheduled workouts up to today (not future)
     const scheduledUpToToday = scheduledThisWeek.filter(sw => sw.date <= todayStr);
     const adherence = {
       completed: completedThisWeek.length,
@@ -323,5 +460,5 @@ export function useProgressMetrics(): ProgressMetrics {
       adherence,
       hasAnyData,
     };
-  }, [sessions, scheduledWorkouts, cyclePlans, exercisePRs, exercises]);
+  }, [sessions, scheduledWorkouts, cyclePlans, exercisePRs, exercises, pinnedKeyLifts, bodyWeightEntries]);
 }

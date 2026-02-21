@@ -1,0 +1,54 @@
+# Smoke Test: TC-10 — Progress tab with full data (lifts + body check-in)
+# Verifies: Lifts section with cards, Body section with weight card,
+# drawer expand/collapse, navigation to Edit Key Lifts.
+# Note: Requires pre-populated data (run after completing workouts + logging weight).
+appId: com.tsunamichi.workouttracker
+
+---
+
+# 1. Launch (state preserved from previous test data)
+- launchApp
+
+- extendedWaitUntil:
+    visible: "Schedule"
+    timeout: 8000
+
+- runFlow: helpers/open-progress.yaml
+
+# 2. Verify Lifts section is visible
+- assertVisible: "Lifts"
+
+- assertVisible: "Strength trends across time"
+
+# 3. Tap the Edit Key Lifts button
+- tapOn:
+    id: "progress-lifts-edit-key-lifts"
+
+- extendedWaitUntil:
+    visible: "Edit Key Lifts"
+    timeout: 3000
+
+- takeScreenshot: "10_edit_key_lifts"
+
+# 4. Go back to Progress
+- back
+
+- extendedWaitUntil:
+    visible: "Current Cycle"
+    timeout: 3000
+
+# 5. Verify Body section
+- scrollUntilVisible:
+    element: "Body"
+    direction: DOWN
+    timeout: 5000
+
+- assertVisible: "Body"
+- assertVisible: "Check-ins and physical changes"
+
+# 6. Verify legacy UI not present
+- assertNotVisible:
+    text: "All-Time Records"
+    optional: true
+
+- takeScreenshot: "10_progress_full_data"

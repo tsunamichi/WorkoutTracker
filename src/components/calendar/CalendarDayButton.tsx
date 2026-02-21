@@ -10,6 +10,7 @@ interface CalendarDayButtonProps {
   hasWorkout: boolean;
   cycleColor?: string;
   isInActiveCycle?: boolean;
+  isPaused?: boolean;
   onPress: () => void;
 }
 
@@ -21,6 +22,7 @@ export function CalendarDayButton({
   hasWorkout,
   cycleColor,
   isInActiveCycle,
+  isPaused,
   onPress,
 }: CalendarDayButtonProps) {
   return (
@@ -40,6 +42,7 @@ export function CalendarDayButton({
         <Text
           style={[
             styles.dayNumber,
+            isPaused && !isSelected && styles.dayNumberPaused,
             isToday && !isSelected && styles.dayNumberToday,
             isSelected && styles.dayNumberSelected,
           ]}
@@ -90,6 +93,9 @@ const styles = StyleSheet.create({
   },
   dayNumberToday: {
     color: COLORS.accentPrimary,
+  },
+  dayNumberPaused: {
+    color: COLORS.textMeta,
   },
   completedPill: {
     position: 'absolute',

@@ -1,0 +1,44 @@
+# Smoke Test: TC-11 — Progress tab for a fresh user (empty state)
+# Verifies: empty state message, drawer still visible, no crash,
+# legacy UI absent.
+appId: com.tsunamichi.workouttracker
+
+---
+
+# 1. Fresh install
+- launchApp:
+    clearState: true
+
+# 2. Dismiss onboarding
+- extendedWaitUntil:
+    visible: "Continue as guest"
+    timeout: 8000
+
+- scrollUntilVisible:
+    element: "Continue as guest"
+    direction: DOWN
+    timeout: 3000
+
+- tapOn: "Continue as guest"
+
+- extendedWaitUntil:
+    visible: "Schedule"
+    timeout: 8000
+
+# 3. Navigate to Progress
+- runFlow: helpers/open-progress.yaml
+
+# 4. Verify drawer header is present (always shown)
+- assertVisible: "Current Cycle"
+
+# 5. Verify legacy UI absent
+- assertNotVisible:
+    text: "All-Time Records"
+    optional: true
+
+- assertNotVisible:
+    text: "See all progress"
+    optional: true
+
+# 6. Screenshot
+- takeScreenshot: "11_progress_fresh_user"

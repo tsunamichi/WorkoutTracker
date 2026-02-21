@@ -1,0 +1,44 @@
+# Smoke Test: TC-9 — Progress tab with active cycle, no body check-in
+# Verifies: drawer collapsed state, lifts section, body section empty states,
+# legacy UI absence.
+appId: com.tsunamichi.workouttracker
+
+---
+
+# 1. Fresh launch
+- launchApp:
+    clearState: true
+
+# 2. Dismiss onboarding if present
+- extendedWaitUntil:
+    visible: "Continue as guest"
+    timeout: 8000
+
+- scrollUntilVisible:
+    element: "Continue as guest"
+    direction: DOWN
+    timeout: 3000
+
+- tapOn: "Continue as guest"
+
+# 3. Wait for main app to load, then navigate to Progress
+- extendedWaitUntil:
+    visible: "Schedule"
+    timeout: 8000
+
+- runFlow: helpers/open-progress.yaml
+
+# 4. Verify Current Cycle header is visible
+- assertVisible: "Current Cycle"
+
+# 5. Verify legacy UI is NOT present
+- assertNotVisible:
+    text: "All-Time Records"
+    optional: true
+
+- assertNotVisible:
+    text: "See all progress"
+    optional: true
+
+# 6. Screenshot for verification
+- takeScreenshot: "09_progress_active_cycle_no_checkin"

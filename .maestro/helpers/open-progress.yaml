@@ -1,0 +1,19 @@
+# Helper: Navigates to the Progress tab.
+# Assumes the app has the main screen visible.
+#
+# KNOWN ISSUE: Maestro 2.1.0 + iOS 26 XCTest driver has an intermittent
+# bug where synthetic taps on bottom navigation Pressable components
+# don't propagate to React Native's onPress handler. If this flow fails,
+# re-run with: maestro test --reinstall-driver
+# Tracking: https://github.com/mobile-dev-inc/maestro/issues
+appId: com.tsunamichi.workouttracker
+
+---
+
+- tapOn:
+    id: "bottom-nav-progress"
+    retryTapIfNoChange: false
+
+- extendedWaitUntil:
+    visible: "Current Cycle"
+    timeout: 5000

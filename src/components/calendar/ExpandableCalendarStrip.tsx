@@ -49,6 +49,7 @@ type DayData = {
   isCompleted: boolean;
   cycleColor?: string;
   isInActiveCycle: boolean;
+  isPaused: boolean;
 };
 
 export function ExpandableCalendarStrip({
@@ -142,6 +143,7 @@ export function ExpandableCalendarStrip({
           isCompleted,
           cycleColor: cycleColorMap[dateStr],
           isInActiveCycle: activePlanIds.has(dateToPlanId[dateStr]),
+          isPaused: pausedDates.has(dateStr),
         });
       }
       weeks.push(days);
@@ -323,7 +325,7 @@ export function ExpandableCalendarStrip({
                           y1={0}
                           x2={x + 200}
                           y2={200}
-                          stroke={COLORS.backgroundContainer}
+                          stroke="rgba(255,255,255,0.2)"
                           strokeWidth={2}
                         />
                       );
@@ -346,6 +348,7 @@ export function ExpandableCalendarStrip({
               hasWorkout={day.hasWorkout}
               cycleColor={day.cycleColor}
               isInActiveCycle={day.isInActiveCycle}
+              isPaused={day.isPaused}
               onPress={() => handleSelectDate(day.date)}
             />
           </View>

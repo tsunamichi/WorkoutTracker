@@ -2,9 +2,9 @@ import React from 'react';
 import { View, StyleSheet } from 'react-native';
 import { COLORS, SPACING } from '../../constants';
 
-export function DragHandle() {
+export function DragHandle({ testID }: { testID?: string }) {
   return (
-    <View style={styles.container}>
+    <View testID={testID} style={styles.container}>
       <View style={styles.handle} />
     </View>
   );

@@ -1,21 +1,23 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useCallback } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput, Alert, Image, Dimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { useSharedValue, useAnimatedStyle, withSpring, interpolate, runOnJS } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
-import { useStore } from '../store';
-import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS, CARDS } from '../constants';
-import { IconAdd, IconSettings, IconPR, IconChevronDown } from '../components/icons';
+import * as ImagePicker from 'expo-image-picker';
 import dayjs from 'dayjs';
+import isoWeek from 'dayjs/plugin/isoWeek';
+import { useStore } from '../store';
+import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS } from '../constants';
+import { IconSettings, IconEdit } from '../components/icons';
 import { formatWeight, fromDisplayWeight } from '../utils/weight';
 import { BottomDrawer } from '../components/common/BottomDrawer';
-import { DiagonalLinePattern } from '../components/common/DiagonalLinePattern';
 import { DragHandle } from '../components/calendar/DragHandle';
 import { useTranslation } from '../i18n/useTranslation';
-import { useProgressMetrics, CycleSnapshot, WeeklySnapshot, KeyLift } from '../hooks/useProgressMetrics';
-import isoWeek from 'dayjs/plugin/isoWeek';
-import * as ImagePicker from 'expo-image-picker';
+import { useProgressMetrics, CycleSnapshot, WeeklySnapshot } from '../hooks/useProgressMetrics';
+import { KeyLiftCard } from '../components/progress/KeyLiftCard';
+import { WeeklyWeightCard } from '../components/progress/WeeklyWeightCard';
+import { PhotoCheckInCard } from '../components/progress/PhotoCheckInCard';
 
 dayjs.extend(isoWeek);
 
@@ -25,374 +27,310 @@ interface ProgressHomeScreenProps {
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
 
-function DeltaBadge({ value, suffix }: { value: number | null; suffix?: string }) {
-  if (value === null) return <Text style={styles.deltaNeutral}>—</Text>;
-
-  const isPositive = value > 0;
-  const isNegative = value < 0;
-  const color = isPositive ? COLORS.successBright : isNegative ? COLORS.textMeta : COLORS.textMeta;
-  const prefix = isPositive ? '+' : '';
-
-  return (
-    <Text style={[styles.deltaText, { color }]}>
-      {prefix}{value}%{suffix ? ` ${suffix}` : ''}
-    </Text>
-  );
-}
-
 export function ProgressHomeScreen({ navigation }: ProgressHomeScreenProps) {
   const insets = useSafeAreaInsets();
   const {
     settings,
-    progressLogs,
-    addProgressLog,
+    bodyWeightEntries,
+    progressPhotos,
+    addBodyWeightEntry,
+    addProgressPhoto,
   } = useStore();
 
-  const [showWeeklyCheckIn, setShowWeeklyCheckIn] = useState(false);
-  const [checkInPhotoUris, setCheckInPhotoUris] = useState<string[]>([]);
-  const [checkInWeight, setCheckInWeight] = useState('');
-  const [isSavingCheckIn, setIsSavingCheckIn] = useState(false);
-  const [showAllLifts, setShowAllLifts] = useState(false);
+  const [showWeightInput, setShowWeightInput] = useState(false);
+  const [weightValue, setWeightValue] = useState('');
+  const [showPhotoCapture, setShowPhotoCapture] = useState(false);
   const { t } = useTranslation();
 
   const metrics = useProgressMetrics();
   const useKg = settings.useKg;
 
-  // ─── Check-in logic (preserved from original) ──────────────────
+  // ─── Body weight data ──────────────────────────────────────────
 
-  const handlePickCheckInPhoto = async (mode: 'camera' | 'library') => {
-    if (!ImagePicker) return;
-    if (checkInPhotoUris.length >= 5) {
-      Alert.alert(t('alertErrorTitle'), 'You can add up to 5 photos.');
+  const sortedWeightEntries = useMemo(() =>
+    [...bodyWeightEntries].sort((a, b) => b.date.localeCompare(a.date)),
+    [bodyWeightEntries]
+  );
+
+  const latestWeightEntry = sortedWeightEntries[0] || null;
+
+  const previousWeekEntry = useMemo(() => {
+    const lastWeekEnd = dayjs().startOf('isoWeek').subtract(1, 'day').format('YYYY-MM-DD');
+    const lastWeekStart = dayjs().startOf('isoWeek').subtract(7, 'day').format('YYYY-MM-DD');
+    const entry = sortedWeightEntries.find(e => e.date >= lastWeekStart && e.date <= lastWeekEnd);
+    return entry || null;
+  }, [sortedWeightEntries]);
+
+  const weightTrend = useMemo(() => {
+    const weeks: number[] = [];
+    for (let i = 7; i >= 0; i--) {
+      const weekStart = dayjs().startOf('isoWeek').subtract(i, 'week').format('YYYY-MM-DD');
+      const weekEnd = dayjs().endOf('isoWeek').subtract(i, 'week').format('YYYY-MM-DD');
+      const weekEntries = bodyWeightEntries.filter(e => e.date >= weekStart && e.date <= weekEnd);
+      if (weekEntries.length > 0) {
+        const latest = weekEntries.sort((a, b) => b.date.localeCompare(a.date))[0];
+        weeks.push(latest.weight);
+      }
+    }
+    return weeks;
+  }, [bodyWeightEntries]);
+
+  // ─── Photo data ────────────────────────────────────────────────
+
+  const sortedPhotos = useMemo(() =>
+    [...progressPhotos].sort((a, b) => b.date.localeCompare(a.date)),
+    [progressPhotos]
+  );
+
+  const latestFrontPhoto = useMemo(() =>
+    sortedPhotos.find(p => p.label === 'Front') || sortedPhotos[0] || null,
+    [sortedPhotos]
+  );
+
+  // ─── Weight logging ────────────────────────────────────────────
+
+  const handleSaveWeight = useCallback(async () => {
+    const displayWeight = parseFloat(weightValue);
+    if (!Number.isFinite(displayWeight) || displayWeight <= 0) {
+      Alert.alert(t('alertErrorTitle'), 'Please enter a valid weight.');
       return;
     }
+
+    const weightInLbs = fromDisplayWeight(displayWeight, settings.useKg);
+    await addBodyWeightEntry({
+      id: `bw-${Date.now()}`,
+      date: dayjs().format('YYYY-MM-DD'),
+      weight: weightInLbs,
+      unit: 'lb',
+    });
+
+    setWeightValue('');
+    setShowWeightInput(false);
+  }, [weightValue, settings.useKg, addBodyWeightEntry, t]);
+
+  // ─── Photo capture ─────────────────────────────────────────────
+
+  const handlePickPhoto = useCallback(async (label: 'Front' | 'Side' | 'Back') => {
     try {
-      if (mode === 'camera') {
-        const permission = await ImagePicker.requestCameraPermissionsAsync();
-        if (!permission.granted) {
-          Alert.alert(t('photoLibraryPermissionTitle'), t('photoLibraryPermissionBody'));
-          return;
-        }
-        const result = await ImagePicker.launchCameraAsync({
-          mediaTypes: ImagePicker.MediaTypeOptions.Images,
-          allowsEditing: true,
-          quality: 1,
-        });
-        if (!result.canceled && result.assets?.[0]?.uri) {
-          setCheckInPhotoUris(prev => [...prev, result.assets[0].uri]);
-        }
-      } else {
-        const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-        if (!permission.granted) {
-          Alert.alert(t('photoLibraryPermissionTitle'), t('photoLibraryPermissionBody'));
-          return;
-        }
-        const result = await ImagePicker.launchImageLibraryAsync({
-          mediaTypes: ImagePicker.MediaTypeOptions.Images,
-          allowsEditing: false,
-          allowsMultipleSelection: true,
-          quality: 1,
-        });
-        if (!result.canceled && result.assets) {
-          const availableSlots = 5 - checkInPhotoUris.length;
-          const newUris = result.assets.slice(0, availableSlots).map(asset => asset.uri);
-          setCheckInPhotoUris(prev => [...prev, ...newUris]);
-        }
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permission.granted) {
+        Alert.alert(t('photoLibraryPermissionTitle'), t('photoLibraryPermissionBody'));
+        return;
       }
-    } catch (error) {
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        quality: 0.8,
+      });
+
+      if (!result.canceled && result.assets?.[0]?.uri) {
+        await addProgressPhoto({
+          date: dayjs().format('YYYY-MM-DD'),
+          imageUri: result.assets[0].uri,
+          label,
+        });
+        setShowPhotoCapture(false);
+      }
+    } catch {
       Alert.alert(t('alertErrorTitle'), t('failedToPickImage'));
     }
-  };
+  }, [addProgressPhoto, t]);
 
-  const handleRemovePhoto = (index: number) => {
-    setCheckInPhotoUris(prev => prev.filter((_, i) => i !== index));
-  };
+  const handleTakePhoto = useCallback(async (label: 'Front' | 'Side' | 'Back') => {
+    try {
+      const permission = await ImagePicker.requestCameraPermissionsAsync();
+      if (!permission.granted) {
+        Alert.alert(t('photoLibraryPermissionTitle'), t('photoLibraryPermissionBody'));
+        return;
+      }
 
-  const handleSaveWeeklyCheckIn = async () => {
-    const displayWeight = parseFloat(checkInWeight);
-    const hasPhotos = checkInPhotoUris.length > 0;
-    const hasWeight = Number.isFinite(displayWeight) && displayWeight > 0;
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        quality: 0.8,
+      });
 
-    if (!hasPhotos && !hasWeight) {
-      Alert.alert(t('alertErrorTitle'), 'Please add at least one photo or weight entry.');
-      return;
+      if (!result.canceled && result.assets?.[0]?.uri) {
+        await addProgressPhoto({
+          date: dayjs().format('YYYY-MM-DD'),
+          imageUri: result.assets[0].uri,
+          label,
+        });
+        setShowPhotoCapture(false);
+      }
+    } catch {
+      Alert.alert(t('alertErrorTitle'), t('failedToPickImage'));
     }
-
-    setIsSavingCheckIn(true);
-    const weightLbs = hasWeight ? fromDisplayWeight(displayWeight, settings.useKg) : undefined;
-    const result = await addProgressLog({ photoUris: checkInPhotoUris, weightLbs });
-    setIsSavingCheckIn(false);
-
-    if (!result.success) {
-      Alert.alert(t('alertErrorTitle'), t('progressLogFailed'));
-      return;
-    }
-
-    setCheckInPhotoUris([]);
-    setCheckInWeight('');
-    setShowWeeklyCheckIn(false);
-  };
-
-  // ─── Derived data ──────────────────────────────────────────────
-
-  const sortedProgressLogs = useMemo(() => {
-    return [...progressLogs]
-      .sort((a, b) => dayjs(b.createdAt).valueOf() - dayjs(a.createdAt).valueOf());
-  }, [progressLogs]);
-
-  // ──────────────────────────────────────────────────────────────
-  // ⚠️  FAKE DATA — remove this block when done reviewing design
-  // ──────────────────────────────────────────────────────────────
-  const FAKE_KEY_LIFTS: KeyLift[] = [
-    { exerciseId: 'fake-1', exerciseName: 'Bench Press', latestWeight: 225, latestReps: 5, previousWeight: 215, deltaPercent: 4.7, occurrences: 8, pr: undefined, isPR: true },
-    { exerciseId: 'fake-2', exerciseName: 'Squat', latestWeight: 315, latestReps: 3, previousWeight: 305, deltaPercent: 3.3, occurrences: 7, pr: undefined, isPR: false },
-    { exerciseId: 'fake-3', exerciseName: 'Deadlift', latestWeight: 405, latestReps: 2, previousWeight: 405, deltaPercent: 0, occurrences: 6, pr: undefined, isPR: false },
-    { exerciseId: 'fake-4', exerciseName: 'Overhead Press', latestWeight: 135, latestReps: 6, previousWeight: 125, deltaPercent: 8.0, occurrences: 5, pr: undefined, isPR: true },
-    { exerciseId: 'fake-5', exerciseName: 'Barbell Row', latestWeight: 185, latestReps: 8, previousWeight: 190, deltaPercent: -2.6, occurrences: 4, pr: undefined, isPR: false },
-  ];
-
-  const FAKE_CHECK_INS = [
-    { id: 'fake-ci-1', createdAt: dayjs().subtract(1, 'day').toISOString(), weightLbs: 178, photoUris: ['https://placekitten.com/200/200'] },
-    { id: 'fake-ci-2', createdAt: dayjs().subtract(8, 'day').toISOString(), weightLbs: 180, photoUris: ['https://placekitten.com/201/201'] },
-  ];
-
-  const FAKE_HERO: CycleSnapshot = {
-    type: 'cycle',
-    cycleName: 'Hypertrophy Block',
-    currentWeek: 3,
-    totalWeeks: 6,
-    workoutsCompleted: 3,
-    workoutsPlanned: 5,
-    volumeThisWeek: 42500,
-    volumeWeekOne: 35000,
-    volumeDeltaPercent: 21.4,
-  };
-
-  const FAKE_ADHERENCE = { completed: 3, planned: 5, hasSchedule: true };
-
-  const previewMetrics = {
-    ...metrics,
-    hero: metrics.hero ?? FAKE_HERO,
-    keyLifts: metrics.keyLifts.length > 0 ? metrics.keyLifts : FAKE_KEY_LIFTS,
-    adherence: metrics.adherence.hasSchedule ? metrics.adherence : FAKE_ADHERENCE,
-    hasAnyData: true,
-  };
-
-  const previewLogs = sortedProgressLogs.length > 0 ? sortedProgressLogs : FAKE_CHECK_INS;
-  // ──────────────────────────────────────────────────────────────
-  // ⚠️  END FAKE DATA
-  // ──────────────────────────────────────────────────────────────
-
-  const latestCheckIn = previewLogs[0];
-
-  const liftsToShow = showAllLifts ? previewMetrics.keyLifts : previewMetrics.keyLifts.slice(0, 3);
+  }, [addProgressPhoto, t]);
 
   // ─── Render ────────────────────────────────────────────────────
 
   return (
-    <View style={styles.container}>
+    <View testID="progress-screen" style={styles.container}>
       <ScrollView
+        testID="progress-scroll-view"
         style={styles.scrollView}
         contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}
         showsVerticalScrollIndicator={false}
       >
-        {/* ═══ CURRENT CYCLE MODULE (includes page header) ═══ */}
+        {/* ═══ CURRENT CYCLE MODULE ═══ */}
         <CurrentCycleModule
-          hero={previewMetrics.hasAnyData ? previewMetrics.hero : null}
-          adherence={previewMetrics.adherence}
+          hero={metrics.hasAnyData ? metrics.hero : null}
+          adherence={metrics.adherence}
           useKg={useKg}
           t={t}
           topInset={insets.top}
           onSettingsPress={() => navigation.navigate('Profile')}
+          onViewCycleSummary={
+            metrics.hero?.type === 'cycle'
+              ? () => {
+                  const activePlan = useStore.getState().cyclePlans.find(p => p.active);
+                  if (activePlan) navigation.navigate('CyclePlanDetail', { planId: activePlan.id });
+                }
+              : undefined
+          }
         />
 
-        {!previewMetrics.hasAnyData ? (
-          /* ═══ Empty State ═══ */
-          <View style={styles.emptyContainer}>
+        {!metrics.hasAnyData ? (
+          <View testID="progress-empty-state" style={styles.emptyContainer}>
             <Text style={styles.emptyTitle}>{t('noDataYet')}</Text>
             <Text style={styles.emptySubtitle}>{t('completeFirstWorkout')}</Text>
           </View>
         ) : (
           <>
+            {/* ═══ LIFTS ═══ */}
+            <View testID="progress-lifts-section" style={styles.section}>
+              <View style={styles.sectionHeader}>
+                <View>
+                  <Text style={styles.sectionTitle}>Lifts</Text>
+                  <Text style={styles.sectionSubtitle}>Strength trends across time</Text>
+                </View>
+                <TouchableOpacity
+                  testID="progress-lifts-edit-key-lifts"
+                  onPress={() => navigation.navigate('EditKeyLifts')}
+                  activeOpacity={0.7}
+                  hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                >
+                  <IconEdit size={20} color={COLORS.textMeta} />
+                </TouchableOpacity>
+              </View>
 
-            {/* ═══ ALL-TIME RECORDS ═══ */}
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>{t('allTimeRecords')}</Text>
-              <Text style={styles.sectionLabel}>{t('keyLifts')}</Text>
-              {previewMetrics.keyLifts.length === 0 ? (
-                <Text style={styles.emptyHint}>{t('noRepeatExercisesYet')}</Text>
+              {metrics.keyLifts.length === 0 ? (
+                <Text style={styles.emptyHint}>
+                  Complete your first workout to see lift trends
+                </Text>
               ) : (
-                <>
-                  {liftsToShow.map((lift) => (
-                    <TouchableOpacity
-                      key={lift.exerciseId}
-                      style={styles.liftRow}
-                      onPress={() => navigation.navigate('ExerciseDetail', { exerciseId: lift.exerciseId })}
-                      activeOpacity={0.7}
-                    >
-                      <View style={styles.liftLeft}>
-                        <View style={styles.liftNameRow}>
-                          <Text style={styles.liftName} numberOfLines={1}>{lift.exerciseName}</Text>
-                          {lift.isPR && (
-                            <View style={styles.prBadge}>
-                              <IconPR size={12} color={COLORS.accentPrimary} />
-                              <Text style={styles.prBadgeText}>{t('pr')}</Text>
-                            </View>
-                          )}
-                        </View>
-                        <Text style={styles.liftDetail}>
-                          {formatWeight(lift.latestWeight, useKg)} {useKg ? 'kg' : 'lb'} × {lift.latestReps}
-                        </Text>
-                      </View>
-                      <DeltaBadge value={lift.deltaPercent} />
-                    </TouchableOpacity>
-                  ))}
-                  {previewMetrics.keyLifts.length > 3 && (
-                    <TouchableOpacity
-                      style={styles.showAllButton}
-                      onPress={() => setShowAllLifts(!showAllLifts)}
-                      activeOpacity={0.7}
-                    >
-                      <Text style={styles.showAllText}>
-                        {showAllLifts ? t('hideHistory') : t('viewAll')}
-                      </Text>
-                    </TouchableOpacity>
-                  )}
-                </>
+                metrics.keyLifts.map((lift, index) => (
+                  <KeyLiftCard
+                    key={lift.exerciseId}
+                    testID={`progress-lift-card-${index}`}
+                    lift={lift}
+                    useKg={useKg}
+                    onPress={() => navigation.navigate('LiftHistory', {
+                      exerciseId: lift.exerciseId,
+                      exerciseName: lift.exerciseName,
+                    })}
+                  />
+                ))
               )}
             </View>
 
-            {/* ═══ BODY CHECK-IN ═══ */}
-            <View style={styles.section}>
-              <Text style={styles.sectionLabel}>{t('bodyCheckIn')}</Text>
-              {latestCheckIn ? (
-                <TouchableOpacity
-                  style={styles.checkInCard}
-                  onPress={() => navigation.navigate('ProgressLogDetail', { progressLogId: latestCheckIn.id })}
-                  activeOpacity={0.7}
-                >
-                  {(latestCheckIn.photoUris?.[0] || latestCheckIn.photoUri) ? (
-                    <Image
-                      source={{ uri: latestCheckIn.photoUris?.[0] || latestCheckIn.photoUri || '' }}
-                      style={styles.checkInThumbnail}
-                    />
-                  ) : (
-                    <View style={styles.checkInPlaceholder} />
-                  )}
-                  <View style={styles.checkInInfo}>
-                    {latestCheckIn.weightLbs !== undefined && (
-                      <Text style={styles.checkInWeight}>
-                        {formatWeight(latestCheckIn.weightLbs, useKg)} {useKg ? 'kg' : 'lb'}
-                      </Text>
-                    )}
-                    <Text style={styles.checkInDate}>
-                      {dayjs(latestCheckIn.createdAt).format('MMM D')}
-                    </Text>
-                  </View>
-                </TouchableOpacity>
-              ) : null}
+            {/* ═══ BODY ═══ */}
+            <View testID="progress-body-section" style={styles.section}>
+              <Text style={styles.sectionTitle}>Body</Text>
+              <Text style={styles.sectionSubtitle}>Check-ins and physical changes</Text>
 
-              <TouchableOpacity
-                onPress={() => setShowWeeklyCheckIn(true)}
-                activeOpacity={0.7}
-                style={styles.addCheckInButton}
-              >
-                <DiagonalLinePattern width="100%" height={48} borderRadius={BORDER_RADIUS.md} />
-                <IconAdd size={18} color={COLORS.text} />
-                <Text style={styles.addCheckInText}>{t('addCheckIn')}</Text>
-              </TouchableOpacity>
+              <View style={styles.bodyCards}>
+                <WeeklyWeightCard
+                  latestEntry={latestWeightEntry}
+                  previousWeekEntry={previousWeekEntry}
+                  weightTrend={weightTrend}
+                  useKg={useKg}
+                  onLogWeight={() => setShowWeightInput(true)}
+                />
 
-              {previewLogs.length > 1 && (
-                <TouchableOpacity
-                  style={styles.seeAllButton}
-                  onPress={() => navigation.navigate('ProgressGallery')}
-                  activeOpacity={0.7}
-                >
-                  <Text style={styles.seeAllText}>{t('seeAllProgress')}</Text>
-                </TouchableOpacity>
-              )}
+                <PhotoCheckInCard
+                  latestPhoto={latestFrontPhoto}
+                  recentPhotos={sortedPhotos}
+                  onAddPhoto={() => setShowPhotoCapture(true)}
+                  onPhotoPress={(photo) => navigation.navigate('PhotoViewer', { photoId: photo.id })}
+                />
+              </View>
             </View>
           </>
         )}
       </ScrollView>
 
-      {/* Progress Log Bottom Drawer */}
+      {/* ═══ WEIGHT LOG DRAWER ═══ */}
       <BottomDrawer
-        visible={showWeeklyCheckIn}
-        onClose={() => {
-          setShowWeeklyCheckIn(false);
-          setCheckInPhotoUris([]);
-          setCheckInWeight('');
-        }}
+        visible={showWeightInput}
+        onClose={() => { setShowWeightInput(false); setWeightValue(''); }}
       >
         <View style={styles.drawerContent}>
-          <Text style={styles.drawerTitle}>{t('weeklyCheckIn')}</Text>
-          <Text style={styles.drawerSubtitle}>{t('weeklyCheckInSubtitle')}</Text>
-
-          {/* Photos */}
-          <View style={styles.drawerSection}>
-            <Text style={styles.drawerSectionLabel}>{t('photos')} ({t('optional')})</Text>
-            <View style={styles.photoGrid}>
-              {checkInPhotoUris.map((uri, index) => (
-                <View key={index} style={styles.photoItem}>
-                  <Image source={{ uri }} style={styles.photoImage} />
-                  <TouchableOpacity
-                    style={styles.photoRemoveBtn}
-                    onPress={() => handleRemovePhoto(index)}
-                  >
-                    <Text style={styles.photoRemoveText}>×</Text>
-                  </TouchableOpacity>
-                </View>
-              ))}
-              {checkInPhotoUris.length < 5 && (
-                <TouchableOpacity
-                  style={styles.photoAddBtn}
-                  onPress={() => handlePickCheckInPhoto('library')}
-                >
-                  <IconAdd size={24} color={COLORS.textMeta} />
-                </TouchableOpacity>
-              )}
-            </View>
-          </View>
-
-          {/* Weight */}
+          <Text style={styles.drawerTitle}>Log weight</Text>
           <View style={styles.drawerSection}>
             <Text style={styles.drawerSectionLabel}>
-              {t('bodyWeight')} ({settings.useKg ? 'kg' : 'lb'}) ({t('optional')})
+              {t('bodyWeight')} ({settings.useKg ? 'kg' : 'lb'})
             </Text>
             <TextInput
               style={styles.weightInput}
               placeholder={settings.useKg ? '70' : '155'}
               placeholderTextColor={COLORS.textMeta}
               keyboardType="decimal-pad"
-              value={checkInWeight}
-              onChangeText={setCheckInWeight}
+              value={weightValue}
+              onChangeText={setWeightValue}
+              autoFocus
             />
           </View>
-
-          {/* Save */}
-          <TouchableOpacity
-            style={[styles.saveButton, isSavingCheckIn && styles.saveButtonDisabled]}
-            onPress={handleSaveWeeklyCheckIn}
-            disabled={isSavingCheckIn}
-          >
-            <Text style={styles.saveButtonText}>
-              {isSavingCheckIn ? t('saving') : t('save')}
-            </Text>
+          <TouchableOpacity style={styles.saveButton} onPress={handleSaveWeight}>
+            <Text style={styles.saveButtonText}>{t('save')}</Text>
           </TouchableOpacity>
+        </View>
+      </BottomDrawer>
+
+      {/* ═══ PHOTO CAPTURE DRAWER ═══ */}
+      <BottomDrawer
+        visible={showPhotoCapture}
+        onClose={() => setShowPhotoCapture(false)}
+      >
+        <View style={styles.drawerContent}>
+          <Text style={styles.drawerTitle}>Add check-in photo</Text>
+          <Text style={styles.drawerSubtitle}>Choose a label and source</Text>
+
+          {(['Front', 'Side', 'Back'] as const).map((label) => (
+            <View key={label} style={styles.photoLabelRow}>
+              <Text style={styles.photoLabelText}>{label}</Text>
+              <View style={styles.photoActions}>
+                <TouchableOpacity
+                  style={styles.photoActionBtn}
+                  onPress={() => handleTakePhoto(label)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.photoActionText}>{t('takePhoto')}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.photoActionBtn}
+                  onPress={() => handlePickPhoto(label)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.photoActionText}>{t('chooseFromLibrary')}</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          ))}
         </View>
       </BottomDrawer>
     </View>
   );
 }
 
-// ─── Sub-components ────────────────────────────────────────────────
-
 // ─── Expandable Current Cycle Module ─────────────────────────────
 
 const MODULE_HEADER_HEIGHT = 48;
 const MODULE_COLLAPSED_EXTRA = 0;
-const MODULE_EXPANDED_EXTRA = 100;
+const SCREEN_HEIGHT = Dimensions.get('window').height;
+const MODULE_EXPANDED_EXTRA = Math.min(180, SCREEN_HEIGHT * 0.4 - MODULE_HEADER_HEIGHT);
 const MODULE_SNAP_THRESHOLD = 0.35;
 const MODULE_SPRING = { damping: 22, stiffness: 220, mass: 0.8 };
 
@@ -403,6 +341,7 @@ function CurrentCycleModule({
   t,
   topInset,
   onSettingsPress,
+  onViewCycleSummary,
 }: {
   hero: (CycleSnapshot | WeeklySnapshot) | null;
   adherence: { completed: number; planned: number; hasSchedule: boolean };
@@ -410,6 +349,7 @@ function CurrentCycleModule({
   t: any;
   topInset: number;
   onSettingsPress: () => void;
+  onViewCycleSummary?: () => void;
 }) {
   const expansion = useSharedValue(0);
   const isExpanded = useSharedValue(false);
@@ -420,7 +360,7 @@ function CurrentCycleModule({
   const weekly = !isCycle && hero ? (hero as WeeklySnapshot) : null;
 
   const subtitle = cycle
-    ? t('weekOf').replace('{current}', String(cycle.currentWeek)).replace('{total}', String(cycle.totalWeeks))
+    ? cycle.cycleName
     : weekly
       ? weekly.weekLabel
       : null;
@@ -472,9 +412,8 @@ function CurrentCycleModule({
   const consistencyPct = adherence.planned > 0 ? Math.min(100, (adherence.completed / adherence.planned) * 100) : 0;
 
   return (
-    <View style={styles.moduleWrapper}>
+    <View testID="progress-drawer" style={styles.moduleWrapper}>
       <View style={[styles.moduleCard, { paddingTop: topInset }]}>
-        {/* Header row — matches TodayScreen exactly */}
         <View style={styles.topBar}>
           <Text style={styles.headerTitle}>{t('currentCycle')}</Text>
           <TouchableOpacity style={styles.settingsButton} onPress={onSettingsPress} activeOpacity={1}>
@@ -485,40 +424,96 @@ function CurrentCycleModule({
           <Text style={styles.moduleWeekLabel}>{subtitle}</Text>
         )}
 
-        {/* Expandable body */}
         {hasHero && (
           <Animated.View style={[styles.moduleBody, bodyStyle]}>
-            {/* Expanded details */}
-            <Animated.View style={[styles.moduleExpandedContent, expandedContentStyle]}>
-              <View style={styles.heroStatsRow}>
-                <View style={styles.heroStat}>
-                  <Text style={styles.heroStatValue}>{completedCount}</Text>
-                  <Text style={styles.heroStatLabel}>{t('completed')}</Text>
-                  {hero.workoutsPlanned > 0 && (
-                    <Text style={styles.heroStatMeta}>of {hero.workoutsPlanned}</Text>
-                  )}
-                </View>
-                {consistencyLabel && (
-                  <>
-                    <View style={styles.heroStatDivider} />
-                    <View style={styles.heroStat}>
-                      <Text style={styles.heroStatValue}>{consistencyLabel}</Text>
-                      <Text style={styles.heroStatLabel}>{t('consistency')}</Text>
-                      <View style={styles.heroConsistencyBar}>
-                        <View style={[styles.heroConsistencyFill, { width: `${consistencyPct}%` }]} />
-                      </View>
+            <Animated.View testID="progress-drawer-expanded" style={[styles.moduleExpandedContent, expandedContentStyle]}>
+              {cycle ? (
+                <>
+                  {/* Completion */}
+                  <View style={styles.drawerRow}>
+                    <Text style={styles.drawerRowLabel}>{t('completed')}</Text>
+                    <View style={styles.drawerRowRight}>
+                      <Text style={styles.drawerRowValue}>{cycle.completionPercent}%</Text>
                     </View>
-                  </>
-                )}
-              </View>
+                  </View>
+                  <View style={styles.progressBarTrack}>
+                    <View style={[styles.progressBarFill, { width: `${cycle.completionPercent}%` }]} />
+                  </View>
 
-              {weekly?.topLiftName && (
-                <View style={styles.heroTopLift}>
-                  <Text style={styles.heroTopLiftLabel}>Top lift</Text>
-                  <Text style={styles.heroTopLiftValue}>
-                    {weekly.topLiftName} · {formatWeight(weekly.topLiftWeight, useKg)} {useKg ? 'kg' : 'lb'}
-                  </Text>
-                </View>
+                  {/* Volume */}
+                  <View style={styles.drawerRow}>
+                    <Text style={styles.drawerRowLabel}>{t('volume')}</Text>
+                    <Text style={styles.drawerRowValue}>
+                      {cycle.totalVolume > 0 ? `${Math.round(cycle.totalVolume / 1000)}k` : '—'}
+                      {cycle.volumeVsPreviousCyclePercent !== null
+                        ? ` (${cycle.volumeVsPreviousCyclePercent > 0 ? '+' : ''}${cycle.volumeVsPreviousCyclePercent}%)`
+                        : ''}
+                    </Text>
+                  </View>
+
+                  {/* Primary lift */}
+                  {cycle.primaryLiftName && (
+                    <View style={styles.drawerRow}>
+                      <Text style={styles.drawerRowLabel}>{cycle.primaryLiftName}</Text>
+                      <Text style={styles.drawerRowValue}>
+                        {cycle.primaryLiftPrevious
+                          ? `${cycle.primaryLiftPrevious} → ${cycle.primaryLiftCurrent}`
+                          : cycle.primaryLiftCurrent}
+                      </Text>
+                    </View>
+                  )}
+
+                  {/* Bodyweight */}
+                  {cycle.bodyweightStart !== null && cycle.bodyweightCurrent !== null && (
+                    <View style={styles.drawerRow}>
+                      <Text style={styles.drawerRowLabel}>{t('bodyWeight')}</Text>
+                      <Text style={styles.drawerRowValue}>
+                        {formatWeight(cycle.bodyweightStart, useKg)} → {formatWeight(cycle.bodyweightCurrent, useKg)} {useKg ? 'kg' : 'lb'}
+                      </Text>
+                    </View>
+                  )}
+
+                  {/* CTA */}
+                  {onViewCycleSummary && (
+                    <TouchableOpacity testID="progress-drawer-view-cycle-summary" style={styles.drawerCta} onPress={onViewCycleSummary} activeOpacity={0.7}>
+                      <Text style={styles.drawerCtaText}>View Cycle Summary</Text>
+                    </TouchableOpacity>
+                  )}
+                </>
+              ) : (
+                <>
+                  {/* Weekly mode: keep existing layout */}
+                  <View style={styles.heroStatsRow}>
+                    <View style={styles.heroStat}>
+                      <Text style={styles.heroStatValue}>{completedCount}</Text>
+                      <Text style={styles.heroStatLabel}>{t('completed')}</Text>
+                      {hero!.workoutsPlanned > 0 && (
+                        <Text style={styles.heroStatMeta}>of {hero!.workoutsPlanned}</Text>
+                      )}
+                    </View>
+                    {consistencyLabel && (
+                      <>
+                        <View style={styles.heroStatDivider} />
+                        <View style={styles.heroStat}>
+                          <Text style={styles.heroStatValue}>{consistencyLabel}</Text>
+                          <Text style={styles.heroStatLabel}>{t('consistency')}</Text>
+                          <View style={styles.heroConsistencyBar}>
+                            <View style={[styles.heroConsistencyFill, { width: `${consistencyPct}%` }]} />
+                          </View>
+                        </View>
+                      </>
+                    )}
+                  </View>
+
+                  {weekly?.topLiftName && (
+                    <View style={styles.heroTopLift}>
+                      <Text style={styles.heroTopLiftLabel}>Top lift</Text>
+                      <Text style={styles.heroTopLiftValue}>
+                        {weekly.topLiftName} · {formatWeight(weekly.topLiftWeight, useKg)} {useKg ? 'kg' : 'lb'}
+                      </Text>
+                    </View>
+                  )}
+                </>
               )}
             </Animated.View>
           </Animated.View>
@@ -527,7 +522,7 @@ function CurrentCycleModule({
         {hasHero && (
           <GestureDetector gesture={panGesture}>
             <Animated.View>
-              <DragHandle />
+              <DragHandle testID="progress-drawer-handle" />
             </Animated.View>
           </GestureDetector>
         )}
@@ -569,18 +564,27 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.xxl,
     marginBottom: 32,
   },
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: SPACING.lg,
+  },
   sectionTitle: {
     ...TYPOGRAPHY.h2,
     color: '#FFFFFF',
-    marginTop: 40,
-    marginBottom: SPACING.lg,
+    marginTop: 32,
   },
-  sectionLabel: {
+  sectionSubtitle: {
     ...TYPOGRAPHY.meta,
     color: COLORS.textMeta,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    marginBottom: SPACING.md,
+    marginTop: 4,
+  },
+
+  // Body section
+  bodyCards: {
+    marginTop: SPACING.lg,
+    gap: SPACING.md,
   },
 
   // Empty state
@@ -603,9 +607,10 @@ const styles = StyleSheet.create({
   emptyHint: {
     ...TYPOGRAPHY.meta,
     color: COLORS.textMeta,
+    marginTop: SPACING.md,
   },
 
-  // Expandable module (full-bleed, matches calendar card)
+  // Module
   moduleWrapper: {
     marginBottom: SPACING.md,
   },
@@ -620,7 +625,6 @@ const styles = StyleSheet.create({
     ...TYPOGRAPHY.meta,
     color: COLORS.textMeta,
     paddingHorizontal: SPACING.xxl,
-    marginTop: 8,
   },
   moduleBody: {
     paddingHorizontal: SPACING.xxl,
@@ -677,68 +681,6 @@ const styles = StyleSheet.create({
     color: COLORS.text,
   },
 
-  // Delta badge
-  deltaText: {
-    ...TYPOGRAPHY.meta,
-    fontWeight: '600',
-  },
-  deltaNeutral: {
-    ...TYPOGRAPHY.meta,
-    color: COLORS.textMetaSoft,
-  },
-
-  // Key Lifts
-  liftRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: SPACING.md,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.borderDimmed,
-  },
-  liftLeft: {
-    flex: 1,
-    marginRight: SPACING.md,
-  },
-  liftNameRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING.sm,
-    marginBottom: 2,
-  },
-  liftName: {
-    ...TYPOGRAPHY.body,
-    color: COLORS.text,
-    flexShrink: 1,
-  },
-  liftDetail: {
-    ...TYPOGRAPHY.meta,
-    color: COLORS.textMeta,
-  },
-  prBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-    backgroundColor: COLORS.accentPrimaryDimmed,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 6,
-  },
-  prBadgeText: {
-    ...TYPOGRAPHY.note,
-    color: COLORS.accentPrimary,
-    fontWeight: '700',
-  },
-  showAllButton: {
-    paddingVertical: SPACING.md,
-    alignItems: 'center',
-  },
-  showAllText: {
-    ...TYPOGRAPHY.meta,
-    color: COLORS.accentPrimary,
-    fontWeight: '600',
-  },
-
   // Hero consistency bar
   heroConsistencyBar: {
     width: '100%',
@@ -754,64 +696,7 @@ const styles = StyleSheet.create({
     borderRadius: 2,
   },
 
-  // Body check-in
-  checkInCard: {
-    flexDirection: 'row',
-    backgroundColor: COLORS.cardBackground,
-    borderRadius: BORDER_RADIUS.md,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: COLORS.borderDimmed,
-    marginBottom: SPACING.md,
-  },
-  checkInThumbnail: {
-    width: 72,
-    height: 72,
-  },
-  checkInPlaceholder: {
-    width: 72,
-    height: 72,
-    backgroundColor: COLORS.activeCard,
-  },
-  checkInInfo: {
-    flex: 1,
-    padding: SPACING.md,
-    justifyContent: 'center',
-  },
-  checkInWeight: {
-    ...TYPOGRAPHY.bodyBold,
-    color: COLORS.text,
-    marginBottom: 2,
-  },
-  checkInDate: {
-    ...TYPOGRAPHY.meta,
-    color: COLORS.textMeta,
-  },
-  addCheckInButton: {
-    width: '100%',
-    height: 48,
-    borderRadius: BORDER_RADIUS.md,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: SPACING.sm,
-    overflow: 'hidden',
-  },
-  addCheckInText: {
-    ...TYPOGRAPHY.metaBold,
-    color: COLORS.text,
-  },
-  seeAllButton: {
-    paddingVertical: SPACING.md,
-    alignItems: 'center',
-  },
-  seeAllText: {
-    ...TYPOGRAPHY.meta,
-    color: COLORS.accentPrimary,
-    fontWeight: '600',
-  },
-
-  // Drawer (check-in form)
+  // Drawer
   drawerContent: {
     padding: SPACING.xl,
   },
@@ -833,49 +718,6 @@ const styles = StyleSheet.create({
     color: COLORS.text,
     marginBottom: SPACING.md,
   },
-  photoGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: SPACING.md,
-  },
-  photoItem: {
-    width: 80,
-    height: 80,
-    borderRadius: BORDER_RADIUS.sm,
-    overflow: 'hidden',
-    position: 'relative',
-  },
-  photoImage: {
-    width: '100%',
-    height: '100%',
-  },
-  photoRemoveBtn: {
-    position: 'absolute',
-    top: 4,
-    right: 4,
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  photoRemoveText: {
-    color: '#FFFFFF',
-    fontSize: 18,
-    lineHeight: 20,
-  },
-  photoAddBtn: {
-    width: 80,
-    height: 80,
-    borderRadius: BORDER_RADIUS.sm,
-    backgroundColor: COLORS.activeCard,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: COLORS.border,
-    borderStyle: 'dashed',
-  },
   weightInput: {
     ...TYPOGRAPHY.body,
     color: COLORS.text,
@@ -891,11 +733,78 @@ const styles = StyleSheet.create({
     padding: SPACING.md,
     alignItems: 'center',
   },
-  saveButtonDisabled: {
-    opacity: 0.5,
-  },
   saveButtonText: {
     ...TYPOGRAPHY.bodyBold,
     color: COLORS.backgroundCanvas,
+  },
+
+  // Photo capture drawer
+  photoLabelRow: {
+    paddingVertical: SPACING.md,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.borderDimmed,
+  },
+  photoLabelText: {
+    ...TYPOGRAPHY.bodyBold,
+    color: COLORS.text,
+    marginBottom: SPACING.sm,
+  },
+  photoActions: {
+    flexDirection: 'row',
+    gap: SPACING.md,
+  },
+  photoActionBtn: {
+    backgroundColor: COLORS.activeCard,
+    borderRadius: BORDER_RADIUS.sm,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
+  },
+  photoActionText: {
+    ...TYPOGRAPHY.meta,
+    color: COLORS.accentPrimary,
+    fontWeight: '600',
+  },
+
+  // Drawer intelligence rows
+  drawerRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 6,
+  },
+  drawerRowLabel: {
+    ...TYPOGRAPHY.meta,
+    color: COLORS.textMeta,
+  },
+  drawerRowRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.sm,
+  },
+  drawerRowValue: {
+    ...TYPOGRAPHY.metaBold,
+    color: COLORS.text,
+  },
+  progressBarTrack: {
+    height: 4,
+    backgroundColor: COLORS.activeCard,
+    borderRadius: 2,
+    overflow: 'hidden',
+    marginBottom: 8,
+  },
+  progressBarFill: {
+    height: 4,
+    backgroundColor: COLORS.accentPrimary,
+    borderRadius: 2,
+  },
+  drawerCta: {
+    marginTop: SPACING.sm,
+    alignItems: 'center',
+    paddingVertical: SPACING.sm,
+  },
+  drawerCtaText: {
+    ...TYPOGRAPHY.meta,
+    color: COLORS.accentPrimary,
+    fontWeight: '600',
   },
 });
