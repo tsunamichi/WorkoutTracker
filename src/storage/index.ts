@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { Cycle, Exercise, WorkoutSession, BodyWeightEntry, ProgressPhoto, AppSettings, WorkoutAssignment, TrainerConversation, ExercisePR, WorkoutProgress, HIITTimer, HIITTimerSession } from '../types';
-import type { WorkoutTemplate, CyclePlan, ScheduledWorkout } from '../types/training';
+import type { WorkoutTemplate, CyclePlan, ScheduledWorkout, WarmUpSetTemplate, CoreSetTemplate, BonusLog } from '../types/training';
 const STORAGE_KEYS = {
   CYCLES: '@workout_tracker_cycles',
   EXERCISES: '@workout_tracker_exercises',
@@ -20,6 +20,10 @@ const STORAGE_KEYS = {
   WORKOUT_TEMPLATES: '@workout_tracker_workout_templates',
   CYCLE_PLANS: '@workout_tracker_cycle_plans',
   SCHEDULED_WORKOUTS: '@workout_tracker_scheduled_workouts',
+  // Bonus feature
+  WARMUP_PRESETS: '@workout_tracker_warmup_presets',
+  CORE_PRESETS: '@workout_tracker_core_presets',
+  BONUS_LOGS: '@workout_tracker_bonus_logs',
 };
 
 // Cycles
@@ -379,6 +383,63 @@ export async function saveScheduledWorkouts(workouts: ScheduledWorkout[]): Promi
     await AsyncStorage.setItem(STORAGE_KEYS.SCHEDULED_WORKOUTS, JSON.stringify(workouts));
   } catch (error) {
     console.error('Error saving scheduled workouts:', error);
+  }
+}
+
+// Warmup Presets
+export async function loadWarmupPresets(): Promise<WarmUpSetTemplate[]> {
+  try {
+    const data = await AsyncStorage.getItem(STORAGE_KEYS.WARMUP_PRESETS);
+    return data ? JSON.parse(data) : [];
+  } catch (error) {
+    console.error('Error loading warmup presets:', error);
+    return [];
+  }
+}
+
+export async function saveWarmupPresets(presets: WarmUpSetTemplate[]): Promise<void> {
+  try {
+    await AsyncStorage.setItem(STORAGE_KEYS.WARMUP_PRESETS, JSON.stringify(presets));
+  } catch (error) {
+    console.error('Error saving warmup presets:', error);
+  }
+}
+
+// Core Presets
+export async function loadCorePresets(): Promise<CoreSetTemplate[]> {
+  try {
+    const data = await AsyncStorage.getItem(STORAGE_KEYS.CORE_PRESETS);
+    return data ? JSON.parse(data) : [];
+  } catch (error) {
+    console.error('Error loading core presets:', error);
+    return [];
+  }
+}
+
+export async function saveCorePresets(presets: CoreSetTemplate[]): Promise<void> {
+  try {
+    await AsyncStorage.setItem(STORAGE_KEYS.CORE_PRESETS, JSON.stringify(presets));
+  } catch (error) {
+    console.error('Error saving core presets:', error);
+  }
+}
+
+// Bonus Logs
+export async function loadBonusLogs(): Promise<BonusLog[]> {
+  try {
+    const data = await AsyncStorage.getItem(STORAGE_KEYS.BONUS_LOGS);
+    return data ? JSON.parse(data) : [];
+  } catch (error) {
+    console.error('Error loading bonus logs:', error);
+    return [];
+  }
+}
+
+export async function saveBonusLogs(logs: BonusLog[]): Promise<void> {
+  try {
+    await AsyncStorage.setItem(STORAGE_KEYS.BONUS_LOGS, JSON.stringify(logs));
+  } catch (error) {
+    console.error('Error saving bonus logs:', error);
   }
 }
 

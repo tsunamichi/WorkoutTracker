@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import dayjs from 'dayjs';
 import isoWeek from 'dayjs/plugin/isoWeek';
 import type { Cycle, Exercise, WorkoutSession, BodyWeightEntry, ProgressPhoto, AppSettings, WorkoutAssignment, TrainerConversation, ExercisePR, WorkoutProgress, ExerciseProgress, HIITTimer, HIITTimerSession } from '../types';
-import type { WorkoutTemplate, CyclePlan, ScheduledWorkout, ConflictResolution, ConflictItem, ConflictResolutionMap, PlanApplySummary, CyclePlanStatus } from '../types/training';
+import type { WorkoutTemplate, CyclePlan, ScheduledWorkout, ConflictResolution, ConflictItem, ConflictResolutionMap, PlanApplySummary, CyclePlanStatus, WarmUpSetTemplate, CoreSetTemplate, BonusLog } from '../types/training';
 import * as storage from '../storage';
 import { SEED_EXERCISES } from '../constants';
 import { kgToLbs } from '../utils/weight';
@@ -91,6 +91,19 @@ interface WorkoutStore {
   hiitTimerSessions: HIITTimerSession[];
   addHIITTimerSession: (session: HIITTimerSession) => Promise<void>;
   getHIITTimerSessionsForDate: (date: string) => HIITTimerSession[];
+  
+  // Bonus feature (warmup/core presets + bonus logs)
+  warmupPresets: WarmUpSetTemplate[];
+  corePresets: CoreSetTemplate[];
+  bonusLogs: BonusLog[];
+  addWarmupPreset: (preset: WarmUpSetTemplate) => Promise<void>;
+  deleteWarmupPreset: (presetId: string) => Promise<void>;
+  addCorePreset: (preset: CoreSetTemplate) => Promise<void>;
+  deleteCorePreset: (presetId: string) => Promise<void>;
+  addBonusLog: (log: BonusLog) => Promise<void>;
+  updateBonusLog: (logId: string, updates: Partial<BonusLog>) => Promise<void>;
+  deleteBonusLog: (logId: string) => Promise<void>;
+  getBonusLogsForDate: (date: string) => BonusLog[];
   
   // NEW: Training Architecture (Templates, Plans, Scheduled Workouts)
   workoutTemplates: WorkoutTemplate[];
@@ -236,6 +249,9 @@ export const useStore = create<WorkoutStore>((set, get) => ({
   hiitTimers: [],
   hiitTimerSessions: [],
   activeHIITTimerId: null,
+  warmupPresets: [],
+  corePresets: [],
+  bonusLogs: [],
   settings: DEFAULT_SETTINGS,
   isLoading: true,
   workoutProgress: {},
@@ -275,6 +291,9 @@ export const useStore = create<WorkoutStore>((set, get) => ({
         workoutTemplates,
         cyclePlans,
         scheduledWorkouts,
+        warmupPresets,
+        corePresets,
+        bonusLogs,
       ] = await Promise.all([
         storage.loadCycles(),
         storage.loadExercises(),
@@ -293,6 +312,9 @@ export const useStore = create<WorkoutStore>((set, get) => ({
         storage.loadWorkoutTemplates(),
         storage.loadCyclePlans(),
         storage.loadScheduledWorkouts(),
+        storage.loadWarmupPresets(),
+        storage.loadCorePresets(),
+        storage.loadBonusLogs(),
       ]);
       
       // Normalize body weight entries to lbs
@@ -1192,6 +1214,9 @@ export const useStore = create<WorkoutStore>((set, get) => ({
         detailedWorkoutProgress,
         hiitTimers,
         hiitTimerSessions,
+        warmupPresets,
+        corePresets,
+        bonusLogs,
         workoutTemplates: finalWorkoutTemplates,
         cyclePlans: finalCyclePlans,
         scheduledWorkouts: finalScheduledWorkouts,
@@ -2443,15 +2468,13 @@ export const useStore = create<WorkoutStore>((set, get) => ({
 
   getCyclePlanEffectiveEndDate: (plan) => {
     if (plan.endedAt) return plan.endedAt;
-    const start = plan.pausedUntil ? dayjs(plan.pausedUntil) : dayjs(plan.startDate);
-    const today = dayjs().format('YYYY-MM-DD');
-    const originalEnd = dayjs(plan.startDate).add(plan.weeks, 'week');
-    if (plan.pausedUntil && dayjs(plan.pausedUntil).isAfter(dayjs(plan.startDate))) {
-      const weeksBeforePause = dayjs(plan.pausedUntil).diff(dayjs(plan.startDate), 'week', true);
-      const remainingWeeks = Math.max(0, Math.ceil(plan.weeks - weeksBeforePause));
-      return dayjs(plan.pausedUntil).add(remainingWeeks, 'week').format('YYYY-MM-DD');
-    }
-    return originalEnd.format('YYYY-MM-DD');
+    // Use the actual last scheduled workout as the authoritative end date
+    const lastWorkout = get().scheduledWorkouts
+      .filter(sw => sw.source === 'cycle' && (sw.programId === plan.id || sw.cyclePlanId === plan.id))
+      .reduce<string | null>((latest, sw) => (!latest || sw.date > latest) ? sw.date : latest, null);
+    if (lastWorkout) return lastWorkout;
+    // Fallback to week arithmetic if no workouts found
+    return dayjs(plan.startDate).add(plan.weeks, 'week').subtract(1, 'day').format('YYYY-MM-DD');
   },
 
   getCyclePlanStatus: (planId) => {
@@ -2529,6 +2552,7 @@ export const useStore = create<WorkoutStore>((set, get) => ({
       const isThisPlan = sw.source === 'cycle' && (sw.programId === planId || sw.cyclePlanId === planId);
       if (!isThisPlan) return true;
       if (sw.date < today) return true;
+      if (sw.date === today && sw.status !== 'planned') return true;
       return false;
     });
     set({ cyclePlans: plans, scheduledWorkouts });
@@ -3511,6 +3535,57 @@ export const useStore = create<WorkoutStore>((set, get) => ({
     set({ scheduledWorkouts });
     await storage.saveScheduledWorkouts(scheduledWorkouts);
     console.log('✅ Accessory completion reset');
+  },
+  
+  // Bonus feature: Warmup Presets
+  addWarmupPreset: async (preset) => {
+    const presets = [...get().warmupPresets, preset];
+    set({ warmupPresets: presets });
+    await storage.saveWarmupPresets(presets);
+  },
+  
+  deleteWarmupPreset: async (presetId) => {
+    const presets = get().warmupPresets.filter(p => p.id !== presetId);
+    set({ warmupPresets: presets });
+    await storage.saveWarmupPresets(presets);
+  },
+  
+  // Bonus feature: Core Presets
+  addCorePreset: async (preset) => {
+    const presets = [...get().corePresets, preset];
+    set({ corePresets: presets });
+    await storage.saveCorePresets(presets);
+  },
+  
+  deleteCorePreset: async (presetId) => {
+    const presets = get().corePresets.filter(p => p.id !== presetId);
+    set({ corePresets: presets });
+    await storage.saveCorePresets(presets);
+  },
+  
+  // Bonus feature: Bonus Logs
+  addBonusLog: async (log) => {
+    const logs = [...get().bonusLogs, log];
+    set({ bonusLogs: logs });
+    await storage.saveBonusLogs(logs);
+  },
+  
+  updateBonusLog: async (logId, updates) => {
+    const logs = get().bonusLogs.map(l =>
+      l.id === logId ? { ...l, ...updates } : l
+    );
+    set({ bonusLogs: logs });
+    await storage.saveBonusLogs(logs);
+  },
+  
+  deleteBonusLog: async (logId) => {
+    const logs = get().bonusLogs.filter(l => l.id !== logId);
+    set({ bonusLogs: logs });
+    await storage.saveBonusLogs(logs);
+  },
+  
+  getBonusLogsForDate: (date) => {
+    return get().bonusLogs.filter(l => l.date === date);
   },
 }));
 

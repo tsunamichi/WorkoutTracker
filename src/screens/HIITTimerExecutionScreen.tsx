@@ -20,6 +20,7 @@ import { COLORS, SPACING, TYPOGRAPHY, GRADIENTS, BUTTONS, BORDER_RADIUS } from '
 import { IconArrowLeft, IconMenu, IconEdit, IconTrash } from '../components/icons';
 import { useTranslation } from '../i18n/useTranslation';
 import { ActionSheet } from '../components/common/ActionSheet';
+import { ShapeConfetti } from '../components/common/ShapeConfetti';
 import { TimerControls } from '../components/timer/TimerControls';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/AppNavigator';
@@ -50,20 +51,11 @@ const MIN_SIZE = 180;
 const SCREEN_WIDTH = Dimensions.get('window').width;
 const CONTAINER_WIDTH = SCREEN_WIDTH - (SPACING.xxl * 2);
 
-interface Particle {
-  id: number;
-  x: Animated.Value;
-  y: Animated.Value;
-  opacity: Animated.Value;
-  rotation: Animated.Value;
-  color: string;
-  size: number;
-}
 
 export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
   const insets = useSafeAreaInsets();
-  const { timerId } = route.params;
-  const { hiitTimers, deleteHIITTimer, addHIITTimerSession, setActiveHIITTimer } = useStore();
+  const { timerId, bonusLogId } = route.params as { timerId: string; bonusLogId?: string };
+  const { hiitTimers, deleteHIITTimer, addHIITTimerSession, setActiveHIITTimer, updateBonusLog } = useStore();
   const { t } = useTranslation();
   
   // Get timer reactively - will update when hiitTimers changes
@@ -90,7 +82,7 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
   const [currentRound, setCurrentRound] = useState(1);
   const [secondsRemaining, setSecondsRemaining] = useState(5);
   const [showGo, setShowGo] = useState(false);
-  const [particles, setParticles] = useState<Particle[]>([]);
+  const [showConfetti, setShowConfetti] = useState(false);
   const [menuVisible, setMenuVisible] = useState(false);
   
   // Track if timer has been started (to determine if we need to show reset confirmation)
@@ -451,6 +443,11 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
     }
   }, [secondsRemaining, currentPhase, restColorAnim]);
 
+  const triggerConfetti = useCallback(() => {
+    if (isTransitioningRef.current) return;
+    setShowConfetti(true);
+  }, []);
+
   // Animate phase transitions (color and reset to 100%)
   useEffect(() => {
     const prevPhase = prevPhaseRef.current;
@@ -772,6 +769,17 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
         addHIITTimerSession(session);
         console.log('💾 Saved HIIT timer session:', session);
         
+        if (bonusLogId) {
+          updateBonusLog(bonusLogId, {
+            status: 'completed',
+            completedAt: new Date().toISOString(),
+            timerPayload: {
+              timerTemplateId: timer.id,
+              totalDuration,
+            },
+          });
+        }
+        
         setCurrentPhase('complete');
         setIsRunning(false);
         isTransitioningRef.current = false;
@@ -835,6 +843,8 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
     textShrinkAnim,
     runCountdownTextAnimation,
     addHIITTimerSession,
+    updateBonusLog,
+    bonusLogId,
     timerId,
   ]);
 
@@ -902,75 +912,6 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
     };
   }, [isRunning]);
 
-  // Trigger confetti
-  const triggerConfetti = useCallback(() => {
-    // Don't trigger confetti during phase transitions
-    if (isTransitioningRef.current) {
-      console.log('⚠️ Skipping confetti during transition');
-      return;
-    }
-    
-    try {
-      const particleCount = 50; // More particles!
-      const colors = [COLORS.successBright, '#5E9EFF', COLORS.signalWarning, COLORS.signalNegative];
-      
-      const newParticles: Particle[] = [];
-      
-      for (let i = 0; i < particleCount; i++) {
-        const angle = (Math.PI * 2 * i) / particleCount + (Math.random() - 0.5) * 0.5;
-        const distance = 120 + Math.random() * 150;
-        const duration = 1200 + Math.random() * 400;
-        
-        const particle: Particle = {
-          id: Date.now() + i,
-          x: new Animated.Value(0),
-          y: new Animated.Value(0),
-          opacity: new Animated.Value(1),
-          rotation: new Animated.Value(0),
-          color: colors[Math.floor(Math.random() * colors.length)],
-          size: 6 + Math.random() * 8, // Varied sizes 6-14px
-        };
-        
-        // Animate particle with varied trajectories
-        Animated.parallel([
-          Animated.timing(particle.x, {
-            toValue: Math.cos(angle) * distance,
-            duration,
-            easing: Easing.out(Easing.cubic),
-            useNativeDriver: true,
-          }),
-          Animated.timing(particle.y, {
-            toValue: Math.sin(angle) * distance + 80, // More gravity effect
-            duration,
-            easing: Easing.out(Easing.quad),
-            useNativeDriver: true,
-          }),
-          Animated.timing(particle.opacity, {
-            toValue: 0,
-            duration: duration * 0.8,
-            delay: duration * 0.2,
-            easing: Easing.ease,
-            useNativeDriver: true,
-          }),
-          Animated.timing(particle.rotation, {
-            toValue: (Math.random() - 0.5) * 6,
-            duration,
-            easing: Easing.linear,
-            useNativeDriver: true,
-          }),
-        ]).start();
-        
-        newParticles.push(particle);
-      }
-      
-      setParticles(newParticles);
-      
-      // Clear particles after animation
-      setTimeout(() => setParticles([]), 1600);
-    } catch (error) {
-      console.log('⚠️ Error triggering confetti:', error);
-    }
-  }, []);
 
   const handlePlayPause = () => {
     const wasRunning = isRunning;
@@ -993,7 +934,7 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
     setCurrentRound(1);
     setSecondsRemaining(5);
     setShowGo(false);
-    setParticles([]);
+    setShowConfetti(false);
     isTransitioningRef.current = false;
     lastPlayedSecondRef.current = null;
     
@@ -1320,6 +1261,7 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
 
     return (
       <View style={styles.container}>
+      <ShapeConfetti active={showConfetti} />
       <View style={[styles.innerContainer, { paddingBottom: insets.bottom }]}>
         {/* Header */}
         <View style={[styles.header, { paddingTop: insets.top }]}>
@@ -1399,30 +1341,6 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
 
         {/* Timer Circle */}
           <View style={styles.timerContainer}>
-          {/* Confetti particles */}
-          {particles.map(particle => (
-            <Animated.View
-              key={particle.id}
-              style={[
-                styles.particle,
-                {
-                  width: particle.size,
-                  height: particle.size,
-                  borderRadius: particle.size / 2,
-                  backgroundColor: particle.color,
-                  transform: [
-                    { translateX: particle.x },
-                    { translateY: particle.y },
-                    { rotate: particle.rotation.interpolate({
-                      inputRange: [0, 1],
-                      outputRange: ['0deg', '360deg'],
-                    }) },
-                  ],
-                  opacity: particle.opacity,
-                },
-              ]}
-            />
-          ))}
           
           {/* Main timer circle - using width/height, with breathing during rest */}
           {currentPhase !== 'complete' && (
@@ -1618,9 +1536,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: SPACING.md,
     opacity: 0.9,
-  },
-  particle: {
-    position: 'absolute',
   },
   errorText: {
     ...TYPOGRAPHY.body,

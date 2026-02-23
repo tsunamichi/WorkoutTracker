@@ -67,6 +67,48 @@ export type WarmUpSetTemplate = {
   lastUsedAt: number | null;
 };
 
+// Core Set Template (reusable core routine, same shape as warmup)
+export type CoreSetTemplate = {
+  id: string;
+  name: string;
+  items: ExerciseInstanceWithCycle[];
+  createdAt: number;
+  updatedAt: number;
+  lastUsedAt: number | null;
+};
+
+// ============================================
+// BONUS LOGS (Day-level non-strength tracking)
+// ============================================
+
+export type BonusType = 'timer' | 'warmup' | 'core';
+export type BonusStatus = 'planned' | 'in_progress' | 'completed';
+
+export type BonusTimerPayload = {
+  timerTemplateId: string;
+  totalDuration?: number;
+  completedRounds?: number;
+  completedSets?: number;
+};
+
+export type BonusExercisePayload = {
+  items: ExerciseInstanceWithCycle[];
+  completedItems: string[];
+};
+
+export type BonusLog = {
+  id: string;
+  date: string; // YYYY-MM-DD
+  type: BonusType;
+  presetId: string;
+  presetName: string;
+  createdAt: string; // ISO
+  status: BonusStatus;
+  completedAt: string | null;
+  timerPayload?: BonusTimerPayload;
+  exercisePayload?: BonusExercisePayload;
+};
+
 // For backward compatibility, alias WarmupItem to ExerciseInstanceWithCycle
 // This allows cycle/superset support for warmups and accessories
 export type WarmupItem = ExerciseInstanceWithCycle;

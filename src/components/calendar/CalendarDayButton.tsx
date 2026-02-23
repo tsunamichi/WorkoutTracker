@@ -95,7 +95,7 @@ const styles = StyleSheet.create({
     color: COLORS.accentPrimary,
   },
   dayNumberPaused: {
-    color: COLORS.textMeta,
+    color: COLORS.text,
   },
   completedPill: {
     position: 'absolute',

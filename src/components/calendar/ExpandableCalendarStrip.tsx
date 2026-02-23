@@ -37,6 +37,7 @@ interface ExpandableCalendarStripProps {
   selectedDate: string;
   onSelectDate: (date: string) => void;
   cyclePlans: CyclePlan[];
+  scheduledWorkouts: ScheduledWorkout[];
   getScheduledWorkout: (date: string) => ScheduledWorkout | undefined;
   getMainCompletion: (workoutId: string) => { percentage: number };
 }
@@ -56,6 +57,7 @@ export function ExpandableCalendarStrip({
   selectedDate,
   onSelectDate,
   cyclePlans,
+  scheduledWorkouts,
   getScheduledWorkout,
   getMainCompletion,
 }: ExpandableCalendarStripProps) {
@@ -71,6 +73,9 @@ export function ExpandableCalendarStrip({
     `${p.id}:${p.active}:${p.startDate}:${p.weeks}:${p.endedAt || ''}:${p.pausedUntil || ''}`
   ).join('|');
 
+  const scheduledWorkoutsFingerprint = scheduledWorkouts.length + ':' +
+    scheduledWorkouts.filter(sw => sw.source === 'cycle').map(sw => `${sw.date}:${sw.programId}`).join(',');
+
   // Build cycle color map and plan ID map: date -> color, date -> planId
   // Process inactive plans first so active plans always take priority on overlapping dates.
   // When a cycle is paused, the strip extends to the new effective end date and
@@ -83,17 +88,27 @@ export function ExpandableCalendarStrip({
     const activePlans = cyclePlans.filter(p => p.active);
     const todayStr = dayjs().format('YYYY-MM-DD');
 
+    // Pre-compute last scheduled workout date per cycle plan
+    const lastWorkoutByPlan: Record<string, string> = {};
+    for (const sw of scheduledWorkouts) {
+      if (sw.source === 'cycle' && (sw.programId || sw.cyclePlanId)) {
+        const pid = sw.programId || sw.cyclePlanId!;
+        if (!lastWorkoutByPlan[pid] || sw.date > lastWorkoutByPlan[pid]) {
+          lastWorkoutByPlan[pid] = sw.date;
+        }
+      }
+    }
+
     const paintPlan = (plan: CyclePlan) => {
-      const color = plan.active ? COLORS.accentPrimaryDimmed : COLORS.backgroundCanvas;
+      const color = plan.active ? COLORS.signalWarningDimmed : COLORS.backgroundCanvas;
       const start = dayjs(plan.startDate);
 
       let end: dayjs.Dayjs;
       if (plan.endedAt) {
         end = dayjs(plan.endedAt);
-      } else if (plan.pausedUntil && dayjs(plan.pausedUntil).isAfter(start)) {
-        const weeksBeforePause = dayjs(plan.pausedUntil).diff(start, 'week', true);
-        const remainingWeeks = Math.max(0, Math.ceil(plan.weeks - weeksBeforePause));
-        end = dayjs(plan.pausedUntil).add(remainingWeeks, 'week').subtract(1, 'day');
+      } else if (lastWorkoutByPlan[plan.id]) {
+        // Use the actual last scheduled workout as the cycle's visual end
+        end = dayjs(lastWorkoutByPlan[plan.id]);
       } else {
         end = start.add(plan.weeks, 'week').subtract(1, 'day');
       }
@@ -103,11 +118,12 @@ export function ExpandableCalendarStrip({
       const totalDays = end.diff(start, 'day') + 1;
       for (let d = 0; d < totalDays; d++) {
         const dateStr = start.add(d, 'day').format('YYYY-MM-DD');
-        colorMap[dateStr] = color;
-        planIdMap[dateStr] = plan.id;
-        if (isPaused && dateStr > todayStr && dateStr < plan.pausedUntil!) {
+        const isInPausedGap = isPaused && dateStr >= todayStr && dateStr < plan.pausedUntil!;
+        if (isInPausedGap) {
           paused.add(dateStr);
         }
+        colorMap[dateStr] = color;
+        planIdMap[dateStr] = plan.id;
       }
     };
 
@@ -115,7 +131,7 @@ export function ExpandableCalendarStrip({
     activePlans.forEach(paintPlan);
 
     return { cycleColorMap: colorMap, dateToPlanId: planIdMap, pausedDates: paused };
-  }, [cyclePlansFingerprint]);
+  }, [cyclePlansFingerprint, scheduledWorkoutsFingerprint]);
 
   // Set of active plan IDs for quick lookup
   const activePlanIds = useMemo(() => {
@@ -312,21 +328,22 @@ export function ExpandableCalendarStrip({
                     borderRadius: 20,
                     overflow: 'hidden',
                     zIndex: 1,
+                    backgroundColor: COLORS.container,
                   }}
                   pointerEvents="none"
                 >
-                  <Svg width="100%" height="100%" style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}>
-                    {Array.from({ length: 80 }, (_, i) => {
-                      const x = (i - 40) * 6;
+                  <Svg width="100%" height="100%" style={StyleSheet.absoluteFill}>
+                    {Array.from({ length: 120 }, (_, i) => {
+                      const offset = (i - 60) * 12;
                       return (
                         <Line
                           key={i}
-                          x1={x}
+                          x1={offset}
                           y1={0}
-                          x2={x + 200}
-                          y2={200}
-                          stroke="rgba(255,255,255,0.2)"
-                          strokeWidth={2}
+                          x2={offset + 500}
+                          y2={500}
+                          stroke={COLORS.signalWarningDimmed}
+                          strokeWidth={1.5}
                         />
                       );
                     })}

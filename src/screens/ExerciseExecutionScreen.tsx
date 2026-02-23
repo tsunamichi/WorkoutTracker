@@ -13,6 +13,7 @@ import { SetTimerSheet } from '../components/timer/SetTimerSheet';
 import { ActionSheet } from '../components/common/ActionSheet';
 import { Toggle } from '../components/Toggle';
 import { DiagonalLinePattern } from '../components/common/DiagonalLinePattern';
+import { ShapeConfetti } from '../components/common/ShapeConfetti';
 import { useTranslation } from '../i18n/useTranslation';
 import { formatWeightForLoad, toDisplayWeight, fromDisplayWeight } from '../utils/weight';
 import type { WarmupItem_DEPRECATED as WarmupItem, AccessoryItem_DEPRECATED as AccessoryItem, WorkoutTemplateExercise } from '../types/training';
@@ -40,7 +41,12 @@ export function ExerciseExecutionScreen() {
   const insets = useSafeAreaInsets();
   const { t } = useTranslation();
   
-  const { workoutKey, workoutTemplateId, type } = route.params;
+  const { workoutKey, workoutTemplateId, type, bonusLogId } = route.params as {
+    workoutKey: string;
+    workoutTemplateId: string;
+    type: 'warmup' | 'main' | 'core';
+    bonusLogId?: string;
+  };
   
   console.log('🚀 ExerciseExecutionScreen initialized:', {
     workoutKey,
@@ -74,6 +80,8 @@ export function ExerciseExecutionScreen() {
     addExercise,
     scheduledWorkouts,
     cyclePlans,
+    updateBonusLog,
+    bonusLogs,
   } = useStore();
   
   const getDetailedWorkoutProgress = () => useStore.getState().detailedWorkoutProgress;
@@ -135,6 +143,14 @@ export function ExerciseExecutionScreen() {
 
   // Get the appropriate items based on type
   const items = useMemo(() => {
+    // Bonus mode: load items from the bonus log's payload
+    if (bonusLogId) {
+      const bonusLog = bonusLogs.find(l => l.id === bonusLogId);
+      if (bonusLog?.exercisePayload?.items) {
+        return bonusLog.exercisePayload.items.map(normalizeToDeprecated);
+      }
+      return [];
+    }
     if (type === 'warmup') {
       return (template?.warmupItems || []).map(normalizeToDeprecated);
     }
@@ -343,6 +359,7 @@ export function ExerciseExecutionScreen() {
   const [showExerciseSettingsMenu, setShowExerciseSettingsMenu] = useState(false);
   const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
   const [isAccessoriesCollapsed, setIsAccessoriesCollapsed] = useState(true);
+  const [showConfetti, setShowConfetti] = useState(false);
   const historyOpacity = useRef(new Animated.Value(0)).current;
   
   // Use refs to avoid stale closures in timer callbacks
@@ -951,18 +968,18 @@ export function ExerciseExecutionScreen() {
             console.log('📋 Section complete but other sections remain');
           }
           
-          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-          
-          if (type === 'main') {
-            // For main workouts, transition to the history/summary view
-            setExpandedGroupIndex(-1);
-            setActiveExerciseIndex(0);
-          } else {
-            // For warmup/core, show alert and navigate back
-            Alert.alert(t('workoutComplete'), t('niceWork'), [
-              { text: t('done'), onPress: () => navigation.goBack() },
-            ]);
+          if (bonusLogId) {
+            updateBonusLog(bonusLogId, {
+              status: 'completed',
+              completedAt: new Date().toISOString(),
+            });
           }
+          
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          setShowConfetti(true);
+          
+          setExpandedGroupIndex(-1);
+          setActiveExerciseIndex(0);
         }
       } else {
         // Same group, next round
@@ -1096,7 +1113,15 @@ export function ExerciseExecutionScreen() {
             setHasLoggedAnySet(true);
             collapseAccessories();
             
+            if (bonusLogId) {
+              updateBonusLog(bonusLogId, {
+                status: 'completed',
+                completedAt: new Date().toISOString(),
+              });
+            }
+            
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            setShowConfetti(true);
             
             if (type === 'main') {
               setExpandedGroupIndex(-1);
@@ -1403,6 +1428,7 @@ export function ExerciseExecutionScreen() {
   
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
+      <ShapeConfetti active={showConfetti} />
       <View style={styles.header}>
         <View style={styles.topBar}>
           <TouchableOpacity
@@ -1438,7 +1464,7 @@ export function ExerciseExecutionScreen() {
         contentContainerStyle={styles.scrollContent}
         bounces={false}
       >
-        {allCurrentGroupsComplete && type === 'main' ? (
+        {allCurrentGroupsComplete ? (
           /* ===== COMPLETED WORKOUT - HISTORY VIEW ===== */
           <View style={styles.historyViewContainer}>
             <View style={styles.historyViewHeader}>
@@ -2436,8 +2462,14 @@ export function ExerciseExecutionScreen() {
               label: t('complete'),
               onPress: handleCompleteAll,
             },
-          ]) : [
-            // Warmup/Core: Swap, Reset, and Remove
+          ]) : (allCurrentGroupsComplete ? [
+            {
+              icon: <IconRestart size={24} color={COLORS.signalNegative} />,
+              label: t('reset'),
+              onPress: handleReset,
+              destructive: true,
+            },
+          ] : [
             {
               icon: <IconSwap size={24} color="#FFFFFF" />,
               label: t('swap'),
@@ -2483,7 +2515,7 @@ export function ExerciseExecutionScreen() {
               },
               destructive: true,
             },
-          ]
+          ])
         }
       />
       

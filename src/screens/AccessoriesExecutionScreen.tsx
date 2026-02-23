@@ -1,14 +1,15 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, LayoutAnimation, Platform, UIManager, Alert, Animated, TextInput, InputAccessoryView, Keyboard } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import * as Haptics from 'expo-haptics';
 import { useStore } from '../store';
 import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS, CARDS } from '../constants';
-import { IconArrowLeft, IconCheck, IconAddLine, IconMinusLine, IconTrash, IconEdit } from '../components/icons';
+import { IconArrowLeft, IconCheck, IconCheckmark, IconAddLine, IconMinusLine, IconTrash, IconEdit } from '../components/icons';
 import { BottomDrawer } from '../components/common/BottomDrawer';
 import { SetTimerSheet } from '../components/timer/SetTimerSheet';
 import { useTranslation } from '../i18n/useTranslation';
+import { ShapeConfetti } from '../components/common/ShapeConfetti';
 import { formatWeightForLoad, toDisplayWeight, fromDisplayWeight } from '../utils/weight';
 import type { AccessoryItem } from '../types/training';
 import { migrateItemsArray, getDisplayValuesFromItem } from '../utils/exerciseMigration';
@@ -148,7 +149,16 @@ export function AccessoriesExecutionScreen() {
   // Track timer visibility
   const [showTimer, setShowTimer] = useState<boolean>(false);
   const [isExerciseTimerPhase, setIsExerciseTimerPhase] = useState<boolean>(true);
-  
+  const [showConfetti, setShowConfetti] = useState(false);
+
+  const allGroupsComplete = useMemo(() => {
+    if (accessoryGroups.length === 0) return false;
+    return accessoryGroups.every(group => {
+      const rounds = currentRounds[group.id] || 0;
+      return rounds >= group.totalRounds;
+    });
+  }, [accessoryGroups, currentRounds]);
+
   // Load completion status on mount and auto-expand first incomplete group
   useEffect(() => {
     const completion = getAccessoryCompletion(workoutKey);
@@ -343,8 +353,9 @@ export function AccessoriesExecutionScreen() {
             setExpandedGroupIndex(nextIncompleteIndex);
             setActiveExerciseIndex(0);
           } else {
-            // All done, navigate back
-            navigation.goBack();
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            setShowConfetti(true);
+            setExpandedGroupIndex(-1);
           }
         } else {
           // Move to next round, start from first exercise
@@ -383,6 +394,7 @@ export function AccessoriesExecutionScreen() {
   
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
+      <ShapeConfetti active={showConfetti} />
       {/* Header */}
       <View style={styles.header}>
         <View style={styles.topBar}>
@@ -396,14 +408,27 @@ export function AccessoriesExecutionScreen() {
           >
             <IconArrowLeft size={24} color="#FFFFFF" />
           </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.removeButton}
-            onPress={handleRemoveAccessory}
-            activeOpacity={1}
-          >
-            <Text style={styles.removeButtonText}>{t('remove')}</Text>
-            <IconTrash size={16} color={COLORS.error} />
-          </TouchableOpacity>
+          {allGroupsComplete ? (
+            <TouchableOpacity
+              style={styles.doneButton}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                navigation.goBack();
+              }}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.doneButtonText}>{t('done')}</Text>
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity
+              style={styles.removeButton}
+              onPress={handleRemoveAccessory}
+              activeOpacity={1}
+            >
+              <Text style={styles.removeButtonText}>{t('remove')}</Text>
+              <IconTrash size={16} color={COLORS.error} />
+            </TouchableOpacity>
+          )}
         </View>
         
         <View style={styles.headerContent}>
@@ -416,6 +441,62 @@ export function AccessoriesExecutionScreen() {
         contentContainerStyle={styles.scrollContent}
         bounces={false}
       >
+        {allGroupsComplete ? (
+          <View style={styles.historyViewContainer}>
+            <View style={styles.historyViewHeader}>
+              <IconCheckmark size={16} color={COLORS.successBright} />
+              <Text style={styles.historyViewTitle}>{t('workoutComplete')}</Text>
+            </View>
+            {accessoryGroups.flatMap((group) =>
+              group.exercises.map((exercise, exIdx) => {
+                const isLast =
+                  group === accessoryGroups[accessoryGroups.length - 1] &&
+                  exIdx === group.exercises.length - 1;
+                const repsUnit = exercise.mode === 'time' ? 'secs' : 'reps';
+
+                return (
+                  <View
+                    key={exercise.id}
+                    style={[styles.historyExerciseRow, isLast && { borderBottomWidth: 0 }]}
+                  >
+                    <View style={styles.historyExerciseNameColumn}>
+                      <Text style={styles.historyExerciseName} numberOfLines={2}>
+                        {exercise.movementId}
+                      </Text>
+                    </View>
+                    <View style={styles.historyExerciseDataColumn}>
+                      {Array.from({ length: group.totalRounds }).map((_, roundIdx) => {
+                        const set = exercise.sets[roundIdx] || exercise.sets[0];
+                        const displayWeight = localValues[exercise.id]?.weight ?? set?.weight ?? 0;
+                        const displayReps =
+                          localValues[exercise.id]?.reps ??
+                          (exercise.mode === 'time' ? (set?.durationSec ?? 0) : (set?.reps ?? 0));
+                        const showWeight = displayWeight > 0;
+
+                        return (
+                          <View key={roundIdx} style={styles.historySetDataRow}>
+                            {showWeight && (
+                              <View style={styles.historySetValueGroup}>
+                                <Text style={styles.historySetValue}>
+                                  {formatWeightForLoad(displayWeight, useKg)}
+                                </Text>
+                                <Text style={styles.historySetUnit}>{weightUnit}</Text>
+                              </View>
+                            )}
+                            <View style={styles.historySetValueGroup}>
+                              <Text style={styles.historySetValue}>{displayReps}</Text>
+                              <Text style={styles.historySetUnit}>{repsUnit}</Text>
+                            </View>
+                          </View>
+                        );
+                      })}
+                    </View>
+                  </View>
+                );
+              })
+            )}
+          </View>
+        ) : (
         <View style={styles.itemsAccordion}>
           {accessoryGroups.map((group, index) => {
             const isExpanded = expandedGroupIndex === index;
@@ -543,6 +624,7 @@ export function AccessoriesExecutionScreen() {
             );
           })}
         </View>
+        )}
       </ScrollView>
       
       {/* Exercise Timer */}
@@ -1232,5 +1314,66 @@ const styles = StyleSheet.create({
     height: 1,
     backgroundColor: COLORS.borderDimmed,
     marginHorizontal: SPACING.xl,
+  },
+  doneButton: {
+    height: 48,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 4,
+  },
+  doneButtonText: {
+    ...TYPOGRAPHY.bodyBold,
+    color: COLORS.successBright,
+  },
+  historyViewContainer: {
+    paddingTop: SPACING.xs,
+  },
+  historyViewHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: SPACING.xl,
+  },
+  historyViewTitle: {
+    ...TYPOGRAPHY.bodyBold,
+    color: COLORS.successBright,
+  },
+  historyExerciseRow: {
+    flexDirection: 'row',
+    paddingVertical: SPACING.md,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.borderDimmed,
+  },
+  historyExerciseNameColumn: {
+    flex: 1,
+    paddingRight: SPACING.lg,
+  },
+  historyExerciseName: {
+    ...TYPOGRAPHY.body,
+    color: COLORS.text,
+  },
+  historyExerciseDataColumn: {
+    minWidth: 120,
+    alignItems: 'flex-end',
+  },
+  historySetDataRow: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: SPACING.lg,
+    paddingVertical: 2,
+  },
+  historySetValueGroup: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: 4,
+  },
+  historySetValue: {
+    ...TYPOGRAPHY.body,
+    color: COLORS.text,
+    fontVariant: ['tabular-nums'] as any,
+  },
+  historySetUnit: {
+    ...TYPOGRAPHY.meta,
+    color: COLORS.textMeta,
   },
 });

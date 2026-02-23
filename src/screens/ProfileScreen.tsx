@@ -5,7 +5,7 @@ import * as Haptics from 'expo-haptics';
 import { useStore } from '../store';
 import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS } from '../constants';
 import { TimerValueSheet } from '../components/timer/TimerValueSheet';
-import { IconArrowLeft, IconTriangle } from '../components/icons';
+import { IconArrowLeft, IconTriangle, IconHistory } from '../components/icons';
 import { Toggle } from '../components/Toggle';
 import { useTranslation } from '../i18n/useTranslation';
 import { cloudBackupService } from '../services/cloudBackup';
@@ -186,6 +186,26 @@ export function ProfileScreen({ navigation }: ProfileScreenProps) {
             <Text style={styles.columnCardLabel}>{t('restTime')}</Text>
           </TouchableOpacity>
         </View>
+
+        {/* Progress */}
+        <TouchableOpacity
+          style={styles.settingCard}
+          activeOpacity={0.7}
+          onPress={() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            navigation.navigate('ProgressTab');
+          }}
+        >
+          <View style={styles.settingRow}>
+            <View style={[styles.settingInfo, { flexDirection: 'row', alignItems: 'center', gap: 12 }]}>
+              <IconHistory size={20} color={COLORS.text} />
+              <Text style={styles.settingLabel}>{t('progress')}</Text>
+            </View>
+            <View style={{ transform: [{ rotate: '90deg' }] }}>
+              <IconTriangle size={12} color={COLORS.text} />
+            </View>
+          </View>
+        </TouchableOpacity>
 
         {/* Group 2: Toggle Settings - Combined Card */}
         <View style={styles.settingCard}>

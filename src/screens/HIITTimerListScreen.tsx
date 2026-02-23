@@ -14,9 +14,11 @@ import { COLORS, SPACING, CARDS, TYPOGRAPHY, BORDER_RADIUS, GRADIENTS } from '..
 import { IconArrowLeft, IconPlay, IconAdd } from '../components/icons';
 import { DiagonalLinePattern } from '../components/common/DiagonalLinePattern';
 import type { HIITTimer } from '../types';
+import type { BonusLog } from '../types/training';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/AppNavigator';
 import { useTranslation } from '../i18n/useTranslation';
+import dayjs from 'dayjs';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'HIITTimerList'>;
 
@@ -28,10 +30,11 @@ const LIGHT_COLORS = {
   textMeta: '#8E8E93',
 };
 
-export default function HIITTimerListScreen({ navigation }: Props) {
+export default function HIITTimerListScreen({ navigation, route }: Props) {
   const insets = useSafeAreaInsets();
-  const { hiitTimers, deleteHIITTimer } = useStore();
+  const { hiitTimers, deleteHIITTimer, addBonusLog } = useStore();
   const { t } = useTranslation();
+  const bonusMode = route.params?.bonusMode === true;
   
   const templates = hiitTimers.filter(t => t.isTemplate);
   
@@ -46,7 +49,24 @@ export default function HIITTimerListScreen({ navigation }: Props) {
     navigation.navigate('HIITTimerForm', { mode: 'create' });
   };
 
-  const handleSelectTemplate = (timer: HIITTimer) => {
+  const handleSelectTemplate = async (timer: HIITTimer) => {
+    if (bonusMode) {
+      const today = dayjs().format('YYYY-MM-DD');
+      const log: BonusLog = {
+        id: `bonus-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        date: today,
+        type: 'timer',
+        presetId: timer.id,
+        presetName: timer.name,
+        createdAt: new Date().toISOString(),
+        status: 'planned',
+        completedAt: null,
+        timerPayload: { timerTemplateId: timer.id },
+      };
+      await addBonusLog(log);
+      navigation.goBack();
+      return;
+    }
     navigation.navigate('HIITTimerExecution', { timerId: timer.id });
   };
 

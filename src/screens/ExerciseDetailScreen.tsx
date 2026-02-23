@@ -15,6 +15,7 @@ import { SetTimerSheet } from '../components/timer/SetTimerSheet';
 import { Toggle } from '../components/Toggle';
 import { BottomDrawer } from '../components/common/BottomDrawer';
 import { ActionSheet } from '../components/common/ActionSheet';
+import { ShapeConfetti } from '../components/common/ShapeConfetti';
 import { formatWeightForLoad, toDisplayWeight, fromDisplayWeight } from '../utils/weight';
 import { useTranslation } from '../i18n/useTranslation';
 
@@ -99,7 +100,8 @@ export function ExerciseDetailScreen({ route, navigation }: ExerciseDetailScreen
   } = useStore();
   const { t, language } = useTranslation();
   const [showTimer, setShowTimer] = useState(false);
-  const [isExerciseTimerPhase, setIsExerciseTimerPhase] = useState(false); // Track if showing exercise timer or rest timer
+  const [isExerciseTimerPhase, setIsExerciseTimerPhase] = useState(false);
+  const [showConfetti, setShowConfetti] = useState(false);
   
   // Store exercise and workout names in state to prevent them from disappearing during navigation
   const [displayExerciseName, setDisplayExerciseName] = useState(exerciseName || '');
@@ -411,25 +413,20 @@ export function ExerciseDetailScreen({ route, navigation }: ExerciseDetailScreen
       setExpandedSetIndex(-1); // Collapse all
 
       if (isLastSet && allNowCompleted && isWorkoutComplete) {
-        // Skip rest timer on the final set
         setIsExerciseTimerPhase(false);
         setShowTimer(false);
         setRecordingSetIndex(null);
         
-        // Mark workout as complete if this is a scheduled workout
         if (workoutKey?.startsWith('sw-')) {
           console.log('🎉 Workout complete! Marking as finished:', workoutKey);
-          
-          // Save session with all completed sets
           await saveWorkoutSession();
-          
-          // Mark workout as complete (keep progress data for viewing)
           await completeWorkout(workoutKey);
           console.log('✅ Workout marked as complete (progress preserved)');
         }
         
         await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        navigation?.goBack();
+        setShowConfetti(true);
+        setTimeout(() => navigation?.goBack(), 1400);
         return;
       }
 
@@ -484,20 +481,16 @@ export function ExerciseDetailScreen({ route, navigation }: ExerciseDetailScreen
       setIsExerciseTimerPhase(false);
       setRecordingSetIndex(null);
       
-      // Mark workout as complete if this is a scheduled workout
       if (workoutKey?.startsWith('sw-')) {
         console.log('🎉 Workout complete! Marking as finished:', workoutKey);
-        
-        // Save session with all completed sets
         await saveWorkoutSession();
-        
-        // Mark workout as complete (keep progress data for viewing)
         await completeWorkout(workoutKey);
         console.log('✅ Workout marked as complete (progress preserved)');
       }
       
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      navigation?.goBack();
+      setShowConfetti(true);
+      setTimeout(() => navigation?.goBack(), 1400);
       return;
     }
     
@@ -878,6 +871,7 @@ export function ExerciseDetailScreen({ route, navigation }: ExerciseDetailScreen
   
   return (
     <View style={styles.gradient}>
+      <ShapeConfetti active={showConfetti} />
       <View style={styles.container}>
         {/* Header (includes topBar with back/menu + title) */}
         <View style={[styles.header, { paddingTop: insets.top }]}>

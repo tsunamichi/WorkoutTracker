@@ -132,6 +132,18 @@ type TranslationKey =
   | 'created'
   | 'timesCompleted'
   | 'addInterval'
+  | 'bonus'
+  | 'addBonus'
+  | 'noBonusPerformedThisDay'
+  | 'timer'
+  | 'warmUp'
+  | 'core'
+  | 'selectBonusType'
+  | 'selectPreset'
+  | 'planned'
+  | 'completed'
+  | 'bonusDetail'
+  | 'noPresetsYet'
   | 'new'
   | 'inProgress'
   | 'currentCycle'
@@ -525,7 +537,18 @@ type TranslationKey =
   | 'repeatCycle'
   | 'finishedToday'
   | 'finishedYesterday'
-  | 'finishedDaysAgo';
+  | 'finishedDaysAgo'
+  | 'startACycle'
+  | 'pauseCycle'
+  | 'endCycle'
+  | 'endCycleEarly'
+  | 'endCycleConfirmTitle'
+  | 'endCycleConfirmMessage'
+  | 'noActiveCycle'
+  | 'cycleActive'
+  | 'cyclePaused'
+  | 'viewDetails'
+  | 'end';
 
 const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
   en: {
@@ -669,7 +692,7 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     addWorkout: 'Add Workout',
     noWorkoutPlanned: 'No workout planned',
     noWorkoutPerformedThisDay: 'No workout performed this day',
-    theCurrentCycleIsPaused: 'The current cycle is paused.',
+    theCurrentCycleIsPaused: 'The current cycle is paused',
     resumeCycle: 'Resume Cycle',
     completed: 'Completed',
     addIntervalTimer: 'Add interval timer',
@@ -677,6 +700,18 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     noTimersPerformedThisDay: 'No timers performed this day',
     addTimer: 'Add Timer',
     addInterval: 'Add',
+    bonus: 'Bonus',
+    addBonus: 'Add Bonus',
+    noBonusPerformedThisDay: 'No bonus performed this day',
+    timer: 'Timer',
+    warmUp: 'Warm up',
+    core: 'Core',
+    selectBonusType: 'Select type',
+    selectPreset: 'Select preset',
+    planned: 'Planned',
+    completed: 'Completed',
+    bonusDetail: 'Bonus Detail',
+    noPresetsYet: 'No presets yet',
     new: 'New',
     inProgress: 'In progress',
     currentCycle: 'Current Cycle',
@@ -1087,6 +1122,17 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     finishedToday: 'finished today',
     finishedYesterday: 'finished yesterday',
     finishedDaysAgo: 'finished {n} days ago',
+    startACycle: 'Start a cycle',
+    pauseCycle: 'Pause Cycle',
+    endCycle: 'End Cycle',
+    endCycleEarly: 'End Cycle Early',
+    endCycleConfirmTitle: 'End cycle early?',
+    endCycleConfirmMessage: 'This will remove future scheduled workouts from this cycle. Past workouts remain in history.',
+    noActiveCycle: 'No active cycle',
+    cycleActive: 'Active',
+    cyclePaused: 'Paused',
+    viewDetails: 'View Details',
+    end: 'End',
   },
   es: {
     today: 'Hoy',
@@ -1229,7 +1275,7 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     addWorkout: 'Agregar entrenamiento',
     noWorkoutPlanned: 'No hay entrenamiento planeado',
     noWorkoutPerformedThisDay: 'No se realizó entrenamiento este día',
-    theCurrentCycleIsPaused: 'El ciclo actual está en pausa.',
+    theCurrentCycleIsPaused: 'El ciclo actual está en pausa',
     resumeCycle: 'Reanudar ciclo',
     completed: 'Completado',
     addIntervalTimer: 'Agregar temporizador',
@@ -1237,6 +1283,18 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     noTimersPerformedThisDay: 'No se realizaron temporizadores este día',
     addTimer: 'Agregar Temporizador',
     addInterval: 'Agregar',
+    bonus: 'Bonus',
+    addBonus: 'Agregar Bonus',
+    noBonusPerformedThisDay: 'No se realizó bonus este día',
+    timer: 'Temporizador',
+    warmUp: 'Calentamiento',
+    core: 'Core',
+    selectBonusType: 'Seleccionar tipo',
+    selectPreset: 'Seleccionar preset',
+    planned: 'Planeado',
+    completed: 'Completado',
+    bonusDetail: 'Detalle de Bonus',
+    noPresetsYet: 'Sin presets aún',
     new: 'Nuevo',
     inProgress: 'En progreso',
     currentCycle: 'Ciclo actual',
@@ -1648,6 +1706,17 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     finishedToday: 'terminado hoy',
     finishedYesterday: 'terminado ayer',
     finishedDaysAgo: 'terminado hace {n} días',
+    startACycle: 'Iniciar un ciclo',
+    pauseCycle: 'Pausar ciclo',
+    endCycle: 'Terminar ciclo',
+    endCycleEarly: 'Terminar ciclo antes',
+    endCycleConfirmTitle: '¿Terminar ciclo antes?',
+    endCycleConfirmMessage: 'Esto eliminará los entrenamientos futuros programados de este ciclo. Los entrenamientos anteriores se mantienen en el historial.',
+    noActiveCycle: 'Ningún ciclo activo',
+    cycleActive: 'Activo',
+    cyclePaused: 'Pausado',
+    viewDetails: 'Ver detalles',
+    end: 'Terminar',
   },
 };
 

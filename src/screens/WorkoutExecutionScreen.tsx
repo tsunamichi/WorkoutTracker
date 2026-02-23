@@ -16,6 +16,7 @@ import { startRestTimer, updateRestTimer, endRestTimer, markRestTimerCompleted }
 import * as Haptics from 'expo-haptics';
 import { Audio } from 'expo-av';
 import { SetTimerSheet } from '../components/timer/SetTimerSheet';
+import { ShapeConfetti } from '../components/common/ShapeConfetti';
 import { useTranslation } from '../i18n/useTranslation';
 
 interface WorkoutExecutionScreenProps {
@@ -500,6 +501,7 @@ export function WorkoutExecutionScreen({ route, navigation }: WorkoutExecutionSc
   const [currentExerciseIndex, setCurrentExerciseIndex] = useState(0);
   const [showMenu, setShowMenu] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [showConfetti, setShowConfetti] = useState(false);
   
   // Force refresh when screen comes into focus (but NOT on every progress change to avoid re-renders)
   useFocusEffect(
@@ -741,8 +743,9 @@ export function WorkoutExecutionScreen({ route, navigation }: WorkoutExecutionSc
             // Show success feedback
             await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
             
-            // Navigate back
-            navigation.goBack();
+            // Show confetti then navigate back
+            setShowConfetti(true);
+            setTimeout(() => navigation.goBack(), 1400);
           },
         },
       ]
@@ -783,6 +786,7 @@ export function WorkoutExecutionScreen({ route, navigation }: WorkoutExecutionSc
   
   return (
     <View style={styles.gradient}>
+      <ShapeConfetti active={showConfetti} />
       <View style={styles.container}>
         {/* Header (includes topBar with back/menu + title) */}
         <View style={[styles.header, { paddingTop: insets.top }]}>

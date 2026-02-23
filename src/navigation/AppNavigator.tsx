@@ -20,6 +20,8 @@ import { ProgressHomeScreen } from '../screens/ProgressHomeScreen';
 import { LiftHistoryScreen } from '../screens/LiftHistoryScreen';
 import { EditKeyLiftsScreen } from '../screens/EditKeyLiftsScreen';
 import { PhotoViewerScreen } from '../screens/PhotoViewerScreen';
+import { BonusPresetPickerScreen } from '../screens/BonusPresetPickerScreen';
+import { BonusDetailScreen } from '../screens/BonusDetailScreen';
 import { CycleDetailScreen } from '../screens/CycleDetailScreen';
 import { CyclePlanDetailScreen } from '../screens/CyclePlanDetailScreen';
 import { CycleConflictsScreen } from '../screens/CycleConflictsScreen';
@@ -37,7 +39,7 @@ import { CreateCycleFlow } from '../screens/manualCycle/CreateCycleFlow';
 import { CreateCycleDayEditor } from '../screens/manualCycle/CreateCycleDayEditor';
 import { AIWorkoutCreationScreen } from '../screens/AIWorkoutCreationScreen';
 import { WorkoutCreationOptionsScreen } from '../screens/WorkoutCreationOptionsScreen';
-import { IconCalendar, IconHistory, IconSwap, IconAdd } from '../components/icons';
+import { IconCalendar, IconHistory, IconSwap, IconAdd, IconStopwatch, IconPlay, IconRestart } from '../components/icons';
 import { COLORS, TYPOGRAPHY, SPACING, CARDS, BORDER_RADIUS } from '../constants';
 import { useStore } from '../store';
 import { CycleTemplateId } from '../types/workout';
@@ -64,7 +66,7 @@ export type RootStackParamList = {
   WarmupExecution: { workoutKey: string; workoutTemplateId: string };
   AccessoriesEditor: { templateId: string; workoutKey?: string };
   AccessoriesExecution: { workoutKey: string; workoutTemplateId: string };
-  ExerciseExecution: { workoutKey: string; workoutTemplateId: string; type: 'warmup' | 'main' | 'core' };
+  ExerciseExecution: { workoutKey: string; workoutTemplateId: string; type: 'warmup' | 'main' | 'core'; bonusLogId?: string };
   DesignSystem: undefined;
   CycleDetail: { cycleId: string };
   CyclePlanDetail: { planId: string };
@@ -72,9 +74,9 @@ export type RootStackParamList = {
   WorkoutExecution: { workoutId?: string; cycleId?: string; templateId?: string; workoutTemplateId?: string; date: string; isLocked?: boolean };
   WorkoutEdit: { cycleId: string; workoutTemplateId: string; date: string };
   ExerciseDetail: { exerciseId: string; workoutKey: string };
-  HIITTimerList: undefined;
+  HIITTimerList: { bonusMode?: boolean } | undefined;
   HIITTimerForm: { mode: 'create' } | { mode: 'edit'; timerId: string };
-  HIITTimerExecution: { timerId: string };
+  HIITTimerExecution: { timerId: string; bonusLogId?: string };
   TemplateEditor: { templateId?: CycleTemplateId };
   CustomTemplateInput: undefined;
   ReviewCreateCycle: undefined;
@@ -85,6 +87,9 @@ export type RootStackParamList = {
   LiftHistory: { exerciseId: string; exerciseName: string };
   PhotoViewer: { photoId: string };
   EditKeyLifts: undefined;
+  BonusPresetPicker: { bonusType: 'timer' | 'warmup' | 'core' };
+  BonusDetail: { bonusLogId: string };
+  ProgressTab: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -118,6 +123,7 @@ function TabNavigator() {
   const [planSelectionSheetVisible, setPlanSelectionSheetVisible] = React.useState(false);
   const [extractDaySheetVisible, setExtractDaySheetVisible] = React.useState(false);
   const [selectedPlanForExtract, setSelectedPlanForExtract] = React.useState<string | null>(null);
+  const [bonusDrawerVisible, setBonusDrawerVisible] = React.useState(false);
   
   // Animated value for tab indicator position (0 = Schedule, 1 = Progress)
   const indicatorPosition = React.useRef(new Animated.Value(0)).current;
@@ -409,13 +415,14 @@ function TabNavigator() {
           onDateChange={(isToday) => setIsViewingToday(isToday)}
           onOpenSwapDrawer={handleOpenSwapDrawer}
           onOpenAddWorkout={handleOpenAddWorkout}
+          onOpenBonusDrawer={() => setBonusDrawerVisible(true)}
         />
       ) : (
         <ProgressHomeScreen navigation={navigation} />
       )}
       
-      {/* Custom Bottom Navigation */}
-      <View style={[styles.bottomNavContainer, { paddingBottom: insets.bottom || 32 }]}>
+      {/* Custom Bottom Navigation — hidden for v1 */}
+      {false && <View style={[styles.bottomNavContainer, { paddingBottom: insets.bottom || 32 }]}>
         {/* Tab Bar - Full width */}
         <View style={styles.tabBar} onLayout={handleTabBarLayout}>
           {/* Animated Active Tab Indicator */}
@@ -555,7 +562,7 @@ function TabNavigator() {
             </Animated.View>
           </Pressable>
             </View>
-            </View>
+            </View>}
       
       {/* Swap Workout Drawer - Renders at TabNavigator level, above bottom nav */}
       <BottomDrawer
@@ -665,6 +672,45 @@ function TabNavigator() {
           })()}
           </ScrollView>
         </View>
+      </BottomDrawer>
+      
+      {/* Bonus type picker drawer - above bottom nav */}
+      <BottomDrawer
+        visible={bonusDrawerVisible}
+        onClose={() => setBonusDrawerVisible(false)}
+        maxHeight="35%"
+        scrollable={false}
+      >
+        {({ requestClose }: { requestClose: () => void }) => (
+          <View style={styles.bonusDrawerContent}>
+            <Text style={styles.bonusDrawerTitle}>{t('selectBonusType')}</Text>
+            <View style={styles.bonusDrawerRow}>
+              {([
+                { type: 'timer' as const, icon: <IconStopwatch size={22} color={COLORS.text} />, label: t('timer') },
+                { type: 'warmup' as const, icon: <IconPlay size={22} color={COLORS.text} />, label: t('warmUp') },
+                { type: 'core' as const, icon: <IconRestart size={22} color={COLORS.text} />, label: t('core') },
+              ]).map(({ type, icon, label }) => (
+                <Pressable
+                  key={type}
+                  style={styles.bonusDrawerItem}
+                  onPress={() => {
+                    requestClose();
+                    setTimeout(() => {
+                      if (type === 'timer') {
+                        (navigation as any).navigate('HIITTimerList', { bonusMode: true });
+                      } else {
+                        (navigation as any).navigate('BonusPresetPicker', { bonusType: type });
+                      }
+                    }, 300);
+                  }}
+                >
+                  <View style={styles.bonusDrawerIconContainer}>{icon}</View>
+                  <Text style={styles.bonusDrawerLabel}>{label}</Text>
+                </Pressable>
+              ))}
+            </View>
+          </View>
+        )}
       </BottomDrawer>
       
       {/* NEW: Add Workout Sheet - Shows templates + create options */}
@@ -853,6 +899,40 @@ const styles = StyleSheet.create({
     color: LIGHT_COLORS.textMeta,
     textAlign: 'center',
   },
+  bonusDrawerContent: {
+    paddingHorizontal: SPACING.xxl,
+    paddingBottom: SPACING.xl,
+  },
+  bonusDrawerTitle: {
+    ...TYPOGRAPHY.h3,
+    color: COLORS.text,
+    marginBottom: SPACING.xl,
+  },
+  bonusDrawerRow: {
+    flexDirection: 'row',
+    gap: SPACING.md,
+    marginBottom: 8,
+  },
+  bonusDrawerItem: {
+    flex: 1,
+    backgroundColor: COLORS.activeCard,
+    borderRadius: 16,
+    paddingVertical: SPACING.lg,
+    paddingHorizontal: SPACING.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  bonusDrawerIconContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: SPACING.sm,
+  },
+  bonusDrawerLabel: {
+    fontSize: 13,
+    fontWeight: '600' as const,
+    color: COLORS.text,
+    textAlign: 'center',
+  },
 });
 
 // Note: NavigationContainer moved to RootNavigator.tsx for onboarding flow integration
@@ -899,6 +979,9 @@ export default function AppNavigator() {
         <Stack.Screen name="LiftHistory" component={LiftHistoryScreen} />
         <Stack.Screen name="EditKeyLifts" component={EditKeyLiftsScreen} />
         <Stack.Screen name="PhotoViewer" component={PhotoViewerScreen} />
+        <Stack.Screen name="BonusPresetPicker" component={BonusPresetPickerScreen} />
+        <Stack.Screen name="BonusDetail" component={BonusDetailScreen} />
+        <Stack.Screen name="ProgressTab" component={ProgressHomeScreen} />
       </Stack.Navigator>
     </View>
   );

@@ -133,6 +133,7 @@ export const COLORS = {
   signalNegative: SIGNAL_NEGATIVE,
   signalPositive: SIGNAL_POSITIVE,
   signalWarning: SIGNAL_WARNING,
+  signalWarningDimmed: 'rgba(255, 214, 10, 0.15)',
   success: SIGNAL_POSITIVE,
   successBright: '#06FF8F',
   successDark: adjustLightness(BASE_GREEN, 10),

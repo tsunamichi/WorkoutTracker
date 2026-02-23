@@ -154,7 +154,7 @@ export function AIWorkoutCreationScreen() {
   const { t } = useTranslation();
   const [workoutDetails, setWorkoutDetails] = useState('');
   const [showInstructionsSheet, setShowInstructionsSheet] = useState(false);
-  const [startDate, setStartDate] = useState(dayjs().startOf('isoWeek').format('YYYY-MM-DD'));
+  const [startDate, setStartDate] = useState(dayjs().format('YYYY-MM-DD'));
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [tempDate, setTempDate] = useState<Date>(new Date());
   const slideAnim = useRef(new Animated.Value(400)).current;
@@ -486,9 +486,19 @@ export function AIWorkoutCreationScreen() {
       const templateIdsByWeekday: Partial<Record<number, string>> = {};
       const weekdays: number[] = [];
 
+      // Shift DAY numbers so DAY 1 lands on the start date's weekday.
+      // Original: DAY 1 → Mon(1), DAY 2 → Tue(2), etc.
+      // Shifted:  DAY 1 → startDate's weekday, preserving relative gaps.
+      const startWeekday = weekStart.day(); // 0=Sun..6=Sat
+      const sortedDayNumbers = week1.map(w => w.dayNumber).sort((a: number, b: number) => a - b);
+      const firstDayNumber = sortedDayNumbers[0] || 1;
+      // Original weekday for DAY 1: dayNumber === 7 ? 0 : dayNumber  →  1 for DAY 1
+      const firstOriginalWeekday = firstDayNumber === 7 ? 0 : firstDayNumber;
+      const shift = (startWeekday - firstOriginalWeekday + 7) % 7;
+
       for (const workout of week1) {
-        // Map DAY 1..7 to dayjs weekday 1..6,0 (Sun)
-        const weekday = workout.dayNumber === 7 ? 0 : workout.dayNumber;
+        const originalWeekday = workout.dayNumber === 7 ? 0 : workout.dayNumber;
+        const weekday = (originalWeekday + shift) % 7;
         weekdays.push(weekday);
 
         const templateId = `wt-${Date.now()}-${weekday}-${Math.floor(Math.random() * 10000)}`;
