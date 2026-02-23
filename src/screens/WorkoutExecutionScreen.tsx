@@ -480,7 +480,7 @@ export function SetTimerSheetLegacy({ visible, onComplete, onClose, workoutName,
 export function WorkoutExecutionScreen({ route, navigation }: WorkoutExecutionScreenProps) {
   const insets = useSafeAreaInsets();
   const { workoutId, cycleId, workoutTemplateId, date } = route.params;
-  const { cycles, exercises, addSession, getWorkoutCompletionPercentage, getExerciseProgress, saveExerciseProgress, clearWorkoutProgress, skipExercise, getWorkoutTemplate, getWarmupCompletion, getMainCompletion, getAccessoryCompletion, settings, completeWorkout, scheduledWorkouts, cyclePlans } = useStore();
+  const { cycles, exercises, addSession, getWorkoutCompletionPercentage, getExerciseProgress, saveExerciseProgress, clearWorkoutProgress, skipExercise, getWorkoutTemplate, getMainCompletion, settings, completeWorkout, scheduledWorkouts, cyclePlans } = useStore();
   const { t } = useTranslation();
   const useKg = settings.useKg;
   const weightUnit = useKg ? 'kg' : 'lb';
@@ -511,17 +511,12 @@ export function WorkoutExecutionScreen({ route, navigation }: WorkoutExecutionSc
     }, [])
   );
   
-  // Get completion status for each section (these are getters, not subscriptions, so they don't cause re-renders)
-  const warmupCompletion = getWarmupCompletion(workoutKey);
   const mainCompletion = getMainCompletion(workoutKey);
-  const coreCompletion = getAccessoryCompletion(workoutKey);
   
   // Support both old cycle-based workouts and new standalone workouts
   const cycle = cycleId ? cycles.find(c => c.id === cycleId) : null;
   let workout = cycle?.workoutTemplates.find(w => w.id === workoutTemplateId);
   
-  // If not found in cycle (or no cycle), try to get the template directly (new architecture)
-  // Get template for warmup items
   const template = getWorkoutTemplate(workoutTemplateId);
   if (!workout) {
     if (template) {
@@ -547,8 +542,6 @@ export function WorkoutExecutionScreen({ route, navigation }: WorkoutExecutionSc
     }
   }
   
-  // Calculate completion percentage - ONLY main strength exercises count
-  // Warmup and core/accessory exercises don't affect completion percentage
   const completionPercentage = mainCompletion.percentage;
 
   // Check if this workout belongs to a past (non-active) cycle
@@ -1073,94 +1066,6 @@ const styles = StyleSheet.create({
   addCardText: {
     ...TYPOGRAPHY.metaBold,
     color: COLORS.text,
-  },
-  warmupSection: {
-    marginBottom: SPACING.xxxl,
-  },
-  warmupCard: {
-    backgroundColor: CARDS.cardDeepDimmed.outer.backgroundColor,
-    borderRadius: CARDS.cardDeepDimmed.outer.borderRadius,
-    borderWidth: CARDS.cardDeepDimmed.outer.borderWidth,
-    borderColor: CARDS.cardDeepDimmed.outer.borderColor,
-    padding: SPACING.lg,
-  },
-  warmupCardComplete: {
-    backgroundColor: COLORS.activeCard,
-    opacity: 0.7,
-  },
-  warmupCardDisabled: {
-    opacity: 0.4,
-  },
-  warmupCardContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  warmupCardLeft: {
-    flex: 1,
-    marginRight: SPACING.md,
-  },
-  warmupCardTitle: {
-    ...TYPOGRAPHY.body,
-    color: COLORS.text,
-  },
-  warmupCardTitleDisabled: {
-    color: COLORS.textMeta,
-  },
-  warmupStartText: {
-    ...TYPOGRAPHY.metaBold,
-    color: COLORS.accentPrimary,
-  },
-  warmupCardSubtitle: {
-    ...TYPOGRAPHY.meta,
-    color: COLORS.textMeta,
-  },
-  warmupCheckCircle: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    borderWidth: 2,
-    borderColor: COLORS.borderDimmed,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  warmupCheckCircleComplete: {
-    backgroundColor: COLORS.accentPrimary,
-    borderColor: COLORS.accentPrimary,
-  },
-  // Accessories Section (mirrors warmup)
-  accessorySection: {
-    marginTop: SPACING.xxxl,
-  },
-  accessoryCard: {
-    backgroundColor: CARDS.cardDeepDimmed.outer.backgroundColor,
-    borderRadius: CARDS.cardDeepDimmed.outer.borderRadius,
-    borderWidth: CARDS.cardDeepDimmed.outer.borderWidth,
-    borderColor: CARDS.cardDeepDimmed.outer.borderColor,
-    padding: SPACING.lg,
-  },
-  accessoryCardComplete: {
-    backgroundColor: COLORS.activeCard,
-    opacity: 0.7,
-  },
-  accessoryCardDisabled: {
-    opacity: 0.4,
-  },
-  accessoryCardContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  accessoryCardTitle: {
-    ...TYPOGRAPHY.body,
-    color: COLORS.text,
-  },
-  accessoryCardTitleDisabled: {
-    color: COLORS.textMeta,
-  },
-  accessoryStartText: {
-    ...TYPOGRAPHY.metaBold,
-    color: COLORS.accentPrimary,
   },
   sectionHeader: {
     marginTop: 40,
