@@ -133,6 +133,7 @@ interface WorkoutStore {
   endCyclePlan: (planId: string) => Promise<void>;
   deleteCyclePlan: (planId: string) => Promise<void>;
   pauseShiftCyclePlan: (planId: string, resumeDate: string, resolutionMap?: ConflictResolutionMap) => Promise<{ success: boolean; conflicts?: ConflictItem[] }>;
+  repairPausedCycleSchedule: () => Promise<void>;
   getCyclePlanEffectiveEndDate: (plan: CyclePlan) => string;
   getCyclePlanStatus: (planId: string) => import('../types/training').CyclePlanStatus;
   getCyclePlanWeekProgress: (planId: string, asOfDate: string) => { currentWeek: number; totalWeeks: number } | null;
@@ -2603,25 +2604,46 @@ export const useStore = create<WorkoutStore>((set, get) => ({
       return false;
     });
 
-    // Shift the weekday template mapping so the first workout day aligns with the resume date.
-    // E.g., if original pattern was Mon/Wed/Fri and resume is Tuesday,
-    // the first workout (originally Mon) lands on Tuesday, next (originally Wed) on Thursday, etc.
+    // Build the weekly rotation order: weekdays sorted by their offset from the cycle start day
     const originalWeekdays = Object.keys(plan.templateIdsByWeekday)
       .map(Number)
       .filter(d => plan.templateIdsByWeekday[d])
       .sort((a, b) => a - b);
     const originalStartDay = dayjs(plan.startDate).day();
-    // Find which weekday in the pattern was "first" relative to the original start
     const sortedFromStart = [...originalWeekdays].sort((a, b) => {
       const da = (a - originalStartDay + 7) % 7;
       const db = (b - originalStartDay + 7) % 7;
       return da - db;
     });
+
+    // Find the last completed/in-progress workout for this cycle (by date) to determine
+    // where in the rotation the user left off
+    const lastDoneWorkout = scheduledWorkouts
+      .filter(sw =>
+        sw.source === 'cycle' &&
+        (sw.programId === planId || sw.cyclePlanId === planId) &&
+        (sw.status === 'completed' || sw.status === 'in_progress')
+      )
+      .sort((a, b) => b.date.localeCompare(a.date))[0];
+
+    let remainingPattern = [...sortedFromStart];
+    if (lastDoneWorkout) {
+      const lastTemplateId = lastDoneWorkout.templateId;
+      const lastIdx = sortedFromStart.findIndex(day => plan.templateIdsByWeekday[day] === lastTemplateId);
+      if (lastIdx >= 0) {
+        // Rotate to start from the workout AFTER the last completed one
+        const startFrom = (lastIdx + 1) % sortedFromStart.length;
+        remainingPattern = [
+          ...sortedFromStart.slice(startFrom),
+          ...sortedFromStart.slice(0, startFrom),
+        ];
+      }
+    }
+
     const resumeDay = resume.day();
     const shiftedTemplateIdsByWeekday: Partial<Record<number, string>> = {};
-    sortedFromStart.forEach((origDay, idx) => {
-      // Compute the offset this workout had from the first workout day in the original pattern
-      const firstOrigDay = sortedFromStart[0];
+    remainingPattern.forEach((origDay, idx) => {
+      const firstOrigDay = remainingPattern[0];
       const offsetFromFirst = (origDay - firstOrigDay + 7) % 7;
       const newDay = (resumeDay + offsetFromFirst) % 7;
       shiftedTemplateIdsByWeekday[newDay] = plan.templateIdsByWeekday[origDay];
@@ -2692,6 +2714,120 @@ export const useStore = create<WorkoutStore>((set, get) => ({
     await storage.saveCyclePlans(plans);
     await storage.saveScheduledWorkouts(scheduledWorkouts);
     return { success: true };
+  },
+
+  repairPausedCycleSchedule: async () => {
+    const plan = get().cyclePlans.find(p => p.active && p.pausedUntil);
+    if (!plan) return;
+    const resumeDate = plan.pausedUntil!;
+    console.log('🔧 Repairing paused cycle schedule:', plan.name, 'resume:', resumeDate);
+
+    const today = dayjs().format('YYYY-MM-DD');
+    const resume = dayjs(resumeDate);
+
+    // Keep non-cycle workouts + completed/in-progress cycle workouts + past cycle workouts
+    let scheduledWorkouts = get().scheduledWorkouts.filter(sw => {
+      if (sw.source !== 'cycle' || (sw.programId !== plan.id && sw.cyclePlanId !== plan.id)) return true;
+      if (sw.status === 'completed' || sw.status === 'in_progress') return true;
+      if (sw.date < today) return true;
+      return false;
+    });
+
+    const weeksBeforePause = resume.diff(dayjs(plan.startDate), 'week', true);
+    const remainingWeeks = Math.max(1, Math.ceil(plan.weeks - weeksBeforePause));
+
+    const originalWeekdays = Object.keys(plan.templateIdsByWeekday)
+      .map(Number)
+      .filter(d => plan.templateIdsByWeekday[d])
+      .sort((a, b) => a - b);
+    const originalStartDay = dayjs(plan.startDate).day();
+    const sortedFromStart = [...originalWeekdays].sort((a, b) => {
+      const da = (a - originalStartDay + 7) % 7;
+      const db = (b - originalStartDay + 7) % 7;
+      return da - db;
+    });
+
+    const lastDoneWorkout = scheduledWorkouts
+      .filter(sw =>
+        sw.source === 'cycle' &&
+        (sw.programId === plan.id || sw.cyclePlanId === plan.id) &&
+        (sw.status === 'completed' || sw.status === 'in_progress')
+      )
+      .sort((a, b) => b.date.localeCompare(a.date))[0];
+
+    let remainingPattern = [...sortedFromStart];
+    if (lastDoneWorkout) {
+      const lastTemplateId = lastDoneWorkout.templateId;
+      const lastIdx = sortedFromStart.findIndex(day => plan.templateIdsByWeekday[day] === lastTemplateId);
+      if (lastIdx >= 0) {
+        const startFrom = (lastIdx + 1) % sortedFromStart.length;
+        remainingPattern = [
+          ...sortedFromStart.slice(startFrom),
+          ...sortedFromStart.slice(0, startFrom),
+        ];
+      }
+    }
+    console.log('🔧 Last done template:', lastDoneWorkout?.templateId, 'Remaining pattern:', remainingPattern.map(d => plan.templateIdsByWeekday[d]));
+
+    const resumeDay = resume.day();
+    const shiftedTemplateIdsByWeekday: Partial<Record<number, string>> = {};
+    remainingPattern.forEach((origDay) => {
+      const firstOrigDay = remainingPattern[0];
+      const offsetFromFirst = (origDay - firstOrigDay + 7) % 7;
+      const newDay = (resumeDay + offsetFromFirst) % 7;
+      shiftedTemplateIdsByWeekday[newDay] = plan.templateIdsByWeekday[origDay];
+    });
+
+    const virtualPlan: CyclePlan = {
+      ...plan,
+      startDate: resumeDate,
+      weeks: remainingWeeks,
+      pausedUntil: undefined,
+      templateIdsByWeekday: shiftedTemplateIdsByWeekday,
+    };
+
+    const endDate = get().getCycleEndDate(resumeDate, remainingWeeks);
+    const datesInRange = get().listDatesInRange(resumeDate, endDate);
+    const templates = get().workoutTemplates;
+    const newWorkouts: ScheduledWorkout[] = [];
+
+    datesInRange.forEach(date => {
+      const dayOfWeek = dayjs(date).day();
+      const templateId = virtualPlan.templateIdsByWeekday[dayOfWeek];
+      if (!templateId) return;
+      const template = templates.find(t => t.id === templateId);
+      if (!template) return;
+      const existing = scheduledWorkouts.find(sw => sw.date === date);
+      if (existing) return;
+      newWorkouts.push({
+        id: `sw-${plan.id}-${date}`,
+        date,
+        templateId,
+        titleSnapshot: template.name,
+        warmupSnapshot: (template.warmupItems || []).map(item => ({ ...item })),
+        exercisesSnapshot: (template.items || []).map(item => ({ ...item })),
+        accessorySnapshot: (template.accessoryItems || []).map(item => ({ ...item })),
+        warmupCompletion: { completedItems: [] },
+        mainCompletion: { completedItems: [] },
+        workoutCompletion: { completedExercises: {}, completedSets: {} },
+        accessoryCompletion: { completedItems: [] },
+        status: 'planned',
+        startedAt: null,
+        completedAt: null,
+        source: 'cycle',
+        programId: plan.id,
+        programName: plan.name,
+        weekIndex: null,
+        dayIndex: null,
+        isLocked: false,
+        cyclePlanId: plan.id,
+      });
+    });
+
+    scheduledWorkouts = [...scheduledWorkouts, ...newWorkouts];
+    console.log('🔧 Repair complete: kept completed workouts, regenerated', newWorkouts.length, 'planned workouts');
+    set({ scheduledWorkouts });
+    await storage.saveScheduledWorkouts(scheduledWorkouts);
   },
 
   getActiveCyclePlan: () => {

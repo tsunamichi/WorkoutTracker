@@ -100,7 +100,7 @@ export function ExpandableCalendarStrip({
     }
 
     const paintPlan = (plan: CyclePlan) => {
-      const color = plan.active ? COLORS.signalWarningDimmed : COLORS.backgroundCanvas;
+      const color = plan.active ? COLORS.accentPrimaryDimmed : COLORS.backgroundCanvas;
       const start = dayjs(plan.startDate);
 
       let end: dayjs.Dayjs;
@@ -328,13 +328,13 @@ export function ExpandableCalendarStrip({
                     borderRadius: 20,
                     overflow: 'hidden',
                     zIndex: 1,
-                    backgroundColor: COLORS.container,
+                    backgroundColor: COLORS.backgroundContainer,
                   }}
                   pointerEvents="none"
                 >
                   <Svg width="100%" height="100%" style={StyleSheet.absoluteFill}>
-                    {Array.from({ length: 120 }, (_, i) => {
-                      const offset = (i - 60) * 12;
+                    {Array.from({ length: 200 }, (_, i) => {
+                      const offset = (i - 100) * 6;
                       return (
                         <Line
                           key={i}
@@ -342,8 +342,8 @@ export function ExpandableCalendarStrip({
                           y1={0}
                           x2={offset + 500}
                           y2={500}
-                          stroke={COLORS.signalWarningDimmed}
-                          strokeWidth={1.5}
+                          stroke={COLORS.accentPrimaryDimmed}
+                          strokeWidth={2}
                         />
                       );
                     })}

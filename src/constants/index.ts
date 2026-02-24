@@ -80,7 +80,7 @@ function adjustLightness(hex: string, amount: number): string {
 }
 
 // Base accent color — vivid lime, used sparingly for CTAs & highlights
-const ACCENT_PRIMARY = '#FFD500';
+const ACCENT_PRIMARY = '#F9B000';
 const SIGNAL_NEGATIVE = '#FF453A';
 const BASE_GREEN = '#00351D';
 const SIGNAL_POSITIVE = BASE_GREEN;
@@ -110,7 +110,7 @@ export const COLORS = {
   accentPrimaryLight: adjustLightness(ACCENT_PRIMARY, 15),
   accentPrimaryDark: adjustLightness(ACCENT_PRIMARY, -15),
   todayIndicator: BASE_INFO,  // Current day label & selected box
-  accentPrimaryDimmed: '#2A2B1A',       // Subtle lime tint bg for selected states
+  accentPrimaryDimmed: '#372E1A',       // Subtle lime tint bg for selected states
   accentSecondary: '#2C2C2E',           // Secondary accent color for buttons
   
   // Text — white on dark

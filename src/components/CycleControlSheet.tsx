@@ -245,7 +245,7 @@ const styles = StyleSheet.create({
     marginLeft: SPACING.md,
   },
   statusBadgePaused: {
-    backgroundColor: COLORS.signalWarningDimmed,
+    backgroundColor: COLORS.accentPrimaryDimmed,
   },
   statusText: {
     ...TYPOGRAPHY.meta,
@@ -253,11 +253,11 @@ const styles = StyleSheet.create({
     color: COLORS.successBright,
   },
   statusTextPaused: {
-    color: COLORS.signalWarning,
+    color: COLORS.accentPrimary,
   },
   resumeDateText: {
     ...TYPOGRAPHY.meta,
-    color: COLORS.signalWarning,
+    color: COLORS.accentPrimary,
   },
   actionsRow: {
     flexDirection: 'row',

@@ -52,6 +52,8 @@ type TranslationKey =
   | 'pastCycle'
   | 'noWorkoutsScheduled'
   | 'swap'
+  | 'useWorkoutFromCycle'
+  | 'selectWorkout'
   | 'createWorkout'
   | 'addWorkout'
   | 'noWorkoutPlanned'
@@ -688,6 +690,8 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     pastCycle: 'Past cycle',
     noWorkoutsScheduled: 'No workouts scheduled',
     swap: 'Swap',
+    useWorkoutFromCycle: 'Use workout from cycle',
+    selectWorkout: 'Select Workout',
     createWorkout: 'Create Workout',
     addWorkout: 'Add Workout',
     noWorkoutPlanned: 'No workout planned',
@@ -1271,6 +1275,8 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     pastCycle: 'Ciclo anterior',
     noWorkoutsScheduled: 'No hay entrenamientos',
     swap: 'Cambiar',
+    useWorkoutFromCycle: 'Usar entrenamiento del ciclo',
+    selectWorkout: 'Seleccionar Entrenamiento',
     createWorkout: 'Crear entrenamiento',
     addWorkout: 'Agregar entrenamiento',
     noWorkoutPlanned: 'No hay entrenamiento planeado',

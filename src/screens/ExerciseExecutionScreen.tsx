@@ -1,12 +1,12 @@
-import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, LayoutAnimation, Platform, UIManager, Alert, Animated, Modal, FlatList, TextInput, Keyboard, KeyboardAvoidingView, TouchableWithoutFeedback } from 'react-native';
+import React, { useState, useEffect, useLayoutEffect, useMemo, useRef, useCallback } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, LayoutAnimation, Platform, UIManager, Alert, Animated, Easing, Modal, FlatList, TextInput, Keyboard, KeyboardAvoidingView, TouchableWithoutFeedback } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, RouteProp, useFocusEffect } from '@react-navigation/native';
 import Svg, { Circle, Path } from 'react-native-svg';
 import * as Haptics from 'expo-haptics';
 import { useStore } from '../store';
 import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS, CARDS } from '../constants';
-import { IconArrowLeft, IconCheck, IconCheckmark, IconAddLine, IconMinusLine, IconTrash, IconEdit, IconMenu, IconHistory, IconRestart, IconSkip, IconSwap, IconSettings, IconArrowRight, IconAdd } from '../components/icons';
+import { IconArrowLeft, IconCheck, IconCheckmark, IconAddLine, IconMinusLine, IconTrash, IconEdit, IconMenu, IconHistory, IconRestart, IconSkip, IconSwap, IconSettings, IconArrowRight, IconAdd, IconPause, IconPlay } from '../components/icons';
 import { BottomDrawer } from '../components/common/BottomDrawer';
 import { NextLabel } from '../components/common/NextLabel';
 import { SetTimerSheet } from '../components/timer/SetTimerSheet';
@@ -102,10 +102,15 @@ export function ExerciseExecutionScreen() {
   const weightUnit = useKg ? 'kg' : 'lb';
   const weightStep = useKg ? 0.5 : 5;
   
-  // Refresh template when screen comes into focus (to show newly added warmup/core items)
+  // Refresh template when screen comes back into focus (not on initial mount)
+  const hasMountedRef = useRef(false);
   useFocusEffect(
     React.useCallback(() => {
-      setRefreshKey(prev => prev + 1);
+      if (hasMountedRef.current) {
+        setRefreshKey(prev => prev + 1);
+      } else {
+        hasMountedRef.current = true;
+      }
     }, [])
   );
   
@@ -241,11 +246,39 @@ export function ExerciseExecutionScreen() {
   
   // State
   const [expandedGroupIndex, setExpandedGroupIndex] = useState(-1);
-  const [currentRounds, setCurrentRounds] = useState<Record<string, number>>({});
-  const [completedSets, setCompletedSets] = useState<Set<string>>(new Set());
-  const [activeExerciseIndex, setActiveExerciseIndex] = useState(0); // Start with first exercise when group is expanded
-  const [hasLoggedAnySet, setHasLoggedAnySet] = useState(false); // Track if any set has been logged
-  const [completionTimestamps, setCompletionTimestamps] = useState<Record<string, number>>({}); // Track when groups were completed
+  const [activeExerciseIndex, setActiveExerciseIndex] = useState(0);
+  const [hasLoggedAnySet, setHasLoggedAnySet] = useState(false);
+  const [completionTimestamps, setCompletionTimestamps] = useState<Record<string, number>>({});
+
+  // Derive completedSets directly from store so it can NEVER go out of sync
+  const storeCompletionItems = useMemo(() => {
+    if (type === 'warmup') return getWarmupCompletion(workoutKey).completedItems;
+    if (type === 'core') return getAccessoryCompletion(workoutKey).completedItems;
+    if (type === 'main') return getMainCompletion(workoutKey).completedItems;
+    return [] as string[];
+  }, [type, workoutKey, scheduledWorkouts]);
+
+  const completedSets = useMemo(
+    () => new Set(storeCompletionItems),
+    [storeCompletionItems],
+  );
+
+  // Derive currentRounds from completedSets + exerciseGroups (always consistent)
+  const currentRounds = useMemo(() => {
+    const rounds: Record<string, number> = {};
+    exerciseGroups.forEach(group => {
+      let completedRoundCount = 0;
+      for (let round = 0; round < group.totalRounds; round++) {
+        const allDone = group.exercises.every(ex =>
+          completedSets.has(`${ex.id}-set-${round}`),
+        );
+        if (allDone) completedRoundCount = round + 1;
+        else break;
+      }
+      rounds[group.id] = completedRoundCount;
+    });
+    return rounds;
+  }, [exerciseGroups, completedSets]);
 
   const [showAddExerciseDrawer, setShowAddExerciseDrawer] = useState(false); // Add exercise bottom drawer
 
@@ -296,6 +329,24 @@ export function ExerciseExecutionScreen() {
   const [drawerExerciseIndex, setDrawerExerciseIndex] = useState<number | null>(null); // Override exercise index for drawer (completed cards)
   const [showTimer, setShowTimer] = useState(false);
   const [isExerciseTimerPhase, setIsExerciseTimerPhase] = useState(false);
+  
+  // Inline rest timer state
+  const [inlineRestActive, setInlineRestActive] = useState(false);
+  const [inlineRestTimeLeft, setInlineRestTimeLeft] = useState(0);
+  const [inlineRestTotal, setInlineRestTotal] = useState(0);
+  const [inlineRestPaused, setInlineRestPaused] = useState(false);
+  const [inlineRestIsLastSet, setInlineRestIsLastSet] = useState(false);
+  const inlineRestEndTimeRef = useRef<number>(0);
+  const inlineRestProgress = useRef(new Animated.Value(1)).current;
+  const inlineRestAnimRef = useRef<Animated.CompositeAnimation | null>(null);
+  const restStagger = useRef({
+    timerLabel: new Animated.Value(0),
+    pauseIcon: new Animated.Value(0),
+    skipIcon: new Animated.Value(0),
+  }).current;
+  const nextLabelAnim = useRef(new Animated.Value(0)).current;
+  const buttonLabelOpacity = useRef(new Animated.Value(1)).current;
+  const counterShrinkAnim = useRef(new Animated.Value(1)).current;
   const [showMenu, setShowMenu] = useState(false);
   const [showExerciseHistory, setShowExerciseHistory] = useState(false);
   const [showSwapModal, setShowSwapModal] = useState(false);
@@ -317,6 +368,146 @@ export function ExerciseExecutionScreen() {
     activeExerciseIndexRef.current = activeExerciseIndex;
   }, [completedSets, currentRounds, activeExerciseIndex]);
   
+  const runRestStaggerIn = useCallback(() => {
+    // Immediately hide button label (no animation — avoids flash from render interruption)
+    buttonLabelOpacity.setValue(0);
+    nextLabelAnim.setValue(0);
+    restStagger.timerLabel.setValue(0);
+    restStagger.pauseIcon.setValue(0);
+    restStagger.skipIcon.setValue(0);
+    // Smooth width expansion for the "Next" label
+    Animated.timing(nextLabelAnim, {
+      toValue: 1, duration: 280, easing: Easing.out(Easing.cubic), useNativeDriver: false,
+    }).start();
+    // Delay stagger by one frame so React renders the correct timer value first
+    requestAnimationFrame(() => {
+      Animated.stagger(55, [
+        Animated.timing(restStagger.timerLabel, {
+          toValue: 1, duration: 220, easing: Easing.out(Easing.cubic), useNativeDriver: true,
+        }),
+        Animated.timing(restStagger.pauseIcon, {
+          toValue: 1, duration: 200, easing: Easing.out(Easing.cubic), useNativeDriver: true,
+        }),
+        Animated.timing(restStagger.skipIcon, {
+          toValue: 1, duration: 200, easing: Easing.out(Easing.cubic), useNativeDriver: true,
+        }),
+      ]).start();
+    });
+  }, [restStagger, nextLabelAnim, buttonLabelOpacity]);
+
+  const runRestStaggerOut = useCallback((onDone: () => void) => {
+    Animated.parallel([
+      // Smooth width collapse for the "Next" label
+      Animated.timing(nextLabelAnim, {
+        toValue: 0, duration: 150, easing: Easing.in(Easing.cubic), useNativeDriver: false,
+      }),
+      // Reverse stagger for timer controls
+      Animated.stagger(30, [
+        Animated.timing(restStagger.skipIcon, {
+          toValue: 0, duration: 100, useNativeDriver: true,
+        }),
+        Animated.timing(restStagger.pauseIcon, {
+          toValue: 0, duration: 100, useNativeDriver: true,
+        }),
+        Animated.timing(restStagger.timerLabel, {
+          toValue: 0, duration: 100, useNativeDriver: true,
+        }),
+      ]),
+    ]).start(() => onDone());
+  }, [restStagger, nextLabelAnim]);
+
+  // Reset animated values and fade in button label when returning from rest timer.
+  // useLayoutEffect runs before paint, preventing a frame where counter/button flash.
+  const wasRestActiveRef = useRef(false);
+  useLayoutEffect(() => {
+    if (wasRestActiveRef.current && !inlineRestActive) {
+      inlineRestProgress.setValue(1);
+      counterShrinkAnim.setValue(1);
+      buttonLabelOpacity.setValue(0);
+      Animated.timing(buttonLabelOpacity, {
+        toValue: 1, duration: 250, easing: Easing.out(Easing.ease), useNativeDriver: true,
+      }).start();
+    }
+    wasRestActiveRef.current = inlineRestActive;
+  }, [inlineRestActive]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Inline rest timer countdown
+  useEffect(() => {
+    if (!inlineRestActive || inlineRestPaused) return;
+    const interval = setInterval(() => {
+      const remaining = Math.max(0, Math.ceil((inlineRestEndTimeRef.current - Date.now()) / 1000));
+      setInlineRestTimeLeft(remaining);
+      if (remaining <= 0) {
+        clearInterval(interval);
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        runRestStaggerOut(() => inlineRestDismissRef.current());
+      }
+    }, 200);
+    return () => clearInterval(interval);
+  }, [inlineRestActive, inlineRestPaused]);
+
+  const startInlineRestAnim = useCallback((fromValue: number, durationMs: number) => {
+    if (inlineRestAnimRef.current) inlineRestAnimRef.current.stop();
+    inlineRestProgress.setValue(fromValue);
+    const anim = Animated.timing(inlineRestProgress, {
+      toValue: 0,
+      duration: durationMs,
+      easing: Easing.linear,
+      useNativeDriver: false,
+    });
+    inlineRestAnimRef.current = anim;
+    anim.start();
+  }, [inlineRestProgress]);
+
+  const startInlineRest = useCallback(() => {
+    const restSeconds = settings.restTimerDefaultSeconds;
+    setInlineRestTotal(restSeconds);
+    setInlineRestTimeLeft(restSeconds);
+    setInlineRestPaused(false);
+    inlineRestEndTimeRef.current = Date.now() + restSeconds * 1000;
+    setInlineRestActive(true);
+    startInlineRestAnim(1, restSeconds * 1000);
+  }, [settings.restTimerDefaultSeconds, startInlineRestAnim]);
+
+  const inlineRestDismissAndAdvance = () => {
+    if (inlineRestAnimRef.current) inlineRestAnimRef.current.stop();
+    setInlineRestActive(false);
+    setInlineRestTimeLeft(0);
+    setInlineRestPaused(false);
+    const currentGroup = exerciseGroups[expandedGroupIndex];
+    if (!currentGroup) return;
+    const currentRound = currentRoundsRef.current[currentGroup.id] || 0;
+    const currentCompletedSets = completedSetsRef.current;
+    // With derived currentRounds, the round count may already reflect completion.
+    // If currentRound >= totalRounds, the group is fully done.
+    const allExercisesComplete = currentRound >= currentGroup.totalRounds ||
+      currentGroup.exercises.every(ex => {
+        const exSetId = `${ex.id}-set-${currentRound}`;
+        return currentCompletedSets.has(exSetId);
+      });
+    advanceToNext(allExercisesComplete, currentCompletedSets);
+  };
+
+  const inlineRestDismissRef = useRef(inlineRestDismissAndAdvance);
+  inlineRestDismissRef.current = inlineRestDismissAndAdvance;
+
+  const handleInlineRestPauseToggle = () => {
+    if (inlineRestPaused) {
+      inlineRestEndTimeRef.current = Date.now() + inlineRestTimeLeft * 1000;
+      setInlineRestPaused(false);
+      const remaining = inlineRestTotal > 0 ? inlineRestTimeLeft / inlineRestTotal : 0;
+      startInlineRestAnim(remaining, inlineRestTimeLeft * 1000);
+    } else {
+      if (inlineRestAnimRef.current) inlineRestAnimRef.current.stop();
+      setInlineRestPaused(true);
+    }
+  };
+
+  const handleInlineRestSkip = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    runRestStaggerOut(() => inlineRestDismissRef.current());
+  };
+
   // Track keyboard visibility for in-drawer Save button
   useEffect(() => {
     const showSub = Keyboard.addListener(Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow', () => setIsKeyboardVisible(true));
@@ -337,7 +528,10 @@ export function ExerciseExecutionScreen() {
   const sortedExerciseGroups = useMemo(() => {
     const groupsWithInfo = exerciseGroups.map((group, index) => {
       const currentRound = currentRounds[group.id] || 0;
-      const isCompleted = currentRound >= group.totalRounds;
+      // Don't treat the active group as "completed" while its rest timer is running —
+      // otherwise it jumps to the top mid-timer and snaps back when done
+      const isActiveWithTimer = inlineRestActive && index === expandedGroupIndex;
+      const isCompleted = currentRound >= group.totalRounds && !isActiveWithTimer;
       const completionTime = completionTimestamps[group.id] || 0;
       return { group, index, isCompleted, completionTime };
     });
@@ -359,7 +553,7 @@ export function ExerciseExecutionScreen() {
     
     // Combine: completed first, then incomplete
     return [...completed.map(g => g.group), ...sortedIncomplete.map(g => g.group)];
-  }, [exerciseGroups, expandedGroupIndex, hasLoggedAnySet, currentRounds, completionTimestamps]);
+  }, [exerciseGroups, expandedGroupIndex, hasLoggedAnySet, currentRounds, completionTimestamps, inlineRestActive]);
   
   // Map to track original indices for group IDs
   const groupIdToOriginalIndex = useMemo(() => {
@@ -392,103 +586,67 @@ export function ExerciseExecutionScreen() {
     });
   }, [exerciseGroups]);
   
-  // Load completion state
+  // Initialize UI state on mount (expandedGroupIndex, hasLoggedAnySet, localValues, sessionId)
+  // completedSets and currentRounds are derived from the store, so we only need to set UI state here
+  const hasInitializedUIRef = useRef(false);
   useEffect(() => {
-    if (exerciseGroups.length === 0) return; // Wait for groups to be populated
-    
-    console.log('📂 Loading completion state:', { type, workoutKey });
-    const completion = type === 'warmup' 
-      ? getWarmupCompletion(workoutKey)
-      : type === 'core'
-      ? getAccessoryCompletion(workoutKey)
-      : type === 'main'
-      ? getMainCompletion(workoutKey)
-      : null;
-    
-    console.log('📊 Loaded completion:', completion);
-      
-    if (completion && completion.completedItems.length > 0) {
-      const completedItemsSet = new Set(completion.completedItems);
-      setCompletedSets(completedItemsSet);
+    if (exerciseGroups.length === 0) return;
+    if (hasInitializedUIRef.current) return;
+    hasInitializedUIRef.current = true;
+
+    if (completedSets.size > 0) {
       setHasLoggedAnySet(true);
-      
-      // Calculate current rounds for each group
-      const rounds: Record<string, number> = {};
-      exerciseGroups.forEach(group => {
-        let completedRounds = 0;
-        for (let round = 0; round < group.totalRounds; round++) {
-          const allExercisesComplete = group.exercises.every(ex => {
-            const setId = `${ex.id}-set-${round}`;
-            return completedItemsSet.has(setId);
-          });
-          if (allExercisesComplete) {
-            completedRounds = round + 1;
-          } else {
-            break;
-          }
-        }
-        rounds[group.id] = completedRounds;
-      });
-      setCurrentRounds(rounds);
-      
-      // Find the last group that has ANY progress (where user was working)
-      // This is better than "first incomplete" because user may have skipped ahead
+
+      // Find the last group with any progress (where user was working)
       let lastActiveGroupIndex = -1;
       exerciseGroups.forEach((group, idx) => {
         const hasAnyProgress = group.exercises.some(ex => {
           for (let round = 0; round < group.totalRounds; round++) {
-            if (completedItemsSet.has(`${ex.id}-set-${round}`)) return true;
+            if (completedSets.has(`${ex.id}-set-${round}`)) return true;
           }
           return false;
         });
-        if (hasAnyProgress) {
-          lastActiveGroupIndex = idx;
-        }
+        if (hasAnyProgress) lastActiveGroupIndex = idx;
       });
-      
-      // If the last active group is fully complete, find the next incomplete group
+
       if (lastActiveGroupIndex >= 0) {
-        const lastActiveRounds = rounds[exerciseGroups[lastActiveGroupIndex].id] || 0;
+        const lastActiveRounds = currentRounds[exerciseGroups[lastActiveGroupIndex].id] || 0;
         const lastActiveTotal = exerciseGroups[lastActiveGroupIndex].totalRounds;
-        
+
         if (lastActiveRounds >= lastActiveTotal) {
-          // Last active group is done - find next incomplete (with wrap-around)
           let nextIncomplete = exerciseGroups.findIndex((group, idx) => {
             if (idx <= lastActiveGroupIndex) return false;
-            return (rounds[group.id] || 0) < group.totalRounds;
+            return (currentRounds[group.id] || 0) < group.totalRounds;
           });
           if (nextIncomplete < 0) {
             nextIncomplete = exerciseGroups.findIndex((group, idx) => {
               if (idx >= lastActiveGroupIndex) return false;
-              return (rounds[group.id] || 0) < group.totalRounds;
+              return (currentRounds[group.id] || 0) < group.totalRounds;
             });
           }
           setExpandedGroupIndex(nextIncomplete >= 0 ? nextIncomplete : lastActiveGroupIndex);
         } else {
-          // Last active group still has sets to do - resume there
           setExpandedGroupIndex(lastActiveGroupIndex);
         }
       } else {
         setExpandedGroupIndex(0);
       }
-      
     } else {
-      setExpandedGroupIndex(0); // Expand first group by default
+      setExpandedGroupIndex(0);
     }
 
     // Restore localValues from the best available data source
     const restoredValues: Record<string, { weight: number; reps: number }> = {};
-    
-    // 1. First, try to restore from detailedWorkoutProgress (most reliable for actual logged values)
+
     const progressData = getDetailedWorkoutProgress();
     if (workoutKey && progressData[workoutKey]) {
       const workoutProgress = progressData[workoutKey];
       const freshTemplate = useStore.getState().workoutTemplates.find(t => t.id === workoutTemplateId);
-      
+
       Object.entries(workoutProgress.exercises).forEach(([templateExId, exProgress]) => {
         const templateEx = (freshTemplate?.items || (freshTemplate as any)?.exercises)?.find((ex: any) => ex.id === templateExId);
         const libExId = templateEx?.exerciseId || templateExId;
-        
+
         exerciseGroups.forEach(group => {
           group.exercises.forEach(ex => {
             if (ex.id === libExId || ex.id === templateExId) {
@@ -502,26 +660,19 @@ export function ExerciseExecutionScreen() {
           });
         });
       });
-      
-      if (Object.keys(restoredValues).length > 0) {
-        console.log('📂 Restored localValues for', Object.keys(restoredValues).length, 'sets from detailedWorkoutProgress');
-      }
     }
-    
-    // 2. Then fill in from session data for any sets not covered by progress
+
     const allSessions = useStore.getState().sessions;
-    const existingSession = allSessions.find(s => 
+    const existingSession = allSessions.find(s =>
       (s as any).workoutKey === workoutKey
     ) || allSessions.find(s => {
       const dateMatch = workoutKey?.match(/(\d{4}-\d{2}-\d{2})/);
       const sessionDate = dateMatch ? dateMatch[1] : null;
       return s.workoutTemplateId === workoutTemplateId && sessionDate && s.date === sessionDate;
     });
-    
+
     if (existingSession) {
-      console.log('📂 Found existing session:', existingSession.id);
       setCurrentSessionId(existingSession.id);
-      
       existingSession.sets.forEach((set: any) => {
         exerciseGroups.forEach(group => {
           group.exercises.forEach(ex => {
@@ -536,11 +687,12 @@ export function ExerciseExecutionScreen() {
         });
       });
     }
-    
+
     if (Object.keys(restoredValues).length > 0) {
       setLocalValues(prev => ({ ...prev, ...restoredValues }));
     }
-  }, [workoutKey, type, exerciseGroups, getWarmupCompletion, getAccessoryCompletion, getMainCompletion]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [exerciseGroups, completedSets, currentRounds]);
   
   // Auto-set active exercise when expanding a group
   useEffect(() => {
@@ -778,15 +930,51 @@ export function ExerciseExecutionScreen() {
     
     if (!hasLoggedAnySet) setHasLoggedAnySet(true);
     
-    // Mark set as complete
     const setId = `${currentExercise.id}-set-${currentRound}`;
+
+    // Build newCompletedSets synchronously for immediate logic checks
     const newCompletedSets = new Set(completedSets);
     newCompletedSets.add(setId);
-    console.log('✅ Marking set as complete:', setId);
-    setCompletedSets(newCompletedSets);
     
-    // Save to store (individual set completion)
-    console.log('💾 Saving set completion:', { type, workoutKey, setId });
+    // Check if all exercises in this round are complete
+    const allExercisesComplete = currentGroup.exercises.every(ex => {
+      const exSetId = `${ex.id}-set-${currentRound}`;
+      return newCompletedSets.has(exSetId);
+    });
+    
+    const isLastGroup = expandedGroupIndex === exerciseGroups.length - 1;
+    const isLastRound = currentRound + 1 >= currentGroup.totalRounds;
+    const isLastExercise = activeExerciseIndex === currentGroup.exercises.length - 1;
+    const isVeryLastSet = isLastGroup && isLastRound && (allExercisesComplete || isLastExercise);
+    
+    // Start the rest timer BEFORE any await — this ensures inlineRestActive is true
+    // when the store update triggers a re-render, preventing the action row from hiding
+    if (type === 'main' && !isVeryLastSet) {
+      const nextRoundAfterRest = allExercisesComplete ? currentRound + 1 : currentRound;
+      const nextRoundIsLast = nextRoundAfterRest + 1 >= currentGroup.totalRounds;
+      const nextExAfterRest = allExercisesComplete ? 0 : activeExerciseIndex + 1;
+      const nextExIsLast = nextExAfterRest >= currentGroup.exercises.length - 1;
+      setInlineRestIsLastSet(isLastGroup && nextRoundIsLast && nextExIsLast);
+      if (currentExercise.isTimeBased) {
+        setIsExerciseTimerPhase(false);
+        setShowTimer(true);
+      } else {
+        counterShrinkAnim.setValue(1);
+        startInlineRest();
+        runRestStaggerIn();
+        if (allExercisesComplete && isLastRound) {
+          nextLabelAnim.setValue(0);
+          requestAnimationFrame(() => {
+            Animated.timing(counterShrinkAnim, {
+              toValue: 0, duration: 350, easing: Easing.out(Easing.cubic), useNativeDriver: false,
+            }).start();
+          });
+        }
+      }
+    }
+    
+    // Now persist to the store — re-renders from this are safe because
+    // inlineRestActive is already true (indicatorActive stays true)
     if (type === 'warmup') {
       await updateWarmupCompletion(workoutKey, setId, true);
     } else if (type === 'core') {
@@ -794,7 +982,6 @@ export function ExerciseExecutionScreen() {
     } else if (type === 'main') {
       await updateMainCompletion(workoutKey, setId, true);
     }
-    console.log('✅ Set completion saved');
     
     // Check for new PR (only for main exercises with weight > 0)
     if (type === 'main' && !currentExercise.isTimeBased) {
@@ -809,22 +996,8 @@ export function ExerciseExecutionScreen() {
       }
     }
     
-    // Check if all exercises in this round are complete
-    const allExercisesComplete = currentGroup.exercises.every(ex => {
-      const exSetId = `${ex.id}-set-${currentRound}`;
-      return newCompletedSets.has(exSetId);
-    });
-    
-    // Check if this is the last set of the last group
-    const isLastGroup = expandedGroupIndex === exerciseGroups.length - 1;
-    const isLastRound = currentRound + 1 >= currentGroup.totalRounds;
-    const isLastExercise = activeExerciseIndex === currentGroup.exercises.length - 1;
-    const isVeryLastSet = isLastGroup && isLastRound && (allExercisesComplete || isLastExercise);
-    
-    // For strength (main) workouts, show rest timer after completing a set (except for the very last set)
     if (type === 'main' && !isVeryLastSet) {
-      setIsExerciseTimerPhase(false);
-      setShowTimer(true);
+      await saveSession(newCompletedSets);
       return;
     }
     
@@ -834,15 +1007,16 @@ export function ExerciseExecutionScreen() {
   
   const advanceToNext = async (allExercisesComplete: boolean, newCompletedSets: Set<string>) => {
     setShowTimer(false);
+    setInlineRestActive(false);
     
     const currentGroup = exerciseGroups[expandedGroupIndex];
-    const currentRound = currentRounds[currentGroup.id] || 0;
+    const currentRound = currentRoundsRef.current[currentGroup.id] || 0;
     
     console.log('⏭️ advanceToNext called:', {
       allExercisesComplete,
       currentRound,
       totalRounds: currentGroup.totalRounds,
-      activeExerciseIndex,
+      activeExerciseIndex: activeExerciseIndexRef.current,
       exercisesInGroup: currentGroup.exercises.length,
     });
     
@@ -851,9 +1025,8 @@ export function ExerciseExecutionScreen() {
       const nextRound = currentRound + 1;
       
       if (nextRound >= currentGroup.totalRounds) {
-        // This group is complete - update state with new round count
-        const updatedRounds = { ...currentRounds, [currentGroup.id]: nextRound };
-        setCurrentRounds(updatedRounds);
+        // This group is complete — currentRounds will update automatically via derived state
+        const updatedRounds = { ...currentRoundsRef.current, [currentGroup.id]: nextRound };
         setCompletionTimestamps(prev => ({ ...prev, [currentGroup.id]: Date.now() }));
         
         // Find the next incomplete group - first look after current, then wrap around to before
@@ -919,9 +1092,8 @@ export function ExerciseExecutionScreen() {
           setActiveExerciseIndex(0);
         }
       } else {
-        // Same group, next round
+        // Same group, next round — currentRounds updates via derived state
         console.log('➡️ Moving to next round:', nextRound);
-        setCurrentRounds(prev => ({ ...prev, [currentGroup.id]: nextRound }));
         setActiveExerciseIndex(0);
         
         // Copy values from completed sets to next round sets
@@ -944,7 +1116,7 @@ export function ExerciseExecutionScreen() {
       }
     } else {
       // Move to next exercise in same round
-      const nextExIndex = activeExerciseIndex + 1;
+      const nextExIndex = activeExerciseIndexRef.current + 1;
       console.log('➡️ Moving to next exercise in same round:', nextExIndex);
       if (nextExIndex < currentGroup.exercises.length) {
         setActiveExerciseIndex(nextExIndex);
@@ -954,7 +1126,7 @@ export function ExerciseExecutionScreen() {
     }
   };
   
-  const handleStart = () => {
+  const handleStart = async () => {
     if (expandedGroupIndex < 0) return;
     
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -975,7 +1147,7 @@ export function ExerciseExecutionScreen() {
       setShowTimer(true);
     } else {
       // For reps-based exercises, mark as complete immediately
-      handleComplete();
+      await handleComplete();
     }
   };
   
@@ -1011,10 +1183,7 @@ export function ExerciseExecutionScreen() {
               });
             });
             
-            const completedSetsSet = new Set(allSetIds);
-            setCompletedSets(completedSetsSet);
-            
-            // Update completion state - call for each set individually
+            // Update completion in store (completedSets + currentRounds derive automatically)
             if (type === 'warmup') {
               for (const setId of allSetIds) {
                 await updateWarmupCompletion(workoutKey, setId, true);
@@ -1028,25 +1197,14 @@ export function ExerciseExecutionScreen() {
                 await updateMainCompletion(workoutKey, setId, true);
               }
             }
-            
-            // Pass the completed sets directly to avoid state timing issues
+
+            const completedSetsSet = new Set(allSetIds);
             await saveSession(completedSetsSet);
             
-            // Only mark workout as completed if ALL sections are done
             if (workoutKey.startsWith('sw-') && isEntireWorkoutComplete()) {
-              console.log('🎉 All sections done - marking workout as complete:', workoutKey);
               await completeWorkout(workoutKey);
-              console.log('✅ Workout marked as complete');
-            } else {
-              console.log('📋 Section complete but other sections remain');
             }
             
-            // Update currentRounds so allCurrentGroupsComplete triggers
-            const updatedRounds: Record<string, number> = {};
-            exerciseGroups.forEach(group => {
-              updatedRounds[group.id] = group.totalRounds;
-            });
-            setCurrentRounds(prev => ({ ...prev, ...updatedRounds }));
             setHasLoggedAnySet(true);
             
             if (bonusLogId) {
@@ -1101,26 +1259,11 @@ export function ExerciseExecutionScreen() {
           text: t('reset'),
           style: 'destructive',
           onPress: async () => {
-            // Delete the saved session for this workout (if any)
-            if (currentSessionId) {
-              console.log('🗑️ Deleting session on reset:', currentSessionId);
-              await deleteSession(currentSessionId);
-              setCurrentSessionId(null);
-            }
-            
-            // Clear all completed sets in local state
             LayoutAnimation.configureNext(
               LayoutAnimation.create(250, LayoutAnimation.Types.easeInEaseOut, LayoutAnimation.Properties.opacity)
             );
-            setCompletedSets(new Set());
-            setCurrentRounds({});
-            setCompletionTimestamps({});
-            setExpandedGroupIndex(0);
-            setActiveExerciseIndex(0);
-            setHasLoggedAnySet(false);
-            setLocalValues({}); // Reset adjusted values back to template defaults
-            
-            // Clear completion state in store
+
+            // Clear completion in store (completedSets + currentRounds derive automatically)
             if (type === 'warmup') {
               await resetWarmupCompletion(workoutKey);
             } else if (type === 'core') {
@@ -1129,12 +1272,21 @@ export function ExerciseExecutionScreen() {
               await resetMainCompletion(workoutKey);
             }
             
-            // Revert workout status from completed back to planned
             if (workoutKey.startsWith('sw-')) {
               await uncompleteWorkout(workoutKey);
             }
+
+            if (currentSessionId) {
+              await deleteSession(currentSessionId);
+              setCurrentSessionId(null);
+            }
+
+            setCompletionTimestamps({});
+            setExpandedGroupIndex(0);
+            setActiveExerciseIndex(0);
+            setHasLoggedAnySet(false);
+            setLocalValues({});
             
-            // Show feedback
             await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
           },
         },
@@ -1142,19 +1294,21 @@ export function ExerciseExecutionScreen() {
     );
   };
 
-  const cleanupAfterSwap = (oldExerciseId: string, newExerciseId: string) => {
-    // Migrate completedSets, localValues, and currentRounds from old exercise ID to new
-    setCompletedSets(prev => {
-      const next = new Set(prev);
-      prev.forEach(setId => {
-        if (setId.startsWith(`${oldExerciseId}-set-`)) {
-          const round = setId.replace(`${oldExerciseId}-set-`, '');
-          next.delete(setId);
-          next.add(`${newExerciseId}-set-${round}`);
-        }
-      });
-      return next;
-    });
+  const cleanupAfterSwap = async (oldExerciseId: string, newExerciseId: string) => {
+    // Migrate completion from old exercise ID to new in the store
+    const completedArray = Array.from(completedSets);
+    const updateFn = type === 'warmup' ? updateWarmupCompletion
+      : type === 'core' ? updateAccessoryCompletion
+      : updateMainCompletion;
+
+    for (const setId of completedArray) {
+      if (setId.startsWith(`${oldExerciseId}-set-`)) {
+        const round = setId.replace(`${oldExerciseId}-set-`, '');
+        await updateFn(workoutKey, setId, false);
+        await updateFn(workoutKey, `${newExerciseId}-set-${round}`, true);
+      }
+    }
+
     setLocalValues(prev => {
       const next = { ...prev };
       Object.keys(prev).forEach(setId => {
@@ -1185,31 +1339,28 @@ export function ExerciseExecutionScreen() {
             text: t('reset'),
             style: 'destructive',
             onPress: async () => {
-              // Delete the saved session for this workout (if any)
+              // Clear completion in store first (completedSets derives automatically)
+              if (type === 'warmup') {
+                await resetWarmupCompletion(workoutKey);
+              } else if (type === 'core') {
+                await resetAccessoryCompletion(workoutKey);
+              } else if (type === 'main') {
+                await resetMainCompletion(workoutKey);
+              }
+              
               if (currentSessionId) {
-                console.log('🗑️ Deleting session on swap-reset:', currentSessionId);
                 await deleteSession(currentSessionId);
                 setCurrentSessionId(null);
               }
               
-              // Clear all completed sets
               LayoutAnimation.configureNext(
                 LayoutAnimation.create(250, LayoutAnimation.Types.easeInEaseOut, LayoutAnimation.Properties.opacity)
               );
-              setCompletedSets(new Set());
-              setCurrentRounds({});
               setCompletionTimestamps({});
               setExpandedGroupIndex(0);
               setActiveExerciseIndex(0);
               setHasLoggedAnySet(false);
               setLocalValues({});
-              
-              // Clear completion state in store
-              if (type === 'warmup') {
-                await resetWarmupCompletion(workoutKey);
-              } else if (type === 'core') {
-                await resetAccessoryCompletion(workoutKey);
-              }
               
               // Show feedback
               await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
@@ -1484,13 +1635,15 @@ export function ExerciseExecutionScreen() {
             const isExpanded = expandedGroupIndex === originalIndex;
             const currentRound = currentRounds[group.id] || 0;
             const isCompleted = currentRound >= group.totalRounds;
+            const isActiveWithTimer = isExpanded && inlineRestActive;
             
             // Whether the indicator column is active for this group
-            const indicatorActive = isExpanded && !isCompleted;
+            const indicatorActive = isExpanded && (!isCompleted || inlineRestActive);
 
-            // Group-level card style
-            const groupCardBg = isCompleted ? styles.itemCardDimmed : (isExpanded ? styles.itemCardBorder : styles.itemCardInactive);
-            const groupCardFg = isCompleted ? styles.itemCardInnerDimmed : (isExpanded ? styles.itemCardFill : styles.itemCardInnerInactive);
+            // Keep the active card style while the rest timer is running to prevent padding jump
+            const visuallyCompleted = isCompleted && !isActiveWithTimer;
+            const groupCardBg = visuallyCompleted ? styles.itemCardDimmed : (isExpanded ? styles.itemCardBorder : styles.itemCardInactive);
+            const groupCardFg = visuallyCompleted ? styles.itemCardInnerDimmed : (isExpanded ? styles.itemCardFill : styles.itemCardInnerInactive);
 
             return (
               <View key={group.id} testID={`exercise-group-${originalIndex}`} style={styles.itemRow}>
@@ -1611,6 +1764,8 @@ export function ExerciseExecutionScreen() {
                                         }}
                                         activeOpacity={0.7}
                                         hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                                        style={{ opacity: isCompleted ? 0 : 1 }}
+                                        disabled={isCompleted}
                                       >
                                         <IconEdit size={18} color={COLORS.textMeta} />
                                       </TouchableOpacity>
@@ -1643,6 +1798,8 @@ export function ExerciseExecutionScreen() {
                                           }}
                                           activeOpacity={0.7}
                                           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                                          style={{ opacity: isCompleted ? 0 : 1 }}
+                                          disabled={isCompleted}
                                         >
                                           <IconEdit size={18} color={COLORS.textMeta} />
                                         </TouchableOpacity>
@@ -1695,24 +1852,90 @@ export function ExerciseExecutionScreen() {
                         </View>
                       )}
 
-                      {/* Start button + Set indicator row inside the card */}
+                      {/* Start button + Set indicator row / Inline rest timer */}
                       {indicatorActive && (
                         <View style={styles.cardActionRow}>
-                          <TouchableOpacity
-                            testID="start-button"
-                            style={styles.cardStartButton}
-                            onPress={handleStart}
-                            activeOpacity={0.8}
-                          >
-                            <Text style={styles.cardStartButtonText}>
-                              {group.exercises[activeExerciseIndex]?.isTimeBased ? t('startTimer') : t('markAsCompleted')}
-                            </Text>
-                          </TouchableOpacity>
-                          <View style={styles.setCountIndicator}>
-                            <Text style={styles.setCountText} numberOfLines={1}>
-                              {currentRound + 1}/{group.totalRounds}
-                            </Text>
-                          </View>
+                          {/* Left: unified button / timer — same element, no mount/unmount */}
+                          <Animated.View style={[styles.actionLeftContainer, {
+                            borderBottomRightRadius: counterShrinkAnim.interpolate({ inputRange: [0, 0.3, 1], outputRange: [11, 0, 0] }),
+                            borderRightWidth: counterShrinkAnim.interpolate({ inputRange: [0, 0.05, 1], outputRange: [1, 0, 0] }),
+                          }]}>
+                            <View style={styles.inlineRestProgressTrack}>
+                              <Animated.View style={[styles.inlineRestProgressFill, { width: inlineRestProgress.interpolate({ inputRange: [0, 1], outputRange: ['0%', '100%'] }) }]} />
+                            </View>
+
+                            {/* Button label — fades out when timer starts */}
+                            <Animated.View
+                              style={[styles.actionLeftOverlay, { opacity: buttonLabelOpacity }]}
+                              pointerEvents={inlineRestActive ? 'none' : 'auto'}
+                            >
+                              <TouchableOpacity
+                                testID="start-button"
+                                style={styles.actionLeftTouchable}
+                                onPress={handleStart}
+                                activeOpacity={0.8}
+                              >
+                                <Text style={styles.cardStartButtonText}>
+                                  {group.exercises[activeExerciseIndex]?.isTimeBased ? t('startTimer') : t('markAsCompleted')}
+                                </Text>
+                              </TouchableOpacity>
+                            </Animated.View>
+
+                            {/* Timer controls — stagger in over the progress bar */}
+                            <View
+                              style={styles.inlineRestControlsAbsolute}
+                              pointerEvents={inlineRestActive ? 'auto' : 'none'}
+                            >
+                              <Animated.View style={{ opacity: restStagger.timerLabel, transform: [{ translateX: restStagger.timerLabel.interpolate({ inputRange: [0, 1], outputRange: [-10, 0] }) }] }}>
+                                <Text style={styles.inlineRestTime}>
+                                  {Math.floor(inlineRestTimeLeft / 60)}:{String(inlineRestTimeLeft % 60).padStart(2, '0')}
+                                </Text>
+                              </Animated.View>
+                              <Animated.View style={{ opacity: restStagger.pauseIcon, transform: [{ translateX: restStagger.pauseIcon.interpolate({ inputRange: [0, 1], outputRange: [-8, 0] }) }] }}>
+                                <TouchableOpacity onPress={handleInlineRestPauseToggle} activeOpacity={0.7} style={styles.inlineRestIconBtn}>
+                                  {inlineRestPaused ? <IconPlay size={20} color={COLORS.canvas} /> : <IconPause size={20} color={COLORS.canvas} />}
+                                </TouchableOpacity>
+                              </Animated.View>
+                              <Animated.View style={{ opacity: restStagger.skipIcon, transform: [{ translateX: restStagger.skipIcon.interpolate({ inputRange: [0, 1], outputRange: [-8, 0] }) }] }}>
+                                <TouchableOpacity onPress={handleInlineRestSkip} activeOpacity={0.7} style={styles.inlineRestIconBtn}>
+                                  <IconSkip size={20} color={COLORS.canvas} />
+                                </TouchableOpacity>
+                              </Animated.View>
+                            </View>
+                          </Animated.View>
+
+                          {/* Right: set counter — shrinks to zero on last set of a group */}
+                          <Animated.View style={[styles.setCountIndicator, {
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            maxWidth: counterShrinkAnim.interpolate({ inputRange: [0, 1], outputRange: [0, 100] }),
+                            paddingHorizontal: counterShrinkAnim.interpolate({ inputRange: [0, 1], outputRange: [0, 12] }),
+                            borderTopWidth: counterShrinkAnim.interpolate({ inputRange: [0, 0.01, 1], outputRange: [0, 1, 1] }),
+                            borderBottomWidth: counterShrinkAnim.interpolate({ inputRange: [0, 0.01, 1], outputRange: [0, 1, 1] }),
+                            borderRightWidth: counterShrinkAnim.interpolate({ inputRange: [0, 0.01, 1], outputRange: [0, 1, 1] }),
+                            borderLeftWidth: 0,
+                          }]}>
+                            {inlineRestActive && inlineRestIsLastSet ? (
+                              <IconCheckmark size={18} color={COLORS.accentPrimary} />
+                            ) : (
+                              <>
+                                <Animated.View style={{
+                                  overflow: 'hidden',
+                                  maxWidth: nextLabelAnim.interpolate({ inputRange: [0, 1], outputRange: [0, 50] }),
+                                  marginRight: nextLabelAnim.interpolate({ inputRange: [0, 1], outputRange: [0, 4] }),
+                                }}>
+                                  <Text style={styles.setCountNextLabel} numberOfLines={1}>
+                                    {t('next')}
+                                  </Text>
+                                </Animated.View>
+                                <Text style={styles.setCountText} numberOfLines={1}>
+                                  {inlineRestActive
+                                    ? `${Math.min(currentRound + 1, group.totalRounds)}/${group.totalRounds}`
+                                    : `${currentRound + 1}/${group.totalRounds}`}
+                                </Text>
+                              </>
+                            )}
+                          </Animated.View>
                         </View>
                       )}
                     </View>
@@ -1762,13 +1985,12 @@ export function ExerciseExecutionScreen() {
               activeExerciseIndex: activeExerciseIndexRef.current,
             });
             
-            // Check if all exercises in this round are complete
-            const allExercisesComplete = currentGroup.exercises.every(ex => {
-              const exSetId = `${ex.id}-set-${currentRound}`;
-              return currentCompletedSets.has(exSetId);
-            });
+            const allExercisesComplete = currentRound >= currentGroup.totalRounds ||
+              currentGroup.exercises.every(ex => {
+                const exSetId = `${ex.id}-set-${currentRound}`;
+                return currentCompletedSets.has(exSetId);
+              });
             
-            console.log('⏰ All exercises complete:', allExercisesComplete);
             advanceToNext(allExercisesComplete, currentCompletedSets);
           }}
           onClose={() => setShowTimer(false)}
@@ -2640,34 +2862,49 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     paddingHorizontal: 4,
     paddingBottom: 4,
+    height: 48,
     gap: 0,
   },
   setCountIndicator: {
     backgroundColor: COLORS.accentPrimaryDimmed,
-    borderWidth: 1,
     borderColor: COLORS.accentPrimary,
     borderTopLeftRadius: 0,
     borderTopRightRadius: 0,
     borderBottomLeftRadius: 0,
-    borderBottomRightRadius: 14,
+    borderBottomRightRadius: 11,
     borderCurve: 'continuous' as const,
     alignItems: 'center',
     justifyContent: 'center',
+    overflow: 'hidden',
     height: 44,
     paddingHorizontal: 12,
     overflow: 'hidden',
   },
-  cardStartButton: {
+  actionLeftContainer: {
     flex: 1,
     height: 44,
-    backgroundColor: COLORS.accentPrimary,
+    backgroundColor: COLORS.backgroundContainer,
     borderTopLeftRadius: 0,
     borderTopRightRadius: 0,
-    borderBottomLeftRadius: 14,
+    borderBottomLeftRadius: 11,
     borderBottomRightRadius: 0,
     borderCurve: 'continuous' as const,
-    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: COLORS.accentPrimary,
+    borderRightWidth: 0,
+    overflow: 'hidden',
+  },
+  actionLeftOverlay: {
+    ...StyleSheet.absoluteFillObject,
     justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 2,
+  },
+  actionLeftTouchable: {
+    flex: 1,
+    width: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   cardStartButtonText: {
     ...TYPOGRAPHY.metaBold,
@@ -2677,6 +2914,51 @@ const styles = StyleSheet.create({
     ...TYPOGRAPHY.meta,
     color: COLORS.accentPrimary,
     textAlign: 'center',
+  },
+  setCountIndicatorRow: {
+    flexDirection: 'row',
+    gap: 4,
+  },
+  setCountNextLabel: {
+    ...TYPOGRAPHY.meta,
+    color: COLORS.text,
+    flexShrink: 0,
+  },
+  inlineRestControlsAbsolute: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    bottom: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    gap: 8,
+    zIndex: 1,
+    overflow: 'hidden',
+  },
+  inlineRestProgressTrack: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 0,
+    bottom: 0,
+    backgroundColor: COLORS.accentPrimaryDimmed,
+    borderRadius: 10,
+  },
+  inlineRestProgressFill: {
+    height: '100%',
+    backgroundColor: COLORS.accentPrimary,
+  },
+  inlineRestTime: {
+    ...TYPOGRAPHY.metaBold,
+    color: COLORS.canvas,
+    width: 40,
+  },
+  inlineRestIconBtn: {
+    width: 32,
+    height: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   completedCheckContainer: {
     alignItems: 'center',

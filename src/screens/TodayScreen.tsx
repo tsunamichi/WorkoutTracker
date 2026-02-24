@@ -124,7 +124,7 @@ const LIGHT_COLORS = {
 
 interface TodayScreenProps {
   onDateChange?: (isToday: boolean) => void;
-  onOpenSwapDrawer?: (selectedDate: string, weekDays: any[]) => void;
+  onOpenSwapDrawer?: (selectedDate: string, weekDays: any[], isRestDay?: boolean) => void;
   onOpenAddWorkout?: (date: string) => void;
   onOpenBonusDrawer?: () => void;
 }
@@ -150,10 +150,16 @@ export function TodayScreen({ onDateChange, onOpenSwapDrawer, onOpenAddWorkout, 
     pauseShiftCyclePlan,
     endCyclePlan,
     updateCyclePlan,
+    repairPausedCycleSchedule,
   } = useStore();
 
   const today = dayjs();
   const { t } = useTranslation();
+
+  // One-time repair for paused cycle schedule (safe to remove after fix is applied)
+  React.useEffect(() => {
+    repairPausedCycleSchedule();
+  }, []);
 
   // State must be declared before any derived values that use it
   const [selectedDate, setSelectedDate] = useState(today.format('YYYY-MM-DD'));
@@ -376,7 +382,7 @@ export function TodayScreen({ onDateChange, onOpenSwapDrawer, onOpenAddWorkout, 
         <SafeAreaView style={[styles.container, { paddingBottom: insets.bottom }]} edges={[]}>
           {/* Unified header + calendar card */}
           <View style={[styles.calendarCard, { paddingTop: insets.top }]}>
-            {/* Header row: Schedule title + cycle chip + icons */}
+            {/* Header row: Schedule title + icons */}
             <View style={styles.topBar}>
               <Text style={styles.headerTitle}>{scheduleLabel}</Text>
               <View style={styles.headerRight}>
@@ -393,34 +399,6 @@ export function TodayScreen({ onDateChange, onOpenSwapDrawer, onOpenAddWorkout, 
                   </TouchableOpacity>
                 )}
                 <TouchableOpacity
-                  style={[
-                    styles.cycleChip,
-                    cycleChipState === 'paused' && styles.cycleChipPaused,
-                    cycleChipState === 'none' && styles.cycleChipNone,
-                  ]}
-                  activeOpacity={0.7}
-                  onPress={() => {
-                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                    setShowCycleSheet(true);
-                  }}
-                >
-                  <Text
-                    style={[
-                      styles.cycleChipText,
-                      cycleChipState === 'paused' && styles.cycleChipTextPaused,
-                      cycleChipState === 'none' && styles.cycleChipTextNone,
-                    ]}
-                    numberOfLines={1}
-                  >
-                    {cycleChipLabel}
-                  </Text>
-                  <Text style={[
-                    styles.cycleChipArrow,
-                    cycleChipState === 'paused' && styles.cycleChipTextPaused,
-                    cycleChipState === 'none' && styles.cycleChipTextNone,
-                  ]}>▾</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
                   style={styles.settingsButton}
                   onPress={() => (navigation as any).navigate('Profile')}
                   activeOpacity={1}
@@ -429,6 +407,36 @@ export function TodayScreen({ onDateChange, onOpenSwapDrawer, onOpenAddWorkout, 
                 </TouchableOpacity>
               </View>
             </View>
+            {/* Cycle chip row below title */}
+            <TouchableOpacity
+              style={[
+                styles.cycleChip,
+                cycleChipState === 'paused' && styles.cycleChipPaused,
+                cycleChipState === 'none' && styles.cycleChipNone,
+                styles.cycleChipRow,
+              ]}
+              activeOpacity={0.7}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                setShowCycleSheet(true);
+              }}
+            >
+              <Text
+                style={[
+                  styles.cycleChipText,
+                  cycleChipState === 'paused' && styles.cycleChipTextPaused,
+                  cycleChipState === 'none' && styles.cycleChipTextNone,
+                ]}
+                numberOfLines={1}
+              >
+                {cycleChipLabel}
+              </Text>
+              <Text style={[
+                styles.cycleChipArrow,
+                cycleChipState === 'paused' && styles.cycleChipTextPaused,
+                cycleChipState === 'none' && styles.cycleChipTextNone,
+              ]}>▾</Text>
+            </TouchableOpacity>
 
             {/* Calendar strip */}
             <ExpandableCalendarStrip
@@ -608,13 +616,22 @@ export function TodayScreen({ onDateChange, onOpenSwapDrawer, onOpenAddWorkout, 
                       onPress={() => onOpenSwapDrawer?.(selectedDate, weekDays)}
                       activeOpacity={1}
                     >
-                      <IconSwap size={24} color={COLORS.text} />
+                      <IconSwap size={24} color={COLORS.textMeta} />
                       <Text style={styles.swapButtonText}>{t('swap')}</Text>
                     </TouchableOpacity>
                   )
                 ) : (
-                  /* NO workout: show "Add workout" only for today and future (not past days) */
-                  !dayjs(selectedDate).isBefore(today, 'day') && (
+                  /* NO workout: show swap button on rest days when cycle is active */
+                  !dayjs(selectedDate).isBefore(today, 'day') && activeCyclePlan && hasEligibleWorkoutsToSwap(selectedDate) ? (
+                    <TouchableOpacity
+                      style={styles.swapButton}
+                      onPress={() => onOpenSwapDrawer?.(selectedDate, weekDays, true)}
+                      activeOpacity={1}
+                    >
+                      <IconAdd size={24} color={COLORS.accentPrimary} />
+                      <Text style={[styles.swapButtonText, { color: COLORS.accentPrimary }]}>{t('useWorkoutFromCycle')}</Text>
+                    </TouchableOpacity>
+                  ) : !dayjs(selectedDate).isBefore(today, 'day') && !activeCyclePlan ? (
                     <TouchableOpacity
                       style={styles.addWorkoutButton}
                       onPress={() => handleAddOrCreateWorkout(selectedDate)}
@@ -623,7 +640,7 @@ export function TodayScreen({ onDateChange, onOpenSwapDrawer, onOpenAddWorkout, 
                       <IconAdd size={24} color={COLORS.accentPrimary} />
                       <Text style={styles.addWorkoutButtonText}>{t('addWorkout')}</Text>
                     </TouchableOpacity>
-                  )
+                  ) : null
                 )}
               </View>
               </View>
@@ -892,6 +909,12 @@ const styles = StyleSheet.create({
   },
 
   // Cycle Chip
+  cycleChipRow: {
+    alignSelf: 'flex-start',
+    marginLeft: SPACING.xxl,
+    marginTop: SPACING.xs,
+    marginBottom: 12,
+  },
   cycleChip: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -903,7 +926,7 @@ const styles = StyleSheet.create({
     maxWidth: 180,
   },
   cycleChipPaused: {
-    backgroundColor: COLORS.signalWarningDimmed,
+    backgroundColor: COLORS.accentPrimaryDimmed,
   },
   cycleChipNone: {
     backgroundColor: COLORS.container,
@@ -914,7 +937,7 @@ const styles = StyleSheet.create({
     color: COLORS.successBright,
   },
   cycleChipTextPaused: {
-    color: COLORS.signalWarning,
+    color: COLORS.accentPrimary,
   },
   cycleChipTextNone: {
     color: COLORS.textSecondary,
@@ -987,7 +1010,7 @@ const styles = StyleSheet.create({
 
   // Workout Card
   workoutCard: {
-    backgroundColor: CARDS.cardDeep.outer.backgroundColor,
+    backgroundColor: COLORS.accentPrimaryDimmed,
     borderRadius: CARDS.cardDeep.outer.borderRadius,
     borderCurve: CARDS.cardDeep.outer.borderCurve,
     overflow: CARDS.cardDeep.outer.overflow,
@@ -1111,7 +1134,7 @@ const styles = StyleSheet.create({
     color: COLORS.accentPrimary,
   },
   startButtonTextFuture: {
-    color: COLORS.textMeta,
+    color: COLORS.accentPrimary,
   },
   
   // Completed Badge
@@ -1136,15 +1159,15 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   restDayContent: {
-    alignItems: 'flex-start',
+    alignItems: 'center',
   },
   restDayQuestion: {
-    ...TYPOGRAPHY.h3,
-    lineHeight: 28,
+    ...TYPOGRAPHY.h2,
     marginBottom: SPACING.xl,
+    textAlign: 'center',
   },
   restDayQuestionGray: {
-    color: COLORS.textMeta,
+    color: COLORS.text,
   },
   restDayQuestionBlack: {
     color: COLORS.text,
@@ -1175,7 +1198,7 @@ const styles = StyleSheet.create({
   },
   swapButtonText: {
     ...TYPOGRAPHY.metaBold,
-    color: COLORS.text,
+    color: COLORS.textMeta,
   },
   swapIconWrapper: {
     width: 16,

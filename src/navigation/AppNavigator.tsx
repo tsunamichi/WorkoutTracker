@@ -114,7 +114,7 @@ function TabNavigator() {
   const [activeTab, setActiveTab] = React.useState<'Schedule' | 'Progress'>('Schedule');
   const [isViewingToday, setIsViewingToday] = React.useState(true);
   const [swapDrawerVisible, setSwapDrawerVisible] = React.useState(false);
-  const [swapDrawerData, setSwapDrawerData] = React.useState<{ selectedDate: string; weekDays: any[] } | null>(null);
+  const [swapDrawerData, setSwapDrawerData] = React.useState<{ selectedDate: string; weekDays: any[]; isRestDay?: boolean } | null>(null);
   const [pressedSwapItemDate, setPressedSwapItemDate] = React.useState<string | null>(null);
   
   // NEW: State for Add Workout flow
@@ -182,8 +182,8 @@ function TabNavigator() {
     setTabBarWidth(width);
   };
   
-  const handleOpenSwapDrawer = (selectedDate: string, weekDays: any[]) => {
-    setSwapDrawerData({ selectedDate, weekDays });
+  const handleOpenSwapDrawer = (selectedDate: string, weekDays: any[], isRestDay?: boolean) => {
+    setSwapDrawerData({ selectedDate, weekDays, isRestDay });
     setSwapDrawerVisible(true);
   };
   
@@ -570,7 +570,7 @@ function TabNavigator() {
         onClose={() => setSwapDrawerVisible(false)}
       >
         <View style={styles.swapSheetContent}>
-          <Text style={styles.swapSheetTitle}>{t('swapWorkout')}</Text>
+          <Text style={styles.swapSheetTitle}>{swapDrawerData?.isRestDay ? t('selectWorkout') : t('swapWorkout')}</Text>
           <ScrollView 
             style={styles.swapSheetScrollView}
             contentContainerStyle={styles.swapSheetScrollContent}
@@ -660,7 +660,7 @@ function TabNavigator() {
                                 {dayjs(sw.date).format('dddd, MMM D')}
                               </Text>
                             </View>
-                            <IconSwap size={24} color="#817B77" />
+                            {swapDrawerData?.isRestDay ? <IconAdd size={24} color="#817B77" /> : <IconSwap size={24} color="#817B77" />}
                           </TouchableOpacity>
                         </View>
                       </View>
