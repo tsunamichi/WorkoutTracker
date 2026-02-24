@@ -63,6 +63,7 @@ interface WorkoutStore {
   clearWorkoutProgress: (workoutId: string) => Promise<void>;
   clearAllHistory: () => Promise<void>;
   recoverCompletedWorkouts: () => Promise<{ success: boolean; sessionsCreated: number; workoutsProcessed: number; error?: string }>;
+  recoverCompletionFromSessions: () => Promise<{ recovered: number; details: string[] }>;
   
   // NEW: Detailed workout progress
   detailedWorkoutProgress: Record<string, WorkoutProgress>;
@@ -1224,6 +1225,13 @@ export const useStore = create<WorkoutStore>((set, get) => ({
         isLoading: false,
       });
       
+      // Recover any mainCompletion data from saved sessions (one-time repair)
+      try {
+        await get().recoverCompletionFromSessions();
+      } catch (error) {
+        console.error('Error recovering completion from sessions:', error);
+      }
+
       // Initialize cloud backup service (after data is loaded)
       try {
         await cloudBackupService.initialize();
@@ -1746,6 +1754,80 @@ export const useStore = create<WorkoutStore>((set, get) => ({
     }
     
     return result;
+  },
+
+  recoverCompletionFromSessions: async () => {
+    console.log('🔧 Recovering mainCompletion from saved sessions...');
+    const sessions = get().sessions;
+    const scheduledWorkouts = [...get().scheduledWorkouts];
+    const details: string[] = [];
+    let recovered = 0;
+
+    for (const session of sessions) {
+      const workoutKey = (session as any).workoutKey as string | undefined;
+      if (!workoutKey) continue;
+
+      const swIdx = scheduledWorkouts.findIndex(sw => sw.id === workoutKey);
+      if (swIdx < 0) continue;
+
+      const sw = scheduledWorkouts[swIdx];
+      const existingCompleted = sw.mainCompletion?.completedItems?.length ?? 0;
+      const snapshot = sw.exercisesSnapshot || [];
+
+      // Build a map: exerciseLibraryId → template item id
+      const libIdToItemId: Record<string, string> = {};
+      snapshot.forEach((item: any) => {
+        const libId = item.exerciseId || item.id;
+        libIdToItemId[libId] = item.id;
+      });
+
+      // Rebuild completion items from session sets
+      const recoveredItems = new Set<string>(sw.mainCompletion?.completedItems || []);
+      let addedCount = 0;
+      for (const setData of session.sets) {
+        const itemId = libIdToItemId[setData.exerciseId];
+        if (itemId && setData.isCompleted) {
+          const completionKey = `${itemId}-set-${setData.setIndex}`;
+          if (!recoveredItems.has(completionKey)) {
+            recoveredItems.add(completionKey);
+            addedCount++;
+          }
+        }
+      }
+
+      if (addedCount > 0) {
+        const completedItems = [...recoveredItems];
+        const wasCompleted = sw.status === 'completed';
+        const totalSets = snapshot.reduce((sum: number, item: any) => sum + (typeof item.sets === 'number' ? item.sets : 0), 0);
+        const isNowComplete = completedItems.length >= totalSets && totalSets > 0;
+
+        scheduledWorkouts[swIdx] = {
+          ...sw,
+          mainCompletion: {
+            ...(sw.mainCompletion || {}),
+            completedItems,
+          },
+          status: isNowComplete ? 'completed' as const : (sw.status === 'planned' ? 'in_progress' as const : sw.status),
+          isLocked: isNowComplete ? true : sw.isLocked,
+          completedAt: isNowComplete && !sw.completedAt ? new Date().toISOString() : sw.completedAt,
+        };
+
+        const msg = `Recovered ${addedCount} sets for ${sw.titleSnapshot || workoutKey} (${sw.date}) — now ${completedItems.length}/${totalSets} sets`;
+        details.push(msg);
+        console.log('✅', msg);
+        recovered++;
+      }
+    }
+
+    if (recovered > 0) {
+      set({ scheduledWorkouts });
+      await storage.saveScheduledWorkouts(scheduledWorkouts);
+      console.log(`🎉 Recovery complete: ${recovered} workouts restored`);
+    } else {
+      console.log('ℹ️ No workouts needed recovery');
+    }
+
+    return { recovered, details };
   },
   
   getExercisePR: (exerciseId) => {
@@ -2597,9 +2679,12 @@ export const useStore = create<WorkoutStore>((set, get) => ({
     const plans = get().cyclePlans.map(p =>
       p.id === planId ? { ...p, pausedUntil: resumeDate, updatedAt: now } : p
     );
-    // Remove only future cycle workouts for this plan (keep today and past untouched)
+    // Remove only future cycle workouts for this plan (keep today, past, and any with progress)
     let scheduledWorkouts = get().scheduledWorkouts.filter(sw => {
       if (sw.source !== 'cycle' || (sw.programId !== planId && sw.cyclePlanId !== planId)) return true;
+      if (sw.status === 'completed' || sw.status === 'in_progress') return true;
+      if (sw.isLocked) return true;
+      if ((sw.mainCompletion?.completedItems?.length ?? 0) > 0) return true;
       if (sw.date <= today) return true;
       return false;
     });
@@ -2725,11 +2810,15 @@ export const useStore = create<WorkoutStore>((set, get) => ({
     const today = dayjs().format('YYYY-MM-DD');
     const resume = dayjs(resumeDate);
 
-    // Keep non-cycle workouts + completed/in-progress cycle workouts + past cycle workouts
+    // Keep non-cycle workouts + completed/in-progress cycle workouts + today & past cycle workouts + any with progress
     let scheduledWorkouts = get().scheduledWorkouts.filter(sw => {
       if (sw.source !== 'cycle' || (sw.programId !== plan.id && sw.cyclePlanId !== plan.id)) return true;
       if (sw.status === 'completed' || sw.status === 'in_progress') return true;
-      if (sw.date < today) return true;
+      if (sw.isLocked) return true;
+      if ((sw.mainCompletion?.completedItems?.length ?? 0) > 0) return true;
+      if ((sw.warmupCompletion?.completedItems?.length ?? 0) > 0) return true;
+      if ((sw.accessoryCompletion?.completedItems?.length ?? 0) > 0) return true;
+      if (sw.date <= today) return true;
       return false;
     });
 
@@ -2855,11 +2944,18 @@ export const useStore = create<WorkoutStore>((set, get) => ({
     
     console.log('   - Date range:', startDate.format('YYYY-MM-DD'), 'to', endDate.format('YYYY-MM-DD'));
     
-    // Remove existing cycle-generated workouts for this plan in this date range
-    let scheduledWorkouts = get().scheduledWorkouts.filter(sw => 
-      !(sw.source === 'cycle' && sw.cyclePlanId === planId && 
-        sw.date >= plan.startDate && sw.date < endDate.format('YYYY-MM-DD'))
-    );
+    // Remove existing cycle-generated workouts for this plan in this date range,
+    // but preserve workouts that have any completion progress or are locked/completed
+    let scheduledWorkouts = get().scheduledWorkouts.filter(sw => {
+      const isCycleMatch = sw.source === 'cycle' && sw.cyclePlanId === planId && 
+        sw.date >= plan.startDate && sw.date < endDate.format('YYYY-MM-DD');
+      if (!isCycleMatch) return true;
+      if (sw.isLocked || sw.status === 'completed' || sw.status === 'in_progress') return true;
+      if ((sw.mainCompletion?.completedItems?.length ?? 0) > 0) return true;
+      if ((sw.warmupCompletion?.completedItems?.length ?? 0) > 0) return true;
+      if ((sw.accessoryCompletion?.completedItems?.length ?? 0) > 0) return true;
+      return false;
+    });
     
     // Generate new workouts based on mapping
     const newWorkouts: ScheduledWorkout[] = [];
@@ -2877,7 +2973,11 @@ export const useStore = create<WorkoutStore>((set, get) => ({
         
         if (templateId) {
           const existing = scheduledWorkouts.find(sw => sw.date === startDate.format('YYYY-MM-DD'));
-          if (!existing || existing.source !== 'manual') {
+          const existingHasProgress = existing && (
+            existing.isLocked || existing.status === 'completed' || existing.status === 'in_progress' ||
+            (existing.mainCompletion?.completedItems?.length ?? 0) > 0
+          );
+          if ((!existing || existing.source !== 'manual') && !existingHasProgress) {
             if (existing) {
               scheduledWorkouts = scheduledWorkouts.filter(sw => sw.date !== startDate.format('YYYY-MM-DD'));
             }
@@ -2946,10 +3046,12 @@ export const useStore = create<WorkoutStore>((set, get) => ({
             const templateId = plan.templateIdsByWeekday[weekday];
             console.log(`       - Template ID for weekday ${weekday}:`, templateId);
             if (templateId) {
-            // Check if there's a manual workout on this date
             const existing = scheduledWorkouts.find(sw => sw.date === currentDate.format('YYYY-MM-DD'));
-            if (!existing || existing.source !== 'manual') {
-              // Don't override manual workouts
+            const existingHasProgress = existing && (
+              existing.isLocked || existing.status === 'completed' || existing.status === 'in_progress' ||
+              (existing.mainCompletion?.completedItems?.length ?? 0) > 0
+            );
+            if ((!existing || existing.source !== 'manual') && !existingHasProgress) {
               if (existing) {
                 scheduledWorkouts = scheduledWorkouts.filter(sw => sw.date !== currentDate.format('YYYY-MM-DD'));
               }
@@ -3032,12 +3134,15 @@ export const useStore = create<WorkoutStore>((set, get) => ({
           
           if (templateId) {
             const existing = scheduledWorkouts.find(sw => sw.date === currentDate.format('YYYY-MM-DD'));
-            if (!existing || existing.source !== 'manual') {
+            const existingHasProgress = existing && (
+              existing.isLocked || existing.status === 'completed' || existing.status === 'in_progress' ||
+              (existing.mainCompletion?.completedItems?.length ?? 0) > 0
+            );
+            if ((!existing || existing.source !== 'manual') && !existingHasProgress) {
               if (existing) {
                 scheduledWorkouts = scheduledWorkouts.filter(sw => sw.date !== currentDate.format('YYYY-MM-DD'));
               }
               
-              // Get template to create snapshots
               const template = get().workoutTemplates.find(t => t.id === templateId);
               if (template) {
                 const now = new Date().toISOString();
@@ -3255,7 +3360,6 @@ export const useStore = create<WorkoutStore>((set, get) => ({
   updateWarmupCompletion: async (workoutId, warmupItemId, completed) => {
     const scheduledWorkouts = get().scheduledWorkouts.map(sw => {
       if (sw.id === workoutId) {
-        // Initialize warmupCompletion if it doesn't exist
         const existingCompletion = sw.warmupCompletion || { completedItems: [] };
         const existingCompletedItems = existingCompletion.completedItems || [];
         
@@ -3269,6 +3373,8 @@ export const useStore = create<WorkoutStore>((set, get) => ({
             ...existingCompletion,
             completedItems,
           },
+          status: sw.status === 'planned' && completed ? 'in_progress' as const : sw.status,
+          startedAt: !sw.startedAt && completed ? new Date().toISOString() : sw.startedAt,
         };
       }
       return sw;
@@ -3348,7 +3454,6 @@ export const useStore = create<WorkoutStore>((set, get) => ({
   updateAccessoryCompletion: async (workoutId, accessoryItemId, completed) => {
     const scheduledWorkouts = get().scheduledWorkouts.map(sw => {
       if (sw.id === workoutId) {
-        // Initialize accessoryCompletion if it doesn't exist
         const existingCompletion = sw.accessoryCompletion || { completedItems: [] };
         const existingCompletedItems = existingCompletion.completedItems || [];
         
@@ -3362,6 +3467,8 @@ export const useStore = create<WorkoutStore>((set, get) => ({
             ...existingCompletion,
             completedItems,
           },
+          status: sw.status === 'planned' && completed ? 'in_progress' as const : sw.status,
+          startedAt: !sw.startedAt && completed ? new Date().toISOString() : sw.startedAt,
         };
       }
       return sw;
@@ -3446,7 +3553,6 @@ export const useStore = create<WorkoutStore>((set, get) => ({
     
     const scheduledWorkouts = get().scheduledWorkouts.map(sw => {
       if (sw.id === workoutId) {
-        // Initialize mainCompletion if it doesn't exist
         const existingCompletion = sw.mainCompletion || { completedItems: [] };
         const existingCompletedItems = existingCompletion.completedItems || [];
         
@@ -3464,6 +3570,8 @@ export const useStore = create<WorkoutStore>((set, get) => ({
             ...existingCompletion,
             completedItems,
           },
+          status: sw.status === 'planned' && completed ? 'in_progress' as const : sw.status,
+          startedAt: !sw.startedAt && completed ? new Date().toISOString() : sw.startedAt,
         };
       }
       return sw;
