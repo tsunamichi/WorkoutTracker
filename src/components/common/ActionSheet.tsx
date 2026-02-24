@@ -9,6 +9,7 @@ export interface ActionSheetItem {
   onPress: () => void;
   destructive?: boolean;
   featured?: boolean;
+  labelColor?: string;
 }
 
 interface ActionSheetProps {
@@ -135,7 +136,8 @@ export function ActionSheet({ visible, onClose, items }: ActionSheetProps) {
                         </View>
                         <Text style={[
                           styles.label,
-                          item.destructive && styles.labelDestructive
+                          item.destructive && styles.labelDestructive,
+                          item.labelColor ? { color: item.labelColor } : undefined
                         ]} numberOfLines={1}>
                           {item.label}
                         </Text>

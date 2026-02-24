@@ -6,10 +6,11 @@ import Svg, { Circle, Path } from 'react-native-svg';
 import * as Haptics from 'expo-haptics';
 import { useStore } from '../store';
 import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS, CARDS } from '../constants';
-import { IconArrowLeft, IconCheck, IconCheckmark, IconAddLine, IconMinusLine, IconTrash, IconEdit, IconMenu, IconHistory, IconRestart, IconSkip, IconSwap, IconSettings, IconArrowRight, IconAdd, IconPause, IconPlay } from '../components/icons';
+import { IconArrowLeft, IconCheck, IconCheckmark, IconAddLine, IconMinusLine, IconTrash, IconEdit, IconMenu, IconHistory, IconRestart, IconSkip, IconSwap, IconSettings, IconArrowRight, IconAdd, IconPause, IconPlay, IconAddTime, IconChevronDown } from '../components/icons';
 import { BottomDrawer } from '../components/common/BottomDrawer';
 import { NextLabel } from '../components/common/NextLabel';
 import { SetTimerSheet } from '../components/timer/SetTimerSheet';
+import { TimerValueSheet } from '../components/timer/TimerValueSheet';
 import { ActionSheet } from '../components/common/ActionSheet';
 import { Toggle } from '../components/Toggle';
 import { DiagonalLinePattern } from '../components/common/DiagonalLinePattern';
@@ -147,25 +148,22 @@ export function ExerciseExecutionScreen() {
     } as WarmupItem;
   };
 
+  const [timeBasedOverrides, setTimeBasedOverrides] = useState<Record<string, boolean>>({});
+
   // Get the appropriate items based on type
   const items = useMemo(() => {
-    // Bonus mode: load items from the bonus log's payload
+    let result: WarmupItem[] = [];
     if (bonusLogId) {
       const bonusLog = bonusLogs.find(l => l.id === bonusLogId);
       if (bonusLog?.exercisePayload?.items) {
-        return bonusLog.exercisePayload.items.map(normalizeToDeprecated);
+        result = bonusLog.exercisePayload.items.map(normalizeToDeprecated);
       }
-      return [];
-    }
-    if (type === 'warmup') {
-      return (template?.warmupItems || []).map(normalizeToDeprecated);
-    }
-    if (type === 'core') {
-      return (template?.accessoryItems || []).map(normalizeToDeprecated);
-    }
-    // For main workout, convert WorkoutTemplateExercise to WarmupItem format
-    if (type === 'main') {
-      return (template?.items || []).map(item => {
+    } else if (type === 'warmup') {
+      result = (template?.warmupItems || []).map(normalizeToDeprecated);
+    } else if (type === 'core') {
+      result = (template?.accessoryItems || []).map(normalizeToDeprecated);
+    } else if (type === 'main') {
+      result = (template?.items || []).map(item => {
         const exercise = exercisesLibrary.find(ex => ex.id === item.exerciseId);
         return {
           id: item.exerciseId,
@@ -180,8 +178,17 @@ export function ExerciseExecutionScreen() {
         } as WarmupItem;
       });
     }
-    return [];
-  }, [type, template, exercisesLibrary, refreshKey]);
+    // Apply local time-based overrides
+    if (timeBasedOverrides && Object.keys(timeBasedOverrides).length > 0) {
+      result = result.map(item => {
+        if (item.id in timeBasedOverrides) {
+          return { ...item, isTimeBased: timeBasedOverrides[item.id] } as WarmupItem;
+        }
+        return item;
+      });
+    }
+    return result;
+  }, [type, template, exercisesLibrary, refreshKey, timeBasedOverrides]);
   
   // Group items into groups (supersets or single exercises)
   const exerciseGroups = useMemo(() => {
@@ -281,7 +288,7 @@ export function ExerciseExecutionScreen() {
     return rounds;
   }, [exerciseGroups, completedSets]);
 
-  const [showAddExerciseDrawer, setShowAddExerciseDrawer] = useState(false); // Add exercise bottom drawer
+  const [showAddExerciseDrawer, setShowAddExerciseDrawer] = useState(false);
 
   // Staggered indicator animation using Animated.View (independent of LayoutAnimation)
   const indicatorWidthAnim = useRef(new Animated.Value(0)).current;
@@ -349,6 +356,8 @@ export function ExerciseExecutionScreen() {
   const buttonLabelOpacity = useRef(new Animated.Value(1)).current;
   const counterShrinkAnim = useRef(new Animated.Value(1)).current;
   const [showMenu, setShowMenu] = useState(false);
+  const [showRestTimePicker, setShowRestTimePicker] = useState(false);
+  const [localRestOverride, setLocalRestOverride] = useState<number | null>(null);
   const [showExerciseHistory, setShowExerciseHistory] = useState(false);
   const [showSwapModal, setShowSwapModal] = useState(false);
   const [swapSearchQuery, setSwapSearchQuery] = useState('');
@@ -460,8 +469,11 @@ export function ExerciseExecutionScreen() {
     anim.start();
   }, [inlineRestProgress]);
 
+  const localRestRef = useRef<number | null>(localRestOverride);
+  localRestRef.current = localRestOverride;
+
   const startInlineRest = useCallback(() => {
-    const restSeconds = settings.restTimerDefaultSeconds;
+    const restSeconds = localRestRef.current ?? settings.restTimerDefaultSeconds;
     setInlineRestTotal(restSeconds);
     setInlineRestTimeLeft(restSeconds);
     setInlineRestPaused(false);
@@ -1993,7 +2005,7 @@ export function ExerciseExecutionScreen() {
         </View>
 
         {/* Add Exercise button - appears after first set is logged */}
-        {hasLoggedAnySet && type === 'main' && (
+        {type === 'main' && (
           <TouchableOpacity
             style={styles.addExerciseButton}
             onPress={() => {
@@ -2077,6 +2089,7 @@ export function ExerciseExecutionScreen() {
           onExerciseTimerComplete={handleComplete}
           skipRestPhase={type !== 'main'}
           isPerSide={exerciseGroups[expandedGroupIndex].exercises[activeExerciseIndex]?.isPerSide}
+          restTimeOverride={localRestOverride}
         />
       )}
       
@@ -2297,7 +2310,9 @@ export function ExerciseExecutionScreen() {
                       <View style={styles.historyRow}>
                         {/* Left column: label + date */}
                         <View style={styles.historyLeftColumn}>
-                          <Text style={styles.historyLabel}>{t('latestExerciseLog')}</Text>
+                          {workoutIndex === workoutsToShow.length - 1 && (
+                            <Text style={styles.historyLabel}>{t('latestExerciseLog')}</Text>
+                          )}
                           <Text style={styles.historyDateLine}>
                             {dayjs(workout.date).format('MMMM D')}{getOrdinalSuffix(dayjs(workout.date).date())}
                           </Text>
@@ -2310,7 +2325,9 @@ export function ExerciseExecutionScreen() {
                               <Text style={styles.viewAllText}>
                                 {showExerciseHistory ? t('showLess') : t('viewAll')}
                               </Text>
-                              <IconArrowRight size={16} color={COLORS.accentPrimary} />
+                              <View style={{ transform: [{ rotate: showExerciseHistory ? '180deg' : '0deg' }] }}>
+                                <IconChevronDown size={16} color={COLORS.accentPrimary} />
+                              </View>
                             </TouchableOpacity>
                           )}
                         </View>
@@ -2499,7 +2516,15 @@ export function ExerciseExecutionScreen() {
         onClose={() => setShowMenu(false)}
         items={
           type === 'main' ? (allCurrentGroupsComplete ? [
-            // Main workout complete: only Reset
+            {
+              icon: <IconAddTime size={24} color="#FFFFFF" />,
+              label: `${(() => { const s = localRestOverride ?? settings.restTimerDefaultSeconds; return `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, '0')}`; })()}`,
+              onPress: () => {
+                setShowMenu(false);
+                setTimeout(() => setShowRestTimePicker(true), 350);
+              },
+              featured: true,
+            },
             {
               icon: <IconRestart size={24} color={COLORS.signalNegative} />,
               label: t('reset'),
@@ -2507,7 +2532,15 @@ export function ExerciseExecutionScreen() {
               destructive: true,
             },
           ] : [
-            // Main workout in progress: Reset and Complete
+            {
+              icon: <IconAddTime size={24} color="#FFFFFF" />,
+              label: `${(() => { const s = localRestOverride ?? settings.restTimerDefaultSeconds; return `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, '0')}`; })()}`,
+              onPress: () => {
+                setShowMenu(false);
+                setTimeout(() => setShowRestTimePicker(true), 350);
+              },
+              featured: true,
+            },
             {
               icon: <IconRestart size={24} color={COLORS.signalNegative} />,
               label: t('reset'),
@@ -2515,9 +2548,10 @@ export function ExerciseExecutionScreen() {
               destructive: true,
             },
             {
-              icon: <IconCheckmark size={24} color="#FFFFFF" />,
+              icon: <IconCheck size={24} color={COLORS.successBright} checkColor={COLORS.container} />,
               label: t('complete'),
               onPress: handleCompleteAll,
+              labelColor: COLORS.successBright,
             },
           ]) : (allCurrentGroupsComplete ? [
             {
@@ -2599,6 +2633,17 @@ export function ExerciseExecutionScreen() {
                   }, 400);
                 },
               },
+              {
+                icon: <IconAddTime size={24} color={activeExercise.isTimeBased ? COLORS.accentPrimary : "#FFFFFF"} />,
+                label: activeExercise.isTimeBased ? 'Switch to Reps' : 'Switch to Time',
+                onPress: () => {
+                  setTimeBasedOverrides(prev => ({
+                    ...prev,
+                    [activeExercise.id]: !activeExercise.isTimeBased,
+                  }));
+                  setShowExerciseSettingsMenu(false);
+                },
+              },
               ...(showBarbellOption ? [{
                 icon: <IconCheck size={24} color={isBarbellMode ? COLORS.accentPrimary : "#FFFFFF"} />,
                 label: t('barbellMode'),
@@ -2628,6 +2673,24 @@ export function ExerciseExecutionScreen() {
           onClose={() => setShowAddExerciseDrawer(false)}
         />
       </BottomDrawer>
+
+      {/* Local Rest Timer Picker */}
+      <TimerValueSheet
+        visible={showRestTimePicker}
+        onClose={() => setShowRestTimePicker(false)}
+        title="Workout Rest Time"
+        label=""
+        value={localRestOverride ?? settings.restTimerDefaultSeconds}
+        min={15}
+        max={300}
+        step={5}
+        onSave={(seconds) => {
+          setLocalRestOverride(seconds);
+          setShowRestTimePicker(false);
+        }}
+        formatValue={(val) => `${Math.floor(val / 60)}:${(val % 60).toString().padStart(2, '0')}`}
+        accentColor={COLORS.info}
+      />
 
     </View>
   );
@@ -3004,13 +3067,20 @@ const styles = StyleSheet.create({
   inlineRestTime: {
     ...TYPOGRAPHY.metaBold,
     color: COLORS.canvas,
-    width: 40,
+    backgroundColor: COLORS.accentPrimary,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    overflow: 'hidden',
+    textAlign: 'center',
   },
   inlineRestIconBtn: {
     width: 32,
     height: 32,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: COLORS.accentPrimary,
+    borderRadius: 8,
   },
   completedCheckContainer: {
     alignItems: 'center',
@@ -3255,7 +3325,7 @@ const styles = StyleSheet.create({
   },
   historyRow: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    alignItems: 'baseline',
     paddingBottom: SPACING.md,
   },
   historyLeftColumn: {
@@ -3269,6 +3339,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
+    marginTop: 8,
   },
   viewAllText: {
     ...TYPOGRAPHY.meta,
@@ -3295,7 +3366,9 @@ const styles = StyleSheet.create({
   historyValueColumn: {
     flexDirection: 'row',
     alignItems: 'baseline',
+    justifyContent: 'flex-end',
     gap: 4,
+    width: 48,
   },
   historySetText: {
     ...TYPOGRAPHY.body,
@@ -3568,7 +3641,9 @@ const styles = StyleSheet.create({
   historySetValueGroup: {
     flexDirection: 'row',
     alignItems: 'baseline',
+    justifyContent: 'flex-end',
     gap: 4,
+    width: 48,
   },
   historySetValue: {
     ...TYPOGRAPHY.body,

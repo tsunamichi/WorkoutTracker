@@ -293,6 +293,7 @@ function TabNavigator() {
       planId: latestPlan.id,
       planName: latestPlan.name,
       workoutCount,
+      weeks: latestPlan.weeks,
       templateNames,
       finishedLabel,
     };

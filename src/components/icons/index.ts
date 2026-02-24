@@ -15,6 +15,7 @@ export { IconEdit } from './IconEdit';
 export { IconForward } from './IconForward';
 export { IconGripVertical } from './IconGripVertical';
 export { IconHistory } from './IconHistory';
+export { IconImport } from './IconImport';
 export { IconMenu } from './IconMenu';
 export { IconShare } from './IconShare';
 export { IconPause } from './IconPause';

@@ -23,6 +23,8 @@ interface TimerValueSheetProps {
   max: number;
   step: number;
   formatValue?: (val: number) => string;
+  accentColor?: string;
+  buttonStyle?: 'solid' | 'dimmed';
 }
 
 const LIGHT_COLORS = {
@@ -46,6 +48,8 @@ export function TimerValueSheet({
   max,
   step,
   formatValue = (val) => `${val}s`,
+  accentColor,
+  buttonStyle = 'solid',
 }: TimerValueSheetProps) {
   const { t } = useTranslation();
   const [selectedValue, setSelectedValue] = useState(value);
@@ -130,7 +134,7 @@ export function TimerValueSheet({
       {({ requestClose }) => (
         <View style={styles.container}>
           <View style={styles.header}>
-            <Text style={styles.type}>{label}</Text>
+            {label ? <Text style={styles.type}>{label}</Text> : null}
             <Text style={styles.label}>{title}</Text>
             <Text style={styles.valueDisplay}>{formatValue(selectedValue)}</Text>
           </View>
@@ -164,6 +168,7 @@ export function TimerValueSheet({
                     <Animated.View 
                       style={[
                         styles.progressBarUnfilled, 
+                        accentColor ? { width: '100%', backgroundColor: accentColor } : undefined,
                         { 
                           height: progressAnim.interpolate({
                             inputRange: [0, 1],
@@ -196,6 +201,7 @@ export function TimerValueSheet({
 const styles = StyleSheet.create({
   container: {
     paddingHorizontal: SPACING.xxl,
+    paddingBottom: 24,
   },
   header: {
     alignItems: 'center',
@@ -246,7 +252,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#000000',
   },
   saveButton: {
-    backgroundColor: '#FD6B00',
+    backgroundColor: COLORS.accentPrimary,
     paddingVertical: SPACING.lg,
     borderRadius: 12,
     alignItems: 'center',
@@ -255,6 +261,6 @@ const styles = StyleSheet.create({
   saveButtonText: {
     fontSize: 17,
     fontWeight: '600',
-    color: '#FFFFFF',
+    color: COLORS.canvas,
   },
 });

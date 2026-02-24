@@ -536,7 +536,7 @@ export function TodayScreen({ onDateChange, onOpenSwapDrawer, onOpenAddWorkout, 
                               <View style={styles.progressIndicator}>
                                 <Text style={styles.progressText}>{completionPercentage}%</Text>
                                 <Svg height="16" width="16" viewBox="0 0 16 16" style={styles.progressCircle}>
-                                  <Circle cx="8" cy="8" r="8" fill={COLORS.backgroundCanvas} />
+                                  <Circle cx="8" cy="8" r="8" fill={COLORS.accentPrimaryDimmed} />
                                   <Path
                                     d={`M 8 8 L 8 0 A 8 8 0 ${progress > 0.5 ? 1 : 0} 1 ${
                                       8 + 8 * Math.sin(2 * Math.PI * progress)

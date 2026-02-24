@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
 import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS, CARDS } from '../constants';
-import { IconAdd } from './icons';
+import { IconAdd, IconImport } from './icons';
 import { BottomDrawer } from './common/BottomDrawer';
 import { useTranslation } from '../i18n/useTranslation';
 import { WorkoutTemplate } from '../types/training';
@@ -18,6 +18,7 @@ interface LatestCycleInfo {
   planId: string;
   planName: string;
   workoutCount: number;
+  weeks: number;
   templateNames: string[];
   finishedLabel: string;
 }
@@ -80,7 +81,6 @@ export function AddWorkoutSheet({
                 <View style={styles.optionCardInner}>
                   <IconAdd size={24} color={COLORS.text} />
                   <Text style={styles.optionTitle}>{t('blankWorkout')}</Text>
-                  <Text style={styles.optionSubtitle}>{t('singleOrMultiDay')}</Text>
                 </View>
               </TouchableOpacity>
 
@@ -94,9 +94,8 @@ export function AddWorkoutSheet({
                 activeOpacity={0.85}
               >
                 <View style={styles.optionCardInner}>
-                  <IconAdd size={24} color={COLORS.text} />
+                  <IconImport size={24} color={COLORS.text} />
                   <Text style={styles.optionTitle}>{t('generateWithAI')}</Text>
-                  <Text style={styles.optionSubtitle}>{t('singleOrMultiDay')}</Text>
                 </View>
               </TouchableOpacity>
             </View>
@@ -112,9 +111,8 @@ export function AddWorkoutSheet({
                 activeOpacity={0.85}
               >
                 <Text style={styles.repeatCycleTitle}>{t('repeatCycle')}</Text>
-                <Text style={styles.repeatCycleName} numberOfLines={1}>{latestCycleInfo.planName}</Text>
                 <Text style={styles.repeatCycleSubtitle}>
-                  {latestCycleInfo.workoutCount} {t('workoutsCountLabel')} · {latestCycleInfo.finishedLabel}
+                  {latestCycleInfo.weeks} {latestCycleInfo.weeks === 1 ? 'Week' : 'Weeks'} · {latestCycleInfo.workoutCount} {t('workoutsCountLabel')}
                 </Text>
               </TouchableOpacity>
             )}
@@ -141,7 +139,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    // paddingBottom handled by BottomDrawer
+    paddingBottom: 24,
   },
   createOptionsSection: {
     gap: SPACING.md,
@@ -165,13 +163,10 @@ const styles = StyleSheet.create({
   repeatCycleButton: {
     backgroundColor: COLORS.accentPrimaryDimmed,
     borderRadius: BORDER_RADIUS.md,
-    borderWidth: 1,
-    borderColor: COLORS.accentPrimary,
     alignItems: 'center' as const,
     justifyContent: 'center' as const,
     paddingVertical: SPACING.lg,
     paddingHorizontal: 24,
-    marginTop: SPACING.md,
   },
   repeatCycleTitle: {
     ...TYPOGRAPHY.bodyBold,

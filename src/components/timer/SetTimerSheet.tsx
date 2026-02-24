@@ -47,6 +47,7 @@ interface SetTimerSheetProps {
   onExerciseTimerComplete?: () => void; // Callback when exercise timer completes
   skipRestPhase?: boolean; // If true, skip rest phase after exercise timer completes
   isPerSide?: boolean; // If true, run exercise timer twice with 10s "switch sides" countdown between
+  restTimeOverride?: number | null; // Local rest time override (seconds), null = use global setting
 }
 
 const REST_COLOR_START = COLORS.accentPrimary;
@@ -74,12 +75,13 @@ export function SetTimerSheet({
   exerciseDuration = 0,
   onExerciseTimerComplete,
   skipRestPhase = false,
-  isPerSide = false
+  isPerSide = false,
+  restTimeOverride = null
 }: SetTimerSheetProps) {
   const insets = useSafeAreaInsets();
   const { settings, updateSettings } = useStore();
   const { t } = useTranslation();
-  const restTime = settings.restTimerDefaultSeconds;
+  const restTime = restTimeOverride ?? settings.restTimerDefaultSeconds;
   
   // Determine initial time based on timer phase
   const getInitialTime = () => {
