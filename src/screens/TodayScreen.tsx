@@ -302,32 +302,37 @@ export function TodayScreen({ onDateChange, onOpenSwapDrawer, onOpenAddWorkout, 
     const currentDay = weekDays.find(d => d.date === currentDate);
     const hasCurrentWorkout = !!currentDay?.scheduledWorkout;
     
-    // CRITICAL: Cannot swap if the current day is completed or locked
     if (currentDay?.isCompleted || currentDay?.isLocked) {
       return false;
     }
     
-    // Filter eligible days (not locked, not selected date)
+    if (!hasCurrentWorkout && activeCyclePlan) {
+      // Rest day: check ALL unstarted cycle workouts (past + future)
+      const planId = activeCyclePlan.id;
+      const effectiveEnd = getCyclePlanEffectiveEndDate(activeCyclePlan);
+      return scheduledWorkouts.some(sw => {
+        if (sw.source !== 'cycle') return false;
+        if (sw.programId !== planId && sw.cyclePlanId !== planId) return false;
+        if (sw.date === currentDate) return false;
+        if (dayjs(sw.date).isAfter(effectiveEnd, 'day')) return false;
+        const completion = getMainCompletion(sw.id);
+        if (sw.isLocked || completion.percentage === 100 || completion.percentage > 0) return false;
+        return true;
+      });
+    }
+    
+    // Day with workout: check current week for swap targets
     const eligibleDays = weekDays.filter(day => 
       !day.isLocked && 
       day.date !== currentDate &&
       !day.isCompleted
     );
-    
-    // Filter workouts that haven't been started
     const unStartedWorkouts = eligibleDays.filter(day => {
       if (!day.scheduledWorkout) return false;
       return day.completionPercentage === 0;
     });
-    
-    // If current day has no workout, we need at least one workout to swap
-    // Otherwise, we need workouts OR rest days
-    if (!hasCurrentWorkout) {
-      return unStartedWorkouts.length > 0;
-    } else {
-      const restDays = eligibleDays.filter(day => !day.scheduledWorkout);
-      return unStartedWorkouts.length > 0 || restDays.length > 0;
-    }
+    const restDays = eligibleDays.filter(day => !day.scheduledWorkout);
+    return unStartedWorkouts.length > 0 || restDays.length > 0;
   };
   
   const handleAddOrCreateWorkout = (currentDate: string) => {

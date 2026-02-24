@@ -597,7 +597,6 @@ function TabNavigator() {
               if (sw.source !== 'cycle') return false;
               if (sw.programId !== planId && sw.cyclePlanId !== planId) return false;
               if (sw.date === selectedDate) return false;
-              if (sw.date < selectedDate) return false;
               if (dayjs(sw.date).isAfter(effectiveEnd, 'day')) return false;
               const completion = getMainCompletion(sw.id);
               if (sw.isLocked || completion.percentage === 100 || completion.percentage > 0) return false;
