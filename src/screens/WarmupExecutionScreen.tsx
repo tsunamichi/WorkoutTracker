@@ -33,7 +33,7 @@ export function WarmupExecutionScreen() {
   const { t } = useTranslation();
   
   const { workoutKey, workoutTemplateId } = route.params;
-  const { getWorkoutTemplate, updateWarmupCompletion, getWarmupCompletion, updateWorkoutTemplate, settings } = useStore();
+  const { getWorkoutTemplate, updateWarmupCompletion, getWarmupCompletion, updateWorkoutTemplate, settings, warmupCompletionByKey } = useStore();
   const template = getWorkoutTemplate(workoutTemplateId);
   // Migrate old items to new structure on load
   const rawWarmupItems = template?.warmupItems || [];
@@ -77,7 +77,8 @@ export function WarmupExecutionScreen() {
       if (item.cycleId && cycleGroups[item.cycleId]) {
         // Create a single group for the entire cycle
         const cycleItems = cycleGroups[item.cycleId];
-        const maxSets = Math.max(...cycleItems.map(i => i.sets.length));
+        const setCount = (i: typeof item) => Array.isArray(i.sets) ? i.sets.length : (typeof (i as any).sets === 'number' ? (i as any).sets : 0);
+        const maxSets = Math.max(...cycleItems.map(setCount), 1);
         
         result.push({
           id: item.cycleId,
@@ -91,10 +92,11 @@ export function WarmupExecutionScreen() {
         cycleItems.forEach(i => processedItems.add(i.id));
       } else if (!item.cycleId) {
         // Non-cycle item - single group with multiple rounds
+        const rounds = Array.isArray(item.sets) ? item.sets.length : (typeof (item as any).sets === 'number' ? (item as any).sets : 0);
         result.push({
           id: item.id,
           isCycle: false,
-          totalRounds: item.sets.length,
+          totalRounds: Math.max(rounds, 1),
           exercises: [item],
         });
         processedItems.add(item.id);
@@ -161,7 +163,7 @@ export function WarmupExecutionScreen() {
 
   // Load completion status on mount and auto-expand first incomplete group
   useEffect(() => {
-    const completion = getWarmupCompletion(workoutKey);
+    const completion = getWarmupCompletion(workoutKey, workoutTemplateId);
     const completed = new Set(completion.completedItems);
     setCompletedSets(completed);
     
@@ -214,7 +216,7 @@ export function WarmupExecutionScreen() {
       }
       setActiveExerciseIndex(firstIncompleteExIdx);
     }
-  }, [workoutKey]);
+  }, [workoutKey, workoutTemplateId, warmupCompletionByKey]);
   
   // Update local state when expanded group changes
   useEffect(() => {
@@ -337,28 +339,43 @@ export function WarmupExecutionScreen() {
       });
       
       if (allExercisesCompleted) {
-        // Update current round for this group
-        const newRounds = { ...currentRounds, [currentGroup.id]: currentRound + 1 };
+        // How many full rounds are now completed for this group (from newCompleted, not state)
+        let completedRounds = 0;
+        for (let r = 0; r < currentGroup.totalRounds; r++) {
+          const allDone = currentGroup.exercises.every(ex => newCompleted.has(`${ex.id}-set-${r}`));
+          if (allDone) completedRounds = r + 1;
+          else break;
+        }
+        const newRounds = { ...currentRounds, [currentGroup.id]: completedRounds };
         setCurrentRounds(newRounds);
         
-        // Check if current group is done
-        if (currentRound + 1 >= currentGroup.totalRounds) {
+        // Only collapse when ALL sets in this superset are logged
+        const groupFullyComplete = completedRounds >= currentGroup.totalRounds;
+        console.log('📊 [WarmupExecution] handleComplete round done:', {
+          groupId: currentGroup.id,
+          completedRounds,
+          totalRounds: currentGroup.totalRounds,
+          groupFullyComplete,
+          willStayExpanded: !groupFullyComplete,
+        });
+        if (groupFullyComplete) {
           // Find next incomplete group
           const nextIncompleteIndex = warmupGroups.findIndex(
             (group, idx) => idx > expandedGroupIndex && (newRounds[group.id] || 0) < group.totalRounds
           );
           
           if (nextIncompleteIndex !== -1) {
-            // Move to next group and start from first exercise
+            console.log('🔴 [WarmupExecution] COLLAPSE: group complete, moving to next. setExpandedGroupIndex(', nextIncompleteIndex, ')');
             setExpandedGroupIndex(nextIncompleteIndex);
             setActiveExerciseIndex(0);
           } else {
+            console.log('🔴 [WarmupExecution] COLLAPSE: all complete. setExpandedGroupIndex(-1)');
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
             setShowConfetti(true);
             setExpandedGroupIndex(-1);
           }
         } else {
-          // Move to next round, start from first exercise
+          console.log('🟢 [WarmupExecution] STAY EXPANDED: more sets to log. setActiveExerciseIndex(0) only');
           setActiveExerciseIndex(0);
         }
       }

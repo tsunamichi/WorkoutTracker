@@ -236,7 +236,8 @@ export function ExerciseExecutionScreen() {
       if (item.cycleId && cycleGroups[item.cycleId]) {
         // Create a single group for the entire cycle
         const cycleItems = cycleGroups[item.cycleId];
-        const maxSets = Math.max(...cycleItems.map(i => i.sets));
+        const setCount = (i: typeof item) => typeof i.sets === 'number' ? i.sets : (Array.isArray(i.sets) ? i.sets.length : 0);
+        const maxSets = Math.max(...cycleItems.map(setCount), 1);
         
         result.push({
           id: item.cycleId,
@@ -250,16 +251,23 @@ export function ExerciseExecutionScreen() {
         cycleItems.forEach(i => processedItems.add(i.id));
       } else if (!item.cycleId) {
         // Non-cycle item - single group with multiple rounds
+        const rounds = typeof item.sets === 'number' ? item.sets : (Array.isArray(item.sets) ? item.sets.length : 0);
         result.push({
           id: item.id,
           isCycle: false,
-          totalRounds: item.sets,
+          totalRounds: Math.max(rounds, 1),
           exercises: [item],
         });
         processedItems.add(item.id);
       }
     });
     
+    console.log('📋 [ExerciseExecution] exerciseGroups built:', result.map(g => ({
+      id: g.id,
+      totalRounds: g.totalRounds,
+      exerciseIds: g.exercises.map(e => e.id),
+      setsType: g.exercises[0] ? (typeof g.exercises[0].sets === 'number' ? 'number' : Array.isArray(g.exercises[0].sets) ? 'array' : 'other') : 'n/a',
+    })));
     return result;
   }, [items]);
   
@@ -270,12 +278,13 @@ export function ExerciseExecutionScreen() {
   const [completionTimestamps, setCompletionTimestamps] = useState<Record<string, number>>({});
 
   // Derive completedSets directly from store so it can NEVER go out of sync
+  const { warmupCompletionByKey, accessoryCompletionByKey } = useStore();
   const storeCompletionItems = useMemo(() => {
-    if (type === 'warmup') return getWarmupCompletion(workoutKey).completedItems;
-    if (type === 'core') return getAccessoryCompletion(workoutKey).completedItems;
+    if (type === 'warmup') return getWarmupCompletion(workoutKey, workoutTemplateId).completedItems;
+    if (type === 'core') return getAccessoryCompletion(workoutKey, workoutTemplateId).completedItems;
     if (type === 'main') return getMainCompletion(workoutKey).completedItems;
     return [] as string[];
-  }, [type, workoutKey, scheduledWorkouts]);
+  }, [type, workoutKey, workoutTemplateId, scheduledWorkouts, warmupCompletionByKey, accessoryCompletionByKey]);
 
   const completedSets = useMemo(
     () => new Set(storeCompletionItems),
@@ -381,6 +390,8 @@ export function ExerciseExecutionScreen() {
   const completedSetsRef = useRef(completedSets);
   const currentRoundsRef = useRef(currentRounds);
   const activeExerciseIndexRef = useRef(activeExerciseIndex);
+  /** Set when we open the exercise timer (time-based); cleared when timer onComplete runs. Used so we add the correct set even after handleComplete has updated other refs. */
+  const pendingTimerSetRef = useRef<{ exerciseId: string; round: number } | null>(null);
   
   // Keep refs in sync with state
   useEffect(() => {
@@ -388,6 +399,15 @@ export function ExerciseExecutionScreen() {
     currentRoundsRef.current = currentRounds;
     activeExerciseIndexRef.current = activeExerciseIndex;
   }, [completedSets, currentRounds, activeExerciseIndex]);
+
+  // Debug: log whenever expanded group changes (helps find unwanted collapse)
+  const prevExpandedRef = useRef(expandedGroupIndex);
+  useEffect(() => {
+    if (prevExpandedRef.current !== expandedGroupIndex) {
+      console.log('🔄 [ExerciseExecution] expandedGroupIndex changed:', prevExpandedRef.current, '→', expandedGroupIndex, expandedGroupIndex === -1 ? '(COLLAPSED)' : '');
+      prevExpandedRef.current = expandedGroupIndex;
+    }
+  }, [expandedGroupIndex]);
   
   const runRestStaggerIn = useCallback(() => {
     // Immediately hide button label (no animation — avoids flash from render interruption)
@@ -1065,6 +1085,17 @@ export function ExerciseExecutionScreen() {
     }
     
     // Advance immediately (for warmup/core every set, for main only the very last set)
+    const roundSetIds = currentGroup.exercises.map(ex => `${ex.id}-set-${currentRound}`);
+    console.log('📤 [ExerciseExecution] handleComplete → advanceToNext:', {
+      type,
+      setId,
+      currentRound,
+      totalRounds: currentGroup.totalRounds,
+      allExercisesComplete,
+      roundSetIds,
+      allInNewCompleted: roundSetIds.every(id => newCompletedSets.has(id)),
+      newCompletedSetsSize: newCompletedSets.size,
+    });
     advanceToNext(allExercisesComplete, newCompletedSets);
   };
   
@@ -1073,23 +1104,42 @@ export function ExerciseExecutionScreen() {
     setInlineRestActive(false);
     
     const currentGroup = exerciseGroups[expandedGroupIndex];
-    const currentRound = currentRoundsRef.current[currentGroup.id] || 0;
+    if (!currentGroup) {
+      console.log('⚠️ [ExerciseExecution] advanceToNext: no currentGroup at index', expandedGroupIndex);
+      return;
+    }
+    // Compute completed rounds from the sets we're passing in, not from refs (refs can be stale or already updated by a re-render)
+    let completedRounds = 0;
+    const completedSetsList = Array.from(newCompletedSets);
+    console.log('📊 [ExerciseExecution] advanceToNext newCompletedSets count:', newCompletedSets.size, 'sample:', completedSetsList.slice(0, 15));
+    for (let r = 0; r < currentGroup.totalRounds; r++) {
+      const setIdsForRound = currentGroup.exercises.map(ex => `${ex.id}-set-${r}`);
+      const allDone = currentGroup.exercises.every(ex => newCompletedSets.has(`${ex.id}-set-${r}`));
+      const found = setIdsForRound.filter(id => newCompletedSets.has(id));
+      console.log(`   round ${r}: need ${setIdsForRound.join(', ')} → allDone=${allDone}, found=${found.join(', ') || 'none'}`);
+      if (allDone) completedRounds = r + 1;
+      else break;
+    }
+    const nextRound = completedRounds; // next round to work on (0-based: we've completed rounds 0..completedRounds-1)
+    const groupFullyComplete = completedRounds >= currentGroup.totalRounds;
     
-    console.log('⏭️ advanceToNext called:', {
+    console.log('⏭️ [ExerciseExecution] advanceToNext:', {
+      groupId: currentGroup.id,
       allExercisesComplete,
-      currentRound,
+      completedRounds,
+      nextRound,
       totalRounds: currentGroup.totalRounds,
+      groupFullyComplete,
+      willStayExpanded: allExercisesComplete && !groupFullyComplete,
       activeExerciseIndex: activeExerciseIndexRef.current,
       exercisesInGroup: currentGroup.exercises.length,
     });
     
     if (allExercisesComplete) {
-      // Move to next round
-      const nextRound = currentRound + 1;
-      
-      if (nextRound >= currentGroup.totalRounds) {
+      // Move to next round (or finish group)
+      if (groupFullyComplete) {
         // This group is complete — currentRounds will update automatically via derived state
-        const updatedRounds = { ...currentRoundsRef.current, [currentGroup.id]: nextRound };
+        const updatedRounds = { ...currentRoundsRef.current, [currentGroup.id]: completedRounds };
         setCompletionTimestamps(prev => ({ ...prev, [currentGroup.id]: Date.now() }));
         
         // Find the next incomplete group - first look after current, then wrap around to before
@@ -1118,7 +1168,7 @@ export function ExerciseExecutionScreen() {
         });
         
         if (nextIncompleteIndex >= 0) {
-          console.log('➡️ Group complete, letting user pick next exercise');
+          console.log('🔴 [ExerciseExecution] COLLAPSE: group complete, user picks next. setExpandedGroupIndex(-1)');
           await saveSession(newCompletedSets);
           LayoutAnimation.configureNext(
             LayoutAnimation.create(250, LayoutAnimation.Types.easeInEaseOut, LayoutAnimation.Properties.opacity)
@@ -1129,7 +1179,7 @@ export function ExerciseExecutionScreen() {
           setHasLoggedAnySet(false); // Unlock flow for next exercise selection
         } else {
           // All groups in this section complete!
-          console.log('✅ All groups in this section complete! Saving session...');
+          console.log('🔴 [ExerciseExecution] COLLAPSE: all groups complete. setExpandedGroupIndex(-1)');
           await saveSession(newCompletedSets);
           
           // Only mark workout as completed if ALL sections (warmup, main, accessories) are done
@@ -1155,16 +1205,18 @@ export function ExerciseExecutionScreen() {
           setActiveExerciseIndex(0);
         }
       } else {
-        // Same group, next round — currentRounds updates via derived state
-        console.log('➡️ Moving to next round:', nextRound);
+        // Same group, next round — keep card expanded until all sets in this superset are logged
+        const roundJustFinished = completedRounds - 1; // 0-based round we just completed
+        console.log('🟢 [ExerciseExecution] STAY EXPANDED: same group next round. roundJustFinished=', roundJustFinished, 'nextRound=', nextRound, '(NOT calling setExpandedGroupIndex)');
         await saveSession(newCompletedSets);
         setActiveExerciseIndex(0);
-        
+        // expandedGroupIndex unchanged so card stays expanded
+
         // Copy values from completed sets to next round sets
         setLocalValues(prev => {
           const updated = { ...prev };
           currentGroup.exercises.forEach(exercise => {
-            const currentSetId = `${exercise.id}-set-${currentRound}`;
+            const currentSetId = `${exercise.id}-set-${roundJustFinished}`;
             const nextSetId = `${exercise.id}-set-${nextRound}`;
             
             // If current set has adjusted values, copy them to next set
@@ -1179,11 +1231,19 @@ export function ExerciseExecutionScreen() {
         });
       }
     } else {
-      // Move to next exercise in same round
-      const nextExIndex = activeExerciseIndexRef.current + 1;
-      console.log('➡️ Moving to next exercise in same round:', nextExIndex);
+      // Move to next exercise in same round. Find the first exercise missing its set for this round (don't use ref+1 — a useEffect can update the ref and skip an exercise in 3+ supersets).
+      const workingRound = nextRound; // round we're still working on (0-based)
+      let nextExIndex = -1;
+      for (let i = 0; i < currentGroup.exercises.length; i++) {
+        const setId = `${currentGroup.exercises[i].id}-set-${workingRound}`;
+        if (!newCompletedSets.has(setId)) {
+          nextExIndex = i;
+          break;
+        }
+      }
+      console.log('➡️ Moving to next exercise in same round:', nextExIndex, 'round', workingRound, '| group has', currentGroup.exercises.length, 'exercises');
       await saveSession(newCompletedSets);
-      if (nextExIndex < currentGroup.exercises.length) {
+      if (nextExIndex >= 0) {
         setActiveExerciseIndex(nextExIndex);
       } else {
         console.log('⚠️ No more exercises in this round');
@@ -1208,6 +1268,8 @@ export function ExerciseExecutionScreen() {
     
     // For time-based exercises, show exercise timer first
     if (currentExercise.isTimeBased) {
+      const roundForTimer = currentRounds[currentGroup.id] ?? 0;
+      pendingTimerSetRef.current = { exerciseId: currentExercise.id, round: roundForTimer };
       setIsExerciseTimerPhase(true);
       setShowTimer(true);
     } else {
@@ -1224,7 +1286,7 @@ export function ExerciseExecutionScreen() {
 
   const handleRest = () => {
     setShowMenu(false);
-    // Show rest timer
+    pendingTimerSetRef.current = null;
     setShowTimer(true);
   };
 
@@ -2045,25 +2107,58 @@ export function ExerciseExecutionScreen() {
         <SetTimerSheet
           visible={showTimer}
           onComplete={() => {
-            console.log('⏰ Timer completed, calling advanceToNext');
+            // CRITICAL: Do not call advanceToNext (or any setState) in this tick. Defer to next frame + macrotask so we are never in the same commit as SetTimerSheet (fixes "useInsertionEffect must not schedule updates").
             const currentGroup = exerciseGroups[expandedGroupIndex];
-            // Use refs to get CURRENT state, not stale closure state
-            const currentRound = currentRoundsRef.current[currentGroup.id] || 0;
-            const currentCompletedSets = completedSetsRef.current;
-            
-            console.log('⏰ Current state:', {
-              currentRound,
-              completedSetsSize: currentCompletedSets.size,
-              activeExerciseIndex: activeExerciseIndexRef.current,
-            });
-            
-            const allExercisesComplete = currentRound >= currentGroup.totalRounds ||
-              currentGroup.exercises.every(ex => {
-                const exSetId = `${ex.id}-set-${currentRound}`;
-                return currentCompletedSets.has(exSetId);
+            if (!currentGroup) return;
+            const captured = {
+              workoutKey,
+              workoutTemplateId,
+              type,
+              expandedGroupIndex,
+              exerciseGroups,
+            };
+            const runWork = () => {
+              const group = captured.exerciseGroups[captured.expandedGroupIndex];
+              if (!group) return;
+              const pending = pendingTimerSetRef.current;
+              pendingTimerSetRef.current = null;
+
+              const state = useStore.getState();
+              const storeCompletedItems =
+                captured.type === 'warmup'
+                  ? state.getWarmupCompletion(captured.workoutKey, captured.workoutTemplateId).completedItems
+                  : captured.type === 'core'
+                    ? state.getAccessoryCompletion(captured.workoutKey, captured.workoutTemplateId).completedItems
+                    : state.getMainCompletion(captured.workoutKey).completedItems;
+              const newCompletedSets = new Set(storeCompletedItems);
+
+              if (pending) {
+                newCompletedSets.add(`${pending.exerciseId}-set-${pending.round}`);
+              }
+
+              let roundJustCompleted = -1;
+              for (let r = 0; r < group.totalRounds; r++) {
+                const allDone = group.exercises.every(ex =>
+                  newCompletedSets.has(`${ex.id}-set-${r}`),
+                );
+                if (allDone) roundJustCompleted = r;
+                else break;
+              }
+              const allExercisesComplete = roundJustCompleted >= 0;
+
+              console.log('⏰ [Timer onComplete]', {
+                workoutKey: captured.workoutKey,
+                type: captured.type,
+                storeCount: storeCompletedItems.length,
+                pending: pending ? `${pending.exerciseId}-set-${pending.round}` : null,
+                roundJustCompleted,
+                allExercisesComplete,
+                newCompletedSetsSize: newCompletedSets.size,
               });
-            
-            advanceToNext(allExercisesComplete, currentCompletedSets);
+
+              advanceToNext(allExercisesComplete, newCompletedSets);
+            };
+            requestAnimationFrame(() => setTimeout(runWork, 0));
           }}
           onClose={() => setShowTimer(false)}
           workoutName={template?.name}

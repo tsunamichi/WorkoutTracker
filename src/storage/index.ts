@@ -24,6 +24,9 @@ const STORAGE_KEYS = {
   WARMUP_PRESETS: '@workout_tracker_warmup_presets',
   CORE_PRESETS: '@workout_tracker_core_presets',
   BONUS_LOGS: '@workout_tracker_bonus_logs',
+  // Fallback completion for warmup/accessory when workoutKey is not a scheduled workout (e.g. bonus, standalone)
+  WARMUP_COMPLETION_BY_KEY: '@workout_tracker_warmup_completion_by_key',
+  ACCESSORY_COMPLETION_BY_KEY: '@workout_tracker_accessory_completion_by_key',
 };
 
 // Cycles
@@ -440,6 +443,44 @@ export async function saveBonusLogs(logs: BonusLog[]): Promise<void> {
     await AsyncStorage.setItem(STORAGE_KEYS.BONUS_LOGS, JSON.stringify(logs));
   } catch (error) {
     console.error('Error saving bonus logs:', error);
+  }
+}
+
+export type CompletionByKey = Record<string, { completedItems: string[] }>;
+
+export async function loadWarmupCompletionByKey(): Promise<CompletionByKey> {
+  try {
+    const data = await AsyncStorage.getItem(STORAGE_KEYS.WARMUP_COMPLETION_BY_KEY);
+    return data ? JSON.parse(data) : {};
+  } catch (error) {
+    console.error('Error loading warmup completion by key:', error);
+    return {};
+  }
+}
+
+export async function saveWarmupCompletionByKey(byKey: CompletionByKey): Promise<void> {
+  try {
+    await AsyncStorage.setItem(STORAGE_KEYS.WARMUP_COMPLETION_BY_KEY, JSON.stringify(byKey));
+  } catch (error) {
+    console.error('Error saving warmup completion by key:', error);
+  }
+}
+
+export async function loadAccessoryCompletionByKey(): Promise<CompletionByKey> {
+  try {
+    const data = await AsyncStorage.getItem(STORAGE_KEYS.ACCESSORY_COMPLETION_BY_KEY);
+    return data ? JSON.parse(data) : {};
+  } catch (error) {
+    console.error('Error loading accessory completion by key:', error);
+    return {};
+  }
+}
+
+export async function saveAccessoryCompletionByKey(byKey: CompletionByKey): Promise<void> {
+  try {
+    await AsyncStorage.setItem(STORAGE_KEYS.ACCESSORY_COMPLETION_BY_KEY, JSON.stringify(byKey));
+  } catch (error) {
+    console.error('Error saving accessory completion by key:', error);
   }
 }
 

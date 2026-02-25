@@ -149,7 +149,11 @@ export function SetTimerSheet({
       easing: Easing.out(Easing.cubic),
       useNativeDriver: true,
     }).start(() => {
-      callback();
+      // Do NOT call callback in this stack. Schedule it for two frames + macrotask so we're fully outside the animation commit (fixes "useInsertionEffect must not schedule updates").
+      const runLater = () => setTimeout(() => callback(), 0);
+      requestAnimationFrame(() => {
+        requestAnimationFrame(runLater);
+      });
     });
   }, [slideAnim]);
 
@@ -662,9 +666,23 @@ export function SetTimerSheet({
           } else {
             // Either not per-side, or we just finished the second side
             if (onExerciseTimerComplete) {
-              onExerciseTimerComplete(); // Notify parent that set is complete
+              // Await so store is updated before we close and run onComplete (parent reads store there)
+              Promise.resolve(onExerciseTimerComplete()).then(() => {
+                if (skipRestPhase) {
+                  cancelTimerNotification();
+                  animateOutAndClose(onComplete);
+                } else {
+                  setCurrentPhase('rest');
+                  const newTime = restTime;
+                  setTimeLeft(newTime);
+                  endTimeRef.current = Date.now() + newTime * 1000;
+                  setIsRunning(true);
+                  lastPlayedSecondRef.current = null;
+                }
+              });
+              return;
             }
-            
+
             // If skipRestPhase is true, close drawer immediately instead of transitioning to rest
             if (skipRestPhase) {
               cancelTimerNotification();
@@ -756,11 +774,19 @@ export function SetTimerSheet({
             if (currentPhase === 'exercise') {
               // Exercise phase completed
               if (onExerciseTimerComplete) {
-                onExerciseTimerComplete(); // Notify parent that set is complete
-              }
-
-              // If skipRestPhase is true, close drawer immediately instead of transitioning to rest
-              if (skipRestPhase) {
+                Promise.resolve(onExerciseTimerComplete()).then(() => {
+                  if (skipRestPhase) {
+                    animateOutAndClose(onComplete);
+                  } else {
+                    setCurrentPhase('rest');
+                    const newTime = restTime;
+                    setTimeLeft(newTime);
+                    endTimeRef.current = Date.now() + newTime * 1000;
+                    setIsRunning(true);
+                    lastPlayedSecondRef.current = null;
+                  }
+                });
+              } else if (skipRestPhase) {
                 animateOutAndClose(onComplete);
               } else {
                 // Transition to rest phase internally
@@ -849,11 +875,20 @@ export function SetTimerSheet({
     if (currentPhase === 'exercise') {
       // Exercise phase: mark set complete
       if (onExerciseTimerComplete) {
-        onExerciseTimerComplete();
-      }
-      
-      // If skipRestPhase is true, close drawer immediately
-      if (skipRestPhase) {
+        Promise.resolve(onExerciseTimerComplete()).then(() => {
+          if (skipRestPhase) {
+            animateOutAndClose(onComplete);
+          } else {
+            // Transition to rest phase
+            setCurrentPhase('rest');
+            const newTime = restTime;
+            setTimeLeft(newTime);
+            endTimeRef.current = Date.now() + newTime * 1000;
+            setIsRunning(true);
+            lastPlayedSecondRef.current = null;
+          }
+        });
+      } else if (skipRestPhase) {
         animateOutAndClose(onComplete);
       } else {
         // Transition to rest phase

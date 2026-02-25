@@ -152,11 +152,13 @@ interface WorkoutStore {
   
   // Warm-up Completion (independent from workout completion)
   updateWarmupCompletion: (workoutId: string, warmupItemId: string, completed: boolean) => Promise<void>;
-  getWarmupCompletion: (workoutId: string) => { completedItems: string[]; totalItems: number; percentage: number };
+  getWarmupCompletion: (workoutId: string, templateId?: string) => { completedItems: string[]; totalItems: number; percentage: number };
+  warmupCompletionByKey: Record<string, { completedItems: string[] }>;
   
   // Accessory Completion (independent from workout completion)
   updateAccessoryCompletion: (workoutId: string, accessoryItemId: string, completed: boolean) => Promise<void>;
-  getAccessoryCompletion: (workoutId: string) => { completedItems: string[]; totalItems: number; percentage: number };
+  getAccessoryCompletion: (workoutId: string, templateId?: string) => { completedItems: string[]; totalItems: number; percentage: number };
+  accessoryCompletionByKey: Record<string, { completedItems: string[] }>;
   
   // Main Exercise Completion (independent from workout completion)
   updateMainCompletion: (workoutId: string, mainItemId: string, completed: boolean) => Promise<void>;
@@ -263,6 +265,8 @@ export const useStore = create<WorkoutStore>((set, get) => ({
   workoutTemplates: [],
   cyclePlans: [],
   scheduledWorkouts: [],
+  warmupCompletionByKey: {},
+  accessoryCompletionByKey: {},
   
   initialize: async () => {
     try {
@@ -297,6 +301,8 @@ export const useStore = create<WorkoutStore>((set, get) => ({
         warmupPresets,
         corePresets,
         bonusLogs,
+        warmupCompletionByKey,
+        accessoryCompletionByKey,
       ] = await Promise.all([
         storage.loadCycles(),
         storage.loadExercises(),
@@ -318,6 +324,8 @@ export const useStore = create<WorkoutStore>((set, get) => ({
         storage.loadWarmupPresets(),
         storage.loadCorePresets(),
         storage.loadBonusLogs(),
+        storage.loadWarmupCompletionByKey(),
+        storage.loadAccessoryCompletionByKey(),
       ]);
       
       // Normalize body weight entries to lbs
@@ -1220,6 +1228,8 @@ export const useStore = create<WorkoutStore>((set, get) => ({
         warmupPresets,
         corePresets,
         bonusLogs,
+        warmupCompletionByKey: warmupCompletionByKey || {},
+        accessoryCompletionByKey: accessoryCompletionByKey || {},
         workoutTemplates: finalWorkoutTemplates,
         cyclePlans: finalCyclePlans,
         scheduledWorkouts: finalScheduledWorkouts,
@@ -1720,6 +1730,8 @@ export const useStore = create<WorkoutStore>((set, get) => ({
       workoutTemplates: [],
       cyclePlans: [],
       scheduledWorkouts: [],
+      warmupCompletionByKey: {},
+      accessoryCompletionByKey: {},
     });
     
     // Save to storage
@@ -1730,6 +1742,8 @@ export const useStore = create<WorkoutStore>((set, get) => ({
     await storage.saveWorkoutTemplates([]);
     await storage.saveCyclePlans([]);
     await storage.saveScheduledWorkouts([]);
+    await storage.saveWarmupCompletionByKey({});
+    await storage.saveAccessoryCompletionByKey({});
     
     console.log('✅ All history cleared!');
   },
@@ -3393,74 +3407,65 @@ export const useStore = create<WorkoutStore>((set, get) => ({
       return sw;
     });
     
-    set({ scheduledWorkouts });
-    await storage.saveScheduledWorkouts(scheduledWorkouts);
+    const foundScheduled = scheduledWorkouts.some(sw => sw.id === workoutId);
+    if (foundScheduled) {
+      set({ scheduledWorkouts });
+      await storage.saveScheduledWorkouts(scheduledWorkouts);
+    } else {
+      // Fallback for bonus/standalone keys: persist in warmupCompletionByKey
+      const byKey = { ...(get().warmupCompletionByKey || {}) };
+      const existing = byKey[workoutId]?.completedItems || [];
+      const completedItems = completed
+        ? [...new Set([...existing, warmupItemId])]
+        : existing.filter(id => id !== warmupItemId);
+      byKey[workoutId] = { completedItems };
+      set({ warmupCompletionByKey: byKey });
+      await storage.saveWarmupCompletionByKey(byKey);
+    }
     
-    console.log('✅ Warm-up item updated:', { workoutId, warmupItemId, completed });
+    console.log('✅ Warm-up item updated:', { workoutId, warmupItemId, completed, foundScheduled: !!foundScheduled });
   },
   
-  getWarmupCompletion: (workoutId) => {
-    console.log('📂 getWarmupCompletion called with workoutId:', workoutId);
+  getWarmupCompletion: (workoutId, templateId?) => {
     const workout = get().scheduledWorkouts.find(sw => sw.id === workoutId);
     
-    console.log('🔍 Found workout:', workout ? `Yes (id: ${workout.id})` : 'No');
-    
     if (!workout) {
-      console.log('⚠️ No workout found, returning empty completion');
-      return { completedItems: [], totalItems: 0, percentage: 0 };
+      // Fallback for bonus/standalone: read from warmupCompletionByKey
+      const byKey = get().warmupCompletionByKey || {};
+      const completedItems = byKey[workoutId]?.completedItems || [];
+      let totalSets = 0;
+      if (templateId) {
+        const template = get().workoutTemplates.find(t => t.id === templateId);
+        const warmupItems = template?.warmupItems || [];
+        warmupItems.forEach((item: any) => {
+          if (Array.isArray(item.sets)) totalSets += item.sets.length;
+          else if (typeof item.sets === 'number') totalSets += item.sets;
+        });
+      } else {
+        totalSets = completedItems.length; // best guess
+      }
+      let percentage = totalSets > 0 ? (completedItems.length >= totalSets ? 100 : Math.round((completedItems.length / totalSets) * 100)) : 0;
+      return { completedItems, totalItems: totalSets, percentage };
     }
     
     // Calculate total sets across all warmup items
-    // Support both old format (sets: number) and new format (sets: ExerciseInstanceSet[])
-    // Fallback to template warmupItems if snapshot is empty
     let warmupItems = workout.warmupSnapshot || [];
-    
-    // If snapshot is empty, try to get from template
-    // Check both templateId (cycle workouts) and workoutTemplateId (standalone workouts)
-    const templateId = (workout as any).templateId || (workout as any).workoutTemplateId;
-    if (warmupItems.length === 0 && templateId) {
-      const template = get().workoutTemplates.find(t => t.id === templateId);
-      if (template && template.warmupItems) {
-        warmupItems = template.warmupItems;
-        console.log('⚠️ Using template warmupItems as fallback:', warmupItems.length);
-      }
+    const tid = (workout as any).templateId || (workout as any).workoutTemplateId;
+    if (warmupItems.length === 0 && tid) {
+      const template = get().workoutTemplates.find(t => t.id === tid);
+      if (template?.warmupItems) warmupItems = template.warmupItems;
     }
-    
     let totalSets = 0;
     warmupItems.forEach((item: any) => {
-      if (Array.isArray(item.sets)) {
-        // New format: sets is an array
-        totalSets += item.sets.length;
-      } else if (typeof item.sets === 'number') {
-        // Old format: sets is a number
-        totalSets += item.sets;
-      }
+      if (Array.isArray(item.sets)) totalSets += item.sets.length;
+      else if (typeof item.sets === 'number') totalSets += item.sets;
     });
-    
     const completedItems = workout.warmupCompletion?.completedItems || [];
-    // Calculate percentage, ensuring it reaches 100% when all sets are complete
     let percentage = 0;
     if (totalSets > 0) {
-      if (completedItems.length >= totalSets) {
-        // Safeguard: if completed items >= total sets, always show 100%
-        percentage = 100;
-      } else {
-        percentage = Math.round((completedItems.length / totalSets) * 100);
-      }
+      percentage = completedItems.length >= totalSets ? 100 : Math.round((completedItems.length / totalSets) * 100);
     }
-    
-    console.log('📊 Warmup completion:', { 
-      totalSets, 
-      completedCount: completedItems.length, 
-      percentage,
-      items: warmupItems.length
-    });
-    
-    return {
-      completedItems,
-      totalItems: totalSets,
-      percentage,
-    };
+    return { completedItems, totalItems: totalSets, percentage };
   },
   
   // Accessory Completion (independent from workout completion)
@@ -3487,95 +3492,73 @@ export const useStore = create<WorkoutStore>((set, get) => ({
       return sw;
     });
     
-    set({ scheduledWorkouts });
-    await storage.saveScheduledWorkouts(scheduledWorkouts);
+    const foundScheduled = scheduledWorkouts.some(sw => sw.id === workoutId);
+    if (foundScheduled) {
+      set({ scheduledWorkouts });
+      await storage.saveScheduledWorkouts(scheduledWorkouts);
+    } else {
+      const byKey = { ...(get().accessoryCompletionByKey || {}) };
+      const existing = byKey[workoutId]?.completedItems || [];
+      const completedItems = completed
+        ? [...new Set([...existing, accessoryItemId])]
+        : existing.filter(id => id !== accessoryItemId);
+      byKey[workoutId] = { completedItems };
+      set({ accessoryCompletionByKey: byKey });
+      await storage.saveAccessoryCompletionByKey(byKey);
+    }
     
-    console.log('✅ Accessory item updated:', { workoutId, accessoryItemId, completed });
+    console.log('✅ Accessory item updated:', { workoutId, accessoryItemId, completed, foundScheduled: !!foundScheduled });
   },
   
-  getAccessoryCompletion: (workoutId) => {
-    console.log('📂 getAccessoryCompletion called with workoutId:', workoutId);
+  getAccessoryCompletion: (workoutId, templateId?) => {
     const workout = get().scheduledWorkouts.find(sw => sw.id === workoutId);
     
-    console.log('🔍 Found workout:', workout ? `Yes (id: ${workout.id})` : 'No');
-    
     if (!workout) {
-      console.log('⚠️ No workout found, returning empty completion');
-      return { completedItems: [], totalItems: 0, percentage: 0 };
-    }
-    
-    // Calculate total sets across all accessory items
-    // Support both old format (sets: number) and new format (sets: ExerciseInstanceSet[])
-    // Fallback to template accessoryItems if snapshot is empty
-    let accessoryItems = workout.accessorySnapshot || [];
-    
-    // If snapshot is empty, try to get from template
-    // Check both templateId (cycle workouts) and workoutTemplateId (standalone workouts)
-    const templateId = (workout as any).templateId || (workout as any).workoutTemplateId;
-    if (accessoryItems.length === 0 && templateId) {
-      const template = get().workoutTemplates.find(t => t.id === templateId);
-      if (template && template.accessoryItems) {
-        accessoryItems = template.accessoryItems;
-        console.log('⚠️ Using template accessoryItems as fallback:', accessoryItems.length);
+      const byKey = get().accessoryCompletionByKey || {};
+      const completedItems = byKey[workoutId]?.completedItems || [];
+      let totalSets = 0;
+      if (templateId) {
+        const template = get().workoutTemplates.find(t => t.id === templateId);
+        const accessoryItems = template?.accessoryItems || [];
+        accessoryItems.forEach((item: any) => {
+          if (Array.isArray(item.sets)) totalSets += item.sets.length;
+          else if (typeof item.sets === 'number') totalSets += item.sets;
+        });
+      } else {
+        totalSets = completedItems.length;
       }
+      let percentage = totalSets > 0 ? (completedItems.length >= totalSets ? 100 : Math.round((completedItems.length / totalSets) * 100)) : 0;
+      return { completedItems, totalItems: totalSets, percentage };
     }
     
+    let accessoryItems = workout.accessorySnapshot || [];
+    const tid = (workout as any).templateId || (workout as any).workoutTemplateId;
+    if (accessoryItems.length === 0 && tid) {
+      const template = get().workoutTemplates.find(t => t.id === tid);
+      if (template?.accessoryItems) accessoryItems = template.accessoryItems;
+    }
     let totalSets = 0;
     accessoryItems.forEach((item: any) => {
-      if (Array.isArray(item.sets)) {
-        // New format: sets is an array
-        totalSets += item.sets.length;
-      } else if (typeof item.sets === 'number') {
-        // Old format: sets is a number
-        totalSets += item.sets;
-      }
+      if (Array.isArray(item.sets)) totalSets += item.sets.length;
+      else if (typeof item.sets === 'number') totalSets += item.sets;
     });
-    
     const completedItems = workout.accessoryCompletion?.completedItems || [];
-    // Calculate percentage, ensuring it reaches 100% when all sets are complete
     let percentage = 0;
     if (totalSets > 0) {
-      if (completedItems.length >= totalSets) {
-        // Safeguard: if completed items >= total sets, always show 100%
-        percentage = 100;
-      } else {
-        percentage = Math.round((completedItems.length / totalSets) * 100);
-      }
+      percentage = completedItems.length >= totalSets ? 100 : Math.round((completedItems.length / totalSets) * 100);
     }
-    
-    console.log('📊 Accessory completion:', { 
-      totalSets, 
-      completedCount: completedItems.length, 
-      percentage,
-      items: accessoryItems.length
-    });
-    
-    return {
-      completedItems,
-      totalItems: totalSets,
-      percentage,
-    };
+    return { completedItems, totalItems: totalSets, percentage };
   },
   
   // Main Exercise Completion (independent from workout completion)
   updateMainCompletion: async (workoutId, mainItemId, completed) => {
-    console.log('💾 updateMainCompletion called:', { workoutId, mainItemId, completed });
-    
-    const foundWorkout = get().scheduledWorkouts.find(sw => sw.id === workoutId);
-    console.log('🔍 Found workout:', foundWorkout ? `Yes (id: ${foundWorkout.id})` : 'No');
-    
     const scheduledWorkouts = get().scheduledWorkouts.map(sw => {
       if (sw.id === workoutId) {
         const existingCompletion = sw.mainCompletion || { completedItems: [] };
         const existingCompletedItems = existingCompletion.completedItems || [];
-        
-        console.log('📋 Before update - completedItems:', existingCompletedItems);
-        
         const completedItems = completed
           ? [...new Set([...existingCompletedItems, mainItemId])]
           : existingCompletedItems.filter(id => id !== mainItemId);
-        
-        console.log('📋 After update - completedItems:', completedItems);
         
         return {
           ...sw,
@@ -3592,54 +3575,21 @@ export const useStore = create<WorkoutStore>((set, get) => ({
     
     set({ scheduledWorkouts });
     await storage.saveScheduledWorkouts(scheduledWorkouts);
-    
-    console.log('✅ Main exercise item updated and saved:', { workoutId, mainItemId, completed });
   },
   
   getMainCompletion: (workoutId) => {
-    console.log('📂 getMainCompletion called with workoutId:', workoutId);
     const workout = get().scheduledWorkouts.find(sw => sw.id === workoutId);
-    
-    console.log('🔍 Found workout:', workout ? `Yes (id: ${workout.id})` : 'No');
-    
-    if (!workout) {
-      console.log('⚠️ No workout found, returning empty completion');
-      return { completedItems: [], totalItems: 0, percentage: 0 };
-    }
-    
-    // Calculate total sets across all main exercises
-    // exercisesSnapshot uses WorkoutTemplateExercise format where sets is always a number
+    if (!workout) return { completedItems: [], totalItems: 0, percentage: 0 };
     let totalSets = 0;
     (workout.exercisesSnapshot || []).forEach((item: any) => {
-      if (typeof item.sets === 'number') {
-        totalSets += item.sets;
-      }
+      if (typeof item.sets === 'number') totalSets += item.sets;
     });
-    
     const completedItems = workout.mainCompletion?.completedItems || [];
-    // Calculate percentage, ensuring it reaches 100% when all sets are complete
     let percentage = 0;
     if (totalSets > 0) {
-      if (completedItems.length >= totalSets) {
-        // Safeguard: if completed items >= total sets, always show 100%
-        percentage = 100;
-      } else {
-        percentage = Math.round((completedItems.length / totalSets) * 100);
-      }
+      percentage = completedItems.length >= totalSets ? 100 : Math.round((completedItems.length / totalSets) * 100);
     }
-    
-    console.log('📊 Main completion:', { 
-      totalSets, 
-      completedCount: completedItems.length, 
-      percentage,
-      exercises: workout.exercisesSnapshot?.length || 0
-    });
-    
-    return {
-      completedItems,
-      totalItems: totalSets,
-      percentage,
-    };
+    return { completedItems, totalItems: totalSets, percentage };
   },
   
   // Move scheduled workout to another date
@@ -3745,18 +3695,19 @@ export const useStore = create<WorkoutStore>((set, get) => ({
   // Reset specific completion types
   resetWarmupCompletion: async (workoutId) => {
     console.log('🧹 Resetting warmup completion for workout:', workoutId);
-    const scheduledWorkouts = get().scheduledWorkouts.map(sw => {
-      if (sw.id === workoutId) {
-        return {
-          ...sw,
-          warmupCompletion: { completedItems: [] },
-        };
-      }
-      return sw;
-    });
-    
-    set({ scheduledWorkouts });
-    await storage.saveScheduledWorkouts(scheduledWorkouts);
+    const found = get().scheduledWorkouts.some(sw => sw.id === workoutId);
+    if (found) {
+      const scheduledWorkouts = get().scheduledWorkouts.map(sw =>
+        sw.id === workoutId ? { ...sw, warmupCompletion: { completedItems: [] } } : sw
+      );
+      set({ scheduledWorkouts });
+      await storage.saveScheduledWorkouts(scheduledWorkouts);
+    } else {
+      const byKey = { ...(get().warmupCompletionByKey || {}) };
+      delete byKey[workoutId];
+      set({ warmupCompletionByKey: byKey });
+      await storage.saveWarmupCompletionByKey(byKey);
+    }
     console.log('✅ Warmup completion reset');
   },
   
@@ -3779,18 +3730,19 @@ export const useStore = create<WorkoutStore>((set, get) => ({
   
   resetAccessoryCompletion: async (workoutId) => {
     console.log('🧹 Resetting accessory completion for workout:', workoutId);
-    const scheduledWorkouts = get().scheduledWorkouts.map(sw => {
-      if (sw.id === workoutId) {
-        return {
-          ...sw,
-          accessoryCompletion: { completedItems: [] },
-        };
-      }
-      return sw;
-    });
-    
-    set({ scheduledWorkouts });
-    await storage.saveScheduledWorkouts(scheduledWorkouts);
+    const found = get().scheduledWorkouts.some(sw => sw.id === workoutId);
+    if (found) {
+      const scheduledWorkouts = get().scheduledWorkouts.map(sw =>
+        sw.id === workoutId ? { ...sw, accessoryCompletion: { completedItems: [] } } : sw
+      );
+      set({ scheduledWorkouts });
+      await storage.saveScheduledWorkouts(scheduledWorkouts);
+    } else {
+      const byKey = { ...(get().accessoryCompletionByKey || {}) };
+      delete byKey[workoutId];
+      set({ accessoryCompletionByKey: byKey });
+      await storage.saveAccessoryCompletionByKey(byKey);
+    }
     console.log('✅ Accessory completion reset');
   },
   
