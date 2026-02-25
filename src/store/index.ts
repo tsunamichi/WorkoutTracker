@@ -133,6 +133,7 @@ interface WorkoutStore {
   // Cycle Management v1
   endCyclePlan: (planId: string) => Promise<void>;
   deleteCyclePlan: (planId: string) => Promise<void>;
+  deleteCyclePlanCompletely: (planId: string) => Promise<void>;
   pauseShiftCyclePlan: (planId: string, resumeDate: string, resolutionMap?: ConflictResolutionMap) => Promise<{ success: boolean; conflicts?: ConflictItem[] }>;
   repairPausedCycleSchedule: () => Promise<void>;
   getCyclePlanEffectiveEndDate: (plan: CyclePlan) => string;
@@ -2660,6 +2661,18 @@ export const useStore = create<WorkoutStore>((set, get) => ({
       }
       return sw;
     });
+    set({ cyclePlans: plans, scheduledWorkouts });
+    await storage.saveCyclePlans(plans);
+    await storage.saveScheduledWorkouts(scheduledWorkouts);
+  },
+
+  deleteCyclePlanCompletely: async (planId) => {
+    const plan = get().cyclePlans.find(p => p.id === planId);
+    if (!plan) return;
+    const plans = get().cyclePlans.filter(p => p.id !== planId);
+    const scheduledWorkouts = get().scheduledWorkouts.filter(
+      sw => sw.source !== 'cycle' || (sw.programId !== planId && sw.cyclePlanId !== planId)
+    );
     set({ cyclePlans: plans, scheduledWorkouts });
     await storage.saveCyclePlans(plans);
     await storage.saveScheduledWorkouts(scheduledWorkouts);

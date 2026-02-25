@@ -10,10 +10,11 @@ import { IconCheckmark, IconSwap, IconAdd, IconSettings, IconCalendar, IconPause
 import { ExpandableCalendarStrip } from '../components/calendar/ExpandableCalendarStrip';
 import { DiagonalLinePattern } from '../components/common/DiagonalLinePattern';
 import { CycleControlSheet } from '../components/CycleControlSheet';
+import { ShareCycleDrawer } from '../components/ShareCycleDrawer';
 import dayjs from 'dayjs';
 import isoWeek from 'dayjs/plugin/isoWeek';
 import { useTranslation } from '../i18n/useTranslation';
-import type { BonusType } from '../types/training';
+import type { BonusType, CyclePlan } from '../types/training';
 
 dayjs.extend(isoWeek);
 
@@ -149,6 +150,7 @@ export function TodayScreen({ onDateChange, onOpenSwapDrawer, onOpenAddWorkout, 
     getCyclePlanStatus,
     pauseShiftCyclePlan,
     endCyclePlan,
+    deleteCyclePlanCompletely,
     updateCyclePlan,
     repairPausedCycleSchedule,
   } = useStore();
@@ -166,6 +168,8 @@ export function TodayScreen({ onDateChange, onOpenSwapDrawer, onOpenAddWorkout, 
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [bonusExpanded, setBonusExpanded] = useState(false);
   const [showCycleSheet, setShowCycleSheet] = useState(false);
+  const [showShareCycleSheet, setShowShareCycleSheet] = useState(false);
+  const [shareCyclePlan, setShareCyclePlan] = useState<CyclePlan | undefined>(undefined);
 
   // TEMP: Seed dev data on mount (remove after use)
   const [seeded, setSeeded] = useState(false);
@@ -191,9 +195,11 @@ export function TodayScreen({ onDateChange, onOpenSwapDrawer, onOpenAddWorkout, 
 
   // Which cycle plan does the selected date belong to?
   // If multiple plans overlap, prefer inactive for past dates, active for today/future.
+  // For inactive (finished) plans, only match if there's an actual workout on that date.
   const selectedDateCyclePlan = React.useMemo(() => {
     let activeMatch: typeof cyclePlans[0] | null = null;
     let inactiveMatch: typeof cyclePlans[0] | null = null;
+    const dateStr = dayjs(selectedDate).format('YYYY-MM-DD');
     for (const plan of cyclePlans) {
       const start = dayjs(plan.startDate);
       const end = dayjs(getCyclePlanEffectiveEndDate(plan));
@@ -201,7 +207,10 @@ export function TodayScreen({ onDateChange, onOpenSwapDrawer, onOpenAddWorkout, 
         if (plan.active) {
           if (!activeMatch) activeMatch = plan;
         } else {
-          if (!inactiveMatch) inactiveMatch = plan;
+          const hasWorkoutOnDate = scheduledWorkouts.some(
+            sw => sw.date === dateStr && sw.source === 'cycle' && (sw.programId === plan.id || sw.cyclePlanId === plan.id)
+          );
+          if (hasWorkoutOnDate && !inactiveMatch) inactiveMatch = plan;
         }
       }
     }
@@ -211,20 +220,31 @@ export function TodayScreen({ onDateChange, onOpenSwapDrawer, onOpenAddWorkout, 
       return !dayjs(selectedDate).isBefore(dayjs(), 'day') ? activeMatch : inactiveMatch;
     }
     return null;
-  }, [cyclePlans, selectedDate]);
+  }, [cyclePlans, selectedDate, scheduledWorkouts]);
   const isSelectedDateInActiveCycle = selectedDateCyclePlan?.active === true;
 
-  const cycleChipState: 'active' | 'paused' | 'none' = activeCyclePlan
-    ? isCyclePaused ? 'paused' : 'active'
-    : 'none';
+  const cycleChipState: 'active' | 'paused' | 'finished' | 'none' = (() => {
+    if (selectedDateCyclePlan) {
+      if (selectedDateCyclePlan.active) {
+        const isPlanPaused = !!selectedDateCyclePlan.pausedUntil &&
+          dayjs(selectedDateCyclePlan.pausedUntil).isAfter(today, 'day');
+        return isPlanPaused ? 'paused' : 'active';
+      }
+      return 'finished';
+    }
+    return 'none';
+  })();
   const activeCycleEndDate = activeCyclePlan
     ? getCyclePlanEffectiveEndDate(activeCyclePlan)
     : undefined;
 
-  const cycleChipLabel = React.useMemo(() => {
-    if (!activeCyclePlan) return t('startACycle');
-    return activeCyclePlan.name;
-  }, [activeCyclePlan, t]);
+  const cycleChipName = selectedDateCyclePlan?.name ?? '';
+  const cycleChipStatus: string = (() => {
+    if (cycleChipState === 'active') return 'Active';
+    if (cycleChipState === 'paused') return 'Paused';
+    if (cycleChipState === 'finished') return 'Finished';
+    return '';
+  })();
 
   // Force refresh when screen comes into focus (e.g., after scheduling a workout)
   useFocusEffect(
@@ -417,30 +437,46 @@ export function TodayScreen({ onDateChange, onOpenSwapDrawer, onOpenAddWorkout, 
               style={[
                 styles.cycleChip,
                 cycleChipState === 'paused' && styles.cycleChipPaused,
+                cycleChipState === 'finished' && styles.cycleChipFinished,
                 cycleChipState === 'none' && styles.cycleChipNone,
                 styles.cycleChipRow,
               ]}
               activeOpacity={0.7}
               onPress={() => {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                setShowCycleSheet(true);
+                if (cycleChipState === 'none') {
+                  onOpenAddWorkout?.(selectedDate);
+                } else if (cycleChipState === 'finished') {
+                  if (selectedDateCyclePlan) {
+                    (navigation as any).navigate('CycleDetail', { cycleId: selectedDateCyclePlan.id });
+                  }
+                } else {
+                  setShowCycleSheet(true);
+                }
               }}
             >
-              <Text
-                style={[
-                  styles.cycleChipText,
-                  cycleChipState === 'paused' && styles.cycleChipTextPaused,
-                  cycleChipState === 'none' && styles.cycleChipTextNone,
-                ]}
-                numberOfLines={1}
-              >
-                {cycleChipLabel}
-              </Text>
-              <Text style={[
-                styles.cycleChipArrow,
-                cycleChipState === 'paused' && styles.cycleChipTextPaused,
-                cycleChipState === 'none' && styles.cycleChipTextNone,
-              ]}>▾</Text>
+              {cycleChipState === 'none' ? (
+                <Text style={styles.cycleChipTextNone} numberOfLines={1}>
+                  {t('startACycle')}
+                </Text>
+              ) : (
+                <Text numberOfLines={1}>
+                  <Text style={[
+                    styles.cycleChipName,
+                    cycleChipState === 'paused' && styles.cycleChipNamePaused,
+                    cycleChipState === 'finished' && styles.cycleChipNameFinished,
+                  ]}>
+                    {cycleChipName}
+                  </Text>
+                  <Text style={[
+                    styles.cycleChipStatusText,
+                    cycleChipState === 'paused' && styles.cycleChipTextPaused,
+                    cycleChipState === 'finished' && styles.cycleChipTextFinished,
+                  ]}>
+                    {' · '}{cycleChipStatus}
+                  </Text>
+                </Text>
+              )}
             </TouchableOpacity>
 
             {/* Calendar strip */}
@@ -596,15 +632,31 @@ export function TodayScreen({ onDateChange, onOpenSwapDrawer, onOpenAddWorkout, 
                 /* Per Product Spec: Empty Day State */
                 <View style={styles.restDayContainer}>
                   <View style={styles.restDayContent}>
-                    <Text style={styles.restDayQuestion}>
-                      <Text style={styles.restDayQuestionGray}>
-                        {dayjs(selectedDate).isBefore(today, 'day')
-                          ? t('noWorkoutPerformedThisDay')
-                          : activeCyclePlan && !dayjs(selectedDate).isBefore(dayjs(activeCyclePlan.startDate), 'day')
-                            ? t('restDayTitle')
-                            : t('noWorkoutPlanned')}
+                    {dayjs(selectedDate).isBefore(today, 'day') ? (
+                      <Text style={styles.restDayQuestion}>
+                        <Text style={styles.restDayQuestionGray}>{t('noWorkoutPerformedThisDay')}</Text>
                       </Text>
-                    </Text>
+                    ) : selectedDateCyclePlan?.active ? (
+                      <Text style={styles.restDayQuestion}>
+                        <Text style={styles.restDayQuestionGray}>{t('restDayTitle')}</Text>
+                      </Text>
+                    ) : (
+                      <>
+                        <Text style={styles.restDayQuestion}>
+                          <Text style={styles.restDayQuestionGray}>No cycles in progress</Text>
+                        </Text>
+                        <TouchableOpacity
+                          style={styles.createCycleButton}
+                          onPress={() => {
+                            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                            onOpenAddWorkout?.(selectedDate);
+                          }}
+                          activeOpacity={0.7}
+                        >
+                          <Text style={styles.createCycleButtonText}>Create new one</Text>
+                        </TouchableOpacity>
+                      </>
+                    )}
                   </View>
                 </View>
               )}
@@ -626,17 +678,8 @@ export function TodayScreen({ onDateChange, onOpenSwapDrawer, onOpenAddWorkout, 
                     </TouchableOpacity>
                   )
                 ) : (
-                  /* NO workout: show swap button on rest days when cycle is active */
-                  !dayjs(selectedDate).isBefore(today, 'day') && activeCyclePlan && hasEligibleWorkoutsToSwap(selectedDate) ? (
-                    <TouchableOpacity
-                      style={styles.swapButton}
-                      onPress={() => onOpenSwapDrawer?.(selectedDate, weekDays, true)}
-                      activeOpacity={1}
-                    >
-                      <IconAdd size={24} color={COLORS.accentPrimary} />
-                      <Text style={[styles.swapButtonText, { color: COLORS.accentPrimary }]}>{t('useWorkoutFromCycle')}</Text>
-                    </TouchableOpacity>
-                  ) : !dayjs(selectedDate).isBefore(today, 'day') && !activeCyclePlan ? (
+                  /* Only show Add Workout when there is an active cycle but this day has no workout (e.g. rest day). When no cycles, we already show "Create new one" above. */
+                  !dayjs(selectedDate).isBefore(today, 'day') && activeCyclePlan && !selectedDay?.scheduledWorkout ? (
                     <TouchableOpacity
                       style={styles.addWorkoutButton}
                       onPress={() => handleAddOrCreateWorkout(selectedDate)}
@@ -745,7 +788,7 @@ export function TodayScreen({ onDateChange, onOpenSwapDrawer, onOpenAddWorkout, 
           visible={showCycleSheet}
           onClose={() => setShowCycleSheet(false)}
           cycleState={cycleChipState}
-          plan={activeCyclePlan}
+          plan={selectedDateCyclePlan?.active ? selectedDateCyclePlan : activeCyclePlan}
           weekProgress={cycleWeekProgress}
           effectiveEndDate={activeCycleEndDate}
           onPause={(resumeDate: string) => {
@@ -780,9 +823,26 @@ export function TodayScreen({ onDateChange, onOpenSwapDrawer, onOpenAddWorkout, 
           onEnd={() => {
             if (activeCyclePlan) endCyclePlan(activeCyclePlan.id);
           }}
+          onDelete={() => {
+            if (activeCyclePlan) deleteCyclePlanCompletely(activeCyclePlan.id);
+          }}
+          onShare={(plan) => {
+            setShowCycleSheet(false);
+            setShareCyclePlan(plan);
+            setShowShareCycleSheet(true);
+          }}
           onStartCycle={() => {
             (navigation as any).navigate('CreateCycleFlow', { selectedDate: today.format('YYYY-MM-DD') });
           }}
+        />
+
+        <ShareCycleDrawer
+          visible={showShareCycleSheet}
+          onClose={() => {
+            setShowShareCycleSheet(false);
+            setShareCyclePlan(undefined);
+          }}
+          plan={shareCyclePlan}
         />
       </View>
   );
@@ -923,33 +983,51 @@ const styles = StyleSheet.create({
   cycleChip: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     backgroundColor: COLORS.successDimmed,
     paddingHorizontal: 10,
-    paddingVertical: 5,
+    height: 28,
     borderRadius: 14,
     gap: 4,
-    maxWidth: 180,
+    maxWidth: 220,
   },
   cycleChipPaused: {
-    backgroundColor: COLORS.accentPrimaryDimmed,
+    backgroundColor: 'rgba(255, 69, 58, 0.15)',
   },
-  cycleChipNone: {
+  cycleChipFinished: {
     backgroundColor: COLORS.container,
   },
-  cycleChipText: {
+  cycleChipNone: {
+    backgroundColor: 'transparent',
+    borderWidth: 1,
+    borderColor: COLORS.container,
+  },
+  cycleChipName: {
     fontSize: 13,
     fontWeight: '600' as const,
     color: COLORS.successBright,
   },
+  cycleChipNamePaused: {
+    color: COLORS.signalNegative,
+  },
+  cycleChipNameFinished: {
+    color: COLORS.textMeta,
+  },
+  cycleChipStatusText: {
+    fontSize: 13,
+    fontWeight: '400' as const,
+    color: COLORS.successBright,
+  },
+  cycleChipTextFinished: {
+    color: COLORS.textMeta,
+  },
   cycleChipTextPaused: {
-    color: COLORS.accentPrimary,
+    color: COLORS.signalNegative,
   },
   cycleChipTextNone: {
-    color: COLORS.textSecondary,
-  },
-  cycleChipArrow: {
-    fontSize: 12,
-    color: COLORS.successBright,
+    fontSize: 13,
+    fontWeight: '600' as const,
+    color: COLORS.textMeta,
   },
 
   // Pause Banner
@@ -1173,6 +1251,20 @@ const styles = StyleSheet.create({
   },
   restDayQuestionGray: {
     color: COLORS.text,
+  },
+  createCycleButton: {
+    width: '100%',
+    height: 56,
+    borderRadius: 16,
+    backgroundColor: COLORS.accentPrimaryDimmed,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  createCycleButtonText: {
+    ...TYPOGRAPHY.body,
+    color: COLORS.accentPrimary,
   },
   restDayQuestionBlack: {
     color: COLORS.text,

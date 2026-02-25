@@ -4,7 +4,7 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import * as Haptics from 'expo-haptics';
 import dayjs from 'dayjs';
 import { BottomDrawer } from './common/BottomDrawer';
-import { IconPause, IconPlay, IconClose } from './icons';
+import { IconPause, IconPlay, IconClose, IconTrash, IconShare } from './icons';
 import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS } from '../constants';
 import { useTranslation } from '../i18n/useTranslation';
 import type { CyclePlan } from '../types/training';
@@ -21,6 +21,8 @@ interface CycleControlSheetProps {
   onPause: (resumeDate: string) => void;
   onResume: () => void;
   onEnd: () => void;
+  onDelete: () => void;
+  onShare: (plan: CyclePlan) => void;
   onStartCycle: () => void;
 }
 
@@ -34,6 +36,8 @@ export function CycleControlSheet({
   onPause,
   onResume,
   onEnd,
+  onDelete,
+  onShare,
   onStartCycle,
 }: CycleControlSheetProps) {
   const { t } = useTranslation();
@@ -58,6 +62,27 @@ export function CycleControlSheet({
             onPress: () => {
               Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
               onEnd();
+            },
+          },
+        ],
+      );
+    }, 350);
+  };
+
+  const handleDelete = () => {
+    onClose();
+    setTimeout(() => {
+      Alert.alert(
+        t('deleteCycleConfirmTitle'),
+        t('deleteCycleConfirmMessage'),
+        [
+          { text: t('cancel'), style: 'cancel' },
+          {
+            text: t('delete'),
+            style: 'destructive',
+            onPress: () => {
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+              onDelete();
             },
           },
         ],
@@ -153,51 +178,80 @@ export function CycleControlSheet({
             )}
           </View>
         ) : (
-          <View style={styles.actionsRow}>
-            {cycleState === 'active' && (
+          <>
+            <View style={styles.shareRow}>
               <TouchableOpacity
-                style={styles.actionItem}
+                style={styles.actionItemFullWidth}
                 activeOpacity={0.7}
                 onPress={() => {
                   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                  setPickingDate(true);
+                  onClose();
+                  if (plan) onShare(plan);
                 }}
               >
                 <View style={styles.iconContainer}>
-                  <IconPause size={20} color={COLORS.text} />
+                  <IconShare size={20} color={COLORS.text} />
                 </View>
-                <Text style={styles.actionLabel}>{t('pauseCycle')}</Text>
+                <Text style={styles.actionLabel}>{t('shareCycle')}</Text>
               </TouchableOpacity>
-            )}
+            </View>
+            <View style={styles.actionsRow}>
+              {cycleState === 'active' && (
+                <TouchableOpacity
+                  style={styles.actionItem}
+                  activeOpacity={0.7}
+                  onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    setPickingDate(true);
+                  }}
+                >
+                  <View style={styles.iconContainer}>
+                    <IconPause size={20} color={COLORS.text} />
+                  </View>
+                  <Text style={styles.actionLabel}>{t('pauseCycle')}</Text>
+                </TouchableOpacity>
+              )}
 
-            {cycleState === 'paused' && (
+              {cycleState === 'paused' && (
+                <TouchableOpacity
+                  style={styles.actionItem}
+                  activeOpacity={0.7}
+                  onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                    onClose();
+                    onResume();
+                  }}
+                >
+                  <View style={styles.iconContainer}>
+                    <IconPlay size={20} color={COLORS.text} />
+                  </View>
+                  <Text style={styles.actionLabel}>{t('resumeCycle')}</Text>
+                </TouchableOpacity>
+              )}
+
               <TouchableOpacity
                 style={styles.actionItem}
                 activeOpacity={0.7}
-                onPress={() => {
-                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                  onClose();
-                  onResume();
-                }}
+                onPress={handleEnd}
               >
                 <View style={styles.iconContainer}>
-                  <IconPlay size={20} color={COLORS.text} />
+                  <IconClose size={20} color={COLORS.signalNegative} />
                 </View>
-                <Text style={styles.actionLabel}>{t('resumeCycle')}</Text>
+                <Text style={[styles.actionLabel, styles.actionLabelDestructive]}>{t('endCycle')}</Text>
               </TouchableOpacity>
-            )}
 
-            <TouchableOpacity
-              style={styles.actionItem}
-              activeOpacity={0.7}
-              onPress={handleEnd}
-            >
-              <View style={styles.iconContainer}>
-                <IconClose size={20} color={COLORS.signalNegative} />
-              </View>
-              <Text style={[styles.actionLabel, styles.actionLabelDestructive]}>{t('endCycle')}</Text>
-            </TouchableOpacity>
-          </View>
+              <TouchableOpacity
+                style={[styles.actionItem, styles.actionItemDestructive]}
+                activeOpacity={0.7}
+                onPress={handleDelete}
+              >
+                <View style={styles.iconContainer}>
+                  <IconTrash size={20} color={COLORS.signalNegative} />
+                </View>
+                <Text style={[styles.actionLabel, styles.actionLabelDestructive]}>{t('deleteCycle')}</Text>
+              </TouchableOpacity>
+            </View>
+          </>
         )}
       </View>
     </BottomDrawer>
@@ -259,6 +313,18 @@ const styles = StyleSheet.create({
     ...TYPOGRAPHY.meta,
     color: COLORS.accentPrimary,
   },
+  shareRow: {
+    marginBottom: SPACING.md,
+  },
+  actionItemFullWidth: {
+    width: '100%',
+    backgroundColor: COLORS.activeCard,
+    borderRadius: 16,
+    paddingVertical: SPACING.lg,
+    paddingHorizontal: SPACING.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   actionsRow: {
     flexDirection: 'row',
     gap: SPACING.md,
@@ -272,6 +338,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.md,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  actionItemDestructive: {
+    backgroundColor: COLORS.signalNegativeDimmed,
   },
   iconContainer: {
     alignItems: 'center',

@@ -1,13 +1,13 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, Alert, KeyboardAvoidingView, Platform, Modal, Animated } from 'react-native';
-import DateTimePicker from '@react-native-community/datetimepicker';
+import React, { useState, useCallback } from 'react';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, Alert, KeyboardAvoidingView, Platform, LayoutAnimation, ScrollView, ActivityIndicator } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import * as Clipboard from 'expo-clipboard';
 import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS, CARDS } from '../constants';
 import { useStore } from '../store';
-import { IconClose, IconChevronDown, IconMenu } from '../components/icons';
+import { IconClose, IconMenu, IconChevronDown } from '../components/icons';
 import { BottomDrawer } from '../components/common/BottomDrawer';
+import { CalendarDayButton } from '../components/calendar/CalendarDayButton';
 import dayjs from 'dayjs';
 import isoWeek from 'dayjs/plugin/isoWeek';
 import { useTranslation } from '../i18n/useTranslation';
@@ -19,6 +19,56 @@ const TEMPLATE_FORMAT = `WEEK [number]
 DAY [number] — [Workout name]
 [Exercise] — [Sets]×[Reps] @ [weight] lb
 [Exercise] — [Sets]×[Time] sec @ [weight] lb (optional)`;
+
+/** Heuristic: clipboard looks like a workout plan */
+function clipboardLooksLikeWorkout(text: string): boolean {
+  if (!text || text.length < 20) return false;
+  const t = text.trim();
+  if (/\bDAY\s*\d+/i.test(t) || /\bWEEK\s*\d+/i.test(t)) return true;
+  if (/\d+\s*[x×]\s*\d+/i.test(t)) return true;
+  if (/@\s*\d+/.test(t) && /\b(lb|kg)\b/i.test(t)) return true;
+  return false;
+}
+
+/** Lightweight parse for preview only: returns day count, exercise count, day names. No DB writes. */
+function parsePlanPreview(text: string): { success: true; dayCount: number; exerciseCount: number; dayNames: string[] } | { success: false } {
+  const lines = text.split('\n');
+  const dayNames: string[] = [];
+  let exerciseCount = 0;
+  let currentWorkout: { name: string; dayNumber: number; exercises: number } | null = null;
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed === '⸻' || /warm\s*up\s*:?/i.test(trimmed)) continue;
+
+    const dayMatch = trimmed.match(/^(?:WEEK\s+\d+\s+)?DAY\s+(\d+)/i);
+    if (dayMatch) {
+      if (currentWorkout) {
+        dayNames.push(currentWorkout.name || `Day ${currentWorkout.dayNumber}`);
+      }
+      const dayNumber = parseInt(dayMatch[1], 10);
+      const parts = trimmed.split(/[—\-:]/).map(p => p.trim());
+      const name = parts.length > 1 ? parts[parts.length - 1] : parts[0] || `Day ${dayNumber}`;
+      currentWorkout = { name, dayNumber, exercises: 0 };
+      continue;
+    }
+
+    if (currentWorkout) {
+      const looksLikeExercise = trimmed.startsWith('- ') || /\b\d+\s*[x×]\s*\d+\b/i.test(trimmed) || /\bsets?\b/i.test(trimmed) || /@\s*\d+/.test(trimmed);
+      if (looksLikeExercise) {
+        currentWorkout.exercises += 1;
+        exerciseCount += 1;
+      }
+    }
+  }
+
+  if (currentWorkout) {
+    dayNames.push(currentWorkout.name || `Day ${currentWorkout.dayNumber}`);
+  }
+
+  if (dayNames.length === 0) return { success: false };
+  return { success: true, dayCount: dayNames.length, exerciseCount, dayNames };
+}
 
 
 type ParsedExercise = {
@@ -146,58 +196,58 @@ const parseExerciseLine = (lineRaw: string, inheritedUnit: "lb" | "kg" | null): 
   return { ex, unitOut: unit };
 };
 
+type PlanCardState = 'empty' | 'imported' | 'edit_mode' | 'parse_error';
+
+const WEEKDAYS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+
 export function AIWorkoutCreationScreen() {
   const navigation = useNavigation();
   const route = useRoute<any>();
   const insets = useSafeAreaInsets();
   const { exercises, addExercise, updateExercise, addWorkoutTemplate, addCyclePlan } = useStore();
   const { t } = useTranslation();
-  const [workoutDetails, setWorkoutDetails] = useState('');
-  const [showInstructionsSheet, setShowInstructionsSheet] = useState(false);
-  const [startDate, setStartDate] = useState(dayjs().format('YYYY-MM-DD'));
-  const [showDatePicker, setShowDatePicker] = useState(false);
-  const [tempDate, setTempDate] = useState<Date>(new Date());
-  const slideAnim = useRef(new Animated.Value(400)).current;
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-
   const mode: 'single' | 'plan' = route?.params?.mode === 'single' ? 'single' : 'plan';
 
-  useEffect(() => {
-    if (showDatePicker) {
-      Animated.parallel([
-        Animated.timing(fadeAnim, { toValue: 1, duration: 300, useNativeDriver: true }),
-        Animated.spring(slideAnim, { toValue: 0, useNativeDriver: true, bounciness: 0 }),
-      ]).start();
-    } else {
-      slideAnim.setValue(400);
-      fadeAnim.setValue(0);
+  // Start date (Section A)
+  const [startDate, setStartDate] = useState(dayjs().format('YYYY-MM-DD'));
+  const [startDateExpanded, setStartDateExpanded] = useState(false);
+  const [calendarMonthKey, setCalendarMonthKey] = useState(() => dayjs().format('YYYY-MM'));
+
+  // Workout plan (Section B)
+  const [workoutDetails, setWorkoutDetails] = useState('');
+  const [planCardState, setPlanCardState] = useState<PlanCardState>('empty');
+  const [parseResult, setParseResult] = useState<ReturnType<typeof parsePlanPreview> | null>(null);
+  const [showInstructionsSheet, setShowInstructionsSheet] = useState(false);
+  const [isImporting, setIsImporting] = useState(false);
+
+  const handlePasteFromClipboard = useCallback(async () => {
+    const content = await Clipboard.getStringAsync();
+    if (!content?.trim()) return;
+    setWorkoutDetails(content);
+    const result = parsePlanPreview(content);
+    setParseResult(result);
+    setPlanCardState(result.success ? 'imported' : 'parse_error');
+  }, []);
+
+  const handleSaveEdit = useCallback(() => {
+    const text = workoutDetails.trim();
+    if (!text) {
+      setPlanCardState('empty');
+      setParseResult(null);
+      return;
     }
-  }, [showDatePicker]);
+    const result = parsePlanPreview(text);
+    setParseResult(result);
+    setPlanCardState(result.success ? 'imported' : 'parse_error');
+  }, [workoutDetails]);
 
-  const handleOpenDatePicker = () => {
-    setTempDate(dayjs(startDate).toDate());
-    setShowDatePicker(true);
-  };
+  const handleClearPlan = useCallback(() => {
+    setWorkoutDetails('');
+    setParseResult(null);
+    setPlanCardState('empty');
+  }, []);
 
-  const handleDateChange = (event: any, selectedDate?: Date) => {
-    if (Platform.OS === 'android') {
-      setShowDatePicker(false);
-      if (event.type === 'set' && selectedDate) {
-        setStartDate(dayjs(selectedDate).format('YYYY-MM-DD'));
-      }
-    } else {
-      if (selectedDate) setTempDate(selectedDate);
-    }
-  };
-
-  const handleConfirmDate = () => {
-    setStartDate(dayjs(tempDate).format('YYYY-MM-DD'));
-    setShowDatePicker(false);
-  };
-
-  const handleCancelDate = () => {
-    setShowDatePicker(false);
-  };
+  const canImport = !!startDate && parseResult?.success === true;
 
   const handleCopyTemplate = async () => {
     await Clipboard.setStringAsync(TEMPLATE_FORMAT);
@@ -207,11 +257,13 @@ export function AIWorkoutCreationScreen() {
 
 
   const handleCreateFromAiText = async () => {
+    if (isImporting) return;
     try {
       if (!workoutDetails.trim()) {
         Alert.alert(t('alertErrorTitle'), t('enterWorkoutDetails'));
         return;
       }
+      setIsImporting(true);
       const weekStart = dayjs(startDate);
       
       // Parse workout details from user input
@@ -559,173 +611,270 @@ export function AIWorkoutCreationScreen() {
     } catch (error) {
       console.error('Error creating cycle:', error);
       Alert.alert(t('alertErrorTitle'), t('failedToCreateCycle'));
+    } finally {
+      setIsImporting(false);
     }
   };
 
-  return (
-    <View style={styles.container}>
-      <KeyboardAvoidingView 
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={{ flex: 1 }}
-      >
-        {/* Header */}
+  const toggleStartDateExpanded = () => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    if (!startDateExpanded) setCalendarMonthKey(dayjs(startDate).format('YYYY-MM'));
+    setStartDateExpanded(prev => !prev);
+  };
+
+  // Full 5 weeks (35 days) starting from Monday of the week that contains the 1st — no blank cells
+  const calendarWeeks = (() => {
+    const firstOfMonth = dayjs(calendarMonthKey + '-01');
+    const daysToMonday = (firstOfMonth.day() + 6) % 7;
+    const firstDisplayed = firstOfMonth.subtract(daysToMonday, 'day');
+    const days: string[] = [];
+    for (let i = 0; i < 35; i++) {
+      days.push(firstDisplayed.add(i, 'day').format('YYYY-MM-DD'));
+    }
+    const weeks: string[][] = [];
+    for (let i = 0; i < days.length; i += 7) {
+      weeks.push(days.slice(i, i + 7));
+    }
+    return weeks;
+  })();
+
+  if (mode === 'single') {
+    return (
+      <View style={styles.container}>
         <View style={[styles.header, { paddingTop: insets.top }]}>
-          {/* Back Button and Menu Button */}
           <View style={styles.topBar}>
-              <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-                <IconClose size={24} color={COLORS.text} />
-              </TouchableOpacity>
-              
-              <TouchableOpacity style={styles.menuButton} activeOpacity={1}>
-                <IconMenu size={24} color={COLORS.text} />
-              </TouchableOpacity>
-            </View>
-            
-            {/* Page Title */}
-            <View style={styles.pageTitleContainer}>
-              <Text style={styles.pageTitle}>
-                {mode === 'single' ? t('createWorkoutWithAi') : t('createPlanWithAi')}
-              </Text>
-            </View>
-          </View>
-
-          <ScrollView 
-            style={styles.content}
-            contentContainerStyle={styles.scrollContent}
-            keyboardShouldPersistTaps="handled"
-            bounces={false}
-          >
-
-            {/* Instructions Button */}
-            <TouchableOpacity
-              style={styles.instructionsButton}
-              onPress={() => setShowInstructionsSheet(true)}
-              activeOpacity={1}
-            >
-              <Text style={styles.instructionsText}>{t('instructions')}</Text>
-              <IconChevronDown size={16} color={COLORS.text} />
+            <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+              <IconClose size={24} color={COLORS.text} />
             </TouchableOpacity>
-
-            {/* Workout Text Input */}
-            <Text style={styles.sectionLabel}>Workout</Text>
-            <TextInput
-              style={styles.textInput}
-              placeholder={t('pasteAiWorkoutPlaceholder')}
-              placeholderTextColor={COLORS.textMeta}
-              value={workoutDetails}
-              onChangeText={setWorkoutDetails}
-              multiline
-              textAlignVertical="top"
-            />
-
-            {/* Start Date Picker - Plan mode only */}
-            {mode === 'plan' && (
-              <View style={styles.startDateSection}>
-                <Text style={styles.sectionLabel}>{t('startDate')}</Text>
-                <TouchableOpacity
-                  style={styles.datePickerButton}
-                  onPress={handleOpenDatePicker}
-                  activeOpacity={1}
-                >
-                  <Text style={styles.datePickerButtonText}>
-                    {dayjs(startDate).format('MMM D, YYYY')}
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            )}
-          </ScrollView>
-
-          {/* Bottom Button */}
-          <View style={styles.bottomContainer}>
-            <TouchableOpacity
-              style={[styles.createButton, !workoutDetails.trim() && styles.createButtonDisabled]}
-              onPress={handleCreateFromAiText}
-              activeOpacity={1}
-              disabled={!workoutDetails.trim()}
-            >
-              <Text style={[styles.createButtonText, !workoutDetails.trim() && styles.createButtonTextDisabled]}>
-                {mode === 'single' ? t('createWorkout') : t('createPlan')}
-              </Text>
+            <TouchableOpacity style={styles.menuButton} activeOpacity={1}>
+              <IconMenu size={24} color={COLORS.text} />
             </TouchableOpacity>
           </View>
-        </KeyboardAvoidingView>
-
-        {/* Instructions Bottom Drawer */}
-        <BottomDrawer
-          visible={showInstructionsSheet}
-          onClose={() => setShowInstructionsSheet(false)}
-          maxHeight="80%"
-          scrollable={false}
-          showHandle={false}
-        >
-                <View style={styles.sheetContent}>
+          <View style={styles.pageTitleContainer}>
+            <Text style={styles.pageTitle}>{t('createWorkoutWithAi')}</Text>
+            <TouchableOpacity onPress={() => setShowInstructionsSheet(true)} activeOpacity={0.7}>
+              <Text style={styles.instructionsLink}>{t('instructions')}</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+        <View style={styles.legacySinglePlaceholder}>
+          <Text style={styles.legacySingleText}>Single workout import: use cycle mode for full flow.</Text>
+        </View>
+        <BottomDrawer visible={showInstructionsSheet} onClose={() => setShowInstructionsSheet(false)} maxHeight="80%" scrollable={false} showHandle={false}>
+          <View style={styles.sheetContent}>
             <Text style={styles.sheetTitle}>{t('instructions')}</Text>
             <Text style={styles.sheetSubtitle}>{t('instructionsSubtitle')}</Text>
-                      <View style={styles.templateBox}>
-                        <Text style={styles.templateText}>{TEMPLATE_FORMAT}</Text>
-                      </View>
-                  <TouchableOpacity
-                    style={styles.copyButton}
-                    onPress={handleCopyTemplate}
-                    activeOpacity={1}
-                  >
+            <View style={styles.templateBox}><Text style={styles.templateText}>{TEMPLATE_FORMAT}</Text></View>
+            <TouchableOpacity style={styles.copyButton} onPress={handleCopyTemplate} activeOpacity={1}>
               <Text style={styles.copyButtonText}>{t('copy')}</Text>
-                  </TouchableOpacity>
+            </TouchableOpacity>
           </View>
         </BottomDrawer>
+      </View>
+    );
+  }
 
-        {/* Date Picker Modal - iOS */}
-        {Platform.OS === 'ios' && showDatePicker && (
-          <Modal
-            visible={showDatePicker}
-            transparent={true}
-            animationType="none"
-            onRequestClose={handleCancelDate}
-          >
-            <Animated.View style={[styles.modalOverlay, { opacity: fadeAnim }]}>
-              <TouchableOpacity
-                style={styles.modalBackdrop}
-                activeOpacity={1}
-                onPress={handleCancelDate}
-              />
-            </Animated.View>
-            <Animated.View style={[
-              styles.datePickerSlide,
-              { transform: [{ translateY: slideAnim }] },
-            ]}>
-              <View style={styles.datePickerModal}>
-                <View style={styles.datePickerHeader}>
-                  <TouchableOpacity onPress={handleCancelDate} activeOpacity={1}>
-                    <Text style={styles.datePickerCancelText}>{t('cancel')}</Text>
+  return (
+    <View style={styles.container}>
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
+        <View style={[styles.header, { paddingTop: insets.top }]}>
+          <View style={styles.topBar}>
+            <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+              <IconClose size={24} color={COLORS.text} />
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.menuButton} activeOpacity={1}>
+              <IconMenu size={24} color={COLORS.text} />
+            </TouchableOpacity>
+          </View>
+          <View style={styles.pageTitleContainer}>
+            <Text style={styles.screenTitle}>Import Cycle</Text>
+          </View>
+        </View>
+
+        <ScrollView style={styles.scroll} contentContainerStyle={styles.sectionsContent} keyboardShouldPersistTaps="handled">
+          {/* Section A — Start date */}
+          <View style={styles.section}>
+            <TouchableOpacity style={styles.startDateRow} onPress={toggleStartDateExpanded} activeOpacity={0.7}>
+              <Text style={styles.startDateLabel}>Start date</Text>
+              <View style={styles.startDateValueRow}>
+                <Text style={styles.startDateValue}>{dayjs(startDate).format('ddd, MMM D')}</Text>
+                <View style={[styles.chevronWrap, startDateExpanded && styles.chevronWrapRotated]}>
+                  <IconChevronDown size={20} color={COLORS.text} />
+                </View>
+              </View>
+            </TouchableOpacity>
+            {startDateExpanded && (
+              <View style={styles.inlineCalendar}>
+                <View style={styles.calendarMonthHeader}>
+                  <TouchableOpacity onPress={() => setCalendarMonthKey(dayjs(calendarMonthKey + '-01').subtract(1, 'month').format('YYYY-MM'))} style={styles.calendarNavArrow} hitSlop={12}>
+                    <Text style={styles.calendarNavArrowText}>‹</Text>
                   </TouchableOpacity>
-                  <TouchableOpacity onPress={handleConfirmDate} activeOpacity={1}>
-                    <Text style={styles.datePickerDoneText}>{t('done')}</Text>
+                  <Text style={styles.calendarMonthLabel}>{dayjs(calendarMonthKey + '-01').format('MMMM YYYY')}</Text>
+                  <TouchableOpacity onPress={() => setCalendarMonthKey(dayjs(calendarMonthKey + '-01').add(1, 'month').format('YYYY-MM'))} style={styles.calendarNavArrow} hitSlop={12}>
+                    <Text style={styles.calendarNavArrowText}>›</Text>
                   </TouchableOpacity>
                 </View>
-                <DateTimePicker
-                  value={tempDate}
-                  mode="date"
-                  display="spinner"
-                  onChange={handleDateChange}
-                  minimumDate={new Date()}
-                  textColor={COLORS.text}
-                  themeVariant="light"
-                />
+                <View style={styles.calendarDayOfWeekRow}>
+                  {WEEKDAYS.map((d, i) => (
+                    <View key={i} style={styles.calendarDayOfWeekCell}>
+                      <Text style={styles.calendarDayOfWeekText}>{d}</Text>
+                    </View>
+                  ))}
+                </View>
+                <View style={styles.calendarWeeksContainer}>
+                  {calendarWeeks.map((weekDays, weekIdx) => (
+                    <View key={weekIdx} style={styles.calendarWeekRow}>
+                      {weekDays.map((dateStr) => {
+                        const isSelected = dateStr === startDate;
+                        const isToday = dayjs(dateStr).isSame(dayjs(), 'day');
+                        const isCurrentMonth = dayjs(dateStr).format('YYYY-MM') === calendarMonthKey;
+                        return (
+                          <View key={dateStr} style={styles.calendarDayCell}>
+                            <CalendarDayButton
+                              dayNumber={dayjs(dateStr).date()}
+                              isSelected={isSelected}
+                              isToday={isToday}
+                              isCompleted={false}
+                              hasWorkout={false}
+                              isCurrentMonth={isCurrentMonth}
+                              onPress={() => setStartDate(dateStr)}
+                            />
+                          </View>
+                        );
+                      })}
+                    </View>
+                  ))}
+                </View>
               </View>
-            </Animated.View>
-          </Modal>
-        )}
+            )}
+          </View>
 
-        {/* Date Picker - Android */}
-        {Platform.OS === 'android' && showDatePicker && (
-          <DateTimePicker
-            value={dayjs(startDate).toDate()}
-            mode="date"
-            display="default"
-            onChange={handleDateChange}
-            minimumDate={new Date()}
-          />
-        )}
+          {/* Section B — Workout plan */}
+          <View style={styles.section}>
+            <View style={styles.importCard}>
+              {planCardState === 'empty' && (
+                <View style={styles.importCardBody}>
+                  <View style={styles.importCardTitleLinkBlock}>
+                    <Text style={styles.importCardTitle}>Workout cycle</Text>
+                    <TouchableOpacity onPress={() => setShowInstructionsSheet(true)} style={styles.tertiaryLink}>
+                      <Text style={styles.tertiaryLinkText}>See supported formats</Text>
+                    </TouchableOpacity>
+                  </View>
+                  <TouchableOpacity style={styles.secondaryButton} onPress={handlePasteFromClipboard} activeOpacity={0.7}>
+                    <Text style={styles.secondaryButtonText}>Paste from clipboard</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+
+              {planCardState === 'imported' && parseResult?.success === true && (
+                <View style={styles.importCardBody}>
+                  <View style={styles.importCardTitleLinkBlock}>
+                    <Text style={styles.importCardTitle}>Workout cycle</Text>
+                    <TouchableOpacity onPress={() => setShowInstructionsSheet(true)} style={styles.tertiaryLink}>
+                      <Text style={styles.tertiaryLinkText}>See supported formats</Text>
+                    </TouchableOpacity>
+                  </View>
+                  <View style={styles.detectedBlock}>
+                    <Text style={styles.detectedLabel}>Detected</Text>
+                    <Text style={styles.detectedDaysCount}>{Math.ceil(parseResult.dayCount / 7)}-week cycle</Text>
+                  </View>
+                  <View style={styles.previewList}>
+                    {parseResult.dayNames.slice(0, 7).map((name, i) => (
+                      <Text key={i} style={styles.previewDayText}>Day {i + 1} {name}</Text>
+                    ))}
+                    {parseResult.dayNames.length > 7 && (
+                      <Text style={styles.previewMoreDays}>+ {parseResult.dayNames.length - 7} other {parseResult.dayNames.length - 7 === 1 ? 'day' : 'days'}</Text>
+                    )}
+                  </View>
+                  <View style={styles.importCardActionsColumn}>
+                    <TouchableOpacity style={[styles.secondaryButton, styles.actionColumnButton]} onPress={() => setPlanCardState('edit_mode')} activeOpacity={0.7}>
+                      <Text style={styles.actionButtonLabelSecondary}>Edit</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={[styles.ghostButton]} onPress={handleClearPlan} activeOpacity={0.7}>
+                      <Text style={styles.actionButtonLabelSecondary}>Clear</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              )}
+
+              {planCardState === 'edit_mode' && (
+                <View style={styles.importCardBody}>
+                  <View style={styles.importCardTitleLinkBlock}>
+                    <Text style={styles.importCardTitle}>Workout cycle</Text>
+                    <TouchableOpacity onPress={() => setShowInstructionsSheet(true)} style={styles.tertiaryLink}>
+                      <Text style={styles.tertiaryLinkText}>See supported formats</Text>
+                    </TouchableOpacity>
+                  </View>
+                  <TextInput
+                    style={styles.editTextArea}
+                    placeholder={t('pasteAiWorkoutPlaceholder')}
+                    placeholderTextColor={COLORS.textMeta}
+                    value={workoutDetails}
+                    onChangeText={setWorkoutDetails}
+                    multiline
+                    textAlignVertical="top"
+                  />
+                  <View style={styles.importCardActionsColumn}>
+                    <TouchableOpacity style={[styles.secondaryButton, styles.actionColumnButton]} onPress={handleSaveEdit} activeOpacity={0.7}>
+                      <Text style={styles.actionButtonLabelSecondary}>Save</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={[styles.ghostButton]} onPress={() => { if (parseResult?.success) setPlanCardState('imported'); else setPlanCardState('parse_error'); }} activeOpacity={0.7}>
+                      <Text style={styles.actionButtonLabelSecondary}>Cancel</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              )}
+
+              {planCardState === 'parse_error' && (
+                <View style={styles.importCardBody}>
+                  <View style={styles.importCardTitleLinkBlock}>
+                    <Text style={styles.importCardTitle}>Workout cycle</Text>
+                    <TouchableOpacity onPress={() => setShowInstructionsSheet(true)} style={styles.tertiaryLink}>
+                      <Text style={styles.tertiaryLinkText}>See supported formats</Text>
+                    </TouchableOpacity>
+                  </View>
+                  <View style={styles.parseErrorRow}>
+                    <Text style={styles.errorTitle} numberOfLines={1}>Couldn't parse this cycle</Text>
+                    <TouchableOpacity style={styles.failureButton} onPress={handleClearPlan} activeOpacity={0.7}>
+                      <Text style={styles.failureButtonText}>Clear</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              )}
+            </View>
+          </View>
+        </ScrollView>
+
+        {/* Pinned CTA */}
+        <View style={[styles.ctaPinned, { paddingBottom: insets.bottom + SPACING.lg }]}>
+          <TouchableOpacity
+            style={[styles.ctaButton, (!canImport || isImporting) && styles.ctaButtonDisabled]}
+            onPress={handleCreateFromAiText}
+            activeOpacity={0.85}
+            disabled={!canImport || isImporting}
+          >
+            {isImporting ? (
+              <View style={styles.ctaButtonContent}>
+                <ActivityIndicator size="small" color={COLORS.text} style={styles.ctaSpinner} />
+                <Text style={[styles.ctaButtonText, styles.ctaButtonTextDisabled]}>Importing…</Text>
+              </View>
+            ) : (
+              <Text style={[styles.ctaButtonText, !canImport && styles.ctaButtonTextDisabled]}>Import cycle</Text>
+            )}
+          </TouchableOpacity>
+        </View>
+      </KeyboardAvoidingView>
+
+      <BottomDrawer visible={showInstructionsSheet} onClose={() => setShowInstructionsSheet(false)} maxHeight="80%" scrollable={false} showHandle={false}>
+        <View style={styles.sheetContent}>
+          <Text style={styles.sheetTitle}>{t('instructions')}</Text>
+          <Text style={styles.sheetSubtitle}>{t('instructionsSubtitle')}</Text>
+          <View style={styles.templateBox}><Text style={styles.templateText}>{TEMPLATE_FORMAT}</Text></View>
+          <TouchableOpacity style={styles.copyButton} onPress={handleCopyTemplate} activeOpacity={1}>
+            <Text style={styles.copyButtonText}>{t('copy')}</Text>
+          </TouchableOpacity>
+        </View>
+      </BottomDrawer>
     </View>
   );
 }
@@ -736,7 +885,7 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.backgroundCanvas,
   },
   header: {
-    paddingBottom: SPACING.md,
+    paddingBottom: SPACING.sm,
   },
   topBar: {
     flexDirection: 'row',
@@ -745,12 +894,8 @@ const styles = StyleSheet.create({
     minHeight: 48,
     paddingHorizontal: SPACING.xxl,
   },
-  backButton: {
-    // No additional styles needed
-  },
-  menuButton: {
-    // No additional styles needed
-  },
+  backButton: {},
+  menuButton: {},
   pageTitleContainer: {
     paddingHorizontal: SPACING.xxl,
     paddingTop: SPACING.md,
@@ -758,70 +903,308 @@ const styles = StyleSheet.create({
   pageTitle: {
     ...TYPOGRAPHY.h2,
     color: COLORS.text,
-    marginBottom: SPACING.sm,
+    marginBottom: 4,
   },
-  content: {
+  screenTitle: {
+    ...TYPOGRAPHY.h2,
+    color: COLORS.text,
+    marginBottom: 4,
+  },
+  instructionsInline: {
+    ...TYPOGRAPHY.bodyBold,
+    color: COLORS.accentPrimary,
+  },
+  instructionsLink: {
+    ...TYPOGRAPHY.bodyBold,
+    color: COLORS.accentPrimary,
+  },
+  scroll: {
     flex: 1,
   },
-  scrollContent: {
+  sectionsContent: {
     paddingHorizontal: SPACING.xxl,
-    paddingTop: SPACING.md,
-    paddingBottom: SPACING.xxxl,
+    paddingBottom: 120,
   },
-  instructionsButton: {
+  section: {
+    marginTop: SPACING.xxl,
+  },
+  sectionTitle: {
+    ...TYPOGRAPHY.h3,
+    fontSize: 20,
+    color: COLORS.text,
+    marginBottom: 4,
+  },
+  sectionSupport: {
+    ...TYPOGRAPHY.meta,
+    color: COLORS.textMeta,
+    marginBottom: SPACING.md,
+  },
+  startDateRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    justifyContent: 'space-between',
+    height: 48,
+    paddingHorizontal: SPACING.lg,
     backgroundColor: COLORS.activeCard,
     borderRadius: BORDER_RADIUS.md,
-    paddingHorizontal: SPACING.lg,
-    paddingVertical: SPACING.md,
-    marginBottom: SPACING.lg,
   },
-  instructionsText: {
-    ...TYPOGRAPHY.body,
-    fontWeight: '600',
+  startDateLabel: {
+    ...TYPOGRAPHY.bodyBold,
     color: COLORS.text,
   },
-  textInput: {
+  startDateValueRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.xs,
+  },
+  startDateValue: {
+    ...TYPOGRAPHY.body,
+    color: COLORS.text,
+  },
+  chevronWrap: {
+    transform: [{ rotate: '0deg' }],
+  },
+  chevronWrapRotated: {
+    transform: [{ rotate: '180deg' }],
+  },
+  inlineCalendar: {
+    marginTop: 0,
+    padding: SPACING.lg,
+    backgroundColor: COLORS.activeCard,
+    borderRadius: BORDER_RADIUS.md,
+  },
+  calendarMonthHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: 24,
+    marginBottom: 4,
+    gap: 12,
+  },
+  calendarNavArrow: {
+    width: 28,
+    height: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  calendarNavArrowText: {
+    fontSize: 22,
+    color: COLORS.textPrimary,
+    fontWeight: '500',
+  },
+  calendarMonthLabel: {
+    ...TYPOGRAPHY.metaBold,
+    color: '#FFFFFF',
+    textAlign: 'center',
+  },
+  calendarDayOfWeekRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    height: 24,
+    alignItems: 'center',
+  },
+  calendarDayOfWeekCell: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  calendarDayOfWeekText: {
+    ...TYPOGRAPHY.note,
+    color: COLORS.textMeta,
+    textAlign: 'center',
+  },
+  calendarWeeksContainer: {
+    overflow: 'hidden',
+  },
+  calendarWeekRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    height: 50,
+    alignItems: 'center',
+  },
+  calendarDayCell: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  importCard: {
     backgroundColor: COLORS.activeCard,
     borderRadius: BORDER_RADIUS.md,
     padding: SPACING.lg,
-    fontSize: 16,
-    color: COLORS.text,
-    minHeight: 400,
-    borderWidth: 0,
   },
-  sectionLabel: {
+  importCardTitle: {
     ...TYPOGRAPHY.bodyBold,
-    fontSize: 14,
     color: COLORS.text,
-    marginBottom: SPACING.sm,
-    marginTop: SPACING.md,
+    marginBottom: 4,
   },
-  bottomContainer: {
-    paddingHorizontal: SPACING.xxl,
-    paddingVertical: SPACING.lg,
-    paddingBottom: SPACING.xl,
+  importCardTitleLinkBlock: {
+    marginBottom: 8,
   },
-  createButton: {
+  importCardBody: {
+    gap: SPACING.md,
+  },
+  primaryButton: {
+    backgroundColor: COLORS.accentPrimary,
+    height: 52,
+    borderRadius: BORDER_RADIUS.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  primaryButtonText: {
+    ...TYPOGRAPHY.bodyBold,
+    color: COLORS.backgroundCanvas,
+  },
+  actionButtonLabelPrimary: {
+    ...TYPOGRAPHY.metaBold,
+    color: COLORS.backgroundCanvas,
+  },
+  actionButtonLabelSecondary: {
+    ...TYPOGRAPHY.metaBold,
+    color: COLORS.accentPrimary,
+  },
+  secondaryButton: {
+    height: 56,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
     backgroundColor: COLORS.accentPrimaryDimmed,
+  },
+  secondaryButtonFullWidth: {
+    width: '100%',
+  },
+  secondaryButtonText: {
+    ...TYPOGRAPHY.body,
+    color: COLORS.accentPrimary,
+  },
+  tertiaryLink: {
+    alignSelf: 'flex-start',
+  },
+  tertiaryLinkText: {
+    ...TYPOGRAPHY.meta,
+    color: COLORS.accentPrimary,
+  },
+  detectedBlock: {
+    marginBottom: SPACING.md,
+  },
+  detectedLabel: {
+    ...TYPOGRAPHY.meta,
+    color: COLORS.text,
+    marginBottom: 4,
+  },
+  detectedDaysCount: {
+    ...TYPOGRAPHY.h3,
+    color: COLORS.text,
+  },
+  previewList: {
+    marginBottom: SPACING.md,
+  },
+  previewDayText: {
+    ...TYPOGRAPHY.body,
+    color: COLORS.text,
+    marginBottom: 2,
+  },
+  previewMoreDays: {
+    ...TYPOGRAPHY.body,
+    color: COLORS.text,
+    marginTop: 2,
+  },
+  importCardActions: {
+    flexDirection: 'row',
+    gap: SPACING.md,
+  },
+  importCardActionsColumn: {
+    flexDirection: 'row',
+    gap: SPACING.md,
+  },
+  buttonFullWidth: {
+    flex: 1,
+  },
+  actionColumnButton: {
+    minWidth: 100,
+    paddingHorizontal: 24,
+  },
+  ghostButton: {
+    height: 56,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minWidth: 100,
+    paddingHorizontal: 24,
+    backgroundColor: 'transparent',
+  },
+  editTextArea: {
+    minHeight: 160,
+    backgroundColor: 'transparent',
+    borderRadius: BORDER_RADIUS.sm,
+    padding: SPACING.lg,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    ...TYPOGRAPHY.meta,
+    color: COLORS.text,
+    textAlignVertical: 'top',
+  },
+  parseErrorRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: SPACING.md,
+  },
+  errorTitle: {
+    ...TYPOGRAPHY.h3,
+    color: COLORS.text,
+    flex: 1,
+  },
+  failureButton: {
+    height: 56,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: SPACING.lg,
+    backgroundColor: COLORS.signalNegativeDimmed,
+  },
+  failureButtonText: {
+    ...TYPOGRAPHY.body,
+    color: COLORS.signalNegative,
+  },
+  ctaPinned: {
+    paddingHorizontal: SPACING.xxl,
+    paddingTop: SPACING.lg,
+    backgroundColor: COLORS.backgroundCanvas,
+  },
+  ctaButton: {
+    backgroundColor: COLORS.accentPrimary,
     height: 56,
     borderRadius: BORDER_RADIUS.md,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  createButtonDisabled: {
+  ctaButtonContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: SPACING.sm,
+  },
+  ctaSpinner: {
+    marginRight: SPACING.xs,
+  },
+  ctaButtonDisabled: {
     backgroundColor: COLORS.backgroundCanvas,
     borderWidth: 1,
     borderColor: COLORS.border,
   },
-  createButtonText: {
-    ...TYPOGRAPHY.meta,
-    fontWeight: 'bold',
-    color: COLORS.accentPrimary,
+  ctaButtonText: {
+    ...TYPOGRAPHY.bodyBold,
+    fontSize: 16,
+    color: COLORS.backgroundCanvas,
   },
-  createButtonTextDisabled: {
+  ctaButtonTextDisabled: {
+    color: COLORS.textMeta,
+  },
+  legacySinglePlaceholder: {
+    flex: 1,
+    justifyContent: 'center',
+    paddingHorizontal: SPACING.xxl,
+  },
+  legacySingleText: {
+    ...TYPOGRAPHY.body,
     color: COLORS.textMeta,
   },
   sheetContent: {
@@ -859,56 +1242,6 @@ const styles = StyleSheet.create({
     ...TYPOGRAPHY.meta,
     fontWeight: 'bold',
     color: COLORS.backgroundCanvas,
-  },
-  startDateSection: {
-    marginTop: SPACING.lg,
-  },
-  datePickerButton: {
-    backgroundColor: COLORS.activeCard,
-    borderRadius: BORDER_RADIUS.md,
-    padding: SPACING.lg,
-  },
-  datePickerButtonText: {
-    fontSize: 16,
-    color: COLORS.text,
-    fontWeight: '500',
-  },
-  modalOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0, 0, 0, 0.4)',
-  },
-  modalBackdrop: {
-    flex: 1,
-  },
-  datePickerSlide: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-  },
-  datePickerModal: {
-    backgroundColor: COLORS.backgroundCanvas,
-    borderTopLeftRadius: BORDER_RADIUS.lg,
-    borderTopRightRadius: BORDER_RADIUS.lg,
-    paddingBottom: 34,
-  },
-  datePickerHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: SPACING.lg,
-    paddingVertical: SPACING.md,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
-  },
-  datePickerCancelText: {
-    fontSize: 17,
-    color: COLORS.text,
-  },
-  datePickerDoneText: {
-    fontSize: 17,
-    fontWeight: '600',
-    color: COLORS.accentPrimary,
   },
 });
 

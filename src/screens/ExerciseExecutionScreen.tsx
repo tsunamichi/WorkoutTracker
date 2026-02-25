@@ -150,7 +150,13 @@ export function ExerciseExecutionScreen() {
 
   const [timeBasedOverrides, setTimeBasedOverrides] = useState<Record<string, boolean>>({});
 
-  // Get the appropriate items based on type
+  // When we have a scheduled workout, use its snapshot so completion IDs match the store exactly
+  const scheduledWorkout = useMemo(
+    () => (workoutKey?.startsWith('sw-') ? scheduledWorkouts.find(sw => sw.id === workoutKey) : null),
+    [scheduledWorkouts, workoutKey]
+  );
+
+  // Get the appropriate items based on type. For scheduled workouts use snapshot so setIds match store.
   const items = useMemo(() => {
     let result: WarmupItem[] = [];
     if (bonusLogId) {
@@ -159,16 +165,21 @@ export function ExerciseExecutionScreen() {
         result = bonusLog.exercisePayload.items.map(normalizeToDeprecated);
       }
     } else if (type === 'warmup') {
-      result = (template?.warmupItems || []).map(normalizeToDeprecated);
+      const source = scheduledWorkout?.warmupSnapshot ?? template?.warmupItems ?? [];
+      result = source.map((item: any) => normalizeToDeprecated(item));
     } else if (type === 'core') {
-      result = (template?.accessoryItems || []).map(normalizeToDeprecated);
+      const source = scheduledWorkout?.accessorySnapshot ?? template?.accessoryItems ?? [];
+      result = source.map((item: any) => normalizeToDeprecated(item));
     } else if (type === 'main') {
-      result = (template?.items || []).map(item => {
+      const source = scheduledWorkout?.exercisesSnapshot ?? template?.items ?? [];
+      result = source.map((item: any) => {
         const exercise = exercisesLibrary.find(ex => ex.id === item.exerciseId);
+        // Use item.id (template row id) for scheduled workouts so completion setIds match snapshot
+        const id = scheduledWorkout ? item.id : (item.exerciseId ?? item.id);
         return {
-          id: item.exerciseId,
+          id,
           exerciseName: exercise?.name || 'Exercise',
-          sets: item.sets,
+          sets: typeof item.sets === 'number' ? item.sets : (item.sets?.length ?? 0),
           reps: item.reps,
           weight: item.weight || 0,
           isTimeBased: item.isTimeBased ?? exercise?.measurementType === 'time' ?? false,
@@ -188,7 +199,7 @@ export function ExerciseExecutionScreen() {
       });
     }
     return result;
-  }, [type, template, exercisesLibrary, refreshKey, timeBasedOverrides]);
+  }, [type, template, exercisesLibrary, refreshKey, timeBasedOverrides, scheduledWorkout]);
   
   // Group items into groups (supersets or single exercises)
   const exerciseGroups = useMemo(() => {
@@ -937,11 +948,14 @@ export function ExerciseExecutionScreen() {
     
     const currentGroup = exerciseGroups[expandedGroupIndex];
     const currentRound = currentRounds[currentGroup.id] || 0;
-    const currentExercise = currentGroup.exercises[activeExerciseIndex];
+    // Use ref so we always have the latest index (e.g. after advancing within same round in superset)
+    const exerciseIndex = activeExerciseIndexRef.current;
+    const currentExercise = currentGroup.exercises[exerciseIndex] ?? currentGroup.exercises[activeExerciseIndex];
     
     console.log('🎯 handleComplete called:', {
       expandedGroupIndex,
       activeExerciseIndex,
+      exerciseIndexRef: exerciseIndex,
       groupId: currentGroup.id,
       currentRound,
       exerciseName: currentExercise?.exerciseName,

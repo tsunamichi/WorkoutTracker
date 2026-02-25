@@ -11,6 +11,8 @@ interface CalendarDayButtonProps {
   cycleColor?: string;
   isInActiveCycle?: boolean;
   isPaused?: boolean;
+  /** When false, day is from adjacent month (e.g. in a full grid); use meta color unless selected. */
+  isCurrentMonth?: boolean;
   onPress: () => void;
 }
 
@@ -23,6 +25,7 @@ export function CalendarDayButton({
   cycleColor,
   isInActiveCycle,
   isPaused,
+  isCurrentMonth = true,
   onPress,
 }: CalendarDayButtonProps) {
   return (
@@ -42,6 +45,7 @@ export function CalendarDayButton({
         <Text
           style={[
             styles.dayNumber,
+            isCurrentMonth === false && !isSelected && styles.dayNumberOtherMonth,
             isPaused && !isSelected && styles.dayNumberPaused,
             isToday && !isSelected && styles.dayNumberToday,
             isSelected && styles.dayNumberSelected,
@@ -87,6 +91,9 @@ const styles = StyleSheet.create({
   dayNumber: {
     ...TYPOGRAPHY.metaBold,
     color: '#FFFFFF',
+  },
+  dayNumberOtherMonth: {
+    color: COLORS.textMeta,
   },
   dayNumberSelected: {
     color: COLORS.backgroundCanvas,

@@ -49,6 +49,7 @@ import { BottomDrawer } from '../components/common/BottomDrawer';
 import { AddWorkoutSheet } from '../components/AddWorkoutSheet';
 import { PlanSelectionSheet } from '../components/PlanSelectionSheet';
 import { ExtractDayFromPlanSheet } from '../components/ExtractDayFromPlanSheet';
+import { RepeatCycleSheet } from '../components/RepeatCycleSheet';
 import * as Haptics from 'expo-haptics';
 import dayjs from 'dayjs';
 import { useTranslation } from '../i18n/useTranslation';
@@ -123,6 +124,8 @@ function TabNavigator() {
   const [planSelectionSheetVisible, setPlanSelectionSheetVisible] = React.useState(false);
   const [extractDaySheetVisible, setExtractDaySheetVisible] = React.useState(false);
   const [selectedPlanForExtract, setSelectedPlanForExtract] = React.useState<string | null>(null);
+  const [repeatCycleSheetVisible, setRepeatCycleSheetVisible] = React.useState(false);
+  const [repeatCycleInitialDate, setRepeatCycleInitialDate] = React.useState<Date>(new Date());
   const [bonusDrawerVisible, setBonusDrawerVisible] = React.useState(false);
   
   // Animated value for tab indicator position (0 = Schedule, 1 = Progress)
@@ -310,21 +313,43 @@ function TabNavigator() {
     return workoutTemplates.filter(t => !cycleTemplateIds.has(t.id));
   }, [workoutTemplates, cyclePlans]);
 
-  // Handler for repeating the latest archived cycle with latest exercise logs
-  const handleRepeatCycle = async () => {
+  // Handler for opening the repeat cycle confirmation sheet
+  const handleRepeatCycle = () => {
     setAddWorkoutSheetVisible(false);
     if (!latestCycleInfo) return;
 
-    const newPlanId = await repeatCyclePlan(latestCycleInfo.planId, addWorkoutDate);
+    const freshScheduled = useStore.getState().scheduledWorkouts;
+    const baseDate = addWorkoutDate && !dayjs(addWorkoutDate).isBefore(dayjs(), 'day')
+      ? dayjs(addWorkoutDate)
+      : dayjs();
+    let candidate = baseDate;
+    const scheduledDates = new Set(freshScheduled.map(sw => sw.date));
+    for (let i = 0; i < 30; i++) {
+      if (!scheduledDates.has(candidate.format('YYYY-MM-DD'))) break;
+      candidate = candidate.add(1, 'day');
+    }
+    setRepeatCycleInitialDate(candidate.toDate());
+
+    setTimeout(() => setRepeatCycleSheetVisible(true), 350);
+  };
+
+  // Handler for confirming the repeat cycle with a chosen start date
+  const handleConfirmRepeatCycle = async (startDate: string, name: string) => {
+    setRepeatCycleSheetVisible(false);
+    if (!latestCycleInfo) return;
+
+    const newPlanId = await repeatCyclePlan(latestCycleInfo.planId, startDate);
     if (!newPlanId) return;
 
-    // Try to apply the new plan
+    if (name !== latestCycleInfo.planName) {
+      await updateCyclePlan(newPlanId, { name });
+    }
+
     const result = await applyCyclePlan(newPlanId);
 
     if (result.success) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } else if ('conflicts' in result && result.conflicts.length > 0) {
-      // Navigate to conflict resolution screen
       const newPlan = useStore.getState().cyclePlans.find(p => p.id === newPlanId);
       (navigation as any).navigate('CycleConflicts', {
         plan: newPlan,
@@ -726,6 +751,19 @@ function TabNavigator() {
         onRepeatCycle={handleRepeatCycle}
       />
       
+      {/* Repeat Cycle Confirmation Sheet */}
+      {latestCycleInfo && (
+        <RepeatCycleSheet
+          visible={repeatCycleSheetVisible}
+          onClose={() => setRepeatCycleSheetVisible(false)}
+          cycleName={latestCycleInfo.planName}
+          weeks={latestCycleInfo.weeks}
+          workoutCount={latestCycleInfo.workoutCount}
+          initialDate={repeatCycleInitialDate}
+          onConfirm={handleConfirmRepeatCycle}
+        />
+      )}
+
       {/* NEW: Plan Selection Sheet - Choose cycle plan and start date */}
       <PlanSelectionSheet
         visible={planSelectionSheetVisible}

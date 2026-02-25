@@ -1,5 +1,5 @@
 import React, { useMemo, useCallback } from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Svg, { Line } from 'react-native-svg';
 import Animated, {
@@ -40,6 +40,9 @@ interface ExpandableCalendarStripProps {
   scheduledWorkouts: ScheduledWorkout[];
   getScheduledWorkout: (date: string) => ScheduledWorkout | undefined;
   getMainCompletion: (workoutId: string) => { percentage: number };
+  alwaysExpanded?: boolean;
+  showNavArrows?: boolean;
+  previewDateRange?: { start: string; end: string; color: string };
 }
 
 type DayData = {
@@ -60,13 +63,16 @@ export function ExpandableCalendarStrip({
   scheduledWorkouts,
   getScheduledWorkout,
   getMainCompletion,
+  alwaysExpanded = false,
+  showNavArrows = false,
+  previewDateRange,
 }: ExpandableCalendarStripProps) {
   const today = dayjs();
   const selectedDayjs = dayjs(selectedDate);
   const centerWeekStart = selectedDayjs.startOf('isoWeek');
 
-  const expansion = useSharedValue(0);
-  const isExpanded = useSharedValue(false);
+  const expansion = useSharedValue(alwaysExpanded ? 1 : 0);
+  const isExpanded = useSharedValue(alwaysExpanded);
 
   // Fingerprint to force recalc when any plan field changes
   const cyclePlansFingerprint = cyclePlans.map(p =>
@@ -99,15 +105,34 @@ export function ExpandableCalendarStrip({
       }
     }
 
+    // Build set of dates with actual workouts per plan (for inactive plans)
+    const workoutDatesByPlan: Record<string, Set<string>> = {};
+    for (const sw of scheduledWorkouts) {
+      if (sw.source === 'cycle' && (sw.programId || sw.cyclePlanId)) {
+        const pid = sw.programId || sw.cyclePlanId!;
+        if (!workoutDatesByPlan[pid]) workoutDatesByPlan[pid] = new Set();
+        workoutDatesByPlan[pid].add(sw.date);
+      }
+    }
+
     const paintPlan = (plan: CyclePlan) => {
       const color = plan.active ? COLORS.accentPrimaryDimmed : COLORS.backgroundCanvas;
       const start = dayjs(plan.startDate);
 
+      // For inactive plans, only paint dates that have actual workouts
+      if (!plan.active) {
+        const planDates = workoutDatesByPlan[plan.id];
+        if (planDates) {
+          planDates.forEach(dateStr => {
+            colorMap[dateStr] = color;
+            planIdMap[dateStr] = plan.id;
+          });
+        }
+        return;
+      }
+
       let end: dayjs.Dayjs;
-      if (plan.endedAt) {
-        end = dayjs(plan.endedAt);
-      } else if (lastWorkoutByPlan[plan.id]) {
-        // Use the actual last scheduled workout as the cycle's visual end
+      if (lastWorkoutByPlan[plan.id]) {
         end = dayjs(lastWorkoutByPlan[plan.id]);
       } else {
         end = start.add(plan.weeks, 'week').subtract(1, 'day');
@@ -195,9 +220,24 @@ export function ExpandableCalendarStrip({
       });
       if (currentBand) bands.push(currentBand);
 
+      // Add preview date range band
+      if (previewDateRange) {
+        let previewBand: BandInfo | null = null;
+        weekDays.forEach((d, idx) => {
+          if (d.date >= previewDateRange.start && d.date <= previewDateRange.end) {
+            if (previewBand) {
+              previewBand.endIndex = idx;
+            } else {
+              previewBand = { color: previewDateRange.color, startIndex: idx, endIndex: idx, planId: '__preview__', pausedStartIndex: null, pausedEndIndex: null };
+            }
+          }
+        });
+        if (previewBand) bands.push(previewBand);
+      }
+
       return bands.length > 0 ? bands : null;
     });
-  }, [weeksData, dateToPlanId, pausedDates]);
+  }, [weeksData, dateToPlanId, pausedDates, previewDateRange]);
 
   // Month/year label
   const expandedLabel = useMemo(() => {
@@ -213,12 +253,12 @@ export function ExpandableCalendarStrip({
     (date: string) => {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       onSelectDate(date);
-      if (isExpanded.value) {
+      if (isExpanded.value && !alwaysExpanded) {
         expansion.value = withSpring(0, SPRING_CONFIG);
         isExpanded.value = false;
       }
     },
-    [onSelectDate, expansion, isExpanded],
+    [onSelectDate, expansion, isExpanded, alwaysExpanded],
   );
 
   // Pan gesture
@@ -374,6 +414,52 @@ export function ExpandableCalendarStrip({
     );
   };
 
+  const handleNavPrev = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    const prev = selectedDayjs.subtract(1, 'month').startOf('month');
+    onSelectDate(prev.format('YYYY-MM-DD'));
+  }, [selectedDayjs, onSelectDate]);
+
+  const handleNavNext = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    const next = selectedDayjs.add(1, 'month').startOf('month');
+    onSelectDate(next.format('YYYY-MM-DD'));
+  }, [selectedDayjs, onSelectDate]);
+
+  if (alwaysExpanded) {
+    return (
+      <View style={styles.wrapper}>
+        <View style={[styles.container, { height: EXPANDED_HEIGHT }]}>
+          <View style={styles.monthHeader}>
+            {showNavArrows && (
+              <TouchableOpacity onPress={handleNavPrev} style={styles.navArrow} activeOpacity={0.6}>
+                <Text style={styles.navArrowText}>‹</Text>
+              </TouchableOpacity>
+            )}
+            <Text style={styles.monthLabel}>{expandedLabel}</Text>
+            {showNavArrows && (
+              <TouchableOpacity onPress={handleNavNext} style={styles.navArrow} activeOpacity={0.6}>
+                <Text style={styles.navArrowText}>›</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+
+          <View style={styles.dayOfWeekRow}>
+            {DAYS_SHORT.map((letter, i) => (
+              <View key={i} style={styles.dayCell}>
+                <Text style={styles.dayOfWeekText}>{letter}</Text>
+              </View>
+            ))}
+          </View>
+
+          <View style={styles.weeksContainer}>
+            {weeksData.map((weekDays, idx) => renderWeekRow(weekDays, idx))}
+          </View>
+        </View>
+      </View>
+    );
+  }
+
   return (
     <View style={styles.wrapper}>
       <Animated.View style={[styles.container, containerAnimatedStyle]}>
@@ -414,11 +500,29 @@ const styles = StyleSheet.create({
   container: {
     overflow: 'hidden',
   },
+  monthHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: MONTH_LABEL_HEIGHT,
+    marginBottom: 4,
+    gap: 12,
+  },
+  navArrow: {
+    width: 28,
+    height: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  navArrowText: {
+    fontSize: 22,
+    color: COLORS.textPrimary,
+    fontWeight: '500',
+  },
   monthLabel: {
     ...TYPOGRAPHY.metaBold,
     color: '#FFFFFF',
     textAlign: 'center',
-    marginBottom: 4,
   },
   dayOfWeekRow: {
     flexDirection: 'row',

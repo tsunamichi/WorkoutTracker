@@ -546,11 +546,17 @@ type TranslationKey =
   | 'endCycleEarly'
   | 'endCycleConfirmTitle'
   | 'endCycleConfirmMessage'
+  | 'deleteCycle'
+  | 'deleteCycleConfirmTitle'
+  | 'deleteCycleConfirmMessage'
   | 'noActiveCycle'
   | 'cycleActive'
   | 'cyclePaused'
   | 'viewDetails'
-  | 'end';
+  | 'end'
+  | 'shareCycle'
+  | 'shareCycleSubtitle'
+  | 'shareWorkoutsCount';
 
 const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
   en: {
@@ -587,7 +593,7 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     archived: 'Archived',
     duplicate: 'Duplicate',
     schedule: 'Schedule',
-    createPlanWithAi: 'Create Plan with AI',
+    createPlanWithAi: 'Import Cycle',
     progress: 'Progress',
     thisWeek: 'This Week',
     weekOf: 'Week {current} of {total}',
@@ -697,7 +703,7 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     noWorkoutPlanned: 'No workout planned',
     noWorkoutPerformedThisDay: 'No workout performed this day',
     theCurrentCycleIsPaused: 'The current cycle is paused',
-    resumeCycle: 'Resume Cycle',
+    resumeCycle: 'Resume',
     completed: 'Completed',
     addIntervalTimer: 'Add interval timer',
     intervalTimers: 'Interval Timers',
@@ -1126,17 +1132,23 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     finishedToday: 'finished today',
     finishedYesterday: 'finished yesterday',
     finishedDaysAgo: 'finished {n} days ago',
-    startACycle: 'Start a cycle',
-    pauseCycle: 'Pause Cycle',
-    endCycle: 'End Cycle',
+    startACycle: 'No cycles scheduled',
+    pauseCycle: 'Pause',
+    endCycle: 'End',
     endCycleEarly: 'End Cycle Early',
     endCycleConfirmTitle: 'End cycle early?',
     endCycleConfirmMessage: 'This will remove future scheduled workouts from this cycle. Past workouts remain in history.',
+    deleteCycle: 'Delete',
+    deleteCycleConfirmTitle: 'Delete cycle?',
+    deleteCycleConfirmMessage: 'This will remove the cycle and all its scheduled workouts from your schedule. This cannot be undone.',
     noActiveCycle: 'No active cycle',
     cycleActive: 'Active',
     cyclePaused: 'Paused',
     viewDetails: 'View Details',
     end: 'End',
+    shareCycle: 'Share',
+    shareCycleSubtitle: 'Choose workouts to include. Shared text can be pasted into Import cycle.',
+    shareWorkoutsCount: 'Share {count} workouts',
   },
   es: {
     today: 'Hoy',
@@ -1172,7 +1184,7 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     archived: 'Archivado',
     duplicate: 'Duplicar',
     schedule: 'Programar',
-    createPlanWithAi: 'Crear plan con IA',
+    createPlanWithAi: 'Importar Ciclo',
     progress: 'Progreso',
     thisWeek: 'Esta Semana',
     weekOf: 'Semana {current} de {total}',
@@ -1282,7 +1294,7 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     noWorkoutPlanned: 'No hay entrenamiento planeado',
     noWorkoutPerformedThisDay: 'No se realizó entrenamiento este día',
     theCurrentCycleIsPaused: 'El ciclo actual está en pausa',
-    resumeCycle: 'Reanudar ciclo',
+    resumeCycle: 'Reanudar',
     completed: 'Completado',
     addIntervalTimer: 'Agregar temporizador',
     intervalTimers: 'Temporizadores de Intervalos',
@@ -1712,17 +1724,23 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     finishedToday: 'terminado hoy',
     finishedYesterday: 'terminado ayer',
     finishedDaysAgo: 'terminado hace {n} días',
-    startACycle: 'Iniciar un ciclo',
-    pauseCycle: 'Pausar ciclo',
-    endCycle: 'Terminar ciclo',
+    startACycle: 'Sin ciclos programados',
+    pauseCycle: 'Pausar',
+    endCycle: 'Terminar',
     endCycleEarly: 'Terminar ciclo antes',
     endCycleConfirmTitle: '¿Terminar ciclo antes?',
     endCycleConfirmMessage: 'Esto eliminará los entrenamientos futuros programados de este ciclo. Los entrenamientos anteriores se mantienen en el historial.',
+    deleteCycle: 'Eliminar',
+    deleteCycleConfirmTitle: '¿Eliminar ciclo?',
+    deleteCycleConfirmMessage: 'Se eliminará el ciclo y todos sus entrenamientos programados. Esta acción no se puede deshacer.',
     noActiveCycle: 'Ningún ciclo activo',
     cycleActive: 'Activo',
     cyclePaused: 'Pausado',
     viewDetails: 'Ver detalles',
     end: 'Terminar',
+    shareCycle: 'Compartir',
+    shareCycleSubtitle: 'Elige los entrenamientos a incluir. El texto se puede pegar en Importar ciclo.',
+    shareWorkoutsCount: 'Compartir {count} entrenamientos',
   },
 };
 
