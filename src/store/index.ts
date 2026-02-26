@@ -149,6 +149,7 @@ interface WorkoutStore {
   getScheduledWorkoutsForDateRange: (startDate: string, endDate: string) => ScheduledWorkout[];
   moveScheduledWorkout: (workoutId: string, toDate: string) => Promise<{ success: boolean; error?: string }>;
   duplicateScheduledWorkout: (workoutId: string, toDate: string) => Promise<{ success: boolean; error?: string }>;
+  updateScheduledWorkoutSnapshots: (workoutId: string, updates: { warmupSnapshot?: any[]; exercisesSnapshot?: any[]; accessorySnapshot?: any[] }) => Promise<void>;
   
   // Warm-up Completion (independent from workout completion)
   updateWarmupCompletion: (workoutId: string, warmupItemId: string, completed: boolean) => Promise<void>;
@@ -3371,6 +3372,20 @@ export const useStore = create<WorkoutStore>((set, get) => ({
     await storage.saveScheduledWorkouts(scheduledWorkouts);
     
     console.log('🔓 Workout uncompleted and unlocked:', workoutId);
+  },
+  
+  updateScheduledWorkoutSnapshots: async (workoutId, updates) => {
+    const scheduledWorkouts = get().scheduledWorkouts.map(sw => {
+      if (sw.id !== workoutId) return sw;
+      return {
+        ...sw,
+        ...(updates.warmupSnapshot !== undefined && { warmupSnapshot: updates.warmupSnapshot }),
+        ...(updates.exercisesSnapshot !== undefined && { exercisesSnapshot: updates.exercisesSnapshot }),
+        ...(updates.accessorySnapshot !== undefined && { accessorySnapshot: updates.accessorySnapshot }),
+      };
+    });
+    set({ scheduledWorkouts });
+    await storage.saveScheduledWorkouts(scheduledWorkouts);
   },
   
   getScheduledWorkout: (date) => {
