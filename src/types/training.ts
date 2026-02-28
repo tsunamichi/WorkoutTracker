@@ -75,6 +75,42 @@ export type CoreSetTemplate = {
   createdAt: number;
   updatedAt: number;
   lastUsedAt: number | null;
+  // Core Program: optional link to program and position
+  belongsToProgramId?: string | null;
+  groupKey?: 'A' | 'B';
+  orderIndex?: number; // 0..2 within group
+};
+
+// ============================================
+// CORE PROGRAM (ordered program with progress)
+// ============================================
+
+export type CoreProgramRotationType = 'alternating';
+
+export type CoreProgram = {
+  id: string;
+  name: string;
+  durationWeeks: number;
+  sessionsPerWeekTarget: number;
+  isActive: boolean;
+  createdAt: string; // ISO
+  updatedAt: string; // ISO
+  rotationType: CoreProgramRotationType;
+  // Pointer: 1-based week, session index 0..2 within current group
+  currentWeekIndex: number;
+  currentSessionIndexWithinGroup: number;
+};
+
+export type CoreLogOutcome = 'completed' | 'skipped';
+
+export type CoreLog = {
+  id: string;
+  programId: string;
+  sessionTemplateId: string;
+  dateTime: string; // ISO
+  outcome: CoreLogOutcome;
+  completedExerciseLogs?: string[]; // item IDs if completed
+  weekIndex: number; // program week this log belongs to (for "completed/skipped this week" UI)
 };
 
 // ============================================
@@ -107,6 +143,9 @@ export type BonusLog = {
   completedAt: string | null;
   timerPayload?: BonusTimerPayload;
   exercisePayload?: BonusExercisePayload;
+  // Core Program: when type is 'core', link to program/session for pointer updates
+  coreProgramId?: string | null;
+  coreSessionTemplateId?: string | null;
 };
 
 // For backward compatibility, alias WarmupItem to ExerciseInstanceWithCycle

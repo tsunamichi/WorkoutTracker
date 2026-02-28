@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { Cycle, Exercise, WorkoutSession, BodyWeightEntry, ProgressPhoto, AppSettings, WorkoutAssignment, TrainerConversation, ExercisePR, WorkoutProgress, HIITTimer, HIITTimerSession } from '../types';
-import type { WorkoutTemplate, CyclePlan, ScheduledWorkout, WarmUpSetTemplate, CoreSetTemplate, BonusLog } from '../types/training';
+import type { WorkoutTemplate, CyclePlan, ScheduledWorkout, WarmUpSetTemplate, CoreSetTemplate, BonusLog, CoreProgram, CoreLog } from '../types/training';
 const STORAGE_KEYS = {
   CYCLES: '@workout_tracker_cycles',
   EXERCISES: '@workout_tracker_exercises',
@@ -24,6 +24,8 @@ const STORAGE_KEYS = {
   WARMUP_PRESETS: '@workout_tracker_warmup_presets',
   CORE_PRESETS: '@workout_tracker_core_presets',
   BONUS_LOGS: '@workout_tracker_bonus_logs',
+  CORE_PROGRAMS: '@workout_tracker_core_programs',
+  CORE_LOGS: '@workout_tracker_core_logs',
   // Fallback completion for warmup/accessory when workoutKey is not a scheduled workout (e.g. bonus, standalone)
   WARMUP_COMPLETION_BY_KEY: '@workout_tracker_warmup_completion_by_key',
   ACCESSORY_COMPLETION_BY_KEY: '@workout_tracker_accessory_completion_by_key',
@@ -443,6 +445,44 @@ export async function saveBonusLogs(logs: BonusLog[]): Promise<void> {
     await AsyncStorage.setItem(STORAGE_KEYS.BONUS_LOGS, JSON.stringify(logs));
   } catch (error) {
     console.error('Error saving bonus logs:', error);
+  }
+}
+
+// Core Programs
+export async function loadCorePrograms(): Promise<CoreProgram[]> {
+  try {
+    const data = await AsyncStorage.getItem(STORAGE_KEYS.CORE_PROGRAMS);
+    return data ? JSON.parse(data) : [];
+  } catch (error) {
+    console.error('Error loading core programs:', error);
+    return [];
+  }
+}
+
+export async function saveCorePrograms(programs: CoreProgram[]): Promise<void> {
+  try {
+    await AsyncStorage.setItem(STORAGE_KEYS.CORE_PROGRAMS, JSON.stringify(programs));
+  } catch (error) {
+    console.error('Error saving core programs:', error);
+  }
+}
+
+// Core Logs
+export async function loadCoreLogs(): Promise<CoreLog[]> {
+  try {
+    const data = await AsyncStorage.getItem(STORAGE_KEYS.CORE_LOGS);
+    return data ? JSON.parse(data) : [];
+  } catch (error) {
+    console.error('Error loading core logs:', error);
+    return [];
+  }
+}
+
+export async function saveCoreLogs(logs: CoreLog[]): Promise<void> {
+  try {
+    await AsyncStorage.setItem(STORAGE_KEYS.CORE_LOGS, JSON.stringify(logs));
+  } catch (error) {
+    console.error('Error saving core logs:', error);
   }
 }
 

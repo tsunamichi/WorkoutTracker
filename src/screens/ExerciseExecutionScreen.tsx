@@ -85,6 +85,7 @@ export function ExerciseExecutionScreen() {
     updateBonusLog,
     bonusLogs,
     saveExerciseProgress,
+    logCoreSession,
   } = useStore();
   
   const getDetailedWorkoutProgress = () => useStore.getState().detailedWorkoutProgress;
@@ -1046,12 +1047,13 @@ export function ExerciseExecutionScreen() {
       await updateMainCompletion(workoutKey, setId, true);
     }
     
-    // Keep detailedWorkoutProgress in sync so other screens see progress
-    const exerciseTemplateId = currentExercise.exerciseId || currentExercise.id;
+    // Keep detailedWorkoutProgress in sync so other screens see progress.
+    // Use template item id (currentExercise.id) as the key so history/previous log lookups match.
+    const templateItemId = currentExercise.id;
     const setValues = localValuesRef.current[setId];
     const savedWeight = setValues?.weight ?? currentExercise.weight ?? 0;
     const savedReps = setValues?.reps ?? Number(currentExercise.reps) ?? 0;
-    const existingProgress = useStore.getState().detailedWorkoutProgress[workoutKey]?.exercises[exerciseTemplateId];
+    const existingProgress = useStore.getState().detailedWorkoutProgress[workoutKey]?.exercises[templateItemId];
     const existingSets = (existingProgress as any)?.sets || [];
     const updatedSets = [...existingSets.filter((s: any) => s.setNumber !== currentRound), {
       setNumber: currentRound,
@@ -1059,8 +1061,8 @@ export function ExerciseExecutionScreen() {
       reps: savedReps,
       completed: true,
     }];
-    await saveExerciseProgress(workoutKey, exerciseTemplateId, {
-      exerciseId: exerciseTemplateId,
+    await saveExerciseProgress(workoutKey, templateItemId, {
+      exerciseId: currentExercise.exerciseId || currentExercise.id,
       sets: updatedSets,
     });
     
@@ -1196,10 +1198,15 @@ export function ExerciseExecutionScreen() {
           }
           
           if (bonusLogId) {
+            const bonusLog = bonusLogs.find(l => l.id === bonusLogId);
             updateBonusLog(bonusLogId, {
               status: 'completed',
               completedAt: new Date().toISOString(),
             });
+            if (type === 'core' && bonusLog?.coreProgramId && bonusLog?.coreSessionTemplateId) {
+              const completed = getAccessoryCompletion(workoutKey, workoutTemplateId).completedItems;
+              await logCoreSession(bonusLog.coreProgramId, bonusLog.coreSessionTemplateId, 'completed', completed);
+            }
           }
           
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -1329,10 +1336,10 @@ export function ExerciseExecutionScreen() {
               }
             }
 
-            // Keep detailedWorkoutProgress in sync
-            exerciseGroups.forEach(group => {
-              group.exercises.forEach(exercise => {
-                const exerciseTemplateId = exercise.exerciseId || exercise.id;
+            // Keep detailedWorkoutProgress in sync (use template item id as key for history lookups)
+            for (const group of exerciseGroups) {
+              for (const exercise of group.exercises) {
+                const templateItemId = exercise.id;
                 const sets = [];
                 for (let round = 0; round < group.totalRounds; round++) {
                   const setId = `${exercise.id}-set-${round}`;
@@ -1344,12 +1351,12 @@ export function ExerciseExecutionScreen() {
                     completed: true,
                   });
                 }
-                saveExerciseProgress(workoutKey, exerciseTemplateId, {
-                  exerciseId: exerciseTemplateId,
+                await saveExerciseProgress(workoutKey, templateItemId, {
+                  exerciseId: exercise.exerciseId || exercise.id,
                   sets,
                 });
-              });
-            });
+              }
+            }
 
             const completedSetsSet = new Set(allSetIds);
             await saveSession(completedSetsSet);
@@ -1361,10 +1368,15 @@ export function ExerciseExecutionScreen() {
             setHasLoggedAnySet(true);
             
             if (bonusLogId) {
+              const bonusLog = bonusLogs.find(l => l.id === bonusLogId);
               updateBonusLog(bonusLogId, {
                 status: 'completed',
                 completedAt: new Date().toISOString(),
               });
+              if (type === 'core' && bonusLog?.coreProgramId && bonusLog?.coreSessionTemplateId) {
+                const completed = getAccessoryCompletion(workoutKey, workoutTemplateId).completedItems;
+                await logCoreSession(bonusLog.coreProgramId, bonusLog.coreSessionTemplateId, 'completed', completed);
+              }
             }
             
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -1392,7 +1404,13 @@ export function ExerciseExecutionScreen() {
         {
           text: t('skip'),
           style: 'destructive',
-          onPress: () => {
+          onPress: async () => {
+            if (type === 'core' && bonusLogId) {
+              const bonusLog = bonusLogs.find(l => l.id === bonusLogId);
+              if (bonusLog?.coreProgramId && bonusLog?.coreSessionTemplateId) {
+                await logCoreSession(bonusLog.coreProgramId, bonusLog.coreSessionTemplateId, 'skipped');
+              }
+            }
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
             navigation.goBack();
           },

@@ -92,51 +92,53 @@ export function ActionSheet({ visible, onClose, items }: ActionSheetProps) {
           <TouchableOpacity activeOpacity={1}>
             <View style={styles.drawer}>
               <View style={styles.container}>
-                {/* Featured Action */}
+                {/* Featured Action - full width, icon stacked above label */}
                 {featuredItem && (
                   <TouchableOpacity
                     style={[
-                      styles.featuredAction,
-                      featuredItem.destructive && styles.featuredActionDestructive
+                      styles.drawerItem,
+                      featuredItem.destructive && styles.drawerItemDanger
                     ]}
                     onPress={() => {
                       featuredItem.onPress();
                       onClose();
                     }}
-                    activeOpacity={0.7}
+                    activeOpacity={0.85}
                   >
-                    {featuredItem.icon}
+                    <View style={styles.drawerItemIconWrap}>
+                      {featuredItem.icon}
+                    </View>
                     <Text style={[
-                      styles.featuredLabel,
-                      featuredItem.destructive && styles.featuredLabelDestructive
-                    ]}>
+                      styles.drawerItemText,
+                      featuredItem.destructive && styles.drawerItemTextDanger
+                    ]} numberOfLines={1}>
                       {featuredItem.label}
                     </Text>
                   </TouchableOpacity>
                 )}
 
-                {/* Regular Actions */}
+                {/* Regular Actions - row of buttons, icon stacked above label */}
                 {regularItems.length > 0 && (
-                  <View style={styles.actionsRow}>
+                  <View style={styles.drawerRow}>
                     {regularItems.map((item, index) => (
                       <TouchableOpacity
                         key={index}
                         style={[
-                          styles.actionItem,
-                          item.destructive && styles.actionItemDestructive
+                          styles.drawerItem,
+                          item.destructive && styles.drawerItemDanger
                         ]}
                         onPress={() => {
                           item.onPress();
                           onClose();
                         }}
-                        activeOpacity={0.7}
+                        activeOpacity={0.85}
                       >
-                        <View style={styles.iconContainer}>
+                        <View style={styles.drawerItemIconWrap}>
                           {item.icon}
                         </View>
                         <Text style={[
-                          styles.label,
-                          item.destructive && styles.labelDestructive,
+                          styles.drawerItemText,
+                          item.destructive && styles.drawerItemTextDanger,
                           item.labelColor ? { color: item.labelColor } : undefined
                         ]} numberOfLines={1}>
                           {item.label}
@@ -172,59 +174,40 @@ const styles = StyleSheet.create({
   },
   container: {
     paddingHorizontal: SPACING.xxl,
-    paddingTop: 24,
-    paddingBottom: 24,
+    paddingTop: SPACING.lg,
+    paddingBottom: SPACING.lg,
     gap: SPACING.md,
   },
-  featuredAction: {
+  drawerRow: {
     flexDirection: 'row' as const,
-    backgroundColor: COLORS.activeCard,
-    borderRadius: 16,
-    borderCurve: 'continuous' as const,
-    paddingVertical: SPACING.lg,
-    paddingHorizontal: SPACING.lg,
+    gap: SPACING.md,
+  },
+  drawerItem: {
+    flex: 1,
+    flexDirection: 'column' as const,
     alignItems: 'center' as const,
     justifyContent: 'center' as const,
     gap: SPACING.sm,
-  },
-  featuredActionDestructive: {
-    // Background stays the same, only text/icon color changes
-  },
-  featuredLabel: {
-    ...TYPOGRAPHY.metaBold,
-    color: COLORS.text,
-  },
-  featuredLabelDestructive: {
-    color: COLORS.signalNegative,
-  },
-  actionsRow: {
-    flexDirection: 'row' as const,
-    gap: SPACING.md,
-  },
-  actionItem: {
-    flex: 1,
     backgroundColor: COLORS.activeCard,
     borderRadius: 16,
     borderCurve: 'continuous' as const,
     paddingVertical: SPACING.lg,
     paddingHorizontal: SPACING.md,
+  },
+  drawerItemIconWrap: {
     alignItems: 'center' as const,
     justifyContent: 'center' as const,
   },
-  actionItemDestructive: {
-    // Background stays the same, only text/icon color changes
+  drawerItemDanger: {
+    // Background stays the same; text/icon use destructive color
   },
-  iconContainer: {
-    alignItems: 'center' as const,
-    justifyContent: 'center' as const,
-    marginBottom: SPACING.sm,
-  },
-  label: {
-    ...TYPOGRAPHY.metaBold,
+  drawerItemText: {
+    ...TYPOGRAPHY.body,
+    fontWeight: '700',
     color: COLORS.text,
     textAlign: 'center' as const,
   },
-  labelDestructive: {
+  drawerItemTextDanger: {
     color: COLORS.signalNegative,
   },
 });

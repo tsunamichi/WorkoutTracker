@@ -1,14 +1,16 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import dayjs from 'dayjs';
 import { useStore } from '../store';
 import { COLORS, SPACING, TYPOGRAPHY, CARDS, BORDER_RADIUS } from '../constants';
-import { IconArrowLeft, IconPlay, IconAdd } from '../components/icons';
+import { IconArrowLeft, IconPlay, IconAdd, IconArrowRight } from '../components/icons';
 import { DiagonalLinePattern } from '../components/common/DiagonalLinePattern';
+import { BottomDrawer } from '../components/common/BottomDrawer';
 import { useTranslation } from '../i18n/useTranslation';
 import { createNewExerciseItem } from '../utils/exerciseMigration';
+import { BUILTIN_CORE_TEMPLATES, resolveBuiltinCoreItems } from '../constants/coreTemplates';
 import type { RootStackParamList } from '../navigation/AppNavigator';
 import type { BonusLog, BonusType, ExerciseInstanceWithCycle } from '../types/training';
 
@@ -49,39 +51,6 @@ const BUILTIN_WARMUP_TEMPLATES: Record<string, BuiltinTemplate> = {
   },
 };
 
-const BUILTIN_CORE_TEMPLATES: Record<string, BuiltinTemplate> = {
-  dayA: { name: 'Day A', items: [
-    { exerciseName: 'Ab Wheel Rollout', sets: 3, reps: 8, weight: 0, isTimeBased: false },
-    { exerciseName: 'Cable Crunch', sets: 3, reps: 12, weight: 0, isTimeBased: false },
-    { exerciseName: 'Dead Bug', sets: 2, reps: 8, weight: 0, isTimeBased: false, isPerSide: true },
-  ]},
-  dayB: { name: 'Day B', items: [
-    { exerciseName: 'Pallof Press', sets: 3, reps: 10, weight: 0, isTimeBased: false, isPerSide: true },
-    { exerciseName: 'Half-Kneeling Cable Chop', sets: 3, reps: 8, weight: 0, isTimeBased: false, isPerSide: true },
-    { exerciseName: 'Single-Arm Farmer Hold', sets: 2, reps: 35, weight: 0, isTimeBased: true, isPerSide: true },
-  ]},
-  dayC: { name: 'Day C', items: [
-    { exerciseName: 'Suitcase Carry', sets: 4, reps: 35, weight: 0, isTimeBased: true, isPerSide: true },
-    { exerciseName: 'Weighted Side Plank', sets: 3, reps: 25, weight: 0, isTimeBased: true, isPerSide: true },
-    { exerciseName: 'Offset Kettlebell March', sets: 2, reps: 10, weight: 0, isTimeBased: false, isPerSide: true },
-  ]},
-  dayD: { name: 'Day D', items: [
-    { exerciseName: 'Long-Lever Plank', sets: 4, reps: 25, weight: 0, isTimeBased: true },
-    { exerciseName: 'Cable Pulldown Crunch', sets: 3, reps: 10, weight: 0, isTimeBased: false },
-    { exerciseName: 'Dead Bug (Straight-Leg)', sets: 2, reps: 6, weight: 0, isTimeBased: false, isPerSide: true },
-  ]},
-  dayE: { name: 'Day E', items: [
-    { exerciseName: 'Cable Lift', sets: 3, reps: 8, weight: 0, isTimeBased: false, isPerSide: true },
-    { exerciseName: 'Pallof Press ISO Hold', sets: 3, reps: 25, weight: 0, isTimeBased: true, isPerSide: true },
-    { exerciseName: 'Single-Arm DB Carry', sets: 2, reps: 25, weight: 0, isTimeBased: true, isPerSide: true },
-  ]},
-  dayF: { name: 'Day F', items: [
-    { exerciseName: 'Hanging Knee Raise', sets: 3, reps: 10, weight: 0, isTimeBased: false },
-    { exerciseName: 'Decline Sit-Up', sets: 3, reps: 8, weight: 0, isTimeBased: false },
-    { exerciseName: 'Side Plank Reach-Through', sets: 2, reps: 8, weight: 0, isTimeBased: false, isPerSide: true },
-  ]},
-};
-
 function resolveBuiltinItems(template: BuiltinTemplate): ExerciseInstanceWithCycle[] {
   const cycleIdMap = new Map<string, string>();
   return template.items.map(item => {
@@ -108,15 +77,26 @@ function resolveBuiltinItems(template: BuiltinTemplate): ExerciseInstanceWithCyc
 export function BonusPresetPickerScreen({ navigation, route }: Props) {
   const insets = useSafeAreaInsets();
   const { t } = useTranslation();
-  const { bonusType } = route.params;
+  const { bonusType, addToProgram } = route.params;
   const {
     warmupPresets,
     corePresets,
     workoutTemplates,
     addBonusLog,
+    setPendingCorePresetForProgram,
+    getActiveCoreProgram,
+    getUpNextCoreSession,
+    getCoreCompletedCount,
+    createDefaultCoreProgram,
   } = useStore();
 
   const title = bonusType === 'warmup' ? t('warmUp') : t('core');
+  const activeProgram = bonusType === 'core' ? getActiveCoreProgram() : null;
+  const upNextSession = activeProgram ? getUpNextCoreSession(activeProgram.id) : null;
+  const completedCount = activeProgram ? getCoreCompletedCount(activeProgram.id) : 0;
+  const totalExpected = activeProgram ? activeProgram.durationWeeks * activeProgram.sessionsPerWeekTarget : 18;
+  const programFinished = activeProgram && activeProgram.currentWeekIndex > activeProgram.durationWeeks;
+  const [addCoreDrawerVisible, setAddCoreDrawerVisible] = useState(false);
 
   const presets: PresetOption[] = useMemo(() => {
     const standalone = bonusType === 'warmup'
@@ -154,9 +134,19 @@ export function BonusPresetPickerScreen({ navigation, route }: Props) {
       items = [...preset.items];
     } else if (preset.id.startsWith('builtin-')) {
       const key = preset.id.replace('builtin-', '');
-      const builtinTemplates = bonusType === 'warmup' ? BUILTIN_WARMUP_TEMPLATES : BUILTIN_CORE_TEMPLATES;
-      const tmpl = builtinTemplates[key];
-      if (tmpl) items = resolveBuiltinItems(tmpl);
+      if (bonusType === 'warmup') {
+        const tmpl = BUILTIN_WARMUP_TEMPLATES[key];
+        if (tmpl) items = resolveBuiltinItems(tmpl);
+      } else {
+        const tmpl = BUILTIN_CORE_TEMPLATES[key];
+        if (tmpl) items = resolveBuiltinCoreItems(tmpl);
+      }
+    }
+
+    if (addToProgram && bonusType === 'core') {
+      setPendingCorePresetForProgram({ id: preset.id, name: preset.name, items });
+      navigation.goBack();
+      return;
     }
 
     const today = dayjs().format('YYYY-MM-DD');
@@ -227,63 +217,176 @@ export function BonusPresetPickerScreen({ navigation, route }: Props) {
           contentContainerStyle={styles.scrollContent}
           bounces={false}
         >
-          <View style={styles.grid}>
-            {presets.map(preset => (
-              <TouchableOpacity
-                key={preset.id}
-                onPress={() => handleSelect(preset)}
-                onLongPress={() => {
-                  if (!preset.id.startsWith('wt-')) {
-                    Alert.alert(
-                      preset.name,
-                      'What would you like to do?',
-                      [
-                        { text: 'Cancel', style: 'cancel' },
-                        {
-                          text: 'Delete',
-                          style: 'destructive',
-                          onPress: () => handleDelete(preset),
-                        },
-                      ]
-                    );
-                  }
-                }}
-                activeOpacity={1}
-                style={styles.card}
-              >
-                <View style={CARDS.cardDeepDimmed.outer}>
-                  <View style={[CARDS.cardDeepDimmed.inner, styles.cardInner]}>
-                    <Text style={styles.cardName}>{preset.name}</Text>
-                    <Text style={styles.cardMeta}>
-                      {preset.itemCount} {preset.itemCount === 1 ? 'exercise' : 'exercises'}
-                    </Text>
-                    <TouchableOpacity
-                      onPress={() => handleSelect(preset)}
-                      style={styles.startButton}
-                      activeOpacity={1}
-                    >
-                      <Text style={styles.startButtonText}>{t('start')}</Text>
-                      <IconPlay size={10} color={COLORS.accentPrimary} />
-                    </TouchableOpacity>
+          {bonusType === 'core' && (
+            <View style={styles.programCardSection}>
+              {!activeProgram ? (
+                <TouchableOpacity
+                  style={[CARDS.cardDeepDimmed.outer, styles.programCard]}
+                  onPress={async () => {
+                    await createDefaultCoreProgram();
+                    (navigation as any).navigate('CoreProgram');
+                  }}
+                  activeOpacity={0.85}
+                >
+                  <View style={[CARDS.cardDeepDimmed.inner, styles.programCardInner]}>
+                    <Text style={styles.programCardTitle}>Set up your Core Program</Text>
+                    <Text style={styles.programCardMeta}>Create a program to track progress and see what's next</Text>
+                    <View style={styles.programCardCta}>
+                      <Text style={styles.programCardCtaText}>Create program</Text>
+                      <IconArrowRight size={16} color={COLORS.accentPrimary} />
+                    </View>
                   </View>
-                </View>
-              </TouchableOpacity>
-            ))}
-          </View>
+                </TouchableOpacity>
+              ) : (
+                <TouchableOpacity
+                  style={[CARDS.cardDeepDimmed.outer, styles.programCard]}
+                  onPress={() => (navigation as any).navigate('CoreProgram')}
+                  activeOpacity={0.85}
+                >
+                  <View style={[CARDS.cardDeepDimmed.inner, styles.programCardInner]}>
+                    <Text style={styles.programCardTitle}>{activeProgram.name}</Text>
+                    <Text style={styles.programCardMeta}>
+                      Week {activeProgram.currentWeekIndex} of {activeProgram.durationWeeks} · {completedCount}/{totalExpected} sessions
+                    </Text>
+                    {programFinished ? (
+                      <Text style={styles.programCardUpNext}>Program complete</Text>
+                    ) : upNextSession ? (
+                      <Text style={styles.programCardUpNext}>Up next: {upNextSession.name}</Text>
+                    ) : null}
+                    <View style={styles.programCardCta}>
+                      <Text style={styles.programCardCtaText}>View workouts & details</Text>
+                      <IconArrowRight size={16} color={COLORS.accentPrimary} />
+                    </View>
+                  </View>
+                </TouchableOpacity>
+              )}
+            </View>
+          )}
 
-          <TouchableOpacity
-            style={styles.addButton}
-            onPress={handleCreateNew}
-            activeOpacity={0.7}
-          >
-            <DiagonalLinePattern width="100%" height={56} borderRadius={16} />
-            <IconAdd size={24} color={COLORS.text} />
-            <Text style={styles.addButtonText}>
-              {bonusType === 'warmup' ? `Add ${t('warmUp')}` : `Add ${t('core')}`}
-            </Text>
-          </TouchableOpacity>
+          {bonusType === 'core' ? (
+            <TouchableOpacity
+              style={styles.addButton}
+              onPress={() => setAddCoreDrawerVisible(true)}
+              activeOpacity={0.7}
+            >
+              <DiagonalLinePattern width="100%" height={56} borderRadius={16} />
+              <IconAdd size={24} color={COLORS.text} />
+              <Text style={styles.addButtonText}>Add Core Workout</Text>
+            </TouchableOpacity>
+          ) : (
+            <>
+              <View style={styles.grid}>
+                {presets.map(preset => (
+                  <TouchableOpacity
+                    key={preset.id}
+                    onPress={() => handleSelect(preset)}
+                    onLongPress={() => {
+                      if (!preset.id.startsWith('wt-')) {
+                        Alert.alert(
+                          preset.name,
+                          'What would you like to do?',
+                          [
+                            { text: 'Cancel', style: 'cancel' },
+                            {
+                              text: 'Delete',
+                              style: 'destructive',
+                              onPress: () => handleDelete(preset),
+                            },
+                          ]
+                        );
+                      }
+                    }}
+                    activeOpacity={1}
+                    style={styles.card}
+                  >
+                    <View style={CARDS.cardDeepDimmed.outer}>
+                      <View style={[CARDS.cardDeepDimmed.inner, styles.cardInner]}>
+                        <Text style={styles.cardName}>{preset.name}</Text>
+                        <Text style={styles.cardMeta}>
+                          {preset.itemCount} {preset.itemCount === 1 ? 'exercise' : 'exercises'}
+                        </Text>
+                        <TouchableOpacity
+                          onPress={() => handleSelect(preset)}
+                          style={styles.startButton}
+                          activeOpacity={1}
+                        >
+                          <Text style={styles.startButtonText}>{t('start')}</Text>
+                          <IconPlay size={10} color={COLORS.accentPrimary} />
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  </TouchableOpacity>
+                ))}
+              </View>
+              <TouchableOpacity
+                style={styles.addButton}
+                onPress={handleCreateNew}
+                activeOpacity={0.7}
+              >
+                <DiagonalLinePattern width="100%" height={56} borderRadius={16} />
+                <IconAdd size={24} color={COLORS.text} />
+                <Text style={styles.addButtonText}>{`Add ${t('warmUp')}`}</Text>
+              </TouchableOpacity>
+            </>
+          )}
         </ScrollView>
       </View>
+
+      {bonusType === 'core' && (
+        <BottomDrawer visible={addCoreDrawerVisible} onClose={() => setAddCoreDrawerVisible(false)} maxHeight="85%">
+          <View style={styles.addCoreDrawerContent}>
+            <Text style={styles.addCoreDrawerTitle}>Add Core Workout</Text>
+            <ScrollView style={styles.addCoreDrawerScroll} contentContainerStyle={styles.addCoreDrawerScrollContent} showsVerticalScrollIndicator={false}>
+              <View style={styles.grid}>
+                {presets.map(preset => (
+                  <TouchableOpacity
+                    key={preset.id}
+                    onPress={() => {
+                      handleSelect(preset);
+                      setAddCoreDrawerVisible(false);
+                    }}
+                    activeOpacity={1}
+                    style={styles.card}
+                  >
+                    <View style={CARDS.cardDeepDimmed.outer}>
+                      <View style={[CARDS.cardDeepDimmed.inner, styles.cardInner]}>
+                        <Text style={styles.cardName}>{preset.name}</Text>
+                        <Text style={styles.cardMeta}>
+                          {preset.itemCount} {preset.itemCount === 1 ? 'exercise' : 'exercises'}
+                        </Text>
+                        <TouchableOpacity
+                          onPress={() => {
+                            handleSelect(preset);
+                            setAddCoreDrawerVisible(false);
+                          }}
+                          style={styles.startButton}
+                          activeOpacity={1}
+                        >
+                          <Text style={styles.startButtonText}>{t('start')}</Text>
+                          <IconPlay size={10} color={COLORS.accentPrimary} />
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  </TouchableOpacity>
+                ))}
+              </View>
+              <TouchableOpacity
+                style={styles.addButton}
+                onPress={() => {
+                  setAddCoreDrawerVisible(false);
+                  handleCreateNew();
+                }}
+                activeOpacity={0.7}
+              >
+                <DiagonalLinePattern width="100%" height={56} borderRadius={16} />
+                <IconAdd size={24} color={COLORS.text} />
+                <Text style={styles.addButtonText}>Create new</Text>
+              </TouchableOpacity>
+              <View style={{ height: 32 }} />
+            </ScrollView>
+          </View>
+        </BottomDrawer>
+      )}
     </View>
   );
 }
@@ -378,5 +481,54 @@ const styles = StyleSheet.create({
   addButtonText: {
     ...TYPOGRAPHY.metaBold,
     color: COLORS.text,
+  },
+  programCardSection: {
+    marginBottom: SPACING.xl,
+  },
+  programCard: {
+    marginBottom: 0,
+  },
+  programCardInner: {
+    paddingVertical: SPACING.lg,
+    paddingHorizontal: 24,
+  },
+  programCardTitle: {
+    ...TYPOGRAPHY.h3,
+    color: COLORS.text,
+    marginBottom: 4,
+  },
+  programCardMeta: {
+    ...TYPOGRAPHY.meta,
+    color: COLORS.textMeta,
+    marginBottom: 4,
+  },
+  programCardUpNext: {
+    ...TYPOGRAPHY.meta,
+    color: COLORS.accentPrimary,
+    marginBottom: 12,
+  },
+  programCardCta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  programCardCtaText: {
+    ...TYPOGRAPHY.metaBold,
+    color: COLORS.accentPrimary,
+  },
+  addCoreDrawerContent: {
+    paddingHorizontal: SPACING.xxl,
+    paddingBottom: SPACING.xxl,
+  },
+  addCoreDrawerTitle: {
+    ...TYPOGRAPHY.h3,
+    color: COLORS.text,
+    marginBottom: SPACING.lg,
+  },
+  addCoreDrawerScroll: {
+    maxHeight: 400,
+  },
+  addCoreDrawerScrollContent: {
+    paddingBottom: SPACING.xl,
   },
 });

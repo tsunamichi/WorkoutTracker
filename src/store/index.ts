@@ -2,7 +2,8 @@ import { create } from 'zustand';
 import dayjs from 'dayjs';
 import isoWeek from 'dayjs/plugin/isoWeek';
 import type { Cycle, Exercise, WorkoutSession, BodyWeightEntry, ProgressPhoto, AppSettings, WorkoutAssignment, TrainerConversation, ExercisePR, WorkoutProgress, ExerciseProgress, HIITTimer, HIITTimerSession } from '../types';
-import type { WorkoutTemplate, CyclePlan, ScheduledWorkout, ConflictResolution, ConflictItem, ConflictResolutionMap, PlanApplySummary, CyclePlanStatus, WarmUpSetTemplate, CoreSetTemplate, BonusLog } from '../types/training';
+import type { WorkoutTemplate, CyclePlan, ScheduledWorkout, ConflictResolution, ConflictItem, ConflictResolutionMap, PlanApplySummary, CyclePlanStatus, WarmUpSetTemplate, CoreSetTemplate, BonusLog, CoreProgram, CoreLog } from '../types/training';
+import * as coreProgramUtil from '../utils/coreProgram';
 import * as storage from '../storage';
 import { SEED_EXERCISES } from '../constants';
 import { kgToLbs } from '../utils/weight';
@@ -105,6 +106,25 @@ interface WorkoutStore {
   updateBonusLog: (logId: string, updates: Partial<BonusLog>) => Promise<void>;
   deleteBonusLog: (logId: string) => Promise<void>;
   getBonusLogsForDate: (date: string) => BonusLog[];
+
+  // Core Program
+  corePrograms: CoreProgram[];
+  coreLogs: CoreLog[];
+  getActiveCoreProgram: () => CoreProgram | undefined;
+  createDefaultCoreProgram: () => Promise<CoreProgram>;
+  getUpNextCoreSession: (programId?: string) => CoreSetTemplate | null;
+  getCoreSessionsByGroup: (programId: string) => { A: CoreSetTemplate[]; B: CoreSetTemplate[] };
+  getCoreCompletedCount: (programId: string) => number;
+  advanceCorePointer: (programId: string) => Promise<void>;
+  logCoreSession: (programId: string, sessionTemplateId: string, outcome: 'completed' | 'skipped', completedItemIds?: string[]) => Promise<void>;
+  isCoreSessionCompletedThisWeek: (programId: string, sessionTemplateId: string) => boolean;
+  isCoreSessionSkippedThisWeek: (programId: string, sessionTemplateId: string) => boolean;
+  restartCoreProgram: (programId: string) => Promise<void>;
+  addCoreSessionToProgram: (programId: string, preset: CoreSetTemplate, group: 'A' | 'B') => Promise<void>;
+  updateCoreProgram: (programId: string, updates: Partial<CoreProgram>) => Promise<void>;
+  deleteCoreProgram: (programId: string) => Promise<void>;
+  pendingCorePresetForProgram: { id: string; name: string; items: CoreSetTemplate['items'] } | null;
+  setPendingCorePresetForProgram: (preset: { id: string; name: string; items: CoreSetTemplate['items'] } | null) => void;
   
   // NEW: Training Architecture (Templates, Plans, Scheduled Workouts)
   workoutTemplates: WorkoutTemplate[];
@@ -258,6 +278,9 @@ export const useStore = create<WorkoutStore>((set, get) => ({
   warmupPresets: [],
   corePresets: [],
   bonusLogs: [],
+  corePrograms: [],
+  coreLogs: [],
+  pendingCorePresetForProgram: null,
   settings: DEFAULT_SETTINGS,
   isLoading: true,
   workoutProgress: {},
@@ -302,6 +325,8 @@ export const useStore = create<WorkoutStore>((set, get) => ({
         warmupPresets,
         corePresets,
         bonusLogs,
+        corePrograms,
+        coreLogs,
         warmupCompletionByKey,
         accessoryCompletionByKey,
       ] = await Promise.all([
@@ -325,6 +350,8 @@ export const useStore = create<WorkoutStore>((set, get) => ({
         storage.loadWarmupPresets(),
         storage.loadCorePresets(),
         storage.loadBonusLogs(),
+        storage.loadCorePrograms(),
+        storage.loadCoreLogs(),
         storage.loadWarmupCompletionByKey(),
         storage.loadAccessoryCompletionByKey(),
       ]);
@@ -1229,6 +1256,8 @@ export const useStore = create<WorkoutStore>((set, get) => ({
         warmupPresets,
         corePresets,
         bonusLogs,
+        corePrograms,
+        coreLogs,
         warmupCompletionByKey: warmupCompletionByKey || {},
         accessoryCompletionByKey: accessoryCompletionByKey || {},
         workoutTemplates: finalWorkoutTemplates,
@@ -3810,6 +3839,154 @@ export const useStore = create<WorkoutStore>((set, get) => ({
   
   getBonusLogsForDate: (date) => {
     return get().bonusLogs.filter(l => l.date === date);
+  },
+
+  // Core Program
+  getActiveCoreProgram: () => {
+    return get().corePrograms.find(p => p.isActive) ?? undefined;
+  },
+
+  createDefaultCoreProgram: async () => {
+    const now = new Date().toISOString();
+    const program: CoreProgram = {
+      id: `core-program-${Date.now()}`,
+      name: 'Core Program',
+      durationWeeks: 6,
+      sessionsPerWeekTarget: 3,
+      isActive: true,
+      createdAt: now,
+      updatedAt: now,
+      rotationType: 'alternating',
+      currentWeekIndex: 1,
+      currentSessionIndexWithinGroup: 0,
+    };
+    const programs = [...get().corePrograms];
+    programs.forEach(p => { (p as CoreProgram).isActive = false; });
+    programs.push(program);
+    set({ corePrograms: programs });
+    await storage.saveCorePrograms(programs);
+    return program;
+  },
+
+  getUpNextCoreSession: (programId) => {
+    const program = programId ? get().corePrograms.find(p => p.id === programId) : get().getActiveCoreProgram();
+    if (!program) return null;
+    return coreProgramUtil.getUpNextSession(program, get().corePresets);
+  },
+
+  getCoreSessionsByGroup: (programId) => {
+    return coreProgramUtil.getSessionsByGroup(programId, get().corePresets);
+  },
+
+  getCoreCompletedCount: (programId) => {
+    return get().coreLogs.filter(l => l.programId === programId && l.outcome === 'completed').length;
+  },
+
+  advanceCorePointer: async (programId) => {
+    const program = get().corePrograms.find(p => p.id === programId);
+    if (!program) return;
+    const next = coreProgramUtil.advancePointer(program);
+    const programs = get().corePrograms.map(p => p.id === programId ? next : p);
+    set({ corePrograms: programs });
+    await storage.saveCorePrograms(programs);
+  },
+
+  logCoreSession: async (programId, sessionTemplateId, outcome, completedItemIds) => {
+    const program = get().corePrograms.find(p => p.id === programId);
+    if (!program) return;
+    const now = new Date().toISOString();
+    const log: CoreLog = {
+      id: `core-log-${Date.now()}`,
+      programId,
+      sessionTemplateId,
+      dateTime: now,
+      outcome,
+      completedExerciseLogs: outcome === 'completed' ? completedItemIds : undefined,
+      weekIndex: program.currentWeekIndex,
+    };
+    const logs = [...get().coreLogs, log];
+    set({ coreLogs: logs });
+    await storage.saveCoreLogs(logs);
+    const upNext = coreProgramUtil.getUpNextSession(program, get().corePresets);
+    if (upNext?.id === sessionTemplateId) {
+      await get().advanceCorePointer(programId);
+    }
+  },
+
+  isCoreSessionCompletedThisWeek: (programId, sessionTemplateId) => {
+    const program = get().corePrograms.find(p => p.id === programId);
+    if (!program) return false;
+    return get().coreLogs.some(
+      l => l.programId === programId && l.sessionTemplateId === sessionTemplateId && l.outcome === 'completed' && l.weekIndex === program.currentWeekIndex
+    );
+  },
+
+  isCoreSessionSkippedThisWeek: (programId, sessionTemplateId) => {
+    const program = get().corePrograms.find(p => p.id === programId);
+    if (!program) return false;
+    return get().coreLogs.some(
+      l => l.programId === programId && l.sessionTemplateId === sessionTemplateId && l.outcome === 'skipped' && l.weekIndex === program.currentWeekIndex
+    );
+  },
+
+  restartCoreProgram: async (programId) => {
+    const program = get().corePrograms.find(p => p.id === programId);
+    if (!program) return;
+    const updated: CoreProgram = {
+      ...program,
+      currentWeekIndex: 1,
+      currentSessionIndexWithinGroup: 0,
+      updatedAt: new Date().toISOString(),
+    };
+    const programs = get().corePrograms.map(p => p.id === programId ? updated : p);
+    set({ corePrograms: programs });
+    await storage.saveCorePrograms(programs);
+  },
+
+  addCoreSessionToProgram: async (programId, preset, group) => {
+    const { A, B } = get().getCoreSessionsByGroup(programId);
+    const arr = group === 'A' ? A : B;
+    if (arr.length >= 3) return; // v1: no replace, just refuse
+    const orderIndex = arr.length;
+    const now = Date.now();
+    const linked: CoreSetTemplate = {
+      ...preset,
+      id: preset.id.startsWith('builtin-') ? `core-${now}-${orderIndex}` : preset.id,
+      belongsToProgramId: programId,
+      groupKey: group,
+      orderIndex,
+      updatedAt: now,
+      lastUsedAt: preset.lastUsedAt ?? null,
+    };
+    const presets = [...get().corePresets];
+    const existingIdx = presets.findIndex(p => p.id === linked.id || (p.belongsToProgramId === programId && p.groupKey === group && p.orderIndex === orderIndex));
+    if (existingIdx >= 0) presets[existingIdx] = linked;
+    else presets.push(linked);
+    set({ corePresets: presets });
+    await storage.saveCorePresets(presets);
+  },
+
+  updateCoreProgram: async (programId, updates) => {
+    const programs = get().corePrograms.map(p => p.id === programId ? { ...p, ...updates, updatedAt: new Date().toISOString() } : p);
+    set({ corePrograms: programs });
+    await storage.saveCorePrograms(programs);
+  },
+
+  deleteCoreProgram: async (programId) => {
+    const programs = get().corePrograms.filter(p => p.id !== programId);
+    set({ corePrograms: programs });
+    await storage.saveCorePrograms(programs);
+    const presets = get().corePresets.map(p =>
+      p.belongsToProgramId === programId
+        ? { ...p, belongsToProgramId: undefined, groupKey: undefined, orderIndex: undefined }
+        : p
+    );
+    set({ corePresets: presets });
+    await storage.saveCorePresets(presets);
+  },
+
+  setPendingCorePresetForProgram: (preset) => {
+    set({ pendingCorePresetForProgram: preset });
   },
 }));
 

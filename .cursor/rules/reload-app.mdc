@@ -1,5 +1,5 @@
 ---
-description: Run a full app reload after making code changes so the user sees updates in the simulator/device.
+description: MUST clear cache after every code/UI change so the user sees updates in the simulator.
 globs: 
   - "**/*.tsx"
   - "**/*.ts"
@@ -7,15 +7,18 @@ globs:
   - "**/*.js"
 ---
 
-# Full reload after code changes
+# MUST clear cache after every change
 
-**Every time** we make a code change to the WorkoutTracker app, run a full reload so the user sees updates:
+**You MUST clear the cache every time** you make a code or UI change to the WorkoutTracker app. Do not skip this.
 
-1. From the **project root** (the folder that contains `package.json` and `src/`, i.e. `WorkoutTracker`), run:
+1. From the **project root** (`WorkoutTracker`), run:
    ```bash
-   npm run reload
+   lsof -ti :8081 | xargs kill -9 2>/dev/null; rm -rf node_modules/.cache .expo/cache $TMPDIR/metro-* $TMPDIR/haste-* 2>/dev/null; npm run start:fresh
    ```
-2. This kills any process on port 8082 and starts Expo with `--clear` on port 8082. Run it in the **background** so the dev server stays up.
-3. Tell the user the app has been fully reloaded and they can reload the client (e.g. press `r` in the Expo terminal or shake to reload in the simulator).
+2. Run it in the **background** so the dev server stays up.
+3. Tell the user the cache was cleared, the server is running with a fresh bundle, and to **reload the app** in the simulator (**Cmd+R** or force quit and reopen).
 
-If the workspace is `WorkoutTracker/ios`, use the parent directory for the command: `cd /Users/fcasanov/Projects/WorkoutTracker && npm run reload`.
+If the workspace is `WorkoutTracker/ios`, use:
+`cd /Users/fcasanov/Projects/WorkoutTracker && lsof -ti :8081 | xargs kill -9 2>/dev/null; rm -rf node_modules/.cache .expo/cache $TMPDIR/metro-* $TMPDIR/haste-* 2>/dev/null; npm run start:fresh`
+
+No exceptions: clear cache after every change.

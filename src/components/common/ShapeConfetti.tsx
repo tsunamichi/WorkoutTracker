@@ -1,8 +1,14 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { View, StyleSheet, Animated, Easing, Dimensions } from 'react-native';
+import { View, StyleSheet, Dimensions } from 'react-native';
+import Animated, { useSharedValue, useAnimatedStyle } from 'react-native-reanimated';
 import Svg, { Path, Circle as SvgCircle, Rect } from 'react-native-svg';
+import { DeviceMotion } from 'expo-sensors';
 
-const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
+// Bounds read each frame in step() so rotation/window changes are respected
+function getScreenBounds() {
+  const { width, height } = Dimensions.get('window');
+  return { w: width, h: height };
+}
 
 const SHAPE_COLORS = {
   diamond: '#FF1A6C',
@@ -14,7 +20,7 @@ const SHAPE_COLORS = {
 type ShapeType = keyof typeof SHAPE_COLORS;
 const SHAPE_TYPES: ShapeType[] = ['diamond', 'squircle', 'circle', 'triangle'];
 
-const COUNT = 30;
+const COUNT = 15;
 const SIZE = 64;
 const HALF = SIZE / 2;
 
@@ -28,20 +34,54 @@ const SHAPE_RADII: Record<ShapeType, number> = {
 const FPS = 60;
 const DT = 1 / FPS;
 const GRAV = 2400;
+const GRAV_SCALE = GRAV / 9.81; // device m/s² -> our units; screen +Y = down
 const BOUNCE = 0.15;
 const FLOOR_FRIC = 0.75;
 const AIR_FRIC = 0.998;
-const FLOOR = SCREEN_H;
 const VEL_SETTLE = 3;
-const MAX_FRAMES = 420;
 const COL_ITERS = 12;
+const GRAVITY_SMOOTH = 0.2; // lerp toward sensor (smoother tilt response)
+const GRAVITY_SNAP = 0.45; // when gravity direction flips (e.g. phone upside down), lerp faster so shapes drop to new "down"
+const FIXED_STEP_CAP = 3; // max physics steps per frame to avoid spiral of death
 
-interface ParticleAnim {
+interface ParticleData {
   shape: ShapeType;
   color: string;
-  x: Animated.AnimatedInterpolation<number>;
-  y: Animated.AnimatedInterpolation<number>;
-  rot: Animated.AnimatedInterpolation<string>;
+}
+
+function ConfettiParticle({
+  index,
+  shape,
+  color,
+  state,
+  frameTicker,
+}: {
+  index: number;
+  shape: ShapeType;
+  color: string;
+  state: Animated.SharedValue<number[]>;
+  frameTicker: Animated.SharedValue<number>;
+}) {
+  const animatedStyle = useAnimatedStyle(() => {
+    'worklet';
+    const _ = frameTicker.value; // subscribe so we re-run every frame when positions update
+    const i = index * 3;
+    const x = state.value[i] ?? 0;
+    const y = state.value[i + 1] ?? 0;
+    const rot = state.value[i + 2] ?? 0;
+    return {
+      transform: [
+        { translateX: x },
+        { translateY: y },
+        { rotate: `${rot}rad` },
+      ],
+    };
+  });
+  return (
+    <Animated.View style={[styles.particle, animatedStyle]}>
+      <MemoShape shape={shape} color={color} />
+    </Animated.View>
+  );
 }
 
 const MemoShape = React.memo(function ShapeSvg({
@@ -98,16 +138,16 @@ const MemoShape = React.memo(function ShapeSvg({
   }
 });
 
-function simulate(originY: number) {
+function initParticles(originY: number) {
+  const { w: SCREEN_W } = getScreenBounds();
   const ox = SCREEN_W / 2;
-
   const px = new Float64Array(COUNT);
   const py = new Float64Array(COUNT);
   const vx = new Float64Array(COUNT);
   const vy = new Float64Array(COUNT);
   const rot = new Float64Array(COUNT);
   const av = new Float64Array(COUNT);
-  const ri = new Float64Array(COUNT); // per-shape collision radius
+  const ri = new Float64Array(COUNT);
   const shapes: ShapeType[] = [];
 
   for (let i = 0; i < COUNT; i++) {
@@ -123,231 +163,223 @@ function simulate(originY: number) {
     rot[i] = (Math.random() - 0.5) * 1.5;
     av[i] = (Math.random() - 0.5) * 4;
   }
-
-  // Pre-compute max possible collision distance for broad-phase skip
-  const maxR = 32;
-  const maxDist = maxR * 2;
-  const maxDistSq = maxDist * maxDist;
-
-  const kx: number[][] = Array.from({ length: COUNT }, () => []);
-  const ky: number[][] = Array.from({ length: COUNT }, () => []);
-  const kr: number[][] = Array.from({ length: COUNT }, () => []);
-  let nFrames = 0;
-
-  // Capture initial state
-  for (let i = 0; i < COUNT; i++) {
-    kx[i].push(px[i] - HALF);
-    ky[i].push(py[i] - HALF);
-    kr[i].push(rot[i]);
-  }
-  nFrames++;
-
-  for (let f = 0; f < MAX_FRAMES; f++) {
-    // Integrate
-    for (let i = 0; i < COUNT; i++) {
-      vy[i] += GRAV * DT;
-      vx[i] *= AIR_FRIC;
-      px[i] += vx[i] * DT;
-      py[i] += vy[i] * DT;
-      rot[i] += av[i] * DT;
-      av[i] *= 0.92;
-    }
-
-    // Floor — per-shape radius, kill spin hard on contact
-    for (let i = 0; i < COUNT; i++) {
-      if (py[i] + ri[i] > FLOOR) {
-        py[i] = FLOOR - ri[i];
-        vy[i] = Math.abs(vy[i]) < VEL_SETTLE ? 0 : -vy[i] * BOUNCE;
-        vx[i] *= FLOOR_FRIC;
-        av[i] *= 0.1;
-      }
-    }
-
-    // Settle rotation toward upright when nearly at rest
-    for (let i = 0; i < COUNT; i++) {
-      const speed = Math.abs(vx[i]) + Math.abs(vy[i]);
-      if (speed < 60) {
-        const uprightTarget = Math.round(rot[i] / (Math.PI * 2)) * (Math.PI * 2);
-        const diff = uprightTarget - rot[i];
-        const blend = speed < 15 ? 0.15 : 0.06;
-        rot[i] += diff * blend;
-        av[i] *= 0.6;
-        if (Math.abs(av[i]) < 0.05) av[i] = 0;
-      }
-    }
-
-    // Walls — per-shape radius
-    for (let i = 0; i < COUNT; i++) {
-      if (px[i] - ri[i] < 0) {
-        px[i] = ri[i];
-        vx[i] = Math.abs(vx[i]) * BOUNCE;
-      } else if (px[i] + ri[i] > SCREEN_W) {
-        px[i] = SCREEN_W - ri[i];
-        vx[i] = -Math.abs(vx[i]) * BOUNCE;
-      }
-    }
-
-    // Particle-particle collisions — per-shape pair distance
-    for (let iter = 0; iter < COL_ITERS; iter++) {
-      for (let i = 0; i < COUNT; i++) {
-        for (let j = i + 1; j < COUNT; j++) {
-          const dx = px[j] - px[i];
-          const dy = py[j] - py[i];
-          const dSq = dx * dx + dy * dy;
-          if (dSq > maxDistSq || dSq < 0.001) continue;
-
-          const minDist = ri[i] + ri[j];
-          if (dSq >= minDist * minDist) continue;
-
-          const d = Math.sqrt(dSq);
-          const nx = dx / d;
-          const ny = dy / d;
-          const ov = minDist - d;
-
-          px[i] -= nx * ov * 0.5;
-          py[i] -= ny * ov * 0.5;
-          px[j] += nx * ov * 0.5;
-          py[j] += ny * ov * 0.5;
-
-          const rvn = (vx[i] - vx[j]) * nx + (vy[i] - vy[j]) * ny;
-          if (rvn > 0) {
-            const imp = rvn * 0.5 * (1 + BOUNCE);
-            vx[i] -= imp * nx;
-            vy[i] -= imp * ny;
-            vx[j] += imp * nx;
-            vy[j] += imp * ny;
-          }
-        }
-      }
-    }
-
-    // Re-enforce floor + walls after collision pushes — per-shape radius
-    for (let i = 0; i < COUNT; i++) {
-      if (py[i] + ri[i] > FLOOR) {
-        py[i] = FLOOR - ri[i];
-        if (vy[i] > 0) vy[i] = 0;
-      }
-      if (px[i] - ri[i] < 0) px[i] = ri[i];
-      else if (px[i] + ri[i] > SCREEN_W) px[i] = SCREEN_W - ri[i];
-    }
-
-    // Capture keyframes AFTER collision resolution (no unresolved overlap frames)
-    for (let i = 0; i < COUNT; i++) {
-      kx[i].push(px[i] - HALF);
-      ky[i].push(py[i] - HALF);
-      kr[i].push(rot[i]);
-    }
-    nFrames++;
-
-    // Settle check (only after 1.5s so everything has time to fall)
-    if (f > FPS * 1.5) {
-      let settled = true;
-      for (let i = 0; i < COUNT; i++) {
-        if (
-          Math.abs(vx[i]) > VEL_SETTLE ||
-          Math.abs(vy[i]) > VEL_SETTLE ||
-          Math.abs(av[i]) > 0.05
-        ) {
-          settled = false;
-          break;
-        }
-      }
-      if (settled) {
-        for (let e = 0; e < 12; e++) {
-          for (let i = 0; i < COUNT; i++) {
-            kx[i].push(px[i] - HALF);
-            ky[i].push(py[i] - HALF);
-            kr[i].push(rot[i]);
-          }
-          nFrames++;
-        }
-        break;
-      }
-    }
-  }
-
-  const frames = Array.from({ length: nFrames }, (_, i) => i);
-  return { kx, ky, kr, frames, shapes };
+  return { px, py, vx, vy, rot, av, ri, shapes };
 }
+
+const maxR = 32;
+const maxDistSq = (maxR * 2) ** 2;
 
 interface ShapeConfettiProps {
   active: boolean;
   originY?: number;
 }
 
-export function ShapeConfetti({ active, originY = SCREEN_H * 0.35 }: ShapeConfettiProps) {
-  const clockRef = useRef(new Animated.Value(0));
-  const [particles, setParticles] = useState<ParticleAnim[]>([]);
-  const animConfigRef = useRef({ to: 0, duration: 0 });
+export function ShapeConfetti({
+  active,
+  originY = getScreenBounds().h * 0.35,
+}: ShapeConfettiProps) {
+  const [particles, setParticles] = useState<ParticleData[]>([]);
+  const particleState = useSharedValue<number[]>([]);
+  const frameTicker = useSharedValue(0); // increment each frame so useAnimatedStyle re-runs and picks up new positions
+  const physicsRef = useRef<ReturnType<typeof initParticles> | null>(null);
+  const gravityRef = useRef({ gx: 0, gy: GRAV }); // raw from sensor
+  const smoothedGravityRef = useRef({ gx: 0, gy: GRAV }); // lerped each frame for smooth tilt
+  const rafRef = useRef<number | null>(null);
+
+  // Gravity = direction toward physical bottom of phone (screen +X = right, +Y = down).
+  // Device portrait: device X right, Y up → so (device.x, -device.y) = down in screen space.
+  useEffect(() => {
+    if (!active) return;
+    DeviceMotion.setUpdateInterval(1000 / 60);
+    const sub = DeviceMotion.addListener((data) => {
+      const a = data.accelerationIncludingGravity;
+      if (a) {
+        gravityRef.current = {
+          gx: (a.x ?? 0) * GRAV_SCALE,
+          gy: -(a.y ?? -9.81) * GRAV_SCALE,
+        };
+      }
+    });
+    return () => sub.remove();
+  }, [active]);
 
   useEffect(() => {
     if (!active) {
-      clockRef.current.stopAnimation();
-      clockRef.current.setValue(0);
+      if (rafRef.current != null) {
+        cancelAnimationFrame(rafRef.current);
+        rafRef.current = null;
+      }
       setParticles([]);
+      physicsRef.current = null;
       return;
     }
 
-    const { kx, ky, kr, frames, shapes } = simulate(originY);
-    if (frames.length < 2) return;
+    const { px, py, vx, vy, rot, av, ri, shapes } = initParticles(originY);
+    physicsRef.current = { px, py, vx, vy, rot, av, ri, shapes };
 
-    const clock = clockRef.current;
-    clock.setValue(0);
+    const initial: number[] = [];
+    for (let i = 0; i < COUNT; i++) {
+      initial.push(px[i] - HALF, py[i] - HALF, rot[i]);
+    }
+    particleState.value = initial;
+    setParticles(shapes.map((shape) => ({ shape, color: SHAPE_COLORS[shape] })));
+    smoothedGravityRef.current = { gx: 0, gy: GRAV };
 
-    animConfigRef.current = {
-      to: frames[frames.length - 1],
-      duration: (frames.length / FPS) * 1000,
+    let lastTs = 0;
+    let acc = 0;
+
+    function step(ts: number) {
+      const phys = physicsRef.current;
+      if (!phys) return;
+      const { w: SCREEN_W, h: SCREEN_H } = getScreenBounds();
+      const { px, py, vx, vy, rot, av, ri, shapes } = phys;
+      const raw = gravityRef.current;
+      const sm = smoothedGravityRef.current;
+      // When gravity direction flips (e.g. phone turned upside down), snap faster so shapes fall toward new physical bottom
+      const signFlip =
+        (raw.gx * sm.gx < 0 && Math.abs(raw.gx) > 50) ||
+        (raw.gy * sm.gy < 0 && Math.abs(raw.gy) > 50);
+      const smooth = signFlip ? GRAVITY_SNAP : GRAVITY_SMOOTH;
+      sm.gx += (raw.gx - sm.gx) * smooth;
+      sm.gy += (raw.gy - sm.gy) * smooth;
+      const gx = sm.gx;
+      const gy = sm.gy;
+
+      const delta = lastTs ? Math.min((ts - lastTs) / 1000, 0.1) : DT;
+      lastTs = ts;
+      acc += delta;
+      let steps = 0;
+      while (acc >= DT && steps < FIXED_STEP_CAP) {
+        acc -= DT;
+        steps++;
+        // Integrate: gravity points toward physical bottom of phone
+        for (let i = 0; i < COUNT; i++) {
+          vx[i] += gx * DT;
+          vy[i] += gy * DT;
+          vx[i] *= AIR_FRIC;
+          vy[i] *= AIR_FRIC;
+          px[i] += vx[i] * DT;
+          py[i] += vy[i] * DT;
+          rot[i] += av[i] * DT;
+          av[i] *= 0.92;
+        }
+
+        // Four walls: keep shapes on screen so they pile toward "down" side when you tilt
+        for (let i = 0; i < COUNT; i++) {
+          const r = ri[i];
+          if (py[i] + r > SCREEN_H) {
+            py[i] = SCREEN_H - r;
+            vy[i] = Math.abs(vy[i]) < VEL_SETTLE ? 0 : -vy[i] * BOUNCE;
+            vx[i] *= FLOOR_FRIC;
+            av[i] *= 0.1;
+          }
+          if (py[i] - r < 0) {
+            py[i] = r;
+            vy[i] = Math.abs(vy[i]) * BOUNCE;
+            vx[i] *= FLOOR_FRIC;
+          }
+          if (px[i] - r < 0) {
+            px[i] = r;
+            vx[i] = Math.abs(vx[i]) * BOUNCE;
+          } else if (px[i] + r > SCREEN_W) {
+            px[i] = SCREEN_W - r;
+            vx[i] = -Math.abs(vx[i]) * BOUNCE;
+          }
+        }
+
+        // Settle rotation
+        for (let i = 0; i < COUNT; i++) {
+          const speed = Math.abs(vx[i]) + Math.abs(vy[i]);
+          if (speed < 60) {
+            const uprightTarget = Math.round(rot[i] / (Math.PI * 2)) * (Math.PI * 2);
+            const diff = uprightTarget - rot[i];
+            const blend = speed < 15 ? 0.15 : 0.06;
+            rot[i] += diff * blend;
+            av[i] *= 0.6;
+            if (Math.abs(av[i]) < 0.05) av[i] = 0;
+          }
+        }
+
+        // Particle-particle collisions
+        let totalSpeed = 0;
+        for (let i = 0; i < COUNT; i++) totalSpeed += Math.abs(vx[i]) + Math.abs(vy[i]);
+        const iters = totalSpeed < 200 ? 3 : COL_ITERS;
+        for (let iter = 0; iter < iters; iter++) {
+          for (let i = 0; i < COUNT; i++) {
+            for (let j = i + 1; j < COUNT; j++) {
+              const dx = px[j] - px[i];
+              const dy = py[j] - py[i];
+              const dSq = dx * dx + dy * dy;
+              if (dSq > maxDistSq || dSq < 0.001) continue;
+              const minDist = ri[i] + ri[j];
+              if (dSq >= minDist * minDist) continue;
+              const d = Math.sqrt(dSq);
+              const nx = dx / d;
+              const ny = dy / d;
+              const ov = minDist - d;
+              px[i] -= nx * ov * 0.5;
+              py[i] -= ny * ov * 0.5;
+              px[j] += nx * ov * 0.5;
+              py[j] += ny * ov * 0.5;
+              const rvn = (vx[i] - vx[j]) * nx + (vy[i] - vy[j]) * ny;
+              if (rvn > 0) {
+                const imp = rvn * 0.5 * (1 + BOUNCE);
+                vx[i] -= imp * nx;
+                vy[i] -= imp * ny;
+                vx[j] += imp * nx;
+                vy[j] += imp * ny;
+              }
+            }
+          }
+        }
+
+        // Re-enforce bounds
+        for (let i = 0; i < COUNT; i++) {
+          const r = ri[i];
+          if (py[i] + r > SCREEN_H) {
+            py[i] = SCREEN_H - r;
+            if (vy[i] > 0) vy[i] = 0;
+          }
+          if (py[i] - r < 0) py[i] = r;
+          if (px[i] - r < 0) px[i] = r;
+          else if (px[i] + r > SCREEN_W) px[i] = SCREEN_W - r;
+        }
+      }
+
+      // Update Reanimated shared values so UI thread picks up new positions every frame
+      const next: number[] = [];
+      for (let i = 0; i < COUNT; i++) {
+        next.push(px[i] - HALF, py[i] - HALF, rot[i]);
+      }
+      particleState.value = next;
+      frameTicker.value = frameTicker.value + 1;
+
+      rafRef.current = requestAnimationFrame(step);
+    }
+
+    rafRef.current = requestAnimationFrame(step);
+
+    return () => {
+      if (rafRef.current != null) {
+        cancelAnimationFrame(rafRef.current);
+        rafRef.current = null;
+      }
     };
-
-    setParticles(
-      shapes.map((shape, i) => ({
-        shape,
-        color: SHAPE_COLORS[shape],
-        x: clock.interpolate({ inputRange: frames, outputRange: kx[i] }),
-        y: clock.interpolate({ inputRange: frames, outputRange: ky[i] }),
-        rot: clock.interpolate({
-          inputRange: frames,
-          outputRange: kr[i].map((r) => `${r}rad`),
-        }),
-      }))
-    );
   }, [active, originY]);
-
-  useEffect(() => {
-    if (particles.length === 0) return;
-    const { to, duration } = animConfigRef.current;
-    const clock = clockRef.current;
-
-    Animated.timing(clock, {
-      toValue: to,
-      duration,
-      easing: Easing.linear,
-      useNativeDriver: true,
-    }).start();
-
-    return () => clock.stopAnimation();
-  }, [particles]);
 
   if (particles.length === 0) return null;
 
   return (
     <View style={styles.container} pointerEvents="none">
       {particles.map((p, i) => (
-        <Animated.View
+        <ConfettiParticle
           key={i}
-          style={[
-            styles.particle,
-            {
-              transform: [
-                { translateX: p.x as any },
-                { translateY: p.y as any },
-                { rotate: p.rot as any },
-              ],
-            },
-          ]}
-        >
-          <MemoShape shape={p.shape} color={p.color} />
-        </Animated.View>
+          index={i}
+          shape={p.shape}
+          color={p.color}
+          state={particleState}
+          frameTicker={frameTicker}
+        />
       ))}
     </View>
   );
@@ -358,8 +390,8 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: 0,
     top: 0,
-    width: SCREEN_W,
-    height: SCREEN_H,
+    right: 0,
+    bottom: 0,
     zIndex: 999,
   },
   particle: {

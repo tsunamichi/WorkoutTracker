@@ -22,8 +22,10 @@
         "NSSupportsLiveActivitiesFrequentUpdates": true,
         "NSCameraUsageDescription": "Allow access to take progress photos for your weekly check-in.",
         "NSPhotoLibraryUsageDescription": "Allow access to select progress photos for your weekly check-in.",
-        "NSPhotoLibraryAddUsageDescription": "Allow saving progress photos to your library."
-      }
+        "NSPhotoLibraryAddUsageDescription": "Allow saving progress photos to your library.",
+        "NSMotionUsageDescription": "Motion is used so the celebration animation responds to how you hold your device."
+      },
+      "backgroundColor": "#0D0D0D"
     },
     "android": {
       "adaptiveIcon": {
@@ -42,8 +44,10 @@
       }
     },
     "plugins": [
-      "expo-apple-authentication"
+      "expo-apple-authentication",
+      "expo-system-ui"
     ],
-    "owner": "tsunamichi"
+    "owner": "tsunamichi",
+    "backgroundColor": "#0D0D0D"
   }
 }

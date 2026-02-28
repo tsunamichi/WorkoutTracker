@@ -173,9 +173,7 @@ export function ExpandableCalendarStrip({
         const date = weekStart.add(dayIdx, 'day');
         const dateStr = date.format('YYYY-MM-DD');
         const sw = getScheduledWorkout(dateStr);
-        const isCompleted = sw
-          ? sw.status === 'completed' || getMainCompletion(sw.id).percentage === 100
-          : false;
+        const isCompleted = sw ? getMainCompletion(sw.id).percentage === 100 : false;
         days.push({
           date: dateStr,
           dayNumber: date.date(),

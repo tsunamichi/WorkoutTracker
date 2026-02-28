@@ -292,7 +292,8 @@ export function TodayScreen({ onDateChange, onOpenSwapDrawer, onOpenAddWorkout, 
       completionPercentage = mainCompletion.percentage;
     }
     
-    const isCompleted = scheduledWorkout?.status === 'completed' || completionPercentage === 100;
+    // Only show as complete when all sets are actually done (percentage === 100)
+    const isCompleted = completionPercentage === 100;
     const isLocked = scheduledWorkout?.isLocked || false;
     
     return {
@@ -550,7 +551,7 @@ export function TodayScreen({ onDateChange, onOpenSwapDrawer, onOpenAddWorkout, 
                       
                       // Determine button state
                       const progress = completionPercentage / 100;
-                      const isCompleted = sw.isLocked || completionPercentage === 100;
+                      const isCompleted = completionPercentage === 100;
                       
                       const isSkipped = isInPastCycle && !isCompleted;
                       let buttonState = t('start');

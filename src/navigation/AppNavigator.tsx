@@ -22,6 +22,7 @@ import { EditKeyLiftsScreen } from '../screens/EditKeyLiftsScreen';
 import { PhotoViewerScreen } from '../screens/PhotoViewerScreen';
 import { BonusPresetPickerScreen } from '../screens/BonusPresetPickerScreen';
 import { BonusDetailScreen } from '../screens/BonusDetailScreen';
+import { CoreProgramScreen } from '../screens/CoreProgramScreen';
 import { CycleDetailScreen } from '../screens/CycleDetailScreen';
 import { CyclePlanDetailScreen } from '../screens/CyclePlanDetailScreen';
 import { CycleConflictsScreen } from '../screens/CycleConflictsScreen';
@@ -88,8 +89,9 @@ export type RootStackParamList = {
   LiftHistory: { exerciseId: string; exerciseName: string };
   PhotoViewer: { photoId: string };
   EditKeyLifts: undefined;
-  BonusPresetPicker: { bonusType: 'timer' | 'warmup' | 'core' };
+  BonusPresetPicker: { bonusType: 'timer' | 'warmup' | 'core'; addToProgram?: boolean };
   BonusDetail: { bonusLogId: string };
+  CoreProgram: undefined;
   ProgressTab: undefined;
 };
 
@@ -1019,6 +1021,7 @@ export default function AppNavigator() {
         <Stack.Screen name="PhotoViewer" component={PhotoViewerScreen} />
         <Stack.Screen name="BonusPresetPicker" component={BonusPresetPickerScreen} />
         <Stack.Screen name="BonusDetail" component={BonusDetailScreen} />
+        <Stack.Screen name="CoreProgram" component={CoreProgramScreen} />
         <Stack.Screen name="ProgressTab" component={ProgressHomeScreen} />
       </Stack.Navigator>
     </View>

@@ -20,14 +20,8 @@ export function RootNavigator() {
 
   const checkAuth = async () => {
     try {
-      // Check if user previously chose guest mode
-      const guestMode = await AsyncStorage.getItem(GUEST_MODE_KEY);
-      if (guestMode === 'true') {
-        setAuthState('authenticated');
-        return;
-      }
-
-      // Check Supabase auth state
+      // Only treat as authenticated when user is signed in with Supabase.
+      // If not signed in, always show welcome/sign-in screen (no guest bypass on launch).
       if (isSupabaseConfigured()) {
         const user = await getCurrentUser();
         if (user) {
@@ -36,11 +30,9 @@ export function RootNavigator() {
         }
       }
 
-      // Not authenticated
       setAuthState('unauthenticated');
     } catch (error) {
       console.error('Auth check failed:', error);
-      // On error, show login screen rather than blocking
       setAuthState('unauthenticated');
     }
   };
