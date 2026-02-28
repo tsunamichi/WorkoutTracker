@@ -88,7 +88,7 @@ const styles = StyleSheet.create({
   prText: {
     ...TYPOGRAPHY.note,
     color: COLORS.accentPrimary,
-    fontWeight: '700',
+    fontWeight: '600',
   },
   bottomRow: {
     flexDirection: 'row',

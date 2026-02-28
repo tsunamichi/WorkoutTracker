@@ -92,11 +92,11 @@ export function ActionSheet({ visible, onClose, items }: ActionSheetProps) {
           <TouchableOpacity activeOpacity={1}>
             <View style={styles.drawer}>
               <View style={styles.container}>
-                {/* Featured Action - full width, icon stacked above label */}
+                {/* Featured Action - full width, icon and label side by side, 48px tall */}
                 {featuredItem && (
                   <TouchableOpacity
                     style={[
-                      styles.drawerItem,
+                      styles.drawerItemFeatured,
                       featuredItem.destructive && styles.drawerItemDanger
                     ]}
                     onPress={() => {
@@ -104,15 +104,20 @@ export function ActionSheet({ visible, onClose, items }: ActionSheetProps) {
                       onClose();
                     }}
                     activeOpacity={0.85}
+                    testID="action-sheet-featured-item"
                   >
                     <View style={styles.drawerItemIconWrap}>
                       {featuredItem.icon}
                     </View>
-                    <Text style={[
-                      styles.drawerItemText,
-                      featuredItem.destructive && styles.drawerItemTextDanger
-                    ]} numberOfLines={1}>
-                      {featuredItem.label}
+                    <Text
+                      style={[
+                        styles.drawerItemTextFeatured,
+                        featuredItem.destructive && styles.drawerItemTextDanger
+                      ]}
+                      numberOfLines={1}
+                      testID="rest-timer-menu-label"
+                    >
+                      {featuredItem.label || '0:00'}
                     </Text>
                   </TouchableOpacity>
                 )}
@@ -138,6 +143,7 @@ export function ActionSheet({ visible, onClose, items }: ActionSheetProps) {
                         </View>
                         <Text style={[
                           styles.drawerItemText,
+                          styles.drawerItemLabelWrap,
                           item.destructive && styles.drawerItemTextDanger,
                           item.labelColor ? { color: item.labelColor } : undefined
                         ]} numberOfLines={1}>
@@ -194,6 +200,17 @@ const styles = StyleSheet.create({
     paddingVertical: SPACING.lg,
     paddingHorizontal: SPACING.md,
   },
+  drawerItemFeatured: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+    gap: SPACING.sm,
+    height: 48,
+    backgroundColor: COLORS.activeCard,
+    borderRadius: 16,
+    borderCurve: 'continuous' as const,
+    paddingHorizontal: SPACING.lg,
+  },
   drawerItemIconWrap: {
     alignItems: 'center' as const,
     justifyContent: 'center' as const,
@@ -202,10 +219,19 @@ const styles = StyleSheet.create({
     // Background stays the same; text/icon use destructive color
   },
   drawerItemText: {
-    ...TYPOGRAPHY.body,
-    fontWeight: '700',
+    ...TYPOGRAPHY.meta,
+    fontWeight: '600',
     color: COLORS.text,
     textAlign: 'center' as const,
+  },
+  drawerItemTextFeatured: {
+    ...TYPOGRAPHY.meta,
+    fontWeight: '600',
+    color: COLORS.text,
+    textAlign: 'center' as const,
+  },
+  drawerItemLabelWrap: {
+    minHeight: 22,
   },
   drawerItemTextDanger: {
     color: COLORS.signalNegative,

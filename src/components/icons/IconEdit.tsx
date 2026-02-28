@@ -6,12 +6,34 @@ interface IconEditProps {
   color?: string;
 }
 
-export function IconEdit({ size = 24, color = 'black' }: IconEditProps) {
+export function IconEdit({ size = 24, color = '#161616' }: IconEditProps) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" pointerEvents="none">
       <Path
-        d="M17.499 11.9141L8.70703 20.707C8.51951 20.8945 8.26516 21 8 21H4C3.4478 21 3.00013 20.5522 3 20V16L3.00488 15.9014C3.02763 15.6725 3.12897 15.457 3.29297 15.293L12.085 6.5L17.499 11.9141ZM16.5 3.67188C17.0026 3.67187 17.5005 3.77059 17.9648 3.96289C18.4292 4.15526 18.8516 4.43756 19.207 4.79297C19.5625 5.14844 19.8447 5.57073 20.0371 6.03516C20.2294 6.49949 20.3281 6.99742 20.3281 7.5C20.3281 8.00267 20.2295 8.50141 20.0371 8.96582C19.8447 9.43002 19.5623 9.8517 19.207 10.207L18.9141 10.499L13.5 5.08496L13.793 4.79297C14.1484 4.43756 14.5708 4.15526 15.0352 3.96289C15.4995 3.77059 15.9974 3.67188 16.5 3.67188Z"
+        opacity={0.16}
+        d="M5 16L4 20L8 19L18 9L15 6L5 16Z"
         fill={color}
+      />
+      <Path
+        d="M5 16L4 20L8 19L19.5858 7.41421C20.3668 6.63316 20.3668 5.36683 19.5858 4.58579L19.4142 4.41421C18.6332 3.63316 17.3668 3.63317 16.5858 4.41421L5 16Z"
+        stroke={color}
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <Path
+        d="M15 6L18 9"
+        stroke={color}
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <Path
+        d="M13 20H21"
+        stroke={color}
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
       />
     </Svg>
   );

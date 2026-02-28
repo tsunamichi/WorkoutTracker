@@ -668,7 +668,7 @@ const styles = StyleSheet.create({
   cycleBadgeText: {
     ...TYPOGRAPHY.meta,
     fontSize: 10,
-    fontWeight: '700',
+    fontWeight: '600',
     color: COLORS.accentPrimary,
   },
   cycleConnector: {

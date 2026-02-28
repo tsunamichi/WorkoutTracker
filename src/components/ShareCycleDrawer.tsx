@@ -206,7 +206,7 @@ const styles = StyleSheet.create({
   checkmark: {
     color: COLORS.backgroundCanvas,
     fontSize: 14,
-    fontWeight: '700',
+    fontWeight: '600',
   },
   workoutName: {
     ...TYPOGRAPHY.body,

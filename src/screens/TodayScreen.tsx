@@ -292,9 +292,9 @@ export function TodayScreen({ onDateChange, onOpenSwapDrawer, onOpenAddWorkout, 
       completionPercentage = mainCompletion.percentage;
     }
     
-    // Only show as complete when all sets are actually done (percentage === 100)
-    const isCompleted = completionPercentage === 100;
+    // Completed: all sets done (100%) OR workout was marked complete (isLocked / status)
     const isLocked = scheduledWorkout?.isLocked || false;
+    const isCompleted = completionPercentage === 100 || isLocked || scheduledWorkout?.status === 'completed';
     
     return {
       dayLetter,
@@ -550,14 +550,13 @@ export function TodayScreen({ onDateChange, onOpenSwapDrawer, onOpenAddWorkout, 
                     {(() => {
                       const sw = selectedDay.scheduledWorkout;
                       
-                      // Calculate completion percentage using mainCompletion (only strength workout, not warmup/core)
+                      // Calculate completion: use mainCompletion % OR locked/status (e.g. after "Complete" or recoverCompletion)
                       const mainCompletion = getMainCompletion(sw.id);
                       const completionPercentage = mainCompletion.percentage;
+                      const isCompleted = completionPercentage === 100 || sw.isLocked === true || sw.status === 'completed';
                       
                       // Determine button state
-                      const progress = completionPercentage / 100;
-                      const isCompleted = completionPercentage === 100;
-                      
+                      const progress = isCompleted ? 1 : completionPercentage / 100;
                       const isSkipped = isInPastCycle && !isCompleted;
                       let buttonState = t('start');
                       if (isSkipped) {
@@ -762,15 +761,15 @@ export function TodayScreen({ onDateChange, onOpenSwapDrawer, onOpenAddWorkout, 
                           <View style={styles.intervalCardInner}>
                             <View style={styles.bonusCardLeft}>
                               <Text style={styles.intervalName}>{item.presetName}</Text>
-                              <View style={styles.bonusTypeIconWrap}>
-                                <BonusTypeIcon type={item.type} size={16} />
-                              </View>
+                              {item.status === 'completed' ? (
+                                <IconCheckmark size={16} color={COLORS.successBright} />
+                              ) : (
+                                <Text style={styles.bonusStatusText}>{t('planned')}</Text>
+                              )}
                             </View>
-                            {item.status === 'completed' ? (
-                              <IconCheckmark size={16} color={COLORS.successBright} />
-                            ) : (
-                              <Text style={styles.bonusStatusText}>{t('planned')}</Text>
-                            )}
+                            <View style={styles.bonusTypeIconWrap}>
+                              <BonusTypeIcon type={item.type} size={16} />
+                            </View>
                           </View>
                         </View>
                       </TouchableOpacity>

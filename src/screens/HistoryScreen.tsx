@@ -46,10 +46,10 @@ export function HistoryScreen() {
     const firstWorkout = sortedWorkouts[0];
     const lastWorkout = sortedWorkouts[sortedWorkouts.length - 1];
     
-    // Check if any workout is completed
-    const hasCompletedWorkouts = workouts.some(w => w.status === 'completed');
-    const allCompleted = workouts.every(w => w.status === 'completed');
-    const hasInProgress = workouts.some(w => w.status === 'in_progress');
+    // Check if any workout is completed (status or isLocked so history is correct after ending cycle)
+    const hasCompletedWorkouts = workouts.some(w => w.status === 'completed' || w.isLocked === true);
+    const allCompleted = workouts.every(w => w.status === 'completed' || w.isLocked === true);
+    const hasInProgress = workouts.some(w => w.status === 'in_progress' && !w.isLocked);
     
     // Determine status
     let status: 'active' | 'in_progress' | 'completed';

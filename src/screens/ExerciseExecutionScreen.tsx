@@ -176,11 +176,14 @@ export function ExerciseExecutionScreen() {
       const source = scheduledWorkout?.accessorySnapshot ?? template?.accessoryItems ?? [];
       result = source.map((item: any) => normalizeToDeprecated(item));
     } else if (type === 'main') {
-      const source = scheduledWorkout?.exercisesSnapshot ?? template?.items ?? [];
+      // Read from store so "add exercise" sees the update immediately (subscription can lag)
+      const st = useStore.getState();
+      const sw = st.scheduledWorkouts.find((w: { id: string }) => w.id === workoutKey);
+      const t = st.workoutTemplates.find((t: { id: string }) => t.id === workoutTemplateId);
+      const source = sw?.exercisesSnapshot ?? t?.items ?? [];
       result = source.map((item: any) => {
         const exercise = exercisesLibrary.find(ex => ex.id === item.exerciseId);
-        // Use item.id (template row id) for scheduled workouts so completion setIds match snapshot
-        const id = scheduledWorkout ? item.id : (item.exerciseId ?? item.id);
+        const id = sw ? item.id : (item.exerciseId ?? item.id);
         return {
           id,
           exerciseName: exercise?.name || 'Exercise',
@@ -820,23 +823,34 @@ export function ExerciseExecutionScreen() {
   }, [exerciseGroups, currentRounds]);
 
   // Handler for adding a new exercise to the workout template
-  const handleAddExercise = (exerciseId: string, exerciseName: string) => {
+  const handleAddExercise = async (exerciseId: string, exerciseName: string) => {
     if (!template) return;
-    
+
+    // Use current list from store (snapshot if scheduled, else template) so we append to what's actually shown
+    const st = useStore.getState();
+    const sw = st.scheduledWorkouts.find((w: { id: string }) => w.id === workoutKey);
+    const currentItems = (sw?.exercisesSnapshot ?? st.workoutTemplates.find((t: { id: string }) => t.id === workoutTemplateId)?.items) ?? template.items;
+
     const newItem: WorkoutTemplateExercise = {
       id: `${exerciseId}-${Date.now()}`,
       exerciseId,
-      order: template.items.length,
+      order: currentItems.length,
       sets: 3,
       reps: 10,
       weight: 0,
     };
-    
-    const updatedItems = [...template.items, newItem];
-    updateWorkoutTemplate(workoutTemplateId, { items: updatedItems });
-    setRefreshKey(prev => prev + 1);
+
+    const updatedItems = [...currentItems, newItem];
+    await updateWorkoutTemplate(workoutTemplateId, { items: updatedItems });
+    if (scheduledWorkout) {
+      await updateScheduledWorkoutSnapshots(workoutKey, { exercisesSnapshot: updatedItems });
+    }
     setShowAddExerciseDrawer(false);
-    
+    // Force re-render after store and DOM tick so useMemo sees updated getState()
+    requestAnimationFrame(() => {
+      setRefreshKey(prev => prev + 1);
+    });
+
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
   };
 
@@ -1536,8 +1550,10 @@ export function ExerciseExecutionScreen() {
               // Show feedback
               await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
               
-              // Now navigate to editor
-              if (type === 'warmup') {
+              // Now open swap modal (main) or navigate to editor (warmup/core)
+              if (type === 'main') {
+                setTimeout(() => setShowSwapModal(true), 400);
+              } else if (type === 'warmup') {
                 (navigation as any).navigate('WarmupEditor', { templateId: workoutTemplateId, workoutKey });
               } else if (type === 'core') {
                 (navigation as any).navigate('AccessoriesEditor', { templateId: workoutTemplateId, workoutKey });
@@ -1547,8 +1563,10 @@ export function ExerciseExecutionScreen() {
         ]
       );
     } else {
-      // No sets logged, allow swap directly
-      if (type === 'warmup') {
+      // No sets logged (or main workout): open swap modal or navigate to editor
+      if (type === 'main') {
+        setTimeout(() => setShowSwapModal(true), 400);
+      } else if (type === 'warmup') {
         (navigation as any).navigate('WarmupEditor', { templateId: workoutTemplateId, workoutKey });
       } else if (type === 'core') {
         (navigation as any).navigate('AccessoriesEditor', { templateId: workoutTemplateId, workoutKey });
@@ -1561,7 +1579,14 @@ export function ExerciseExecutionScreen() {
     if (type === 'core') return t('core');
     return template?.name || 'Workout';
   };
-  
+
+  const restTimerMenuLabel = (() => {
+    const s = localRestOverride ?? settings.restTimerDefaultSeconds;
+    const mm = Math.floor(s / 60);
+    const ss = s % 60;
+    return `${mm}:${ss.toString().padStart(2, '0')}`;
+  })();
+
   // Helper function to get ordinal suffix for dates
   const getOrdinalSuffix = (day: number) => {
     if (day > 3 && day < 21) return 'th';
@@ -1583,17 +1608,33 @@ export function ExerciseExecutionScreen() {
     freshWorkoutTemplates.forEach(template => {
       workoutTemplateMap.set(template.id, template);
     });
-    
+    const freshScheduledWorkouts = useStore.getState().scheduledWorkouts;
+
     const detailedWorkoutProgress = getDetailedWorkoutProgress();
     Object.entries(detailedWorkoutProgress).forEach(([wKey, workoutProgress]) => {
-      const wTemplateId = wKey.split('-').slice(0, -3).join('-');
-      const workoutTemplate = workoutTemplateMap.get(wTemplateId);
-      
+      // Resolve template: scheduled workout id is e.g. "sw-1730123456789" — get templateId from scheduled workout
+      let workoutTemplate: any = null;
+      let workoutDate: string = '';
+      if (wKey.startsWith('sw-')) {
+        const sw = freshScheduledWorkouts.find(s => s.id === wKey);
+        if (sw) {
+          workoutTemplate = workoutTemplateMap.get(sw.templateId);
+          workoutDate = sw.date || '';
+        }
+      }
+      if (!workoutTemplate) {
+        const wTemplateId = wKey.split('-').slice(0, -3).join('-');
+        workoutTemplate = workoutTemplateMap.get(wTemplateId);
+      }
       if (!workoutTemplate) return;
-      
+
+      const date = workoutDate || (wKey.match(/(\d{4}-\d{2}-\d{2})/)?.[1] ?? new Date().toISOString().split('T')[0]);
+
       Object.entries(workoutProgress.exercises).forEach(([templateExerciseId, exerciseProgress]) => {
-        const templateExercise = (workoutTemplate.items || (workoutTemplate as any).exercises)?.find((ex: any) => ex.id === templateExerciseId);
-        
+        const templateExercise = (workoutTemplate.items || (workoutTemplate as any).exercises)?.find(
+          (ex: any) => ex.id === templateExerciseId || ex.exerciseId === templateExerciseId
+        );
+
         if (!templateExercise) return;
         
         const exerciseDataById = exercisesLibrary.find(e => e.id === templateExercise.exerciseId);
@@ -1605,12 +1646,9 @@ export function ExerciseExecutionScreen() {
         if (matchesById || matchesByName) {
           if (exerciseProgress.skipped) return;
           
-          const hasCompletedSets = exerciseProgress.sets.some(set => set.completed);
+          const hasCompletedSets = exerciseProgress.sets?.some((set: any) => set.completed);
           
-          if (hasCompletedSets) {
-            const dateMatch = wKey.match(/(\d{4}-\d{2}-\d{2})/);
-            const date = dateMatch ? dateMatch[1] : new Date().toISOString().split('T')[0];
-            
+          if (hasCompletedSets && exerciseProgress.sets) {
             const completedSets = exerciseProgress.sets
               .filter(set => set.completed)
               .map(set => ({
@@ -2569,11 +2607,17 @@ export function ExerciseExecutionScreen() {
                         await updateWorkoutTemplate(workoutTemplateId, { accessoryItems: updatedItems });
                       } else if (type === 'main' && template?.items) {
                         const updatedItems = template.items.map(item =>
-                          item.exerciseId === currentExercise.id ? { ...item, exerciseId } : item
+                          item.id === currentExercise.id || item.exerciseId === currentExercise.id
+                            ? { ...item, exerciseId } : item
                         );
                         await updateWorkoutTemplate(workoutTemplateId, { items: updatedItems });
+                        if (scheduledWorkout) {
+                          await updateScheduledWorkoutSnapshots(workoutKey, { exercisesSnapshot: updatedItems });
+                        }
                       }
-                      cleanupAfterSwap(currentExercise.id, exerciseId);
+                      if (type !== 'main' || !scheduledWorkout) {
+                        cleanupAfterSwap(currentExercise.id, exerciseId);
+                      }
                       setSwapSearchQuery('');
                       setShowSwapModal(false);
                       setRefreshKey(prev => prev + 1);
@@ -2623,11 +2667,17 @@ export function ExerciseExecutionScreen() {
                                   await updateWorkoutTemplate(workoutTemplateId, { accessoryItems: updatedItems });
                                 } else if (type === 'main' && template?.items) {
                                   const updatedItems = template.items.map(item =>
-                                    item.exerciseId === currentExercise.id ? { ...item, exerciseId: newId } : item
+                                    item.id === currentExercise.id || item.exerciseId === currentExercise.id
+                                      ? { ...item, exerciseId: newId } : item
                                   );
                                   await updateWorkoutTemplate(workoutTemplateId, { items: updatedItems });
+                                  if (scheduledWorkout) {
+                                    await updateScheduledWorkoutSnapshots(workoutKey, { exercisesSnapshot: updatedItems });
+                                  }
                                 }
-                                cleanupAfterSwap(currentExercise.id, newId);
+                                if (type !== 'main' || !scheduledWorkout) {
+                                  cleanupAfterSwap(currentExercise.id, newId);
+                                }
                               }
                               setSwapSearchQuery('');
                               setShowSwapModal(false);
@@ -2666,7 +2716,7 @@ export function ExerciseExecutionScreen() {
           type === 'main' ? (allCurrentGroupsComplete ? [
             {
               icon: <IconAddTime size={24} color="#FFFFFF" />,
-              label: `${(() => { const s = localRestOverride ?? settings.restTimerDefaultSeconds; return `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, '0')}`; })()}`,
+              label: restTimerMenuLabel,
               onPress: () => {
                 setShowMenu(false);
                 setTimeout(() => setShowRestTimePicker(true), 350);
@@ -2682,7 +2732,7 @@ export function ExerciseExecutionScreen() {
           ] : [
             {
               icon: <IconAddTime size={24} color="#FFFFFF" />,
-              label: `${(() => { const s = localRestOverride ?? settings.restTimerDefaultSeconds; return `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, '0')}`; })()}`,
+              label: restTimerMenuLabel,
               onPress: () => {
                 setShowMenu(false);
                 setTimeout(() => setShowRestTimePicker(true), 350);
@@ -2694,6 +2744,11 @@ export function ExerciseExecutionScreen() {
               label: t('reset'),
               onPress: handleReset,
               destructive: true,
+            },
+            {
+              icon: <IconSwap size={24} color="#FFFFFF" />,
+              label: t('swap'),
+              onPress: handleSwap,
             },
             {
               icon: <IconCheck size={24} color={COLORS.successBright} checkColor={COLORS.container} />,
@@ -2914,24 +2969,24 @@ export function ExerciseExecutionScreen() {
 }
 
 // Separate component to avoid re-renders on the main screen
-function AddExerciseDrawerContent({ 
-  exercisesLibrary, 
-  onSelect, 
-  onClose 
-}: { 
-  exercisesLibrary: Array<{ id: string; name: string }>; 
-  onSelect: (id: string, name: string) => void; 
+function AddExerciseDrawerContent({
+  exercisesLibrary,
+  onSelect,
+  onClose
+}: {
+  exercisesLibrary: Array<{ id: string; name: string }>;
+  onSelect: (id: string, name: string) => void | Promise<void>;
   onClose: () => void;
 }) {
   const { t } = useTranslation();
   const [searchQuery, setSearchQuery] = useState('');
-  
+
   const filteredExercises = useMemo(() => {
     if (!searchQuery.trim()) return exercisesLibrary;
     const lowerQuery = searchQuery.toLowerCase();
     return exercisesLibrary.filter(ex => ex.name.toLowerCase().includes(lowerQuery));
   }, [searchQuery, exercisesLibrary]);
-  
+
   return (
     <View style={addExerciseStyles.container}>
       <View style={addExerciseStyles.header}>
@@ -2940,7 +2995,7 @@ function AddExerciseDrawerContent({
           <Text style={addExerciseStyles.cancelText}>{t('cancel')}</Text>
         </TouchableOpacity>
       </View>
-      
+
       <View style={addExerciseStyles.searchContainer}>
         <TextInput
           style={addExerciseStyles.searchInput}
@@ -2952,7 +3007,7 @@ function AddExerciseDrawerContent({
           autoCorrect={false}
         />
       </View>
-      
+
       <FlatList
         data={filteredExercises}
         keyExtractor={(item) => item.id}
@@ -2961,9 +3016,9 @@ function AddExerciseDrawerContent({
         renderItem={({ item }) => (
           <TouchableOpacity
             style={addExerciseStyles.exerciseItem}
-            onPress={() => {
+            onPress={async () => {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              onSelect(item.id, item.name);
+              await onSelect(item.id, item.name);
             }}
             activeOpacity={0.7}
           >

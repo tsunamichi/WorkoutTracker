@@ -65,6 +65,7 @@ interface WorkoutStore {
   clearAllHistory: () => Promise<void>;
   recoverCompletedWorkouts: () => Promise<{ success: boolean; sessionsCreated: number; workoutsProcessed: number; error?: string }>;
   recoverCompletionFromSessions: () => Promise<{ recovered: number; details: string[] }>;
+  recoverCompletionFromDetailedProgress: () => Promise<{ recovered: number; details: string[] }>;
   
   // NEW: Detailed workout progress
   detailedWorkoutProgress: Record<string, WorkoutProgress>;
@@ -152,6 +153,7 @@ interface WorkoutStore {
   listDatesInRange: (start: string, endExclusive: string) => string[];
   // Cycle Management v1
   endCyclePlan: (planId: string) => Promise<void>;
+  reactivateCyclePlan: (planId: string) => Promise<void>;
   deleteCyclePlan: (planId: string) => Promise<void>;
   deleteCyclePlanCompletely: (planId: string) => Promise<void>;
   pauseShiftCyclePlan: (planId: string, resumeDate: string, resolutionMap?: ConflictResolutionMap) => Promise<{ success: boolean; conflicts?: ConflictItem[] }>;
@@ -1272,6 +1274,12 @@ export const useStore = create<WorkoutStore>((set, get) => ({
       } catch (error) {
         console.error('Error recovering completion from sessions:', error);
       }
+      // Recover completed state from detailedWorkoutProgress so past workouts show as completed (not skipped)
+      try {
+        await get().recoverCompletionFromDetailedProgress();
+      } catch (error) {
+        console.error('Error recovering completion from detailed progress:', error);
+      }
 
       // Initialize cloud backup service (after data is loaded)
       try {
@@ -1872,6 +1880,72 @@ export const useStore = create<WorkoutStore>((set, get) => ({
       console.log('ℹ️ No workouts needed recovery');
     }
 
+    return { recovered, details };
+  },
+
+  /** Recover completed state from detailedWorkoutProgress so past workouts show as completed (not skipped) after ending a cycle. */
+  recoverCompletionFromDetailedProgress: async () => {
+    console.log('🔧 Recovering completion from detailedWorkoutProgress...');
+    const scheduledWorkouts = [...get().scheduledWorkouts];
+    const detailedProgress = get().detailedWorkoutProgress;
+    const details: string[] = [];
+    let recovered = 0;
+
+    for (const sw of scheduledWorkouts) {
+      if (sw.isLocked || sw.status === 'completed') continue;
+      const progress = detailedProgress[sw.id];
+      if (!progress) continue;
+
+      const snapshot = sw.exercisesSnapshot || [];
+      let totalSets = 0;
+      snapshot.forEach((item: any) => {
+        if (Array.isArray(item.sets)) totalSets += item.sets.length;
+        else if (typeof item.sets === 'number') totalSets += item.sets;
+      });
+      if (totalSets === 0) continue;
+
+      const percentage = get().getWorkoutCompletionPercentage(sw.id, totalSets);
+      if (percentage < 100) continue;
+
+      // Build mainCompletion.completedItems from progress so getMainCompletion returns 100%
+      const completedItems: string[] = [];
+      snapshot.forEach((item: any) => {
+        const itemId = item.id;
+        const exerciseProgress = progress.exercises[itemId] || progress.exercises[item.exerciseId];
+        if (!exerciseProgress?.sets) return;
+        const numSets = typeof item.sets === 'number' ? item.sets : (item.sets?.length ?? 0);
+        for (let i = 0; i < numSets; i++) {
+          if (exerciseProgress.sets[i]?.completed) {
+            completedItems.push(`${itemId}-set-${i}`);
+          }
+        }
+      });
+
+      const existingCompleted = sw.mainCompletion?.completedItems?.length ?? 0;
+      if (completedItems.length >= totalSets && (existingCompleted < totalSets || !sw.mainCompletion?.completedItems?.length)) {
+        const swIdx = scheduledWorkouts.findIndex(s => s.id === sw.id);
+        if (swIdx < 0) continue;
+        scheduledWorkouts[swIdx] = {
+          ...sw,
+          mainCompletion: { ...(sw.mainCompletion || {}), completedItems },
+          status: 'completed' as const,
+          isLocked: true,
+          completedAt: sw.completedAt || new Date().toISOString(),
+        };
+        const msg = `Recovered ${sw.titleSnapshot || sw.id} (${sw.date}) from progress — ${completedItems.length}/${totalSets} sets`;
+        details.push(msg);
+        console.log('✅', msg);
+        recovered++;
+      }
+    }
+
+    if (recovered > 0) {
+      set({ scheduledWorkouts });
+      await storage.saveScheduledWorkouts(scheduledWorkouts);
+      console.log(`🎉 Recovery from progress: ${recovered} workouts restored`);
+    } else {
+      console.log('ℹ️ No workouts needed recovery from progress');
+    }
     return { recovered, details };
   },
   
@@ -2686,6 +2760,18 @@ export const useStore = create<WorkoutStore>((set, get) => ({
     set({ cyclePlans: plans, scheduledWorkouts });
     await storage.saveCyclePlans(plans);
     await storage.saveScheduledWorkouts(scheduledWorkouts);
+  },
+
+  /** Make an ended cycle active again (for testing or re-use). Does not re-add future workouts. */
+  reactivateCyclePlan: async (planId) => {
+    const plan = get().cyclePlans.find(p => p.id === planId);
+    if (!plan) return;
+    const now = new Date().toISOString();
+    const plans = get().cyclePlans.map(p =>
+      p.id === planId ? { ...p, active: true, endedAt: undefined, updatedAt: now } : p
+    );
+    set({ cyclePlans: plans });
+    await storage.saveCyclePlans(plans);
   },
 
   deleteCyclePlan: async (planId) => {
@@ -3626,7 +3712,8 @@ export const useStore = create<WorkoutStore>((set, get) => ({
     if (!workout) return { completedItems: [], totalItems: 0, percentage: 0 };
     let totalSets = 0;
     (workout.exercisesSnapshot || []).forEach((item: any) => {
-      if (typeof item.sets === 'number') totalSets += item.sets;
+      if (Array.isArray(item.sets)) totalSets += item.sets.length;
+      else if (typeof item.sets === 'number') totalSets += item.sets;
     });
     const completedItems = workout.mainCompletion?.completedItems || [];
     let percentage = 0;

@@ -154,7 +154,7 @@ export function PlanHistoryDetailScreen({ route, navigation }: PlanHistoryDetail
   };
 
   // Calculate overall plan completion
-  const completedWorkouts = planWorkouts.filter(w => w.status === 'completed').length;
+  const completedWorkouts = planWorkouts.filter(w => w.status === 'completed' || w.isLocked === true).length;
   const totalWorkouts = planWorkouts.length;
   const overallProgress = totalWorkouts > 0 ? Math.round((completedWorkouts / totalWorkouts) * 100) : 0;
 
@@ -198,8 +198,8 @@ export function PlanHistoryDetailScreen({ route, navigation }: PlanHistoryDetail
           showsVerticalScrollIndicator={false}
         >
           {planWorkouts.map((workout, workoutIndex) => {
-            const isCompleted = workout.status === 'completed';
-            const isActive = workout.status !== 'completed';
+            const isCompleted = workout.status === 'completed' || workout.isLocked === true;
+            const isActive = !isCompleted;
             const exercises = workout.exercisesSnapshot || [];
 
             // Check if workout has any completed sets

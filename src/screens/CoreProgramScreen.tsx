@@ -611,7 +611,7 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.accentPrimaryDimmed,
     marginBottom: 8,
   },
-  upNextBadgeText: { ...TYPOGRAPHY.meta, fontWeight: '700', color: COLORS.accentPrimary },
+  upNextBadgeText: { ...TYPOGRAPHY.meta, fontWeight: '600', color: COLORS.accentPrimary },
   sessionCardName: { ...TYPOGRAPHY.h3, color: COLORS.text, marginBottom: 8 },
   sessionCardSkipped: { opacity: 0.6 },
   sessionCardExercises: { marginBottom: 0 },
@@ -628,7 +628,7 @@ const styles = StyleSheet.create({
     borderRadius: BORDER_RADIUS.lg,
     backgroundColor: COLORS.accentPrimary,
   },
-  createButtonText: { ...TYPOGRAPHY.body, fontWeight: '700', color: COLORS.backgroundCanvas },
+  createButtonText: { ...TYPOGRAPHY.body, fontWeight: '600', color: COLORS.backgroundCanvas },
   finishedState: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: SPACING.xxl },
   finishedTitle: { ...TYPOGRAPHY.h3, color: COLORS.text, marginBottom: SPACING.xl, textAlign: 'center' },
   restartButton: {
@@ -637,7 +637,7 @@ const styles = StyleSheet.create({
     borderRadius: BORDER_RADIUS.lg,
     backgroundColor: COLORS.accentPrimary,
   },
-  restartButtonText: { ...TYPOGRAPHY.body, fontWeight: '700', color: COLORS.backgroundCanvas },
+  restartButtonText: { ...TYPOGRAPHY.body, fontWeight: '600', color: COLORS.backgroundCanvas },
   sheetContent: { paddingHorizontal: SPACING.xxl, paddingTop: SPACING.lg, paddingBottom: SPACING.xxl },
   sheetTitle: { ...TYPOGRAPHY.h3, color: COLORS.text, marginBottom: SPACING.md },
   sheetRow: {
@@ -650,7 +650,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.lg,
     marginBottom: SPACING.sm,
   },
-  sheetRowText: { ...TYPOGRAPHY.body, color: COLORS.text, fontWeight: '700' },
+  sheetRowText: { ...TYPOGRAPHY.body, color: COLORS.text, fontWeight: '600' },
   drawerRow: {
     flexDirection: 'row',
     gap: SPACING.md,
@@ -675,7 +675,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  drawerItemText: { ...TYPOGRAPHY.body, color: COLORS.text, fontWeight: '700', textAlign: 'center' },
+  drawerItemText: { ...TYPOGRAPHY.body, color: COLORS.text, fontWeight: '600', textAlign: 'center' },
   drawerItemDanger: {},
   editLabel: { ...TYPOGRAPHY.meta, color: COLORS.textMeta, marginTop: 12, marginBottom: 4 },
   editInput: {

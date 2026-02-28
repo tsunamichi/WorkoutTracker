@@ -5,11 +5,12 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useStore } from '../store';
 import { formatWeightForLoad } from '../utils/weight';
 import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS, CARDS } from '../constants';
-import { IconArrowLeft, IconMenu, IconShare, IconTrash, IconCheck } from '../components/icons';
+import { IconArrowLeft, IconMenu, IconShare, IconTrash, IconCheck, IconPlay } from '../components/icons';
 import { ActionSheet } from '../components/common/ActionSheet';
 import { BottomDrawer } from '../components/common/BottomDrawer';
 import type { ScheduledWorkout, WorkoutTemplateExercise } from '../types/training';
 import type { ExerciseProgress } from '../types';
+import * as Haptics from 'expo-haptics';
 import dayjs from 'dayjs';
 import isoWeek from 'dayjs/plugin/isoWeek';
 import { useTranslation } from '../i18n/useTranslation';
@@ -35,6 +36,7 @@ export function CycleDetailScreen({ route, navigation }: CycleDetailScreenProps)
     settings,
     detailedWorkoutProgress,
     getMainCompletion,
+    reactivateCyclePlan,
   } = useStore();
   const { t } = useTranslation();
   const useKg = settings.useKg;
@@ -91,6 +93,13 @@ export function CycleDetailScreen({ route, navigation }: CycleDetailScreenProps)
     const progress = detailedWorkoutProgress[workoutKey];
     if (!progress?.exercises?.[exerciseId]) return null;
     return progress.exercises[exerciseId];
+  };
+
+  const handleMakeActiveAgain = async () => {
+    setMenuVisible(false);
+    if (!cyclePlan || cyclePlan.active) return;
+    await reactivateCyclePlan(cycleId);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
   };
 
   const handleExportData = async () => {
@@ -180,6 +189,13 @@ export function CycleDetailScreen({ route, navigation }: CycleDetailScreenProps)
         visible={menuVisible}
         onClose={() => setMenuVisible(false)}
         items={[
+          ...(cyclePlan && !cyclePlan.active
+            ? [{
+                icon: <IconPlay size={24} color={COLORS.accentPrimary} />,
+                label: 'Make active again',
+                onPress: handleMakeActiveAgain,
+              }]
+            : []),
           {
             icon: <IconShare size={24} color={COLORS.text} />,
             label: t('exportData'),

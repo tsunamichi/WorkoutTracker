@@ -1,5 +1,5 @@
 ---
-description: MUST clear cache after every code/UI change so the user sees updates in the simulator.
+description: MUST clear cache and reload after every code/UI change so the user sees updates. Do this automatically—do not wait for the user to say they don't see changes.
 globs: 
   - "**/*.tsx"
   - "**/*.ts"
@@ -7,18 +7,28 @@ globs:
   - "**/*.js"
 ---
 
-# MUST clear cache after every change
+# See changes: clear cache + reload (every time)
 
-**You MUST clear the cache every time** you make a code or UI change to the WorkoutTracker app. Do not skip this.
+**After every code or UI change**, do the following so the user sees updates without having to ask. Do not skip this; do not wait for "I don't see the changes."
 
-1. From the **project root** (`WorkoutTracker`), run:
-   ```bash
-   lsof -ti :8081 | xargs kill -9 2>/dev/null; rm -rf node_modules/.cache .expo/cache $TMPDIR/metro-* $TMPDIR/haste-* 2>/dev/null; npm run start:fresh
-   ```
-2. Run it in the **background** so the dev server stays up.
-3. Tell the user the cache was cleared, the server is running with a fresh bundle, and to **reload the app** in the simulator (**Cmd+R** or force quit and reopen).
+## 1. Kill Metro and clear caches (from project root)
 
-If the workspace is `WorkoutTracker/ios`, use:
-`cd /Users/fcasanov/Projects/WorkoutTracker && lsof -ti :8081 | xargs kill -9 2>/dev/null; rm -rf node_modules/.cache .expo/cache $TMPDIR/metro-* $TMPDIR/haste-* 2>/dev/null; npm run start:fresh`
+If the workspace is `WorkoutTracker/ios`, use the full path. Otherwise run from repo root.
 
-No exceptions: clear cache after every change.
+```bash
+cd /Users/fcasanov/Projects/WorkoutTracker && lsof -ti :8081 | xargs kill -9 2>/dev/null; rm -rf node_modules/.cache .expo/cache $TMPDIR/metro-* $TMPDIR/haste-* 2>/dev/null; npx expo start --clear --port 8081
+```
+
+Run that command **in the background** so the dev server stays up.
+
+## 2. Tell the user
+
+Say: "Cache cleared and Metro restarted with a fresh bundle. Reload the app in the simulator (**Cmd+R**) to see the changes."
+
+If they run the app via `expo run:ios`, they can press **r** in the Metro terminal to reload, or **Cmd+R** in the simulator.
+
+## 3. Project root
+
+All JS/TS source lives under **WorkoutTracker** (the folder with `package.json` and `src/`). The **ios** folder is native only. Always run Metro and npm from **WorkoutTracker**, not from **WorkoutTracker/ios**.
+
+No exceptions: after any edit to app code, clear cache, start Metro, and tell the user to reload.

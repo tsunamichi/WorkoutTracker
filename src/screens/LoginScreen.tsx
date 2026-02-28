@@ -213,7 +213,7 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 34,
-    fontWeight: '700',
+    fontWeight: '600',
     color: COLORS.text,
     textAlign: 'center',
     marginBottom: SPACING.lg,

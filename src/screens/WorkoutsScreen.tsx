@@ -452,7 +452,7 @@ const styles = StyleSheet.create({
   dashedCreateText: {
     ...TYPOGRAPHY.meta,
     color: COLORS.text,
-    fontWeight: '700',
+    fontWeight: '600',
   },
   emptyState: {
     alignItems: 'center',
@@ -510,7 +510,7 @@ const styles = StyleSheet.create({
   activePillText: {
     ...TYPOGRAPHY.meta,
     color: 'rgba(52, 199, 89, 0.95)',
-    fontWeight: '700',
+    fontWeight: '600',
   },
   archivedPill: {
     paddingHorizontal: 8,
@@ -523,7 +523,7 @@ const styles = StyleSheet.create({
   archivedPillText: {
     ...TYPOGRAPHY.meta,
     color: 'rgba(255, 149, 0, 0.9)',
-    fontWeight: '700',
+    fontWeight: '600',
   },
   actionSheet: {
     paddingHorizontal: SPACING.xxl,
@@ -549,6 +549,6 @@ const styles = StyleSheet.create({
   actionText: {
     ...TYPOGRAPHY.body,
     color: COLORS.text,
-    fontWeight: '700',
+    fontWeight: '600',
   },
 });

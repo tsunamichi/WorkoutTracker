@@ -1,0 +1,12 @@
+---
+description: Use font weight 600 for bold text everywhere. Never use 700.
+globs: 
+  - "**/*.tsx"
+  - "**/*.ts"
+---
+
+# Bold = 600 only
+
+- **Bold text** in the app must use `fontWeight: '600'`.
+- **Never use** `fontWeight: '700'` or `fontWeight: 700`.
+- Prefer `TYPOGRAPHY.metaBold` or `TYPOGRAPHY.bodyBold` when possible (they use 600).

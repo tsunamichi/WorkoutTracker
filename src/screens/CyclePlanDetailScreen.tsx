@@ -41,6 +41,7 @@ export function CyclePlanDetailScreen() {
   const {
     cyclePlans,
     endCyclePlan,
+    reactivateCyclePlan,
     deleteCyclePlan,
     pauseShiftCyclePlan,
     duplicateCyclePlan,
@@ -154,7 +155,14 @@ export function CyclePlanDetailScreen() {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
   };
 
+  const handleReactivateCycle = async () => {
+    setMenuVisible(false);
+    await reactivateCyclePlan(planId);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+  };
+
   const isActiveOrPaused = status === 'active' || status === 'paused';
+  const isEnded = status === 'ended_early';
   const actionSheetItems = [
     ...(isActiveOrPaused
       ? [
@@ -163,6 +171,9 @@ export function CyclePlanDetailScreen() {
             ? [{ icon: <IconPause size={20} color={COLORS.text} />, label: 'Pause / Shift', onPress: handlePauseShift }]
             : [{ icon: <IconPlay size={20} color={COLORS.text} />, label: 'Resume', onPress: handleResumeCycle }]),
         ]
+      : []),
+    ...(isEnded
+      ? [{ icon: <IconPlay size={20} color={COLORS.accentPrimary} />, label: 'Make active again', onPress: handleReactivateCycle }]
       : []),
     { icon: <IconTrash size={20} color={COLORS.error} />, label: t('delete'), onPress: handleDeleteCycle, destructive: true as const },
   ].filter(Boolean) as { icon: React.ReactNode; label: string; onPress: () => void; destructive?: boolean }[];
