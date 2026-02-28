@@ -9,6 +9,7 @@ export { IconCheck } from './IconCheck';
 export { IconCheckmark } from './IconCheckmark';
 export { IconChevronDown } from './IconChevronDown';
 export { IconClose } from './IconClose';
+export { IconCore } from './IconCore';
 export { IconMinus } from './IconMinus';
 export { IconMinusLine } from './IconMinusLine';
 export { IconEdit } from './IconEdit';
@@ -35,6 +36,7 @@ export { IconSwap } from './IconSwap';
 export { IconTrash } from './IconTrash';
 export { IconTriangle } from './IconTriangle';
 export { IconUser } from './IconUser';
+export { IconWarmup } from './IconWarmup';
 export { IconWorkouts } from './IconWorkouts';
 export { IconX } from './IconX';
 

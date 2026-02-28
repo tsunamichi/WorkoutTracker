@@ -6,7 +6,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { useStore } from '../store';
 import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS, CARDS } from '../constants';
-import { IconCheckmark, IconSwap, IconAdd, IconSettings, IconCalendar, IconPause, IconPlay } from '../components/icons';
+import { IconCheckmark, IconSwap, IconAdd, IconSettings, IconCalendar, IconPause, IconPlay, IconCore, IconWarmup, IconStopwatch } from '../components/icons';
 import { ExpandableCalendarStrip } from '../components/calendar/ExpandableCalendarStrip';
 import { DiagonalLinePattern } from '../components/common/DiagonalLinePattern';
 import { CycleControlSheet } from '../components/CycleControlSheet';
@@ -491,9 +491,14 @@ export function TodayScreen({ onDateChange, onOpenSwapDrawer, onOpenAddWorkout, 
             />
           </View>
             
-            {/* Day Detail Content */}
+            {/* Day Detail Content - scrollable when bonus list is long */}
             {(
-              <View style={styles.content}>
+              <ScrollView
+                style={styles.contentScroll}
+                contentContainerStyle={[styles.contentScrollContent, { paddingBottom: insets.bottom + 56 }]}
+                showsVerticalScrollIndicator={true}
+                keyboardShouldPersistTaps="handled"
+              >
                 {/* Workout Content Wrapper - Fixed height for consistent Intervals positioning */}
                 <View style={styles.workoutContentWrapper}>
                 <View style={styles.cardsContainer}>
@@ -679,8 +684,8 @@ export function TodayScreen({ onDateChange, onOpenSwapDrawer, onOpenAddWorkout, 
                     </TouchableOpacity>
                   )
                 ) : (
-                  /* Only show Add Workout when there is an active cycle but this day has no workout (e.g. rest day). When no cycles, we already show "Create new one" above. */
-                  !dayjs(selectedDate).isBefore(today, 'day') && activeCyclePlan && !selectedDay?.scheduledWorkout ? (
+                  /* Only show Add Workout when the selected date is in an active cycle (rest day). When no cycles in progress, only "Create new one" is shown above. */
+                  !dayjs(selectedDate).isBefore(today, 'day') && activeCyclePlan && selectedDateCyclePlan?.active && !selectedDay?.scheduledWorkout ? (
                     <TouchableOpacity
                       style={styles.addWorkoutButton}
                       onPress={() => handleAddOrCreateWorkout(selectedDate)}
@@ -691,6 +696,7 @@ export function TodayScreen({ onDateChange, onOpenSwapDrawer, onOpenAddWorkout, 
                     </TouchableOpacity>
                   ) : null
                 )}
+              </View>
               </View>
               </View>
               
@@ -708,12 +714,28 @@ export function TodayScreen({ onDateChange, onOpenSwapDrawer, onOpenAddWorkout, 
                 const hasMore = bonusItems.length > BONUS_COLLAPSED_MAX;
                 const visibleItems = bonusExpanded ? bonusItems : bonusItems.slice(0, BONUS_COLLAPSED_MAX);
 
-                const typeLabel = (type: BonusType) =>
-                  type === 'timer' ? t('timer') : type === 'warmup' ? t('warmUp') : t('core');
+                const BonusTypeIcon = ({ type, size = 16 }: { type: BonusType; size?: number }) => {
+                  if (type === 'timer') return <IconStopwatch size={size} color={COLORS.textMeta} />;
+                  if (type === 'warmup') return <IconWarmup size={size} color={COLORS.textMeta} />;
+                  return <IconCore size={size} color={COLORS.textMeta} />;
+                };
                 
                 return (
                   <View style={styles.bonusSection}>
-                    <Text style={styles.intervalsSectionTitle}>{t('bonus')}</Text>
+                    <View style={styles.bonusSectionHeader}>
+                      <Text style={styles.intervalsSectionTitle}>{t('bonus')}</Text>
+                      {hasMore && (
+                        <TouchableOpacity
+                          onPress={() => setBonusExpanded(!bonusExpanded)}
+                          activeOpacity={0.7}
+                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                        >
+                          <Text style={styles.bonusShowAllText}>
+                            {bonusExpanded ? 'Show less' : `Show all (${bonusItems.length})`}
+                          </Text>
+                        </TouchableOpacity>
+                      )}
+                    </View>
                     {bonusItems.length === 0 && isPastDay && (
                       <Text style={styles.noIntervalsText}>{t('noBonusPerformedThisDay')}</Text>
                     )}
@@ -740,7 +762,9 @@ export function TodayScreen({ onDateChange, onOpenSwapDrawer, onOpenAddWorkout, 
                           <View style={styles.intervalCardInner}>
                             <View style={styles.bonusCardLeft}>
                               <Text style={styles.intervalName}>{item.presetName}</Text>
-                              <Text style={styles.bonusTypeMeta}>{typeLabel(item.type)}</Text>
+                              <View style={styles.bonusTypeIconWrap}>
+                                <BonusTypeIcon type={item.type} size={16} />
+                              </View>
                             </View>
                             {item.status === 'completed' ? (
                               <IconCheckmark size={16} color={COLORS.successBright} />
@@ -751,18 +775,6 @@ export function TodayScreen({ onDateChange, onOpenSwapDrawer, onOpenAddWorkout, 
                         </View>
                       </TouchableOpacity>
                     ))}
-                    
-                    {hasMore && (
-                      <TouchableOpacity
-                        style={styles.addIntervalButton}
-                        onPress={() => setBonusExpanded(!bonusExpanded)}
-                        activeOpacity={0.7}
-                      >
-                        <Text style={styles.addIntervalButtonText}>
-                          {bonusExpanded ? 'Show less' : `Show all (${bonusItems.length})`}
-                        </Text>
-                      </TouchableOpacity>
-                    )}
                     
                     {bonusItems.length > 0 && isToday && (
                       <TouchableOpacity
@@ -778,8 +790,7 @@ export function TodayScreen({ onDateChange, onOpenSwapDrawer, onOpenAddWorkout, 
                 );
               })()}
               
-              </View>
-              </View>
+              </ScrollView>
             )}
             
         </SafeAreaView>
@@ -862,6 +873,13 @@ const styles = StyleSheet.create({
     flex: 1,
     padding: SPACING.xxl,
   },
+  contentScroll: {
+    flex: 1,
+  },
+  contentScrollContent: {
+    padding: SPACING.xxl,
+    paddingBottom: SPACING.xxl,
+  },
   workoutContentWrapper: {
     // Wrapper contains cardsContainer
   },
@@ -923,7 +941,7 @@ const styles = StyleSheet.create({
     borderBottomLeftRadius: 24,
     borderBottomRightRadius: 24,
     paddingBottom: SPACING.xs,
-    marginBottom: SPACING.md,
+    marginBottom: 4,
   },
   topBar: {
     flexDirection: 'row',
@@ -1204,7 +1222,7 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.accentPrimaryDimmed,
   },
   startButtonFuture: {
-    backgroundColor: 'transparent',
+    backgroundColor: COLORS.accentPrimaryDimmed,
   },
   startButtonText: {
     ...TYPOGRAPHY.metaBold,
@@ -1264,7 +1282,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   createCycleButtonText: {
-    ...TYPOGRAPHY.body,
+    ...TYPOGRAPHY.bodyBold,
     color: COLORS.accentPrimary,
   },
   restDayQuestionBlack: {
@@ -1311,11 +1329,20 @@ const styles = StyleSheet.create({
   },
   
   // Intervals / Bonus Section
+  bonusSectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: SPACING.md,
+  },
   intervalsSectionTitle: {
     ...TYPOGRAPHY.meta,
     color: COLORS.text,
     textTransform: 'uppercase',
-    marginBottom: SPACING.md,
+  },
+  bonusShowAllText: {
+    ...TYPOGRAPHY.metaBold,
+    color: COLORS.accentPrimary,
   },
   addIntervalCardButton: {
     width: '100%',
@@ -1378,6 +1405,9 @@ const styles = StyleSheet.create({
     ...TYPOGRAPHY.meta,
     color: COLORS.textMeta,
     marginTop: 2,
+  },
+  bonusTypeIconWrap: {
+    marginTop: 4,
   },
   bonusStatusText: {
     ...TYPOGRAPHY.meta,

@@ -1071,7 +1071,7 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   secondaryButtonText: {
-    ...TYPOGRAPHY.body,
+    ...TYPOGRAPHY.bodyBold,
     color: COLORS.accentPrimary,
   },
   tertiaryLink: {

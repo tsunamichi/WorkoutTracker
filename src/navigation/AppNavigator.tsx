@@ -40,7 +40,7 @@ import { CreateCycleFlow } from '../screens/manualCycle/CreateCycleFlow';
 import { CreateCycleDayEditor } from '../screens/manualCycle/CreateCycleDayEditor';
 import { AIWorkoutCreationScreen } from '../screens/AIWorkoutCreationScreen';
 import { WorkoutCreationOptionsScreen } from '../screens/WorkoutCreationOptionsScreen';
-import { IconCalendar, IconHistory, IconSwap, IconAdd, IconStopwatch, IconPlay, IconRestart } from '../components/icons';
+import { IconCalendar, IconHistory, IconSwap, IconAdd, IconStopwatch, IconPlay, IconCore, IconWarmup } from '../components/icons';
 import { COLORS, TYPOGRAPHY, SPACING, CARDS, BORDER_RADIUS } from '../constants';
 import { useStore } from '../store';
 import { CycleTemplateId } from '../types/workout';
@@ -714,8 +714,8 @@ function TabNavigator() {
             <View style={styles.bonusDrawerRow}>
               {([
                 { type: 'timer' as const, icon: <IconStopwatch size={22} color={COLORS.text} />, label: t('timer') },
-                { type: 'warmup' as const, icon: <IconPlay size={22} color={COLORS.text} />, label: t('warmUp') },
-                { type: 'core' as const, icon: <IconRestart size={22} color={COLORS.text} />, label: t('core') },
+                { type: 'warmup' as const, icon: <IconWarmup size={22} color={COLORS.text} />, label: t('warmUp') },
+                { type: 'core' as const, icon: <IconCore size={22} color={COLORS.text} />, label: t('core') },
               ]).map(({ type, icon, label }) => (
                 <Pressable
                   key={type}

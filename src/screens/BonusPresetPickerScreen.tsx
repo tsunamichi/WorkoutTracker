@@ -85,6 +85,7 @@ export function BonusPresetPickerScreen({ navigation, route }: Props) {
     addBonusLog,
     setPendingCorePresetForProgram,
     getActiveCoreProgram,
+    getCoreSessionsByGroup,
     getUpNextCoreSession,
     getCoreCompletedCount,
     createDefaultCoreProgram,
@@ -99,34 +100,34 @@ export function BonusPresetPickerScreen({ navigation, route }: Props) {
   const [addCoreDrawerVisible, setAddCoreDrawerVisible] = useState(false);
 
   const presets: PresetOption[] = useMemo(() => {
-    const standalone = bonusType === 'warmup'
-      ? warmupPresets.map(p => ({ id: p.id, name: p.name, itemCount: p.items.length, items: p.items }))
-      : corePresets.map(p => ({ id: p.id, name: p.name, itemCount: p.items.length, items: p.items }));
+    if (bonusType === 'warmup') {
+      // Warm up: only show builtin Upper and Legs
+      return Object.entries(BUILTIN_WARMUP_TEMPLATES).map(([key, tmpl]) => ({
+        id: `builtin-${key}`,
+        name: tmpl.name,
+        itemCount: tmpl.items.length,
+      }));
+    }
 
-    const fromTemplates = workoutTemplates
-      .filter(wt => {
-        const items = bonusType === 'warmup' ? wt.warmupItems : wt.accessoryItems;
-        return items && items.length > 0;
-      })
-      .map(wt => {
-        const items = (bonusType === 'warmup' ? wt.warmupItems : wt.accessoryItems) as ExerciseInstanceWithCycle[];
-        return {
-          id: `wt-${wt.id}`,
-          name: wt.name,
-          itemCount: items.length,
-          items,
-        };
-      });
+    // Core: only show the active program's sessions (Day A, B, C, D, E, F) when a program exists
+    if (activeProgram) {
+      const { A, B } = getCoreSessionsByGroup(activeProgram.id);
+      const orderedSessions = [...A, ...B];
+      return orderedSessions.map(s => ({
+        id: s.id,
+        name: s.name,
+        itemCount: s.items?.length ?? 0,
+        items: s.items ?? [],
+      }));
+    }
 
-    const builtinTemplates = bonusType === 'warmup' ? BUILTIN_WARMUP_TEMPLATES : BUILTIN_CORE_TEMPLATES;
-    const builtins: PresetOption[] = Object.entries(builtinTemplates).map(([key, tmpl]) => ({
+    // No active core program: show builtin Day A–F so user can still add core bonus
+    return Object.entries(BUILTIN_CORE_TEMPLATES).map(([key, tmpl]) => ({
       id: `builtin-${key}`,
       name: tmpl.name,
       itemCount: tmpl.items.length,
     }));
-
-    return [...standalone, ...fromTemplates, ...builtins];
-  }, [bonusType, warmupPresets, corePresets, workoutTemplates]);
+  }, [bonusType, activeProgram, getCoreSessionsByGroup]);
 
   const handleSelect = async (preset: PresetOption) => {
     let items: ExerciseInstanceWithCycle[] = [];
@@ -281,7 +282,10 @@ export function BonusPresetPickerScreen({ navigation, route }: Props) {
                     key={preset.id}
                     onPress={() => handleSelect(preset)}
                     onLongPress={() => {
-                      if (!preset.id.startsWith('wt-')) {
+                      const isUserPreset = bonusType === 'warmup'
+                        ? warmupPresets.some(p => p.id === preset.id)
+                        : corePresets.some(p => p.id === preset.id);
+                      if (isUserPreset && !preset.id.startsWith('wt-')) {
                         Alert.alert(
                           preset.name,
                           'What would you like to do?',
