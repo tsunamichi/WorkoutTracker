@@ -126,6 +126,28 @@ export function CoreProgramScreen() {
     );
   };
 
+  const handleResetCycle = () => {
+    if (!program) return;
+    const currentCycle = Math.ceil(program.currentWeekIndex / 2);
+    const startWeekOfCycle = (currentCycle - 1) * 2 + 1;
+    const alreadyAtStart = program.currentWeekIndex === startWeekOfCycle && program.currentSessionIndexWithinGroup === 0;
+    if (alreadyAtStart) return;
+    setProgramMenuVisible(false);
+    Alert.alert(
+      'Reset',
+      'Go back to the start of the current 2-week cycle? Your logs will remain.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Reset', onPress: async () => {
+          await updateCoreProgram(program.id, {
+            currentWeekIndex: startWeekOfCycle,
+            currentSessionIndexWithinGroup: 0,
+          });
+        } },
+      ]
+    );
+  };
+
   const openEditSheet = () => {
     setProgramMenuVisible(false);
     if (program) {
@@ -479,6 +501,12 @@ export function CoreProgramScreen() {
                 <IconEdit size={24} color={COLORS.text} />
               </View>
               <Text style={styles.drawerItemText}>Edit</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[styles.drawerItem, styles.drawerItemStacked]} onPress={handleResetCycle} activeOpacity={0.85}>
+              <View style={styles.drawerItemIconWrap}>
+                <IconRestart size={24} color={COLORS.text} />
+              </View>
+              <Text style={styles.drawerItemText}>Reset</Text>
             </TouchableOpacity>
             <TouchableOpacity style={[styles.drawerItem, styles.drawerItemStacked, styles.drawerItemDanger]} onPress={handleDeleteProgram} activeOpacity={0.85}>
               <View style={styles.drawerItemIconWrap}>
