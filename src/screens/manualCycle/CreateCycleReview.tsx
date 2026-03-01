@@ -160,6 +160,8 @@ export function CreateCycleReview({ navigation }: CreateCycleReviewProps) {
           sets: week0Settings.sets ?? 3,
           reps: parseInt(week0Settings.reps || '8', 10),
           weight: week0Settings.weight,
+          isTimeBased: week0Settings.isTimeBased ?? false,
+          isPerSide: exerciseBlock.isPerSide ?? false,
           restSeconds: undefined,
         };
       });

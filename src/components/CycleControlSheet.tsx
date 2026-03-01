@@ -325,8 +325,9 @@ export function CycleControlSheet({
 
 const styles = StyleSheet.create({
   container: {
-    padding: SPACING.lg,
+    paddingHorizontal: 24,
     paddingTop: SPACING.sm,
+    paddingBottom: SPACING.lg,
   },
   headerRow: {
     flexDirection: 'row',
@@ -357,7 +358,7 @@ const styles = StyleSheet.create({
   statusBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: COLORS.successDimmed,
+    backgroundColor: COLORS.backgroundCanvas,
     paddingHorizontal: 12,
     paddingVertical: 4,
     borderRadius: 12,
@@ -367,13 +368,15 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.accentPrimaryDimmed,
   },
   statusBadgeFinished: {
-    backgroundColor: COLORS.container,
+    backgroundColor: 'transparent',
+    borderWidth: 1,
+    borderColor: COLORS.container,
     borderRadius: 14,
   },
   statusText: {
     ...TYPOGRAPHY.meta,
     fontWeight: '600',
-    color: COLORS.successBright,
+    color: '#5D7CFF',
   },
   statusTextPaused: {
     color: COLORS.accentPrimary,

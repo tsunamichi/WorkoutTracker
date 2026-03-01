@@ -370,6 +370,15 @@ type TranslationKey =
   | 'noExercisesFound'
   | 'customBadge'
   | 'barbellLabel'
+  | 'platesPerSide'
+  | 'alternateSides'
+  | 'timed'
+  | 'setBehaviorWeight'
+  | 'setBehaviorPlatesDesc'
+  | 'setBehaviorStructure'
+  | 'setBehaviorBothSidesDesc'
+  | 'setBehaviorType'
+  | 'setBehaviorTimedDesc'
   | 'all'
   | 'workoutStats'
   | 'totalWorkouts'
@@ -411,6 +420,7 @@ type TranslationKey =
   | 'weekShort'
   | 'reps'
   | 'timeBased'
+  | 'perSide'
   | 'duration'
   | 'seconds'
   | 'sets'
@@ -842,6 +852,7 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     failedToCreateCycle: 'Failed to create cycle. Please try again.',
     reps: 'reps',
     timeBased: 'Time-based',
+    perSide: 'Per side',
     duration: 'Duration',
     seconds: 'seconds',
     sets: 'Sets',
@@ -974,6 +985,15 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     noExercisesFound: 'No exercises found',
     customBadge: 'CUSTOM',
     barbellLabel: 'Barbell',
+    platesPerSide: 'Use plates per side',
+    alternateSides: 'Log both sides',
+    timed: 'Track time',
+    setBehaviorWeight: 'Weight',
+    setBehaviorPlatesDesc: 'Plates per side',
+    setBehaviorStructure: 'Structure',
+    setBehaviorBothSidesDesc: 'Both sides',
+    setBehaviorType: 'Type',
+    setBehaviorTimedDesc: 'Timed',
     all: 'All',
     workoutStats: 'Workout Stats',
     totalWorkouts: 'Total Workouts',
@@ -1434,6 +1454,7 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     failedToCreateCycle: 'No se pudo crear el ciclo. Intenta de nuevo.',
     reps: 'reps',
     timeBased: 'Basado en Tiempo',
+    perSide: 'Por lado',
     duration: 'Duración',
     seconds: 'segundos',
     sets: 'Series',
@@ -1567,6 +1588,15 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     noExercisesFound: 'No se encontraron ejercicios',
     customBadge: 'PERSONAL',
     barbellLabel: 'Barra',
+    platesPerSide: 'Usar placas por lado',
+    alternateSides: 'Registrar ambos lados',
+    timed: 'Registrar tiempo',
+    setBehaviorWeight: 'Peso',
+    setBehaviorPlatesDesc: 'Placas por lado',
+    setBehaviorStructure: 'Estructura',
+    setBehaviorBothSidesDesc: 'Ambos lados',
+    setBehaviorType: 'Tipo',
+    setBehaviorTimedDesc: 'Por tiempo',
     all: 'Todo',
     workoutStats: 'Estadisticas de entrenamiento',
     totalWorkouts: 'Entrenamientos totales',

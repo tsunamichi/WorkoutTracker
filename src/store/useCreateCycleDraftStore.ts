@@ -39,6 +39,11 @@ interface CreateCycleDraftStore {
     weekIndex: number,
     patch: Partial<ExerciseWeekPlan>
   ) => void;
+  updateExerciseBlock: (
+    weekday: Weekday,
+    exerciseBlockId: string,
+    patch: Partial<Pick<ExerciseBlock, 'isPerSide'>>
+  ) => void;
   applyExercisePlanToAllWeeks: (
     weekday: Weekday,
     exerciseBlockId: string,
@@ -188,6 +193,7 @@ export const useCreateCycleDraftStore = create<CreateCycleDraftStore>((set, get)
       newExercise = {
         id: generateId(),
         exerciseId,
+        isPerSide: false,
         weeks,
       };
 
@@ -266,6 +272,24 @@ export const useCreateCycleDraftStore = create<CreateCycleDraftStore>((set, get)
               ),
             };
           }),
+        };
+      }),
+    }));
+  },
+
+  updateExerciseBlock: (
+    weekday: Weekday,
+    exerciseBlockId: string,
+    patch: Partial<Pick<ExerciseBlock, 'isPerSide'>>
+  ) => {
+    set((state) => ({
+      workouts: state.workouts.map((workout) => {
+        if (workout.weekday !== weekday) return workout;
+        return {
+          ...workout,
+          exercises: workout.exercises.map((exercise) =>
+            exercise.id === exerciseBlockId ? { ...exercise, ...patch } : exercise
+          ),
         };
       }),
     }));

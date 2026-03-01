@@ -1076,7 +1076,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: COLORS.successDimmed,
+    backgroundColor: COLORS.backgroundCanvas,
     paddingHorizontal: 10,
     height: 28,
     borderRadius: 14,
@@ -1087,7 +1087,9 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255, 69, 58, 0.15)',
   },
   cycleChipFinished: {
-    backgroundColor: COLORS.container,
+    backgroundColor: 'transparent',
+    borderWidth: 1,
+    borderColor: COLORS.container,
   },
   cycleChipNone: {
     backgroundColor: 'transparent',
@@ -1097,7 +1099,7 @@ const styles = StyleSheet.create({
   cycleChipName: {
     fontSize: 13,
     fontWeight: '600' as const,
-    color: COLORS.successBright,
+    color: '#5D7CFF',
   },
   cycleChipNamePaused: {
     color: COLORS.signalNegative,
@@ -1108,7 +1110,7 @@ const styles = StyleSheet.create({
   cycleChipStatusText: {
     fontSize: 13,
     fontWeight: '400' as const,
-    color: COLORS.successBright,
+    color: '#5D7CFF',
   },
   cycleChipTextFinished: {
     color: COLORS.textMeta,

@@ -7,9 +7,11 @@ interface ToggleProps {
   value: boolean;
   onValueChange: (value: boolean) => void;
   disabled?: boolean;
+  /** When true, do not render the label (e.g. when stacking label above externally) */
+  hideLabel?: boolean;
 }
 
-export function Toggle({ label, value, onValueChange, disabled = false }: ToggleProps) {
+export function Toggle({ label, value, onValueChange, disabled = false, hideLabel = false }: ToggleProps) {
   const animatedValue = React.useRef(new Animated.Value(value ? 1 : 0)).current;
 
   React.useEffect(() => {
@@ -39,10 +41,10 @@ export function Toggle({ label, value, onValueChange, disabled = false }: Toggle
     <TouchableOpacity
       activeOpacity={disabled ? 1 : 0.8}
       onPress={() => !disabled && onValueChange(!value)}
-      style={styles.container}
+      style={[styles.container, hideLabel && styles.containerNoLabel]}
       disabled={disabled}
     >
-      <Text style={[styles.label, disabled && styles.labelDisabled]}>{label}</Text>
+      {!hideLabel && <Text style={[styles.label, disabled && styles.labelDisabled]}>{label}</Text>}
       <Animated.View style={[styles.track, { backgroundColor: trackColor }]}>
         <Animated.View
           style={[
@@ -64,6 +66,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8, // 8px between label and toggle
     height: 32, // 32px tall tappable area
+  },
+  containerNoLabel: {
+    height: 17,
   },
   label: {
     ...TYPOGRAPHY.metaBold,

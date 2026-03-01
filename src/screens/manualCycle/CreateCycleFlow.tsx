@@ -230,6 +230,7 @@ export function CreateCycleFlow({ navigation, route }: CreateCycleFlowProps) {
           reps: ex.weeks[0]?.reps || '8',
           weight: ex.weeks[0]?.weight || 0,
           isTimeBased: ex.weeks[0]?.isTimeBased || false,
+          isPerSide: ex.isPerSide ?? false,
         })),
         lastUsedAt: null,
         usageCount: 0,

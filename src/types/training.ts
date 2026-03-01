@@ -167,6 +167,7 @@ export type WorkoutTemplateExercise = {
   reps: string | number; // string for "8-10", "AMRAP", or numeric
   weight?: number; // optional placeholder
   isTimeBased?: boolean; // true for time-based exercises (seconds instead of reps)
+  isPerSide?: boolean; // if true, exercise timer runs twice (one side, then switch, then other side)
   restSeconds?: number; // optional
   cycleId?: string; // optional ID to group exercises in a cycle/superset
   cycleOrder?: number; // order within the cycle (0-indexed)

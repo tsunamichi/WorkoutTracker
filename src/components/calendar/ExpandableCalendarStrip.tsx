@@ -116,7 +116,7 @@ export function ExpandableCalendarStrip({
     }
 
     const paintPlan = (plan: CyclePlan) => {
-      const color = plan.active ? COLORS.accentPrimaryDimmed : COLORS.backgroundCanvas;
+      const color = plan.active ? COLORS.backgroundCanvas : COLORS.container;
       const start = dayjs(plan.startDate);
 
       // For inactive plans, only paint dates that have actual workouts
@@ -193,7 +193,7 @@ export function ExpandableCalendarStrip({
   // Compute row-level cycle band info: show bands for ALL cycles (past and active).
   // Each row can have multiple bands if different plans cover different date ranges.
   // For simplicity, we render a single contiguous band per row per plan, grouped by planId.
-  type BandInfo = { color: string; startIndex: number; endIndex: number; planId: string; pausedStartIndex: number | null; pausedEndIndex: number | null };
+  type BandInfo = { color: string; startIndex: number; endIndex: number; planId: string; pausedStartIndex: number | null; pausedEndIndex: number | null; isFinished: boolean };
   const weekBandInfo = useMemo(() => {
     return weeksData.map((weekDays) => {
       const bands: BandInfo[] = [];
@@ -202,11 +202,12 @@ export function ExpandableCalendarStrip({
       weekDays.forEach((d, idx) => {
         const planId = dateToPlanId[d.date];
         if (d.cycleColor && planId) {
+          const isFinished = planId !== '__preview__' && !activePlanIds.has(planId);
           if (currentBand && currentBand.planId === planId) {
             currentBand.endIndex = idx;
           } else {
             if (currentBand) bands.push(currentBand);
-            currentBand = { color: d.cycleColor, startIndex: idx, endIndex: idx, planId, pausedStartIndex: null, pausedEndIndex: null };
+            currentBand = { color: d.cycleColor, startIndex: idx, endIndex: idx, planId, pausedStartIndex: null, pausedEndIndex: null, isFinished };
           }
           if (pausedDates.has(d.date)) {
             if (currentBand!.pausedStartIndex === null) currentBand!.pausedStartIndex = idx;
@@ -219,14 +220,14 @@ export function ExpandableCalendarStrip({
       if (currentBand) bands.push(currentBand);
 
       // Add preview date range band
-      if (previewDateRange) {
+        if (previewDateRange) {
         let previewBand: BandInfo | null = null;
         weekDays.forEach((d, idx) => {
           if (d.date >= previewDateRange.start && d.date <= previewDateRange.end) {
             if (previewBand) {
               previewBand.endIndex = idx;
             } else {
-              previewBand = { color: previewDateRange.color, startIndex: idx, endIndex: idx, planId: '__preview__', pausedStartIndex: null, pausedEndIndex: null };
+              previewBand = { color: previewDateRange.color, startIndex: idx, endIndex: idx, planId: '__preview__', pausedStartIndex: null, pausedEndIndex: null, isFinished: false };
             }
           }
         });
@@ -235,7 +236,7 @@ export function ExpandableCalendarStrip({
 
       return bands.length > 0 ? bands : null;
     });
-  }, [weeksData, dateToPlanId, pausedDates, previewDateRange]);
+  }, [weeksData, dateToPlanId, pausedDates, previewDateRange, activePlanIds]);
 
   // Month/year label
   const expandedLabel = useMemo(() => {
@@ -345,7 +346,9 @@ export function ExpandableCalendarStrip({
                 style={[
                   styles.cycleBand,
                   {
-                    backgroundColor: band.color,
+                    backgroundColor: band.isFinished ? 'transparent' : band.color,
+                    borderWidth: band.isFinished ? 1 : 0,
+                    borderColor: band.isFinished ? COLORS.container : undefined,
                     left: bandLeft as any,
                     right: bandRight as any,
                     marginLeft: 3,

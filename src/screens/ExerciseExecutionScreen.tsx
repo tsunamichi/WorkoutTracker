@@ -6,7 +6,7 @@ import Svg, { Circle, Path } from 'react-native-svg';
 import * as Haptics from 'expo-haptics';
 import { useStore } from '../store';
 import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS, CARDS } from '../constants';
-import { IconArrowLeft, IconCheck, IconCheckmark, IconAddLine, IconMinusLine, IconTrash, IconEdit, IconMenu, IconHistory, IconRestart, IconSkip, IconSwap, IconSettings, IconArrowRight, IconAdd, IconPause, IconPlay, IconAddTime, IconChevronDown } from '../components/icons';
+import { IconArrowLeft, IconCheck, IconCheckmark, IconAddLine, IconMinusLine, IconTrash, IconEdit, IconMenu, IconHistory, IconRestart, IconSkip, IconSwap, IconArrowRight, IconAdd, IconPause, IconPlay, IconAddTime, IconChevronDown } from '../components/icons';
 import { BottomDrawer } from '../components/common/BottomDrawer';
 import { NextLabel } from '../components/common/NextLabel';
 import { SetTimerSheet } from '../components/timer/SetTimerSheet';
@@ -154,6 +154,7 @@ export function ExerciseExecutionScreen() {
   };
 
   const [timeBasedOverrides, setTimeBasedOverrides] = useState<Record<string, boolean>>({});
+  const [perSideOverrides, setPerSideOverrides] = useState<Record<string, boolean>>({});
 
   // When we have a scheduled workout, use its snapshot so completion IDs match the store exactly
   const scheduledWorkout = useMemo(
@@ -192,23 +193,25 @@ export function ExerciseExecutionScreen() {
           reps: item.reps,
           weight: item.weight || 0,
           isTimeBased: item.isTimeBased ?? exercise?.measurementType === 'time' ?? false,
-          isPerSide: false,
+          isPerSide: item.isPerSide ?? false,
           cycleId: item.cycleId,
           cycleOrder: item.cycleOrder,
         } as WarmupItem;
       });
     }
-    // Apply local time-based overrides
-    if (timeBasedOverrides && Object.keys(timeBasedOverrides).length > 0) {
-      result = result.map(item => {
-        if (item.id in timeBasedOverrides) {
-          return { ...item, isTimeBased: timeBasedOverrides[item.id] } as WarmupItem;
-        }
-        return item;
-      });
-    }
+    // Apply local time-based and per-side overrides
+    result = result.map(item => {
+      let out = item;
+      if (timeBasedOverrides && item.id in timeBasedOverrides) {
+        out = { ...out, isTimeBased: timeBasedOverrides[item.id] } as WarmupItem;
+      }
+      if (perSideOverrides && item.id in perSideOverrides) {
+        out = { ...out, isPerSide: perSideOverrides[item.id] } as WarmupItem;
+      }
+      return out;
+    });
     return result;
-  }, [type, template, exercisesLibrary, refreshKey, timeBasedOverrides, scheduledWorkout]);
+  }, [type, template, exercisesLibrary, refreshKey, timeBasedOverrides, perSideOverrides, scheduledWorkout]);
   
   // Group items into groups (supersets or single exercises)
   const exerciseGroups = useMemo(() => {
@@ -700,32 +703,8 @@ export function ExerciseExecutionScreen() {
       setExpandedGroupIndex(0);
     }
 
-    // Restore localValues from the best available data source
+    // Restore localValues: prefer session (source of truth for edits) then detailedWorkoutProgress
     const restoredValues: Record<string, { weight: number; reps: number }> = {};
-
-    const progressData = getDetailedWorkoutProgress();
-    if (workoutKey && progressData[workoutKey]) {
-      const workoutProgress = progressData[workoutKey];
-      const freshTemplate = useStore.getState().workoutTemplates.find(t => t.id === workoutTemplateId);
-
-      Object.entries(workoutProgress.exercises).forEach(([templateExId, exProgress]) => {
-        const templateEx = (freshTemplate?.items || (freshTemplate as any)?.exercises)?.find((ex: any) => ex.id === templateExId);
-        const libExId = templateEx?.exerciseId || templateExId;
-
-        exerciseGroups.forEach(group => {
-          group.exercises.forEach(ex => {
-            if (ex.id === libExId || ex.id === templateExId) {
-              (exProgress as any).sets?.forEach((s: any) => {
-                if (s.completed) {
-                  const setId = `${ex.id}-set-${s.setNumber}`;
-                  restoredValues[setId] = { weight: s.weight, reps: s.reps };
-                }
-              });
-            }
-          });
-        });
-      });
-    }
 
     const allSessions = useStore.getState().sessions;
     const existingSession = allSessions.find(s =>
@@ -744,9 +723,33 @@ export function ExerciseExecutionScreen() {
             const exerciseIdToMatch = ex.exerciseId || ex.id;
             if (set.exerciseId === exerciseIdToMatch || set.exerciseId === ex.id) {
               const setId = `${ex.id}-set-${set.setIndex}`;
-              if (!restoredValues[setId]) {
-                restoredValues[setId] = { weight: set.weight, reps: set.reps };
-              }
+              restoredValues[setId] = { weight: set.weight, reps: set.reps };
+            }
+          });
+        });
+      });
+    }
+
+    const progressData = getDetailedWorkoutProgress();
+    if (workoutKey && progressData[workoutKey]) {
+      const workoutProgress = progressData[workoutKey];
+      const freshTemplate = useStore.getState().workoutTemplates.find(t => t.id === workoutTemplateId);
+
+      Object.entries(workoutProgress.exercises).forEach(([templateExId, exProgress]) => {
+        const templateEx = (freshTemplate?.items || (freshTemplate as any)?.exercises)?.find((ex: any) => ex.id === templateExId);
+        const libExId = templateEx?.exerciseId || templateExId;
+
+        exerciseGroups.forEach(group => {
+          group.exercises.forEach(ex => {
+            if (ex.id === libExId || ex.id === templateExId) {
+              (exProgress as any).sets?.forEach((s: any) => {
+                if (s.completed) {
+                  const setId = `${ex.id}-set-${s.setNumber}`;
+                  if (!restoredValues[setId]) {
+                    restoredValues[setId] = { weight: s.weight, reps: s.reps };
+                  }
+                }
+              });
             }
           });
         });
@@ -977,6 +980,31 @@ export function ExerciseExecutionScreen() {
         setCurrentSessionId(sessionId);
         await addSession(session);
         console.log('✅ Session created successfully!');
+      }
+
+      // Keep detailedWorkoutProgress in sync so history and display use updated values
+      if (workoutKey && type === 'main') {
+        const byTemplateId = new Map<string, { exerciseId: string; sets: Array<{ setNumber: number; weight: number; reps: number; completed: boolean }> }>();
+        allSets.forEach((set: any) => {
+          const templateEx = exerciseGroups.flatMap(g => g.exercises).find(ex =>
+            (ex.exerciseId || ex.id) === set.exerciseId || ex.id === set.exerciseId
+          );
+          const templateItemId = templateEx?.id ?? set.exerciseId;
+          if (!byTemplateId.has(templateItemId)) {
+            byTemplateId.set(templateItemId, { exerciseId: set.exerciseId, sets: [] });
+          }
+          const entry = byTemplateId.get(templateItemId)!;
+          entry.sets.push({
+            setNumber: set.setIndex,
+            weight: set.weight,
+            reps: set.reps,
+            completed: true,
+          });
+        });
+        for (const [templateItemId, { exerciseId, sets }] of byTemplateId) {
+          sets.sort((a, b) => a.setNumber - b.setNumber);
+          await saveExerciseProgress(workoutKey, templateItemId, { exerciseId, sets });
+        }
       }
     } else {
       console.log('⚠️ No completed sets to save - session not created');
@@ -2254,7 +2282,13 @@ export function ExerciseExecutionScreen() {
             return undefined; // No next exercise (workout complete)
           })()}
           isExerciseTimerPhase={isExerciseTimerPhase}
-          exerciseDuration={localValues[exerciseGroups[expandedGroupIndex].exercises[activeExerciseIndex]?.id]?.reps ?? exerciseGroups[expandedGroupIndex].exercises[activeExerciseIndex]?.reps ?? 30}
+          exerciseDuration={(() => {
+            const activeEx = exerciseGroups[expandedGroupIndex]?.exercises[activeExerciseIndex];
+            if (!activeEx) return 30;
+            const currentRound = currentRounds[exerciseGroups[expandedGroupIndex].id] ?? 0;
+            const displayVals = getSetDisplayValues(activeEx.id, currentRound, activeEx.weight ?? 0, activeEx.reps ?? 0);
+            return Number(displayVals.reps) || 30;
+          })()}
           onExerciseTimerComplete={handleComplete}
           skipRestPhase={type !== 'main'}
           isPerSide={exerciseGroups[expandedGroupIndex].exercises[activeExerciseIndex]?.isPerSide}
@@ -2278,6 +2312,7 @@ export function ExerciseExecutionScreen() {
         }}
         maxHeight="90%"
         scrollable={true}
+        backgroundColor={COLORS.backgroundCanvas}
       >
         <View style={styles.adjustmentDrawerContent}>
           {/* Title Row with Action Buttons */}
@@ -2292,7 +2327,7 @@ export function ExerciseExecutionScreen() {
                   onPress={() => setShowExerciseSettingsMenu(true)}
                   activeOpacity={0.7}
                 >
-                  <IconSettings size={24} color={COLORS.text} />
+                  <IconMenu size={24} color={COLORS.text} />
                 </TouchableOpacity>
               </View>
             )}
@@ -2394,18 +2429,11 @@ export function ExerciseExecutionScreen() {
                                   const rounded = Math.round(parsed * 2) / 2; // snap to nearest 0.5
                                   const newWeight = fromDisplayWeight(rounded, useKg);
                                   setLocalValues(prev => {
-                                    const current = prev[setId];
-                                    if (!current) return prev;
-                                    const updated = { ...prev };
-                                    for (let i = setIndex; i < currentGroup.totalRounds; i++) {
-                                      const futureSetId = `${activeExercise.id}-set-${i}`;
-                                      if (completedSets.has(futureSetId)) continue; // don't overwrite logged sets
-                                      updated[futureSetId] = {
-                                        reps: updated[futureSetId]?.reps ?? current.reps,
-                                        weight: newWeight,
-                                      };
-                                    }
-                                    return updated;
+                                    const current = prev[setId] ?? { weight: displayWeight, reps: displayReps };
+                                    return {
+                                      ...prev,
+                                      [setId]: { weight: newWeight, reps: current.reps },
+                                    };
                                   });
                                 }}
                               />
@@ -2423,18 +2451,11 @@ export function ExerciseExecutionScreen() {
                                   const parsed = parseInt(text, 10);
                                   if (text === '' || isNaN(parsed) || parsed < 1) return;
                                   setLocalValues(prev => {
-                                    const current = prev[setId];
-                                    if (!current) return prev;
-                                    const updated = { ...prev };
-                                    for (let i = setIndex; i < currentGroup.totalRounds; i++) {
-                                      const futureSetId = `${activeExercise.id}-set-${i}`;
-                                      if (completedSets.has(futureSetId)) continue; // don't overwrite logged sets
-                                      updated[futureSetId] = {
-                                        weight: updated[futureSetId]?.weight ?? current.weight,
-                                        reps: parsed,
-                                      };
-                                    }
-                                    return updated;
+                                    const current = prev[setId] ?? { weight: displayWeight, reps: displayReps };
+                                    return {
+                                      ...prev,
+                                      [setId]: { weight: current.weight, reps: parsed },
+                                    };
                                   });
                                 }}
                               />
@@ -2457,26 +2478,6 @@ export function ExerciseExecutionScreen() {
               })}
             </View>
           ) : null}
-          
-          {/* Barbell toggle: below the set cards, when weight > bar (20kg / 45lb) */}
-          {drawerGrpIdx >= 0 && exerciseGroups[drawerGrpIdx] && exerciseGroups[drawerGrpIdx].exercises[drawerExIdx] && (() => {
-            const activeExercise = exerciseGroups[drawerGrpIdx].exercises[drawerExIdx];
-            const currentRound = currentRounds[exerciseGroups[drawerGrpIdx].id] ?? 0;
-            const drawerSetVals = getSetDisplayValues(activeExercise.id, currentRound, activeExercise.weight ?? 0, activeExercise.reps ?? 0);
-            const displayWeight = localValues[`${activeExercise.id}-set-${currentRound}`]?.weight ?? drawerSetVals.weight;
-            const showBarbellToggle = displayWeight > (useKg ? 20 : 45);
-            const isBarbellMode = getBarbellMode(activeExercise.id);
-            if (!showBarbellToggle) return null;
-            return (
-              <View style={[styles.barbellToggleRow, styles.barbellToggleContainer]}>
-                <Text style={styles.barbellToggleLabel}>{t('barbellMode')}</Text>
-                <Toggle
-                  value={isBarbellMode}
-                  onValueChange={() => setBarbellMode(activeExercise.id, !isBarbellMode)}
-                />
-              </View>
-            );
-          })()}
           
           {/* Exercise History - always show section; show empty state when no data */}
           {drawerGrpIdx >= 0 && exerciseGroups[drawerGrpIdx] && (() => {
@@ -2819,119 +2820,140 @@ export function ExerciseExecutionScreen() {
         }
       />
       
-      {/* Exercise Settings Menu (in Adjust Values Drawer): Switch to Time/Reps (own row), Swap, Remove. Barbell is in the drawer below. */}
-      {expandedGroupIndex >= 0 && exerciseGroups[expandedGroupIndex] && exerciseGroups[expandedGroupIndex].exercises[activeExerciseIndex] && (() => {
-        const activeExercise = exerciseGroups[expandedGroupIndex].exercises[activeExerciseIndex];
-        const exerciseMenuItems: ActionSheetItem[] = [
-          {
-            icon: <IconAddTime size={24} color={activeExercise.isTimeBased ? COLORS.accentPrimary : '#FFFFFF'} />,
-            label: activeExercise.isTimeBased ? 'Switch to Reps' : 'Switch to Time',
-            onPress: () => {
-              setTimeBasedOverrides(prev => ({
-                ...prev,
-                [activeExercise.id]: !activeExercise.isTimeBased,
-              }));
-              setShowExerciseSettingsMenu(false);
-            },
-            featured: true,
-          },
-          {
-            icon: <IconSwap size={24} color="#FFFFFF" />,
-            label: t('swap'),
-            onPress: () => {
-              setShowExerciseSettingsMenu(false);
-              setShowAdjustmentDrawer(false);
-              setTimeout(() => setShowSwapModal(true), 400);
-            },
-          },
-          {
-            icon: <IconTrash size={24} color={COLORS.error} />,
-            label: t('remove'),
-            onPress: () => {
-              setShowExerciseSettingsMenu(false);
-              setShowAdjustmentDrawer(false);
-              setTimeout(() => {
-                Alert.alert(
-                  t('deleteExerciseTitle'),
-                  t('deleteExerciseMessage'),
-                  [
-                    { text: t('cancel'), style: 'cancel' },
-                    {
-                      text: t('remove'),
-                      style: 'destructive',
-                      onPress: async () => {
-                        try {
-                          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                          console.log('[Remove] Confirm pressed', {
-                            type,
-                            activeExerciseId: activeExercise.id,
-                            workoutKey,
-                            hasScheduledWorkout: !!scheduledWorkout,
-                            hasTemplate: !!template,
-                            templateItemsLen: template?.items?.length,
-                            warmupItemsLen: template?.warmupItems?.length,
-                            accessoryItemsLen: template?.accessoryItems?.length,
-                          });
-                          if (type === 'warmup') {
-                            const source = scheduledWorkout?.warmupSnapshot ?? template?.warmupItems ?? [];
-                            console.log('[Remove] warmup source', { sourceLen: source.length, sourceIds: source.map((i: any) => i.id) });
-                            const updatedItems = source.filter((item: any) => item.id !== activeExercise.id);
-                            console.log('[Remove] warmup updatedItems', updatedItems.length);
-                            await updateWorkoutTemplate(workoutTemplateId, { warmupItems: updatedItems });
-                            console.log('[Remove] warmup template updated');
-                            if (scheduledWorkout && workoutKey) {
-                              await updateScheduledWorkoutSnapshots(workoutKey, { warmupSnapshot: updatedItems });
-                              console.log('[Remove] warmup snapshot updated');
-                            }
-                          } else if (type === 'core') {
-                            const source = scheduledWorkout?.accessorySnapshot ?? template?.accessoryItems ?? [];
-                            console.log('[Remove] core source', { sourceLen: source.length, sourceIds: source.map((i: any) => i.id) });
-                            const updatedItems = source.filter((item: any) => item.id !== activeExercise.id);
-                            console.log('[Remove] core updatedItems', updatedItems.length);
-                            await updateWorkoutTemplate(workoutTemplateId, { accessoryItems: updatedItems });
-                            console.log('[Remove] core template updated');
-                            if (scheduledWorkout && workoutKey) {
-                              await updateScheduledWorkoutSnapshots(workoutKey, { accessorySnapshot: updatedItems });
-                              console.log('[Remove] core snapshot updated');
-                            }
-                          } else if (type === 'main') {
-                            const source = scheduledWorkout?.exercisesSnapshot ?? template?.items ?? [];
-                            const sourceIds = source.map((i: any) => ({ id: i.id, exerciseId: i.exerciseId }));
-                            console.log('[Remove] main source', { sourceLen: source.length, sourceIds });
-                            // Match how we set id in items useMemo: scheduled uses item.id, else item.exerciseId ?? item.id
-                            const updatedItems = source.filter((item: any) => {
-                              const itemKey = scheduledWorkout ? item.id : (item.exerciseId ?? item.id);
-                              return itemKey !== activeExercise.id;
-                            });
-                            console.log('[Remove] main updatedItems', updatedItems.length, 'activeExercise.id', activeExercise.id);
-                            await updateWorkoutTemplate(workoutTemplateId, { items: updatedItems });
-                            console.log('[Remove] main template updated');
-                            if (scheduledWorkout && workoutKey) {
-                              await updateScheduledWorkoutSnapshots(workoutKey, { exercisesSnapshot: updatedItems });
-                              console.log('[Remove] main snapshot updated');
-                            }
-                          }
-                          setRefreshKey(prev => prev + 1);
-                          console.log('[Remove] refreshKey bumped, done');
-                          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-                        } catch (e) {
-                          console.error('[Remove] Error', e);
-                        }
-                      },
-                    },
-                  ]
-                );
-              }, 300);
-            },
-            destructive: true,
-          },
-        ];
+      {/* Exercise Settings overflow menu: 3 toggles (stacked, label + toggle per line) then Swap, Remove */}
+      {(() => {
+        const menuGrpIdx = drawerGroupIndex ?? expandedGroupIndex;
+        const menuExIdx = drawerExerciseIndex ?? activeExerciseIndex;
+        const menuExercise = menuGrpIdx >= 0 && exerciseGroups[menuGrpIdx] ? exerciseGroups[menuGrpIdx].exercises[menuExIdx] : null;
+        if (!menuExercise) return null;
+        const currentRound = currentRounds[exerciseGroups[menuGrpIdx]?.id] ?? 0;
+        const drawerSetVals = getSetDisplayValues(menuExercise.id, currentRound, menuExercise.weight ?? 0, menuExercise.reps ?? 0);
+        const displayWeight = localValues[`${menuExercise.id}-set-${currentRound}`]?.weight ?? drawerSetVals.weight;
+        const showBarbellToggle = displayWeight > (useKg ? 20 : 45);
+        const isBarbellMode = getBarbellMode(menuExercise.id);
         return (
-          <ActionSheet
+          <BottomDrawer
             visible={showExerciseSettingsMenu}
             onClose={() => setShowExerciseSettingsMenu(false)}
-            items={exerciseMenuItems}
-          />
+            maxHeight="55%"
+            scrollable={false}
+            showHandle={true}
+            backgroundColor={COLORS.backgroundCanvas}
+          >
+            <View style={[styles.exerciseSettingsMenuContent, { paddingBottom: Math.max(SPACING.xl, insets.bottom) }]}>
+              <Text style={styles.exerciseSettingsMenuSectionTitle}>Set behavior</Text>
+              <View style={styles.exerciseSettingsMenuRow}>
+                <View style={styles.exerciseSettingsMenuLabelBlock}>
+                  <Text style={styles.exerciseSettingsMenuLabel}>{t('setBehaviorWeight')}</Text>
+                  <Text style={styles.exerciseSettingsMenuLabelDesc}>{t('setBehaviorPlatesDesc')}</Text>
+                </View>
+                <Toggle
+                  label=""
+                  hideLabel
+                  value={isBarbellMode}
+                  onValueChange={() => setBarbellMode(menuExercise.id, !isBarbellMode)}
+                  disabled={!showBarbellToggle}
+                />
+              </View>
+              <View style={styles.exerciseSettingsMenuRow}>
+                <View style={styles.exerciseSettingsMenuLabelBlock}>
+                  <Text style={styles.exerciseSettingsMenuLabel}>{t('setBehaviorStructure')}</Text>
+                  <Text style={styles.exerciseSettingsMenuLabelDesc}>{t('setBehaviorBothSidesDesc')}</Text>
+                </View>
+                <Toggle
+                  label=""
+                  hideLabel
+                  value={menuExercise.isPerSide ?? false}
+                  onValueChange={() => setPerSideOverrides(prev => ({ ...prev, [menuExercise.id]: !(menuExercise.isPerSide ?? false) }))}
+                />
+              </View>
+              <View style={styles.exerciseSettingsMenuRow}>
+                <View style={styles.exerciseSettingsMenuLabelBlock}>
+                  <Text style={styles.exerciseSettingsMenuLabel}>{t('setBehaviorType')}</Text>
+                  <Text style={styles.exerciseSettingsMenuLabelDesc}>{t('setBehaviorTimedDesc')}</Text>
+                </View>
+                <Toggle
+                  label=""
+                  hideLabel
+                  value={menuExercise.isTimeBased ?? false}
+                  onValueChange={() => setTimeBasedOverrides(prev => ({ ...prev, [menuExercise.id]: !(menuExercise.isTimeBased ?? false) }))}
+                />
+              </View>
+              <View style={styles.exerciseSettingsMenuActionsRow}>
+                <TouchableOpacity
+                  style={styles.exerciseSettingsMenuActionCard}
+                  onPress={() => {
+                    setShowExerciseSettingsMenu(false);
+                    setShowAdjustmentDrawer(false);
+                    setTimeout(() => setShowSwapModal(true), 400);
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <IconSwap size={24} color={COLORS.text} />
+                  <Text style={styles.exerciseSettingsMenuActionLabel}>{t('swap')}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.exerciseSettingsMenuActionCard, styles.exerciseSettingsMenuActionCardDanger]}
+                onPress={() => {
+                  setShowExerciseSettingsMenu(false);
+                  setShowAdjustmentDrawer(false);
+                  setTimeout(() => {
+                    Alert.alert(
+                      t('deleteExerciseTitle'),
+                      t('deleteExerciseMessage'),
+                      [
+                        { text: t('cancel'), style: 'cancel' },
+                        {
+                          text: t('remove'),
+                          style: 'destructive',
+                          onPress: async () => {
+                            try {
+                              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                              const activeExercise = menuExercise;
+                              if (type === 'warmup') {
+                                const source = scheduledWorkout?.warmupSnapshot ?? template?.warmupItems ?? [];
+                                const updatedItems = source.filter((item: any) => item.id !== activeExercise.id);
+                                await updateWorkoutTemplate(workoutTemplateId, { warmupItems: updatedItems });
+                                if (scheduledWorkout && workoutKey) {
+                                  await updateScheduledWorkoutSnapshots(workoutKey, { warmupSnapshot: updatedItems });
+                                }
+                              } else if (type === 'core') {
+                                const source = scheduledWorkout?.accessorySnapshot ?? template?.accessoryItems ?? [];
+                                const updatedItems = source.filter((item: any) => item.id !== activeExercise.id);
+                                await updateWorkoutTemplate(workoutTemplateId, { accessoryItems: updatedItems });
+                                if (scheduledWorkout && workoutKey) {
+                                  await updateScheduledWorkoutSnapshots(workoutKey, { accessorySnapshot: updatedItems });
+                                }
+                              } else if (type === 'main') {
+                                const source = scheduledWorkout?.exercisesSnapshot ?? template?.items ?? [];
+                                const updatedItems = source.filter((item: any) => {
+                                  const itemKey = scheduledWorkout ? item.id : (item.exerciseId ?? item.id);
+                                  return itemKey !== activeExercise.id;
+                                });
+                                await updateWorkoutTemplate(workoutTemplateId, { items: updatedItems });
+                                if (scheduledWorkout && workoutKey) {
+                                  await updateScheduledWorkoutSnapshots(workoutKey, { exercisesSnapshot: updatedItems });
+                                }
+                              }
+                              setRefreshKey(prev => prev + 1);
+                              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                            } catch (e) {
+                              console.error('[Remove] Error', e);
+                            }
+                          },
+                        },
+                      ]
+                    );
+                  }, 300);
+                }}
+                  activeOpacity={0.7}
+                >
+                  <IconTrash size={24} color={COLORS.signalNegative} />
+                  <Text style={[styles.exerciseSettingsMenuActionLabel, { color: COLORS.signalNegative }]}>{t('remove')}</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </BottomDrawer>
         );
       })()}
 
@@ -3450,7 +3472,7 @@ const styles = StyleSheet.create({
   },
   setCard: {
     ...CARDS.cardDeep.outer,
-    backgroundColor: COLORS.activeCard,
+    backgroundColor: COLORS.backgroundContainer,
     overflow: 'hidden',
   },
   inProgressBadge: {
@@ -3673,6 +3695,71 @@ const styles = StyleSheet.create({
   },
   barbellToggleContainer: {
     marginTop: 24,
+  },
+  exerciseSettingsMenuContent: {
+    paddingHorizontal: SPACING.xxl,
+    paddingTop: SPACING.md,
+    paddingBottom: SPACING.xl,
+  },
+  exerciseSettingsMenuSectionTitle: {
+    ...TYPOGRAPHY.legal,
+    color: COLORS.textMeta,
+    textTransform: 'uppercase',
+    marginBottom: SPACING.sm,
+  },
+  exerciseSettingsMenuRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: SPACING.md,
+  },
+  exerciseSettingsMenuLabelBlock: {
+    gap: 2,
+  },
+  exerciseSettingsMenuLabel: {
+    ...TYPOGRAPHY.body,
+    color: COLORS.text,
+  },
+  exerciseSettingsMenuLabelDesc: {
+    ...TYPOGRAPHY.meta,
+    color: COLORS.textMeta,
+  },
+  exerciseSettingsMenuActionsRow: {
+    flexDirection: 'row',
+    gap: SPACING.md,
+    marginTop: 24,
+  },
+  exerciseSettingsMenuActionCard: {
+    flex: 1,
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: SPACING.sm,
+    backgroundColor: COLORS.backgroundContainer,
+    borderRadius: BORDER_RADIUS.lg,
+    paddingVertical: SPACING.lg,
+    paddingHorizontal: SPACING.md,
+  },
+  exerciseSettingsMenuActionCardDanger: {},
+  exerciseSettingsMenuActionLabel: {
+    ...TYPOGRAPHY.body,
+    color: COLORS.text,
+    fontWeight: '600',
+  },
+  exerciseOptionCardLabel: {
+    ...TYPOGRAPHY.meta,
+    color: COLORS.text,
+    textAlign: 'center',
+  },
+  exerciseOptionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 10,
+  },
+  exerciseOptionLabel: {
+    ...TYPOGRAPHY.body,
+    color: COLORS.text,
   },
   barbellToggleLabel: {
     ...TYPOGRAPHY.body,

@@ -143,6 +143,7 @@ export const COLORS = {
   failureBright: adjustLightness(BASE_FAILURE, 40),
   info: BASE_INFO,
   infoBright: adjustLightness(BASE_INFO, 40),
+  infoDimmed: '#0f1528',
   warning: SIGNAL_WARNING,
   error: SIGNAL_NEGATIVE,
   

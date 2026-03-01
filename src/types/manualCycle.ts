@@ -21,6 +21,7 @@ export type ExerciseWeekPlan = {
 export type ExerciseBlock = {
   id: string;
   exerciseId: string; // references Exercise library
+  isPerSide?: boolean; // if true, exercise timer runs twice (each side)
   weeks: ExerciseWeekPlan[]; // length === cycle.weeks
 };
 

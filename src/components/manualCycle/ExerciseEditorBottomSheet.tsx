@@ -32,7 +32,7 @@ export const ExerciseEditorBottomSheet = ({
   onClose,
 }: ExerciseEditorBottomSheetProps) => {
   const { exercises: exerciseLibrary, settings } = useStore();
-  const { weeks, workouts, updateExerciseWeekPlan } =
+  const { weeks, workouts, updateExerciseWeekPlan, updateExerciseBlock } =
     useCreateCycleDraftStore();
   const { t } = useTranslation();
 
@@ -86,6 +86,7 @@ export const ExerciseEditorBottomSheet = ({
 
   const currentWeek = liveExerciseBlock.weeks[selectedWeekIndex] || {};
   const isTimeBased = currentWeek.isTimeBased || false;
+  const isPerSide = liveExerciseBlock.isPerSide || false;
   useEffect(() => {
     const key = `${liveExerciseBlock.id}:${selectedWeekIndex}`;
     if (initializedWeeksRef.current.has(key)) return;
@@ -188,6 +189,13 @@ export const ExerciseEditorBottomSheet = ({
                 label={t('timeBased')}
                 value={isTimeBased}
                 onValueChange={(value) => handleUpdateField('isTimeBased', value)}
+              />
+            </View>
+            <View style={styles.toggleRow}>
+              <Toggle
+                label={t('perSide')}
+                value={isPerSide}
+                onValueChange={(value) => updateExerciseBlock(weekday, liveExerciseBlock.id, { isPerSide: value })}
               />
             </View>
             <View style={styles.weekCard}>
