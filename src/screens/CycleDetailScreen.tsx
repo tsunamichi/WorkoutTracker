@@ -88,11 +88,12 @@ export function CycleDetailScreen({ route, navigation }: CycleDetailScreenProps)
     return result.percentage;
   };
 
-  const getExerciseProgressForWorkout = (sw: ScheduledWorkout, exerciseId: string): ExerciseProgress | null => {
-    const workoutKey = `${sw.templateId}-${sw.date}`;
-    const progress = detailedWorkoutProgress[workoutKey];
-    if (!progress?.exercises?.[exerciseId]) return null;
-    return progress.exercises[exerciseId];
+  const getExerciseProgressForWorkout = (sw: ScheduledWorkout, templateItemId: string, exerciseId: string): ExerciseProgress | null => {
+    const keyByScheduleId = detailedWorkoutProgress[sw.id];
+    const keyByTemplateDate = detailedWorkoutProgress[`${sw.templateId}-${sw.date}`];
+    const progress = keyByScheduleId ?? keyByTemplateDate;
+    const exerciseProgress = progress?.exercises?.[templateItemId] ?? progress?.exercises?.[exerciseId];
+    return exerciseProgress ?? null;
   };
 
   const handleMakeActiveAgain = async () => {
@@ -110,15 +111,18 @@ export function CycleDetailScreen({ route, navigation }: CycleDetailScreenProps)
     for (const group of weekGroups) {
       exportText += `WEEK ${group.weekNumber} (${group.weekStart} - ${group.weekEnd})\n`;
       exportText += `${'-'.repeat(40)}\n`;
-      for (const sw of group.workouts) {
+        for (const sw of group.workouts) {
         exportText += `\n  ${sw.titleSnapshot} — ${dayjs(sw.date).format('ddd, MMM D')}\n`;
         for (const ex of sw.exercisesSnapshot || []) {
           const exerciseData = exercises.find(e => e.id === ex.exerciseId);
-          const progress = getExerciseProgressForWorkout(sw, ex.exerciseId);
+          const progress = getExerciseProgressForWorkout(sw, ex.id, ex.exerciseId);
+          const isTimeBased = ex.isTimeBased === true;
+          const repUnit = isTimeBased ? 'sec' : 'reps';
           exportText += `    ${exerciseData?.name || 'Unknown'}\n`;
           if (progress?.sets && progress.sets.length > 0) {
             progress.sets.forEach((set, idx) => {
-              exportText += `      Set ${idx + 1}: ${formatWeightForLoad(set.weight, useKg)} ${weightUnit} × ${set.reps} ${set.completed ? '✓' : ''}\n`;
+              const value = set.reps ?? 0;
+              exportText += `      Set ${idx + 1}: ${formatWeightForLoad(set.weight ?? 0, useKg)} ${weightUnit} × ${value} ${repUnit}${set.completed ? ' ✓' : ''}\n`;
             });
           } else {
             exportText += `      No logged data\n`;
@@ -297,7 +301,7 @@ export function CycleDetailScreen({ route, navigation }: CycleDetailScreenProps)
             >
               {(selectedWorkout.exercisesSnapshot || []).map((ex: WorkoutTemplateExercise, idx: number) => {
                 const exerciseData = exercises.find(e => e.id === ex.exerciseId);
-                const progress = getExerciseProgressForWorkout(selectedWorkout, ex.exerciseId);
+                const progress = getExerciseProgressForWorkout(selectedWorkout, ex.id, ex.exerciseId);
                 const hasSets = progress?.sets && progress.sets.length > 0;
 
                 return (

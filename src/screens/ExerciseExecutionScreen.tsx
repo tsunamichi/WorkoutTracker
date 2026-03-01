@@ -186,6 +186,7 @@ export function ExerciseExecutionScreen() {
         const id = sw ? item.id : (item.exerciseId ?? item.id);
         return {
           id,
+          exerciseId: item.exerciseId,
           exerciseName: exercise?.name || 'Exercise',
           sets: typeof item.sets === 'number' ? item.sets : (item.sets?.length ?? 0),
           reps: item.reps,
@@ -1065,8 +1066,9 @@ export function ExerciseExecutionScreen() {
     // Use template item id (currentExercise.id) as the key so history/previous log lookups match.
     const templateItemId = currentExercise.id;
     const setValues = localValuesRef.current[setId];
-    const savedWeight = setValues?.weight ?? currentExercise.weight ?? 0;
-    const savedReps = setValues?.reps ?? Number(currentExercise.reps) ?? 0;
+    const displayVals = getSetDisplayValues(currentExercise.id, currentRound, currentExercise.weight ?? 0, Number(currentExercise.reps) ?? 0);
+    const savedWeight = setValues?.weight ?? displayVals.weight ?? currentExercise.weight ?? 0;
+    const savedReps = setValues?.reps ?? displayVals.reps ?? Number(currentExercise.reps) ?? 0;
     const existingProgress = useStore.getState().detailedWorkoutProgress[workoutKey]?.exercises[templateItemId];
     const existingSets = (existingProgress as any)?.sets || [];
     const updatedSets = [...existingSets.filter((s: any) => s.setNumber !== currentRound), {
@@ -1358,10 +1360,11 @@ export function ExerciseExecutionScreen() {
                 for (let round = 0; round < group.totalRounds; round++) {
                   const setId = `${exercise.id}-set-${round}`;
                   const sv = localValuesRef.current[setId];
+                  const displayVals = getSetDisplayValues(exercise.id, round, exercise.weight ?? 0, Number(exercise.reps) ?? 0);
                   sets.push({
                     setNumber: round,
-                    weight: sv?.weight ?? exercise.weight ?? 0,
-                    reps: sv?.reps ?? Number(exercise.reps) ?? 0,
+                    weight: sv?.weight ?? displayVals.weight ?? exercise.weight ?? 0,
+                    reps: sv?.reps ?? displayVals.reps ?? Number(exercise.reps) ?? 0,
                     completed: true,
                   });
                 }
@@ -1598,8 +1601,9 @@ export function ExerciseExecutionScreen() {
     }
   };
   
-  // Get exercise history for the current exercise
-  const getExerciseHistoryForDrawer = (exerciseId: string) => {
+  // Get exercise history for the current exercise (templateItemId = progress key, libraryExerciseId = sessions key)
+  const getExerciseHistoryForDrawer = (templateItemId: string, libraryExerciseId?: string) => {
+    const exerciseIdForSession = libraryExerciseId ?? templateItemId;
     const historyByDate = new Map<string, Array<{ setNumber: number; weight: number; reps: number }>>();
     
     // 1. Get from detailed workout progress (written by ExerciseDetailScreen)
@@ -1638,12 +1642,13 @@ export function ExerciseExecutionScreen() {
         if (!templateExercise) return;
         
         const exerciseDataById = exercisesLibrary.find(e => e.id === templateExercise.exerciseId);
-        const exerciseDataForCurrent = exercisesLibrary.find(e => e.id === exerciseId);
+        const exerciseDataForCurrent = exercisesLibrary.find(e => e.id === templateItemId || e.id === libraryExerciseId);
         
-        const matchesById = templateExercise.exerciseId === exerciseId;
+        const matchesByTemplateId = templateExerciseId === templateItemId;
+        const matchesByLibraryId = templateExercise.exerciseId === templateItemId || templateExercise.exerciseId === libraryExerciseId;
         const matchesByName = exerciseDataById?.name.toLowerCase().trim() === exerciseDataForCurrent?.name.toLowerCase().trim();
         
-        if (matchesById || matchesByName) {
+        if (matchesByTemplateId || matchesByLibraryId || matchesByName) {
           if (exerciseProgress.skipped) return;
           
           const hasCompletedSets = exerciseProgress.sets?.some((set: any) => set.completed);
@@ -1678,7 +1683,7 @@ export function ExerciseExecutionScreen() {
       if (datesFromProgress.has(date)) return;
       
       const hasExercise = session.sets.some(set => 
-        set.exerciseId === exerciseId || set.exerciseName === items.find(i => i.id === exerciseId)?.exerciseName
+        set.exerciseId === exerciseIdForSession || set.exerciseId === templateItemId || set.exerciseName === items.find(i => i.id === templateItemId || i.exerciseId === exerciseIdForSession)?.exerciseName
       );
       if (!hasExercise) return;
       
@@ -1690,7 +1695,7 @@ export function ExerciseExecutionScreen() {
     
     latestSessionByDate.forEach((session, date) => {
       session.sets.forEach(set => {
-        if (set.exerciseId === exerciseId || set.exerciseName === items.find(i => i.id === exerciseId)?.exerciseName) {
+        if (set.exerciseId === exerciseIdForSession || set.exerciseId === templateItemId || set.exerciseName === items.find(i => i.id === templateItemId || i.exerciseId === exerciseIdForSession)?.exerciseName) {
           if (!historyByDate.has(date)) {
             historyByDate.set(date, []);
           }
@@ -2473,75 +2478,76 @@ export function ExerciseExecutionScreen() {
             );
           })()}
           
-          {/* Exercise History */}
+          {/* Exercise History - always show section; show empty state when no data */}
           {drawerGrpIdx >= 0 && exerciseGroups[drawerGrpIdx] && (() => {
             const activeExercise = exerciseGroups[drawerGrpIdx].exercises[drawerExIdx];
             if (!activeExercise) return null;
-            
-            // Get exercise history for this exercise
-            const exerciseHistory = getExerciseHistoryForDrawer(activeExercise.id);
-            
-            // Only show if there's history
-            if (exerciseHistory.length === 0) return null;
-            
-            // Show latest workout by default, or last 3 if expanded (oldest first, latest at bottom)
-            const workoutsToShow = showExerciseHistory ? exerciseHistory.slice(-3) : exerciseHistory.slice(-1);
-            
+
+            const exerciseHistory = getExerciseHistoryForDrawer(activeExercise.id, activeExercise.exerciseId);
+            const workoutsToShow = exerciseHistory.length > 0
+              ? (showExerciseHistory ? exerciseHistory.slice(-3) : exerciseHistory.slice(-1))
+              : [];
+
             return (
               <>
                 <View style={styles.historyFullBleedDivider} />
                 <View style={styles.historySection}>
-                  {workoutsToShow.map((workout, workoutIndex) => (
-                    <View key={workout.date}>
-                      <View style={styles.historyRow}>
-                        {/* Left column: label + date */}
-                        <View style={styles.historyLeftColumn}>
-                          {workoutIndex === workoutsToShow.length - 1 && (
-                            <Text style={styles.historyLabel}>{t('latestExerciseLog')}</Text>
-                          )}
-                          <Text style={styles.historyDateLine}>
-                            {dayjs(workout.date).format('MMMM D')}{getOrdinalSuffix(dayjs(workout.date).date())}
-                          </Text>
-                          {workoutIndex === workoutsToShow.length - 1 && exerciseHistory.length > 1 && (
-                            <TouchableOpacity
-                              style={styles.viewAllButton}
-                              onPress={() => setShowExerciseHistory(!showExerciseHistory)}
-                              activeOpacity={0.7}
-                            >
-                              <Text style={styles.viewAllText}>
-                                {showExerciseHistory ? t('showLess') : t('viewAll')}
-                              </Text>
-                              <View style={{ transform: [{ rotate: showExerciseHistory ? '180deg' : '0deg' }] }}>
-                                <IconChevronDown size={16} color={COLORS.accentPrimary} />
-                              </View>
-                            </TouchableOpacity>
-                          )}
-                        </View>
-
-                        {/* Right column: sets */}
-                        <View style={styles.historySetsColumn}>
-                          {workout.sets.map((set, setIndex) => (
-                            <View key={setIndex} style={styles.historySetRow}>
-                              <View style={styles.historyValueColumn}>
-                                <Text style={styles.historySetText}>
-                                  {formatWeightForLoad(set.weight, useKg)}
-                                </Text>
-                                <Text style={styles.historySetUnit}>{weightUnit}</Text>
-                              </View>
-                              <View style={styles.historyValueColumn}>
-                                <Text style={styles.historySetText}>{set.reps}</Text>
-                                <Text style={styles.historySetUnit}>{activeExercise.isTimeBased ? 'secs' : 'reps'}</Text>
-                              </View>
-                            </View>
-                          ))}
-                        </View>
+                  {exerciseHistory.length === 0 ? (
+                    <View style={styles.historyRow}>
+                      <View style={styles.historyLeftColumn}>
+                        <Text style={styles.historyLabel}>{t('latestExerciseLog')}</Text>
+                        <Text style={styles.historyEmptyText}>{t('noHistoryRecordedYet')}</Text>
                       </View>
-                      
-                      {workoutIndex < workoutsToShow.length - 1 && (
-                        <View style={styles.historyDivider} />
-                      )}
                     </View>
-                  ))}
+                  ) : (
+                    workoutsToShow.map((workout, workoutIndex) => (
+                      <View key={workout.date}>
+                        <View style={styles.historyRow}>
+                          <View style={styles.historyLeftColumn}>
+                            {workoutIndex === workoutsToShow.length - 1 && (
+                              <Text style={styles.historyLabel}>{t('latestExerciseLog')}</Text>
+                            )}
+                            <Text style={styles.historyDateLine}>
+                              {dayjs(workout.date).format('MMMM D')}{getOrdinalSuffix(dayjs(workout.date).date())}
+                            </Text>
+                            {workoutIndex === workoutsToShow.length - 1 && exerciseHistory.length > 1 && (
+                              <TouchableOpacity
+                                style={styles.viewAllButton}
+                                onPress={() => setShowExerciseHistory(!showExerciseHistory)}
+                                activeOpacity={0.7}
+                              >
+                                <Text style={styles.viewAllText}>
+                                  {showExerciseHistory ? t('showLess') : t('viewAll')}
+                                </Text>
+                                <View style={{ transform: [{ rotate: showExerciseHistory ? '180deg' : '0deg' }] }}>
+                                  <IconChevronDown size={16} color={COLORS.accentPrimary} />
+                                </View>
+                              </TouchableOpacity>
+                            )}
+                          </View>
+                          <View style={styles.historySetsColumn}>
+                            {workout.sets.map((set, setIndex) => (
+                              <View key={setIndex} style={styles.historySetRow}>
+                                <View style={styles.historyValueColumn}>
+                                  <Text style={styles.historySetText}>
+                                    {formatWeightForLoad(set.weight, useKg)}
+                                  </Text>
+                                  <Text style={styles.historySetUnit}>{weightUnit}</Text>
+                                </View>
+                                <View style={styles.historyValueColumn}>
+                                  <Text style={styles.historySetText}>{set.reps}</Text>
+                                  <Text style={styles.historySetUnit}>{activeExercise.isTimeBased ? 'secs' : 'reps'}</Text>
+                                </View>
+                              </View>
+                            ))}
+                          </View>
+                        </View>
+                        {workoutIndex < workoutsToShow.length - 1 && (
+                          <View style={styles.historyDivider} />
+                        )}
+                      </View>
+                    ))
+                  )}
                 </View>
               </>
             );
@@ -3614,7 +3620,8 @@ const styles = StyleSheet.create({
   },
   historyEmptyText: {
     ...TYPOGRAPHY.meta,
-    color: COLORS.textMeta,
+    color: COLORS.text,
+    paddingTop: 4,
   },
   historyDateLine: {
     ...TYPOGRAPHY.meta,

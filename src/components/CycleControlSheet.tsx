@@ -4,12 +4,12 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import * as Haptics from 'expo-haptics';
 import dayjs from 'dayjs';
 import { BottomDrawer } from './common/BottomDrawer';
-import { IconPause, IconPlay, IconClose, IconTrash, IconShare } from './icons';
+import { IconPause, IconPlay, IconClose, IconTrash, IconShare, IconSave } from './icons';
 import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS } from '../constants';
 import { useTranslation } from '../i18n/useTranslation';
 import type { CyclePlan } from '../types/training';
 
-type CycleState = 'active' | 'paused' | 'none';
+type CycleState = 'active' | 'paused' | 'finished' | 'none';
 
 interface CycleControlSheetProps {
   visible: boolean;
@@ -23,6 +23,7 @@ interface CycleControlSheetProps {
   onEnd: () => void;
   onDelete: () => void;
   onShare: (plan: CyclePlan) => void;
+  onExportData: (plan: CyclePlan) => void;
   onStartCycle: () => void;
 }
 
@@ -38,6 +39,7 @@ export function CycleControlSheet({
   onEnd,
   onDelete,
   onShare,
+  onExportData,
   onStartCycle,
 }: CycleControlSheetProps) {
   const { t } = useTranslation();
@@ -134,13 +136,21 @@ export function CycleControlSheet({
   const resumeStr = plan?.pausedUntil ? dayjs(plan.pausedUntil).format('MMM D') : '';
 
   return (
-    <BottomDrawer visible={visible} onClose={onClose} maxHeight={pickingDate ? '70%' : '45%'}>
+    <BottomDrawer visible={visible} onClose={onClose} maxHeight={pickingDate ? '70%' : '55%'}>
       <View style={styles.container}>
         <View style={styles.headerRow}>
           <Text style={styles.title}>{plan?.name ?? ''}</Text>
-          <View style={[styles.statusBadge, cycleState === 'paused' && styles.statusBadgePaused]}>
-            <Text style={[styles.statusText, cycleState === 'paused' && styles.statusTextPaused]}>
-              {cycleState === 'active' ? t('cycleActive') : t('cyclePaused')}
+          <View style={[
+            styles.statusBadge,
+            cycleState === 'paused' && styles.statusBadgePaused,
+            cycleState === 'finished' && styles.statusBadgeFinished,
+          ]}>
+            <Text style={[
+              styles.statusText,
+              cycleState === 'paused' && styles.statusTextPaused,
+              cycleState === 'finished' && styles.statusTextFinished,
+            ]}>
+              {cycleState === 'active' ? t('cycleActive') : cycleState === 'paused' ? t('cyclePaused') : t('cycleFinished')}
             </Text>
             {cycleState === 'paused' && resumeStr && (
               <Text style={styles.resumeDateText}> · {resumeStr}</Text>
@@ -177,11 +187,52 @@ export function CycleControlSheet({
               </TouchableOpacity>
             )}
           </View>
+        ) : cycleState === 'finished' ? (
+          <View style={styles.shareExportRow}>
+            <TouchableOpacity
+              style={styles.shareExportButton}
+              activeOpacity={0.7}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                onClose();
+                if (plan) onShare(plan);
+              }}
+            >
+              <View style={styles.shareExportIconRow}>
+                <IconShare size={20} color={COLORS.text} />
+                <Text style={styles.actionLabel}>{t('shareCycle')}</Text>
+              </View>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.shareExportButton}
+              activeOpacity={0.7}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                onClose();
+                if (plan) onExportData(plan);
+              }}
+            >
+              <View style={styles.shareExportIconRow}>
+                <IconSave size={20} color={COLORS.text} />
+                <Text style={styles.actionLabel}>{t('exportData')}</Text>
+              </View>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.shareExportButton, styles.actionItemDestructive]}
+              activeOpacity={0.7}
+              onPress={handleDelete}
+            >
+              <View style={styles.shareExportIconRow}>
+                <IconTrash size={20} color={COLORS.signalNegative} />
+                <Text style={[styles.actionLabel, styles.actionLabelDestructive]}>{t('deleteCycle')}</Text>
+              </View>
+            </TouchableOpacity>
+          </View>
         ) : (
           <>
-            <View style={styles.shareRow}>
+            <View style={styles.shareExportRow}>
               <TouchableOpacity
-                style={styles.actionItemFullWidth}
+                style={styles.shareExportButton}
                 activeOpacity={0.7}
                 onPress={() => {
                   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -189,10 +240,24 @@ export function CycleControlSheet({
                   if (plan) onShare(plan);
                 }}
               >
-                <View style={styles.iconContainer}>
+                <View style={styles.shareExportIconRow}>
                   <IconShare size={20} color={COLORS.text} />
+                  <Text style={styles.actionLabel}>{t('shareCycle')}</Text>
                 </View>
-                <Text style={styles.actionLabel}>{t('shareCycle')}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.shareExportButton}
+                activeOpacity={0.7}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  onClose();
+                  if (plan) onExportData(plan);
+                }}
+              >
+                <View style={styles.shareExportIconRow}>
+                  <IconSave size={20} color={COLORS.text} />
+                  <Text style={styles.actionLabel}>{t('exportData')}</Text>
+                </View>
               </TouchableOpacity>
             </View>
             <View style={styles.actionsRow}>
@@ -235,9 +300,9 @@ export function CycleControlSheet({
                 onPress={handleEnd}
               >
                 <View style={styles.iconContainer}>
-                  <IconClose size={20} color={COLORS.signalNegative} />
+                  <IconClose size={20} color={COLORS.text} />
                 </View>
-                <Text style={[styles.actionLabel, styles.actionLabelDestructive]}>{t('endCycle')}</Text>
+                <Text style={styles.actionLabel}>{t('endCycle')}</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
@@ -301,6 +366,10 @@ const styles = StyleSheet.create({
   statusBadgePaused: {
     backgroundColor: COLORS.accentPrimaryDimmed,
   },
+  statusBadgeFinished: {
+    backgroundColor: COLORS.container,
+    borderRadius: 14,
+  },
   statusText: {
     ...TYPOGRAPHY.meta,
     fontWeight: '600',
@@ -309,21 +378,32 @@ const styles = StyleSheet.create({
   statusTextPaused: {
     color: COLORS.accentPrimary,
   },
+  statusTextFinished: {
+    color: COLORS.textMeta,
+  },
   resumeDateText: {
     ...TYPOGRAPHY.meta,
     color: COLORS.accentPrimary,
   },
-  shareRow: {
+  shareExportRow: {
+    flexDirection: 'row',
+    gap: SPACING.md,
     marginBottom: SPACING.md,
   },
-  actionItemFullWidth: {
-    width: '100%',
+  shareExportButton: {
+    flex: 1,
+    minWidth: 0,
     backgroundColor: COLORS.activeCard,
     borderRadius: 16,
     paddingVertical: SPACING.lg,
-    paddingHorizontal: SPACING.md,
+    paddingHorizontal: SPACING.sm,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  shareExportIconRow: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: SPACING.sm,
   },
   actionsRow: {
     flexDirection: 'row',

@@ -7,10 +7,13 @@ import { useStore } from '../store';
 import { useTranslation } from '../i18n/useTranslation';
 import type { CyclePlan, WorkoutTemplate, WorkoutTemplateExercise } from '../types/training';
 
+import { IconSave } from './icons';
+
 interface ShareCycleDrawerProps {
   visible: boolean;
   onClose: () => void;
   plan: CyclePlan | undefined;
+  onExportData?: (plan: CyclePlan) => void;
 }
 
 /** Unique template IDs from plan in weekday order (Mon=1 first, then Tue..Sun=0). */
@@ -63,7 +66,7 @@ function buildPasteableCycleText(
   return lines.join('\n').trim();
 }
 
-export function ShareCycleDrawer({ visible, onClose, plan }: ShareCycleDrawerProps) {
+export function ShareCycleDrawer({ visible, onClose, plan, onExportData }: ShareCycleDrawerProps) {
   const { t } = useTranslation();
   const { workoutTemplates, exercises, settings } = useStore();
   const useKg = settings?.useKg ?? false;
@@ -124,6 +127,21 @@ export function ShareCycleDrawer({ visible, onClose, plan }: ShareCycleDrawerPro
       <View style={styles.container}>
         <Text style={styles.title}>{t('shareCycle')}</Text>
         <Text style={styles.subtitle}>{t('shareCycleSubtitle')}</Text>
+
+        {onExportData && plan && (
+          <TouchableOpacity
+            style={styles.exportDataButton}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              onExportData(plan);
+              onClose();
+            }}
+            activeOpacity={0.85}
+          >
+            <IconSave size={20} color={COLORS.text} />
+            <Text style={styles.exportDataButtonText}>{t('exportData')}</Text>
+          </TouchableOpacity>
+        )}
 
         <ScrollView style={styles.list} contentContainerStyle={styles.listContent} showsVerticalScrollIndicator={false}>
           {workoutList.map(({ template }) => {
@@ -231,5 +249,20 @@ const styles = StyleSheet.create({
   },
   shareButtonTextDisabled: {
     color: COLORS.textMeta,
+  },
+  exportDataButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: SPACING.sm,
+    backgroundColor: COLORS.activeCard,
+    height: 48,
+    borderRadius: BORDER_RADIUS.md,
+    marginBottom: SPACING.lg,
+  },
+  exportDataButtonText: {
+    ...TYPOGRAPHY.meta,
+    fontWeight: '600',
+    color: COLORS.text,
   },
 });

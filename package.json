@@ -7,6 +7,7 @@
     "start:clear": "expo start --clear",
     "start:fresh": "rm -rf node_modules/.cache .expo/cache $TMPDIR/metro-* $TMPDIR/haste-* 2>/dev/null; expo start --clear --port 8081 --localhost",
     "clean": "rm -rf node_modules/.cache .expo/cache $TMPDIR/metro-* $TMPDIR/haste-* 2>/dev/null; echo Done. Run npm run start:fresh to start with a clean bundle.",
+    "dev": "npm run clean && npx expo run:ios --no-build-cache",
     "reload": "lsof -ti :8082 | xargs kill -9 2>/dev/null; expo start --clear --port 8082",
     "android": "expo run:android",
     "ios": "expo run:ios",

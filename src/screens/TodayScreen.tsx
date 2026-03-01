@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Modal, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Modal, ScrollView, Alert, Share } from 'react-native';
 import Svg, { Circle, Path } from 'react-native-svg';
 import * as Haptics from 'expo-haptics';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -14,7 +14,10 @@ import { ShareCycleDrawer } from '../components/ShareCycleDrawer';
 import dayjs from 'dayjs';
 import isoWeek from 'dayjs/plugin/isoWeek';
 import { useTranslation } from '../i18n/useTranslation';
+import { formatWeightForLoad } from '../utils/weight';
 import type { BonusType, CyclePlan } from '../types/training';
+import type { ScheduledWorkout } from '../types/training';
+import type { ExerciseProgress } from '../types';
 
 dayjs.extend(isoWeek);
 
@@ -153,6 +156,8 @@ export function TodayScreen({ onDateChange, onOpenSwapDrawer, onOpenAddWorkout, 
     deleteCyclePlanCompletely,
     updateCyclePlan,
     repairPausedCycleSchedule,
+    exercises,
+    detailedWorkoutProgress,
   } = useStore();
 
   const today = dayjs();
@@ -245,6 +250,77 @@ export function TodayScreen({ onDateChange, onOpenSwapDrawer, onOpenAddWorkout, 
     if (cycleChipState === 'finished') return 'Finished';
     return '';
   })();
+
+  const handleExportData = useCallback(
+    async (plan: CyclePlan) => {
+      const cycleId = plan.id;
+      const cycleWorkouts = scheduledWorkouts
+        .filter(sw => sw.programId === cycleId || sw.cyclePlanId === cycleId)
+        .sort((a, b) => a.date.localeCompare(b.date));
+      const startDate = dayjs(plan.startDate);
+      const endDate = plan.endedAt
+        ? dayjs(plan.endedAt)
+        : cycleWorkouts.length > 0
+          ? dayjs(cycleWorkouts[cycleWorkouts.length - 1].date)
+          : dayjs(plan.startDate).add(plan.weeks, 'week').subtract(1, 'day');
+      const weekGroups: { weekNumber: number; weekStart: string; weekEnd: string; workouts: ScheduledWorkout[] }[] = [];
+      for (let w = 0; w < plan.weeks; w++) {
+        const weekStart = startDate.add(w, 'week');
+        const weekEnd = weekStart.add(6, 'day');
+        const weekWorkouts = cycleWorkouts.filter(
+          sw => sw.date >= weekStart.format('YYYY-MM-DD') && sw.date <= weekEnd.format('YYYY-MM-DD')
+        );
+        if (weekWorkouts.length > 0) {
+          weekGroups.push({
+            weekNumber: w + 1,
+            weekStart: weekStart.format('MMM D'),
+            weekEnd: weekEnd.format('MMM D'),
+            workouts: weekWorkouts,
+          });
+        }
+      }
+      const useKg = settings?.useKg ?? false;
+      const weightUnit = useKg ? 'kg' : 'lb';
+      const getExerciseProgressForWorkout = (sw: ScheduledWorkout, templateItemId: string, exerciseId: string): ExerciseProgress | null => {
+        const keyByScheduleId = detailedWorkoutProgress[sw.id];
+        const keyByTemplateDate = detailedWorkoutProgress[`${sw.templateId}-${sw.date}`];
+        const progress = keyByScheduleId ?? keyByTemplateDate;
+        const exerciseProgress = progress?.exercises?.[templateItemId] ?? progress?.exercises?.[exerciseId];
+        return exerciseProgress ?? null;
+      };
+      let exportText = `${plan.name}\n`;
+      exportText += `Period: ${dayjs(plan.startDate).format('MMM D, YYYY')} - ${endDate.format('MMM D, YYYY')}\n\n`;
+      for (const group of weekGroups) {
+        exportText += `WEEK ${group.weekNumber} (${group.weekStart} - ${group.weekEnd})\n`;
+        exportText += `${'-'.repeat(40)}\n`;
+        for (const sw of group.workouts) {
+          exportText += `\n  ${sw.titleSnapshot} — ${dayjs(sw.date).format('ddd, MMM D')}\n`;
+          for (const ex of sw.exercisesSnapshot || []) {
+            const exerciseData = exercises.find(e => e.id === ex.exerciseId);
+            const progress = getExerciseProgressForWorkout(sw, ex.id, ex.exerciseId);
+            const isTimeBased = ex.isTimeBased === true;
+            const repUnit = isTimeBased ? 'sec' : 'reps';
+            exportText += `    ${exerciseData?.name || 'Unknown'}\n`;
+            if (progress?.sets && progress.sets.length > 0) {
+              progress.sets.forEach((set, idx) => {
+                const value = set.reps ?? 0;
+                exportText += `      Set ${idx + 1}: ${formatWeightForLoad(set.weight ?? 0, useKg)} ${weightUnit} × ${value} ${repUnit}${set.completed ? ' ✓' : ''}\n`;
+              });
+            } else {
+              exportText += `      No logged data\n`;
+            }
+          }
+        }
+        exportText += '\n';
+      }
+      try {
+        await Share.share({ message: exportText, title: plan.name });
+      } catch (error) {
+        Alert.alert(t('alertErrorTitle'), t('failedToExportData'));
+      }
+    },
+    [scheduledWorkouts, exercises, detailedWorkoutProgress, settings, t]
+  );
 
   // Force refresh when screen comes into focus (e.g., after scheduling a workout)
   useFocusEffect(
@@ -447,10 +523,6 @@ export function TodayScreen({ onDateChange, onOpenSwapDrawer, onOpenAddWorkout, 
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                 if (cycleChipState === 'none') {
                   onOpenAddWorkout?.(selectedDate);
-                } else if (cycleChipState === 'finished') {
-                  if (selectedDateCyclePlan) {
-                    (navigation as any).navigate('CycleDetail', { cycleId: selectedDateCyclePlan.id });
-                  }
                 } else {
                   setShowCycleSheet(true);
                 }
@@ -768,7 +840,7 @@ export function TodayScreen({ onDateChange, onOpenSwapDrawer, onOpenAddWorkout, 
                               )}
                             </View>
                             <View style={styles.bonusTypeIconWrap}>
-                              <BonusTypeIcon type={item.type} size={16} />
+                              <BonusTypeIcon type={item.type} size={24} />
                             </View>
                           </View>
                         </View>
@@ -799,7 +871,7 @@ export function TodayScreen({ onDateChange, onOpenSwapDrawer, onOpenAddWorkout, 
           visible={showCycleSheet}
           onClose={() => setShowCycleSheet(false)}
           cycleState={cycleChipState}
-          plan={selectedDateCyclePlan?.active ? selectedDateCyclePlan : activeCyclePlan}
+          plan={cycleChipState === 'finished' ? selectedDateCyclePlan ?? undefined : (selectedDateCyclePlan?.active ? selectedDateCyclePlan : activeCyclePlan)}
           weekProgress={cycleWeekProgress}
           effectiveEndDate={activeCycleEndDate}
           onPause={(resumeDate: string) => {
@@ -842,6 +914,7 @@ export function TodayScreen({ onDateChange, onOpenSwapDrawer, onOpenAddWorkout, 
             setShareCyclePlan(plan);
             setShowShareCycleSheet(true);
           }}
+          onExportData={handleExportData}
           onStartCycle={() => {
             (navigation as any).navigate('CreateCycleFlow', { selectedDate: today.format('YYYY-MM-DD') });
           }}
@@ -854,6 +927,7 @@ export function TodayScreen({ onDateChange, onOpenSwapDrawer, onOpenAddWorkout, 
             setShareCyclePlan(undefined);
           }}
           plan={shareCyclePlan}
+          onExportData={handleExportData}
         />
       </View>
   );
@@ -1399,6 +1473,7 @@ const styles = StyleSheet.create({
   bonusCardLeft: {
     flex: 1,
     marginRight: SPACING.md,
+    gap: 4,
   },
   bonusTypeMeta: {
     ...TYPOGRAPHY.meta,

@@ -552,6 +552,7 @@ type TranslationKey =
   | 'noActiveCycle'
   | 'cycleActive'
   | 'cyclePaused'
+  | 'cycleFinished'
   | 'viewDetails'
   | 'end'
   | 'shareCycle'
@@ -1144,6 +1145,7 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     noActiveCycle: 'No active cycle',
     cycleActive: 'Active',
     cyclePaused: 'Paused',
+    cycleFinished: 'Finished',
     viewDetails: 'View Details',
     end: 'End',
     shareCycle: 'Share',
@@ -1736,6 +1738,7 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     noActiveCycle: 'Ningún ciclo activo',
     cycleActive: 'Activo',
     cyclePaused: 'Pausado',
+    cycleFinished: 'Finalizado',
     viewDetails: 'Ver detalles',
     end: 'Terminar',
     shareCycle: 'Compartir',
