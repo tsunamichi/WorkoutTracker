@@ -98,7 +98,9 @@ export const COLORS = {
   container: '#2C2C2E',          // Elevated secondary container
   cardBackground: '#1C1C1E',     // Card background
   activeCard: '#252528',         // Active/selected card state
-  
+  /** Active cycle strip and pill background (backgroundCanvas at 30% opacity) */
+  cycleStripBackground: 'rgba(13, 13, 13, 0.3)',
+
   // Primary actions
   primary: ACCENT_PRIMARY,              // Lime for CTAs
   primarySoft: '#1A1C0D',              // Very dark lime tint

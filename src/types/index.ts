@@ -155,6 +155,8 @@ export interface AppSettings {
   trainerPersonality?: string; // Preferred trainer personality/style
   // Exercise preferences
   barbellMode?: Record<string, boolean>; // exerciseId -> barbell mode preference
+  // Progression rules – show next-session suggestions during workout
+  progressionSuggestionsEnabled?: boolean;
 }
 
 // Helper type for cycle creation flow

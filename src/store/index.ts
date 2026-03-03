@@ -3,6 +3,7 @@ import dayjs from 'dayjs';
 import isoWeek from 'dayjs/plugin/isoWeek';
 import type { Cycle, Exercise, WorkoutSession, BodyWeightEntry, ProgressPhoto, AppSettings, WorkoutAssignment, TrainerConversation, ExercisePR, WorkoutProgress, ExerciseProgress, HIITTimer, HIITTimerSession } from '../types';
 import type { WorkoutTemplate, CyclePlan, ScheduledWorkout, ConflictResolution, ConflictItem, ConflictResolutionMap, PlanApplySummary, CyclePlanStatus, WarmUpSetTemplate, CoreSetTemplate, BonusLog, CoreProgram, CoreLog } from '../types/training';
+import type { ProgressionGroup, ProgressionRule, ProgressionDefaults, EffectiveProgressionRule, LastLogForExercise } from '../types/progression';
 import * as coreProgramUtil from '../utils/coreProgram';
 import * as storage from '../storage';
 import { SEED_EXERCISES } from '../constants';
@@ -191,6 +192,20 @@ interface WorkoutStore {
   resetWarmupCompletion: (workoutId: string) => Promise<void>;
   resetMainCompletion: (workoutId: string) => Promise<void>;
   resetAccessoryCompletion: (workoutId: string) => Promise<void>;
+
+  // Progression rules (suggestions)
+  progressionGroups: ProgressionGroup[];
+  progressionRules: ProgressionRule[];
+  progressionDefaults: ProgressionDefaults | null;
+  addProgressionGroup: (group: ProgressionGroup) => Promise<void>;
+  updateProgressionGroup: (groupId: string, updates: Partial<ProgressionGroup>) => Promise<void>;
+  deleteProgressionGroup: (groupId: string) => Promise<void>;
+  setProgressionDefaults: (defaults: ProgressionDefaults) => Promise<void>;
+  getProgressionRule: (exerciseId: string) => ProgressionRule | undefined;
+  setProgressionRule: (rule: ProgressionRule) => Promise<void>;
+  removeProgressionRule: (exerciseId: string) => Promise<void>;
+  getEffectiveProgressionRule: (exerciseId: string) => EffectiveProgressionRule | null;
+  getLastCompletedLogForExercise: (exerciseId: string) => LastLogForExercise | null;
 }
 
 const DEFAULT_SETTINGS: AppSettings = {
@@ -202,6 +217,14 @@ const DEFAULT_SETTINGS: AppSettings = {
   notificationsPermissionPrompted: false,
   profileAvatarUri: undefined,
   openaiApiKey: '', // API key removed for security - add via app settings
+  progressionSuggestionsEnabled: true,
+};
+
+const DEFAULT_PROGRESSION_DEFAULTS: ProgressionDefaults = {
+  repRangeMin: 8,
+  repRangeMax: 12,
+  weightIncrement: 2.5,
+  progressionMode: 'double',
 };
 
 // Helper function to infer equipment type from exercise name
@@ -293,6 +316,9 @@ export const useStore = create<WorkoutStore>((set, get) => ({
   scheduledWorkouts: [],
   warmupCompletionByKey: {},
   accessoryCompletionByKey: {},
+  progressionGroups: [],
+  progressionRules: [],
+  progressionDefaults: null,
   
   initialize: async () => {
     try {
@@ -331,6 +357,9 @@ export const useStore = create<WorkoutStore>((set, get) => ({
         coreLogs,
         warmupCompletionByKey,
         accessoryCompletionByKey,
+        progressionGroups,
+        progressionRules,
+        progressionDefaults,
       ] = await Promise.all([
         storage.loadCycles(),
         storage.loadExercises(),
@@ -356,6 +385,9 @@ export const useStore = create<WorkoutStore>((set, get) => ({
         storage.loadCoreLogs(),
         storage.loadWarmupCompletionByKey(),
         storage.loadAccessoryCompletionByKey(),
+        storage.loadProgressionGroups(),
+        storage.loadProgressionRules(),
+        storage.loadProgressionDefaults(),
       ]);
       
       // Normalize body weight entries to lbs
@@ -1240,6 +1272,111 @@ export const useStore = create<WorkoutStore>((set, get) => ({
       
       console.log('================================================\n');
       
+      // Seed default progression groups if the canonical IDs are missing
+      let finalProgressionGroups = progressionGroups || [];
+      let finalProgressionDefaults = progressionDefaults ?? null;
+      const hasCanonicalGroups = finalProgressionGroups.some(g => g.id === 'pg-main-upper');
+      if (!hasCanonicalGroups && finalExercises.length > 0) {
+        const byName = (name: string) => finalExercises.find(e => e.name === name)?.id;
+        const resolveIds = (names: string[]) => names.map(byName).filter(Boolean) as string[];
+        const now = new Date().toISOString();
+
+        finalProgressionGroups = [
+          {
+            id: 'pg-main-upper',
+            name: 'Main Upper',
+            orderIndex: 0,
+            repRangeMin: 5,
+            repRangeMax: 8,
+            weightIncrement: 2.5,
+            progressionMode: 'double' as const,
+            exerciseIds: resolveIds([
+              'Barbell Bench Press', 'Incline Barbell Bench Press', 'Dumbbell Bench Press',
+              'Decline Bench Press', 'Chest Press Machine',
+              'Pull-Ups', 'Chin-Ups', 'Barbell Row', 'Pendlay Row', 'T-Bar Row',
+              'Chest-Supported Row (Machine)',
+              'Overhead Barbell Press', 'Seated Dumbbell Shoulder Press', 'Machine Shoulder Press',
+              'Close-Grip Bench Press',
+            ]),
+            createdAt: now,
+            updatedAt: now,
+          },
+          {
+            id: 'pg-main-lower',
+            name: 'Main Lower',
+            orderIndex: 1,
+            repRangeMin: 5,
+            repRangeMax: 8,
+            weightIncrement: 5,
+            progressionMode: 'double' as const,
+            exerciseIds: resolveIds([
+              'Back Squat', 'Front Squat', 'Hack Squat', 'Leg Press', 'Bulgarian Split Squat',
+              'Romanian Deadlift', 'Stiff-Leg Deadlift', 'Hip Hinge Machine',
+              'Hip Thrust (Barbell)', 'Hip Thrust (Machine)',
+            ]),
+            createdAt: now,
+            updatedAt: now,
+          },
+          {
+            id: 'pg-accessories',
+            name: 'Accessories',
+            orderIndex: 2,
+            repRangeMin: 10,
+            repRangeMax: 15,
+            weightIncrement: 2.5,
+            progressionMode: 'double' as const,
+            exerciseIds: resolveIds([
+              'Incline Dumbbell Press', 'Dumbbell Fly (Flat)', 'Incline Dumbbell Fly',
+              'Cable Fly (High to Low)', 'Cable Fly (Low to High)', 'Pec Deck', 'Push-Ups', 'Chest Dips',
+              'Lat Pulldown (Wide)', 'Lat Pulldown (Neutral)', 'Single-Arm Lat Pulldown',
+              'Seated Cable Row', 'Chest-Supported Dumbbell Row', 'Single-Arm Dumbbell Row', 'Inverted Row',
+              'Face Pull', 'Rear Delt Row (Cable or Dumbbell)', 'High Cable Row', 'Band Pull-Apart',
+              'Prone Y Raise', 'Prone T Raise', 'Reverse Pec Deck', 'Scapular Pull-Ups',
+              'Arnold Press', 'Lateral Raise (Dumbbell)', 'Cable Lateral Raise',
+              'Front Raise (Dumbbell or Plate)', 'Upright Row (EZ Bar or Cable)', 'Rear Delt Fly (Dumbbell)',
+              'Barbell Curl', 'EZ-Bar Curl', 'Dumbbell Curl', 'Alternating Dumbbell Curl',
+              'Incline Dumbbell Curl', 'Preacher Curl (Machine or EZ)', 'Cable Curl',
+              'Hammer Curl', 'Cross-Body Hammer Curl', 'Concentration Curl',
+              'Triceps Pushdown (Rope)', 'Triceps Pushdown (Bar)', 'Overhead Triceps Extension (Cable)',
+              'Dumbbell Overhead Extension', 'Skullcrushers (EZ Bar)', 'Bench Dips', 'Assisted Dips',
+              'Single-Arm Cable Kickback',
+              'Goblet Squat', 'Step-Ups', 'Spanish Squat', 'Wall Sit', 'Sissy Squat (Assisted)',
+              'Seated Hamstring Curl', 'Lying Hamstring Curl', 'Nordic Hamstring Curl (Assisted)',
+              'Single-Leg Romanian Deadlift',
+              'Glute Bridge', 'Cable Kickback', 'Reverse Lunge', 'Walking Lunge', 'Step-Back Lunge', 'Curtsy Lunge',
+              'Adductor Machine', 'Abductor Machine', 'Copenhagen Plank', 'Lateral Lunge',
+              'Cable Hip Adduction', 'Cable Hip Abduction',
+              'Standing Calf Raise', 'Seated Calf Raise', 'Single-Leg Calf Raise', 'Donkey Calf Raise',
+              'Calf Press (Leg Press Machine)',
+              'Plank', 'Side Plank', 'Dead Bug', 'Bird Dog', 'Pallof Press',
+              'Stability Ball Rollout', 'Ab Wheel Rollout',
+              'Hanging Knee Raise', 'Hanging Leg Raise', "Captain's Chair Leg Raise", 'Cable Crunch',
+              'Decline Sit-Up', 'Russian Twist (Controlled)', 'Cable Woodchop', 'Cable Lift',
+              "Farmer's Carry", 'Suitcase Carry', 'Front Rack Carry', 'Overhead Carry', 'Sled Push', 'Sled Pull',
+              'Assault Bike', 'Row Erg', 'Ski Erg', 'Incline Treadmill Walk', 'Stair Climber',
+            ]),
+            createdAt: now,
+            updatedAt: now,
+          },
+        ];
+        await storage.saveProgressionGroups(finalProgressionGroups);
+
+        if (!finalProgressionDefaults) {
+          finalProgressionDefaults = { repRangeMin: 8, repRangeMax: 12, weightIncrement: 2.5, progressionMode: 'double' };
+          await storage.saveProgressionDefaults(finalProgressionDefaults);
+        }
+        console.log('🏋️ Seeded 3 default progression groups');
+      } else {
+        // One-time rename: "Main Lift (Upper)" → "Main Upper", "Main Lift (Lower)" → "Main Lower"
+        const renames: Record<string, string> = { 'Main Lift (Upper)': 'Main Upper', 'Main Lift (Lower)': 'Main Lower' };
+        let renamed = false;
+        finalProgressionGroups = finalProgressionGroups.map(g => {
+          if (renames[g.name]) { renamed = true; return { ...g, name: renames[g.name] }; }
+          return g;
+        });
+        if (renamed) await storage.saveProgressionGroups(finalProgressionGroups);
+      }
+
       set({
         cycles: finalCycles,
         exercises: finalExercises,
@@ -1262,6 +1399,9 @@ export const useStore = create<WorkoutStore>((set, get) => ({
         coreLogs,
         warmupCompletionByKey: warmupCompletionByKey || {},
         accessoryCompletionByKey: accessoryCompletionByKey || {},
+        progressionGroups: finalProgressionGroups,
+        progressionRules: progressionRules || [],
+        progressionDefaults: finalProgressionDefaults,
         workoutTemplates: finalWorkoutTemplates,
         cyclePlans: finalCyclePlans,
         scheduledWorkouts: finalScheduledWorkouts,
@@ -3875,6 +4015,116 @@ export const useStore = create<WorkoutStore>((set, get) => ({
       await storage.saveAccessoryCompletionByKey(byKey);
     }
     console.log('✅ Accessory completion reset');
+  },
+
+  addProgressionGroup: async (group) => {
+    const groups = [...get().progressionGroups, group];
+    set({ progressionGroups: groups });
+    await storage.saveProgressionGroups(groups);
+  },
+  updateProgressionGroup: async (groupId, updates) => {
+    const groups = get().progressionGroups.map(g =>
+      g.id === groupId ? { ...g, ...updates, updatedAt: new Date().toISOString() } : g
+    );
+    set({ progressionGroups: groups });
+    await storage.saveProgressionGroups(groups);
+  },
+  deleteProgressionGroup: async (groupId) => {
+    const groups = get().progressionGroups.filter(g => g.id !== groupId);
+    const rules = get().progressionRules.filter(r => r.groupId !== groupId);
+    set({ progressionGroups: groups, progressionRules: rules });
+    await storage.saveProgressionGroups(groups);
+    await storage.saveProgressionRules(rules);
+  },
+  setProgressionDefaults: async (defaults) => {
+    set({ progressionDefaults: defaults });
+    await storage.saveProgressionDefaults(defaults);
+  },
+  getProgressionRule: (exerciseId) => {
+    return get().progressionRules.find(r => r.exerciseId === exerciseId);
+  },
+  setProgressionRule: async (rule) => {
+    const rules = get().progressionRules.filter(r => r.exerciseId !== rule.exerciseId);
+    rules.push({ ...rule, updatedAt: new Date().toISOString() });
+    set({ progressionRules: rules });
+    await storage.saveProgressionRules(rules);
+  },
+  removeProgressionRule: async (exerciseId) => {
+    const rules = get().progressionRules.filter(r => r.exerciseId !== exerciseId);
+    set({ progressionRules: rules });
+    await storage.saveProgressionRules(rules);
+  },
+  getEffectiveProgressionRule: (exerciseId) => {
+    const defs = get().progressionDefaults ?? DEFAULT_PROGRESSION_DEFAULTS;
+    const rule = get().progressionRules.find(r => r.exerciseId === exerciseId);
+    if (rule) {
+      return {
+        repRangeMin: rule.repRangeMin ?? defs.repRangeMin,
+        repRangeMax: rule.repRangeMax ?? defs.repRangeMax,
+        weightIncrement: rule.weightIncrement ?? defs.weightIncrement,
+        progressionMode: rule.progressionMode ?? defs.progressionMode,
+        source: 'rule' as const,
+      };
+    }
+    const group = get().progressionGroups.find(g => g.exerciseIds.includes(exerciseId));
+    if (group) {
+      return {
+        repRangeMin: group.repRangeMin,
+        repRangeMax: group.repRangeMax,
+        weightIncrement: group.weightIncrement,
+        progressionMode: group.progressionMode,
+        source: 'group' as const,
+      };
+    }
+    // No group and no individual rule → no progression
+    return null;
+  },
+
+  getLastCompletedLogForExercise: (exerciseId) => {
+    const { detailedWorkoutProgress, scheduledWorkouts, workoutTemplates } = get();
+    const templateMap = new Map(workoutTemplates.map(t => [t.id, t]));
+    const entries: { date: string; workingSets: Array<{ setNumber: number; weight: number; reps: number }> }[] = [];
+
+    Object.entries(detailedWorkoutProgress).forEach(([wKey, progress]) => {
+      let date = '';
+      let template: WorkoutTemplate | undefined;
+      if (wKey.startsWith('sw-')) {
+        const sw = scheduledWorkouts.find(s => s.id === wKey);
+        if (sw) {
+          date = sw.date || '';
+          template = templateMap.get(sw.templateId);
+        }
+      }
+      if (!template) {
+        const parts = wKey.split('-');
+        const templateId = parts.length >= 3 ? parts.slice(0, -3).join('-') : wKey;
+        template = templateMap.get(templateId);
+        const dateMatch = wKey.match(/(\d{4}-\d{2}-\d{2})/);
+        date = dateMatch ? dateMatch[1] : progress.lastUpdated?.split('T')[0] || '';
+      }
+      if (!template) return;
+
+      const items = (template as any).items ?? (template as any).exercises ?? [];
+      const templateItemIds = items
+        .filter((i: any) => (i.exerciseId || i.id) === exerciseId)
+        .map((i: any) => i.id);
+
+      for (const templateItemId of templateItemIds) {
+        const exProgress = progress.exercises[templateItemId];
+        if (!exProgress?.sets?.length) continue;
+        const completed = exProgress.sets
+          .filter((s: any) => s.completed)
+          .map((s: any) => ({ setNumber: s.setNumber, weight: s.weight, reps: s.reps }));
+        if (completed.length > 0) {
+          entries.push({ date: date || progress.lastUpdated?.split('T')[0] || '', workingSets: completed });
+          break;
+        }
+      }
+    });
+
+    if (entries.length === 0) return null;
+    entries.sort((a, b) => (b.date > a.date ? 1 : b.date < a.date ? -1 : 0));
+    return entries[0];
   },
   
   // Bonus feature: Warmup Presets

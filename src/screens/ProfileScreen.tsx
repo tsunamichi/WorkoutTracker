@@ -5,11 +5,9 @@ import * as Haptics from 'expo-haptics';
 import { useStore } from '../store';
 import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS } from '../constants';
 import { TimerValueSheet } from '../components/timer/TimerValueSheet';
-import { IconArrowLeft, IconTriangle, IconHistory } from '../components/icons';
+import { IconArrowLeft, IconTriangle } from '../components/icons';
 import { Toggle } from '../components/Toggle';
 import { useTranslation } from '../i18n/useTranslation';
-import { cloudBackupService } from '../services/cloudBackup';
-import { exportDataToFile, importDataFromFile } from '../services/dataExportImport';
 import { signInWithApple, getCurrentUser, signOut, isAppleSignInAvailable, AuthUser } from '../services/authService';
 import { uploadBackup, downloadBackup, getCloudBackupInfo } from '../services/cloudSync';
 import { isSupabaseConfigured } from '../services/supabase';
@@ -31,8 +29,6 @@ export function ProfileScreen({ navigation }: ProfileScreenProps) {
   const { settings, updateSettings, initialize } = useStore();
   const [showRestTimePicker, setShowRestTimePicker] = useState(false);
   const [notificationsSystemEnabled, setNotificationsSystemEnabled] = useState<boolean | null>(null);
-  const [cloudBackupInfo, setCloudBackupInfo] = useState<{ exists: boolean; timestamp?: string } | null>(null);
-  const [showBackupOptions, setShowBackupOptions] = useState(false);
   const [authUser, setAuthUser] = useState<AuthUser | null>(null);
   const [appleSignInAvailable, setAppleSignInAvailable] = useState(false);
   const [cloudSyncInfo, setCloudSyncInfo] = useState<{ exists: boolean; syncedAt?: string } | null>(null);
@@ -57,13 +53,6 @@ export function ProfileScreen({ navigation }: ProfileScreenProps) {
     })();
   }, []);
 
-  useEffect(() => {
-    // Load cloud backup info
-    (async () => {
-      const info = await cloudBackupService.getBackupInfo();
-      setCloudBackupInfo(info);
-    })();
-  }, []);
 
   useEffect(() => {
     // Check Apple Sign-In availability and current auth state
@@ -151,6 +140,9 @@ export function ProfileScreen({ navigation }: ProfileScreenProps) {
         contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 24 }]}
         showsVerticalScrollIndicator={false}
       >
+        {/* Global Settings title */}
+        <Text style={styles.sectionTitle}>Global Settings</Text>
+
         {/* Group 1: Quick Settings - 3 Column Layout */}
         <View style={styles.threeColumnRow}>
           {/* Unit Card */}
@@ -187,19 +179,18 @@ export function ProfileScreen({ navigation }: ProfileScreenProps) {
           </TouchableOpacity>
         </View>
 
-        {/* Progress */}
+        {/* Progression Rules */}
         <TouchableOpacity
           style={styles.settingCard}
           activeOpacity={0.7}
           onPress={() => {
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-            navigation.navigate('ProgressTab');
+            navigation.navigate('Progression');
           }}
         >
           <View style={styles.settingRow}>
             <View style={[styles.settingInfo, { flexDirection: 'row', alignItems: 'center', gap: 12 }]}>
-              <IconHistory size={20} color={COLORS.text} />
-              <Text style={styles.settingLabel}>{t('progress')}</Text>
+              <Text style={styles.settingLabel}>Progression rules</Text>
             </View>
             <View style={{ transform: [{ rotate: '90deg' }] }}>
               <IconTriangle size={12} color={COLORS.text} />
@@ -207,26 +198,8 @@ export function ProfileScreen({ navigation }: ProfileScreenProps) {
           </View>
         </TouchableOpacity>
 
-        {/* Group 2: Toggle Settings - Combined Card */}
+        {/* Group 2: Toggle Settings */}
         <View style={styles.settingCard}>
-          {/* Monthly Progress Check */}
-          <View style={styles.settingRow}>
-            <View style={styles.settingInfo}>
-              <Text style={styles.settingLabel}>{t('monthlyProgressCheck')}</Text>
-              <Text style={styles.settingDescription}>
-                {t('monthlyProgressReminder').replace('{day}', String(settings.monthlyProgressReminderDay))}
-              </Text>
-            </View>
-            <Toggle
-              label=""
-              value={settings.monthlyProgressReminderEnabled}
-              onValueChange={(value) => updateSettings({ monthlyProgressReminderEnabled: value })}
-            />
-          </View>
-
-          {/* Divider */}
-          <View style={styles.settingDivider} />
-
           {/* Timer Notifications */}
           <View style={styles.settingRow}>
             <View style={styles.settingInfo}>
@@ -438,216 +411,6 @@ export function ProfileScreen({ navigation }: ProfileScreenProps) {
           </View>
         )}
 
-        {/* iCloud Backup Section - Collapsible */}
-        <TouchableOpacity 
-          style={[styles.settingCard, styles.settingCardRow]}
-          onPress={() => {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-            setShowBackupOptions(!showBackupOptions);
-          }}
-          activeOpacity={0.7}
-        >
-          <View style={styles.settingInfo}>
-            <Text style={styles.settingLabel}>☁️ iCloud Backup</Text>
-            <Text style={styles.settingDescription}>
-              {cloudBackupInfo?.exists 
-                ? `Last backup: ${cloudBackupInfo.timestamp ? new Date(cloudBackupInfo.timestamp).toLocaleDateString() : 'Unknown'}`
-                : 'Automatic backup enabled'}
-            </Text>
-          </View>
-          <IconTriangle 
-            size={16} 
-            color={COLORS.text} 
-            style={{ transform: [{ rotate: showBackupOptions ? '90deg' : '0deg' }] }}
-          />
-        </TouchableOpacity>
-
-        {showBackupOptions && (
-          <View style={styles.nestedOptionsContainer}>
-            <TouchableOpacity 
-              style={[styles.settingCard, styles.settingCardRow, styles.nestedOption]}
-              onPress={async () => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                const info = await cloudBackupService.getBackupInfo();
-                const timestamp = info.timestamp 
-                  ? new Date(info.timestamp).toLocaleString()
-                  : 'Never';
-                
-                Alert.alert(
-                  'iCloud Backup Status',
-                  info.exists
-                    ? `✅ Backup exists\n\nLast backup: ${timestamp}\n\nYour workout data is automatically backed up to iCloud every 5 minutes.`
-                    : `No backup found\n\nBackups will start automatically. Your first backup will happen within 5 minutes.`,
-                  [{ text: 'OK' }]
-                );
-              }}
-              activeOpacity={0.7}
-            >
-              <View style={styles.settingInfo}>
-                <Text style={styles.settingLabel}>View Status</Text>
-                <Text style={styles.settingDescription}>Check backup details</Text>
-              </View>
-            </TouchableOpacity>
-
-            <TouchableOpacity 
-              style={[styles.settingCard, styles.settingCardRow, styles.nestedOption]}
-              onPress={async () => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                Alert.alert(
-                  'Backup to iCloud Now',
-                  'Create a backup of all your workout data to iCloud?',
-                  [
-                    { text: 'Cancel', style: 'cancel' },
-                    {
-                      text: 'Backup Now',
-                      onPress: async () => {
-                        const result = await cloudBackupService.manualBackup();
-                        if (result.success) {
-                          const newInfo = await cloudBackupService.getBackupInfo();
-                          setCloudBackupInfo(newInfo);
-                          Alert.alert(
-                            'Success',
-                            'Your workout data has been backed up to iCloud!',
-                            [{ text: 'OK' }]
-                          );
-                        } else {
-                          Alert.alert(
-                            'Error',
-                            result.error || 'Failed to backup. Please try again.',
-                            [{ text: 'OK' }]
-                          );
-                        }
-                      }
-                    }
-                  ]
-                );
-              }}
-              activeOpacity={0.7}
-            >
-              <View style={styles.settingInfo}>
-                <Text style={styles.settingLabel}>Backup Now</Text>
-                <Text style={styles.settingDescription}>Create manual backup</Text>
-              </View>
-            </TouchableOpacity>
-
-            <TouchableOpacity 
-              style={[styles.settingCard, styles.settingCardRow, styles.nestedOption]}
-              onPress={async () => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                const hasBackup = await cloudBackupService.hasCloudBackup();
-                if (!hasBackup) {
-                  Alert.alert(
-                    'No Backup Found',
-                    'There is no iCloud backup to restore from.',
-                    [{ text: 'OK' }]
-                  );
-                  return;
-                }
-                
-                Alert.alert(
-                  'Restore from iCloud',
-                  'This will restore your workout data from your iCloud backup. Current data will be replaced.',
-                  [
-                    { text: 'Cancel', style: 'cancel' },
-                    {
-                      text: 'Restore',
-                      style: 'destructive',
-                      onPress: async () => {
-                        const result = await cloudBackupService.restoreFromCloud();
-                        if (result.success) {
-                          // Reload the store
-                          await initialize();
-                          Alert.alert(
-                            'Success',
-                            `Restored ${result.restoredKeys} items from iCloud backup!`,
-                            [{ text: 'OK' }]
-                          );
-                        } else {
-                          Alert.alert(
-                            'Error',
-                            result.error || 'Failed to restore. Please try again.',
-                            [{ text: 'OK' }]
-                          );
-                        }
-                      }
-                    }
-                  ]
-                );
-              }}
-              activeOpacity={0.7}
-            >
-              <View style={styles.settingInfo}>
-                <Text style={styles.settingLabel}>Restore from Backup</Text>
-                <Text style={styles.settingDescription}>Replace current data</Text>
-              </View>
-            </TouchableOpacity>
-          </View>
-        )}
-
-        {/* Export / Import Data */}
-        <View style={styles.settingCard}>
-          <TouchableOpacity 
-            style={styles.settingRow}
-            onPress={async () => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              const result = await exportDataToFile();
-              if (!result.success && result.error !== undefined) {
-                Alert.alert('Export Failed', result.error, [{ text: 'OK' }]);
-              }
-            }}
-            activeOpacity={0.7}
-          >
-            <View style={styles.settingInfo}>
-              <Text style={styles.settingLabel}>📤 Export Data</Text>
-              <Text style={styles.settingDescription}>
-                Save a backup file to Files, AirDrop, etc.
-              </Text>
-            </View>
-            <IconTriangle size={16} color={COLORS.text} />
-          </TouchableOpacity>
-
-          <View style={styles.settingDivider} />
-
-          <TouchableOpacity 
-            style={styles.settingRow}
-            onPress={async () => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              Alert.alert(
-                'Import Backup',
-                'This will restore data from a backup file. Your current data will be merged with the imported data.',
-                [
-                  { text: 'Cancel', style: 'cancel' },
-                  {
-                    text: 'Choose File',
-                    onPress: async () => {
-                      const result = await importDataFromFile();
-                      if (result.success) {
-                        await initialize();
-                        Alert.alert(
-                          'Import Successful',
-                          `Restored ${result.restoredKeys} data entries from backup!\n\nYour workouts and progress have been restored.`,
-                          [{ text: 'OK' }]
-                        );
-                      } else if (result.error && result.error !== 'No file selected.') {
-                        Alert.alert('Import Failed', result.error, [{ text: 'OK' }]);
-                      }
-                    }
-                  }
-                ]
-              );
-            }}
-            activeOpacity={0.7}
-          >
-            <View style={styles.settingInfo}>
-              <Text style={styles.settingLabel}>📥 Import Data</Text>
-              <Text style={styles.settingDescription}>
-                Restore from a previously exported backup file
-              </Text>
-            </View>
-            <IconTriangle size={16} color={COLORS.text} />
-          </TouchableOpacity>
-        </View>
-
       </ScrollView>
 
       {/* Rest Time Picker */}
@@ -704,6 +467,12 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingHorizontal: SPACING.xxl,
   },
+  sectionTitle: {
+    ...TYPOGRAPHY.legal,
+    color: COLORS.textMeta,
+    textTransform: 'uppercase',
+    marginBottom: SPACING.sm,
+  },
   // Group 1: Three Column Layout
   threeColumnRow: {
     flexDirection: 'row',
@@ -745,19 +514,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-  },
-  // Nested Options Container
-  nestedOptionsContainer: {
-    marginTop: -SPACING.md,
-    marginBottom: SPACING.lg,
-    paddingLeft: SPACING.md,
-  },
-  nestedOption: {
-    marginLeft: SPACING.lg,
-    marginBottom: SPACING.sm,
-    backgroundColor: COLORS.backgroundCanvas,
-    borderLeftWidth: 2,
-    borderLeftColor: COLORS.borderDimmed,
   },
   settingRow: {
     flexDirection: 'row',

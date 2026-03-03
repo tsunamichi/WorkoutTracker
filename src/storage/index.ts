@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { Cycle, Exercise, WorkoutSession, BodyWeightEntry, ProgressPhoto, AppSettings, WorkoutAssignment, TrainerConversation, ExercisePR, WorkoutProgress, HIITTimer, HIITTimerSession } from '../types';
 import type { WorkoutTemplate, CyclePlan, ScheduledWorkout, WarmUpSetTemplate, CoreSetTemplate, BonusLog, CoreProgram, CoreLog } from '../types/training';
+import type { ProgressionGroup, ProgressionRule, ProgressionDefaults } from '../types/progression';
 const STORAGE_KEYS = {
   CYCLES: '@workout_tracker_cycles',
   EXERCISES: '@workout_tracker_exercises',
@@ -29,6 +30,9 @@ const STORAGE_KEYS = {
   // Fallback completion for warmup/accessory when workoutKey is not a scheduled workout (e.g. bonus, standalone)
   WARMUP_COMPLETION_BY_KEY: '@workout_tracker_warmup_completion_by_key',
   ACCESSORY_COMPLETION_BY_KEY: '@workout_tracker_accessory_completion_by_key',
+  PROGRESSION_GROUPS: '@workout_tracker_progression_groups',
+  PROGRESSION_RULES: '@workout_tracker_progression_rules',
+  PROGRESSION_DEFAULTS: '@workout_tracker_progression_defaults',
 };
 
 // Cycles
@@ -521,6 +525,61 @@ export async function saveAccessoryCompletionByKey(byKey: CompletionByKey): Prom
     await AsyncStorage.setItem(STORAGE_KEYS.ACCESSORY_COMPLETION_BY_KEY, JSON.stringify(byKey));
   } catch (error) {
     console.error('Error saving accessory completion by key:', error);
+  }
+}
+
+// Progression (groups, rules, defaults)
+export async function loadProgressionGroups(): Promise<ProgressionGroup[]> {
+  try {
+    const data = await AsyncStorage.getItem(STORAGE_KEYS.PROGRESSION_GROUPS);
+    return data ? JSON.parse(data) : [];
+  } catch (error) {
+    console.error('Error loading progression groups:', error);
+    return [];
+  }
+}
+
+export async function saveProgressionGroups(groups: ProgressionGroup[]): Promise<void> {
+  try {
+    await AsyncStorage.setItem(STORAGE_KEYS.PROGRESSION_GROUPS, JSON.stringify(groups));
+  } catch (error) {
+    console.error('Error saving progression groups:', error);
+  }
+}
+
+export async function loadProgressionRules(): Promise<ProgressionRule[]> {
+  try {
+    const data = await AsyncStorage.getItem(STORAGE_KEYS.PROGRESSION_RULES);
+    return data ? JSON.parse(data) : [];
+  } catch (error) {
+    console.error('Error loading progression rules:', error);
+    return [];
+  }
+}
+
+export async function saveProgressionRules(rules: ProgressionRule[]): Promise<void> {
+  try {
+    await AsyncStorage.setItem(STORAGE_KEYS.PROGRESSION_RULES, JSON.stringify(rules));
+  } catch (error) {
+    console.error('Error saving progression rules:', error);
+  }
+}
+
+export async function loadProgressionDefaults(): Promise<ProgressionDefaults | null> {
+  try {
+    const data = await AsyncStorage.getItem(STORAGE_KEYS.PROGRESSION_DEFAULTS);
+    return data ? JSON.parse(data) : null;
+  } catch (error) {
+    console.error('Error loading progression defaults:', error);
+    return null;
+  }
+}
+
+export async function saveProgressionDefaults(defaults: ProgressionDefaults): Promise<void> {
+  try {
+    await AsyncStorage.setItem(STORAGE_KEYS.PROGRESSION_DEFAULTS, JSON.stringify(defaults));
+  } catch (error) {
+    console.error('Error saving progression defaults:', error);
   }
 }
 

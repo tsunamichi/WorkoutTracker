@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Modal, ScrollView, Alert, Share } from 'react-native';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Modal, ScrollView, Alert, Share, Dimensions } from 'react-native';
 import Svg, { Circle, Path } from 'react-native-svg';
 import * as Haptics from 'expo-haptics';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -171,10 +171,10 @@ export function TodayScreen({ onDateChange, onOpenSwapDrawer, onOpenAddWorkout, 
   // State must be declared before any derived values that use it
   const [selectedDate, setSelectedDate] = useState(today.format('YYYY-MM-DD'));
   const [refreshTrigger, setRefreshTrigger] = useState(0);
-  const [bonusExpanded, setBonusExpanded] = useState(false);
   const [showCycleSheet, setShowCycleSheet] = useState(false);
   const [showShareCycleSheet, setShowShareCycleSheet] = useState(false);
   const [shareCyclePlan, setShareCyclePlan] = useState<CyclePlan | undefined>(undefined);
+  const [isCalendarExpanded, setIsCalendarExpanded] = useState(false);
 
   // TEMP: Seed dev data on mount (remove after use)
   const [seeded, setSeeded] = useState(false);
@@ -350,7 +350,18 @@ export function TodayScreen({ onDateChange, onOpenSwapDrawer, onOpenAddWorkout, 
   const weekStart = dayjs(selectedDate).startOf('isoWeek');
   
   const scheduleLabel = t('schedule');
-  
+
+  // Month/year label for calendar (same range as ExpandableCalendarStrip: 5 weeks centered on selected)
+  const calendarMonthLabel = useMemo(() => {
+    const centerWeekStart = dayjs(selectedDate).startOf('isoWeek');
+    const first = centerWeekStart.add(-2, 'week');
+    const last = centerWeekStart.add(2, 'week').add(6, 'day');
+    if (first.month() === last.month()) {
+      return first.format('MMMM YYYY');
+    }
+    return `${first.format('MMM')} - ${last.format('MMM YYYY')}`;
+  }, [selectedDate]);
+
   // Get workouts for this week (SCHEDULE-FIRST: Only use ScheduledWorkout)
   const weekDays = React.useMemo(() => DAYS_SHORT.map((dayLetter, index) => {
     const date = weekStart.add(index, 'day');
@@ -481,7 +492,7 @@ export function TodayScreen({ onDateChange, onOpenSwapDrawer, onOpenAddWorkout, 
   
   return (
       <View style={styles.gradient}>
-        <SafeAreaView style={[styles.container, { paddingBottom: insets.bottom }]} edges={[]}>
+        <SafeAreaView style={styles.container} edges={[]}>
           {/* Unified header + calendar card */}
           <View style={[styles.calendarCard, { paddingTop: insets.top }]}>
             {/* Header row: Schedule title + icons */}
@@ -509,51 +520,62 @@ export function TodayScreen({ onDateChange, onOpenSwapDrawer, onOpenAddWorkout, 
                 </TouchableOpacity>
               </View>
             </View>
-            {/* Cycle chip row below title */}
-            <TouchableOpacity
-              style={[
-                styles.cycleChip,
-                cycleChipState === 'paused' && styles.cycleChipPaused,
-                cycleChipState === 'finished' && styles.cycleChipFinished,
-                cycleChipState === 'none' && styles.cycleChipNone,
-                styles.cycleChipRow,
-              ]}
-              activeOpacity={0.7}
-              onPress={() => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                if (cycleChipState === 'none') {
-                  onOpenAddWorkout?.(selectedDate);
-                } else {
-                  setShowCycleSheet(true);
-                }
-              }}
-            >
-              {cycleChipState === 'none' ? (
-                <Text style={styles.cycleChipTextNone} numberOfLines={1}>
-                  {t('startACycle')}
-                </Text>
-              ) : (
-                <Text numberOfLines={1}>
-                  <Text style={[
-                    styles.cycleChipName,
-                    cycleChipState === 'paused' && styles.cycleChipNamePaused,
-                    cycleChipState === 'finished' && styles.cycleChipNameFinished,
-                  ]}>
-                    {cycleChipName}
+            {/* Cycle chip + month/year on one row */}
+            <View style={styles.cycleChipAndMonthRow}>
+              <TouchableOpacity
+                style={[
+                  styles.cycleChip,
+                  cycleChipState === 'paused' && styles.cycleChipPaused,
+                  cycleChipState === 'finished' && styles.cycleChipFinished,
+                  cycleChipState === 'none' && styles.cycleChipNone,
+                  styles.cycleChipRow,
+                ]}
+                activeOpacity={0.7}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  if (cycleChipState === 'none') {
+                    onOpenAddWorkout?.(selectedDate);
+                  } else {
+                    setShowCycleSheet(true);
+                  }
+                }}
+              >
+                {cycleChipState === 'none' ? (
+                  <Text style={styles.cycleChipTextNone} numberOfLines={1}>
+                    {t('startACycle')}
                   </Text>
-                  <Text style={[
-                    styles.cycleChipStatusText,
-                    cycleChipState === 'paused' && styles.cycleChipTextPaused,
-                    cycleChipState === 'finished' && styles.cycleChipTextFinished,
-                  ]}>
-                    {' · '}{cycleChipStatus}
+                ) : (
+                  <Text numberOfLines={1}>
+                    <Text style={[
+                      styles.cycleChipName,
+                      cycleChipState === 'paused' && styles.cycleChipNamePaused,
+                      cycleChipState === 'finished' && styles.cycleChipNameFinished,
+                    ]}>
+                      {cycleChipName}
+                    </Text>
+                    <Text style={[
+                      styles.cycleChipStatusText,
+                      cycleChipState === 'paused' && styles.cycleChipTextPaused,
+                      cycleChipState === 'finished' && styles.cycleChipTextFinished,
+                    ]}>
+                      {' · '}{cycleChipStatus}
+                    </Text>
                   </Text>
-                </Text>
+                )}
+              </TouchableOpacity>
+              {isCalendarExpanded && (
+                <View style={styles.calendarMonthLabelWrap}>
+                  <Text style={styles.calendarMonthLabel} numberOfLines={1}>
+                    {calendarMonthLabel}
+                  </Text>
+                </View>
               )}
-            </TouchableOpacity>
+            </View>
 
             {/* Calendar strip */}
             <ExpandableCalendarStrip
+              hideMonthLabel
+              onExpandedChange={setIsCalendarExpanded}
               selectedDate={selectedDate}
               onSelectDate={handleDayChange}
               cyclePlans={cyclePlans}
@@ -780,37 +802,65 @@ export function TodayScreen({ onDateChange, onOpenSwapDrawer, onOpenAddWorkout, 
                 
                 if (isFutureDay) return null;
                 
-                const bonusItems = getBonusLogsForDate(selectedDate);
-                const BONUS_COLLAPSED_MAX = 3;
-                const hasMore = bonusItems.length > BONUS_COLLAPSED_MAX;
-                const visibleItems = bonusExpanded ? bonusItems : bonusItems.slice(0, BONUS_COLLAPSED_MAX);
+                const rawBonusItems = getBonusLogsForDate(selectedDate);
+                // Latest added first
+                const bonusItems = [...rawBonusItems].sort(
+                  (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+                );
+                const count = bonusItems.length;
+                const contentWidth = Dimensions.get('window').width - SPACING.xxl * 2;
+                const carouselCardWidth = (contentWidth - SPACING.sm) / 2;
+                const carouselSnapInterval = carouselCardWidth + SPACING.sm;
 
                 const BonusTypeIcon = ({ type, size = 16 }: { type: BonusType; size?: number }) => {
                   if (type === 'timer') return <IconStopwatch size={size} color={COLORS.textMeta} />;
                   if (type === 'warmup') return <IconWarmup size={size} color={COLORS.textMeta} />;
                   return <IconCore size={size} color={COLORS.textMeta} />;
                 };
-                
+
+                const renderBonusCard = (item: typeof bonusItems[0], inCarousel?: boolean, carouselWidth?: number) => (
+                  <TouchableOpacity
+                    key={item.id}
+                    style={[
+                      inCarousel
+                        ? [styles.bonusCarouselCard, carouselWidth !== undefined && { width: carouselWidth }]
+                        : count === 2
+                          ? styles.bonusCardHalf
+                          : styles.bonusCardWrapper,
+                    ]}
+                    onPress={() => (navigation as any).navigate('BonusDetail', { bonusLogId: item.id })}
+                    activeOpacity={0.85}
+                  >
+                    <View style={styles.bonusPresetCard}>
+                      <View style={[styles.bonusPresetCardInner, count === 2 && styles.bonusPresetCardInnerCompact]}>
+                        <Text style={styles.bonusPresetCardName} numberOfLines={2}>{item.presetName}</Text>
+                        <View style={styles.bonusPresetCardBottomRow}>
+                          {item.status === 'completed' ? (
+                            <View style={styles.bonusPresetCardCta}>
+                              <IconCheckmark size={16} color={COLORS.successBright} />
+                            </View>
+                          ) : (
+                            <View style={styles.bonusPresetCardCta} pointerEvents="none">
+                              <Text style={styles.bonusPresetCardCtaStart}>{t('start')}</Text>
+                              <IconPlay size={10} color={COLORS.accentPrimary} />
+                            </View>
+                          )}
+                          <BonusTypeIcon type={item.type} size={20} />
+                        </View>
+                      </View>
+                    </View>
+                  </TouchableOpacity>
+                );
+
                 return (
                   <View style={styles.bonusSection}>
                     <View style={styles.bonusSectionHeader}>
                       <Text style={styles.intervalsSectionTitle}>{t('bonus')}</Text>
-                      {hasMore && (
-                        <TouchableOpacity
-                          onPress={() => setBonusExpanded(!bonusExpanded)}
-                          activeOpacity={0.7}
-                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                        >
-                          <Text style={styles.bonusShowAllText}>
-                            {bonusExpanded ? 'Show less' : `Show all (${bonusItems.length})`}
-                          </Text>
-                        </TouchableOpacity>
-                      )}
                     </View>
-                    {bonusItems.length === 0 && isPastDay && (
+                    {count === 0 && isPastDay && (
                       <Text style={styles.noIntervalsText}>{t('noBonusPerformedThisDay')}</Text>
                     )}
-                    {bonusItems.length === 0 && isToday && (
+                    {count === 0 && isToday && (
                       <TouchableOpacity
                         style={styles.addIntervalCardButton}
                         onPress={() => onOpenBonusDrawer?.()}
@@ -821,40 +871,38 @@ export function TodayScreen({ onDateChange, onOpenSwapDrawer, onOpenAddWorkout, 
                         <Text style={styles.addIntervalCardText}>{t('addBonus')}</Text>
                       </TouchableOpacity>
                     )}
-                    
-                    {visibleItems.map((item) => (
-                      <TouchableOpacity
-                        key={item.id}
-                        style={styles.intervalCardWrapper}
-                        onPress={() => (navigation as any).navigate('BonusDetail', { bonusLogId: item.id })}
-                        activeOpacity={0.7}
+                    {count === 1 && (
+                      <View style={styles.bonusCardsRow}>
+                        {renderBonusCard(bonusItems[0])}
+                      </View>
+                    )}
+                    {count === 2 && (
+                      <View style={styles.bonusCardsRow}>
+                        {bonusItems.map(renderBonusCard)}
+                      </View>
+                    )}
+                    {count >= 3 && (
+                      <ScrollView
+                        horizontal
+                        showsHorizontalScrollIndicator={false}
+                        contentContainerStyle={styles.bonusCarouselContent}
+                        style={styles.bonusCarousel}
+                        snapToInterval={carouselSnapInterval}
+                        snapToAlignment="start"
+                        decelerationRate="fast"
                       >
-                        <View style={styles.intervalCard}>
-                          <View style={styles.intervalCardInner}>
-                            <View style={styles.bonusCardLeft}>
-                              <Text style={styles.intervalName}>{item.presetName}</Text>
-                              {item.status === 'completed' ? (
-                                <IconCheckmark size={16} color={COLORS.successBright} />
-                              ) : (
-                                <Text style={styles.bonusStatusText}>{t('planned')}</Text>
-                              )}
-                            </View>
-                            <View style={styles.bonusTypeIconWrap}>
-                              <BonusTypeIcon type={item.type} size={24} />
-                            </View>
-                          </View>
-                        </View>
-                      </TouchableOpacity>
-                    ))}
-                    
-                    {bonusItems.length > 0 && isToday && (
+                        {bonusItems.map((item) => renderBonusCard(item, true, carouselCardWidth))}
+                      </ScrollView>
+                    )}
+                    {isToday && count > 0 && (
                       <TouchableOpacity
-                        style={styles.addIntervalButton}
+                        style={[styles.addIntervalCardButton, styles.addIntervalCardButtonBelow]}
                         onPress={() => onOpenBonusDrawer?.()}
                         activeOpacity={0.7}
                       >
+                        <DiagonalLinePattern width="100%" height={56} borderRadius={16} />
                         <IconAdd size={24} color={COLORS.text} />
-                        <Text style={styles.addIntervalButtonText}>{t('addBonus')}</Text>
+                        <Text style={styles.addIntervalCardText}>{t('addBonus')}</Text>
                       </TouchableOpacity>
                     )}
                   </View>
@@ -1066,6 +1114,25 @@ const styles = StyleSheet.create({
   },
 
   // Cycle Chip
+  cycleChipAndMonthRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: SPACING.md,
+  },
+  calendarMonthLabelWrap: {
+    height: 28,
+    minHeight: 28,
+    justifyContent: 'center',
+    marginRight: 24,
+    marginTop: 4,
+  },
+  calendarMonthLabel: {
+    ...TYPOGRAPHY.legal,
+    color: COLORS.textMeta,
+    lineHeight: 28,
+    textTransform: 'uppercase',
+  },
   cycleChipRow: {
     alignSelf: 'flex-start',
     marginLeft: SPACING.xxl,
@@ -1076,7 +1143,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: COLORS.backgroundCanvas,
+    backgroundColor: COLORS.cycleStripBackground,
     paddingHorizontal: 10,
     height: 28,
     borderRadius: 14,
@@ -1099,7 +1166,7 @@ const styles = StyleSheet.create({
   cycleChipName: {
     fontSize: 13,
     fontWeight: '600' as const,
-    color: '#5D7CFF',
+    color: COLORS.accentPrimary,
   },
   cycleChipNamePaused: {
     color: COLORS.signalNegative,
@@ -1110,7 +1177,7 @@ const styles = StyleSheet.create({
   cycleChipStatusText: {
     fontSize: 13,
     fontWeight: '400' as const,
-    color: '#5D7CFF',
+    color: COLORS.accentPrimary,
   },
   cycleChipTextFinished: {
     color: COLORS.textMeta,
@@ -1430,6 +1497,9 @@ const styles = StyleSheet.create({
     marginTop: SPACING.sm,
     overflow: 'hidden',
   },
+  addIntervalCardButtonBelow: {
+    marginTop: SPACING.lg,
+  },
   addIntervalCardText: {
     ...TYPOGRAPHY.metaBold,
     color: COLORS.text,
@@ -1446,8 +1516,68 @@ const styles = StyleSheet.create({
     ...TYPOGRAPHY.metaBold,
     color: COLORS.text,
   },
-  intervalCardWrapper: {
+  bonusCardWrapper: {
     marginBottom: SPACING.sm,
+  },
+  bonusPresetCard: {
+    ...CARDS.cardDeepDimmed.outer,
+  },
+  bonusPresetCardInner: {
+    ...CARDS.cardDeepDimmed.inner,
+    paddingVertical: SPACING.lg,
+    paddingHorizontal: 24,
+    height: 100,
+    justifyContent: 'space-between',
+  },
+  bonusPresetCardInnerCompact: {
+    paddingVertical: SPACING.md,
+    paddingHorizontal: 16,
+    height: 100,
+    justifyContent: 'space-between',
+  },
+  bonusPresetCardName: {
+    ...TYPOGRAPHY.body,
+    color: COLORS.text,
+    marginBottom: 4,
+  },
+  bonusPresetCardBottomRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  bonusPresetCardMeta: {
+    ...TYPOGRAPHY.meta,
+    color: COLORS.textMeta,
+  },
+  bonusPresetCardCta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  bonusPresetCardCtaStart: {
+    ...TYPOGRAPHY.metaBold,
+    color: COLORS.accentPrimary,
+  },
+  bonusCardsRow: {
+    flexDirection: 'row',
+    gap: SPACING.sm,
+    marginBottom: SPACING.sm,
+  },
+  bonusCardHalf: {
+    flex: 1,
+    minWidth: 0,
+  },
+  bonusCarousel: {
+    marginHorizontal: -SPACING.xxl,
+    marginBottom: SPACING.sm,
+  },
+  bonusCarouselContent: {
+    paddingHorizontal: SPACING.xxl,
+    gap: SPACING.sm,
+    flexDirection: 'row',
+  },
+  bonusCarouselCard: {
+    marginRight: 0,
   },
   intervalCard: CARDS.cardDeepDimmed.outer,
   intervalCardInner: {

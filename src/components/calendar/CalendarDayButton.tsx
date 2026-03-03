@@ -53,12 +53,13 @@ export function CalendarDayButton({
         >
           {dayNumber}
         </Text>
-        {/* Completed indicator: pill inside the circle, 2px below label */}
-        {isCompleted && (
+        {/* Workout indicator: 2x2 circle — outline when scheduled, filled when completed */}
+        {(hasWorkout || isCompleted) && (
           <View
             style={[
-              styles.completedPill,
-              isSelected && styles.completedPillSelected,
+              styles.completionCircle,
+              isCompleted ? styles.completionCircleFilled : styles.completionCircleOutline,
+              isSelected && (isCompleted ? styles.completionCircleFilledSelected : styles.completionCircleOutlineSelected),
             ]}
           />
         )}
@@ -102,17 +103,27 @@ const styles = StyleSheet.create({
     color: COLORS.accentPrimary,
   },
   dayNumberPaused: {
-    color: COLORS.text,
+    color: COLORS.textMeta,
   },
-  completedPill: {
+  completionCircle: {
     position: 'absolute',
     bottom: 6,
-    width: 6,
-    height: 2,
-    borderRadius: 1,
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+  },
+  completionCircleOutline: {
+    backgroundColor: 'transparent',
+    borderWidth: 1,
+    borderColor: '#FFFFFF',
+  },
+  completionCircleOutlineSelected: {
+    borderColor: COLORS.backgroundCanvas,
+  },
+  completionCircleFilled: {
     backgroundColor: '#FFFFFF',
   },
-  completedPillSelected: {
+  completionCircleFilledSelected: {
     backgroundColor: COLORS.backgroundCanvas,
   },
 });

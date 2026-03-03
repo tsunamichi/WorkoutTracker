@@ -19,6 +19,7 @@ import { useTranslation } from '../i18n/useTranslation';
 import { formatWeightForLoad, toDisplayWeight, fromDisplayWeight } from '../utils/weight';
 import type { WarmupItem_DEPRECATED as WarmupItem, AccessoryItem_DEPRECATED as AccessoryItem, WorkoutTemplateExercise } from '../types/training';
 import { isDeprecatedItem, getDisplayValuesFromItem } from '../utils/exerciseMigration';
+import { computeNextSuggestion } from '../utils/progressionSuggestions';
 import dayjs from 'dayjs';
 
 // Enable LayoutAnimation on Android
@@ -86,6 +87,10 @@ export function ExerciseExecutionScreen() {
     bonusLogs,
     saveExerciseProgress,
     logCoreSession,
+    getEffectiveProgressionRule,
+    getLastCompletedLogForExercise,
+    progressionGroups,
+    updateProgressionGroup,
   } = useStore();
   
   const getDetailedWorkoutProgress = () => useStore.getState().detailedWorkoutProgress;
@@ -282,6 +287,32 @@ export function ExerciseExecutionScreen() {
     })));
     return result;
   }, [items]);
+
+  const progressionEnabled = settings.progressionSuggestionsEnabled !== false;
+  const progressionValuesByItemId = useMemo(() => {
+    if (!progressionEnabled || type !== 'main') return {};
+    const map: Record<string, { weight: number; reps: number; weightDelta: number; repsDelta: number }> = {};
+    items.forEach(item => {
+      const libraryId = (item as any).exerciseId || item.id;
+      if (!libraryId) return;
+      const rule = getEffectiveProgressionRule(libraryId);
+      if (!rule) return;
+      const lastLog = getLastCompletedLogForExercise(libraryId);
+      const setCount = typeof item.sets === 'number' ? item.sets : (Array.isArray(item.sets) ? item.sets.length : undefined);
+      const suggestion = computeNextSuggestion(libraryId, rule, lastLog, setCount, item.id);
+      if (suggestion && suggestion.source !== 'no_log' && lastLog && lastLog.workingSets.length > 0) {
+        const lastWeight = lastLog.workingSets[0].weight;
+        const lastReps = lastLog.workingSets[0].reps;
+        map[item.id] = {
+          weight: suggestion.suggestedWeight,
+          reps: suggestion.suggestedRepsMin,
+          weightDelta: suggestion.suggestedWeight - lastWeight,
+          repsDelta: suggestion.suggestedRepsMin - lastReps,
+        };
+      }
+    });
+    return map;
+  }, [items, progressionEnabled, type]);
   
   // State
   const [expandedGroupIndex, setExpandedGroupIndex] = useState(-1);
@@ -632,19 +663,22 @@ export function ExerciseExecutionScreen() {
     return map;
   }, [exerciseGroups]);
   
-  // Initialize local values at set level (merge, don't overwrite restored session values)
+  // Initialize local values at set level (merge, don't overwrite restored session values).
+  // When progression is enabled, use the progression-adjusted weight/reps so every
+  // render path (card, drawer, save) sees the updated values from the start.
   useEffect(() => {
     if (exerciseGroups.length === 0) return;
     setLocalValues(prev => {
       const merged = { ...prev };
       exerciseGroups.forEach(group => {
         group.exercises.forEach(exercise => {
+          const prog = progressionValuesByItemId[exercise.id];
           for (let round = 0; round < group.totalRounds; round++) {
             const setId = `${exercise.id}-set-${round}`;
             if (!merged[setId]) {
               merged[setId] = {
-                weight: exercise.weight || 0,
-                reps: Number(exercise.reps) || 0,
+                weight: prog?.weight ?? exercise.weight ?? 0,
+                reps: prog?.reps ?? Number(exercise.reps) ?? 0,
               };
             }
           }
@@ -652,7 +686,7 @@ export function ExerciseExecutionScreen() {
       });
       return merged;
     });
-  }, [exerciseGroups]);
+  }, [exerciseGroups, progressionValuesByItemId]);
   
   // Initialize UI state on mount (expandedGroupIndex, hasLoggedAnySet, localValues, sessionId)
   // completedSets and currentRounds are derived from the store, so we only need to set UI state here
@@ -860,21 +894,16 @@ export function ExerciseExecutionScreen() {
 
   // Build a lookup of session values for displaying accurate logged data
   // Falls back through: localValues → detailedWorkoutProgress → session data → template values
+  const progressionValuesRef = useRef(progressionValuesByItemId);
+  progressionValuesRef.current = progressionValuesByItemId;
+
   const getSetDisplayValues = useCallback((exerciseId: string, setIndex: number, templateWeight: number, templateReps: number) => {
     const setId = `${exerciseId}-set-${setIndex}`;
-    const fallback = { weight: templateWeight, reps: Number(templateReps) || 0 };
-    
-    // First try localValues (includes session-restored and user-edited values)
-    const lv = localValuesRef.current[setId];
-    if (lv && (lv.weight !== fallback.weight || lv.reps !== fallback.reps)) {
-      return lv;
-    }
-    
-    // Then try detailedWorkoutProgress (most reliable source for completed workout data)
+
+    // 1. Already-completed sets in THIS workout (actual logged data)
     const progressData = getDetailedWorkoutProgress();
     if (workoutKey && progressData[workoutKey]) {
       const workoutProgress = progressData[workoutKey];
-      // Find the matching exercise in progress by checking all exercises
       for (const [templateExId, exProgress] of Object.entries(workoutProgress.exercises)) {
         const freshTemplate = useStore.getState().workoutTemplates.find(t => t.id === workoutTemplateId);
         const templateExercise = (freshTemplate?.items || (freshTemplate as any)?.exercises)?.find((ex: any) => ex.id === templateExId);
@@ -886,8 +915,8 @@ export function ExerciseExecutionScreen() {
         }
       }
     }
-    
-    // Then try reading directly from the session in the store
+
+    // 2. Session data for THIS workout
     const allSessions = useStore.getState().sessions;
     const session = allSessions.find(s => (s as any).workoutKey === workoutKey)
       || allSessions.find(s => {
@@ -901,9 +930,17 @@ export function ExerciseExecutionScreen() {
       );
       if (match) return { weight: match.weight, reps: match.reps };
     }
-    
-    // Last resort: localValues (even if same as template) or template
-    return lv || fallback;
+
+    // 3. User manual edits from this session
+    const lv = localValuesRef.current[setId];
+    if (lv) return lv;
+
+    // 4. Auto-progression values (computed from last log + rules)
+    const prog = progressionValuesRef.current[exerciseId];
+    if (prog) return { weight: prog.weight, reps: prog.reps };
+
+    // 5. Template defaults
+    return { weight: templateWeight, reps: Number(templateReps) || 0 };
   }, [workoutKey, workoutTemplateId]);
 
   const saveSession = async (completedSetIds?: Set<string>) => {
@@ -1963,12 +2000,28 @@ export function ExerciseExecutionScreen() {
                                               <Text style={styles.largeValue}>
                                                 {formatWeightForLoad(displayWeight, useKg)}
                                               </Text>
-                                              <Text style={styles.unit}>{weightUnit}</Text>
+                                              <View style={styles.unitWithDelta}>
+                                                {(() => {
+                                                  const prog = progressionValuesRef.current[exercise.id];
+                                                  return prog && prog.weightDelta > 0 ? (
+                                                    <Text style={styles.deltaLabel} numberOfLines={1}>↑</Text>
+                                                  ) : null;
+                                                })()}
+                                                <Text style={styles.unit}>{weightUnit}</Text>
+                                              </View>
                                             </View>
                                           )}
                                           <View style={styles.valueRow}>
                                             <Text style={styles.largeValue}>{displayReps}</Text>
-                                            <Text style={styles.unit}>{repsUnit}</Text>
+                                            <View style={styles.unitWithDelta}>
+                                              {(() => {
+                                                const prog = progressionValuesRef.current[exercise.id];
+                                                return prog && prog.repsDelta > 0 ? (
+                                                  <Text style={styles.deltaLabel} numberOfLines={1}>↑</Text>
+                                                ) : null;
+                                              })()}
+                                              <Text style={styles.unit}>{repsUnit}</Text>
+                                            </View>
                                           </View>
                                         </View>
                                         {showWeight && (() => {
@@ -2038,7 +2091,15 @@ export function ExerciseExecutionScreen() {
                                                 <Text style={styles.largeValue}>
                                                   {formatWeightForLoad(displayWeight, useKg)}
                                                 </Text>
-                                                <Text style={styles.unit}>{weightUnit}</Text>
+                                                <View style={styles.unitWithDelta}>
+                                                  {(() => {
+                                                    const prog = progressionValuesRef.current[exercise.id];
+                                                    return prog && prog.weightDelta > 0 ? (
+                                                      <Text style={styles.deltaLabel} numberOfLines={1}>↑</Text>
+                                                    ) : null;
+                                                  })()}
+                                                  <Text style={styles.unit}>{weightUnit}</Text>
+                                                </View>
                                               </View>
                                               {(() => {
                                                 const isBarbellMode = getBarbellMode(exercise.id);
@@ -2055,7 +2116,15 @@ export function ExerciseExecutionScreen() {
 
                                           <View style={styles.valueRow}>
                                             <Text style={styles.largeValue}>{displayReps}</Text>
-                                            <Text style={styles.unit}>{repsUnit}</Text>
+                                            <View style={styles.unitWithDelta}>
+                                              {(() => {
+                                                const prog = progressionValuesRef.current[exercise.id];
+                                                return prog && prog.repsDelta > 0 ? (
+                                                  <Text style={styles.deltaLabel} numberOfLines={1}>↑</Text>
+                                                ) : null;
+                                              })()}
+                                              <Text style={styles.unit}>{repsUnit}</Text>
+                                            </View>
                                           </View>
                                         </View>
                                       </View>
@@ -2313,6 +2382,7 @@ export function ExerciseExecutionScreen() {
         maxHeight="90%"
         scrollable={true}
         backgroundColor={COLORS.backgroundCanvas}
+        keyboardShouldPersistTaps="always"
       >
         <View style={styles.adjustmentDrawerContent}>
           {/* Title Row with Action Buttons */}
@@ -2428,12 +2498,22 @@ export function ExerciseExecutionScreen() {
                                   if (text === '' || isNaN(parsed) || parsed < 0) return;
                                   const rounded = Math.round(parsed * 2) / 2; // snap to nearest 0.5
                                   const newWeight = fromDisplayWeight(rounded, useKg);
+                                  const totalRounds = currentGroup.totalRounds;
+                                  const isFirstTimeLogging = !Array.from({ length: totalRounds }, (_, i) => `${activeExercise.id}-set-${i}`).some(sid => completedSets.has(sid));
                                   setLocalValues(prev => {
                                     const current = prev[setId] ?? { weight: displayWeight, reps: displayReps };
-                                    return {
+                                    const next: Record<string, { weight: number; reps: number }> = {
                                       ...prev,
                                       [setId]: { weight: newWeight, reps: current.reps },
                                     };
+                                    if (isFirstTimeLogging) {
+                                      for (let i = setIndex + 1; i < totalRounds; i++) {
+                                        const sid = `${activeExercise.id}-set-${i}`;
+                                        const existing = next[sid] ?? prev[sid];
+                                        next[sid] = { weight: newWeight, reps: existing?.reps ?? current.reps };
+                                      }
+                                    }
+                                    return next;
                                   });
                                 }}
                               />
@@ -2450,12 +2530,22 @@ export function ExerciseExecutionScreen() {
                                   const text = e.nativeEvent.text.trim();
                                   const parsed = parseInt(text, 10);
                                   if (text === '' || isNaN(parsed) || parsed < 1) return;
+                                  const totalRounds = currentGroup.totalRounds;
+                                  const isFirstTimeLogging = !Array.from({ length: totalRounds }, (_, i) => `${activeExercise.id}-set-${i}`).some(sid => completedSets.has(sid));
                                   setLocalValues(prev => {
                                     const current = prev[setId] ?? { weight: displayWeight, reps: displayReps };
-                                    return {
+                                    const next: Record<string, { weight: number; reps: number }> = {
                                       ...prev,
                                       [setId]: { weight: current.weight, reps: parsed },
                                     };
+                                    if (isFirstTimeLogging) {
+                                      for (let i = setIndex + 1; i < totalRounds; i++) {
+                                        const sid = `${activeExercise.id}-set-${i}`;
+                                        const existing = next[sid] ?? prev[sid];
+                                        next[sid] = { weight: existing?.weight ?? current.weight, reps: parsed };
+                                      }
+                                    }
+                                    return next;
                                   });
                                 }}
                               />
@@ -2554,12 +2644,16 @@ export function ExerciseExecutionScreen() {
             );
           })()}
 
-          {/* Save button - appears when keyboard is visible */}
+          {/* Save button - appears when keyboard is visible; dismiss then persist so one tap is enough */}
           {isKeyboardVisible && (
             <View style={styles.drawerKeyboardSaveContainer}>
               <TouchableOpacity
                 style={styles.drawerKeyboardSaveButton}
-                onPress={() => Keyboard.dismiss()}
+                onPress={() => {
+                  Keyboard.dismiss();
+                  // Delay so onEndEditing runs and localValues is updated before we persist
+                  setTimeout(() => { saveSession(); }, 150);
+                }}
                 activeOpacity={0.8}
               >
                 <Text style={styles.drawerKeyboardSaveText}>{t('save')}</Text>
@@ -2835,8 +2929,8 @@ export function ExerciseExecutionScreen() {
           <BottomDrawer
             visible={showExerciseSettingsMenu}
             onClose={() => setShowExerciseSettingsMenu(false)}
-            maxHeight="55%"
-            scrollable={false}
+            maxHeight="65%"
+            scrollable={true}
             showHandle={true}
             backgroundColor={COLORS.backgroundCanvas}
           >
@@ -2879,6 +2973,53 @@ export function ExerciseExecutionScreen() {
                   onValueChange={() => setTimeBasedOverrides(prev => ({ ...prev, [menuExercise.id]: !(menuExercise.isTimeBased ?? false) }))}
                 />
               </View>
+              {/* Progression group selector */}
+              {type === 'main' && (() => {
+                const libId = menuExercise.exerciseId || menuExercise.id;
+                const currentGroup = progressionGroups.find(g => g.exerciseIds.includes(libId));
+                const options: { key: string | null; label: string }[] = [
+                  { key: null, label: 'None' },
+                  ...progressionGroups.map(g => ({ key: g.id, label: g.name })),
+                ];
+                return (
+                  <>
+                    <Text style={[styles.exerciseSettingsMenuSectionTitle, { marginTop: SPACING.lg }]}>Progression group</Text>
+                    <View style={styles.progressionGroupPills}>
+                      {options.map(opt => {
+                        const selected = opt.key === (currentGroup?.id ?? null);
+                        return (
+                          <TouchableOpacity
+                            key={opt.key ?? 'none'}
+                            style={[styles.progressionGroupPill, selected && styles.progressionGroupPillSelected]}
+                            activeOpacity={0.7}
+                            onPress={async () => {
+                              if (selected) return;
+                              if (currentGroup) {
+                                await updateProgressionGroup(currentGroup.id, {
+                                  exerciseIds: currentGroup.exerciseIds.filter(id => id !== libId),
+                                });
+                              }
+                              if (opt.key) {
+                                const target = progressionGroups.find(g => g.id === opt.key);
+                                if (target) {
+                                  await updateProgressionGroup(target.id, {
+                                    exerciseIds: [...target.exerciseIds, libId],
+                                  });
+                                }
+                              }
+                            }}
+                          >
+                            <Text style={[styles.progressionGroupPillText, selected && styles.progressionGroupPillTextSelected]}>
+                              {opt.label}
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+                  </>
+                );
+              })()}
+
               <View style={styles.exerciseSettingsMenuActionsRow}>
                 <TouchableOpacity
                   style={styles.exerciseSettingsMenuActionCard}
@@ -3272,6 +3413,18 @@ const styles = StyleSheet.create({
   unit: {
     ...TYPOGRAPHY.body,
     color: COLORS.textMeta,
+  },
+  unitWithDelta: {
+    position: 'relative',
+    overflow: 'visible',
+  },
+  deltaLabel: {
+    position: 'absolute',
+    top: -12,
+    left: 0,
+    fontSize: 12,
+    color: COLORS.successBright,
+    fontWeight: '700',
   },
   cardActionRow: {
     flexDirection: 'row',
@@ -3741,6 +3894,28 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.md,
   },
   exerciseSettingsMenuActionCardDanger: {},
+  progressionGroupPills: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: SPACING.sm,
+  },
+  progressionGroupPill: {
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
+    borderRadius: BORDER_RADIUS.full,
+    backgroundColor: COLORS.backgroundContainer,
+  },
+  progressionGroupPillSelected: {
+    backgroundColor: COLORS.accentPrimary,
+  },
+  progressionGroupPillText: {
+    ...TYPOGRAPHY.meta,
+    color: COLORS.textMeta,
+  },
+  progressionGroupPillTextSelected: {
+    color: COLORS.backgroundCanvas,
+    fontWeight: '600',
+  },
   exerciseSettingsMenuActionLabel: {
     ...TYPOGRAPHY.body,
     color: COLORS.text,

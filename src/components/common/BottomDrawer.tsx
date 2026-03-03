@@ -24,6 +24,7 @@ interface BottomDrawerProps {
   expandable?: boolean; // New prop to enable pull-to-expand
   fixedHeight?: boolean; // Force drawer to maxHeight
   onRequestClose?: () => void; // Called when close is initiated (before animation)
+  keyboardShouldPersistTaps?: 'always' | 'handled' | 'never'; // So first tap on buttons (e.g. Save) registers when keyboard is up
 }
 
 export function BottomDrawer({
@@ -40,6 +41,7 @@ export function BottomDrawer({
   expandable = false,
   fixedHeight = false,
   onRequestClose,
+  keyboardShouldPersistTaps = 'handled',
 }: BottomDrawerProps) {
   const insets = useSafeAreaInsets();
   const [isExpanded, setIsExpanded] = useState(false);
@@ -281,7 +283,7 @@ export function BottomDrawer({
         showsVerticalScrollIndicator: true,
         bounces: true,
         stickyHeaderIndices,
-        keyboardShouldPersistTaps: 'handled' as const,
+        keyboardShouldPersistTaps: keyboardShouldPersistTaps as 'always' | 'handled' | 'never',
         onContentSizeChange: (_width: number, height: number) => {
           setContentHeight(height);
         },

@@ -358,7 +358,7 @@ const styles = StyleSheet.create({
   statusBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: COLORS.backgroundCanvas,
+    backgroundColor: COLORS.cycleStripBackground,
     paddingHorizontal: 12,
     paddingVertical: 4,
     borderRadius: 12,
@@ -376,7 +376,7 @@ const styles = StyleSheet.create({
   statusText: {
     ...TYPOGRAPHY.meta,
     fontWeight: '600',
-    color: '#5D7CFF',
+    color: COLORS.accentPrimary,
   },
   statusTextPaused: {
     color: COLORS.accentPrimary,

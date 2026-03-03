@@ -40,6 +40,9 @@ import { CreateCycleFlow } from '../screens/manualCycle/CreateCycleFlow';
 import { CreateCycleDayEditor } from '../screens/manualCycle/CreateCycleDayEditor';
 import { AIWorkoutCreationScreen } from '../screens/AIWorkoutCreationScreen';
 import { WorkoutCreationOptionsScreen } from '../screens/WorkoutCreationOptionsScreen';
+import { ProgressionScreen } from '../screens/ProgressionScreen';
+import { ProgressionDefaultsScreen } from '../screens/ProgressionDefaultsScreen';
+import { ProgressionGroupDetailScreen } from '../screens/ProgressionGroupDetailScreen';
 import { IconCalendar, IconHistory, IconSwap, IconAdd, IconStopwatch, IconPlay, IconCore, IconWarmup } from '../components/icons';
 import { COLORS, TYPOGRAPHY, SPACING, CARDS, BORDER_RADIUS } from '../constants';
 import { useStore } from '../store';
@@ -93,6 +96,9 @@ export type RootStackParamList = {
   BonusDetail: { bonusLogId: string };
   CoreProgram: undefined;
   ProgressTab: undefined;
+  Progression: undefined;
+  ProgressionDefaults: undefined;
+  ProgressionGroupDetail: { groupId: string };
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -1023,6 +1029,9 @@ export default function AppNavigator() {
         <Stack.Screen name="BonusDetail" component={BonusDetailScreen} />
         <Stack.Screen name="CoreProgram" component={CoreProgramScreen} />
         <Stack.Screen name="ProgressTab" component={ProgressHomeScreen} />
+        <Stack.Screen name="Progression" component={ProgressionScreen} />
+        <Stack.Screen name="ProgressionDefaults" component={ProgressionDefaultsScreen} />
+        <Stack.Screen name="ProgressionGroupDetail" component={ProgressionGroupDetailScreen} />
       </Stack.Navigator>
     </View>
   );

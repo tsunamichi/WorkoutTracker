@@ -5,6 +5,7 @@ import Svg, { Line } from 'react-native-svg';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
+  useAnimatedReaction,
   withSpring,
   interpolate,
   runOnJS,
@@ -25,6 +26,7 @@ const DAY_LETTERS_HEIGHT = 24;
 const MONTH_LABEL_HEIGHT = 24;
 const COLLAPSED_HEIGHT = DAY_LETTERS_HEIGHT + ROW_HEIGHT;
 const EXPANDED_HEIGHT = DAY_LETTERS_HEIGHT + MONTH_LABEL_HEIGHT + ROW_HEIGHT * 5;
+const EXPANDED_HEIGHT_NO_MONTH = DAY_LETTERS_HEIGHT + ROW_HEIGHT * 5;
 const SNAP_THRESHOLD = 0.35;
 
 const SPRING_CONFIG = {
@@ -32,6 +34,7 @@ const SPRING_CONFIG = {
   stiffness: 220,
   mass: 0.8,
 };
+
 
 interface ExpandableCalendarStripProps {
   selectedDate: string;
@@ -43,6 +46,10 @@ interface ExpandableCalendarStripProps {
   alwaysExpanded?: boolean;
   showNavArrows?: boolean;
   previewDateRange?: { start: string; end: string; color: string };
+  /** When true, month/year label is not rendered (e.g. when shown in parent next to cycle pill) */
+  hideMonthLabel?: boolean;
+  /** Called when calendar expand/collapse state changes (e.g. to show/hide parent month label) */
+  onExpandedChange?: (expanded: boolean) => void;
 }
 
 type DayData = {
@@ -66,6 +73,8 @@ export function ExpandableCalendarStrip({
   alwaysExpanded = false,
   showNavArrows = false,
   previewDateRange,
+  hideMonthLabel = false,
+  onExpandedChange,
 }: ExpandableCalendarStripProps) {
   const today = dayjs();
   const selectedDayjs = dayjs(selectedDate);
@@ -116,7 +125,7 @@ export function ExpandableCalendarStrip({
     }
 
     const paintPlan = (plan: CyclePlan) => {
-      const color = plan.active ? COLORS.backgroundCanvas : COLORS.container;
+      const color = COLORS.cycleStripBackground;
       const start = dayjs(plan.startDate);
 
       // For inactive plans, only paint dates that have actual workouts
@@ -193,6 +202,8 @@ export function ExpandableCalendarStrip({
   // Compute row-level cycle band info: show bands for ALL cycles (past and active).
   // Each row can have multiple bands if different plans cover different date ranges.
   // For simplicity, we render a single contiguous band per row per plan, grouped by planId.
+  // Only show strip for the cycle that contains the selected date (and preview if any)
+  const selectedPlanId = dateToPlanId[selectedDate] ?? null;
   type BandInfo = { color: string; startIndex: number; endIndex: number; planId: string; pausedStartIndex: number | null; pausedEndIndex: number | null; isFinished: boolean };
   const weekBandInfo = useMemo(() => {
     return weeksData.map((weekDays) => {
@@ -237,6 +248,15 @@ export function ExpandableCalendarStrip({
       return bands.length > 0 ? bands : null;
     });
   }, [weeksData, dateToPlanId, pausedDates, previewDateRange, activePlanIds]);
+
+  // Filter bands to only the selected cycle (and preview)
+  const filteredWeekBandInfo = useMemo(() => {
+    return weekBandInfo?.map((bands) =>
+      bands
+        ? bands.filter((b) => b.planId === '__preview__' || b.planId === selectedPlanId)
+        : null
+    ) ?? null;
+  }, [weekBandInfo, selectedPlanId]);
 
   // Month/year label
   const expandedLabel = useMemo(() => {
@@ -292,9 +312,16 @@ export function ExpandableCalendarStrip({
       }
     });
 
-  // -- Animated styles --
+  const expandedHeight = hideMonthLabel ? EXPANDED_HEIGHT_NO_MONTH : EXPANDED_HEIGHT;
+  useAnimatedReaction(
+    () => expansion.value > 0.5,
+    (expanded) => {
+      if (onExpandedChange) runOnJS(onExpandedChange)(expanded);
+    },
+    [onExpandedChange],
+  );
   const containerAnimatedStyle = useAnimatedStyle(() => ({
-    height: interpolate(expansion.value, [0, 1], [COLLAPSED_HEIGHT, EXPANDED_HEIGHT]),
+    height: interpolate(expansion.value, [0, 1], [COLLAPSED_HEIGHT, expandedHeight]),
   }));
 
   // Month label: slides in above the day letters once expansion is underway
@@ -329,7 +356,7 @@ export function ExpandableCalendarStrip({
   const weekRowStyles = [weekRowStyle0, weekRowStyle1, weekRowStyle2, weekRowStyle3, weekRowStyle4];
 
   const renderWeekRow = (weekDays: DayData[], weekIdx: number) => {
-    const bands = weekBandInfo[weekIdx];
+    const bands = filteredWeekBandInfo?.[weekIdx] ?? null;
 
     return (
       <Animated.View
@@ -346,9 +373,7 @@ export function ExpandableCalendarStrip({
                 style={[
                   styles.cycleBand,
                   {
-                    backgroundColor: band.isFinished ? 'transparent' : band.color,
-                    borderWidth: band.isFinished ? 1 : 0,
-                    borderColor: band.isFinished ? COLORS.container : undefined,
+                    backgroundColor: band.color,
                     left: bandLeft as any,
                     right: bandRight as any,
                     marginLeft: 3,
@@ -383,7 +408,7 @@ export function ExpandableCalendarStrip({
                           y1={0}
                           x2={offset + 500}
                           y2={500}
-                          stroke={COLORS.accentPrimaryDimmed}
+                          stroke={COLORS.cycleStripBackground}
                           strokeWidth={2}
                         />
                       );
@@ -428,22 +453,25 @@ export function ExpandableCalendarStrip({
   }, [selectedDayjs, onSelectDate]);
 
   if (alwaysExpanded) {
+    const expandedHeightStatic = hideMonthLabel ? EXPANDED_HEIGHT_NO_MONTH : EXPANDED_HEIGHT;
     return (
       <View style={styles.wrapper}>
-        <View style={[styles.container, { height: EXPANDED_HEIGHT }]}>
-          <View style={styles.monthHeader}>
-            {showNavArrows && (
-              <TouchableOpacity onPress={handleNavPrev} style={styles.navArrow} activeOpacity={0.6}>
-                <Text style={styles.navArrowText}>‹</Text>
-              </TouchableOpacity>
-            )}
-            <Text style={styles.monthLabel}>{expandedLabel}</Text>
-            {showNavArrows && (
-              <TouchableOpacity onPress={handleNavNext} style={styles.navArrow} activeOpacity={0.6}>
-                <Text style={styles.navArrowText}>›</Text>
-              </TouchableOpacity>
-            )}
-          </View>
+        <View style={[styles.container, { height: expandedHeightStatic }]}>
+          {!hideMonthLabel && (
+            <View style={styles.monthHeader}>
+              {showNavArrows && (
+                <TouchableOpacity onPress={handleNavPrev} style={styles.navArrow} activeOpacity={0.6}>
+                  <Text style={styles.navArrowText}>‹</Text>
+                </TouchableOpacity>
+              )}
+              <Text style={styles.monthLabel}>{expandedLabel}</Text>
+              {showNavArrows && (
+                <TouchableOpacity onPress={handleNavNext} style={styles.navArrow} activeOpacity={0.6}>
+                  <Text style={styles.navArrowText}>›</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          )}
 
           <View style={styles.dayOfWeekRow}>
             {DAYS_SHORT.map((letter, i) => (
@@ -464,12 +492,13 @@ export function ExpandableCalendarStrip({
   return (
     <View style={styles.wrapper}>
       <Animated.View style={[styles.container, containerAnimatedStyle]}>
-        {/* Month label — grows into view at ~50% expansion */}
-        <Animated.View style={monthLabelStyle}>
-          <Text style={styles.monthLabel}>{expandedLabel}</Text>
-        </Animated.View>
+        {!hideMonthLabel && (
+          <Animated.View style={monthLabelStyle}>
+            <Text style={styles.monthLabel}>{expandedLabel}</Text>
+          </Animated.View>
+        )}
 
-        {/* Day letters — always visible, pushed down by month label's animated height */}
+        {/* Day letters — always visible, pushed down by month label's animated height when shown */}
         <View style={styles.dayOfWeekRow}>
           {DAYS_SHORT.map((letter, i) => (
             <View key={i} style={styles.dayCell}>
