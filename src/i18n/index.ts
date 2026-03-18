@@ -567,7 +567,9 @@ type TranslationKey =
   | 'end'
   | 'shareCycle'
   | 'shareCycleSubtitle'
-  | 'shareWorkoutsCount';
+  | 'shareCycleSubtitleImported'
+  | 'shareWorkoutsCount'
+  | 'copyWorkoutPlan';
 
 const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
   en: {
@@ -1170,7 +1172,9 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     end: 'End',
     shareCycle: 'Share',
     shareCycleSubtitle: 'Choose workouts to include. Shared text can be pasted into Import cycle.',
+    shareCycleSubtitleImported: 'Share copies the exact workout you pasted. Export copies your progress and logs.',
     shareWorkoutsCount: 'Share {count} workouts',
+    copyWorkoutPlan: 'Copy workout plan',
   },
   es: {
     today: 'Hoy',
@@ -1773,7 +1777,9 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     end: 'Terminar',
     shareCycle: 'Compartir',
     shareCycleSubtitle: 'Elige los entrenamientos a incluir. El texto se puede pegar en Importar ciclo.',
+    shareCycleSubtitleImported: 'Compartir copia el entrenamiento que pegaste. Exportar copia tu progreso y registros.',
     shareWorkoutsCount: 'Compartir {count} entrenamientos',
+    copyWorkoutPlan: 'Copiar plan de entrenamiento',
   },
 };
 

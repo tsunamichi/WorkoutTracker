@@ -293,6 +293,8 @@ export type CyclePlan = {
   // Cycle Management v1
   endedAt?: string; // YYYY-MM-DD when user ended cycle early; plan cannot be reactivated
   pausedUntil?: string; // YYYY-MM-DD resume date for Pause/Shift; plan extends from this date
+  /** When set, Share copies this exact text (e.g. pasted at import). Export always copies progress/logs. */
+  shareableSourceText?: string;
 };
 
 /** Derived status for CyclePlan (from active, endedAt, pausedUntil, and scheduled workouts). */

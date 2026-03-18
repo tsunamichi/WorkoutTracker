@@ -102,13 +102,31 @@ export function ShareCycleDrawer({ visible, onClose, plan, onExportData }: Share
   const selectedCount = workoutList.filter(w => selectedIds.has(w.template.id)).length;
   const selectedTemplates = workoutList.filter(w => selectedIds.has(w.template.id));
 
-  const handleShare = async () => {
-    if (selectedCount === 0 || !plan) return;
-    const text = buildPasteableCycleText(
-      selectedTemplates,
-      exercises.map(e => ({ id: e.id, name: e.name })),
-      weightUnit
+  /** Export format has "Period:", "No logged data", "WEEK N (Mon DD - Sun DD)". Don't use stored text if it looks like export. */
+  function looksLikeExportFormat(raw: string): boolean {
+    const t = raw.trim();
+    return (
+      /Period:\s*\w{3}\s+\d{1,2},\s*\d{4}/i.test(t) ||
+      /No logged data/i.test(t) ||
+      /WEEK\s+\d+\s*\(\w{3}\s+\d{1,2}\s*-\s*\w{3}\s+\d{1,2}\)/i.test(t)
     );
+  }
+
+  const rawSource = plan?.shareableSourceText?.trim() ?? '';
+  const hasShareableSource = !!rawSource && !looksLikeExportFormat(rawSource);
+
+  const handleShare = async () => {
+    if (!plan) return;
+    const text = hasShareableSource
+      ? rawSource
+      : selectedCount > 0
+        ? buildPasteableCycleText(
+            selectedTemplates,
+            exercises.map(e => ({ id: e.id, name: e.name })),
+            weightUnit
+          )
+        : '';
+    if (!text) return;
     try {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       await Share.share({ message: text, title: plan.name });
@@ -126,8 +144,49 @@ export function ShareCycleDrawer({ visible, onClose, plan, onExportData }: Share
     <BottomDrawer visible={visible} onClose={onClose} maxHeight="60%" showHandle={true}>
       <View style={styles.container}>
         <Text style={styles.title}>{t('shareCycle')}</Text>
-        <Text style={styles.subtitle}>{t('shareCycleSubtitle')}</Text>
+        <Text style={styles.subtitle}>
+          {hasShareableSource ? t('shareCycleSubtitleImported') : t('shareCycleSubtitle')}
+        </Text>
 
+        {/* Primary: Copy plan (original structure). This is the main "Share" action. */}
+        <TouchableOpacity
+          style={[styles.shareButton, !hasShareableSource && selectedCount === 0 && styles.shareButtonDisabled]}
+          onPress={handleShare}
+          activeOpacity={0.85}
+          disabled={!hasShareableSource && selectedCount === 0}
+        >
+          <Text
+            style={[
+              styles.shareButtonText,
+              !hasShareableSource && selectedCount === 0 && styles.shareButtonTextDisabled,
+            ]}
+          >
+            {hasShareableSource ? t('copyWorkoutPlan') : t('shareWorkoutsCount').replace('{count}', String(selectedCount))}
+          </Text>
+        </TouchableOpacity>
+
+        {!hasShareableSource && (
+          <ScrollView style={styles.list} contentContainerStyle={styles.listContent} showsVerticalScrollIndicator={false}>
+            {workoutList.map(({ template }) => {
+              const isSelected = selectedIds.has(template.id);
+              return (
+                <TouchableOpacity
+                  key={template.id}
+                  style={styles.row}
+                  onPress={() => toggle(template.id)}
+                  activeOpacity={0.7}
+                >
+                  <View style={[styles.checkbox, isSelected && styles.checkboxSelected]}>
+                    {isSelected && <Text style={styles.checkmark}>✓</Text>}
+                  </View>
+                  <Text style={styles.workoutName}>{template.name}</Text>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+        )}
+
+        {/* Secondary: Export progress & logs (dates, completed sets, "No logged data"). */}
         {onExportData && plan && (
           <TouchableOpacity
             style={styles.exportDataButton}
@@ -142,36 +201,6 @@ export function ShareCycleDrawer({ visible, onClose, plan, onExportData }: Share
             <Text style={styles.exportDataButtonText}>{t('exportData')}</Text>
           </TouchableOpacity>
         )}
-
-        <ScrollView style={styles.list} contentContainerStyle={styles.listContent} showsVerticalScrollIndicator={false}>
-          {workoutList.map(({ template }) => {
-            const isSelected = selectedIds.has(template.id);
-            return (
-              <TouchableOpacity
-                key={template.id}
-                style={styles.row}
-                onPress={() => toggle(template.id)}
-                activeOpacity={0.7}
-              >
-                <View style={[styles.checkbox, isSelected && styles.checkboxSelected]}>
-                  {isSelected && <Text style={styles.checkmark}>✓</Text>}
-                </View>
-                <Text style={styles.workoutName}>{template.name}</Text>
-              </TouchableOpacity>
-            );
-          })}
-        </ScrollView>
-
-        <TouchableOpacity
-          style={[styles.shareButton, selectedCount === 0 && styles.shareButtonDisabled]}
-          onPress={handleShare}
-          activeOpacity={0.85}
-          disabled={selectedCount === 0}
-        >
-          <Text style={[styles.shareButtonText, selectedCount === 0 && styles.shareButtonTextDisabled]}>
-            {t('shareWorkoutsCount').replace('{count}', String(selectedCount))}
-          </Text>
-        </TouchableOpacity>
       </View>
     </BottomDrawer>
   );
@@ -237,6 +266,7 @@ const styles = StyleSheet.create({
     borderRadius: BORDER_RADIUS.md,
     alignItems: 'center',
     justifyContent: 'center',
+    marginBottom: SPACING.md,
   },
   shareButtonDisabled: {
     backgroundColor: COLORS.backgroundCanvas,
@@ -258,6 +288,7 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.activeCard,
     height: 48,
     borderRadius: BORDER_RADIUS.md,
+    marginTop: SPACING.lg,
     marginBottom: SPACING.lg,
   },
   exportDataButtonText: {

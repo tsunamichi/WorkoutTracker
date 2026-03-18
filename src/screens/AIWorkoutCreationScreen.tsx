@@ -589,6 +589,7 @@ export function AIWorkoutCreationScreen() {
         active: true,
         createdAt: nowIso,
         updatedAt: nowIso,
+        shareableSourceText: workoutDetails.trim(),
       };
 
       const result = await addCyclePlan(newPlan);

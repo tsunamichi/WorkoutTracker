@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useLayoutEffect, useMemo, useRef, useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, LayoutAnimation, Platform, UIManager, Alert, Animated, Easing, Modal, FlatList, TextInput, Keyboard, KeyboardAvoidingView, TouchableWithoutFeedback } from 'react-native';
+import AnimatedReanimated, { useSharedValue, useAnimatedStyle, withTiming, withDelay, interpolate, runOnJS } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, RouteProp, useFocusEffect } from '@react-navigation/native';
 import Svg, { Circle, Path } from 'react-native-svg';
@@ -15,6 +16,7 @@ import { ActionSheet, type ActionSheetItem } from '../components/common/ActionSh
 import { Toggle } from '../components/Toggle';
 import { DiagonalLinePattern } from '../components/common/DiagonalLinePattern';
 import { ShapeConfetti } from '../components/common/ShapeConfetti';
+import { DeviceEdgeTimer } from '../components/common/DeviceEdgeTimer';
 import { useTranslation } from '../i18n/useTranslation';
 import { formatWeightForLoad, toDisplayWeight, fromDisplayWeight } from '../utils/weight';
 import type { WarmupItem_DEPRECATED as WarmupItem, AccessoryItem_DEPRECATED as AccessoryItem, WorkoutTemplateExercise } from '../types/training';
@@ -25,6 +27,94 @@ import dayjs from 'dayjs';
 // Enable LayoutAnimation on Android
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
+}
+
+// Coordinated expand/collapse transition for exercise cards (height, spacing, opacity)
+const CARD_TRANSITION = LayoutAnimation.create(
+  280,
+  LayoutAnimation.Types.easeInEaseOut,
+  LayoutAnimation.Properties.opacity
+);
+
+const CARD_COLLAPSED_HEIGHT = 48;
+const CARD_EXPANDED_MAX_HEIGHT = 520;
+// Overlapped shell/content timing: coordinated transform, not sequential
+const SHELL_EXPAND_MS = 230;
+const METRICS_ENTER_DELAY_MS = 10;
+const ACTION_ENTER_DELAY_MS = 40;
+const CONTENT_ENTER_MS = 160;
+const CONTENT_EXIT_MS = 120;
+const SHELL_COLLAPSE_DELAY_MS = 0;
+const SHELL_COLLAPSE_MS = 170;
+const CONTENT_TRANSLATE_Y = 8;
+
+type TransitionPhase = 'idle' | 'collapsing' | 'expanding';
+
+const DEBUG_CARD_TRANSITION = true;
+function cardLog(msg: string, data?: Record<string, unknown>) {
+  if (DEBUG_CARD_TRANSITION && __DEV__) {
+    console.log(`[CardTransition] ${msg}`, data ?? '');
+  }
+}
+
+/** One shell + two grouped content sections (metrics + action), overlapped with shell motion. */
+function AnimatedCardContainer({
+  shouldBeOpen,
+  onCloseComplete,
+  onOpenComplete,
+  children,
+}: {
+  shouldBeOpen: boolean;
+  isClosing: boolean;
+  isOpening: boolean;
+  onCloseComplete?: () => void;
+  onOpenComplete?: () => void;
+  children: (metricsStyle: Record<string, unknown>, actionStyle: Record<string, unknown>) => React.ReactNode;
+}) {
+  const shellProgress = useSharedValue(shouldBeOpen ? 1 : 0);
+  const metricsProgress = useSharedValue(shouldBeOpen ? 1 : 0);
+  const actionProgress = useSharedValue(shouldBeOpen ? 1 : 0);
+
+  useEffect(() => {
+    const onOpen = onOpenComplete;
+    const onClose = onCloseComplete;
+    if (shouldBeOpen) {
+      cardLog('open start');
+      metricsProgress.value = withDelay(METRICS_ENTER_DELAY_MS, withTiming(1, { duration: CONTENT_ENTER_MS }));
+      actionProgress.value = withDelay(ACTION_ENTER_DELAY_MS, withTiming(1, { duration: CONTENT_ENTER_MS }));
+      shellProgress.value = withTiming(1, { duration: SHELL_EXPAND_MS }, (f) => {
+        if (f !== false && onOpen) runOnJS(onOpen)();
+      });
+    } else {
+      cardLog('close start');
+      metricsProgress.value = withTiming(0, { duration: CONTENT_EXIT_MS });
+      actionProgress.value = withTiming(0, { duration: CONTENT_EXIT_MS });
+      shellProgress.value = withDelay(SHELL_COLLAPSE_DELAY_MS, withTiming(0, { duration: SHELL_COLLAPSE_MS }, (f) => {
+        if (f !== false && onClose) runOnJS(onClose)();
+      }));
+    }
+  }, [shouldBeOpen, shellProgress, metricsProgress, actionProgress, onOpenComplete, onCloseComplete]);
+
+  const containerStyle = useAnimatedStyle(() => ({
+    overflow: 'hidden' as const,
+    maxHeight: interpolate(shellProgress.value, [0, 1], [CARD_COLLAPSED_HEIGHT, CARD_EXPANDED_MAX_HEIGHT]),
+  }));
+
+  const metricsStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(metricsProgress.value, [0, 0.2, 1], [0, 0, 1]),
+    transform: [{ translateY: interpolate(metricsProgress.value, [0, 1], [CONTENT_TRANSLATE_Y, 0]) }],
+  }));
+
+  const actionStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(actionProgress.value, [0, 0.2, 1], [0, 0, 1]),
+    transform: [{ translateY: interpolate(actionProgress.value, [0, 1], [CONTENT_TRANSLATE_Y, 0]) }],
+  }));
+
+  return (
+    <AnimatedReanimated.View style={containerStyle}>
+      {children(metricsStyle, actionStyle)}
+    </AnimatedReanimated.View>
+  );
 }
 
 type ExecutionType = 'warmup' | 'main' | 'core';
@@ -320,6 +410,54 @@ export function ExerciseExecutionScreen() {
   const [hasLoggedAnySet, setHasLoggedAnySet] = useState(false);
   const [completionTimestamps, setCompletionTimestamps] = useState<Record<string, number>>({});
 
+  // Sequenced expand/collapse: collapse current card first, then expand next (no simultaneous transition)
+  const [transitionPhase, setTransitionPhase] = useState<TransitionPhase>('idle');
+  const [pendingExpandGroupIndex, setPendingExpandGroupIndex] = useState<number | null>(null);
+  const [pendingExpandExerciseIndex, setPendingExpandExerciseIndex] = useState<number | null>(null);
+
+  const transitionPhaseRef = useRef(transitionPhase);
+  transitionPhaseRef.current = transitionPhase;
+
+  const handleCollapseComplete = useCallback(() => {
+    cardLog('collapse complete', { pendingExpandGroupIndex, pendingExpandExerciseIndex, phase: transitionPhaseRef.current });
+    if (transitionPhaseRef.current !== 'collapsing') return;
+    if (pendingExpandGroupIndex === null || pendingExpandExerciseIndex === null) {
+      setTransitionPhase('idle');
+      setPendingExpandGroupIndex(null);
+      setPendingExpandExerciseIndex(null);
+      return;
+    }
+    setExpandedGroupIndex(pendingExpandGroupIndex);
+    setActiveExerciseIndex(pendingExpandExerciseIndex);
+    setTransitionPhase('expanding');
+  }, [pendingExpandGroupIndex, pendingExpandExerciseIndex]);
+
+  const handleExpandComplete = useCallback(() => {
+    cardLog('expand complete → idle', { phase: transitionPhaseRef.current });
+    if (transitionPhaseRef.current !== 'expanding') return;
+    setTransitionPhase('idle');
+    setPendingExpandGroupIndex(null);
+    setPendingExpandExerciseIndex(null);
+  }, []);
+
+  // Safety: if animation completion never fires, still advance so we never get stuck
+  useEffect(() => {
+    if (transitionPhase !== 'collapsing' && transitionPhase !== 'expanding') return;
+    const ms = transitionPhase === 'collapsing'
+      ? SHELL_COLLAPSE_DELAY_MS + SHELL_COLLAPSE_MS + 80
+      : SHELL_EXPAND_MS + 80;
+    const t = setTimeout(() => {
+      if (transitionPhaseRef.current === 'collapsing') {
+        cardLog('safety timeout: force collapse complete');
+        handleCollapseComplete();
+      } else if (transitionPhaseRef.current === 'expanding') {
+        cardLog('safety timeout: force expand complete');
+        handleExpandComplete();
+      }
+    }, ms);
+    return () => clearTimeout(t);
+  }, [transitionPhase, handleCollapseComplete, handleExpandComplete]);
+
   // Derive completedSets directly from store so it can NEVER go out of sync
   const { warmupCompletionByKey, accessoryCompletionByKey } = useStore();
   const storeCompletionItems = useMemo(() => {
@@ -408,8 +546,8 @@ export function ExerciseExecutionScreen() {
   const [inlineRestPaused, setInlineRestPaused] = useState(false);
   const [inlineRestIsLastSet, setInlineRestIsLastSet] = useState(false);
   const inlineRestEndTimeRef = useRef<number>(0);
+  const inlineRestTotalMsRef = useRef<number>(0);
   const inlineRestProgress = useRef(new Animated.Value(1)).current;
-  const inlineRestAnimRef = useRef<Animated.CompositeAnimation | null>(null);
   const restStagger = useRef({
     timerLabel: new Animated.Value(0),
     pauseIcon: new Animated.Value(0),
@@ -505,7 +643,8 @@ export function ExerciseExecutionScreen() {
   const wasRestActiveRef = useRef(false);
   useLayoutEffect(() => {
     if (wasRestActiveRef.current && !inlineRestActive) {
-      inlineRestProgress.setValue(1);
+      // Do not reset inlineRestProgress here — border exit animation uses current progress.
+      // Progress is set to 1 only when starting a new rest (startInlineRest).
       counterShrinkAnim.setValue(1);
       buttonLabelOpacity.setValue(0);
       Animated.timing(buttonLabelOpacity, {
@@ -515,49 +654,69 @@ export function ExerciseExecutionScreen() {
     wasRestActiveRef.current = inlineRestActive;
   }, [inlineRestActive]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Inline rest timer countdown
+  const REST_BORDER_INTRO_MS = 320;
+  const restRafRef = useRef<number | null>(null);
+  const restStartTimeRef = useRef<number>(0);
+
+  // Inline rest timer: border progress at 60fps (RAF), countdown text + completion at interval.
   useEffect(() => {
     if (!inlineRestActive || inlineRestPaused) return;
+
+    const tick = () => {
+      const totalMs = inlineRestTotalMsRef.current;
+      const endTime = inlineRestEndTimeRef.current;
+      if (totalMs <= 0) return;
+      const now = Date.now();
+      const elapsed = now - restStartTimeRef.current;
+      const timeLeft = Math.max(0, endTime - now);
+      const progress =
+        elapsed < REST_BORDER_INTRO_MS ? 1 : Math.min(1, timeLeft / totalMs);
+      inlineRestProgress.setValue(progress);
+      if (timeLeft > 0) restRafRef.current = requestAnimationFrame(tick);
+    };
+    restRafRef.current = requestAnimationFrame(tick);
+
     const interval = setInterval(() => {
-      const remaining = Math.max(0, Math.ceil((inlineRestEndTimeRef.current - Date.now()) / 1000));
-      setInlineRestTimeLeft(remaining);
-      if (remaining <= 0) {
+      const timeLeft = Math.max(0, inlineRestEndTimeRef.current - Date.now());
+      const remainingSec = Math.max(0, Math.ceil(timeLeft / 1000));
+      setInlineRestTimeLeft(remainingSec);
+      if (remainingSec <= 0) {
         clearInterval(interval);
+        if (restRafRef.current != null) {
+          cancelAnimationFrame(restRafRef.current);
+          restRafRef.current = null;
+        }
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         runRestStaggerOut(() => inlineRestDismissRef.current());
       }
     }, 200);
-    return () => clearInterval(interval);
-  }, [inlineRestActive, inlineRestPaused]);
 
-  const startInlineRestAnim = useCallback((fromValue: number, durationMs: number) => {
-    if (inlineRestAnimRef.current) inlineRestAnimRef.current.stop();
-    inlineRestProgress.setValue(fromValue);
-    const anim = Animated.timing(inlineRestProgress, {
-      toValue: 0,
-      duration: durationMs,
-      easing: Easing.linear,
-      useNativeDriver: false,
-    });
-    inlineRestAnimRef.current = anim;
-    anim.start();
-  }, [inlineRestProgress]);
+    return () => {
+      if (restRafRef.current != null) {
+        cancelAnimationFrame(restRafRef.current);
+        restRafRef.current = null;
+      }
+      clearInterval(interval);
+    };
+  }, [inlineRestActive, inlineRestPaused]);
 
   const localRestRef = useRef<number | null>(localRestOverride);
   localRestRef.current = localRestOverride;
 
   const startInlineRest = useCallback(() => {
     const restSeconds = localRestRef.current ?? settings.restTimerDefaultSeconds;
+    const totalMs = restSeconds * 1000;
+    restStartTimeRef.current = Date.now();
     setInlineRestTotal(restSeconds);
     setInlineRestTimeLeft(restSeconds);
     setInlineRestPaused(false);
-    inlineRestEndTimeRef.current = Date.now() + restSeconds * 1000;
+    inlineRestEndTimeRef.current = Date.now() + totalMs;
+    inlineRestTotalMsRef.current = totalMs;
     setInlineRestActive(true);
-    startInlineRestAnim(1, restSeconds * 1000);
-  }, [settings.restTimerDefaultSeconds, startInlineRestAnim]);
+    inlineRestProgress.setValue(1);
+  }, [settings.restTimerDefaultSeconds]);
 
   const inlineRestDismissAndAdvance = () => {
-    if (inlineRestAnimRef.current) inlineRestAnimRef.current.stop();
     setInlineRestActive(false);
     setInlineRestTimeLeft(0);
     setInlineRestPaused(false);
@@ -580,12 +739,11 @@ export function ExerciseExecutionScreen() {
 
   const handleInlineRestPauseToggle = () => {
     if (inlineRestPaused) {
+      // Resume: extend endTime by remaining time only. Keep original totalMs so progress
+      // stays continuous (border does not jump back to full).
       inlineRestEndTimeRef.current = Date.now() + inlineRestTimeLeft * 1000;
       setInlineRestPaused(false);
-      const remaining = inlineRestTotal > 0 ? inlineRestTimeLeft / inlineRestTotal : 0;
-      startInlineRestAnim(remaining, inlineRestTimeLeft * 1000);
     } else {
-      if (inlineRestAnimRef.current) inlineRestAnimRef.current.stop();
       setInlineRestPaused(true);
     }
   };
@@ -1257,9 +1415,7 @@ export function ExerciseExecutionScreen() {
         if (nextIncompleteIndex >= 0) {
           console.log('🔴 [ExerciseExecution] COLLAPSE: group complete, user picks next. setExpandedGroupIndex(-1)');
           await saveSession(newCompletedSets);
-          LayoutAnimation.configureNext(
-            LayoutAnimation.create(250, LayoutAnimation.Types.easeInEaseOut, LayoutAnimation.Properties.opacity)
-          );
+          LayoutAnimation.configureNext(CARD_TRANSITION);
           // Don't auto-expand the next group - let the user choose freely
           setExpandedGroupIndex(-1);
           setActiveExerciseIndex(0);
@@ -1292,7 +1448,7 @@ export function ExerciseExecutionScreen() {
           
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
           setShowConfetti(true);
-          
+          LayoutAnimation.configureNext(CARD_TRANSITION);
           setExpandedGroupIndex(-1);
           setActiveExerciseIndex(0);
         }
@@ -1301,6 +1457,7 @@ export function ExerciseExecutionScreen() {
         const roundJustFinished = completedRounds - 1; // 0-based round we just completed
         console.log('🟢 [ExerciseExecution] STAY EXPANDED: same group next round. roundJustFinished=', roundJustFinished, 'nextRound=', nextRound, '(NOT calling setExpandedGroupIndex)');
         await saveSession(newCompletedSets);
+        LayoutAnimation.configureNext(CARD_TRANSITION);
         setActiveExerciseIndex(0);
         // expandedGroupIndex unchanged so card stays expanded
 
@@ -1336,6 +1493,7 @@ export function ExerciseExecutionScreen() {
       console.log('➡️ Moving to next exercise in same round:', nextExIndex, 'round', workingRound, '| group has', currentGroup.exercises.length, 'exercises');
       await saveSession(newCompletedSets);
       if (nextExIndex >= 0) {
+        LayoutAnimation.configureNext(CARD_TRANSITION);
         setActiveExerciseIndex(nextExIndex);
       } else {
         console.log('⚠️ No more exercises in this round');
@@ -1463,8 +1621,8 @@ export function ExerciseExecutionScreen() {
             
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
             setShowConfetti(true);
-            
             if (type === 'main') {
+              LayoutAnimation.configureNext(CARD_TRANSITION);
               setExpandedGroupIndex(-1);
               setActiveExerciseIndex(0);
             } else {
@@ -1512,9 +1670,7 @@ export function ExerciseExecutionScreen() {
           text: t('reset'),
           style: 'destructive',
           onPress: async () => {
-            LayoutAnimation.configureNext(
-              LayoutAnimation.create(250, LayoutAnimation.Types.easeInEaseOut, LayoutAnimation.Properties.opacity)
-            );
+            LayoutAnimation.configureNext(CARD_TRANSITION);
 
             // Clear completion in store (completedSets + currentRounds derive automatically)
             if (type === 'warmup') {
@@ -1606,9 +1762,7 @@ export function ExerciseExecutionScreen() {
                 setCurrentSessionId(null);
               }
               
-              LayoutAnimation.configureNext(
-                LayoutAnimation.create(250, LayoutAnimation.Types.easeInEaseOut, LayoutAnimation.Properties.opacity)
-              );
+              LayoutAnimation.configureNext(CARD_TRANSITION);
               setCompletionTimestamps({});
               setExpandedGroupIndex(0);
               setActiveExerciseIndex(0);
@@ -1795,6 +1949,12 @@ export function ExerciseExecutionScreen() {
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
       <ShapeConfetti active={showConfetti} />
+      <DeviceEdgeTimer
+        visible={inlineRestActive}
+        progress={inlineRestProgress}
+        strokeColor={COLORS.accentPrimary}
+        strokeWidth={4}
+      />
       <View style={styles.header}>
         <View style={styles.topBar}>
           <TouchableOpacity
@@ -1825,11 +1985,15 @@ export function ExerciseExecutionScreen() {
         </View>
       </View>
       
-      <ScrollView 
-        style={styles.content} 
-        contentContainerStyle={styles.scrollContent}
-        bounces={false}
-      >
+      <View style={styles.contentWrap}>
+        <ScrollView
+          style={styles.content}
+          contentContainerStyle={[
+            styles.scrollContent,
+            type === 'main' && !allCurrentGroupsComplete && { paddingBottom: 48 + 12 + Math.max(insets.bottom, 16) },
+          ]}
+          bounces={false}
+        >
         {allCurrentGroupsComplete ? (
           /* ===== COMPLETED WORKOUT - HISTORY VIEW ===== */
           <View style={styles.historyViewContainer}>
@@ -1906,7 +2070,9 @@ export function ExerciseExecutionScreen() {
         <View style={styles.itemsAccordion}>
           {sortedExerciseGroups.map((group) => {
             const originalIndex = groupIdToOriginalIndex.get(group.id) ?? -1;
-            const isExpanded = expandedGroupIndex === originalIndex;
+            const effectiveExpandedIndex = transitionPhase === 'expanding' && pendingExpandGroupIndex != null ? pendingExpandGroupIndex : expandedGroupIndex;
+            const effectiveActiveExerciseIndex = transitionPhase === 'expanding' && pendingExpandExerciseIndex != null ? pendingExpandExerciseIndex : activeExerciseIndex;
+            const isExpanded = effectiveExpandedIndex === originalIndex;
             const currentRound = currentRounds[group.id] || 0;
             const isCompleted = currentRound >= group.totalRounds;
             const isActiveWithTimer = isExpanded && inlineRestActive;
@@ -1933,7 +2099,12 @@ export function ExerciseExecutionScreen() {
                         const displayWeight = displayVals.weight;
                         const displayReps = displayVals.reps;
                         const showWeight = displayWeight > 0;
-                        const isCurrentExercise = isExpanded && exIndex === activeExerciseIndex;
+                        const isActive = expandedGroupIndex === originalIndex && activeExerciseIndex === exIndex;
+                        const isPending = pendingExpandGroupIndex === originalIndex && pendingExpandExerciseIndex === exIndex;
+                        const shouldBeOpen = transitionPhase === 'idle' ? isActive : transitionPhase === 'collapsing' ? false : isPending;
+                        const displayActive = (transitionPhase === 'idle' && isActive) || (transitionPhase === 'collapsing' && isActive) || (transitionPhase === 'expanding' && isPending);
+                        const isClosing = transitionPhase === 'collapsing' && isActive;
+                        const isOpening = transitionPhase === 'expanding' && isPending;
                         const isExerciseCompleted = completedSets.has(setId);
                         const repsUnit = exercise.isTimeBased ? 'secs' : 'reps';
 
@@ -1951,142 +2122,143 @@ export function ExerciseExecutionScreen() {
                                   const lastRound = Math.max(0, (currentRounds[group.id] || 0) - 1);
                                   setExpandedSetInDrawer(lastRound);
                                   setShowAdjustmentDrawer(true);
-                                } else if (isCurrentExercise) {
+                                } else if (displayActive) {
                                   setDrawerGroupIndex(null);
                                   setDrawerExerciseIndex(null);
                                   const currentRound = currentRounds[group.id] || 0;
                                   setExpandedSetInDrawer(currentRound);
                                   setShowAdjustmentDrawer(true);
-                                } else if (!hasLoggedAnySet && !isExpanded) {
-                                  LayoutAnimation.configureNext(
-                                    LayoutAnimation.create(
-                                      250,
-                                      LayoutAnimation.Types.easeInEaseOut,
-                                      LayoutAnimation.Properties.opacity
-                                    )
-                                  );
-                                  setExpandedGroupIndex(originalIndex);
-                                  setActiveExerciseIndex(0);
+                                } else if (expandedGroupIndex !== originalIndex) {
+                                  // Tapping a collapsed card (different group or none expanded): expand or switch
+                                  if (transitionPhase !== 'idle') {
+                                    cardLog('tap ignored (transition in progress)', { phase: transitionPhase });
+                                    return;
+                                  }
+                                  cardLog('tap collapsed card', {
+                                    tappedGroup: originalIndex,
+                                    tappedEx: exIndex,
+                                    currentExpanded: expandedGroupIndex,
+                                    currentActiveEx: activeExerciseIndex,
+                                    phase: transitionPhase,
+                                    pendingGroup: pendingExpandGroupIndex,
+                                    pendingEx: pendingExpandExerciseIndex,
+                                  });
+                                  if (expandedGroupIndex >= 0) {
+                                    setPendingExpandGroupIndex(originalIndex);
+                                    setPendingExpandExerciseIndex(exIndex);
+                                    setTransitionPhase('collapsing');
+                                  } else {
+                                    setExpandedGroupIndex(originalIndex);
+                                    setActiveExerciseIndex(exIndex);
+                                  }
+                                } else if (activeExerciseIndex !== exIndex) {
+                                  cardLog('tap same group, switch exercise', { group: originalIndex, exIndex });
+                                  setActiveExerciseIndex(exIndex);
                                 }
                               }}
                             >
-                              {/* Collapsed card: not started or completed */}
-                              {!isCurrentExercise ? (
-                                <View style={[styles.itemCardCollapsed, isExerciseCompleted && styles.exerciseContentDimmed]}>
-                                  <Text style={[
-                                    styles.exerciseNameText,
-                                    isExpanded && styles.exerciseNameTextActive,
-                                    { flex: 1 },
-                                  ]} numberOfLines={1}>
-                                    {exercise.exerciseName}
-                                  </Text>
-                                </View>
-                              ) : (
-                                /* Active card: full expanded layout */
-                                <View style={styles.itemCardExpanded}>
-                                  {/* Superset active: two-column layout */}
-                                  {group.exercises.length > 1 ? (
-                                    <View style={styles.supersetActiveRow}>
-                                      <View style={styles.supersetActiveLeft}>
-                                        <Text style={[
-                                          styles.exerciseNameText,
-                                          styles.exerciseNameTextActive,
-                                        ]} numberOfLines={1}>
-                                          {exercise.exerciseName}
+                              <AnimatedCardContainer
+                                shouldBeOpen={shouldBeOpen}
+                                isClosing={isClosing}
+                                isOpening={isOpening}
+                                onCloseComplete={handleCollapseComplete}
+                                onOpenComplete={handleExpandComplete}
+                              >
+                                {(metricsStyle, actionStyle) => (
+                                  <>
+                                    {/* GROUP A — shared header. Stays mounted and stable. */}
+                                    <View style={[
+                                      displayActive ? styles.itemCardHeaderActive : styles.itemCardCollapsed,
+                                      isExerciseCompleted && styles.exerciseContentDimmed,
+                                    ]}>
+                                      <Text style={[
+                                        styles.exerciseNameText,
+                                        isExpanded && styles.exerciseNameTextActive,
+                                        styles.exerciseNameCollapsedFlex,
+                                      ]} numberOfLines={1}>
+                                        {exercise.exerciseName}
+                                      </Text>
+                                      {!displayActive ? (
+                                        <Text style={styles.setCountCollapsed} numberOfLines={1}>
+                                          {`${Math.min((currentRounds[group.id] || 0) + 1, group.totalRounds)}/${group.totalRounds}`}
                                         </Text>
-                                        <View style={styles.valuesInlineRow}>
-                                          {showWeight && (
-                                            <View style={styles.valueRow}>
-                                              <Text style={styles.largeValue}>
-                                                {formatWeightForLoad(displayWeight, useKg)}
-                                              </Text>
-                                              <View style={styles.unitWithDelta}>
-                                                {(() => {
-                                                  const prog = progressionValuesRef.current[exercise.id];
-                                                  return prog && prog.weightDelta > 0 ? (
-                                                    <Text style={styles.deltaLabel} numberOfLines={1}>↑</Text>
-                                                  ) : null;
-                                                })()}
-                                                <Text style={styles.unit}>{weightUnit}</Text>
+                                      ) : (
+                                        <>
+                                          {isCompleted || (displayActive && inlineRestActive && inlineRestIsLastSet) ? (
+                                            <View style={styles.cardHeaderIconWrap}>
+                                              <IconCheckmark size={18} color={COLORS.successBright} />
+                                            </View>
+                                          ) : (
+                                            <TouchableOpacity
+                                              onPress={() => {
+                                                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                                                setDrawerGroupIndex(null);
+                                                setDrawerExerciseIndex(null);
+                                                const cr = currentRounds[group.id] || 0;
+                                                setExpandedSetInDrawer(cr);
+                                                setShowAdjustmentDrawer(true);
+                                              }}
+                                              activeOpacity={0.7}
+                                              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                                            >
+                                              <IconEdit size={18} color={COLORS.textMeta} />
+                                            </TouchableOpacity>
+                                          )}
+                                          {group.exercises.length > 1 && <NextLabel />}
+                                        </>
+                                      )}
+                                    </View>
+                                    {/* GROUP B + C — overlapped with shell; slight metrics -> action stagger */}
+                                    <View style={styles.itemCardExpanded}>
+                                      <AnimatedReanimated.View style={metricsStyle}>
+                                        {group.exercises.length === 1 ? (
+                                          <View style={styles.valuesDisplayRow}>
+                                            <View style={styles.valuesDisplayLeft}>
+                                              {showWeight && (
+                                                <View style={styles.valueColumn}>
+                                                  <View style={styles.valueRow}>
+                                                    <Text style={styles.largeValue}>
+                                                      {formatWeightForLoad(displayWeight, useKg)}
+                                                    </Text>
+                                                    <View style={styles.unitWithDelta}>
+                                                      {(() => {
+                                                        const prog = progressionValuesRef.current[exercise.id];
+                                                        return prog && prog.weightDelta > 0 ? (
+                                                          <Text style={styles.deltaLabel} numberOfLines={1}>↑</Text>
+                                                        ) : null;
+                                                      })()}
+                                                      <Text style={styles.unit}>{weightUnit}</Text>
+                                                    </View>
+                                                  </View>
+                                                  {(() => {
+                                                    const isBarbellMode = getBarbellMode(exercise.id);
+                                                    const barbellWeight = useKg ? 20 : 45;
+                                                    const weightPerSide = (displayWeight - barbellWeight) / 2;
+                                                    return isBarbellMode && weightPerSide > 0 ? (
+                                                      <Text style={styles.weightPerSideText}>
+                                                        {formatWeightForLoad(weightPerSide, useKg)}/side
+                                                      </Text>
+                                                    ) : null;
+                                                  })()}
+                                                </View>
+                                              )}
+                                              <View style={styles.valueRow}>
+                                                <Text style={styles.largeValue}>{displayReps}</Text>
+                                                <View style={styles.unitWithDelta}>
+                                                  {(() => {
+                                                    const prog = progressionValuesRef.current[exercise.id];
+                                                    return prog && prog.repsDelta > 0 ? (
+                                                      <Text style={styles.deltaLabel} numberOfLines={1}>↑</Text>
+                                                    ) : null;
+                                                  })()}
+                                                  <Text style={styles.unit}>{repsUnit}</Text>
+                                                </View>
                                               </View>
                                             </View>
-                                          )}
-                                          <View style={styles.valueRow}>
-                                            <Text style={styles.largeValue}>{displayReps}</Text>
-                                            <View style={styles.unitWithDelta}>
-                                              {(() => {
-                                                const prog = progressionValuesRef.current[exercise.id];
-                                                return prog && prog.repsDelta > 0 ? (
-                                                  <Text style={styles.deltaLabel} numberOfLines={1}>↑</Text>
-                                                ) : null;
-                                              })()}
-                                              <Text style={styles.unit}>{repsUnit}</Text>
-                                            </View>
                                           </View>
-                                        </View>
-                                        {showWeight && (() => {
-                                          const isBarbellMode = getBarbellMode(exercise.id);
-                                          const barbellWeight = useKg ? 20 : 45;
-                                          const weightPerSide = (displayWeight - barbellWeight) / 2;
-                                          return isBarbellMode && weightPerSide > 0 ? (
-                                            <Text style={styles.weightPerSideText}>
-                                              {formatWeightForLoad(weightPerSide, useKg)}/side
-                                            </Text>
-                                          ) : null;
-                                        })()}
-                                      </View>
-                                      <View style={styles.supersetActiveRight}>
-                                        <TouchableOpacity
-                                          onPress={() => {
-                                            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                                            setDrawerGroupIndex(null);
-                                            setDrawerExerciseIndex(null);
-                                            const cr = currentRounds[group.id] || 0;
-                                            setExpandedSetInDrawer(cr);
-                                            setShowAdjustmentDrawer(true);
-                                          }}
-                                          activeOpacity={0.7}
-                                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                                          style={{ opacity: isCompleted ? 0 : 1 }}
-                                          disabled={isCompleted}
-                                        >
-                                          <IconEdit size={18} color={COLORS.textMeta} />
-                                        </TouchableOpacity>
-                                        <NextLabel />
-                                      </View>
-                                    </View>
-                                  ) : (
-                                    <>
-                                      <View style={styles.exerciseNameRowWithIcon}>
-                                        <Text style={[
-                                          styles.exerciseNameText,
-                                          styles.exerciseNameTextActive,
-                                          { flex: 1 },
-                                        ]} numberOfLines={1}>
-                                          {exercise.exerciseName}
-                                        </Text>
-                                        <TouchableOpacity
-                                          onPress={() => {
-                                            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                                            setDrawerGroupIndex(null);
-                                            setDrawerExerciseIndex(null);
-                                            const cr = currentRounds[group.id] || 0;
-                                            setExpandedSetInDrawer(cr);
-                                            setShowAdjustmentDrawer(true);
-                                          }}
-                                          activeOpacity={0.7}
-                                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                                          style={{ opacity: isCompleted ? 0 : 1 }}
-                                          disabled={isCompleted}
-                                        >
-                                          <IconEdit size={18} color={COLORS.textMeta} />
-                                        </TouchableOpacity>
-                                      </View>
-
-                                      <View style={styles.valuesDisplayRow}>
-                                        <View style={styles.valuesDisplayLeft}>
-                                          {showWeight && (
-                                            <View style={styles.valueColumn}>
+                                        ) : (
+                                          <View style={styles.valuesInlineRow}>
+                                            {showWeight && (
                                               <View style={styles.valueRow}>
                                                 <Text style={styles.largeValue}>
                                                   {formatWeightForLoad(displayWeight, useKg)}
@@ -2101,134 +2273,107 @@ export function ExerciseExecutionScreen() {
                                                   <Text style={styles.unit}>{weightUnit}</Text>
                                                 </View>
                                               </View>
-                                              {(() => {
-                                                const isBarbellMode = getBarbellMode(exercise.id);
-                                                const barbellWeight = useKg ? 20 : 45;
-                                                const weightPerSide = (displayWeight - barbellWeight) / 2;
-                                                return isBarbellMode && weightPerSide > 0 ? (
-                                                  <Text style={styles.weightPerSideText}>
-                                                    {formatWeightForLoad(weightPerSide, useKg)}/side
-                                                  </Text>
-                                                ) : null;
-                                              })()}
+                                            )}
+                                            <View style={styles.valueRow}>
+                                              <Text style={styles.largeValue}>{displayReps}</Text>
+                                              <View style={styles.unitWithDelta}>
+                                                {(() => {
+                                                  const prog = progressionValuesRef.current[exercise.id];
+                                                  return prog && prog.repsDelta > 0 ? (
+                                                    <Text style={styles.deltaLabel} numberOfLines={1}>↑</Text>
+                                                  ) : null;
+                                                })()}
+                                                <Text style={styles.unit}>{repsUnit}</Text>
+                                              </View>
                                             </View>
-                                          )}
-
-                                          <View style={styles.valueRow}>
-                                            <Text style={styles.largeValue}>{displayReps}</Text>
-                                            <View style={styles.unitWithDelta}>
-                                              {(() => {
-                                                const prog = progressionValuesRef.current[exercise.id];
-                                                return prog && prog.repsDelta > 0 ? (
-                                                  <Text style={styles.deltaLabel} numberOfLines={1}>↑</Text>
-                                                ) : null;
-                                              })()}
-                                              <Text style={styles.unit}>{repsUnit}</Text>
-                                            </View>
+                                            {showWeight && (() => {
+                                              const isBarbellMode = getBarbellMode(exercise.id);
+                                              const barbellWeight = useKg ? 20 : 45;
+                                              const weightPerSide = (displayWeight - barbellWeight) / 2;
+                                              return isBarbellMode && weightPerSide > 0 ? (
+                                                <Text style={styles.weightPerSideText}>
+                                                  {formatWeightForLoad(weightPerSide, useKg)}/side
+                                                </Text>
+                                              ) : null;
+                                            })()}
                                           </View>
-                                        </View>
-                                      </View>
-                                    </>
-                                  )}
-                                </View>
-                              )}
+                                        )}
+                                      </AnimatedReanimated.View>
+                                      {/* Group C — action row */}
+                                      {exIndex === effectiveActiveExerciseIndex && (
+                                        <AnimatedReanimated.View style={actionStyle}>
+                                          <View style={styles.cardActionRow}>
+                                            <Animated.View style={styles.actionLeftContainer}>
+                                              <Animated.View
+                                                style={[styles.actionLeftOverlay, { opacity: buttonLabelOpacity }]}
+                                                pointerEvents={inlineRestActive ? 'none' : 'auto'}
+                                              >
+                                                <TouchableOpacity
+                                                  testID="start-button"
+                                                  style={styles.actionLeftTouchable}
+                                                  onPress={handleStart}
+                                                  activeOpacity={0.8}
+                                                >
+                                                  <Text style={styles.cardStartButtonText}>
+                                                    {group.exercises[activeExerciseIndex]?.isTimeBased ? t('startTimer') : t('markAsCompleted')}
+                                                  </Text>
+                                                </TouchableOpacity>
+                                              </Animated.View>
+                                              <View
+                                                style={styles.inlineRestControlsAbsolute}
+                                                pointerEvents={inlineRestActive ? 'auto' : 'none'}
+                                              >
+                                                <Animated.View style={{ opacity: restStagger.timerLabel, transform: [{ translateX: restStagger.timerLabel.interpolate({ inputRange: [0, 1], outputRange: [-10, 0] }) }] }}>
+                                                  <Text style={[styles.inlineRestTime, inlineRestActive && styles.inlineRestTimeActive]}>
+                                                    {Math.floor(inlineRestTimeLeft / 60)}:{String(inlineRestTimeLeft % 60).padStart(2, '0')}
+                                                  </Text>
+                                                </Animated.View>
+                                                <Animated.View style={{ opacity: restStagger.pauseIcon, transform: [{ translateX: restStagger.pauseIcon.interpolate({ inputRange: [0, 1], outputRange: [-8, 0] }) }] }}>
+                                                  <TouchableOpacity onPress={handleInlineRestPauseToggle} activeOpacity={0.7} style={styles.inlineRestIconBtn}>
+                                                    {inlineRestPaused ? <IconPlay size={20} color={inlineRestActive ? COLORS.accentPrimary : COLORS.text} /> : <IconPause size={20} color={inlineRestActive ? COLORS.accentPrimary : COLORS.text} />}
+                                                  </TouchableOpacity>
+                                                </Animated.View>
+                                                <Animated.View style={{ opacity: restStagger.skipIcon, transform: [{ translateX: restStagger.skipIcon.interpolate({ inputRange: [0, 1], outputRange: [-8, 0] }) }] }}>
+                                                  <TouchableOpacity onPress={handleInlineRestSkip} activeOpacity={0.7} style={styles.inlineRestIconBtn}>
+                                                    <IconSkip size={20} color={inlineRestActive ? COLORS.accentPrimary : COLORS.text} />
+                                                  </TouchableOpacity>
+                                                </Animated.View>
+                                              </View>
+                                            </Animated.View>
+                                            <Animated.View style={[styles.setCountIndicator, {
+                                              flexDirection: 'row',
+                                              alignItems: 'center',
+                                              maxWidth: counterShrinkAnim.interpolate({ inputRange: [0, 1], outputRange: [0, 100] }),
+                                              paddingHorizontal: counterShrinkAnim.interpolate({ inputRange: [0, 1], outputRange: [0, 0] }),
+                                            }]}>
+                                              <>
+                                                <Animated.View style={{
+                                                  overflow: 'hidden',
+                                                  maxWidth: nextLabelAnim.interpolate({ inputRange: [0, 1], outputRange: [0, 50] }),
+                                                  marginRight: nextLabelAnim.interpolate({ inputRange: [0, 1], outputRange: [0, 4] }),
+                                                }}>
+                                                  <Text style={styles.setCountNextLabel} numberOfLines={1}>
+                                                    {t('next')}
+                                                  </Text>
+                                                </Animated.View>
+                                                <Text style={styles.setCountText} numberOfLines={1}>
+                                                  {inlineRestActive
+                                                    ? `${Math.min(currentRound + 1, group.totalRounds)}/${group.totalRounds}`
+                                                    : `${currentRound + 1}/${group.totalRounds}`}
+                                                </Text>
+                                              </>
+                                            </Animated.View>
+                                          </View>
+                                        </AnimatedReanimated.View>
+                                      )}
+                                    </View>
+                                  </>
+                                )}
+                              </AnimatedCardContainer>
                             </TouchableOpacity>
                           </React.Fragment>
                         );
                       })}
-                      {/* Completed check icon */}
-                      {isCompleted && (
-                        <View style={styles.completedCardBadge}>
-                          <IconCheckmark size={16} color={COLORS.successBright} />
-                        </View>
-                      )}
-
-                      {/* Start button + Set indicator row / Inline rest timer */}
-                      {indicatorActive && (
-                        <View style={styles.cardActionRow}>
-                          {/* Left: unified button / timer — same element, no mount/unmount */}
-                          <Animated.View style={[styles.actionLeftContainer, {
-                            borderBottomRightRadius: counterShrinkAnim.interpolate({ inputRange: [0, 0.3, 1], outputRange: [11, 0, 0] }),
-                            borderRightWidth: counterShrinkAnim.interpolate({ inputRange: [0, 0.05, 1], outputRange: [1, 0, 0] }),
-                          }]}>
-                            <View style={styles.inlineRestProgressTrack}>
-                              <Animated.View style={[styles.inlineRestProgressFill, { width: inlineRestProgress.interpolate({ inputRange: [0, 1], outputRange: ['0%', '100%'] }) }]} />
-                            </View>
-
-                            {/* Button label — fades out when timer starts */}
-                            <Animated.View
-                              style={[styles.actionLeftOverlay, { opacity: buttonLabelOpacity }]}
-                              pointerEvents={inlineRestActive ? 'none' : 'auto'}
-                            >
-                              <TouchableOpacity
-                                testID="start-button"
-                                style={styles.actionLeftTouchable}
-                                onPress={handleStart}
-                                activeOpacity={0.8}
-                              >
-                                <Text style={styles.cardStartButtonText}>
-                                  {group.exercises[activeExerciseIndex]?.isTimeBased ? t('startTimer') : t('markAsCompleted')}
-                                </Text>
-                              </TouchableOpacity>
-                            </Animated.View>
-
-                            {/* Timer controls — stagger in over the progress bar */}
-                            <View
-                              style={styles.inlineRestControlsAbsolute}
-                              pointerEvents={inlineRestActive ? 'auto' : 'none'}
-                            >
-                              <Animated.View style={{ opacity: restStagger.timerLabel, transform: [{ translateX: restStagger.timerLabel.interpolate({ inputRange: [0, 1], outputRange: [-10, 0] }) }] }}>
-                                <Text style={styles.inlineRestTime}>
-                                  {Math.floor(inlineRestTimeLeft / 60)}:{String(inlineRestTimeLeft % 60).padStart(2, '0')}
-                                </Text>
-                              </Animated.View>
-                              <Animated.View style={{ opacity: restStagger.pauseIcon, transform: [{ translateX: restStagger.pauseIcon.interpolate({ inputRange: [0, 1], outputRange: [-8, 0] }) }] }}>
-                                <TouchableOpacity onPress={handleInlineRestPauseToggle} activeOpacity={0.7} style={styles.inlineRestIconBtn}>
-                                  {inlineRestPaused ? <IconPlay size={20} color={COLORS.text} /> : <IconPause size={20} color={COLORS.text} />}
-                                </TouchableOpacity>
-                              </Animated.View>
-                              <Animated.View style={{ opacity: restStagger.skipIcon, transform: [{ translateX: restStagger.skipIcon.interpolate({ inputRange: [0, 1], outputRange: [-8, 0] }) }] }}>
-                                <TouchableOpacity onPress={handleInlineRestSkip} activeOpacity={0.7} style={styles.inlineRestIconBtn}>
-                                  <IconSkip size={20} color={COLORS.text} />
-                                </TouchableOpacity>
-                              </Animated.View>
-                            </View>
-                          </Animated.View>
-
-                          {/* Right: set counter — shrinks to zero on last set of a group */}
-                          <Animated.View style={[styles.setCountIndicator, {
-                            flexDirection: 'row',
-                            alignItems: 'center',
-                            maxWidth: counterShrinkAnim.interpolate({ inputRange: [0, 1], outputRange: [0, 100] }),
-                            paddingHorizontal: counterShrinkAnim.interpolate({ inputRange: [0, 1], outputRange: [0, 12] }),
-                            borderTopWidth: counterShrinkAnim.interpolate({ inputRange: [0, 0.01, 1], outputRange: [0, 1, 1] }),
-                            borderBottomWidth: counterShrinkAnim.interpolate({ inputRange: [0, 0.01, 1], outputRange: [0, 1, 1] }),
-                            borderRightWidth: counterShrinkAnim.interpolate({ inputRange: [0, 0.01, 1], outputRange: [0, 1, 1] }),
-                            borderLeftWidth: 0,
-                          }]}>
-                            {inlineRestActive && inlineRestIsLastSet ? (
-                              <IconCheckmark size={18} color={COLORS.accentPrimary} />
-                            ) : (
-                              <>
-                                <Animated.View style={{
-                                  overflow: 'hidden',
-                                  maxWidth: nextLabelAnim.interpolate({ inputRange: [0, 1], outputRange: [0, 50] }),
-                                  marginRight: nextLabelAnim.interpolate({ inputRange: [0, 1], outputRange: [0, 4] }),
-                                }}>
-                                  <Text style={styles.setCountNextLabel} numberOfLines={1}>
-                                    {t('next')}
-                                  </Text>
-                                </Animated.View>
-                                <Text style={styles.setCountText} numberOfLines={1}>
-                                  {inlineRestActive
-                                    ? `${Math.min(currentRound + 1, group.totalRounds)}/${group.totalRounds}`
-                                    : `${currentRound + 1}/${group.totalRounds}`}
-                                </Text>
-                              </>
-                            )}
-                          </Animated.View>
-                        </View>
-                      )}
                     </View>
                   </View>
                 </View>
@@ -2236,27 +2381,29 @@ export function ExerciseExecutionScreen() {
             );
           })}
         </View>
-
-        {/* Add Exercise button - appears after first set is logged */}
-        {type === 'main' && (
-          <TouchableOpacity
-            style={styles.addExerciseButton}
-            onPress={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              setShowAddExerciseDrawer(true);
-            }}
-            activeOpacity={0.7}
-          >
-            <DiagonalLinePattern width="100%" height="100%" borderRadius={BORDER_RADIUS.lg} />
-            <View style={styles.addExerciseButtonContent}>
-              <IconAdd size={20} color={COLORS.text} />
-              <Text style={styles.addExerciseButtonText}>{t('addExercise')}</Text>
-            </View>
-          </TouchableOpacity>
-        )}
           </>
         )}
-      </ScrollView>
+        </ScrollView>
+        {/* Add Exercise button - pinned to bottom, same height as inactive cards (only when in progress) */}
+        {type === 'main' && !allCurrentGroupsComplete && (
+          <View style={[styles.addExerciseButtonFooter, { paddingBottom: Math.max(insets.bottom, 16) }]}>
+            <TouchableOpacity
+              style={styles.addExerciseButton}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                setShowAddExerciseDrawer(true);
+              }}
+              activeOpacity={0.7}
+            >
+              <DiagonalLinePattern width="100%" height="100%" borderRadius={BORDER_RADIUS.lg} />
+              <View style={styles.addExerciseButtonContent}>
+                <IconAdd size={20} color={COLORS.text} />
+                <Text style={styles.addExerciseButtonText}>{t('addExercise')}</Text>
+              </View>
+            </TouchableOpacity>
+          </View>
+        )}
+      </View>
       
       
       {/* Timer Sheet */}
@@ -3289,6 +3436,9 @@ const styles = StyleSheet.create({
     ...TYPOGRAPHY.h2,
     color: '#FFFFFF',
   },
+  contentWrap: {
+    flex: 1,
+  },
   content: {
     flex: 1,
   },
@@ -3355,10 +3505,26 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
   },
-  itemCardExpanded: {
+  itemCardHeaderActive: {
     paddingTop: 16,
     paddingHorizontal: 16,
-    paddingBottom: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  exerciseNameCollapsedFlex: {
+    flex: 1,
+    minWidth: 0,
+    marginRight: 10,
+  },
+  setCountCollapsed: {
+    ...TYPOGRAPHY.meta,
+    color: COLORS.textMeta,
+    flexShrink: 0,
+  },
+  itemCardExpanded: {
+    paddingTop: 6,
+    paddingHorizontal: 16,
+    paddingBottom: 0,
   },
   itemCardExpandedWithIndicator: {
     paddingRight: 60,
@@ -3384,6 +3550,11 @@ const styles = StyleSheet.create({
   },
   editIconContainer: {
     marginLeft: SPACING.md,
+  },
+  cardHeaderIconWrap: {
+    padding: 4,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   valuesDisplayRow: {
     flexDirection: 'row',
@@ -3428,60 +3599,42 @@ const styles = StyleSheet.create({
   },
   cardActionRow: {
     flexDirection: 'row',
-    paddingHorizontal: 4,
-    paddingBottom: 4,
+    paddingHorizontal: 0,
+    marginTop: 16,
     height: 48,
     gap: 0,
   },
   setCountIndicator: {
-    backgroundColor: COLORS.accentPrimaryDimmed,
-    borderColor: COLORS.accentPrimary,
-    borderTopLeftRadius: 0,
-    borderTopRightRadius: 0,
-    borderBottomLeftRadius: 0,
-    borderBottomRightRadius: 11,
-    borderCurve: 'continuous' as const,
     alignItems: 'center',
     justifyContent: 'center',
-    overflow: 'hidden',
     height: 44,
     paddingHorizontal: 12,
-    overflow: 'hidden',
   },
   actionLeftContainer: {
     flex: 1,
     height: 44,
-    backgroundColor: COLORS.backgroundContainer,
-    borderTopLeftRadius: 0,
-    borderTopRightRadius: 0,
-    borderBottomLeftRadius: 11,
-    borderBottomRightRadius: 0,
-    borderCurve: 'continuous' as const,
-    borderWidth: 1,
-    borderColor: COLORS.accentPrimary,
-    borderRightWidth: 0,
-    overflow: 'hidden',
   },
   actionLeftOverlay: {
     ...StyleSheet.absoluteFillObject,
     justifyContent: 'center',
-    alignItems: 'center',
+    alignItems: 'flex-start',
+    paddingLeft: 0,
     zIndex: 2,
   },
   actionLeftTouchable: {
     flex: 1,
     width: '100%',
     justifyContent: 'center',
-    alignItems: 'center',
+    alignItems: 'flex-start',
   },
   cardStartButtonText: {
     ...TYPOGRAPHY.metaBold,
-    color: COLORS.backgroundCanvas,
+    color: COLORS.accentPrimary,
   },
   setCountText: {
     ...TYPOGRAPHY.meta,
     color: COLORS.accentPrimary,
-    textAlign: 'center',
+    textAlign: 'right',
   },
   setCountIndicatorRow: {
     flexDirection: 'row',
@@ -3499,30 +3652,20 @@ const styles = StyleSheet.create({
     bottom: 0,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 12,
+    paddingHorizontal: 0,
     gap: 8,
     zIndex: 1,
     overflow: 'hidden',
   },
-  inlineRestProgressTrack: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    top: 0,
-    bottom: 0,
-    backgroundColor: COLORS.accentPrimaryDimmed,
-    borderRadius: 10,
-  },
-  inlineRestProgressFill: {
-    height: '100%',
-    backgroundColor: COLORS.accentPrimary,
-  },
   inlineRestTime: {
     ...TYPOGRAPHY.metaBold,
     color: COLORS.text,
-    width: 52,
     paddingVertical: 4,
-    textAlign: 'center',
+    width: 40,
+    textAlign: 'left',
+  },
+  inlineRestTimeActive: {
+    color: COLORS.accentPrimary,
   },
   inlineRestIconBtn: {
     width: 32,
@@ -3673,11 +3816,6 @@ const styles = StyleSheet.create({
     color: COLORS.textMeta,
   },
   completedBadge: {
-    position: 'absolute',
-    top: 12,
-    right: 14,
-  },
-  completedCardBadge: {
     position: 'absolute',
     top: 12,
     right: 14,
@@ -4114,16 +4252,19 @@ const styles = StyleSheet.create({
     marginTop: SPACING.xs,
     marginBottom: SPACING.md,
   },
-  // Add Exercise button
+  // Add Exercise button (same height as inactive cards, pinned to bottom via addExerciseButtonFooter)
   addExerciseButton: {
-    height: 56,
+    height: 48,
     borderRadius: BORDER_RADIUS.lg,
-    marginTop: SPACING.xl,
     overflow: 'hidden',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: SPACING.sm,
+  },
+  addExerciseButtonFooter: {
+    paddingHorizontal: SPACING.xxl,
+    paddingTop: 12,
   },
   addExerciseButtonContent: {
     flexDirection: 'row',
