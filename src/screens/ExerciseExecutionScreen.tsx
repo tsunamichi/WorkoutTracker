@@ -2184,26 +2184,29 @@ export function ExerciseExecutionScreen() {
                                         </Text>
                                       ) : (
                                         <>
-                                          {isCompleted || (displayActive && inlineRestActive && inlineRestIsLastSet) ? (
-                                            <View style={styles.cardHeaderIconWrap}>
-                                              <IconCheckmark size={18} color={COLORS.successBright} />
-                                            </View>
-                                          ) : (
-                                            <TouchableOpacity
-                                              onPress={() => {
-                                                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                                                setDrawerGroupIndex(null);
-                                                setDrawerExerciseIndex(null);
-                                                const cr = currentRounds[group.id] || 0;
-                                                setExpandedSetInDrawer(cr);
-                                                setShowAdjustmentDrawer(true);
-                                              }}
-                                              activeOpacity={0.7}
-                                              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                                            >
-                                              <IconEdit size={18} color={COLORS.textMeta} />
-                                            </TouchableOpacity>
-                                          )}
+                                          <View style={styles.cardHeaderActionSlot}>
+                                            {isCompleted || (displayActive && inlineRestActive && inlineRestIsLastSet) ? (
+                                              <View style={styles.cardHeaderActionTouchable}>
+                                                <IconCheckmark size={18} color={COLORS.successBright} />
+                                              </View>
+                                            ) : (
+                                              <TouchableOpacity
+                                                onPress={() => {
+                                                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                                                  setDrawerGroupIndex(null);
+                                                  setDrawerExerciseIndex(null);
+                                                  const cr = currentRounds[group.id] || 0;
+                                                  setExpandedSetInDrawer(cr);
+                                                  setShowAdjustmentDrawer(true);
+                                                }}
+                                                activeOpacity={0.7}
+                                                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                                                style={styles.cardHeaderActionTouchable}
+                                              >
+                                                <IconEdit size={18} color={COLORS.textMeta} />
+                                              </TouchableOpacity>
+                                            )}
+                                          </View>
                                           {group.exercises.length > 1 && <NextLabel />}
                                         </>
                                       )}
@@ -3508,6 +3511,7 @@ const styles = StyleSheet.create({
   itemCardHeaderActive: {
     paddingTop: 16,
     paddingHorizontal: 16,
+    paddingBottom: 0,
     flexDirection: 'row',
     alignItems: 'center',
   },
@@ -3551,8 +3555,16 @@ const styles = StyleSheet.create({
   editIconContainer: {
     marginLeft: SPACING.md,
   },
-  cardHeaderIconWrap: {
-    padding: 4,
+  cardHeaderActionSlot: {
+    width: 28,
+    height: 28,
+    marginLeft: 2,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  cardHeaderActionTouchable: {
+    width: 28,
+    height: 28,
     justifyContent: 'center',
     alignItems: 'center',
   },
