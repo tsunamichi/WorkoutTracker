@@ -439,7 +439,7 @@ const styles = StyleSheet.create({
     paddingBottom: SPACING.lg,
   },
   headerTitle: {
-    ...TYPOGRAPHY.h1,
+    ...TYPOGRAPHY.h3,
     color: '#FFFFFF',
     marginBottom: SPACING.xs,
   },

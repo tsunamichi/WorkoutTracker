@@ -811,7 +811,7 @@ const styles = StyleSheet.create({
     color: COLORS.error,
   },
   headerTitle: {
-    ...TYPOGRAPHY.h2,
+    ...TYPOGRAPHY.h3,
     color: '#FFFFFF',
   },
   content: {

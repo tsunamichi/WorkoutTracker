@@ -399,7 +399,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.xxl,
   },
   headerTitle: {
-    ...TYPOGRAPHY.h2,
+    ...TYPOGRAPHY.h3,
     color: LIGHT_COLORS.secondary,
   },
   headerRight: {

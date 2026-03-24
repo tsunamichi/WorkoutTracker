@@ -9,6 +9,7 @@ export interface ActionSheetItem {
   onPress: () => void;
   destructive?: boolean;
   featured?: boolean;
+  singleRow?: boolean;
   labelColor?: string;
 }
 
@@ -19,8 +20,8 @@ interface ActionSheetProps {
 }
 
 export function ActionSheet({ visible, onClose, items }: ActionSheetProps) {
-  const featuredItem = items.find(item => item.featured);
-  const regularItems = items.filter(item => !item.featured);
+  const singleRowItems = items.filter(item => item.featured || item.singleRow);
+  const regularItems = items.filter(item => !item.featured && !item.singleRow);
   const insets = useSafeAreaInsets();
   const translateY = useRef(new Animated.Value(-300)).current;
   const opacity = useRef(new Animated.Value(0)).current;
@@ -92,35 +93,37 @@ export function ActionSheet({ visible, onClose, items }: ActionSheetProps) {
           <TouchableOpacity activeOpacity={1}>
             <View style={styles.drawer}>
               <View style={styles.container}>
-                {/* Featured Action - full width, icon and label side by side, 48px tall */}
-                {featuredItem && (
+                {/* Single-row actions - full width, icon and label side by side */}
+                {singleRowItems.map((item, index) => (
                   <TouchableOpacity
+                    key={`single-${index}`}
                     style={[
                       styles.drawerItemFeatured,
-                      featuredItem.destructive && styles.drawerItemDanger
+                      item.destructive && styles.drawerItemDanger
                     ]}
                     onPress={() => {
-                      featuredItem.onPress();
+                      item.onPress();
                       onClose();
                     }}
                     activeOpacity={0.85}
-                    testID="action-sheet-featured-item"
+                    testID={index === 0 ? 'action-sheet-featured-item' : undefined}
                   >
                     <View style={styles.drawerItemIconWrap}>
-                      {featuredItem.icon}
+                      {item.icon}
                     </View>
                     <Text
                       style={[
                         styles.drawerItemTextFeatured,
-                        featuredItem.destructive && styles.drawerItemTextDanger
+                        item.destructive && styles.drawerItemTextDanger,
+                        item.labelColor ? { color: item.labelColor } : undefined
                       ]}
                       numberOfLines={1}
-                      testID="rest-timer-menu-label"
+                      testID={item.label.includes(':') ? 'rest-timer-menu-label' : undefined}
                     >
-                      {featuredItem.label || '0:00'}
+                      {item.label || '0:00'}
                     </Text>
                   </TouchableOpacity>
-                )}
+                ))}
 
                 {/* Regular Actions - row of buttons, icon stacked above label */}
                 {regularItems.length > 0 && (
@@ -195,7 +198,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center' as const,
     gap: SPACING.sm,
     backgroundColor: COLORS.activeCard,
-    borderRadius: 16,
+    borderRadius: 10,
     borderCurve: 'continuous' as const,
     paddingVertical: SPACING.lg,
     paddingHorizontal: SPACING.md,
@@ -207,7 +210,7 @@ const styles = StyleSheet.create({
     gap: SPACING.sm,
     height: 48,
     backgroundColor: COLORS.activeCard,
-    borderRadius: 16,
+    borderRadius: 10,
     borderCurve: 'continuous' as const,
     paddingHorizontal: SPACING.lg,
   },
@@ -220,13 +223,13 @@ const styles = StyleSheet.create({
   },
   drawerItemText: {
     ...TYPOGRAPHY.meta,
-    fontWeight: '600',
+    fontWeight: '400',
     color: COLORS.text,
     textAlign: 'center' as const,
   },
   drawerItemTextFeatured: {
     ...TYPOGRAPHY.meta,
-    fontWeight: '600',
+    fontWeight: '400',
     color: COLORS.text,
     textAlign: 'center' as const,
   },

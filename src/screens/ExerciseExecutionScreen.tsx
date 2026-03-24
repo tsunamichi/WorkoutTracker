@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useLayoutEffect, useMemo, useRef, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, LayoutAnimation, Platform, UIManager, Alert, Animated, Easing, Modal, FlatList, TextInput, Keyboard, KeyboardAvoidingView, TouchableWithoutFeedback } from 'react-native';
-import AnimatedReanimated, { useSharedValue, useAnimatedStyle, withTiming, withDelay, interpolate, runOnJS } from 'react-native-reanimated';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, LayoutAnimation, Platform, UIManager, Alert, Animated, Easing, Modal, FlatList, TextInput, InputAccessoryView, Keyboard, KeyboardAvoidingView, TouchableWithoutFeedback, useWindowDimensions } from 'react-native';
+import AnimatedReanimated, { useSharedValue, useAnimatedStyle, withTiming, withDelay, interpolate, runOnJS, Easing as ReanimatedEasing } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, RouteProp, useFocusEffect } from '@react-navigation/native';
 import Svg, { Circle, Path } from 'react-native-svg';
@@ -14,9 +14,11 @@ import { SetTimerSheet } from '../components/timer/SetTimerSheet';
 import { TimerValueSheet } from '../components/timer/TimerValueSheet';
 import { ActionSheet, type ActionSheetItem } from '../components/common/ActionSheet';
 import { Toggle } from '../components/Toggle';
-import { DiagonalLinePattern } from '../components/common/DiagonalLinePattern';
 import { ShapeConfetti } from '../components/common/ShapeConfetti';
 import { DeviceEdgeTimer } from '../components/common/DeviceEdgeTimer';
+import { ExploreV2ExecutionRoot } from '../components/exploreV2/ExploreV2ExecutionRoot';
+import { ExploreV2TimerArea } from '../components/exploreV2/ExploreV2TimerArea';
+import { EXPLORE_V2 } from '../components/exploreV2/exploreV2Tokens';
 import { useTranslation } from '../i18n/useTranslation';
 import { formatWeightForLoad, toDisplayWeight, fromDisplayWeight } from '../utils/weight';
 import type { WarmupItem_DEPRECATED as WarmupItem, AccessoryItem_DEPRECATED as AccessoryItem, WorkoutTemplateExercise } from '../types/training';
@@ -43,10 +45,13 @@ const SHELL_EXPAND_MS = 230;
 const METRICS_ENTER_DELAY_MS = 10;
 const ACTION_ENTER_DELAY_MS = 40;
 const CONTENT_ENTER_MS = 160;
-const CONTENT_EXIT_MS = 120;
+const CONTENT_EXIT_MS = 0;
 const SHELL_COLLAPSE_DELAY_MS = 0;
-const SHELL_COLLAPSE_MS = 170;
+const SHELL_COLLAPSE_MS = 0;
 const CONTENT_TRANSLATE_Y = 8;
+
+/** iOS keyboard toolbar for Explore detail sheet inline set editing */
+const EXPLORE_SET_EDIT_ACCESSORY_ID = 'exploreSetEditAccessory';
 
 type TransitionPhase = 'idle' | 'collapsing' | 'expanding';
 
@@ -118,6 +123,7 @@ function AnimatedCardContainer({
 }
 
 type ExecutionType = 'warmup' | 'main' | 'core';
+type ExecutionMode = 'current' | 'explore' | 'explore-v2';
 
 type RouteParams = {
   ExerciseExecution: {
@@ -128,6 +134,7 @@ type RouteParams = {
 };
 
 export function ExerciseExecutionScreen() {
+  const { height: screenHeight } = useWindowDimensions();
   const navigation = useNavigation();
   const route = useRoute<RouteProp<RouteParams, 'ExerciseExecution'>>();
   const insets = useSafeAreaInsets();
@@ -201,7 +208,7 @@ export function ExerciseExecutionScreen() {
     return plan ? !plan.active : false;
   }, [scheduledWorkouts, cyclePlans, workoutKey]);
   const useKg = settings.useKg;
-  const weightUnit = useKg ? 'kg' : 'lb';
+  const weightUnit = useKg ? 'kg' : 'lbs';
   const weightStep = useKg ? 0.5 : 5;
   
   // Refresh template when screen comes back into focus (not on initial mount)
@@ -410,54 +417,6 @@ export function ExerciseExecutionScreen() {
   const [hasLoggedAnySet, setHasLoggedAnySet] = useState(false);
   const [completionTimestamps, setCompletionTimestamps] = useState<Record<string, number>>({});
 
-  // Sequenced expand/collapse: collapse current card first, then expand next (no simultaneous transition)
-  const [transitionPhase, setTransitionPhase] = useState<TransitionPhase>('idle');
-  const [pendingExpandGroupIndex, setPendingExpandGroupIndex] = useState<number | null>(null);
-  const [pendingExpandExerciseIndex, setPendingExpandExerciseIndex] = useState<number | null>(null);
-
-  const transitionPhaseRef = useRef(transitionPhase);
-  transitionPhaseRef.current = transitionPhase;
-
-  const handleCollapseComplete = useCallback(() => {
-    cardLog('collapse complete', { pendingExpandGroupIndex, pendingExpandExerciseIndex, phase: transitionPhaseRef.current });
-    if (transitionPhaseRef.current !== 'collapsing') return;
-    if (pendingExpandGroupIndex === null || pendingExpandExerciseIndex === null) {
-      setTransitionPhase('idle');
-      setPendingExpandGroupIndex(null);
-      setPendingExpandExerciseIndex(null);
-      return;
-    }
-    setExpandedGroupIndex(pendingExpandGroupIndex);
-    setActiveExerciseIndex(pendingExpandExerciseIndex);
-    setTransitionPhase('expanding');
-  }, [pendingExpandGroupIndex, pendingExpandExerciseIndex]);
-
-  const handleExpandComplete = useCallback(() => {
-    cardLog('expand complete → idle', { phase: transitionPhaseRef.current });
-    if (transitionPhaseRef.current !== 'expanding') return;
-    setTransitionPhase('idle');
-    setPendingExpandGroupIndex(null);
-    setPendingExpandExerciseIndex(null);
-  }, []);
-
-  // Safety: if animation completion never fires, still advance so we never get stuck
-  useEffect(() => {
-    if (transitionPhase !== 'collapsing' && transitionPhase !== 'expanding') return;
-    const ms = transitionPhase === 'collapsing'
-      ? SHELL_COLLAPSE_DELAY_MS + SHELL_COLLAPSE_MS + 80
-      : SHELL_EXPAND_MS + 80;
-    const t = setTimeout(() => {
-      if (transitionPhaseRef.current === 'collapsing') {
-        cardLog('safety timeout: force collapse complete');
-        handleCollapseComplete();
-      } else if (transitionPhaseRef.current === 'expanding') {
-        cardLog('safety timeout: force expand complete');
-        handleExpandComplete();
-      }
-    }, ms);
-    return () => clearTimeout(t);
-  }, [transitionPhase, handleCollapseComplete, handleExpandComplete]);
-
   // Derive completedSets directly from store so it can NEVER go out of sync
   const { warmupCompletionByKey, accessoryCompletionByKey } = useStore();
   const storeCompletionItems = useMemo(() => {
@@ -490,6 +449,25 @@ export function ExerciseExecutionScreen() {
   }, [exerciseGroups, completedSets]);
 
   const [showAddExerciseDrawer, setShowAddExerciseDrawer] = useState(false);
+  /** Measured height of the Explore v2 wallet stack area below the timer band. */
+  const [exploreV2StackHeight, setExploreV2StackHeight] = useState(0);
+  const [exploreV2RootHeight, setExploreV2RootHeight] = useState(0);
+  const exploreV2TimerBandProgress = useSharedValue(0);
+  const executionMode: ExecutionMode = 'explore-v2';
+  const [isExploreCompletedExpanded, setIsExploreCompletedExpanded] = useState(false);
+  const [showExploreDetailSheet, setShowExploreDetailSheet] = useState(false);
+  const [exploreDetailGroupIndex, setExploreDetailGroupIndex] = useState<number | null>(null);
+  const [exploreDetailExerciseIndex, setExploreDetailExerciseIndex] = useState<number>(0);
+  /** Explore: small bottom sheet editor for one set (not inline in the current card) */
+  const [showExploreSetEditor, setShowExploreSetEditor] = useState(false);
+  const [exploreSetEditorSetIndex, setExploreSetEditorSetIndex] = useState<number | null>(null);
+  const [exploreEditDraft, setExploreEditDraft] = useState<{ weightStr: string; repsStr: string } | null>(null);
+  const exploreEditDraftRef = useRef<{ weightStr: string; repsStr: string } | null>(null);
+  const exploreEditPendingFocusRef = useRef<'weight' | 'reps'>('weight');
+  const exploreEditWeightRef = useRef<TextInput>(null);
+  const exploreEditRepsRef = useRef<TextInput>(null);
+  const exploreEditActiveFieldRef = useRef<'weight' | 'reps'>('weight');
+  const [showAllExploreHistory, setShowAllExploreHistory] = useState(false);
 
   // Staggered indicator animation using Animated.View (independent of LayoutAnimation)
   const indicatorWidthAnim = useRef(new Animated.Value(0)).current;
@@ -565,6 +543,42 @@ export function ExerciseExecutionScreen() {
   const [showExerciseSettingsMenu, setShowExerciseSettingsMenu] = useState(false);
   const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
   const [showConfetti, setShowConfetti] = useState(false);
+  const exploreV2TimerVisibleHeight = Math.max(
+    EXPLORE_V2.layout.timerVisibleHeight,
+    Math.round(screenHeight * 0.2),
+  );
+
+  useEffect(() => {
+    if (executionMode !== 'explore-v2') return;
+    exploreV2TimerBandProgress.value = withTiming(inlineRestActive ? 1 : 0, {
+      duration: EXPLORE_V2.motion.stackLayoutTransitionMs,
+      easing: ReanimatedEasing.bezier(...EXPLORE_V2.motion.stackLayoutTransitionEase),
+    });
+  }, [executionMode, inlineRestActive, exploreV2TimerBandProgress]);
+
+  const exploreV2TimerBandAnimatedStyle = useAnimatedStyle(() => ({
+    height: interpolate(
+      exploreV2TimerBandProgress.value,
+      [0, 1],
+      [EXPLORE_V2.layout.timerInactiveHeight, exploreV2TimerVisibleHeight],
+    ),
+    opacity: interpolate(exploreV2TimerBandProgress.value, [0, 0.2, 1], [0, 0.7, 1]),
+  }), [exploreV2TimerVisibleHeight]);
+  const exploreV2ThemeLayerStyle = useAnimatedStyle(
+    () => ({
+      transform: [
+        {
+          translateY: interpolate(
+            exploreV2TimerBandProgress.value,
+            [0, 1],
+            [-(exploreV2RootHeight || screenHeight), 0],
+          ),
+        },
+      ],
+    }),
+    [exploreV2RootHeight, screenHeight],
+  );
+  const exploreV2HeaderInk = '#1F1F1F';
   const historyOpacity = useRef(new Animated.Value(0)).current;
   
   // Use refs to avoid stale closures in timer callbacks
@@ -1017,6 +1031,193 @@ export function ExerciseExecutionScreen() {
       return rounds >= group.totalRounds;
     });
   }, [exerciseGroups, currentRounds]);
+
+  const exploreCurrentGroupIndex = useMemo(() => {
+    if (expandedGroupIndex < 0) return null;
+    const group = exerciseGroups[expandedGroupIndex];
+    if (!group) return null;
+    const completedRounds = currentRounds[group.id] || 0;
+    if (completedRounds >= group.totalRounds) return null;
+    // Explore v1: "current" only exists after at least one set is logged
+    if (executionMode === 'explore' && completedSets.size === 0) return null;
+    return expandedGroupIndex;
+  }, [
+    executionMode,
+    completedSets.size,
+    expandedGroupIndex,
+    exerciseGroups,
+    currentRounds,
+  ]);
+
+  const hasCurrentExercise = executionMode === 'explore' && exploreCurrentGroupIndex !== null;
+  const hasExploreV2CurrentExercise = executionMode === 'explore-v2' && exploreCurrentGroupIndex !== null;
+
+  const exploreV2CurrentGroupHasLoggedSets = useMemo(() => {
+    if (executionMode !== 'explore-v2') return false;
+    if (exploreCurrentGroupIndex === null) return false;
+    const g = exerciseGroups[exploreCurrentGroupIndex];
+    if (!g) return false;
+    for (let r = 0; r < g.totalRounds; r++) {
+      for (const ex of g.exercises) {
+        if (completedSets.has(`${ex.id}-set-${r}`)) return true;
+      }
+    }
+    return false;
+  }, [executionMode, exploreCurrentGroupIndex, exerciseGroups, completedSets]);
+  const currentExercise = hasCurrentExercise && exploreCurrentGroupIndex !== null
+    ? exerciseGroups[exploreCurrentGroupIndex]
+    : null;
+
+  const completedExerciseIndexes = useMemo(() => {
+    return exerciseGroups
+      .map((group, index) => ({ group, index }))
+      .filter(({ group }) => (currentRounds[group.id] || 0) >= group.totalRounds)
+      .sort((a, b) => {
+        const aTime = completionTimestamps[a.group.id] ?? Number.MAX_SAFE_INTEGER;
+        const bTime = completionTimestamps[b.group.id] ?? Number.MAX_SAFE_INTEGER;
+        return aTime - bTime;
+      })
+      .map(({ index }) => index);
+  }, [exerciseGroups, currentRounds, completionTimestamps]);
+
+  const upNextExercises = useMemo(() => {
+    return exerciseGroups
+      .map((group, index) => ({ group, index }))
+      .filter(({ group, index }) => {
+        const completedRounds = currentRounds[group.id] || 0;
+        const isCompleted = completedRounds >= group.totalRounds;
+        if (isCompleted) return false;
+        // Explore v2 rule: keep selected Current in Up Next until first set is actually logged.
+        // Only remove Current from queue after there is logged progress.
+        if (
+          exploreCurrentGroupIndex !== null &&
+          index === exploreCurrentGroupIndex &&
+          (executionMode !== 'explore-v2' || exploreV2CurrentGroupHasLoggedSets)
+        ) {
+          return false;
+        }
+        return true;
+      })
+      .map(({ index }) => index);
+  }, [
+    exerciseGroups,
+    currentRounds,
+    exploreCurrentGroupIndex,
+    executionMode,
+    exploreV2CurrentGroupHasLoggedSets,
+  ]);
+
+  const isExplorePreStart = executionMode === 'explore' && completedSets.size === 0;
+  const isExploreWorkoutComplete = executionMode === 'explore' && allCurrentGroupsComplete;
+  const isExploreV2WorkoutComplete = executionMode === 'explore-v2' && allCurrentGroupsComplete;
+
+  const canExpandExercise = useCallback((groupIndex: number) => {
+    if (executionMode !== 'explore') return true;
+    if (!hasCurrentExercise) return true;
+    return groupIndex === exploreCurrentGroupIndex;
+  }, [executionMode, hasCurrentExercise, exploreCurrentGroupIndex]);
+
+  const canShowPrimaryCTA = useCallback((groupIndex: number) => {
+    if (executionMode !== 'explore') return false;
+    if (expandedGroupIndex !== groupIndex) return false;
+    const group = exerciseGroups[groupIndex];
+    if (!group) return false;
+    const completedRounds = currentRounds[group.id] || 0;
+    if (completedRounds >= group.totalRounds) return false;
+    if (hasCurrentExercise) return groupIndex === exploreCurrentGroupIndex;
+    return true;
+  }, [
+    executionMode,
+    expandedGroupIndex,
+    exerciseGroups,
+    currentRounds,
+    hasCurrentExercise,
+    exploreCurrentGroupIndex,
+  ]);
+
+  const canShowPrimaryCTAExploreV2 = useCallback(
+    (groupIndex: number) => {
+      if (executionMode !== 'explore-v2') return false;
+      if (exploreCurrentGroupIndex === null) return false;
+      if (expandedGroupIndex !== groupIndex) return false;
+      const group = exerciseGroups[groupIndex];
+      if (!group) return false;
+      const completedRounds = currentRounds[group.id] || 0;
+      if (completedRounds >= group.totalRounds) return false;
+      return groupIndex === exploreCurrentGroupIndex;
+    },
+    [
+      executionMode,
+      expandedGroupIndex,
+      exerciseGroups,
+      currentRounds,
+      exploreCurrentGroupIndex,
+    ],
+  );
+
+  const exploreV2FrontGroupIndex = useMemo(() => {
+    if (executionMode !== 'explore-v2') return null;
+    if (allCurrentGroupsComplete) return null;
+    return exploreCurrentGroupIndex;
+  }, [executionMode, allCurrentGroupsComplete, exploreCurrentGroupIndex]);
+
+  /** Group + active exercise on Explore execution page — source of truth for inline sets/editing */
+  const exploreExecutionEditTarget = useMemo(() => {
+    if (executionMode !== 'explore' && executionMode !== 'explore-v2') return null;
+    let groupIndex: number | null = null;
+    if (executionMode === 'explore') {
+      if (exploreCurrentGroupIndex === null) return null;
+      groupIndex = exploreCurrentGroupIndex;
+    } else {
+      // Explore v2: no implicit "current" from Up Next — only when a group is selected as Current
+      if (exploreCurrentGroupIndex !== null) {
+        groupIndex = exploreCurrentGroupIndex;
+      } else if (!allCurrentGroupsComplete && executionMode === 'explore') {
+        groupIndex = upNextExercises[0] ?? null;
+      }
+    }
+    if (groupIndex === null) return null;
+    const g = exerciseGroups[groupIndex];
+    if (!g?.exercises?.length) return null;
+    const exIdx = Math.min(Math.max(0, activeExerciseIndex), g.exercises.length - 1);
+    const exercise = g.exercises[exIdx];
+    if (!exercise) return null;
+    return { group: g, exercise, exerciseIndex: exIdx };
+  }, [executionMode, exploreCurrentGroupIndex, exerciseGroups, activeExerciseIndex, allCurrentGroupsComplete, upNextExercises]);
+
+  useEffect(() => {
+    if (executionMode !== 'explore') return;
+    if (isExploreWorkoutComplete || hasCurrentExercise) return;
+    if (expandedGroupIndex >= 0) return;
+    const firstUpNext = upNextExercises[0];
+    if (firstUpNext !== undefined) {
+      setExpandedGroupIndex(firstUpNext);
+      setActiveExerciseIndex(0);
+    }
+  }, [
+    executionMode,
+    isExploreWorkoutComplete,
+    hasCurrentExercise,
+    expandedGroupIndex,
+    upNextExercises,
+  ]);
+
+  // Explore v2: entry state is Up Next only — do not auto-expand a "current" group (user selects from Up Next).
+
+  const prevExecutionModeRef = useRef(executionMode);
+  useEffect(() => {
+    if (executionMode === 'explore-v2' && prevExecutionModeRef.current !== 'explore-v2') {
+      setExpandedGroupIndex(-1);
+      setActiveExerciseIndex(0);
+    }
+    prevExecutionModeRef.current = executionMode;
+  }, [executionMode]);
+
+  useEffect(() => {
+    if (executionMode === 'explore' || executionMode === 'explore-v2') return;
+    setShowExploreDetailSheet(false);
+    setExploreDetailGroupIndex(null);
+  }, [executionMode]);
 
   // Handler for adding a new exercise to the workout template
   const handleAddExercise = async (exerciseId: string, exerciseName: string) => {
@@ -1795,6 +1996,94 @@ export function ExerciseExecutionScreen() {
       }
     }
   };
+
+  /** Remove all template items in an exercise group (Explore v2 Up Next trash). */
+  const removeGroupFromWorkoutByIndex = useCallback(
+    async (groupIndex: number) => {
+      const group = exerciseGroups[groupIndex];
+      if (!group || !template) return;
+      const idsToRemove = new Set(group.exercises.map(e => e.id));
+      if (type === 'warmup') {
+        const source = scheduledWorkout?.warmupSnapshot ?? template?.warmupItems ?? [];
+        const updatedItems = source.filter((item: any) => !idsToRemove.has(item.id));
+        await updateWorkoutTemplate(workoutTemplateId, { warmupItems: updatedItems });
+        if (scheduledWorkout && workoutKey) {
+          await updateScheduledWorkoutSnapshots(workoutKey, { warmupSnapshot: updatedItems });
+        }
+      } else if (type === 'core') {
+        const source = scheduledWorkout?.accessorySnapshot ?? template?.accessoryItems ?? [];
+        const updatedItems = source.filter((item: any) => !idsToRemove.has(item.id));
+        await updateWorkoutTemplate(workoutTemplateId, { accessoryItems: updatedItems });
+        if (scheduledWorkout && workoutKey) {
+          await updateScheduledWorkoutSnapshots(workoutKey, { accessorySnapshot: updatedItems });
+        }
+      } else if (type === 'main') {
+        const source = scheduledWorkout?.exercisesSnapshot ?? template?.items ?? [];
+        const updatedItems = source.filter((item: any) => !idsToRemove.has(item.id));
+        await updateWorkoutTemplate(workoutTemplateId, { items: updatedItems });
+        if (scheduledWorkout && workoutKey) {
+          await updateScheduledWorkoutSnapshots(workoutKey, { exercisesSnapshot: updatedItems });
+        }
+      }
+      if (expandedGroupIndex === groupIndex) {
+        setExpandedGroupIndex(-1);
+      } else if (groupIndex < expandedGroupIndex) {
+        setExpandedGroupIndex(expandedGroupIndex - 1);
+      }
+      setActiveExerciseIndex(0);
+      setRefreshKey(prev => prev + 1);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    },
+    [
+      exerciseGroups,
+      template,
+      type,
+      scheduledWorkout,
+      workoutKey,
+      workoutTemplateId,
+      updateWorkoutTemplate,
+      updateScheduledWorkoutSnapshots,
+      expandedGroupIndex,
+    ],
+  );
+
+  const removeExerciseFromWorkout = useCallback(async (activeExercise: WarmupItem) => {
+    if (type === 'warmup') {
+      const source = scheduledWorkout?.warmupSnapshot ?? template?.warmupItems ?? [];
+      const updatedItems = source.filter((item: any) => item.id !== activeExercise.id);
+      await updateWorkoutTemplate(workoutTemplateId, { warmupItems: updatedItems });
+      if (scheduledWorkout && workoutKey) {
+        await updateScheduledWorkoutSnapshots(workoutKey, { warmupSnapshot: updatedItems });
+      }
+    } else if (type === 'core') {
+      const source = scheduledWorkout?.accessorySnapshot ?? template?.accessoryItems ?? [];
+      const updatedItems = source.filter((item: any) => item.id !== activeExercise.id);
+      await updateWorkoutTemplate(workoutTemplateId, { accessoryItems: updatedItems });
+      if (scheduledWorkout && workoutKey) {
+        await updateScheduledWorkoutSnapshots(workoutKey, { accessorySnapshot: updatedItems });
+      }
+    } else if (type === 'main') {
+      const source = scheduledWorkout?.exercisesSnapshot ?? template?.items ?? [];
+      const updatedItems = source.filter((item: any) => {
+        const itemKey = scheduledWorkout ? item.id : (item.exerciseId ?? item.id);
+        return itemKey !== activeExercise.id;
+      });
+      await updateWorkoutTemplate(workoutTemplateId, { items: updatedItems });
+      if (scheduledWorkout && workoutKey) {
+        await updateScheduledWorkoutSnapshots(workoutKey, { exercisesSnapshot: updatedItems });
+      }
+    }
+    setRefreshKey(prev => prev + 1);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+  }, [
+    type,
+    scheduledWorkout,
+    template,
+    updateWorkoutTemplate,
+    workoutTemplateId,
+    workoutKey,
+    updateScheduledWorkoutSnapshots,
+  ]);
   
   const getTitle = () => {
     if (type === 'warmup') return t('warmup');
@@ -1942,6 +2231,124 @@ export function ExerciseExecutionScreen() {
       .map(([date, sets]) => ({ date, sets }))
       .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
   };
+
+  const exploreDetailGroup = exploreDetailGroupIndex !== null ? exerciseGroups[exploreDetailGroupIndex] : null;
+  const exploreDetailExercise = exploreDetailGroup
+    ? exploreDetailGroup.exercises[exploreDetailExerciseIndex] ?? exploreDetailGroup.exercises[0]
+    : null;
+  const exploreDetailCurrentRound = exploreDetailGroup ? (currentRounds[exploreDetailGroup.id] || 0) : 0;
+  const exploreDetailHistory = useMemo(() => {
+    if (!exploreDetailExercise) return [];
+    return getExerciseHistoryForDrawer(exploreDetailExercise.id, (exploreDetailExercise as any).exerciseId);
+  }, [exploreDetailExercise, completedSets, localValues, refreshKey]);
+
+  const flushExploreSetEditorDraftToLocal = useCallback(() => {
+    if (exploreSetEditorSetIndex === null || !exploreExecutionEditTarget) return;
+    const draft = exploreEditDraftRef.current;
+    if (!draft) return;
+    const { exercise } = exploreExecutionEditTarget;
+    const setIndex = exploreSetEditorSetIndex;
+    const setId = `${exercise.id}-set-${setIndex}`;
+    const setVals = getSetDisplayValues(
+      exercise.id,
+      setIndex,
+      exercise.weight ?? 0,
+      Number(exercise.reps ?? 0),
+    );
+    const wText = draft.weightStr.trim();
+    const rText = draft.repsStr.trim();
+    const parsedW = parseFloat(wText);
+    const parsedR = parseInt(rText, 10);
+    setLocalValues(prev => {
+      const cur = prev[setId];
+      let weight = cur?.weight ?? setVals.weight;
+      let reps = cur?.reps ?? setVals.reps;
+      if (wText !== '' && !isNaN(parsedW) && parsedW >= 0) {
+        weight = fromDisplayWeight(Math.round(parsedW * 2) / 2, useKg);
+      }
+      if (rText !== '' && !isNaN(parsedR) && parsedR >= 1) {
+        reps = parsedR;
+      }
+      return { ...prev, [setId]: { weight, reps } };
+    });
+  }, [exploreSetEditorSetIndex, exploreExecutionEditTarget, getSetDisplayValues, setLocalValues, useKg]);
+
+  const closeExploreSetEditor = useCallback(() => {
+    flushExploreSetEditorDraftToLocal();
+    setShowExploreSetEditor(false);
+    setExploreSetEditorSetIndex(null);
+    setExploreEditDraft(null);
+    exploreEditDraftRef.current = null;
+    Keyboard.dismiss();
+  }, [flushExploreSetEditorDraftToLocal]);
+
+  const openExploreSetRowEditor = useCallback(
+    (setIndex: number) => {
+      if (!exploreExecutionEditTarget) return;
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      if (showExploreSetEditor && exploreSetEditorSetIndex !== null && exploreSetEditorSetIndex !== setIndex) {
+        flushExploreSetEditorDraftToLocal();
+      }
+      const { exercise } = exploreExecutionEditTarget;
+      const setId = `${exercise.id}-set-${setIndex}`;
+      const setVals = getSetDisplayValues(
+        exercise.id,
+        setIndex,
+        exercise.weight ?? 0,
+        Number(exercise.reps ?? 0),
+      );
+      const lv = localValuesRef.current[setId];
+      const w = lv?.weight ?? setVals.weight;
+      const r = lv?.reps ?? setVals.reps;
+      const nextDraft = {
+        weightStr: formatWeightForLoad(w, useKg),
+        repsStr: String(r),
+      };
+      exploreEditDraftRef.current = nextDraft;
+      exploreEditPendingFocusRef.current = 'weight';
+      exploreEditActiveFieldRef.current = 'weight';
+      setExploreEditDraft(nextDraft);
+      setExploreSetEditorSetIndex(setIndex);
+      setShowExploreSetEditor(true);
+    },
+    [
+      exploreExecutionEditTarget,
+      showExploreSetEditor,
+      exploreSetEditorSetIndex,
+      flushExploreSetEditorDraftToLocal,
+      getSetDisplayValues,
+      useKg,
+    ],
+  );
+
+  const openExploreDetailSheet = useCallback(
+    (groupIndex: number, exerciseIndex: number) => {
+      const group = exerciseGroups[groupIndex];
+      if (!group) return;
+      flushExploreSetEditorDraftToLocal();
+      setShowExploreSetEditor(false);
+      setExploreSetEditorSetIndex(null);
+      setExploreEditDraft(null);
+      exploreEditDraftRef.current = null;
+      Keyboard.dismiss();
+      setExploreDetailGroupIndex(groupIndex);
+      setExploreDetailExerciseIndex(exerciseIndex);
+      setShowAllExploreHistory(false);
+      setShowExploreDetailSheet(true);
+    },
+    [exerciseGroups, flushExploreSetEditorDraftToLocal],
+  );
+
+  // Focus weight when the Explore set editor sheet opens.
+  useEffect(() => {
+    if (!showExploreSetEditor || exploreSetEditorSetIndex === null) return;
+    const target = exploreEditPendingFocusRef.current;
+    const id = requestAnimationFrame(() => {
+      if (target === 'reps') exploreEditRepsRef.current?.focus();
+      else exploreEditWeightRef.current?.focus();
+    });
+    return () => cancelAnimationFrame(id);
+  }, [showExploreSetEditor, exploreSetEditorSetIndex]);
   
   // Rest of the render logic from WarmupExecutionScreen...
   // (I'll keep this abbreviated for now, but it will include all the card rendering, drawer, timer, etc.)
@@ -1949,12 +2356,14 @@ export function ExerciseExecutionScreen() {
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
       <ShapeConfetti active={showConfetti} />
-      <DeviceEdgeTimer
-        visible={inlineRestActive}
-        progress={inlineRestProgress}
-        strokeColor={COLORS.accentPrimary}
-        strokeWidth={4}
-      />
+      {executionMode !== 'explore-v2' && (
+        <DeviceEdgeTimer
+          visible={inlineRestActive}
+          progress={inlineRestProgress}
+          strokeColor={COLORS.info}
+          strokeWidth={4}
+        />
+      )}
       <View style={styles.header}>
         <View style={styles.topBar}>
           <TouchableOpacity
@@ -1966,8 +2375,30 @@ export function ExerciseExecutionScreen() {
             }}
             activeOpacity={1}
           >
-            <IconArrowLeft size={24} color="#FFFFFF" />
+            <IconArrowLeft size={24} color={executionMode === 'explore-v2' ? exploreV2HeaderInk : '#FFFFFF'} />
           </TouchableOpacity>
+          <View style={styles.topBarCenter}>
+            <Text
+              testID="header-title"
+              numberOfLines={1}
+              style={[styles.headerTitle, executionMode === 'explore-v2' && styles.headerTitleExploreV2]}
+            >
+              {getTitle()}
+            </Text>
+            {executionMode === 'explore' && inlineRestActive && (
+              <View style={[styles.headerTimerPill, styles.headerTimerPillBelowTitle]}>
+                <TouchableOpacity onPress={handleInlineRestPauseToggle} activeOpacity={0.7} style={styles.exploreTimerIconBtn}>
+                  {inlineRestPaused ? <IconPlay size={16} color={COLORS.accentPrimary} /> : <IconPause size={16} color={COLORS.accentPrimary} />}
+                </TouchableOpacity>
+                <Text style={styles.exploreTimerText}>
+                  {Math.floor(inlineRestTimeLeft / 60)}:{String(inlineRestTimeLeft % 60).padStart(2, '0')}
+                </Text>
+                <TouchableOpacity onPress={handleInlineRestSkip} activeOpacity={0.7} style={styles.exploreTimerIconBtn}>
+                  <IconSkip size={16} color={COLORS.accentPrimary} />
+                </TouchableOpacity>
+              </View>
+            )}
+          </View>
           {!isInPastCycle && (
             <TouchableOpacity
               testID="menu-button"
@@ -1975,17 +2406,79 @@ export function ExerciseExecutionScreen() {
               onPress={() => setShowMenu(true)}
               activeOpacity={1}
             >
-              <IconMenu size={24} color="#FFFFFF" />
+              <IconMenu size={24} color={executionMode === 'explore-v2' ? exploreV2HeaderInk : '#FFFFFF'} />
             </TouchableOpacity>
           )}
-        </View>
-        
-        <View style={styles.headerContent}>
-          <Text testID="header-title" style={styles.headerTitle}>{getTitle()}</Text>
+          {isInPastCycle && (
+            <View style={styles.menuSpacer} />
+          )}
         </View>
       </View>
       
       <View style={styles.contentWrap}>
+        {executionMode === 'explore-v2' ? (
+          <View style={styles.exploreV2Root} onLayout={e => setExploreV2RootHeight(e.nativeEvent.layout.height)}>
+            <AnimatedReanimated.View style={[styles.exploreV2ThemeLayer, exploreV2ThemeLayerStyle]} />
+            <AnimatedReanimated.View style={[styles.exploreV2TimerBand, exploreV2TimerBandAnimatedStyle]}>
+              <ExploreV2TimerArea
+                active={inlineRestActive}
+                timeLeftSec={inlineRestTimeLeft}
+                paused={inlineRestPaused}
+                onPauseToggle={handleInlineRestPauseToggle}
+                onSkip={handleInlineRestSkip}
+                progress={inlineRestProgress}
+              />
+            </AnimatedReanimated.View>
+            <View
+              style={styles.exploreV2WalletBand}
+              onLayout={e => setExploreV2StackHeight(e.nativeEvent.layout.height)}
+            >
+              <ExploreV2ExecutionRoot
+                exerciseGroups={exerciseGroups}
+                exploreCurrentGroupIndex={exploreCurrentGroupIndex}
+                upNextExercises={upNextExercises}
+                completedExerciseIndexes={completedExerciseIndexes}
+                currentRounds={currentRounds}
+                completedSets={completedSets}
+                setExpandedGroupIndex={setExpandedGroupIndex}
+                activeExerciseIndex={activeExerciseIndex}
+                setActiveExerciseIndex={setActiveExerciseIndex}
+                getSetDisplayValues={getSetDisplayValues}
+                localValues={localValues}
+                setLocalValues={setLocalValues}
+                useKg={useKg}
+                weightUnit={weightUnit}
+                getBarbellMode={getBarbellMode}
+                setBarbellMode={setBarbellMode}
+                timeBasedOverrides={timeBasedOverrides}
+                setTimeBasedOverrides={setTimeBasedOverrides}
+                perSideOverrides={perSideOverrides}
+                setPerSideOverrides={setPerSideOverrides}
+                handleStart={handleStart}
+                openExploreDetailSheet={openExploreDetailSheet}
+                showPrimaryCta={
+                  exploreV2FrontGroupIndex !== null &&
+                  canShowPrimaryCTAExploreV2(exploreV2FrontGroupIndex)
+                }
+                inlineRestActive={inlineRestActive}
+                allComplete={isExploreV2WorkoutComplete}
+                type={type}
+                progressionGroups={progressionGroups}
+                updateProgressionGroup={updateProgressionGroup}
+                onSwapExercise={handleSwap}
+                onRemoveExercise={async (exercise) => {
+                  await removeExerciseFromWorkout(exercise as WarmupItem);
+                }}
+                walletStackHeight={exploreV2StackHeight}
+                currentGroupHasLoggedSets={exploreV2CurrentGroupHasLoggedSets}
+                onOpenAddExercise={() => setShowAddExerciseDrawer(true)}
+                onRemoveGroupFromUpNext={removeGroupFromWorkoutByIndex}
+                allowAddExercise={type === 'main'}
+                timerThemeActive={inlineRestActive}
+              />
+            </View>
+          </View>
+        ) : (
         <ScrollView
           style={styles.content}
           contentContainerStyle={[
@@ -1994,7 +2487,356 @@ export function ExerciseExecutionScreen() {
           ]}
           bounces={false}
         >
-        {allCurrentGroupsComplete ? (
+        {executionMode === 'explore' ? (
+          <View style={styles.exploreRoot}>
+            {(() => {
+              const renderExploreCard = (
+                groupIndex: number,
+                section: 'current' | 'up-next' | 'completed',
+                currentLayout?: 'current-stack',
+              ) => {
+                const group = exerciseGroups[groupIndex];
+                if (!group) return null;
+
+                const completedRounds = currentRounds[group.id] || 0;
+                const isCompleted = completedRounds >= group.totalRounds;
+                const isExpanded = expandedGroupIndex === groupIndex;
+                const isCurrent = exploreCurrentGroupIndex === groupIndex;
+                /** Current explore area: summary card + separate set list + CTA (calmer than one overloaded card) */
+                const layoutStack = section === 'current' && currentLayout === 'current-stack';
+                const isCardLocked = section !== 'completed' && hasCurrentExercise && !isCurrent;
+                const canOpen = canExpandExercise(groupIndex) && !isCompleted && section !== 'completed';
+                const workingRound = Math.min(completedRounds, Math.max(0, group.totalRounds - 1));
+                const focusExerciseIndex = isCurrent
+                  ? Math.min(activeExerciseIndex, Math.max(0, group.exercises.length - 1))
+                  : Math.max(
+                      0,
+                      group.exercises.findIndex(ex => !completedSets.has(`${ex.id}-set-${workingRound}`)),
+                    );
+                const focusExercise = group.exercises[focusExerciseIndex] ?? group.exercises[0];
+                const displayRound = isCompleted ? Math.max(0, completedRounds - 1) : completedRounds;
+                const displayVals = getSetDisplayValues(
+                  focusExercise.id,
+                  displayRound,
+                  focusExercise.weight ?? 0,
+                  Number(focusExercise.reps) ?? 0,
+                );
+                const showWeight = displayVals.weight > 0;
+                const repsUnit = focusExercise.isTimeBased ? 'secs' : 'reps';
+                const groupHasStarted = group.exercises.some(ex => completedSets.has(`${ex.id}-set-0`));
+                const ctaLabel = !groupHasStarted
+                  ? 'Log first set'
+                  : completedRounds + 1 >= group.totalRounds
+                    ? 'Log final set'
+                    : 'Log next set';
+                const indicatorActive = isExpanded && !isCompleted && canShowPrimaryCTA(groupIndex);
+                const groupCardBg = isExpanded ? styles.itemCardBorder : styles.itemCardInactive;
+                const groupCardFg = isExpanded ? styles.itemCardFill : styles.itemCardInnerInactive;
+
+                return (
+                  <View key={`${section}-${group.id}`} style={layoutStack ? styles.exploreCurrentStack : styles.itemRow}>
+                    <View style={styles.exerciseCardsColumn}>
+                      <View style={groupCardBg}>
+                        <View style={[groupCardFg, isCardLocked && styles.exploreCardLocked]}>
+                          {/* Header only; expanded summary / set list / CTA stay outside this press target */}
+                          <TouchableOpacity
+                            activeOpacity={0.9}
+                            onPress={() => {
+                              if (!canOpen || isCardLocked) return;
+                              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                              LayoutAnimation.configureNext(CARD_TRANSITION);
+                              if (isExpanded && !hasCurrentExercise) {
+                                setExpandedGroupIndex(-1);
+                                return;
+                              }
+                              setExpandedGroupIndex(groupIndex);
+                              setActiveExerciseIndex(focusExerciseIndex);
+                            }}
+                            disabled={!canOpen || isCardLocked}
+                          >
+                            <View style={isExpanded ? styles.itemCardHeaderActive : styles.itemCardCollapsed}>
+                              <Text style={[styles.exerciseNameText, isExpanded && styles.exerciseNameTextActive, styles.exerciseNameCollapsedFlex]} numberOfLines={1}>
+                                {group.exercises.map(ex => ex.exerciseName).join(' + ')}
+                              </Text>
+                              {!isExpanded ? (
+                                <Text style={styles.setCountCollapsed} numberOfLines={1}>
+                                  {isCompleted ? 'Done' : `${Math.min(completedRounds + 1, group.totalRounds)}/${group.totalRounds}`}
+                                </Text>
+                              ) : (
+                                <View style={styles.cardHeaderRightCluster}>
+                                  <View style={styles.cardHeaderActionSlot}>
+                                    {isCompleted ? (
+                                      <View style={styles.cardHeaderActionTouchable}>
+                                        <IconCheckmark size={18} color={COLORS.successBright} />
+                                      </View>
+                                    ) : (
+                                      <TouchableOpacity
+                                        onPress={() => {
+                                          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                                          openExploreDetailSheet(groupIndex, focusExerciseIndex);
+                                        }}
+                                        activeOpacity={0.7}
+                                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                                        style={styles.cardHeaderActionTouchable}
+                                      >
+                                        <View style={styles.pencilIconOffset}>
+                                          <IconEdit size={18} color={COLORS.textMeta} />
+                                        </View>
+                                      </TouchableOpacity>
+                                    )}
+                                  </View>
+                                </View>
+                              )}
+                            </View>
+                          </TouchableOpacity>
+
+                          {isExpanded && !isCompleted && (
+                            <View style={styles.itemCardExpanded}>
+                              {layoutStack ? (
+                                <View style={styles.exploreCurrentSummaryCompact}>
+                                  <Text style={styles.exploreCurrentSummaryText}>
+                                    {`${Math.min(completedRounds + 1, group.totalRounds)} / ${group.totalRounds} sets`}
+                                  </Text>
+                                </View>
+                              ) : (
+                                <View style={styles.valuesDisplayRow}>
+                                  <View style={styles.valuesDisplayLeft}>
+                                    {showWeight && (
+                                      <View style={styles.valueColumn}>
+                                        <View style={styles.valueRow}>
+                                          <Text style={styles.largeValue}>
+                                            {formatWeightForLoad(displayVals.weight, useKg)}
+                                          </Text>
+                                          <Text style={styles.unit}>{weightUnit}</Text>
+                                        </View>
+                                        {(() => {
+                                          const isBarbellMode = getBarbellMode(focusExercise.id);
+                                          const barbellWeight = useKg ? 20 : 45;
+                                          const weightPerSide = (displayVals.weight - barbellWeight) / 2;
+                                          return isBarbellMode && weightPerSide > 0 ? (
+                                            <Text style={styles.weightPerSideText}>
+                                              {formatWeightForLoad(weightPerSide, useKg)}/side
+                                            </Text>
+                                          ) : null;
+                                        })()}
+                                      </View>
+                                    )}
+                                    <View style={styles.valueRow}>
+                                      <Text style={styles.largeValue}>{displayVals.reps}</Text>
+                                      <Text style={styles.unit}>{repsUnit}</Text>
+                                    </View>
+                                  </View>
+                                  <Text style={styles.setCountInValues} numberOfLines={1}>
+                                    {`${Math.min(completedRounds + 1, group.totalRounds)}/${group.totalRounds}`}
+                                  </Text>
+                                </View>
+                              )}
+                            </View>
+                          )}
+                        </View>
+                      </View>
+                    </View>
+
+                    {layoutStack && isExpanded && !isCompleted && (
+                      <View style={styles.exploreSetListBlock}>
+                        <Text style={styles.exploreDetailSectionTitle}>Sets</Text>
+                        {Array.from({ length: group.totalRounds }, (_, setIndex) => {
+                          const setId = `${focusExercise.id}-set-${setIndex}`;
+                          const isSetCompleted = completedSets.has(setId);
+                          const isSetNext = !isSetCompleted && setIndex === completedRounds;
+                          const isSetUpcoming = !isSetCompleted && !isSetNext;
+                          const setVals = getSetDisplayValues(
+                            focusExercise.id,
+                            setIndex,
+                            focusExercise.weight ?? 0,
+                            focusExercise.reps ?? 0,
+                          );
+                          const setRepsUnit = focusExercise.isTimeBased ? 'secs' : 'reps';
+                          const rowShellStyle = [
+                            styles.exploreSetRow,
+                            isSetCompleted && styles.exploreSetRowCompleted,
+                            !isSetCompleted && isSetNext && styles.exploreSetRowActive,
+                            !isSetCompleted && isSetUpcoming && styles.exploreSetRowUpcoming,
+                          ];
+                          const valueSummary = `${formatWeightForLoad(setVals.weight, useKg)} ${weightUnit} × ${setVals.reps} ${setRepsUnit}`;
+                          return (
+                            <TouchableOpacity
+                              key={setId}
+                              style={rowShellStyle}
+                              onPress={() => openExploreSetRowEditor(setIndex)}
+                              activeOpacity={0.75}
+                            >
+                              <View style={styles.exploreSetRowCompact}>
+                                <View style={styles.exploreSetRowLeft}>
+                                  {isSetCompleted && (
+                                    <View style={styles.exploreSetDoneIcon}>
+                                      <IconCheckmark size={18} color={COLORS.successBright} />
+                                    </View>
+                                  )}
+                                  <Text style={styles.exploreInlineSetNumber}>Set {setIndex + 1}</Text>
+                                  {isSetNext && <Text style={styles.exploreSetNextLabel}>next</Text>}
+                                  {isSetUpcoming && <Text style={styles.exploreSetUpcomingLabel}>upcoming</Text>}
+                                </View>
+                                <View style={styles.exploreSetRowRight}>
+                                  <Text
+                                    style={[styles.exploreSetValueCompact, isSetCompleted && styles.exploreSetValueMuted]}
+                                    numberOfLines={1}
+                                  >
+                                    {valueSummary}
+                                  </Text>
+                                </View>
+                              </View>
+                            </TouchableOpacity>
+                          );
+                        })}
+                      </View>
+                    )}
+
+                    {indicatorActive && (
+                      <View style={[styles.externalActionCard, inlineRestActive && styles.externalActionCardDisabled]}>
+                        <TouchableOpacity
+                          style={styles.externalActionTouchable}
+                          onPress={async () => {
+                            if (expandedGroupIndex !== groupIndex || activeExerciseIndex !== focusExerciseIndex) {
+                              setExpandedGroupIndex(groupIndex);
+                              setActiveExerciseIndex(focusExerciseIndex);
+                              return;
+                            }
+                            await handleStart();
+                          }}
+                          disabled={inlineRestActive}
+                          activeOpacity={0.8}
+                        >
+                          <Text style={[styles.cardStartButtonText, inlineRestActive && styles.cardStartButtonTextDisabled]}>
+                            {ctaLabel}
+                          </Text>
+                        </TouchableOpacity>
+                      </View>
+                    )}
+                  </View>
+                );
+              };
+
+              const renderExploreCompletedRows = () => {
+                const completedExercises = completedExerciseIndexes.flatMap((groupIndex) => {
+                  const group = exerciseGroups[groupIndex];
+                  if (!group) return [];
+                  return group.exercises.map((exercise) => ({
+                    groupIndex,
+                    group,
+                    exercise,
+                    key: `${group.id}-${exercise.id}`,
+                  }));
+                });
+
+                return completedExercises.map((entry, idx) => (
+                  <TouchableOpacity
+                    key={entry.key}
+                    style={[
+                      styles.historyExerciseRow,
+                      idx === completedExercises.length - 1 && { borderBottomWidth: 0 },
+                    ]}
+                    onPress={() => {
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                      const exIdx = entry.group.exercises.findIndex(e => e.id === entry.exercise.id);
+                      openExploreDetailSheet(entry.groupIndex, exIdx);
+                    }}
+                    activeOpacity={0.7}
+                  >
+                    <View style={styles.historyExerciseNameColumn}>
+                      <Text style={styles.historyExerciseName} numberOfLines={2}>
+                        {entry.exercise.exerciseName}
+                      </Text>
+                    </View>
+                    <View style={styles.historyExerciseDataColumn}>
+                      {Array.from({ length: entry.group.totalRounds }).map((_, roundIdx) => {
+                        const vals = getSetDisplayValues(
+                          entry.exercise.id,
+                          roundIdx,
+                          entry.exercise.weight ?? 0,
+                          entry.exercise.reps ?? 0,
+                        );
+                        const displayWeight = vals.weight;
+                        const displayReps = vals.reps;
+                        const showWeight = displayWeight > 0;
+                        return (
+                          <View key={roundIdx} style={styles.historySetDataRow}>
+                            {showWeight && (
+                              <View style={styles.historySetValueGroup}>
+                                <Text style={styles.historySetValue}>
+                                  {formatWeightForLoad(displayWeight, useKg)}
+                                </Text>
+                                <Text style={styles.historySetUnit}>{weightUnit}</Text>
+                              </View>
+                            )}
+                            <View style={styles.historySetValueGroup}>
+                              <Text style={styles.historySetValue}>{displayReps}</Text>
+                              <Text style={styles.historySetUnit}>
+                                {entry.exercise.isTimeBased ? 'secs' : 'reps'}
+                              </Text>
+                            </View>
+                          </View>
+                        );
+                      })}
+                    </View>
+                  </TouchableOpacity>
+                ));
+              };
+
+              const renderExploreCompletedSection = () => (
+                <View style={styles.exploreSection}>
+                  <TouchableOpacity
+                    style={styles.exploreSectionAccordionHeader}
+                    onPress={() => {
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                      setIsExploreCompletedExpanded(prev => !prev);
+                    }}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.exploreSectionTitle}>Completed</Text>
+                    <View
+                      style={[
+                        styles.exploreSectionAccordionIconWrap,
+                        isExploreCompletedExpanded && styles.exploreSectionAccordionIconWrapExpanded,
+                      ]}
+                    >
+                      <IconChevronDown size={20} color={COLORS.accentPrimary} />
+                    </View>
+                  </TouchableOpacity>
+                  {isExploreCompletedExpanded && renderExploreCompletedRows()}
+                </View>
+              );
+
+              if (isExploreWorkoutComplete) {
+                return (
+                  renderExploreCompletedSection()
+                );
+              }
+
+              return (
+                <>
+                  {currentExercise && exploreCurrentGroupIndex !== null && (
+                    <View style={styles.exploreSection}>
+                      <Text style={styles.exploreSectionTitle}>Current</Text>
+                      {renderExploreCard(exploreCurrentGroupIndex, 'current', 'current-stack')}
+                    </View>
+                  )}
+
+                  {upNextExercises.length > 0 && (
+                    <View style={styles.exploreSection}>
+                      <Text style={styles.exploreSectionTitle}>Up next</Text>
+                      {upNextExercises.map(index => renderExploreCard(index, 'up-next'))}
+                    </View>
+                  )}
+
+                  {!isExplorePreStart && completedExerciseIndexes.length > 0 && (
+                    renderExploreCompletedSection()
+                  )}
+                </>
+              );
+            })()}
+          </View>
+        ) : allCurrentGroupsComplete ? (
           /* ===== COMPLETED WORKOUT - HISTORY VIEW ===== */
           <View style={styles.historyViewContainer}>
             <View style={styles.historyViewHeader}>
@@ -2070,9 +2912,7 @@ export function ExerciseExecutionScreen() {
         <View style={styles.itemsAccordion}>
           {sortedExerciseGroups.map((group) => {
             const originalIndex = groupIdToOriginalIndex.get(group.id) ?? -1;
-            const effectiveExpandedIndex = transitionPhase === 'expanding' && pendingExpandGroupIndex != null ? pendingExpandGroupIndex : expandedGroupIndex;
-            const effectiveActiveExerciseIndex = transitionPhase === 'expanding' && pendingExpandExerciseIndex != null ? pendingExpandExerciseIndex : activeExerciseIndex;
-            const isExpanded = effectiveExpandedIndex === originalIndex;
+            const isExpanded = expandedGroupIndex === originalIndex;
             const currentRound = currentRounds[group.id] || 0;
             const isCompleted = currentRound >= group.totalRounds;
             const isActiveWithTimer = isExpanded && inlineRestActive;
@@ -2086,7 +2926,11 @@ export function ExerciseExecutionScreen() {
             const groupCardFg = visuallyCompleted ? styles.itemCardInnerDimmed : (isExpanded ? styles.itemCardFill : styles.itemCardInnerInactive);
 
             return (
-              <View key={group.id} testID={`exercise-group-${originalIndex}`} style={styles.itemRow}>
+              <View
+                key={group.id}
+                testID={`exercise-group-${originalIndex}`}
+                style={styles.itemRow}
+              >
                 {/* Single card wrapping all exercises in the group */}
                 <View style={styles.exerciseCardsColumn}>
                   <View style={groupCardBg}>
@@ -2100,11 +2944,8 @@ export function ExerciseExecutionScreen() {
                         const displayReps = displayVals.reps;
                         const showWeight = displayWeight > 0;
                         const isActive = expandedGroupIndex === originalIndex && activeExerciseIndex === exIndex;
-                        const isPending = pendingExpandGroupIndex === originalIndex && pendingExpandExerciseIndex === exIndex;
-                        const shouldBeOpen = transitionPhase === 'idle' ? isActive : transitionPhase === 'collapsing' ? false : isPending;
-                        const displayActive = (transitionPhase === 'idle' && isActive) || (transitionPhase === 'collapsing' && isActive) || (transitionPhase === 'expanding' && isPending);
-                        const isClosing = transitionPhase === 'collapsing' && isActive;
-                        const isOpening = transitionPhase === 'expanding' && isPending;
+                        const shouldBeOpen = isActive;
+                        const displayActive = isActive;
                         const isExerciseCompleted = completedSets.has(setId);
                         const repsUnit = exercise.isTimeBased ? 'secs' : 'reps';
 
@@ -2129,28 +2970,9 @@ export function ExerciseExecutionScreen() {
                                   setExpandedSetInDrawer(currentRound);
                                   setShowAdjustmentDrawer(true);
                                 } else if (expandedGroupIndex !== originalIndex) {
-                                  // Tapping a collapsed card (different group or none expanded): expand or switch
-                                  if (transitionPhase !== 'idle') {
-                                    cardLog('tap ignored (transition in progress)', { phase: transitionPhase });
-                                    return;
-                                  }
-                                  cardLog('tap collapsed card', {
-                                    tappedGroup: originalIndex,
-                                    tappedEx: exIndex,
-                                    currentExpanded: expandedGroupIndex,
-                                    currentActiveEx: activeExerciseIndex,
-                                    phase: transitionPhase,
-                                    pendingGroup: pendingExpandGroupIndex,
-                                    pendingEx: pendingExpandExerciseIndex,
-                                  });
-                                  if (expandedGroupIndex >= 0) {
-                                    setPendingExpandGroupIndex(originalIndex);
-                                    setPendingExpandExerciseIndex(exIndex);
-                                    setTransitionPhase('collapsing');
-                                  } else {
-                                    setExpandedGroupIndex(originalIndex);
-                                    setActiveExerciseIndex(exIndex);
-                                  }
+                                  // Switch cards immediately so active/inactive colors and CTA move together.
+                                  setExpandedGroupIndex(originalIndex);
+                                  setActiveExerciseIndex(exIndex);
                                 } else if (activeExerciseIndex !== exIndex) {
                                   cardLog('tap same group, switch exercise', { group: originalIndex, exIndex });
                                   setActiveExerciseIndex(exIndex);
@@ -2159,10 +2981,8 @@ export function ExerciseExecutionScreen() {
                             >
                               <AnimatedCardContainer
                                 shouldBeOpen={shouldBeOpen}
-                                isClosing={isClosing}
-                                isOpening={isOpening}
-                                onCloseComplete={handleCollapseComplete}
-                                onOpenComplete={handleExpandComplete}
+                                isClosing={false}
+                                isOpening={false}
                               >
                                 {(metricsStyle, actionStyle) => (
                                   <>
@@ -2183,7 +3003,7 @@ export function ExerciseExecutionScreen() {
                                           {`${Math.min((currentRounds[group.id] || 0) + 1, group.totalRounds)}/${group.totalRounds}`}
                                         </Text>
                                       ) : (
-                                        <>
+                                        <View style={styles.cardHeaderRightCluster}>
                                           <View style={styles.cardHeaderActionSlot}>
                                             {isCompleted || (displayActive && inlineRestActive && inlineRestIsLastSet) ? (
                                               <View style={styles.cardHeaderActionTouchable}>
@@ -2203,12 +3023,13 @@ export function ExerciseExecutionScreen() {
                                                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                                                 style={styles.cardHeaderActionTouchable}
                                               >
-                                                <IconEdit size={18} color={COLORS.textMeta} />
+                                                <View style={styles.pencilIconOffset}>
+                                                  <IconEdit size={18} color={COLORS.textMeta} />
+                                                </View>
                                               </TouchableOpacity>
                                             )}
                                           </View>
-                                          {group.exercises.length > 1 && <NextLabel />}
-                                        </>
+                                        </View>
                                       )}
                                     </View>
                                     {/* GROUP B + C — overlapped with shell; slight metrics -> action stagger */}
@@ -2258,6 +3079,11 @@ export function ExerciseExecutionScreen() {
                                                 </View>
                                               </View>
                                             </View>
+                                            <Text style={styles.setCountInValues} numberOfLines={1}>
+                                              {inlineRestActive
+                                                ? `${Math.min(currentRound + 1, group.totalRounds)}/${group.totalRounds}`
+                                                : `${currentRound + 1}/${group.totalRounds}`}
+                                            </Text>
                                           </View>
                                         ) : (
                                           <View style={styles.valuesInlineRow}>
@@ -2299,76 +3125,15 @@ export function ExerciseExecutionScreen() {
                                                 </Text>
                                               ) : null;
                                             })()}
+                                            <Text style={styles.setCountInValues} numberOfLines={1}>
+                                              {inlineRestActive
+                                                ? `${Math.min(currentRound + 1, group.totalRounds)}/${group.totalRounds}`
+                                                : `${currentRound + 1}/${group.totalRounds}`}
+                                            </Text>
                                           </View>
                                         )}
                                       </AnimatedReanimated.View>
-                                      {/* Group C — action row */}
-                                      {exIndex === effectiveActiveExerciseIndex && (
-                                        <AnimatedReanimated.View style={actionStyle}>
-                                          <View style={styles.cardActionRow}>
-                                            <Animated.View style={styles.actionLeftContainer}>
-                                              <Animated.View
-                                                style={[styles.actionLeftOverlay, { opacity: buttonLabelOpacity }]}
-                                                pointerEvents={inlineRestActive ? 'none' : 'auto'}
-                                              >
-                                                <TouchableOpacity
-                                                  testID="start-button"
-                                                  style={styles.actionLeftTouchable}
-                                                  onPress={handleStart}
-                                                  activeOpacity={0.8}
-                                                >
-                                                  <Text style={styles.cardStartButtonText}>
-                                                    {group.exercises[activeExerciseIndex]?.isTimeBased ? t('startTimer') : t('markAsCompleted')}
-                                                  </Text>
-                                                </TouchableOpacity>
-                                              </Animated.View>
-                                              <View
-                                                style={styles.inlineRestControlsAbsolute}
-                                                pointerEvents={inlineRestActive ? 'auto' : 'none'}
-                                              >
-                                                <Animated.View style={{ opacity: restStagger.timerLabel, transform: [{ translateX: restStagger.timerLabel.interpolate({ inputRange: [0, 1], outputRange: [-10, 0] }) }] }}>
-                                                  <Text style={[styles.inlineRestTime, inlineRestActive && styles.inlineRestTimeActive]}>
-                                                    {Math.floor(inlineRestTimeLeft / 60)}:{String(inlineRestTimeLeft % 60).padStart(2, '0')}
-                                                  </Text>
-                                                </Animated.View>
-                                                <Animated.View style={{ opacity: restStagger.pauseIcon, transform: [{ translateX: restStagger.pauseIcon.interpolate({ inputRange: [0, 1], outputRange: [-8, 0] }) }] }}>
-                                                  <TouchableOpacity onPress={handleInlineRestPauseToggle} activeOpacity={0.7} style={styles.inlineRestIconBtn}>
-                                                    {inlineRestPaused ? <IconPlay size={20} color={inlineRestActive ? COLORS.accentPrimary : COLORS.text} /> : <IconPause size={20} color={inlineRestActive ? COLORS.accentPrimary : COLORS.text} />}
-                                                  </TouchableOpacity>
-                                                </Animated.View>
-                                                <Animated.View style={{ opacity: restStagger.skipIcon, transform: [{ translateX: restStagger.skipIcon.interpolate({ inputRange: [0, 1], outputRange: [-8, 0] }) }] }}>
-                                                  <TouchableOpacity onPress={handleInlineRestSkip} activeOpacity={0.7} style={styles.inlineRestIconBtn}>
-                                                    <IconSkip size={20} color={inlineRestActive ? COLORS.accentPrimary : COLORS.text} />
-                                                  </TouchableOpacity>
-                                                </Animated.View>
-                                              </View>
-                                            </Animated.View>
-                                            <Animated.View style={[styles.setCountIndicator, {
-                                              flexDirection: 'row',
-                                              alignItems: 'center',
-                                              maxWidth: counterShrinkAnim.interpolate({ inputRange: [0, 1], outputRange: [0, 100] }),
-                                              paddingHorizontal: counterShrinkAnim.interpolate({ inputRange: [0, 1], outputRange: [0, 0] }),
-                                            }]}>
-                                              <>
-                                                <Animated.View style={{
-                                                  overflow: 'hidden',
-                                                  maxWidth: nextLabelAnim.interpolate({ inputRange: [0, 1], outputRange: [0, 50] }),
-                                                  marginRight: nextLabelAnim.interpolate({ inputRange: [0, 1], outputRange: [0, 4] }),
-                                                }}>
-                                                  <Text style={styles.setCountNextLabel} numberOfLines={1}>
-                                                    {t('next')}
-                                                  </Text>
-                                                </Animated.View>
-                                                <Text style={styles.setCountText} numberOfLines={1}>
-                                                  {inlineRestActive
-                                                    ? `${Math.min(currentRound + 1, group.totalRounds)}/${group.totalRounds}`
-                                                    : `${currentRound + 1}/${group.totalRounds}`}
-                                                </Text>
-                                              </>
-                                            </Animated.View>
-                                          </View>
-                                        </AnimatedReanimated.View>
-                                      )}
+                                      {/* Group C action row moved outside card */}
                                     </View>
                                   </>
                                 )}
@@ -2380,6 +3145,48 @@ export function ExerciseExecutionScreen() {
                     </View>
                   </View>
                 </View>
+                {indicatorActive && (
+                  <View style={styles.externalActionCard}>
+                    <View style={styles.inlineRestProgressTrack}>
+                      <Animated.View style={[styles.inlineRestProgressFill, { width: inlineRestProgress.interpolate({ inputRange: [0, 1], outputRange: ['0%', '100%'] }) }]} />
+                    </View>
+                    <Animated.View
+                      style={[styles.externalActionOverlay, { opacity: buttonLabelOpacity }]}
+                      pointerEvents={inlineRestActive ? 'none' : 'auto'}
+                    >
+                      <TouchableOpacity
+                        testID="start-button"
+                        style={styles.externalActionTouchable}
+                        onPress={handleStart}
+                        activeOpacity={0.8}
+                      >
+                        <Text style={styles.cardStartButtonText}>
+                          {group.exercises[activeExerciseIndex]?.isTimeBased ? t('startTimer') : t('markAsCompleted')}
+                        </Text>
+                      </TouchableOpacity>
+                    </Animated.View>
+                    <View
+                      style={styles.externalInlineRestControls}
+                      pointerEvents={inlineRestActive ? 'auto' : 'none'}
+                    >
+                      <Animated.View style={{ opacity: restStagger.timerLabel, transform: [{ translateX: restStagger.timerLabel.interpolate({ inputRange: [0, 1], outputRange: [-10, 0] }) }] }}>
+                        <Text style={[styles.inlineRestTime, inlineRestActive && styles.inlineRestTimeActive]}>
+                          {Math.floor(inlineRestTimeLeft / 60)}:{String(inlineRestTimeLeft % 60).padStart(2, '0')}
+                        </Text>
+                      </Animated.View>
+                      <Animated.View style={{ opacity: restStagger.pauseIcon, transform: [{ translateX: restStagger.pauseIcon.interpolate({ inputRange: [0, 1], outputRange: [-8, 0] }) }] }}>
+                        <TouchableOpacity onPress={handleInlineRestPauseToggle} activeOpacity={0.7} style={styles.inlineRestIconBtn}>
+                          {inlineRestPaused ? <IconPlay size={20} color={inlineRestActive ? COLORS.accentPrimary : COLORS.text} /> : <IconPause size={20} color={inlineRestActive ? COLORS.accentPrimary : COLORS.text} />}
+                        </TouchableOpacity>
+                      </Animated.View>
+                      <Animated.View style={{ opacity: restStagger.skipIcon, transform: [{ translateX: restStagger.skipIcon.interpolate({ inputRange: [0, 1], outputRange: [-8, 0] }) }] }}>
+                        <TouchableOpacity onPress={handleInlineRestSkip} activeOpacity={0.7} style={styles.inlineRestIconBtn}>
+                          <IconSkip size={20} color={inlineRestActive ? COLORS.accentPrimary : COLORS.text} />
+                        </TouchableOpacity>
+                      </Animated.View>
+                    </View>
+                  </View>
+                )}
               </View>
             );
           })}
@@ -2387,27 +3194,9 @@ export function ExerciseExecutionScreen() {
           </>
         )}
         </ScrollView>
-        {/* Add Exercise button - pinned to bottom, same height as inactive cards (only when in progress) */}
-        {type === 'main' && !allCurrentGroupsComplete && (
-          <View style={[styles.addExerciseButtonFooter, { paddingBottom: Math.max(insets.bottom, 16) }]}>
-            <TouchableOpacity
-              style={styles.addExerciseButton}
-              onPress={() => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                setShowAddExerciseDrawer(true);
-              }}
-              activeOpacity={0.7}
-            >
-              <DiagonalLinePattern width="100%" height="100%" borderRadius={BORDER_RADIUS.lg} />
-              <View style={styles.addExerciseButtonContent}>
-                <IconAdd size={20} color={COLORS.text} />
-                <Text style={styles.addExerciseButtonText}>{t('addExercise')}</Text>
-              </View>
-            </TouchableOpacity>
-          </View>
         )}
       </View>
-      
+
       
       {/* Timer Sheet */}
       {expandedGroupIndex >= 0 && exerciseGroups[expandedGroupIndex] && (
@@ -2514,6 +3303,318 @@ export function ExerciseExecutionScreen() {
           restTimeOverride={localRestOverride}
         />
       )}
+
+      {/* Explore-only: exercise settings (setup, history, actions). Sets live on the execution card. */}
+      {(executionMode === 'explore' || executionMode === 'explore-v2') && exploreDetailGroup && exploreDetailExercise && (
+        <BottomDrawer
+          visible={showExploreDetailSheet}
+          onClose={() => {
+            setShowExploreDetailSheet(false);
+            setExploreDetailGroupIndex(null);
+            setShowAllExploreHistory(false);
+            saveSession();
+          }}
+          maxHeight="90%"
+          scrollable={true}
+          backgroundColor={COLORS.backgroundCanvas}
+          keyboardShouldPersistTaps="always"
+        >
+          <View style={styles.exploreDetailSheetContent}>
+            <View style={styles.exploreDetailHeader}>
+              <Text style={styles.exploreDetailTitle} numberOfLines={2}>
+                {exploreDetailExercise.exerciseName}
+              </Text>
+              <Text style={styles.exploreDetailSheetSubtitle}>Exercise settings</Text>
+            </View>
+
+            <View style={styles.exploreDetailSection}>
+              <Text style={styles.exploreDetailSectionTitle}>Exercise setup</Text>
+              {(() => {
+                const setupVals = getSetDisplayValues(
+                  exploreDetailExercise.id,
+                  exploreDetailCurrentRound,
+                  exploreDetailExercise.weight ?? 0,
+                  exploreDetailExercise.reps ?? 0,
+                );
+                const setupWeight = localValues[`${exploreDetailExercise.id}-set-${exploreDetailCurrentRound}`]?.weight ?? setupVals.weight;
+                const showBarbellToggle = setupWeight > (useKg ? 20 : 45);
+                const isBarbellMode = getBarbellMode(exploreDetailExercise.id);
+                return (
+                  <>
+                    <View style={styles.exploreSetupRow}>
+                      <View style={styles.exploreSetupLabelBlock}>
+                        <Text style={styles.exploreSetupLabel}>Weight format</Text>
+                        <Text style={styles.exploreSetupDesc}>Plates per side</Text>
+                      </View>
+                      <Toggle
+                        label=""
+                        hideLabel
+                        value={isBarbellMode}
+                        onValueChange={() => setBarbellMode(exploreDetailExercise.id, !isBarbellMode)}
+                        disabled={!showBarbellToggle}
+                      />
+                    </View>
+                    <View style={styles.exploreSetupRow}>
+                      <View style={styles.exploreSetupLabelBlock}>
+                        <Text style={styles.exploreSetupLabel}>Structure</Text>
+                        <Text style={styles.exploreSetupDesc}>Both sides</Text>
+                      </View>
+                      <Toggle
+                        label=""
+                        hideLabel
+                        value={exploreDetailExercise.isPerSide ?? false}
+                        onValueChange={() =>
+                          setPerSideOverrides(prev => ({
+                            ...prev,
+                            [exploreDetailExercise.id]: !(exploreDetailExercise.isPerSide ?? false),
+                          }))
+                        }
+                      />
+                    </View>
+                    <View style={styles.exploreSetupRow}>
+                      <View style={styles.exploreSetupLabelBlock}>
+                        <Text style={styles.exploreSetupLabel}>Tracking type</Text>
+                        <Text style={styles.exploreSetupDesc}>Timed instead of reps</Text>
+                      </View>
+                      <Toggle
+                        label=""
+                        hideLabel
+                        value={exploreDetailExercise.isTimeBased ?? false}
+                        onValueChange={() =>
+                          setTimeBasedOverrides(prev => ({
+                            ...prev,
+                            [exploreDetailExercise.id]: !(exploreDetailExercise.isTimeBased ?? false),
+                          }))
+                        }
+                      />
+                    </View>
+                    {type === 'main' && (() => {
+                      const libId = (exploreDetailExercise as any).exerciseId || exploreDetailExercise.id;
+                      const currentGroup = progressionGroups.find(g => g.exerciseIds.includes(libId));
+                      const options: { key: string | null; label: string }[] = [
+                        { key: null, label: 'None' },
+                        ...progressionGroups.map(g => ({
+                          key: g.id,
+                          label: g.name === 'Main Upper' ? 'Upper' : g.name === 'Main Lower' ? 'Lower' : g.name,
+                        })),
+                      ];
+                      return (
+                        <View style={styles.exploreProgressionGroupSection}>
+                          <Text style={styles.exploreDetailSectionTitle}>Progression Group</Text>
+                          <View style={styles.exploreProgressionPills}>
+                            {options.map(opt => {
+                              const selected = opt.key === (currentGroup?.id ?? null);
+                              return (
+                                <TouchableOpacity
+                                  key={opt.key ?? 'none'}
+                                  style={[styles.progressionGroupPill, selected && styles.progressionGroupPillSelected]}
+                                  activeOpacity={0.7}
+                                  onPress={async () => {
+                                    if (selected) return;
+                                    if (currentGroup) {
+                                      await updateProgressionGroup(currentGroup.id, {
+                                        exerciseIds: currentGroup.exerciseIds.filter(id => id !== libId),
+                                      });
+                                    }
+                                    if (opt.key) {
+                                      const target = progressionGroups.find(g => g.id === opt.key);
+                                      if (target) {
+                                        await updateProgressionGroup(target.id, {
+                                          exerciseIds: [...target.exerciseIds, libId],
+                                        });
+                                      }
+                                    }
+                                  }}
+                                >
+                                  <Text style={[styles.progressionGroupPillText, selected && styles.progressionGroupPillTextSelected]}>
+                                    {opt.label}
+                                  </Text>
+                                </TouchableOpacity>
+                              );
+                            })}
+                          </View>
+                        </View>
+                      );
+                    })()}
+                  </>
+                );
+              })()}
+            </View>
+
+            <View style={styles.exploreDetailSection}>
+              <Text style={styles.exploreDetailSectionTitle}>Recent history</Text>
+              {exploreDetailHistory.length === 0 ? (
+                <Text style={styles.exploreDetailEmptyText}>{t('noHistoryRecordedYet')}</Text>
+              ) : (
+                <>
+                  {(showAllExploreHistory ? exploreDetailHistory.slice(-5) : exploreDetailHistory.slice(-2)).map((workout) => {
+                    const repsSummary = workout.sets.map(s => s.reps).join(', ');
+                    const firstWeight = workout.sets[0]?.weight ?? 0;
+                    return (
+                      <View key={workout.date} style={styles.exploreHistoryRow}>
+                        <Text style={styles.exploreHistoryText}>
+                          {dayjs(workout.date).format('MMM D')} - {formatWeightForLoad(firstWeight, useKg)} {weightUnit} x {repsSummary}
+                        </Text>
+                      </View>
+                    );
+                  })}
+                  {exploreDetailHistory.length > 2 && (
+                    <TouchableOpacity
+                      style={styles.exploreViewAllHistoryButton}
+                      onPress={() => setShowAllExploreHistory(prev => !prev)}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={styles.exploreViewAllHistoryText}>
+                        {showAllExploreHistory ? t('showLess') : t('viewAll')}
+                      </Text>
+                    </TouchableOpacity>
+                  )}
+                </>
+              )}
+            </View>
+
+            <View style={styles.exploreDetailActionsSection}>
+              <View style={styles.exploreDetailSheetDivider} />
+              <View style={styles.exploreActionsRow}>
+                <TouchableOpacity
+                  style={styles.exploreActionCell}
+                  onPress={() => {
+                    if (exploreDetailGroupIndex !== null) {
+                      setExpandedGroupIndex(exploreDetailGroupIndex);
+                      setActiveExerciseIndex(exploreDetailExerciseIndex);
+                    }
+                    setShowExploreDetailSheet(false);
+                    setTimeout(() => setShowSwapModal(true), 300);
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <IconSwap size={18} color={COLORS.textMeta} />
+                  <Text style={[styles.exploreActionText, styles.exploreActionCellLabel]} numberOfLines={1}>
+                    Swap exercise
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.exploreActionCell}
+                  onPress={() => {
+                    Alert.alert(
+                      t('deleteExerciseTitle'),
+                      t('deleteExerciseMessage'),
+                      [
+                        { text: t('cancel'), style: 'cancel' },
+                        {
+                          text: t('remove'),
+                          style: 'destructive',
+                          onPress: async () => {
+                            await removeExerciseFromWorkout(exploreDetailExercise);
+                            setShowExploreDetailSheet(false);
+                            setExploreDetailGroupIndex(null);
+                          },
+                        },
+                      ],
+                    );
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <IconTrash size={18} color={COLORS.signalNegative} />
+                  <Text style={[styles.exploreActionTextDanger, styles.exploreActionCellLabel]} numberOfLines={1}>
+                    {t('remove')}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </BottomDrawer>
+      )}
+
+      {/* Explore-only: compact sheet to edit one set (not inline in the current card) */}
+      {(executionMode === 'explore' || executionMode === 'explore-v2') &&
+        showExploreSetEditor &&
+        exploreExecutionEditTarget &&
+        exploreSetEditorSetIndex !== null && (
+          <BottomDrawer
+            visible={true}
+            onClose={closeExploreSetEditor}
+            maxHeight="52%"
+            scrollable={true}
+            backgroundColor={COLORS.backgroundCanvas}
+            keyboardShouldPersistTaps="always"
+          >
+            <View style={styles.exploreSetEditorSheet}>
+              <Text style={styles.exploreSetEditorTitle}>
+                Set {exploreSetEditorSetIndex + 1}
+              </Text>
+              <Text style={styles.exploreSetEditorExerciseName} numberOfLines={2}>
+                {exploreExecutionEditTarget.exercise.exerciseName}
+              </Text>
+              <View style={styles.exploreSetEditorInputsColumn}>
+                <View style={styles.exploreSetEditInputGroup}>
+                  <TextInput
+                    ref={exploreEditWeightRef}
+                    style={[styles.exploreSetEditInput, styles.exploreSetEditorInputWide]}
+                    value={exploreEditDraft?.weightStr ?? ''}
+                    keyboardType="decimal-pad"
+                    selectTextOnFocus
+                    inputAccessoryViewID={Platform.OS === 'ios' ? EXPLORE_SET_EDIT_ACCESSORY_ID : undefined}
+                    onFocus={() => {
+                      exploreEditActiveFieldRef.current = 'weight';
+                    }}
+                    onChangeText={text => {
+                      setExploreEditDraft(prev => {
+                        const base = prev ?? { weightStr: '', repsStr: '' };
+                        const next = { ...base, weightStr: text };
+                        exploreEditDraftRef.current = next;
+                        return next;
+                      });
+                    }}
+                    onEndEditing={() => flushExploreSetEditorDraftToLocal()}
+                    returnKeyType={Platform.OS === 'android' ? 'next' : 'default'}
+                    onSubmitEditing={() => exploreEditRepsRef.current?.focus()}
+                  />
+                  <Text style={styles.exploreSetEditUnit}>{weightUnit}</Text>
+                </View>
+                <View style={styles.exploreSetEditInputGroup}>
+                  <TextInput
+                    ref={exploreEditRepsRef}
+                    style={[styles.exploreSetEditInput, styles.exploreSetEditorInputWide]}
+                    value={exploreEditDraft?.repsStr ?? ''}
+                    keyboardType="number-pad"
+                    selectTextOnFocus
+                    inputAccessoryViewID={Platform.OS === 'ios' ? EXPLORE_SET_EDIT_ACCESSORY_ID : undefined}
+                    onFocus={() => {
+                      exploreEditActiveFieldRef.current = 'reps';
+                    }}
+                    onChangeText={text => {
+                      setExploreEditDraft(prev => {
+                        const base = prev ?? { weightStr: '', repsStr: '' };
+                        const next = { ...base, repsStr: text };
+                        exploreEditDraftRef.current = next;
+                        return next;
+                      });
+                    }}
+                    onEndEditing={() => flushExploreSetEditorDraftToLocal()}
+                    returnKeyType="done"
+                    onSubmitEditing={closeExploreSetEditor}
+                  />
+                  <Text style={styles.exploreSetEditUnit}>
+                    {exploreExecutionEditTarget.exercise.isTimeBased ? 'secs' : 'reps'}
+                  </Text>
+                </View>
+              </View>
+              <TouchableOpacity style={styles.exploreSetEditorSaveBtn} onPress={closeExploreSetEditor} activeOpacity={0.85}>
+                <Text style={styles.exploreSetEditorSaveText}>Done</Text>
+              </TouchableOpacity>
+              {Platform.OS === 'ios' && (
+                <InputAccessoryView nativeID={EXPLORE_SET_EDIT_ACCESSORY_ID}>
+                  <View style={styles.exploreSetEditorKeyboardAccessory}>
+                    <TouchableOpacity style={styles.exploreSetEditorKeyboardDone} onPress={closeExploreSetEditor} activeOpacity={0.8}>
+                      <Text style={styles.exploreSetEditorKeyboardDoneText}>Done</Text>
+                    </TouchableOpacity>
+                  </View>
+                </InputAccessoryView>
+              )}
+            </View>
+          </BottomDrawer>
+        )}
       
       {/* Adjustment Drawer */}
       {(() => {
@@ -2521,7 +3622,7 @@ export function ExerciseExecutionScreen() {
         const drawerExIdx = drawerExerciseIndex ?? activeExerciseIndex;
         return (
       <BottomDrawer
-        visible={showAdjustmentDrawer}
+        visible={executionMode === 'current' && showAdjustmentDrawer}
         onClose={() => {
           setShowAdjustmentDrawer(false);
           setDrawerGroupIndex(null);
@@ -2966,13 +4067,23 @@ export function ExerciseExecutionScreen() {
         items={
           type === 'main' ? (allCurrentGroupsComplete ? [
             {
+              icon: <IconAdd size={24} color="#FFFFFF" />,
+              label: t('addExercise'),
+              onPress: () => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                setShowMenu(false);
+                setTimeout(() => setShowAddExerciseDrawer(true), 350);
+              },
+              singleRow: true,
+            },
+            {
               icon: <IconAddTime size={24} color="#FFFFFF" />,
               label: restTimerMenuLabel,
               onPress: () => {
                 setShowMenu(false);
                 setTimeout(() => setShowRestTimePicker(true), 350);
               },
-              featured: true,
+              singleRow: true,
             },
             {
               icon: <IconRestart size={24} color={COLORS.signalNegative} />,
@@ -2982,24 +4093,29 @@ export function ExerciseExecutionScreen() {
             },
           ] : [
             {
+              icon: <IconAdd size={24} color="#FFFFFF" />,
+              label: t('addExercise'),
+              onPress: () => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                setShowMenu(false);
+                setTimeout(() => setShowAddExerciseDrawer(true), 350);
+              },
+              singleRow: true,
+            },
+            {
               icon: <IconAddTime size={24} color="#FFFFFF" />,
               label: restTimerMenuLabel,
               onPress: () => {
                 setShowMenu(false);
                 setTimeout(() => setShowRestTimePicker(true), 350);
               },
-              featured: true,
+              singleRow: true,
             },
             {
               icon: <IconRestart size={24} color={COLORS.signalNegative} />,
               label: t('reset'),
               onPress: handleReset,
               destructive: true,
-            },
-            {
-              icon: <IconSwap size={24} color="#FFFFFF" />,
-              label: t('swap'),
-              onPress: handleSwap,
             },
             {
               icon: <IconCheck size={24} color={COLORS.successBright} checkColor={COLORS.container} />,
@@ -3015,11 +4131,6 @@ export function ExerciseExecutionScreen() {
               destructive: true,
             },
           ] : [
-            {
-              icon: <IconSwap size={24} color="#FFFFFF" />,
-              label: t('swap'),
-              onPress: handleSwap,
-            },
             {
               icon: <IconRestart size={24} color={COLORS.signalNegative} />,
               label: t('reset'),
@@ -3077,7 +4188,7 @@ export function ExerciseExecutionScreen() {
         const isBarbellMode = getBarbellMode(menuExercise.id);
         return (
           <BottomDrawer
-            visible={showExerciseSettingsMenu}
+            visible={executionMode === 'current' && showExerciseSettingsMenu}
             onClose={() => setShowExerciseSettingsMenu(false)}
             maxHeight="65%"
             scrollable={true}
@@ -3287,6 +4398,70 @@ export function ExerciseExecutionScreen() {
   );
 }
 
+function ExecutionModeToggle({
+  mode,
+  onModeChange,
+}: {
+  mode: ExecutionMode;
+  onModeChange: (mode: ExecutionMode) => void;
+}) {
+  return (
+    <View style={styles.executionModeToggleRow}>
+      <TouchableOpacity
+        style={[
+          styles.executionModeToggleOption,
+          mode === 'current' && styles.executionModeToggleOptionActive,
+        ]}
+        onPress={() => onModeChange('current')}
+        activeOpacity={0.85}
+      >
+        <Text
+          style={[
+            styles.executionModeToggleText,
+            mode === 'current' && styles.executionModeToggleTextActive,
+          ]}
+        >
+          Current
+        </Text>
+      </TouchableOpacity>
+      <TouchableOpacity
+        style={[
+          styles.executionModeToggleOption,
+          mode === 'explore' && styles.executionModeToggleOptionActive,
+        ]}
+        onPress={() => onModeChange('explore')}
+        activeOpacity={0.85}
+      >
+        <Text
+          style={[
+            styles.executionModeToggleText,
+            mode === 'explore' && styles.executionModeToggleTextActive,
+          ]}
+        >
+          Explore
+        </Text>
+      </TouchableOpacity>
+      <TouchableOpacity
+        style={[
+          styles.executionModeToggleOption,
+          mode === 'explore-v2' && styles.executionModeToggleOptionActive,
+        ]}
+        onPress={() => onModeChange('explore-v2')}
+        activeOpacity={0.85}
+      >
+        <Text
+          style={[
+            styles.executionModeToggleText,
+            mode === 'explore-v2' && styles.executionModeToggleTextActive,
+          ]}
+        >
+          Explore v2
+        </Text>
+      </TouchableOpacity>
+    </View>
+  );
+}
+
 // Separate component to avoid re-renders on the main screen
 function AddExerciseDrawerContent({
   exercisesLibrary,
@@ -3404,7 +4579,7 @@ const addExerciseStyles = StyleSheet.create({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.backgroundCanvas,
+    backgroundColor: EXPLORE_V2.colors.pageBg,
   },
   header: {
     paddingBottom: 0,
@@ -3415,6 +4590,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     minHeight: 48,
     paddingHorizontal: SPACING.xxl,
+    paddingBottom: SPACING.sm,
   },
   backButton: {
     width: 48,
@@ -3430,17 +4606,117 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
     marginRight: -4,
   },
-  headerContent: {
-    paddingHorizontal: SPACING.xxl,
-    paddingTop: SPACING.md,
-    marginBottom: SPACING.md,
+  menuSpacer: {
+    width: 48,
+    height: 48,
   },
+  topBarCenter: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: SPACING.sm,
+    minWidth: 0,
+  },
+  /** Workout title — 20px via TYPOGRAPHY.h3 */
   headerTitle: {
-    ...TYPOGRAPHY.h2,
+    ...TYPOGRAPHY.h3,
     color: '#FFFFFF',
+    textAlign: 'center',
+    width: '100%',
+  },
+  headerTitleExploreV2: {
+    fontSize: TYPOGRAPHY.body.fontSize,
+    color: '#1F1F1F',
+    fontWeight: '600',
+    letterSpacing: -0.35,
+    lineHeight: 28,
+    opacity: 0.94,
+    textAlign: 'center',
+  },
+  floatingModeToggle: {
+    position: 'absolute',
+    zIndex: 100,
+    right: SPACING.xxl,
+    elevation: 14,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.35,
+    shadowRadius: 10,
+  },
+  executionModeToggleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.containerBackground,
+    borderRadius: BORDER_RADIUS.round,
+    borderWidth: 1,
+    borderColor: COLORS.borderDimmed,
+    padding: 2,
+  },
+  executionModeToggleOption: {
+    minHeight: 30,
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderRadius: BORDER_RADIUS.round,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  executionModeToggleOptionActive: {
+    backgroundColor: COLORS.accentPrimary,
+  },
+  executionModeToggleText: {
+    ...TYPOGRAPHY.legal,
+    color: COLORS.textSecondary,
+  },
+  executionModeToggleTextActive: {
+    color: COLORS.backgroundCanvas,
+  },
+  headerTimerPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.accentPrimaryDimmed,
+    borderRadius: BORDER_RADIUS.round,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    minWidth: 168,
+  },
+  headerTimerPillBelowTitle: {
+    marginTop: SPACING.xs,
   },
   contentWrap: {
     flex: 1,
+  },
+  exploreV2Root: {
+    flex: 1,
+    backgroundColor: EXPLORE_V2.colors.pageBg,
+    flexDirection: 'column',
+    overflow: 'hidden',
+  },
+  exploreV2ThemeLayer: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: '#FFA424',
+  },
+  exploreV2TimerBand: {
+    height: EXPLORE_V2.layout.timerVisibleHeight,
+    minHeight: 0,
+    overflow: 'hidden',
+  },
+  exploreV2WalletBand: {
+    flex: 1,
+    minHeight: 0,
+    paddingBottom: 4,
+  },
+  exploreTimerText: {
+    ...TYPOGRAPHY.metaBold,
+    color: COLORS.accentPrimary,
+    flex: 1,
+    textAlign: 'center',
+  },
+  exploreTimerIconBtn: {
+    width: 28,
+    height: 24,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   content: {
     flex: 1,
@@ -3452,6 +4728,399 @@ const styles = StyleSheet.create({
   },
   itemsAccordion: {
     gap: 12,
+  },
+  exploreRoot: {
+    gap: 48,
+  },
+  /** Current exercise: summary card + set list block + CTA stacked (Explore only) */
+  exploreCurrentStack: {
+    width: '100%',
+    gap: SPACING.sm,
+  },
+  exploreCurrentSummaryCompact: {
+    paddingHorizontal: SPACING.md,
+    paddingBottom: SPACING.sm,
+  },
+  exploreCurrentSummaryText: {
+    ...TYPOGRAPHY.meta,
+    color: COLORS.textMeta,
+  },
+  exploreSetListBlock: {
+    width: '100%',
+    gap: SPACING.xs,
+  },
+  exploreSection: {
+    gap: SPACING.sm,
+  },
+  exploreSectionTitle: {
+    ...TYPOGRAPHY.legal,
+    color: COLORS.textMeta,
+    textTransform: 'uppercase',
+  },
+  exploreSectionAccordionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-start',
+    gap: 6,
+    alignSelf: 'flex-start',
+  },
+  exploreSectionAccordionIconWrap: {
+    width: 20,
+    height: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    transform: [{ rotate: '0deg' }],
+  },
+  exploreSectionAccordionIconWrapExpanded: {
+    transform: [{ rotate: '180deg' }],
+  },
+  exploreCardOuter: {
+    width: '100%',
+  },
+  exploreCard: {
+    backgroundColor: COLORS.cardBackground,
+    borderRadius: BORDER_RADIUS.md,
+    borderWidth: 1,
+    borderColor: COLORS.borderDimmed,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
+    gap: SPACING.sm,
+  },
+  exploreCardExpanded: {
+    borderColor: COLORS.accentPrimaryDimmed,
+  },
+  exploreCardCompleted: {
+    opacity: 0.85,
+  },
+  exploreCardLocked: {
+    opacity: 0.6,
+  },
+  exploreCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: SPACING.sm,
+  },
+  exploreCardTitle: {
+    ...TYPOGRAPHY.bodyBold,
+    color: COLORS.text,
+    flex: 1,
+  },
+  exploreCardMeta: {
+    ...TYPOGRAPHY.meta,
+    color: COLORS.textMeta,
+  },
+  exploreCardExpandedContent: {
+    gap: SPACING.sm,
+    paddingTop: 2,
+  },
+  exploreMetricRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.md,
+    flexWrap: 'wrap',
+  },
+  exploreMetricText: {
+    ...TYPOGRAPHY.body,
+    color: COLORS.text,
+  },
+  exploreMetricProgress: {
+    ...TYPOGRAPHY.meta,
+    color: COLORS.textMeta,
+  },
+  exploreHelperText: {
+    ...TYPOGRAPHY.legal,
+    color: COLORS.textMeta,
+  },
+  exploreExpandedActionsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: SPACING.md,
+  },
+  exploreEditButton: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    borderWidth: 1,
+    borderColor: COLORS.borderDimmed,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  explorePrimaryButton: {
+    flex: 1,
+    minHeight: 40,
+    borderRadius: BORDER_RADIUS.md,
+    backgroundColor: COLORS.accentPrimary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: SPACING.md,
+  },
+  explorePrimaryButtonText: {
+    ...TYPOGRAPHY.metaBold,
+    color: COLORS.backgroundCanvas,
+  },
+  exploreDetailSheetContent: {
+    paddingHorizontal: SPACING.xxl,
+    paddingTop: SPACING.sm,
+    paddingBottom: SPACING.xxl,
+    gap: 40,
+  },
+  exploreDetailHeader: {
+    paddingBottom: SPACING.xs,
+    gap: 4,
+  },
+  exploreDetailTitle: {
+    ...TYPOGRAPHY.h3,
+    color: COLORS.text,
+  },
+  exploreDetailSheetSubtitle: {
+    ...TYPOGRAPHY.meta,
+    color: COLORS.textMeta,
+  },
+  exploreInlineSetNumber: {
+    ...TYPOGRAPHY.meta,
+    fontWeight: '600',
+    color: COLORS.text,
+  },
+  exploreSetUpcomingLabel: {
+    ...TYPOGRAPHY.legal,
+    fontSize: 10,
+    fontWeight: '600',
+    color: COLORS.textMeta,
+    textTransform: 'uppercase',
+  },
+  exploreDetailSection: {
+    gap: SPACING.sm,
+  },
+  exploreDetailSectionTitle: {
+    ...TYPOGRAPHY.legal,
+    color: COLORS.textMeta,
+    textTransform: 'uppercase',
+  },
+  /** Actions block: no extra gap so spacing above buttons is controlled by exploreActionsRow */
+  exploreDetailActionsSection: {
+    gap: 0,
+  },
+  /** Edge-to-edge within the padded drawer content */
+  exploreDetailSheetDivider: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: COLORS.border,
+    marginHorizontal: -SPACING.xxl,
+    alignSelf: 'stretch',
+  },
+  exploreSetRow: {
+    borderRadius: 10,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'transparent',
+  },
+  exploreSetRowCompleted: {
+    backgroundColor: CARDS.cardDeep.inner.backgroundColor,
+    opacity: 0.88,
+  },
+  exploreSetRowActive: {
+    backgroundColor: COLORS.activeCard,
+    borderColor: 'transparent',
+  },
+  exploreSetRowUpcoming: {
+    backgroundColor: CARDS.cardDeep.inner.backgroundColor,
+  },
+  exploreSetRowCompact: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    minHeight: 40,
+  },
+  exploreSetRowLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flexShrink: 0,
+  },
+  exploreSetRowRight: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    gap: 8,
+    marginLeft: SPACING.sm,
+    minWidth: 0,
+  },
+  exploreSetNextLabel: {
+    ...TYPOGRAPHY.legal,
+    fontSize: 10,
+    fontWeight: '700',
+    color: COLORS.accentPrimary,
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+  },
+  exploreSetValueCompact: {
+    ...TYPOGRAPHY.meta,
+    fontSize: 14,
+    color: COLORS.text,
+    textAlign: 'right',
+    flex: 1,
+    minWidth: 0,
+  },
+  exploreSetValueMuted: {
+    color: COLORS.textMeta,
+  },
+  exploreSetDoneIcon: {
+    flexShrink: 0,
+  },
+  exploreSetEditInputGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    flex: 1,
+  },
+  exploreSetEditInput: {
+    ...TYPOGRAPHY.body,
+    fontSize: 20,
+    fontVariant: ['tabular-nums'],
+    color: COLORS.text,
+    padding: 0,
+    minWidth: 48,
+    flex: 1,
+  },
+  exploreSetEditUnit: {
+    ...TYPOGRAPHY.legal,
+    color: COLORS.textMeta,
+    flexShrink: 0,
+  },
+  exploreSetEditorSheet: {
+    paddingHorizontal: SPACING.xxl,
+    paddingTop: SPACING.sm,
+    paddingBottom: SPACING.xl,
+    gap: SPACING.md,
+  },
+  exploreSetEditorTitle: {
+    ...TYPOGRAPHY.h3,
+    color: COLORS.text,
+  },
+  exploreSetEditorExerciseName: {
+    ...TYPOGRAPHY.meta,
+    color: COLORS.textMeta,
+  },
+  exploreSetEditorInputsColumn: {
+    gap: SPACING.md,
+  },
+  exploreSetEditorInputWide: {
+    minWidth: 80,
+  },
+  exploreSetEditorSaveBtn: {
+    marginTop: SPACING.sm,
+    backgroundColor: COLORS.accentPrimary,
+    borderRadius: BORDER_RADIUS.md,
+    paddingVertical: 14,
+    alignItems: 'center',
+  },
+  exploreSetEditorSaveText: {
+    ...TYPOGRAPHY.meta,
+    color: COLORS.backgroundCanvas,
+    fontWeight: '700',
+  },
+  exploreSetEditorKeyboardAccessory: {
+    backgroundColor: COLORS.backgroundCanvas,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border,
+  },
+  exploreSetEditorKeyboardDone: {
+    backgroundColor: COLORS.accentPrimary,
+    borderRadius: BORDER_RADIUS.md,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  exploreSetEditorKeyboardDoneText: {
+    ...TYPOGRAPHY.body,
+    color: '#FFFFFF',
+    fontWeight: '600',
+  },
+  exploreDetailEmptyText: {
+    ...TYPOGRAPHY.meta,
+    color: COLORS.textMeta,
+  },
+  exploreHistoryRow: {
+    paddingVertical: SPACING.xs,
+  },
+  exploreHistoryText: {
+    ...TYPOGRAPHY.meta,
+    color: COLORS.text,
+  },
+  exploreViewAllHistoryButton: {
+    alignSelf: 'flex-start',
+    paddingVertical: 2,
+  },
+  exploreViewAllHistoryText: {
+    ...TYPOGRAPHY.meta,
+    color: COLORS.accentPrimary,
+  },
+  exploreSetupRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: SPACING.md,
+    backgroundColor: CARDS.cardDeep.inner.backgroundColor,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: SPACING.sm,
+  },
+  exploreSetupLabelBlock: {
+    flex: 1,
+    gap: 2,
+  },
+  exploreSetupLabel: {
+    ...TYPOGRAPHY.meta,
+    color: COLORS.text,
+  },
+  exploreSetupDesc: {
+    ...TYPOGRAPHY.legal,
+    color: COLORS.textMeta,
+  },
+  exploreProgressionPills: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: SPACING.sm,
+    paddingTop: SPACING.xs,
+  },
+  exploreProgressionGroupSection: {
+    gap: SPACING.sm,
+    paddingTop: SPACING.xs,
+  },
+  exploreActionsRow: {
+    flexDirection: 'row',
+    alignItems: 'stretch',
+    gap: SPACING.sm,
+    paddingTop: SPACING.xxl,
+  },
+  exploreActionCell: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: SPACING.sm,
+    minHeight: 44,
+    paddingVertical: SPACING.sm,
+    paddingHorizontal: SPACING.xs,
+    backgroundColor: CARDS.cardDeep.inner.backgroundColor,
+    borderRadius: 10,
+    minWidth: 0,
+  },
+  exploreActionCellLabel: {
+    flexShrink: 1,
+  },
+  exploreActionText: {
+    ...TYPOGRAPHY.meta,
+    color: COLORS.textMeta,
+  },
+  exploreActionTextDanger: {
+    ...TYPOGRAPHY.meta,
+    color: COLORS.signalNegative,
   },
   itemRow: {
     width: '100%',
@@ -3469,18 +5138,19 @@ const styles = StyleSheet.create({
   },
   // Active card: use background color as "border" with padding to simulate border width
   itemCardBorder: {
-    borderRadius: 16,
+    borderRadius: 10,
     borderCurve: 'continuous' as const,
     overflow: 'hidden',
   },
   itemCardFill: {
     backgroundColor: COLORS.activeCard,
-    borderRadius: 15,
+    borderRadius: 9,
     borderCurve: 'continuous' as const,
     overflow: 'hidden',
   },
   itemCardInactive: {
     ...CARDS.cardDeep.outer,
+    borderRadius: 10,
     // 1px transparent padding to match active card size and prevent layout jump
     paddingTop: 1,
     paddingBottom: 1,
@@ -3490,9 +5160,11 @@ const styles = StyleSheet.create({
   },
   itemCardInnerInactive: {
     ...CARDS.cardDeep.inner,
+    borderRadius: 9,
   },
   itemCardDimmed: {
     ...CARDS.cardDeepDimmed.outer,
+    borderRadius: 10,
     paddingTop: 1,
     paddingBottom: 1,
     paddingLeft: 1,
@@ -3501,16 +5173,17 @@ const styles = StyleSheet.create({
   },
   itemCardInnerDimmed: {
     ...CARDS.cardDeepDimmed.inner,
+    borderRadius: 9,
   },
   itemCardCollapsed: {
     height: 48,
-    paddingHorizontal: 16,
+    paddingHorizontal: 12,
     flexDirection: 'row',
     alignItems: 'center',
   },
   itemCardHeaderActive: {
-    paddingTop: 16,
-    paddingHorizontal: 16,
+    paddingTop: 10,
+    paddingHorizontal: 12,
     paddingBottom: 0,
     flexDirection: 'row',
     alignItems: 'center',
@@ -3521,14 +5194,16 @@ const styles = StyleSheet.create({
     marginRight: 10,
   },
   setCountCollapsed: {
-    ...TYPOGRAPHY.meta,
+    ...TYPOGRAPHY.legal,
     color: COLORS.textMeta,
     flexShrink: 0,
   },
   itemCardExpanded: {
+    height: 126,
     paddingTop: 6,
     paddingHorizontal: 16,
     paddingBottom: 0,
+    justifyContent: 'flex-end',
   },
   itemCardExpandedWithIndicator: {
     paddingRight: 60,
@@ -3546,7 +5221,7 @@ const styles = StyleSheet.create({
     marginBottom: 4, // Match exerciseNameInCard to prevent jump
   },
   exerciseNameText: {
-    ...TYPOGRAPHY.meta,
+    ...TYPOGRAPHY.body,
     color: COLORS.textMeta,
   },
   exerciseNameTextActive: {
@@ -3558,7 +5233,7 @@ const styles = StyleSheet.create({
   cardHeaderActionSlot: {
     width: 28,
     height: 28,
-    marginLeft: 2,
+    marginLeft: 0,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -3568,9 +5243,23 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  valuesDisplayRow: {
+  pencilIconOffset: {
+    marginLeft: 0,
+  },
+  cardHeaderRightCluster: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 8,
+    flexShrink: 0,
+  },
+  setCountInValues: {
+    ...TYPOGRAPHY.legal,
+    color: COLORS.text,
+    flexShrink: 0,
+  },
+  valuesDisplayRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
     justifyContent: 'space-between',
     gap: 16,
   },
@@ -3592,6 +5281,7 @@ const styles = StyleSheet.create({
   largeValue: {
     ...TYPOGRAPHY.h1,
     color: '#FFFFFF',
+    fontWeight: '400',
   },
   unit: {
     ...TYPOGRAPHY.body,
@@ -3633,6 +5323,37 @@ const styles = StyleSheet.create({
     paddingLeft: 0,
     zIndex: 2,
   },
+  externalActionCard: {
+    marginTop: 2,
+    borderRadius: 10,
+    backgroundColor: COLORS.accentPrimaryDimmed,
+    overflow: 'hidden',
+    height: 52,
+  },
+  externalActionCardDisabled: {
+    backgroundColor: CARDS.cardDeep.inner.backgroundColor,
+  },
+  externalActionOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: 'center',
+    alignItems: 'flex-start',
+    paddingHorizontal: 12,
+    zIndex: 2,
+  },
+  externalActionTouchable: {
+    width: '100%',
+    height: '100%',
+    justifyContent: 'center',
+    paddingHorizontal: 12,
+  },
+  externalInlineRestControls: {
+    ...StyleSheet.absoluteFillObject,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    gap: 8,
+    zIndex: 1,
+  },
   actionLeftTouchable: {
     flex: 1,
     width: '100%',
@@ -3640,8 +5361,12 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
   },
   cardStartButtonText: {
-    ...TYPOGRAPHY.metaBold,
+    ...TYPOGRAPHY.meta,
+    fontWeight: '500',
     color: COLORS.accentPrimary,
+  },
+  cardStartButtonTextDisabled: {
+    opacity: 0.6,
   },
   setCountText: {
     ...TYPOGRAPHY.meta,
@@ -3650,7 +5375,7 @@ const styles = StyleSheet.create({
   },
   setCountIndicatorRow: {
     flexDirection: 'row',
-    gap: 4,
+    gap: 0,
   },
   setCountNextLabel: {
     ...TYPOGRAPHY.meta,
@@ -4266,6 +5991,7 @@ const styles = StyleSheet.create({
   },
   // Add Exercise button (same height as inactive cards, pinned to bottom via addExerciseButtonFooter)
   addExerciseButton: {
+    flex: 1,
     height: 48,
     borderRadius: BORDER_RADIUS.lg,
     overflow: 'hidden',

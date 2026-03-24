@@ -459,7 +459,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   headerTitle: {
-    ...TYPOGRAPHY.h1,
+    ...TYPOGRAPHY.h3,
     color: LIGHT_COLORS.secondary,
   },
   searchContainer: {

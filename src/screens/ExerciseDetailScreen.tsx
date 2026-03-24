@@ -1411,7 +1411,7 @@ const styles = StyleSheet.create({
     marginRight: -4,
   },
   headerTitle: {
-    ...TYPOGRAPHY.h2,
+    ...TYPOGRAPHY.h3,
     color: '#FFFFFF',
     flex: 1,
   },

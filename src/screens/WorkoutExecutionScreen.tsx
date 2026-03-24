@@ -965,7 +965,7 @@ const styles = StyleSheet.create({
     color: '#DC3545',
   },
   headerTitle: {
-    ...TYPOGRAPHY.h2,
+    ...TYPOGRAPHY.h3,
     color: LIGHT_COLORS.secondary,
     marginLeft: 0,
   },

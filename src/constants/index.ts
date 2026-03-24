@@ -97,7 +97,7 @@ export const COLORS = {
   canvas: '#1C1C1E',             // Card/container background
   container: '#2C2C2E',          // Elevated secondary container
   cardBackground: '#1C1C1E',     // Card background
-  activeCard: '#252528',         // Active/selected card state
+  activeCard: '#1C1C1E',         // Active/selected card state
   /** Active cycle strip and pill background (backgroundCanvas at 30% opacity) */
   cycleStripBackground: 'rgba(13, 13, 13, 0.3)',
 
@@ -206,7 +206,17 @@ export const TYPOGRAPHY = {
     fontSize: 20,
     fontWeight: '400' as const,
   },
-  
+  /**
+   * Large display line (e.g. exercise names in Up Next / queues).
+   * Not the same as h1 — h1 is light weight for marketing-style titles.
+   */
+  displayLarge: {
+    fontSize: 32,
+    lineHeight: 36,
+    fontWeight: '600' as const,
+    letterSpacing: -0.4,
+  },
+
   // Body text
   body: {
     fontSize: 16,
@@ -248,6 +258,16 @@ export const TYPOGRAPHY = {
     fontSize: 20,
     lineHeight: 24,
     fontWeight: '600' as const,
+  },
+  /**
+   * Large single-line metric (value + unit share this style).
+   * Used e.g. Explore v2 Current card hero weight/reps.
+   */
+  metricDisplay: {
+    fontSize: 56,
+    lineHeight: 60,
+    fontWeight: '400' as const,
+    letterSpacing: -0.6,
   },
   
   // Timer display
@@ -300,7 +320,7 @@ export const CARDS = {
   },
   cardDeep: {
     outer: {
-      backgroundColor: '#1C1C1E',
+      backgroundColor: '#161617',
       borderRadius: 16,
       borderCurve: 'continuous' as const,
       overflow: 'hidden' as const,
@@ -308,7 +328,7 @@ export const CARDS = {
       borderColor: 'transparent',
     },
     inner: {
-      backgroundColor: '#1C1C1E',
+      backgroundColor: '#161617',
       borderRadius: 16,
       borderCurve: 'continuous' as const,
     },

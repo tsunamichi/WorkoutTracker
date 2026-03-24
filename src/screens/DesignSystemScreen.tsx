@@ -434,7 +434,7 @@ const styles = StyleSheet.create({
     marginLeft: -4,
   },
   headerTitle: {
-    ...TYPOGRAPHY.h2,
+    ...TYPOGRAPHY.h3,
     color: LIGHT_COLORS.secondary,
   },
   scrollView: {

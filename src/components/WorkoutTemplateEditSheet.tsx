@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, Modal, TextInput, TouchableOpacity, ScrollView, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { WorkoutTemplate, WorkoutType } from '../types';
-import { COLORS, SPACING } from '../constants';
+import { COLORS, SPACING, TYPOGRAPHY } from '../constants';
 import { useTranslation } from '../i18n/useTranslation';
 
 interface WorkoutTemplateEditSheetProps {
@@ -205,8 +205,7 @@ const styles = StyleSheet.create({
     color: COLORS.accentPrimary,
   },
   headerTitle: {
-    fontSize: 17,
-    fontWeight: '600',
+    ...TYPOGRAPHY.h3,
   },
   saveButton: {
     fontSize: 17,
