@@ -2,45 +2,48 @@
  * Fixed-height timer strip — time is the hero; never shifts the card stack.
  */
 import React, { useEffect, useRef, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Animated as RNAnimated, useWindowDimensions } from 'react-native';
+import { View, Text, StyleSheet, Pressable, Animated as RNAnimated } from 'react-native';
 import Animated, {
   Easing,
   interpolate,
+  interpolateColor,
   runOnJS,
   useAnimatedStyle,
+  SharedValue,
   useSharedValue,
-  withDelay,
-  withSequence,
   withTiming,
 } from 'react-native-reanimated';
 import { EXPLORE_V2 } from './exploreV2Tokens';
 import { EXPLORE_V2_CHROME } from './exploreV2ColorSystem';
-import { EXPLORE_V2_PALETTES } from './exploreV2ColorSystem';
-import { IconPause, IconPlay, IconSkip } from '../icons';
 
 type Props = {
   /** Omit to fill parent (e.g. 25% flex band). */
   height?: number;
+  /**
+   * `band` — fill the animated timer strip (legacy).
+   * `overlay` — compact block; parent positions absolute at a fixed % of explore root (center between header & stack).
+   */
+  layoutVariant?: 'band' | 'overlay';
   active: boolean;
+  /** 0 = idle layout, 1 = rest fully entered — drives emergence + color (synced with band in parent) */
+  layoutProgress: SharedValue<number>;
   timeLeftSec: number;
   paused: boolean;
   onPauseToggle: () => void;
-  onSkip: () => void;
   /** 0–1 progress for border / track */
   progress: RNAnimated.Value;
 };
 
 const TIMER_MOTION = EXPLORE_V2.motion.timer;
-const TIMER_ENTER_EASE = Easing.bezier(...TIMER_MOTION.timerContainerEnterEase);
-const TIMER_EXIT_EASE = Easing.bezier(...TIMER_MOTION.timerContainerExitEase);
 const TIMER_DIGIT_EASE = Easing.bezier(...TIMER_MOTION.timerDigitEase);
-const INCOMING_DIGIT_DELAY_FRACTION = 0.16;
-const TIMER_CONTROL_BG = EXPLORE_V2_PALETTES.complete.main;
-const TIMER_CONTROL_BG_ACTIVE = '#F3940F';
-const TIMER_CONTROL_ICON_ACTIVE = '#8C5509';
+const DIGIT_TRAVEL_Y = Math.max(12, TIMER_MOTION.timerEnterTranslateY);
 const TIMER_LABEL_WIDTH = 236;
 const TIMER_DIGIT_SLOT_HEIGHT = 82;
 const TIMER_TEXT_Y_OFFSET = 6;
+
+const REST_MS = EXPLORE_V2.motion.rest.colorMs;
+/** Fraction of layout progress before hero digits read as fully visible (≈ stagger ms / REST_MS) */
+const VALUE_START = Math.min(0.45, EXPLORE_V2.motion.rest.timerValueStaggerMs / REST_MS + 0.08);
 
 function DigitSlot({ char }: { char: string }) {
   const previousRef = useRef(char);
@@ -79,25 +82,23 @@ function DigitSlot({ char }: { char: string }) {
   }, [char, t]);
 
   const outgoing = useAnimatedStyle(() => ({
-    // Requested behavior: outgoing digit disappears immediately (no roll/fade animation).
-    opacity: interpolate(t.value, [0, 0.001, 1], [1, 0, 0]),
-    transform: [{ translateY: 0 }],
+    opacity: interpolate(t.value, [0, 0.5, 1], [1, 0, 0]),
+    transform: [
+      {
+        translateY:
+          TIMER_TEXT_Y_OFFSET + interpolate(t.value, [0, 1], [0, -DIGIT_TRAVEL_Y]),
+      },
+    ],
   }));
 
   const incoming = useAnimatedStyle(() => ({
-    // Keep incoming fully hidden at first so outgoing can disappear cleanly.
-    opacity: interpolate(
-      t.value,
-      [0, INCOMING_DIGIT_DELAY_FRACTION, 1],
-      [0, 0, 1],
-    ),
-    transform: [{
-      translateY: interpolate(
-        t.value,
-        [0, INCOMING_DIGIT_DELAY_FRACTION, 1],
-        [TIMER_MOTION.timerDigitOffsetY, TIMER_MOTION.timerDigitOffsetY, 0],
-      ),
-    }],
+    opacity: interpolate(t.value, [0, 0.25, 1], [0, 1, 1]),
+    transform: [
+      {
+        translateY:
+          TIMER_TEXT_Y_OFFSET + interpolate(t.value, [0, 1], [DIGIT_TRAVEL_Y, 0]),
+      },
+    ],
   }));
 
   if (char === ' ') {
@@ -114,8 +115,8 @@ function DigitSlot({ char }: { char: string }) {
         <Text style={[styles.timeHero, styles.timeHeroOffset]}>{toChar}</Text>
       ) : (
         <>
-          <Animated.Text style={[styles.timeHero, styles.timeHeroOffset, styles.digitOverlay, outgoing]}>{fromChar}</Animated.Text>
-          <Animated.Text style={[styles.timeHero, styles.timeHeroOffset, styles.digitOverlay, incoming]}>{toChar}</Animated.Text>
+          <Animated.Text style={[styles.timeHero, styles.digitOverlay, outgoing]}>{fromChar}</Animated.Text>
+          <Animated.Text style={[styles.timeHero, styles.digitOverlay, incoming]}>{toChar}</Animated.Text>
         </>
       )}
     </View>
@@ -124,26 +125,15 @@ function DigitSlot({ char }: { char: string }) {
 
 export function ExploreV2TimerArea({
   height: heightProp,
+  layoutVariant = 'band',
   active,
+  layoutProgress,
   timeLeftSec,
   paused,
   onPauseToggle,
-  onSkip,
-  progress,
+  progress: _progress,
 }: Props) {
-  const { width: screenWidth } = useWindowDimensions();
-  const prevActiveRef = useRef(active);
-  const [timerRowWidth, setTimerRowWidth] = useState(0);
-  const availableRowWidth = timerRowWidth > 0 ? timerRowWidth : screenWidth - EXPLORE_V2.margin * 2;
-  const timerGap = Math.max(10, Math.min(32, (availableRowWidth - TIMER_LABEL_WIDTH - 96 - 24) / 2));
-
-  const containerY = useSharedValue(active ? 0 : TIMER_MOTION.timerEnterTranslateY);
-  const containerScale = useSharedValue(active ? 1 : TIMER_MOTION.timerEnterScaleFrom);
-  const containerOpacity = useSharedValue(active ? 1 : 0);
-  const valueProgress = useSharedValue(active ? 1 : 0);
-  const controlsProgress = useSharedValue(active ? 1 : 0);
-  const borderProgress = useSharedValue(active ? 1 : 0);
-
+  const isOverlay = layoutVariant === 'overlay';
   const totalSec = Math.max(0, timeLeftSec);
   const minutes = Math.floor(totalSec / 60);
   const seconds = totalSec % 60;
@@ -153,169 +143,90 @@ export function ExploreV2TimerArea({
   const sTens = String(Math.floor(seconds / 10));
   const sOnes = String(seconds % 10);
 
-  useEffect(() => {
-    const wasActive = prevActiveRef.current;
-    prevActiveRef.current = active;
+  /** Fade only — no vertical motion so the clock stays visually stable while the stack resizes. */
+  const containerStyle = useAnimatedStyle(() => {
+    const p = layoutProgress.value;
+    return {
+      opacity: interpolate(p, [0, 0.12, 1], [0, 1, 1]),
+    };
+  });
 
-    if (active) {
-      if (!wasActive) {
-        containerY.value = TIMER_MOTION.timerEnterTranslateY;
-        containerScale.value = TIMER_MOTION.timerEnterScaleFrom;
-        containerOpacity.value = 0;
-        valueProgress.value = 0;
-        controlsProgress.value = 0;
-        borderProgress.value = 0;
-      }
+  /** Digits fade in slightly after shell; no translate — anchored with stack seam */
+  const valueStyle = useAnimatedStyle(() => {
+    const p = layoutProgress.value;
+    return {
+      opacity: interpolate(p, [0, VALUE_START, Math.min(1, VALUE_START + 0.2), 1], [0, 0, 1, 1]),
+    };
+  });
 
-      borderProgress.value = withTiming(1, {
-        duration: TIMER_MOTION.timerEnterMs,
-        easing: TIMER_ENTER_EASE,
-      });
-      containerY.value = withSequence(
-        withTiming(TIMER_MOTION.timerEnterBounceOvershootY, {
-          duration: TIMER_MOTION.timerEnterRiseMs,
-          easing: TIMER_ENTER_EASE,
-        }),
-        withTiming(0, {
-          duration: TIMER_MOTION.timerEnterBounceSettleMs,
-          easing: Easing.bezier(0.18, 0.9, 0.25, 1),
-        }),
-      );
-      containerScale.value = withSequence(
-        withTiming(1.004, {
-          duration: TIMER_MOTION.timerEnterRiseMs,
-          easing: TIMER_ENTER_EASE,
-        }),
-        withTiming(1, {
-          duration: TIMER_MOTION.timerEnterBounceSettleMs,
-          easing: Easing.bezier(0.18, 0.9, 0.25, 1),
-        }),
-      );
-      containerOpacity.value = withTiming(1, {
-        duration: TIMER_MOTION.timerEnterMs,
-        easing: TIMER_ENTER_EASE,
-      });
-      valueProgress.value = withTiming(1, {
-        duration: TIMER_MOTION.timerEnterMs - 30,
-        easing: TIMER_ENTER_EASE,
-      });
-      controlsProgress.value = withDelay(
-        TIMER_MOTION.timerControlStaggerMs,
-        withTiming(1, {
-          duration: TIMER_MOTION.timerEnterMs - 60,
-          easing: TIMER_ENTER_EASE,
-        }),
-      );
-      return;
-    }
+  const innerBorderStyle = useAnimatedStyle(() => {
+    const p = layoutProgress.value;
+    return {
+      borderColor: interpolateColor(
+        p,
+        [0, 1],
+        ['transparent', EXPLORE_V2_CHROME.timerActiveBorder],
+      ),
+    };
+  });
 
-    controlsProgress.value = withTiming(0, {
-      duration: Math.round(TIMER_MOTION.timerExitMs * 0.75),
-      easing: TIMER_EXIT_EASE,
-    });
-    valueProgress.value = withTiming(0, {
-      duration: Math.round(TIMER_MOTION.timerExitMs * 0.8),
-      easing: TIMER_EXIT_EASE,
-    });
-    borderProgress.value = withDelay(
-      24,
-      withTiming(0, {
-        duration: TIMER_MOTION.timerExitMs,
-        easing: TIMER_EXIT_EASE,
-      }),
-    );
-    containerY.value = withTiming(TIMER_MOTION.timerExitTranslateY, {
-      duration: TIMER_MOTION.timerExitMs,
-      easing: TIMER_EXIT_EASE,
-    });
-    containerScale.value = withTiming(TIMER_MOTION.timerExitScaleTo, {
-      duration: TIMER_MOTION.timerExitMs,
-      easing: TIMER_EXIT_EASE,
-    });
-    containerOpacity.value = withTiming(0, {
-      duration: TIMER_MOTION.timerExitMs,
-      easing: TIMER_EXIT_EASE,
-    });
-  }, [active, borderProgress, containerOpacity, containerScale, containerY, controlsProgress, valueProgress]);
-
-  const containerStyle = useAnimatedStyle(() => ({
-    opacity: containerOpacity.value,
-    transform: [{ translateY: containerY.value }, { scale: containerScale.value }],
-  }));
-
-  const valueStyle = useAnimatedStyle(() => ({
-    opacity: valueProgress.value,
-    transform: [{ translateY: interpolate(valueProgress.value, [0, 1], [3, 0]) }],
-  }));
-
-  const controlsStyle = useAnimatedStyle(() => ({
-    opacity: controlsProgress.value,
-    transform: [{ translateY: interpolate(controlsProgress.value, [0, 1], [4, 0]) }],
-  }));
-
-  const borderStyle = useAnimatedStyle(() => ({
-    opacity: borderProgress.value,
-  }));
+  const contentPointerEvents =
+    !active ? 'none' : isOverlay ? 'box-none' : 'auto';
 
   return (
     <View
+      pointerEvents={isOverlay ? 'box-none' : 'auto'}
       style={[
-        styles.wrap,
-        heightProp != null ? { height: heightProp } : { flex: 1 },
-        { marginHorizontal: EXPLORE_V2.margin },
+        isOverlay ? styles.wrapOverlay : styles.wrap,
+        !isOverlay && (heightProp != null ? { height: heightProp } : { flex: 1 }),
+        !isOverlay && { marginHorizontal: EXPLORE_V2.margin },
       ]}
     >
-      <View
-        style={[
-          styles.inner,
-          active && styles.innerActive,
-        ]}
+      <Animated.View
+        pointerEvents={isOverlay ? 'box-none' : 'auto'}
+        style={[isOverlay ? styles.innerOverlay : styles.inner, innerBorderStyle]}
       >
-        <Animated.View style={[styles.timerContent, containerStyle]} pointerEvents={active ? 'auto' : 'none'}>
+        <Animated.View
+          style={[isOverlay ? styles.timerContentOverlay : styles.timerContent, containerStyle]}
+          pointerEvents={contentPointerEvents}
+        >
           <>
-            <View style={styles.timerRow} onLayout={e => setTimerRowWidth(e.nativeEvent.layout.width)}>
-              <Animated.View style={controlsStyle}>
-                <TouchableOpacity
-                  onPress={onPauseToggle}
-                  style={[styles.iconBtn, active && styles.iconBtnActive]}
-                  activeOpacity={0.75}
-                >
-                  {paused ? (
-                    <IconPlay size={22} color={active ? TIMER_CONTROL_ICON_ACTIVE : EXPLORE_V2_CHROME.timerIcon} />
-                  ) : (
-                    <IconPause size={22} color={active ? TIMER_CONTROL_ICON_ACTIVE : EXPLORE_V2_CHROME.timerIcon} />
-                  )}
-                </TouchableOpacity>
-              </Animated.View>
-
-              <Animated.View style={[styles.timerValueWrap, { marginHorizontal: 0 }, valueStyle]}>
-                <View style={styles.slotRow}>
-                  {showMinuteTens ? <DigitSlot char={mTens} /> : null}
-                  <DigitSlot char={mOnes} />
-                  <View style={styles.colonSlot}>
-                    <Text style={[styles.timeHero, styles.timeHeroOffset]}>:</Text>
+            <View style={isOverlay ? styles.timerRowOverlay : styles.timerRow} pointerEvents="box-none">
+              <Pressable
+                onPress={active ? onPauseToggle : undefined}
+                disabled={!active}
+                style={({ pressed }) => [styles.timerValuePressable, pressed && active && styles.timerValuePressablePressed]}
+                accessibilityRole="button"
+                accessibilityLabel={paused ? 'Resume rest timer' : 'Pause rest timer'}
+              >
+                <Animated.View style={[styles.timerValueWrap, valueStyle]}>
+                  <View style={styles.slotRow}>
+                    {showMinuteTens ? <DigitSlot char={mTens} /> : null}
+                    <DigitSlot char={mOnes} />
+                    <View style={styles.colonSlot}>
+                      <Text style={[styles.timeHero, styles.timeHeroOffset]}>:</Text>
+                    </View>
+                    <DigitSlot char={sTens} />
+                    <DigitSlot char={sOnes} />
                   </View>
-                  <DigitSlot char={sTens} />
-                  <DigitSlot char={sOnes} />
-                </View>
-              </Animated.View>
-
-              <Animated.View style={controlsStyle}>
-                <TouchableOpacity onPress={onSkip} style={[styles.iconBtn, active && styles.iconBtnActive]} activeOpacity={0.75}>
-                  <IconSkip size={22} color={active ? TIMER_CONTROL_ICON_ACTIVE : EXPLORE_V2_CHROME.timerIcon} />
-                </TouchableOpacity>
-              </Animated.View>
+                </Animated.View>
+              </Pressable>
             </View>
-            {/* Progress strip intentionally removed to avoid visible divider above deck cards. */}
           </>
         </Animated.View>
-      </View>
+      </Animated.View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   wrap: {
+    justifyContent: 'flex-end',
+  },
+  /** Fixed slot: parent positions absolute; no flex fill — digits stay put while stack resizes */
+  wrapOverlay: {
+    width: '100%',
+    alignItems: 'center',
     justifyContent: 'center',
   },
   inner: {
@@ -326,34 +237,51 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     backgroundColor: 'transparent',
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'transparent',
   },
-  innerActive: {
-    borderColor: EXPLORE_V2_CHROME.timerActiveBorder,
+  innerOverlay: {
+    alignSelf: 'stretch',
+    width: '100%',
+    borderRadius: 20,
+    flexDirection: 'column',
+    alignItems: 'center',
+    overflow: 'hidden',
+    backgroundColor: 'transparent',
+    borderWidth: StyleSheet.hairlineWidth,
   },
   timerContent: {
     flex: 1,
     width: '100%',
+    justifyContent: 'flex-end',
+  },
+  timerContentOverlay: {
+    width: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   timerRow: {
-    flex: 1,
     flexDirection: 'row',
     width: '100%',
     paddingHorizontal: 12,
+    paddingBottom: 4,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  iconBtn: {
-    width: 48,
-    height: 48,
+  /** Overlay: no horizontal padding so digits sit on true horizontal center of screen band */
+  timerRowOverlay: {
+    flexDirection: 'row',
+    width: '100%',
+    paddingHorizontal: 0,
+    paddingBottom: 4,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  timerValuePressable: {
+    alignItems: 'center',
+    justifyContent: 'center',
     borderRadius: 16,
-    borderCurve: 'continuous' as const,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: TIMER_CONTROL_BG,
   },
-  iconBtnActive: {
-    backgroundColor: TIMER_CONTROL_BG_ACTIVE,
+  timerValuePressablePressed: {
+    opacity: 0.88,
   },
   timerValueWrap: {
     width: TIMER_LABEL_WIDTH,

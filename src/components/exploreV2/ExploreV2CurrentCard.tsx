@@ -1,5 +1,10 @@
 import React, { useEffect, useMemo, useRef } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, KeyboardAvoidingView, Platform, Animated } from 'react-native';
+import Reanimated, {
+  useAnimatedStyle,
+  interpolateColor,
+  type SharedValue,
+} from 'react-native-reanimated';
 import { EXPLORE_V2 } from './exploreV2Tokens';
 import { EXPLORE_V2_PALETTES } from './exploreV2ColorSystem';
 import { TYPOGRAPHY } from '../../constants';
@@ -22,6 +27,8 @@ type Props = {
   weightUnit: string;
   getBarbellMode: (id: string) => boolean;
   onLogNextSet: () => Promise<void>;
+  /** Ends inline rest when timer theme is active */
+  onSkipRest: () => void;
   onOpenOverflow: () => void;
   preStart: boolean;
   onCollapsedPress: () => void;
@@ -31,7 +38,10 @@ type Props = {
   frontBottomRadius: number;
   coveredBottomRadius: number;
   timerThemeActive: boolean;
+  restThemeProgress: SharedValue<number>;
 };
+
+const AnimatedTouchableOpacity = Reanimated.createAnimatedComponent(TouchableOpacity);
 
 function findNextIncompleteSet(group: ExploreV2Group, completedSets: Set<string>) {
   for (let r = 0; r < group.totalRounds; r++) {
@@ -56,6 +66,7 @@ export function ExploreV2CurrentCard({
   weightUnit,
   getBarbellMode,
   onLogNextSet,
+  onSkipRest,
   onOpenOverflow,
   preStart: _preStart,
   onCollapsedPress,
@@ -65,8 +76,10 @@ export function ExploreV2CurrentCard({
   frontBottomRadius,
   coveredBottomRadius,
   timerThemeActive,
+  restThemeProgress,
 }: Props) {
   const isPrimary = primaryRevealed === 'current';
+  const settingsOpacity = useRef(new Animated.Value(isPrimary ? 1 : 0)).current;
   const bottomCornerRadius = isPrimary ? frontBottomRadius : coveredBottomRadius;
 
   const completedRounds = currentRounds[group.id] || 0;
@@ -102,7 +115,11 @@ export function ExploreV2CurrentCard({
   const showPerSideRow = weightPerSideLbs != null && weightPerSideLbs > 0;
 
   const progressFraction = `${Math.min(completedRounds + 1, group.totalRounds)}/${group.totalRounds}`;
-  const ctaLabel = !groupHasStarted ? 'Log first set' : 'Log next set';
+  const ctaLabel = inlineRestActive
+    ? 'Skip rest time'
+    : !groupHasStarted
+      ? 'Log first set'
+      : 'Log next set';
   const collapsedSecondary = !isPrimary && showCollapsedWhenSecondary;
 
   const valuesSlideX = useRef(new Animated.Value(0)).current;
@@ -116,11 +133,32 @@ export function ExploreV2CurrentCard({
     }).start();
   }, [timerThemeActive, heroRound, heroExIdx, valuesSlideX]);
 
+  useEffect(() => {
+    Animated.timing(settingsOpacity, {
+      toValue: isPrimary ? 1 : 0,
+      duration: 180,
+      useNativeDriver: true,
+    }).start();
+  }, [isPrimary, settingsOpacity]);
+
   const surfaceColor = '#1F1F1F';
-  const borderColor = timerThemeActive ? '#FFA424' : EXPLORE_V2.colors.pageBg;
-  const heroInk = timerThemeActive ? '#464646' : VALUE_INK;
-  const ctaBg = timerThemeActive ? '#464646' : VALUE_INK;
-  const ctaText = timerThemeActive ? CANVAS_INK : '#1F1F1F';
+  const shellAnimatedStyle = useAnimatedStyle(() => ({
+    borderColor: interpolateColor(restThemeProgress.value, [0, 1], [EXPLORE_V2.colors.pageBg, '#FFA424']),
+  }));
+  const heroInkStyle = useAnimatedStyle(() => ({
+    color: interpolateColor(restThemeProgress.value, [0, 1], [VALUE_INK, '#464646']),
+  }));
+  const ctaBgStyle = useAnimatedStyle(() => ({
+    backgroundColor: interpolateColor(restThemeProgress.value, [0, 1], [VALUE_INK, '#464646']),
+  }));
+  const ctaLabelStyle = useAnimatedStyle(() => {
+    if (inlineRestActive && isPrimary) {
+      return { color: VALUE_INK };
+    }
+    return {
+      color: interpolateColor(restThemeProgress.value, [0, 1], ['#1F1F1F', CANVAS_INK]),
+    };
+  }, [inlineRestActive, isPrimary]);
 
   return (
     <KeyboardAvoidingView
@@ -128,12 +166,12 @@ export function ExploreV2CurrentCard({
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       keyboardVerticalOffset={0}
     >
-      <View
+      <Reanimated.View
         style={[
           styles.shell,
+          shellAnimatedStyle,
           {
             backgroundColor: surfaceColor,
-            borderColor,
             borderBottomLeftRadius: bottomCornerRadius,
             borderBottomRightRadius: bottomCornerRadius,
           },
@@ -142,9 +180,17 @@ export function ExploreV2CurrentCard({
       >
         <View style={styles.headerBar}>
           <Text style={[styles.eyebrow, { color: CANVAS_INK }]}>Current</Text>
-          <TouchableOpacity onPress={onOpenOverflow} hitSlop={14} style={styles.settingsBtn} activeOpacity={0.7}>
-            <Text style={[styles.settingsLabel, { color: CANVAS_INK }]}>Settings</Text>
-          </TouchableOpacity>
+          <Animated.View style={{ opacity: settingsOpacity }}>
+            <TouchableOpacity
+              onPress={onOpenOverflow}
+              hitSlop={14}
+              style={styles.settingsBtn}
+              activeOpacity={0.7}
+              disabled={!isPrimary}
+            >
+              <Text style={[styles.settingsLabel, { color: CANVAS_INK }]}>Settings</Text>
+            </TouchableOpacity>
+          </Animated.View>
         </View>
         <Text style={[styles.exerciseName, { color: CANVAS_INK }]} numberOfLines={2}>
           {displayExerciseName}
@@ -154,25 +200,25 @@ export function ExploreV2CurrentCard({
           <Animated.View style={[styles.valuesBlock, { transform: [{ translateX: valuesSlideX }] }]}>
             {showPerSideRow && weightPerSideLbs != null ? (
               <View style={styles.perSideRow}>
-                <Text style={[styles.perSideValue, { color: heroInk }]}>
+                <Reanimated.Text style={[styles.perSideValue, heroInkStyle]}>
                   {formatWeightForLoad(weightPerSideLbs, useKg)}
                   {weightUnit}
-                </Text>
+                </Reanimated.Text>
                 <Text style={styles.perSideLabel}>weight per side</Text>
               </View>
             ) : null}
 
             <>
               <View style={styles.valueRow}>
-                <Text style={[styles.valueMetric, { color: heroInk }]} numberOfLines={1}>
+                <Reanimated.Text style={[styles.valueMetric, heroInkStyle]} numberOfLines={1}>
                   {formatWeightForLoad(Math.max(0, heroW), useKg)}
-                </Text>
+                </Reanimated.Text>
                 <Text style={[styles.valueMetric, { color: UNIT_INK }]}>{weightUnit}</Text>
               </View>
               <View style={styles.valueRow}>
-                <Text style={[styles.valueMetric, { color: heroInk }]} numberOfLines={1}>
+                <Reanimated.Text style={[styles.valueMetric, heroInkStyle]} numberOfLines={1}>
                   {heroR}
-                </Text>
+                </Reanimated.Text>
                 <Text style={[styles.valueMetric, { color: UNIT_INK }]}>
                   {heroEx.isTimeBased ? 'sec' : 'reps'}
                 </Text>
@@ -181,14 +227,21 @@ export function ExploreV2CurrentCard({
           </Animated.View>
 
           <View style={styles.footer}>
-            <TouchableOpacity
-              style={[styles.ctaPill, { backgroundColor: ctaBg }, (!showPrimaryCta || inlineRestActive) && styles.ctaPillDisabled]}
-              onPress={onLogNextSet}
-              disabled={!showPrimaryCta || inlineRestActive}
+            <AnimatedTouchableOpacity
+              style={[
+                styles.ctaPill,
+                ctaBgStyle,
+                !inlineRestActive && !showPrimaryCta && styles.ctaPillDisabled,
+              ]}
+              onPress={() => {
+                if (inlineRestActive) onSkipRest();
+                else void onLogNextSet();
+              }}
+              disabled={inlineRestActive ? false : !showPrimaryCta}
               activeOpacity={0.88}
             >
-              <Text style={[styles.ctaPillText, { color: ctaText }]}>{ctaLabel}</Text>
-            </TouchableOpacity>
+              <Reanimated.Text style={[styles.ctaPillText, ctaLabelStyle]}>{ctaLabel}</Reanimated.Text>
+            </AnimatedTouchableOpacity>
             <Text style={[styles.progressFraction, { color: CANVAS_INK }]}>{progressFraction}</Text>
           </View>
         </View>
@@ -199,7 +252,7 @@ export function ExploreV2CurrentCard({
             activeOpacity={1}
           />
         ) : null}
-      </View>
+      </Reanimated.View>
     </KeyboardAvoidingView>
   );
 }

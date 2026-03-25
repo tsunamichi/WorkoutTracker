@@ -1,6 +1,37 @@
 import React, { useState, useEffect, useLayoutEffect, useMemo, useRef, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, LayoutAnimation, Platform, UIManager, Alert, Animated, Easing, Modal, FlatList, TextInput, InputAccessoryView, Keyboard, KeyboardAvoidingView, TouchableWithoutFeedback, useWindowDimensions } from 'react-native';
-import AnimatedReanimated, { useSharedValue, useAnimatedStyle, withTiming, withDelay, interpolate, runOnJS, Easing as ReanimatedEasing } from 'react-native-reanimated';
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  TouchableOpacity,
+  LayoutAnimation,
+  Platform,
+  UIManager,
+  Alert,
+  Animated,
+  Easing,
+  Modal,
+  FlatList,
+  TextInput,
+  InputAccessoryView,
+  Keyboard,
+  KeyboardAvoidingView,
+  TouchableWithoutFeedback,
+  useWindowDimensions,
+  type LayoutChangeEvent,
+} from 'react-native';
+import AnimatedReanimated, {
+  useSharedValue,
+  useAnimatedStyle,
+  useAnimatedReaction,
+  withTiming,
+  withDelay,
+  interpolate,
+  interpolateColor,
+  runOnJS,
+  Easing as ReanimatedEasing,
+} from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, RouteProp, useFocusEffect } from '@react-navigation/native';
 import Svg, { Circle, Path } from 'react-native-svg';
@@ -134,7 +165,7 @@ type RouteParams = {
 };
 
 export function ExerciseExecutionScreen() {
-  const { height: screenHeight } = useWindowDimensions();
+  const { width: screenWidth, height: screenHeight } = useWindowDimensions();
   const navigation = useNavigation();
   const route = useRoute<RouteProp<RouteParams, 'ExerciseExecution'>>();
   const insets = useSafeAreaInsets();
@@ -451,8 +482,9 @@ export function ExerciseExecutionScreen() {
   const [showAddExerciseDrawer, setShowAddExerciseDrawer] = useState(false);
   /** Measured height of the Explore v2 wallet stack area below the timer band. */
   const [exploreV2StackHeight, setExploreV2StackHeight] = useState(0);
-  const [exploreV2RootHeight, setExploreV2RootHeight] = useState(0);
   const exploreV2TimerBandProgress = useSharedValue(0);
+  /** Measured height of `exploreV2Root` — drives % split (stack vs timer) as pixel heights */
+  const exploreV2RootHeight = useSharedValue(0);
   const executionMode: ExecutionMode = 'explore-v2';
   const [isExploreCompletedExpanded, setIsExploreCompletedExpanded] = useState(false);
   const [showExploreDetailSheet, setShowExploreDetailSheet] = useState(false);
@@ -543,41 +575,81 @@ export function ExerciseExecutionScreen() {
   const [showExerciseSettingsMenu, setShowExerciseSettingsMenu] = useState(false);
   const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
   const [showConfetti, setShowConfetti] = useState(false);
-  const exploreV2TimerVisibleHeight = Math.max(
-    EXPLORE_V2.layout.timerVisibleHeight,
-    Math.round(screenHeight * 0.2),
+  /** While rest UI collapses after skip — keep hero time from flashing 0:00 */
+  const [exploreV2RestSkipDisplayHoldSec, setExploreV2RestSkipDisplayHoldSec] = useState<number | null>(null);
+  const REST_TIMER_FRAC = EXPLORE_V2.layout.restTimerHeightFraction;
+  const REST_STACK_FRAC = EXPLORE_V2.layout.restStackHeightFraction;
+
+  const onExploreV2RootLayout = useCallback(
+    (e: LayoutChangeEvent) => {
+      const h = e.nativeEvent.layout.height;
+      if (h > 0) exploreV2RootHeight.value = h;
+    },
+    [exploreV2RootHeight],
   );
+
+  const REST_EASE = ReanimatedEasing.bezier(...EXPLORE_V2.motion.rest.restTransitionEase);
+  const REST_MS = EXPLORE_V2.motion.rest.colorMs;
 
   useEffect(() => {
     if (executionMode !== 'explore-v2') return;
     exploreV2TimerBandProgress.value = withTiming(inlineRestActive ? 1 : 0, {
-      duration: EXPLORE_V2.motion.stackLayoutTransitionMs,
-      easing: ReanimatedEasing.bezier(...EXPLORE_V2.motion.stackLayoutTransitionEase),
+      duration: REST_MS,
+      easing: REST_EASE,
     });
-  }, [executionMode, inlineRestActive, exploreV2TimerBandProgress]);
+  }, [executionMode, inlineRestActive]);
 
-  const exploreV2TimerBandAnimatedStyle = useAnimatedStyle(() => ({
-    height: interpolate(
+  /** Idle: timer 0%, stack 100%. Rest: timer `REST_TIMER_FRAC`, stack `REST_STACK_FRAC` of content height */
+  const exploreV2TimerBandAnimatedStyle = useAnimatedStyle(() => {
+    const measured = exploreV2RootHeight.value;
+    const H = measured > 0 ? measured : screenHeight * 0.55;
+    return {
+      height: interpolate(exploreV2TimerBandProgress.value, [0, 1], [0, H * REST_TIMER_FRAC]),
+      zIndex: 1,
+    };
+  }, [screenHeight, REST_TIMER_FRAC]);
+
+  const exploreV2WalletBandAnimatedStyle = useAnimatedStyle(() => {
+    const measured = exploreV2RootHeight.value;
+    const H = measured > 0 ? measured : screenHeight * 0.55;
+    return {
+      height: interpolate(exploreV2TimerBandProgress.value, [0, 1], [H, H * REST_STACK_FRAC]),
+      zIndex: 2,
+    };
+  }, [screenHeight, REST_STACK_FRAC]);
+
+  /** Keep JS stack height in lockstep with the animated wallet band (onLayout only fires ~few times → jumps + clip). */
+  const setExploreV2StackHeightFromProgress = useCallback((h: number) => {
+    setExploreV2StackHeight(h);
+  }, []);
+
+  useAnimatedReaction(
+    () => {
+      const measured = exploreV2RootHeight.value;
+      const H = measured > 0 ? measured : screenHeight * 0.55;
+      return interpolate(exploreV2TimerBandProgress.value, [0, 1], [H, H * REST_STACK_FRAC]);
+    },
+    height => {
+      runOnJS(setExploreV2StackHeightFromProgress)(height);
+    },
+    [screenHeight, REST_STACK_FRAC],
+  );
+
+  const exploreV2PageBgAnimatedStyle = useAnimatedStyle(() => ({
+    backgroundColor: interpolateColor(
       exploreV2TimerBandProgress.value,
       [0, 1],
-      [EXPLORE_V2.layout.timerInactiveHeight, exploreV2TimerVisibleHeight],
+      [EXPLORE_V2.colors.pageBg, '#FFA424'],
     ),
-    opacity: interpolate(exploreV2TimerBandProgress.value, [0, 0.2, 1], [0, 0.7, 1]),
-  }), [exploreV2TimerVisibleHeight]);
-  const exploreV2ThemeLayerStyle = useAnimatedStyle(
-    () => ({
-      transform: [
-        {
-          translateY: interpolate(
-            exploreV2TimerBandProgress.value,
-            [0, 1],
-            [-(exploreV2RootHeight || screenHeight), 0],
-          ),
-        },
-      ],
-    }),
-    [exploreV2RootHeight, screenHeight],
-  );
+  }));
+
+  const exploreV2ContentWrapBgAnimatedStyle = useAnimatedStyle(() => ({
+    backgroundColor: interpolateColor(
+      exploreV2TimerBandProgress.value,
+      [0, 1],
+      [EXPLORE_V2.colors.pageBg, '#FFA424'],
+    ),
+  }));
   const exploreV2HeaderInk = '#1F1F1F';
   const historyOpacity = useRef(new Animated.Value(0)).current;
   
@@ -721,6 +793,7 @@ export function ExerciseExecutionScreen() {
     const restSeconds = localRestRef.current ?? settings.restTimerDefaultSeconds;
     const totalMs = restSeconds * 1000;
     restStartTimeRef.current = Date.now();
+    setExploreV2RestSkipDisplayHoldSec(null);
     setInlineRestTotal(restSeconds);
     setInlineRestTimeLeft(restSeconds);
     setInlineRestPaused(false);
@@ -764,8 +837,24 @@ export function ExerciseExecutionScreen() {
 
   const handleInlineRestSkip = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    runRestStaggerOut(() => inlineRestDismissRef.current());
+    const end = inlineRestEndTimeRef.current;
+    const remaining = Math.max(0, Math.ceil((end - Date.now()) / 1000));
+    setExploreV2RestSkipDisplayHoldSec(remaining);
+    runRestStaggerOut(() => {
+      inlineRestDismissRef.current();
+      setTimeout(() => setExploreV2RestSkipDisplayHoldSec(null), REST_MS);
+    });
   };
+
+  /** Countdown from wall-clock end time so the hero never flashes 0:00 before the first tick */
+  const exploreV2RestTimerDisplaySec = useMemo(() => {
+    if (exploreV2RestSkipDisplayHoldSec !== null) return exploreV2RestSkipDisplayHoldSec;
+    if (!inlineRestActive) return 0;
+    if (inlineRestPaused) return inlineRestTimeLeft;
+    const end = inlineRestEndTimeRef.current;
+    if (end <= 0) return 0;
+    return Math.max(0, Math.ceil((end - Date.now()) / 1000));
+  }, [exploreV2RestSkipDisplayHoldSec, inlineRestActive, inlineRestPaused, inlineRestTimeLeft]);
 
   // Track keyboard visibility for in-drawer Save button
   useEffect(() => {
@@ -2354,7 +2443,9 @@ export function ExerciseExecutionScreen() {
   // (I'll keep this abbreviated for now, but it will include all the card rendering, drawer, timer, etc.)
   
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
+    <AnimatedReanimated.View
+      style={[styles.container, { paddingTop: insets.top }, exploreV2PageBgAnimatedStyle]}
+    >
       <ShapeConfetti active={showConfetti} />
       {executionMode !== 'explore-v2' && (
         <DeviceEdgeTimer
@@ -2415,24 +2506,11 @@ export function ExerciseExecutionScreen() {
         </View>
       </View>
       
-      <View style={styles.contentWrap}>
+      <AnimatedReanimated.View style={[styles.contentWrap, exploreV2ContentWrapBgAnimatedStyle]}>
         {executionMode === 'explore-v2' ? (
-          <View style={styles.exploreV2Root} onLayout={e => setExploreV2RootHeight(e.nativeEvent.layout.height)}>
-            <AnimatedReanimated.View style={[styles.exploreV2ThemeLayer, exploreV2ThemeLayerStyle]} />
-            <AnimatedReanimated.View style={[styles.exploreV2TimerBand, exploreV2TimerBandAnimatedStyle]}>
-              <ExploreV2TimerArea
-                active={inlineRestActive}
-                timeLeftSec={inlineRestTimeLeft}
-                paused={inlineRestPaused}
-                onPauseToggle={handleInlineRestPauseToggle}
-                onSkip={handleInlineRestSkip}
-                progress={inlineRestProgress}
-              />
-            </AnimatedReanimated.View>
-            <View
-              style={styles.exploreV2WalletBand}
-              onLayout={e => setExploreV2StackHeight(e.nativeEvent.layout.height)}
-            >
+          <View style={styles.exploreV2Root} onLayout={onExploreV2RootLayout}>
+            <AnimatedReanimated.View style={[styles.exploreV2TimerBand, exploreV2TimerBandAnimatedStyle]} />
+            <AnimatedReanimated.View style={[styles.exploreV2WalletBand, exploreV2WalletBandAnimatedStyle]}>
               <ExploreV2ExecutionRoot
                 exerciseGroups={exerciseGroups}
                 exploreCurrentGroupIndex={exploreCurrentGroupIndex}
@@ -2461,6 +2539,7 @@ export function ExerciseExecutionScreen() {
                   canShowPrimaryCTAExploreV2(exploreV2FrontGroupIndex)
                 }
                 inlineRestActive={inlineRestActive}
+                onSkipRest={handleInlineRestSkip}
                 allComplete={isExploreV2WorkoutComplete}
                 type={type}
                 progressionGroups={progressionGroups}
@@ -2475,7 +2554,33 @@ export function ExerciseExecutionScreen() {
                 onRemoveGroupFromUpNext={removeGroupFromWorkoutByIndex}
                 allowAddExercise={type === 'main'}
                 timerThemeActive={inlineRestActive}
+                restThemeProgress={exploreV2TimerBandProgress}
               />
+            </AnimatedReanimated.View>
+            <View
+              style={styles.exploreV2TimerOverlay}
+              pointerEvents={inlineRestActive ? 'box-none' : 'none'}
+            >
+              <View
+                style={[
+                  styles.exploreV2TimerOverlayAnchor,
+                  {
+                    left: insets.left,
+                    width: screenWidth - insets.left - insets.right,
+                  },
+                ]}
+                pointerEvents={inlineRestActive ? 'box-none' : 'none'}
+              >
+                <ExploreV2TimerArea
+                  layoutVariant="overlay"
+                  active={inlineRestActive}
+                  layoutProgress={exploreV2TimerBandProgress}
+                  timeLeftSec={exploreV2RestTimerDisplaySec}
+                  paused={inlineRestPaused}
+                  onPauseToggle={handleInlineRestPauseToggle}
+                  progress={inlineRestProgress}
+                />
+              </View>
             </View>
           </View>
         ) : (
@@ -3195,7 +3300,7 @@ export function ExerciseExecutionScreen() {
         )}
         </ScrollView>
         )}
-      </View>
+      </AnimatedReanimated.View>
 
       
       {/* Timer Sheet */}
@@ -4394,7 +4499,7 @@ export function ExerciseExecutionScreen() {
         accentColor={COLORS.info}
       />
 
-    </View>
+    </AnimatedReanimated.View>
   );
 }
 
@@ -4684,26 +4789,50 @@ const styles = StyleSheet.create({
   },
   contentWrap: {
     flex: 1,
+    backgroundColor: EXPLORE_V2.colors.pageBg,
+  },
+  /** Solid rest theme — matches timer / chrome (#FFA424) */
+  containerExploreV2RestTimer: {
+    backgroundColor: '#FFA424',
+  },
+  contentWrapExploreV2RestTimer: {
+    backgroundColor: '#FFA424',
   },
   exploreV2Root: {
     flex: 1,
-    backgroundColor: EXPLORE_V2.colors.pageBg,
     flexDirection: 'column',
-    overflow: 'hidden',
+    overflow: 'visible',
+    minHeight: 0,
+    backgroundColor: 'transparent',
+    position: 'relative',
   },
-  exploreV2ThemeLayer: {
+  /** Rest timer hero: above wallet (zIndex 2). pointerEvents set in JSX — idle must be `none` so cards stay tappable */
+  exploreV2TimerOverlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: '#FFA424',
+    zIndex: 3,
   },
+  exploreV2TimerOverlayAnchor: {
+    position: 'absolute',
+    top: `${EXPLORE_V2.layout.restTimerCenterFromRootTopFraction * 100}%`,
+    alignItems: 'center',
+    /** Half digit slot (82) centers on anchor; extra nudge pulls hero toward header */
+    transform: [
+      {
+        translateY: -(82 / 2 + EXPLORE_V2.layout.restTimerOverlayUpNudgePx),
+      },
+    ],
+  },
+  /** Height comes only from exploreV2TimerBandAnimatedStyle so the wallet flexes in sync */
   exploreV2TimerBand: {
-    height: EXPLORE_V2.layout.timerVisibleHeight,
     minHeight: 0,
     overflow: 'hidden',
+    backgroundColor: 'transparent',
   },
   exploreV2WalletBand: {
-    flex: 1,
     minHeight: 0,
+    overflow: 'visible',
     paddingBottom: 4,
+    backgroundColor: 'transparent',
   },
   exploreTimerText: {
     ...TYPOGRAPHY.metaBold,

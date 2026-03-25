@@ -67,10 +67,10 @@ export const EXPLORE_V2 = {
   },
   motion: {
     currentExitMs: 300,
+    /** Brief opposite motion before Current slides off the deck (px up, then exit down) */
+    currentExitAnticipationPx: 14,
+    currentExitAnticipationMs: 110,
     currentEnterMs: 420,
-    upNextRevealMs: 320,
-    upNextSettleMs: 380,
-    stackStaggerMs: 40,
     currentExitEase: [0.32, 0.72, 0, 1] as const,
     currentEnterEase: [0.22, 1, 0.36, 1] as const,
     currentExitScale: 0.985,
@@ -92,12 +92,40 @@ export const EXPLORE_V2 = {
       timerContainerExitEase: [0.32, 0.72, 0, 1] as const,
       timerDigitEase: [0.22, 0.61, 0.36, 1] as const,
     },
-    stackLayoutTransitionMs: 320,
-    stackLayoutTransitionEase: [0.22, 1, 0.36, 1] as const,
+    stackLayoutTransitionMs: 420,
+    stackLayoutTransitionEase: [0.42, 0, 0.58, 1] as const,
+    /** Official rest timer — color + spatial choreography (entry/exit) */
+    rest: {
+      /** Rest entry/exit — stack shrink + colors + shared timer progress */
+      colorMs: 420,
+      /** Legacy — prefer `restTransitionEase` for the shared progress driver */
+      colorEase: [0.22, 1, 0.36, 1] as const,
+      /** Band + stack + colors: ease-in-out so resize doesn’t feel front-loaded (Material-like) */
+      restTransitionEase: [0.42, 0, 0.58, 1] as const,
+      /** Wallet pulls over timer band so digits can start occluded under the stack */
+      stackOverlapPx: 28,
+      /** Timer hero starts this far down (positive = toward stack), then rises into slot */
+      timerEmergenceTranslateY: 32,
+      /** Digits / pressable value fade & rise slightly after the outer container begins */
+      timerValueStaggerMs: 56,
+      /** Reserved for future controls row — keep in sync with timerControlStagger concept */
+      timerControlsStaggerMs: 60,
+    },
   },
   layout: {
     timerInactiveHeight: 0,
+    /** Legacy fixed strip height — prefer `restTimerHeightFraction` × content height */
     timerVisibleHeight: 88,
+    /**
+     * Rest layout: share of explore-v2 **content** height (below header). Idle = stack 100%, timer 0%.
+     * When rest enters, timer grows to `restTimerHeightFraction` and stack shrinks to `restStackHeightFraction`.
+     */
+    restTimerHeightFraction: 0.2,
+    restStackHeightFraction: 0.8,
+    /** Vertical center of rest timer hero: half of `restTimerHeightFraction` (fixed in root %, not tied to band flex). */
+    restTimerCenterFromRootTopFraction: 0.1,
+    /** Extra upward offset (px) so the overlay hero sits closer to the header; added to half digit-slot height in screen anchor */
+    restTimerOverlayUpNudgePx: 20,
   },
   typography: {
     /** Exercise title on Current */

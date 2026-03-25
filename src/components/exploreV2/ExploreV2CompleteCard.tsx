@@ -1,6 +1,7 @@
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Pressable } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Pressable } from 'react-native';
 import { Platform } from 'react-native';
+import Animated, { useAnimatedStyle, interpolateColor, type SharedValue } from 'react-native-reanimated';
 import { EXPLORE_V2 } from './exploreV2Tokens';
 import { EXPLORE_V2_PALETTES } from './exploreV2ColorSystem';
 import { TYPOGRAPHY } from '../../constants';
@@ -21,9 +22,12 @@ type Props = {
   frontBottomRadius: number;
   coveredBottomRadius: number;
   timerThemeActive: boolean;
+  restThemeProgress: SharedValue<number>;
 };
 
 const palette = EXPLORE_V2_PALETTES.complete;
+/** Match Current card surface — used for row title + numerals on Completed list */
+const CURRENT_CARD_SURFACE = EXPLORE_V2_PALETTES.current.main;
 
 export function ExploreV2CompleteCard({
   completedGroupIndexes,
@@ -36,26 +40,31 @@ export function ExploreV2CompleteCard({
   isExpanded,
   frontBottomRadius,
   coveredBottomRadius,
-  timerThemeActive,
+  timerThemeActive: _timerThemeActive,
+  restThemeProgress,
 }: Props) {
   const bottomCornerRadius = isExpanded ? frontBottomRadius : coveredBottomRadius;
+  const shellAnimatedStyle = useAnimatedStyle(() => ({
+    backgroundColor: interpolateColor(restThemeProgress.value, [0, 1], [palette.main, '#F3940F']),
+    borderColor: interpolateColor(restThemeProgress.value, [0, 1], [EXPLORE_V2.colors.pageBg, '#FFA424']),
+  }));
+  const scrollContentAnimatedStyle = useAnimatedStyle(() => ({
+    backgroundColor: interpolateColor(restThemeProgress.value, [0, 1], [palette.main, '#F3940F']),
+  }));
   const rows = completedGroupIndexes.flatMap(gi => {
     const g = exerciseGroups[gi];
     if (!g) return [];
     return g.exercises.map(ex => ({ gi, g, ex }));
   });
 
-  const backgroundColor = timerThemeActive ? '#F3940F' : palette.main;
-  const borderColor = timerThemeActive ? '#FFA424' : EXPLORE_V2.colors.pageBg;
   const headerInk = '#464646';
 
   return (
-    <View
+    <Animated.View
       style={[
         styles.shell,
+        shellAnimatedStyle,
         {
-          backgroundColor,
-          borderColor,
           borderBottomLeftRadius: bottomCornerRadius,
           borderBottomRightRadius: bottomCornerRadius,
         },
@@ -70,9 +79,9 @@ export function ExploreV2CompleteCard({
           <IconChevronDown size={18} color={headerInk} />
         </View>
       </Pressable>
-      <ScrollView
+      <Animated.ScrollView
         style={styles.scroll}
-        contentContainerStyle={[styles.scrollInner, { backgroundColor }]}
+        contentContainerStyle={[styles.scrollInner, scrollContentAnimatedStyle]}
         nestedScrollEnabled
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
@@ -88,7 +97,7 @@ export function ExploreV2CompleteCard({
             activeOpacity={0.75}
           >
             <View style={styles.nameCol}>
-              <Text style={[styles.name, { color: palette.dark }]} numberOfLines={2}>
+              <Text style={[styles.name, { color: CURRENT_CARD_SURFACE }]} numberOfLines={2}>
                 {ex.exerciseName}
               </Text>
             </View>
@@ -99,18 +108,16 @@ export function ExploreV2CompleteCard({
                   <View key={roundIdx} style={styles.valRow}>
                     {vals.weight > 0 && (
                       <View style={styles.valWithUnit}>
-                        <Text style={[styles.val, { color: palette.dark }]}>
+                        <Text style={[styles.val, { color: CURRENT_CARD_SURFACE }]}>
                           {formatWeightForLoad(vals.weight, useKg)}
                         </Text>
-                        <Text style={[styles.valUnit, { color: palette.soft }]}>
-                          {weightUnit}
-                        </Text>
+                        <Text style={styles.valUnit}>{weightUnit}</Text>
                       </View>
                     )}
-                    <Text style={[styles.val, { color: palette.dark }]}>
-                      {vals.reps}
-                    </Text>
-                    {ex.isTimeBased ? <Text style={[styles.valUnit, { color: palette.soft }]}>s</Text> : null}
+                    <View style={styles.valWithUnit}>
+                      <Text style={[styles.val, { color: CURRENT_CARD_SURFACE }]}>{vals.reps}</Text>
+                      <Text style={styles.valUnit}>{ex.isTimeBased ? 's' : 'reps'}</Text>
+                    </View>
                   </View>
                 );
               })}
@@ -120,8 +127,8 @@ export function ExploreV2CompleteCard({
         {rows.length === 0 && (
           <Text style={[styles.empty, { color: palette.muted }]}>Nothing completed yet.</Text>
         )}
-      </ScrollView>
-    </View>
+      </Animated.ScrollView>
+    </Animated.View>
   );
 }
 
@@ -148,6 +155,7 @@ const styles = StyleSheet.create({
   },
   headerRow: {
     height: 32,
+    width: '100%',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -201,14 +209,14 @@ const styles = StyleSheet.create({
     marginBottom: EXPLORE_V2.exerciseListRowGap,
   },
   nameCol: { flex: 1, paddingRight: 10 },
-  name: { fontSize: 15, fontWeight: '500', lineHeight: 20 },
+  name: { ...TYPOGRAPHY.body, lineHeight: 22 },
   valCol: { alignItems: 'flex-end' },
-  valRow: { flexDirection: 'row', gap: 8, justifyContent: 'flex-end' },
+  valRow: { flexDirection: 'row', gap: 24, justifyContent: 'flex-end' },
   valWithUnit: { flexDirection: 'row', alignItems: 'baseline', gap: 2 },
-  val: { fontSize: 13, fontWeight: '500' },
-  valUnit: { fontSize: 13, fontWeight: '400' },
+  val: { ...TYPOGRAPHY.body },
+  valUnit: { ...TYPOGRAPHY.body, color: '#787878' },
   empty: {
-    fontSize: 14,
+    ...TYPOGRAPHY.body,
     paddingVertical: 12,
   },
 });
