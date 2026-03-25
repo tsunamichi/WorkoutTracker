@@ -24,7 +24,6 @@ import {
 import AnimatedReanimated, {
   useSharedValue,
   useAnimatedStyle,
-  useAnimatedReaction,
   withTiming,
   withDelay,
   interpolate,
@@ -52,6 +51,7 @@ import { ExploreV2TimerArea } from '../components/exploreV2/ExploreV2TimerArea';
 import { EXPLORE_V2 } from '../components/exploreV2/exploreV2Tokens';
 import { useTranslation } from '../i18n/useTranslation';
 import { formatWeightForLoad, toDisplayWeight, fromDisplayWeight } from '../utils/weight';
+import { applyForwardPropagationForExerciseRounds } from '../utils/exerciseLocalValues';
 import type { WarmupItem_DEPRECATED as WarmupItem, AccessoryItem_DEPRECATED as AccessoryItem, WorkoutTemplateExercise } from '../types/training';
 import { isDeprecatedItem, getDisplayValuesFromItem } from '../utils/exerciseMigration';
 import { computeNextSuggestion } from '../utils/progressionSuggestions';
@@ -480,8 +480,6 @@ export function ExerciseExecutionScreen() {
   }, [exerciseGroups, completedSets]);
 
   const [showAddExerciseDrawer, setShowAddExerciseDrawer] = useState(false);
-  /** Measured height of the Explore v2 wallet stack area below the timer band. */
-  const [exploreV2StackHeight, setExploreV2StackHeight] = useState(0);
   const exploreV2TimerBandProgress = useSharedValue(0);
   /** Measured height of `exploreV2Root` — drives % split (stack vs timer) as pixel heights */
   const exploreV2RootHeight = useSharedValue(0);
@@ -532,14 +530,17 @@ export function ExerciseExecutionScreen() {
   const [localValues, setLocalValuesState] = useState<Record<string, { weight: number; reps: number }>>({});
   const localValuesRef = useRef(localValues);
   localValuesRef.current = localValues;
-  
-  // Wrapper that updates both state AND ref immediately (ref avoids stale closures in saveSession)
+
+  // Apply updates synchronously so localValuesRef matches handleComplete/saveSession in the same tap (hero blur is not guaranteed).
   const setLocalValues = useCallback((updater: React.SetStateAction<Record<string, { weight: number; reps: number }>>) => {
-    setLocalValuesState(prev => {
-      const next = typeof updater === 'function' ? updater(prev) : updater;
+    if (typeof updater === 'function') {
+      const next = updater(localValuesRef.current);
       localValuesRef.current = next;
-      return next;
-    });
+      setLocalValuesState(next);
+    } else {
+      localValuesRef.current = updater;
+      setLocalValuesState(updater);
+    }
   }, []);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null); // Track session ID for updates
   const [showAdjustmentDrawer, setShowAdjustmentDrawer] = useState(false);
@@ -617,23 +618,6 @@ export function ExerciseExecutionScreen() {
       zIndex: 2,
     };
   }, [screenHeight, REST_STACK_FRAC]);
-
-  /** Keep JS stack height in lockstep with the animated wallet band (onLayout only fires ~few times → jumps + clip). */
-  const setExploreV2StackHeightFromProgress = useCallback((h: number) => {
-    setExploreV2StackHeight(h);
-  }, []);
-
-  useAnimatedReaction(
-    () => {
-      const measured = exploreV2RootHeight.value;
-      const H = measured > 0 ? measured : screenHeight * 0.55;
-      return interpolate(exploreV2TimerBandProgress.value, [0, 1], [H, H * REST_STACK_FRAC]);
-    },
-    height => {
-      runOnJS(setExploreV2StackHeightFromProgress)(height);
-    },
-    [screenHeight, REST_STACK_FRAC],
-  );
 
   const exploreV2PageBgAnimatedStyle = useAnimatedStyle(() => ({
     backgroundColor: interpolateColor(
@@ -1340,31 +1324,35 @@ export function ExerciseExecutionScreen() {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
   };
 
-  // Build a lookup of session values for displaying accurate logged data
-  // Falls back through: localValues → detailedWorkoutProgress → session data → template values
+  // Display values: in-session edits first (weight, reps, and time-as-reps), then persisted data, then template.
   const progressionValuesRef = useRef(progressionValuesByItemId);
   progressionValuesRef.current = progressionValuesByItemId;
 
   const getSetDisplayValues = useCallback((exerciseId: string, setIndex: number, templateWeight: number, templateReps: number) => {
     const setId = `${exerciseId}-set-${setIndex}`;
 
-    // 1. Already-completed sets in THIS workout (actual logged data)
+    // 1. Current session edits (must win over stale progress so Completed card matches what the user entered)
+    const lv = localValuesRef.current[setId];
+    if (lv) return lv;
+
+    // Session rows use library exercise id (exercise.exerciseId || exercise.id), not always template item id
+    const groupExercise = exerciseGroups.flatMap(g => g.exercises).find(ex => ex.id === exerciseId);
+    const sessionExerciseId = groupExercise ? (groupExercise.exerciseId || groupExercise.id) : exerciseId;
+
+    // 2. Already-completed sets in THIS workout (persisted progress; template item id is the key)
     const progressData = getDetailedWorkoutProgress();
     if (workoutKey && progressData[workoutKey]) {
       const workoutProgress = progressData[workoutKey];
       for (const [templateExId, exProgress] of Object.entries(workoutProgress.exercises)) {
-        const freshTemplate = useStore.getState().workoutTemplates.find(t => t.id === workoutTemplateId);
-        const templateExercise = (freshTemplate?.items || (freshTemplate as any)?.exercises)?.find((ex: any) => ex.id === templateExId);
-        if (templateExercise?.exerciseId === exerciseId || templateExId === exerciseId) {
-          const matchingSet = (exProgress as any).sets?.find((s: any) => s.setNumber === setIndex && s.completed);
-          if (matchingSet) {
-            return { weight: matchingSet.weight, reps: matchingSet.reps };
-          }
+        if (templateExId !== exerciseId) continue;
+        const matchingSet = (exProgress as any).sets?.find((s: any) => s.setNumber === setIndex && s.completed);
+        if (matchingSet) {
+          return { weight: matchingSet.weight, reps: matchingSet.reps };
         }
       }
     }
 
-    // 2. Session data for THIS workout
+    // 3. Session data for THIS workout
     const allSessions = useStore.getState().sessions;
     const session = allSessions.find(s => (s as any).workoutKey === workoutKey)
       || allSessions.find(s => {
@@ -1373,23 +1361,22 @@ export function ExerciseExecutionScreen() {
         return s.workoutTemplateId === workoutTemplateId && sd && s.date === sd;
       });
     if (session) {
-      const match = session.sets.find(s =>
-        (s.exerciseId === exerciseId) && (s.setIndex === setIndex)
+      const match = session.sets.find(
+        s =>
+          s.setIndex === setIndex &&
+          (s.exerciseId === sessionExerciseId || s.exerciseId === exerciseId),
       );
       if (match) return { weight: match.weight, reps: match.reps };
     }
-
-    // 3. User manual edits from this session
-    const lv = localValuesRef.current[setId];
-    if (lv) return lv;
 
     // 4. Auto-progression values (computed from last log + rules)
     const prog = progressionValuesRef.current[exerciseId];
     if (prog) return { weight: prog.weight, reps: prog.reps };
 
-    // 5. Template defaults
-    return { weight: templateWeight, reps: Number(templateReps) || 0 };
-  }, [workoutKey, workoutTemplateId]);
+    // 5. Template defaults (reps = count or seconds when time-based)
+    const tr = Number(templateReps);
+    return { weight: templateWeight, reps: Number.isFinite(tr) ? tr : 0 };
+  }, [workoutKey, workoutTemplateId, exerciseGroups]);
 
   const saveSession = async (completedSetIds?: Set<string>) => {
     console.log('💾 Saving workout session for', type, 'section');
@@ -2548,7 +2535,7 @@ export function ExerciseExecutionScreen() {
                 onRemoveExercise={async (exercise) => {
                   await removeExerciseFromWorkout(exercise as WarmupItem);
                 }}
-                walletStackHeight={exploreV2StackHeight}
+                exploreLayoutRootHeight={exploreV2RootHeight}
                 currentGroupHasLoggedSets={exploreV2CurrentGroupHasLoggedSets}
                 onOpenAddExercise={() => setShowAddExerciseDrawer(true)}
                 onRemoveGroupFromUpNext={removeGroupFromWorkoutByIndex}
@@ -3855,21 +3842,17 @@ export function ExerciseExecutionScreen() {
                                   const rounded = Math.round(parsed * 2) / 2; // snap to nearest 0.5
                                   const newWeight = fromDisplayWeight(rounded, useKg);
                                   const totalRounds = currentGroup.totalRounds;
-                                  const isFirstTimeLogging = !Array.from({ length: totalRounds }, (_, i) => `${activeExercise.id}-set-${i}`).some(sid => completedSets.has(sid));
                                   setLocalValues(prev => {
                                     const current = prev[setId] ?? { weight: displayWeight, reps: displayReps };
-                                    const next: Record<string, { weight: number; reps: number }> = {
-                                      ...prev,
-                                      [setId]: { weight: newWeight, reps: current.reps },
-                                    };
-                                    if (isFirstTimeLogging) {
-                                      for (let i = setIndex + 1; i < totalRounds; i++) {
-                                        const sid = `${activeExercise.id}-set-${i}`;
-                                        const existing = next[sid] ?? prev[sid];
-                                        next[sid] = { weight: newWeight, reps: existing?.reps ?? current.reps };
-                                      }
-                                    }
-                                    return next;
+                                    return applyForwardPropagationForExerciseRounds(
+                                      prev,
+                                      activeExercise.id,
+                                      setIndex,
+                                      totalRounds,
+                                      completedSets,
+                                      setId,
+                                      { weight: newWeight, reps: current.reps },
+                                    );
                                   });
                                 }}
                               />
@@ -3887,21 +3870,17 @@ export function ExerciseExecutionScreen() {
                                   const parsed = parseInt(text, 10);
                                   if (text === '' || isNaN(parsed) || parsed < 1) return;
                                   const totalRounds = currentGroup.totalRounds;
-                                  const isFirstTimeLogging = !Array.from({ length: totalRounds }, (_, i) => `${activeExercise.id}-set-${i}`).some(sid => completedSets.has(sid));
                                   setLocalValues(prev => {
                                     const current = prev[setId] ?? { weight: displayWeight, reps: displayReps };
-                                    const next: Record<string, { weight: number; reps: number }> = {
-                                      ...prev,
-                                      [setId]: { weight: current.weight, reps: parsed },
-                                    };
-                                    if (isFirstTimeLogging) {
-                                      for (let i = setIndex + 1; i < totalRounds; i++) {
-                                        const sid = `${activeExercise.id}-set-${i}`;
-                                        const existing = next[sid] ?? prev[sid];
-                                        next[sid] = { weight: existing?.weight ?? current.weight, reps: parsed };
-                                      }
-                                    }
-                                    return next;
+                                    return applyForwardPropagationForExerciseRounds(
+                                      prev,
+                                      activeExercise.id,
+                                      setIndex,
+                                      totalRounds,
+                                      completedSets,
+                                      setId,
+                                      { weight: current.weight, reps: parsed },
+                                    );
                                   });
                                 }}
                               />
@@ -4806,10 +4785,13 @@ const styles = StyleSheet.create({
     backgroundColor: 'transparent',
     position: 'relative',
   },
-  /** Rest timer hero: above wallet (zIndex 2). pointerEvents set in JSX — idle must be `none` so cards stay tappable */
+  /**
+   * Rest timer hero — lowest z-index so the wallet stack paints on top (digits read “through” / behind cards).
+   * pointerEvents set in JSX — idle must be `none` so cards stay tappable.
+   */
   exploreV2TimerOverlay: {
     ...StyleSheet.absoluteFillObject,
-    zIndex: 3,
+    zIndex: 0,
   },
   exploreV2TimerOverlayAnchor: {
     position: 'absolute',

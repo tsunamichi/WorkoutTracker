@@ -1,7 +1,11 @@
 import React, { useEffect, useRef, useCallback, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Pressable, Animated, Easing } from 'react-native';
 import { Platform } from 'react-native';
-import Reanimated, { useAnimatedStyle, interpolateColor, type SharedValue } from 'react-native-reanimated';
+import Reanimated, {
+  useAnimatedStyle,
+  interpolateColor,
+  type SharedValue,
+} from 'react-native-reanimated';
 import { Swipeable } from 'react-native-gesture-handler';
 import { EXPLORE_V2 } from './exploreV2Tokens';
 import { EXPLORE_V2_PALETTES } from './exploreV2ColorSystem';
@@ -18,8 +22,6 @@ type Props = {
   onOpenAddExercise: () => void;
   onRemoveGroupFromUpNext: (groupIndex: number) => void | Promise<void>;
   allowAddExercise: boolean;
-  /** Current has logged sets — cannot replace Current by tapping another row. */
-  currentSelectionsLocked: boolean;
   hasCurrentExercise: boolean;
   hasCompletePresent: boolean;
   /** Card is expanded (primary) — show plus instead of queue count */
@@ -105,7 +107,8 @@ function superscriptFallbackPosition(
 type UpNextQueueRowProps = {
   group: ExploreV2Group;
   groupIndex: number;
-  rowSelectable: boolean;
+  /** Group already has logged sets — row is disabled; taps do not fire. */
+  groupHasProgress: boolean;
   isLast: boolean;
   restThemeProgress: SharedValue<number>;
   onSelectGroup: (groupIndex: number) => void;
@@ -114,10 +117,16 @@ type UpNextQueueRowProps = {
   onSwipeableClose: (direction: 'left' | 'right', swipeable: Swipeable) => void;
 };
 
+const palette = EXPLORE_V2_PALETTES.upNext;
+const HEADER_INK = '#464646';
+const ROW_NAME_INK = '#1F1F1F';
+/** Idle superscript — animated to `EXPLORE_V2.colors.restTimerHeaderInk` when rest timer is on */
+const ROW_SUPER_INK = '#787878';
+
 function UpNextQueueRow({
   group,
   groupIndex,
-  rowSelectable,
+  groupHasProgress,
   isLast,
   restThemeProgress,
   onSelectGroup,
@@ -130,6 +139,13 @@ function UpNextQueueRow({
       restThemeProgress.value,
       [0, 1],
       [EXPLORE_V2_PALETTES.upNext.main, '#E78B0B'],
+    ),
+  }));
+  const superscriptColorStyle = useAnimatedStyle(() => ({
+    color: interpolateColor(
+      restThemeProgress.value,
+      [0, 1],
+      [ROW_SUPER_INK, EXPLORE_V2.colors.restTimerHeaderInk],
     ),
   }));
   const swipeProgressRef = useRef<Animated.AnimatedInterpolation<number> | null>(null);
@@ -184,8 +200,8 @@ function UpNextQueueRow({
           <Reanimated.View style={[styles.rowSwipeFront, rowFrontBgStyle]}>
             <TouchableOpacity
               style={styles.rowMain}
-              disabled={!rowSelectable}
-              onPress={() => rowSelectable && onSelectGroup(groupIndex)}
+              disabled={groupHasProgress}
+              onPress={() => onSelectGroup(groupIndex)}
               activeOpacity={0.75}
               accessibilityLabel={`${title}, ${roundsStr} rounds`}
             >
@@ -214,12 +230,16 @@ function UpNextQueueRow({
                     {title}
                   </Text>
                   {overlayPos ? (
-                    <Text
-                      style={[styles.superScriptOverlay, { top: overlayPos.top, left: overlayPos.left }]}
+                    <Reanimated.Text
+                      style={[
+                        styles.superScriptOverlay,
+                        { top: overlayPos.top, left: overlayPos.left },
+                        superscriptColorStyle,
+                      ]}
                       pointerEvents="none"
                     >
                       {roundsStr}
-                    </Text>
+                    </Reanimated.Text>
                   ) : null}
                 </View>
               </View>
@@ -241,11 +261,6 @@ function UpNextQueueRow({
   );
 }
 
-const palette = EXPLORE_V2_PALETTES.upNext;
-const HEADER_INK = '#464646';
-const ROW_NAME_INK = '#1F1F1F';
-const ROW_SUPER_INK = '#787878';
-
 export function ExploreV2UpNextCard({
   upNextGroupIndexes,
   exerciseGroups,
@@ -255,7 +270,6 @@ export function ExploreV2UpNextCard({
   onOpenAddExercise,
   onRemoveGroupFromUpNext,
   allowAddExercise,
-  currentSelectionsLocked,
   hasCurrentExercise,
   hasCompletePresent,
   isExpanded,
@@ -279,6 +293,24 @@ export function ExploreV2UpNextCard({
       activeSwipeRowRef.current = null;
     }
   }, []);
+
+  const headerChromeAnimatedStyle = useAnimatedStyle(() => ({
+    color: interpolateColor(restThemeProgress.value, [0, 1], [HEADER_INK, EXPLORE_V2.colors.restTimerHeaderInk]),
+  }));
+  const addExerciseLinkAnimatedStyle = useAnimatedStyle(() => ({
+    color: interpolateColor(restThemeProgress.value, [0, 1], [HEADER_INK, EXPLORE_V2.colors.restTimerHeaderInk]),
+    borderBottomColor: interpolateColor(
+      restThemeProgress.value,
+      [0, 1],
+      [HEADER_INK, EXPLORE_V2.colors.restTimerHeaderInk],
+    ),
+  }));
+  const chevronIdleOpacityStyle = useAnimatedStyle(() => ({
+    opacity: 1 - restThemeProgress.value,
+  }));
+  const chevronTimerOpacityStyle = useAnimatedStyle(() => ({
+    opacity: restThemeProgress.value,
+  }));
 
   const bottomCornerRadius = isExpanded ? frontBottomRadius : coveredBottomRadius;
   const shellAnimatedStyle = useAnimatedStyle(() => ({
@@ -330,7 +362,7 @@ export function ExploreV2UpNextCard({
         <Pressable style={styles.peekTapOverlay} onPress={onHeaderPress} />
       ) : null}
       <Pressable style={styles.headerRow} onPress={onHeaderPress}>
-        <Text style={[styles.headerLabel, { color: HEADER_INK }]}>Up Next</Text>
+        <Reanimated.Text style={[styles.headerLabel, headerChromeAnimatedStyle]}>Up Next</Reanimated.Text>
         <View style={styles.countOrPlusSlot}>
           <Animated.View
             style={[styles.addExerciseLayer, addLayerStyle]}
@@ -344,13 +376,20 @@ export function ExploreV2UpNextCard({
               activeOpacity={0.75}
               disabled={!showAddExercise}
             >
-              <Text style={styles.addExerciseText} numberOfLines={1}>
+              <Reanimated.Text style={[styles.addExerciseText, addExerciseLinkAnimatedStyle]} numberOfLines={1}>
                 Add exercise
-              </Text>
+              </Reanimated.Text>
             </TouchableOpacity>
           </Animated.View>
           <Animated.View style={[styles.chevronLayer, chevronLayerStyle]} pointerEvents="none">
-            <IconChevronDown size={18} color={HEADER_INK} />
+            <View style={styles.chevronDualWrap}>
+              <Animated.View style={[styles.chevronTintLayer, chevronIdleOpacityStyle]} pointerEvents="none">
+                <IconChevronDown size={18} color={HEADER_INK} />
+              </Animated.View>
+              <Animated.View style={[styles.chevronTintLayer, chevronTimerOpacityStyle]} pointerEvents="none">
+                <IconChevronDown size={18} color={EXPLORE_V2.colors.restTimerHeaderInk} />
+              </Animated.View>
+            </View>
           </Animated.View>
         </View>
       </Pressable>
@@ -388,14 +427,13 @@ export function ExploreV2UpNextCard({
             const g = exerciseGroups[gi];
             if (!g) return null;
             const started = groupHasAnyLoggedSet(g, completedSets);
-            const rowSelectable = !started && !currentSelectionsLocked;
             const isLast = index === upNextGroupIndexes.length - 1;
             return (
             <UpNextQueueRow
               key={g.id}
               group={g}
               groupIndex={gi}
-              rowSelectable={rowSelectable}
+              groupHasProgress={started}
               isLast={isLast}
               restThemeProgress={restThemeProgress}
               onSelectGroup={onSelectGroup}
@@ -483,10 +521,18 @@ const styles = StyleSheet.create({
     ...TYPOGRAPHY.legal,
     fontWeight: '500',
     flexShrink: 0,
-    color: HEADER_INK,
     paddingBottom: 2,
     borderBottomWidth: 1,
-    borderBottomColor: HEADER_INK,
+  },
+  chevronDualWrap: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  chevronTintLayer: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   headerLabel: {
     ...TYPOGRAPHY.legal,
@@ -576,7 +622,6 @@ const styles = StyleSheet.create({
     ...TYPOGRAPHY.legal,
     fontWeight: '700',
     lineHeight: SUPER_SCRIPT_LINE_HEIGHT,
-    color: ROW_SUPER_INK,
     includeFontPadding: false,
     textAlign: 'right',
   },

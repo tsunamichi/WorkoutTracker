@@ -28,6 +28,14 @@ type Props = {
 const palette = EXPLORE_V2_PALETTES.complete;
 /** Match Current card surface — used for row title + numerals on Completed list */
 const CURRENT_CARD_SURFACE = EXPLORE_V2_PALETTES.current.main;
+const IDLE_HEADER_INK = '#464646';
+const IDLE_UNIT_INK = '#787878';
+/** Vertical gap between set rows (logs) in the Completed list */
+const COMPLETE_SET_LOG_GAP = 2;
+/** Space below each exercise row — token + 12px */
+const COMPLETE_EXERCISE_ROW_MARGIN = EXPLORE_V2.exerciseListRowGap + 12;
+/** Fixed width for load / reps numerals in the Completed list */
+const COMPLETE_VALUE_WIDTH = 32;
 
 export function ExploreV2CompleteCard({
   completedGroupIndexes,
@@ -43,6 +51,23 @@ export function ExploreV2CompleteCard({
   timerThemeActive: _timerThemeActive,
   restThemeProgress,
 }: Props) {
+  const headerChromeAnimatedStyle = useAnimatedStyle(() => ({
+    color: interpolateColor(restThemeProgress.value, [0, 1], [IDLE_HEADER_INK, EXPLORE_V2.colors.restTimerHeaderInk]),
+  }));
+  const completedUnitAnimatedStyle = useAnimatedStyle(() => ({
+    color: interpolateColor(
+      restThemeProgress.value,
+      [0, 1],
+      [IDLE_UNIT_INK, EXPLORE_V2.colors.restTimerCompletedUnitInk],
+    ),
+  }));
+  const chevronIdleOpacityStyle = useAnimatedStyle(() => ({
+    opacity: 1 - restThemeProgress.value,
+  }));
+  const chevronTimerOpacityStyle = useAnimatedStyle(() => ({
+    opacity: restThemeProgress.value,
+  }));
+
   const bottomCornerRadius = isExpanded ? frontBottomRadius : coveredBottomRadius;
   const shellAnimatedStyle = useAnimatedStyle(() => ({
     backgroundColor: interpolateColor(restThemeProgress.value, [0, 1], [palette.main, '#F3940F']),
@@ -56,8 +81,6 @@ export function ExploreV2CompleteCard({
     if (!g) return [];
     return g.exercises.map(ex => ({ gi, g, ex }));
   });
-
-  const headerInk = '#464646';
 
   return (
     <Animated.View
@@ -74,9 +97,14 @@ export function ExploreV2CompleteCard({
         <Pressable style={styles.peekTapOverlay} onPress={onHeaderPress} />
       ) : null}
       <Pressable style={styles.headerRow} onPress={onHeaderPress}>
-        <Text style={[styles.headerLabel, { color: headerInk }]}>Completed</Text>
+        <Animated.Text style={[styles.headerLabel, headerChromeAnimatedStyle]}>Completed</Animated.Text>
         <View style={styles.countOrPlusSlot}>
-          <IconChevronDown size={18} color={headerInk} />
+          <Animated.View style={[styles.chevronLayer, chevronIdleOpacityStyle]} pointerEvents="none">
+            <IconChevronDown size={18} color={IDLE_HEADER_INK} />
+          </Animated.View>
+          <Animated.View style={[styles.chevronLayer, chevronTimerOpacityStyle]} pointerEvents="none">
+            <IconChevronDown size={18} color={EXPLORE_V2.colors.restTimerHeaderInk} />
+          </Animated.View>
         </View>
       </Pressable>
       <Animated.ScrollView
@@ -105,18 +133,32 @@ export function ExploreV2CompleteCard({
               {Array.from({ length: g.totalRounds }).map((_, roundIdx) => {
                 const vals = getSetDisplayValues(ex.id, roundIdx, ex.weight ?? 0, ex.reps ?? 0);
                 return (
-                  <View key={roundIdx} style={styles.valRow}>
+                  <View
+                    key={roundIdx}
+                    style={[
+                      styles.valRow,
+                      roundIdx < g.totalRounds - 1 && styles.valRowGapAfter,
+                    ]}
+                  >
                     {vals.weight > 0 && (
                       <View style={styles.valWithUnit}>
-                        <Text style={[styles.val, { color: CURRENT_CARD_SURFACE }]}>
-                          {formatWeightForLoad(vals.weight, useKg)}
-                        </Text>
-                        <Text style={styles.valUnit}>{weightUnit}</Text>
+                        <View style={styles.valueFixedSlot}>
+                          <Text style={[styles.val, styles.valueTextRight, { color: CURRENT_CARD_SURFACE }]}>
+                            {formatWeightForLoad(vals.weight, useKg)}
+                          </Text>
+                        </View>
+                        <Animated.Text style={[styles.valUnit, completedUnitAnimatedStyle]}>{weightUnit}</Animated.Text>
                       </View>
                     )}
                     <View style={styles.valWithUnit}>
-                      <Text style={[styles.val, { color: CURRENT_CARD_SURFACE }]}>{vals.reps}</Text>
-                      <Text style={styles.valUnit}>{ex.isTimeBased ? 's' : 'reps'}</Text>
+                      <View style={styles.valueFixedSlot}>
+                        <Text style={[styles.val, styles.valueTextRight, { color: CURRENT_CARD_SURFACE }]}>
+                          {vals.reps}
+                        </Text>
+                      </View>
+                      <Animated.Text style={[styles.valUnit, completedUnitAnimatedStyle]}>
+                        {ex.isTimeBased ? 's' : 'reps'}
+                      </Animated.Text>
                     </View>
                   </View>
                 );
@@ -169,6 +211,7 @@ const styles = StyleSheet.create({
     zIndex: 1,
   },
   countOrPlusSlot: {
+    position: 'relative',
     width: 38,
     height: 38,
     alignItems: 'center',
@@ -206,15 +249,30 @@ const styles = StyleSheet.create({
     paddingVertical: 0,
   },
   rowGapAfter: {
-    marginBottom: EXPLORE_V2.exerciseListRowGap,
+    marginBottom: COMPLETE_EXERCISE_ROW_MARGIN,
   },
   nameCol: { flex: 1, paddingRight: 10 },
   name: { ...TYPOGRAPHY.body, lineHeight: 22 },
   valCol: { alignItems: 'flex-end' },
-  valRow: { flexDirection: 'row', gap: 24, justifyContent: 'flex-end' },
+  valRow: { flexDirection: 'row', gap: 20, justifyContent: 'flex-end' },
+  valRowGapAfter: {
+    marginBottom: COMPLETE_SET_LOG_GAP,
+  },
   valWithUnit: { flexDirection: 'row', alignItems: 'baseline', gap: 2 },
+  valueFixedSlot: {
+    width: COMPLETE_VALUE_WIDTH,
+  },
+  valueTextRight: {
+    textAlign: 'right',
+    width: '100%',
+  },
   val: { ...TYPOGRAPHY.body },
-  valUnit: { ...TYPOGRAPHY.body, color: '#787878' },
+  valUnit: { ...TYPOGRAPHY.body },
+  chevronLayer: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   empty: {
     ...TYPOGRAPHY.body,
     paddingVertical: 12,

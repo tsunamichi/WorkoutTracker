@@ -64,6 +64,10 @@ export const EXPLORE_V2 = {
     textSecondary: 'rgba(250,250,250,0.72)',
     textMeta: 'rgba(250,250,250,0.45)',
     divider: 'rgba(255,255,255,0.08)',
+    /** Rest timer active — Completed / Up Next headers, chevrons, Add exercise, Up Next superscript */
+    restTimerHeaderInk: '#915100',
+    /** Rest timer active — unit suffixes in Completed list (kg, reps, s) */
+    restTimerCompletedUnitInk: '#C87000',
   },
   motion: {
     currentExitMs: 300,

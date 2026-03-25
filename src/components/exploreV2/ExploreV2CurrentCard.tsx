@@ -1,20 +1,30 @@
-import React, { useEffect, useMemo, useRef } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, KeyboardAvoidingView, Platform, Animated } from 'react-native';
+import React, { useCallback, useEffect, useMemo, useRef } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  KeyboardAvoidingView,
+  Platform,
+  Animated,
+  TextInput,
+} from 'react-native';
 import Reanimated, {
   useAnimatedStyle,
   interpolateColor,
   type SharedValue,
 } from 'react-native-reanimated';
 import { EXPLORE_V2 } from './exploreV2Tokens';
-import { EXPLORE_V2_PALETTES } from './exploreV2ColorSystem';
 import { TYPOGRAPHY } from '../../constants';
-import { formatWeightForLoad } from '../../utils/weight';
+import { formatWeightForLoad, fromDisplayWeight } from '../../utils/weight';
+import { applyForwardPropagationForExerciseRounds } from '../../utils/exerciseLocalValues';
 import type { ExploreV2Group, PrimaryRevealedCard } from './exploreV2Types';
 
-const palette = EXPLORE_V2_PALETTES.current;
 const CANVAS_INK = '#F5F4F4';
 const VALUE_INK = '#FFA424';
 const UNIT_INK = '#464646';
+/** “Skip rest time” CTA pill — solid dark so orange label stays legible */
+const SKIP_REST_CTA_BG = '#161616';
 
 type Props = {
   group: ExploreV2Group;
@@ -23,6 +33,7 @@ type Props = {
   completedSets: Set<string>;
   getSetDisplayValues: (exerciseId: string, round: number, w: number, r: number) => { weight: number; reps: number };
   localValues: Record<string, { weight: number; reps: number }>;
+  setLocalValues: React.Dispatch<React.SetStateAction<Record<string, { weight: number; reps: number }>>>;
   useKg: boolean;
   weightUnit: string;
   getBarbellMode: (id: string) => boolean;
@@ -37,6 +48,7 @@ type Props = {
   showCollapsedWhenSecondary: boolean;
   frontBottomRadius: number;
   coveredBottomRadius: number;
+  /** Rest timer band active — dims hero numerals */
   timerThemeActive: boolean;
   restThemeProgress: SharedValue<number>;
 };
@@ -62,6 +74,7 @@ export function ExploreV2CurrentCard({
   completedSets,
   getSetDisplayValues,
   localValues,
+  setLocalValues,
   useKg,
   weightUnit,
   getBarbellMode,
@@ -106,9 +119,120 @@ export function ExploreV2CurrentCard({
     heroEx.weight ?? 0,
     Number(heroEx.reps) ?? 0,
   );
-  const lvHero = localValues[`${heroEx.id}-set-${heroRound}`];
+  const setId = `${heroEx.id}-set-${heroRound}`;
+  const lvHero = localValues[setId];
   const heroW = lvHero?.weight ?? heroVals.weight;
   const heroR = lvHero?.reps ?? heroVals.reps;
+
+  /**
+   * Uncontrolled TextInputs (defaultValue + key) so parent re-renders never overwrite the native
+   * buffer while typing — controlled value={...} is what caused 1 → flash → 15 style glitches.
+   */
+  const weightDefault = useMemo(
+    () => formatWeightForLoad(heroW, useKg),
+    [setId, heroW, useKg],
+  );
+  const repsDefault = useMemo(
+    () => (heroEx.isTimeBased ? String(heroR) : String(Math.round(heroR))),
+    [setId, heroR, heroEx.isTimeBased],
+  );
+
+  const weightInputRef = useRef<React.ElementRef<typeof TextInput>>(null);
+  const repsInputRef = useRef<React.ElementRef<typeof TextInput>>(null);
+  const weightDraftRef = useRef(weightDefault);
+  const repsDraftRef = useRef(repsDefault);
+
+  const prevSetIdForInputsRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (prevSetIdForInputsRef.current === setId) return;
+    prevSetIdForInputsRef.current = setId;
+    weightDraftRef.current = weightDefault;
+    repsDraftRef.current = repsDefault;
+  }, [setId, weightDefault, repsDefault]);
+
+  const parseWeightFromDraft = useCallback((): number | null => {
+    const cleaned = weightDraftRef.current.replace(',', '.').trim();
+    if (cleaned === '') return null;
+    const n = parseFloat(cleaned);
+    if (Number.isNaN(n) || n < 0) return null;
+    return fromDisplayWeight(n, useKg);
+  }, [useKg]);
+
+  const parseRepsFromDraft = useCallback((): number | null => {
+    const cleaned = repsDraftRef.current.replace(',', '.').trim();
+    if (cleaned === '') return null;
+    const n = parseFloat(cleaned);
+    if (Number.isNaN(n) || n < 0) return null;
+    return heroEx.isTimeBased ? n : Math.round(n);
+  }, [heroEx.isTimeBased]);
+
+  const commitWeight = useCallback(() => {
+    const cleaned = weightDraftRef.current.replace(',', '.').trim();
+    const n = parseFloat(cleaned);
+    const wLbs =
+      Number.isNaN(n) || n < 0 ? 0 : fromDisplayWeight(n, useKg);
+    const parsedReps = parseRepsFromDraft();
+    setLocalValues(prev => {
+      const reps = parsedReps ?? prev[setId]?.reps ?? heroVals.reps;
+      return applyForwardPropagationForExerciseRounds(
+        prev,
+        heroEx.id,
+        heroRound,
+        group.totalRounds,
+        completedSets,
+        setId,
+        { weight: wLbs, reps },
+      );
+    });
+    const formatted = formatWeightForLoad(wLbs, useKg);
+    weightDraftRef.current = formatted;
+    weightInputRef.current?.setNativeProps({ text: formatted });
+  }, [
+    useKg,
+    setId,
+    setLocalValues,
+    heroVals.reps,
+    heroEx.id,
+    heroRound,
+    group.totalRounds,
+    completedSets,
+    parseRepsFromDraft,
+  ]);
+
+  const commitReps = useCallback(() => {
+    const cleaned = repsDraftRef.current.replace(',', '.').trim();
+    const n = parseFloat(cleaned);
+    let r = 0;
+    if (!Number.isNaN(n) && n >= 0) {
+      r = heroEx.isTimeBased ? n : Math.round(n);
+    }
+    const parsedWeight = parseWeightFromDraft();
+    setLocalValues(prev => {
+      const w = parsedWeight ?? prev[setId]?.weight ?? heroVals.weight;
+      return applyForwardPropagationForExerciseRounds(
+        prev,
+        heroEx.id,
+        heroRound,
+        group.totalRounds,
+        completedSets,
+        setId,
+        { weight: w, reps: r },
+      );
+    });
+    const formatted = heroEx.isTimeBased ? String(r) : String(Math.round(r));
+    repsDraftRef.current = formatted;
+    repsInputRef.current?.setNativeProps({ text: formatted });
+  }, [
+    setId,
+    setLocalValues,
+    heroEx.isTimeBased,
+    heroEx.id,
+    heroVals.weight,
+    heroRound,
+    group.totalRounds,
+    completedSets,
+    parseWeightFromDraft,
+  ]);
 
   const _barbellMode = getBarbellMode(heroEx.id);
   const weightPerSideLbs = heroW > 45 ? (heroW - 45) / 2 : null;
@@ -121,6 +245,8 @@ export function ExploreV2CurrentCard({
       ? 'Log first set'
       : 'Log next set';
   const collapsedSecondary = !isPrimary && showCollapsedWhenSecondary;
+  const metricsEditable = isPrimary && !inlineRestActive;
+  const heroValueColor = timerThemeActive ? '#464646' : VALUE_INK;
 
   const valuesSlideX = useRef(new Animated.Value(0)).current;
   useEffect(() => {
@@ -145,12 +271,14 @@ export function ExploreV2CurrentCard({
   const shellAnimatedStyle = useAnimatedStyle(() => ({
     borderColor: interpolateColor(restThemeProgress.value, [0, 1], [EXPLORE_V2.colors.pageBg, '#FFA424']),
   }));
-  const heroInkStyle = useAnimatedStyle(() => ({
-    color: interpolateColor(restThemeProgress.value, [0, 1], [VALUE_INK, '#464646']),
-  }));
-  const ctaBgStyle = useAnimatedStyle(() => ({
-    backgroundColor: interpolateColor(restThemeProgress.value, [0, 1], [VALUE_INK, '#464646']),
-  }));
+  const ctaBgStyle = useAnimatedStyle(() => {
+    if (inlineRestActive) {
+      return { backgroundColor: SKIP_REST_CTA_BG };
+    }
+    return {
+      backgroundColor: interpolateColor(restThemeProgress.value, [0, 1], [VALUE_INK, '#464646']),
+    };
+  }, [inlineRestActive]);
   const ctaLabelStyle = useAnimatedStyle(() => {
     if (inlineRestActive && isPrimary) {
       return { color: VALUE_INK };
@@ -200,25 +328,55 @@ export function ExploreV2CurrentCard({
           <Animated.View style={[styles.valuesBlock, { transform: [{ translateX: valuesSlideX }] }]}>
             {showPerSideRow && weightPerSideLbs != null ? (
               <View style={styles.perSideRow}>
-                <Reanimated.Text style={[styles.perSideValue, heroInkStyle]}>
-                  {formatWeightForLoad(weightPerSideLbs, useKg)}
-                  {weightUnit}
-                </Reanimated.Text>
-                <Text style={styles.perSideLabel}>weight per side</Text>
+                <View style={styles.perSideCluster}>
+                  <View style={styles.perSideNumUnit}>
+                    <Text style={[styles.perSideValue, { color: CANVAS_INK }]}>
+                      {formatWeightForLoad(weightPerSideLbs, useKg)}
+                    </Text>
+                    <Text style={[styles.perSideUnit, { color: CANVAS_INK }]}>{weightUnit}</Text>
+                  </View>
+                  <Text style={[styles.perSideLabel, { color: UNIT_INK }]}>weight per side</Text>
+                </View>
               </View>
             ) : null}
 
             <>
               <View style={styles.valueRow}>
-                <Reanimated.Text style={[styles.valueMetric, heroInkStyle]} numberOfLines={1}>
-                  {formatWeightForLoad(Math.max(0, heroW), useKg)}
-                </Reanimated.Text>
+                <TextInput
+                  ref={weightInputRef}
+                  key={`${setId}-weight`}
+                  style={[styles.valueInput, { color: heroValueColor }]}
+                  defaultValue={weightDefault}
+                  onChangeText={t => {
+                    weightDraftRef.current = t;
+                  }}
+                  onBlur={commitWeight}
+                  keyboardType="decimal-pad"
+                  selectTextOnFocus
+                  editable={metricsEditable}
+                  placeholder="0"
+                  placeholderTextColor={heroValueColor}
+                  underlineColorAndroid="transparent"
+                />
                 <Text style={[styles.valueMetric, { color: UNIT_INK }]}>{weightUnit}</Text>
               </View>
               <View style={styles.valueRow}>
-                <Reanimated.Text style={[styles.valueMetric, heroInkStyle]} numberOfLines={1}>
-                  {heroR}
-                </Reanimated.Text>
+                <TextInput
+                  ref={repsInputRef}
+                  key={`${setId}-reps`}
+                  style={[styles.valueInput, { color: heroValueColor }]}
+                  defaultValue={repsDefault}
+                  onChangeText={t => {
+                    repsDraftRef.current = t;
+                  }}
+                  onBlur={commitReps}
+                  keyboardType={heroEx.isTimeBased ? 'decimal-pad' : 'number-pad'}
+                  selectTextOnFocus
+                  editable={metricsEditable}
+                  placeholder="0"
+                  placeholderTextColor={heroValueColor}
+                  underlineColorAndroid="transparent"
+                />
                 <Text style={[styles.valueMetric, { color: UNIT_INK }]}>
                   {heroEx.isTimeBased ? 'sec' : 'reps'}
                 </Text>
@@ -235,7 +393,12 @@ export function ExploreV2CurrentCard({
               ]}
               onPress={() => {
                 if (inlineRestActive) onSkipRest();
-                else void onLogNextSet();
+                else {
+                  // Commit pending inputs before logging so save uses the same values the user sees
+                  commitWeight();
+                  commitReps();
+                  void onLogNextSet();
+                }
               }}
               disabled={inlineRestActive ? false : !showPrimaryCta}
               activeOpacity={0.88}
@@ -356,23 +519,30 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   perSideRow: {
+    marginBottom: 0,
+  },
+  perSideCluster: {
     flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    borderBottomWidth: 1,
-    borderBottomColor: '#464646',
-    paddingBottom: 8,
-    marginBottom: 16,
+    alignItems: 'baseline',
+    flexWrap: 'wrap',
+    gap: 3,
+  },
+  perSideNumUnit: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: 2,
   },
   perSideValue: {
-    ...TYPOGRAPHY.legal,
+    ...TYPOGRAPHY.body,
     fontWeight: '400',
-    color: VALUE_INK,
+  },
+  perSideUnit: {
+    ...TYPOGRAPHY.body,
+    fontWeight: '400',
   },
   perSideLabel: {
-    ...TYPOGRAPHY.legal,
+    ...TYPOGRAPHY.body,
     fontWeight: '400',
-    color: UNIT_INK,
   },
   valueRow: {
     flexDirection: 'row',
@@ -386,6 +556,17 @@ const styles = StyleSheet.create({
     fontWeight: '400',
     letterSpacing: -0.5,
     fontVariant: ['tabular-nums'],
+  },
+  valueInput: {
+    fontSize: 80,
+    fontWeight: '400',
+    letterSpacing: -0.5,
+    fontVariant: ['tabular-nums'],
+    minWidth: 48,
+    padding: 0,
+    margin: 0,
+    borderWidth: 0,
+    backgroundColor: 'transparent',
   },
   footer: {
     flexDirection: 'row',
