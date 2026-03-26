@@ -1,15 +1,16 @@
-import React, { useEffect, useRef, useCallback, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useRef, useCallback, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Pressable, Animated, Easing } from 'react-native';
 import { Platform } from 'react-native';
 import Reanimated, {
   useAnimatedStyle,
   interpolateColor,
+  useSharedValue,
   type SharedValue,
 } from 'react-native-reanimated';
-import { Swipeable } from 'react-native-gesture-handler';
+import { Swipeable, TouchableOpacity as GestureTouchableOpacity } from 'react-native-gesture-handler';
 import { EXPLORE_V2 } from './exploreV2Tokens';
 import { EXPLORE_V2_PALETTES } from './exploreV2ColorSystem';
-import { TYPOGRAPHY } from '../../constants';
+import { COLORS, TYPOGRAPHY } from '../../constants';
 import { IconChevronDown, IconTrash } from '../icons';
 import type { ExploreV2Group } from './exploreV2Types';
 
@@ -30,6 +31,7 @@ type Props = {
   coveredBottomRadius: number;
   timerThemeActive: boolean;
   restThemeProgress: SharedValue<number>;
+  exploreV2WorkBlueProgress: SharedValue<number>;
 };
 
 function groupHasAnyLoggedSet(group: ExploreV2Group, completedSets: Set<string>): boolean {
@@ -61,7 +63,7 @@ const SUPER_SCRIPT_LINE_HEIGHT = TYPOGRAPHY.legal.fontSize;
 /** Extra right inset so the title text wraps before the overlay column (overlay is outside text flow). */
 const TITLE_SUPER_RESERVE_RIGHT = Math.ceil(SUPER_SCRIPT_FONT_SIZE * 1.6);
 /** Nudge right from line end; large values can hit swipe row `overflow: hidden` (clamped below) */
-const SUPER_SCRIPT_OFFSET_RIGHT = 10;
+const SUPER_SCRIPT_OFFSET_RIGHT = 16;
 const SUPER_SCRIPT_OFFSET_DOWN = 4;
 
 function estimateSuperscriptWidthPx(digitCount: number, fontSize: number): number {
@@ -111,6 +113,8 @@ type UpNextQueueRowProps = {
   groupHasProgress: boolean;
   isLast: boolean;
   restThemeProgress: SharedValue<number>;
+  restChromeGateSV: SharedValue<number>;
+  exploreV2WorkBlueProgress: SharedValue<number>;
   onSelectGroup: (groupIndex: number) => void;
   onRemoveGroupFromUpNext: (groupIndex: number) => void | Promise<void>;
   onSwipeableOpen: (direction: 'left' | 'right', swipeable: Swipeable) => void;
@@ -129,24 +133,38 @@ function UpNextQueueRow({
   groupHasProgress,
   isLast,
   restThemeProgress,
+  restChromeGateSV,
+  exploreV2WorkBlueProgress,
   onSelectGroup,
   onRemoveGroupFromUpNext,
   onSwipeableOpen,
   onSwipeableClose,
 }: UpNextQueueRowProps) {
-  const rowFrontBgStyle = useAnimatedStyle(() => ({
-    backgroundColor: interpolateColor(
-      restThemeProgress.value,
-      [0, 1],
-      [EXPLORE_V2_PALETTES.upNext.main, '#E78B0B'],
-    ),
-  }));
-  const superscriptColorStyle = useAnimatedStyle(() => ({
-    color: interpolateColor(
-      restThemeProgress.value,
-      [0, 1],
-      [ROW_SUPER_INK, EXPLORE_V2.colors.restTimerHeaderInk],
-    ),
+  const workUpNextBg = EXPLORE_V2.colors.workTimerUpNextCardBg;
+  const rowFrontBgStyle = useAnimatedStyle(() => {
+    const b = restThemeProgress.value;
+    const w = exploreV2WorkBlueProgress.value;
+    const g = restChromeGateSV.value;
+    const rowFillAtBand = interpolateColor(w, [0, 1], [
+      interpolateColor(b * g, [0, 1], [EXPLORE_V2_PALETTES.upNext.main, '#E78B0B']),
+      workUpNextBg,
+    ]);
+    return {
+      backgroundColor: interpolateColor(b, [0, 1], [EXPLORE_V2_PALETTES.upNext.main, rowFillAtBand]),
+    };
+  });
+  const superscriptColorStyle = useAnimatedStyle(() => {
+    const b = restThemeProgress.value;
+    const w = exploreV2WorkBlueProgress.value;
+    const g = restChromeGateSV.value;
+    const p = b * g * (1 - w);
+    const restCol = interpolateColor(p, [0, 1], [ROW_SUPER_INK, EXPLORE_V2.colors.restTimerHeaderInk]);
+    return {
+      color: interpolateColor(b * w, [0, 1], [restCol, EXPLORE_V2.colors.pageBg]),
+    };
+  });
+  const rowNameInkStyle = useAnimatedStyle(() => ({
+    color: interpolateColor(exploreV2WorkBlueProgress.value, [0, 1], [ROW_NAME_INK, EXPLORE_V2.colors.pageBg]),
   }));
   const swipeProgressRef = useRef<Animated.AnimatedInterpolation<number> | null>(null);
   const borderPrimedRef = useRef(false);
@@ -179,7 +197,7 @@ function UpNextQueueRow({
             }
             return (
               <View style={styles.swipeDeleteStrip}>
-                <TouchableOpacity
+                <GestureTouchableOpacity
                   style={styles.swipeDeleteBtn}
                   onPress={() => {
                     swipeable.close();
@@ -190,7 +208,7 @@ function UpNextQueueRow({
                   accessibilityLabel="Remove from queue"
                 >
                   <IconTrash size={22} color={SWIPE_DELETE_ICON_COLOR} />
-                </TouchableOpacity>
+                </GestureTouchableOpacity>
               </View>
             );
           }}
@@ -198,7 +216,7 @@ function UpNextQueueRow({
           friction={2}
         >
           <Reanimated.View style={[styles.rowSwipeFront, rowFrontBgStyle]}>
-            <TouchableOpacity
+            <GestureTouchableOpacity
               style={styles.rowMain}
               disabled={groupHasProgress}
               onPress={() => onSelectGroup(groupIndex)}
@@ -213,8 +231,8 @@ function UpNextQueueRow({
                     if (w > 0) setTitleBlockWidth(w);
                   }}
                 >
-                  <Text
-                    style={[styles.name, { color: ROW_NAME_INK }]}
+                  <Reanimated.Text
+                    style={[styles.name, rowNameInkStyle]}
                     numberOfLines={2}
                     onTextLayout={e => {
                       const lines = e.nativeEvent.lines.map(l => ({
@@ -228,22 +246,23 @@ function UpNextQueueRow({
                     }}
                   >
                     {title}
-                  </Text>
+                  </Reanimated.Text>
                   {overlayPos ? (
-                    <Reanimated.Text
-                      style={[
-                        styles.superScriptOverlay,
-                        { top: overlayPos.top, left: overlayPos.left },
-                        superscriptColorStyle,
-                      ]}
+                    <View
                       pointerEvents="none"
+                      style={[
+                        styles.superScriptOverlayWrap,
+                        { top: overlayPos.top, left: overlayPos.left },
+                      ]}
                     >
-                      {roundsStr}
-                    </Reanimated.Text>
+                      <Reanimated.Text style={[styles.superScriptOverlayText, superscriptColorStyle]}>
+                        {roundsStr}
+                      </Reanimated.Text>
+                    </View>
                   ) : null}
                 </View>
               </View>
-            </TouchableOpacity>
+            </GestureTouchableOpacity>
           </Reanimated.View>
         </Swipeable>
         {rowBorderLayer && swipeProgressRef.current != null ? (
@@ -275,9 +294,16 @@ export function ExploreV2UpNextCard({
   isExpanded,
   frontBottomRadius,
   coveredBottomRadius,
-  timerThemeActive: _timerThemeActive,
+  timerThemeActive,
   restThemeProgress,
+  exploreV2WorkBlueProgress,
 }: Props) {
+  /** Mirrors `timerThemeActive` on UI thread — multiplies theme progress so chrome snaps idle when rest ends. */
+  const restChromeGateSV = useSharedValue(timerThemeActive ? 1 : 0);
+  useLayoutEffect(() => {
+    restChromeGateSV.value = timerThemeActive ? 1 : 0;
+  }, [timerThemeActive]);
+
   const activeSwipeRowRef = useRef<Swipeable | null>(null);
 
   const onQueueRowSwipeOpen = useCallback((_direction: 'left' | 'right', swipeable: Swipeable) => {
@@ -294,32 +320,60 @@ export function ExploreV2UpNextCard({
     }
   }, []);
 
-  const headerChromeAnimatedStyle = useAnimatedStyle(() => ({
-    color: interpolateColor(restThemeProgress.value, [0, 1], [HEADER_INK, EXPLORE_V2.colors.restTimerHeaderInk]),
-  }));
-  const addExerciseLinkAnimatedStyle = useAnimatedStyle(() => ({
-    color: interpolateColor(restThemeProgress.value, [0, 1], [HEADER_INK, EXPLORE_V2.colors.restTimerHeaderInk]),
-    borderBottomColor: interpolateColor(
-      restThemeProgress.value,
-      [0, 1],
-      [HEADER_INK, EXPLORE_V2.colors.restTimerHeaderInk],
-    ),
-  }));
+  const workUpNextBg = EXPLORE_V2.colors.workTimerUpNextCardBg;
+  const headerChromeAnimatedStyle = useAnimatedStyle(() => {
+    const b = restThemeProgress.value;
+    const w = exploreV2WorkBlueProgress.value;
+    const g = restChromeGateSV.value;
+    const pRest = b * g * (1 - w);
+    const pWork = b * w;
+    const restCol = interpolateColor(pRest, [0, 1], [HEADER_INK, EXPLORE_V2.colors.restTimerHeaderInk]);
+    return {
+      color: interpolateColor(pWork, [0, 1], [restCol, EXPLORE_V2.colors.pageBg]),
+    };
+  });
+  const addExerciseLinkAnimatedStyle = useAnimatedStyle(() => {
+    const b = restThemeProgress.value;
+    const w = exploreV2WorkBlueProgress.value;
+    const g = restChromeGateSV.value;
+    const pRest = b * g * (1 - w);
+    const pWork = b * w;
+    const restCol = interpolateColor(pRest, [0, 1], [HEADER_INK, EXPLORE_V2.colors.restTimerHeaderInk]);
+    const c = interpolateColor(pWork, [0, 1], [restCol, EXPLORE_V2.colors.pageBg]);
+    return {
+      color: c,
+      borderBottomColor: c,
+    };
+  });
   const chevronIdleOpacityStyle = useAnimatedStyle(() => ({
-    opacity: 1 - restThemeProgress.value,
+    opacity: 1 - restThemeProgress.value * (1 - exploreV2WorkBlueProgress.value),
   }));
   const chevronTimerOpacityStyle = useAnimatedStyle(() => ({
-    opacity: restThemeProgress.value,
+    opacity: restThemeProgress.value * (1 - exploreV2WorkBlueProgress.value),
+  }));
+  const chevronWorkOpacityStyle = useAnimatedStyle(() => ({
+    opacity: restThemeProgress.value * exploreV2WorkBlueProgress.value,
   }));
 
   const bottomCornerRadius = isExpanded ? frontBottomRadius : coveredBottomRadius;
-  const shellAnimatedStyle = useAnimatedStyle(() => ({
-    backgroundColor: interpolateColor(restThemeProgress.value, [0, 1], [palette.main, '#E78B0B']),
-    borderColor: interpolateColor(restThemeProgress.value, [0, 1], [EXPLORE_V2.colors.pageBg, '#FFA424']),
-  }));
-  const scrollBgAnimatedStyle = useAnimatedStyle(() => ({
-    backgroundColor: interpolateColor(restThemeProgress.value, [0, 1], [palette.main, '#E78B0B']),
-  }));
+  const shellAnimatedStyle = useAnimatedStyle(() => {
+    const b = restThemeProgress.value;
+    const w = exploreV2WorkBlueProgress.value;
+    const whenUpBg = interpolateColor(w, [0, 1], ['#E78B0B', workUpNextBg]);
+    const whenUpBorder = interpolateColor(w, [0, 1], ['#FFA424', COLORS.info]);
+    return {
+      backgroundColor: interpolateColor(b, [0, 1], [palette.main, whenUpBg]),
+      borderColor: interpolateColor(b, [0, 1], [EXPLORE_V2.colors.pageBg, whenUpBorder]),
+    };
+  });
+  const scrollBgAnimatedStyle = useAnimatedStyle(() => {
+    const b = restThemeProgress.value;
+    const w = exploreV2WorkBlueProgress.value;
+    const whenUpBg = interpolateColor(w, [0, 1], ['#E78B0B', workUpNextBg]);
+    return {
+      backgroundColor: interpolateColor(b, [0, 1], [palette.main, whenUpBg]),
+    };
+  });
   const showAddExercise = isExpanded && allowAddExercise;
   const swapProgress = useRef(new Animated.Value(showAddExercise ? 1 : 0)).current;
 
@@ -366,7 +420,7 @@ export function ExploreV2UpNextCard({
         <View style={styles.countOrPlusSlot}>
           <Animated.View
             style={[styles.addExerciseLayer, addLayerStyle]}
-            pointerEvents={showAddExercise ? 'auto' : 'none'}
+            pointerEvents={showAddExercise ? 'box-none' : 'none'}
           >
             <TouchableOpacity
               onPress={onOpenAddExercise}
@@ -382,14 +436,15 @@ export function ExploreV2UpNextCard({
             </TouchableOpacity>
           </Animated.View>
           <Animated.View style={[styles.chevronLayer, chevronLayerStyle]} pointerEvents="none">
-            <View style={styles.chevronDualWrap}>
-              <Animated.View style={[styles.chevronTintLayer, chevronIdleOpacityStyle]} pointerEvents="none">
-                <IconChevronDown size={18} color={HEADER_INK} />
-              </Animated.View>
-              <Animated.View style={[styles.chevronTintLayer, chevronTimerOpacityStyle]} pointerEvents="none">
-                <IconChevronDown size={18} color={EXPLORE_V2.colors.restTimerHeaderInk} />
-              </Animated.View>
-            </View>
+            <Reanimated.View style={[styles.chevronLayer, chevronIdleOpacityStyle]} pointerEvents="none">
+              <IconChevronDown size={18} color={HEADER_INK} />
+            </Reanimated.View>
+            <Reanimated.View style={[styles.chevronLayer, chevronTimerOpacityStyle]} pointerEvents="none">
+              <IconChevronDown size={18} color={EXPLORE_V2.colors.restTimerHeaderInk} />
+            </Reanimated.View>
+            <Reanimated.View style={[styles.chevronLayer, chevronWorkOpacityStyle]} pointerEvents="none">
+              <IconChevronDown size={18} color={EXPLORE_V2.colors.pageBg} />
+            </Reanimated.View>
           </Animated.View>
         </View>
       </Pressable>
@@ -436,6 +491,8 @@ export function ExploreV2UpNextCard({
               groupHasProgress={started}
               isLast={isLast}
               restThemeProgress={restThemeProgress}
+              restChromeGateSV={restChromeGateSV}
+              exploreV2WorkBlueProgress={exploreV2WorkBlueProgress}
               onSelectGroup={onSelectGroup}
               onRemoveGroupFromUpNext={onRemoveGroupFromUpNext}
               onSwipeableOpen={onQueueRowSwipeOpen}
@@ -481,6 +538,7 @@ const styles = StyleSheet.create({
     paddingLeft: 24,
     paddingRight: HEADER_PADDING_RIGHT,
     paddingBottom: 0,
+    overflow: 'hidden',
   },
   peekTapOverlay: {
     ...StyleSheet.absoluteFillObject,
@@ -488,12 +546,13 @@ const styles = StyleSheet.create({
   },
   countOrPlusSlot: {
     width: 38,
-    height: 38,
+    height: 32,
     position: 'relative',
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'visible',
   },
+  /** Wide hit area for layout only — use `pointerEvents="box-none"` so empty space does not steal taps on the queue below. */
   addExerciseLayer: {
     position: 'absolute',
     right: 0,
@@ -523,16 +582,6 @@ const styles = StyleSheet.create({
     flexShrink: 0,
     paddingBottom: 2,
     borderBottomWidth: 1,
-  },
-  chevronDualWrap: {
-    ...StyleSheet.absoluteFillObject,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  chevronTintLayer: {
-    ...StyleSheet.absoluteFillObject,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   headerLabel: {
     ...TYPOGRAPHY.legal,
@@ -616,9 +665,12 @@ const styles = StyleSheet.create({
     fontWeight: '400',
     flexShrink: 1,
   },
-  superScriptOverlay: {
+  /** Non-interactive wrapper so set-count never steals taps (e.g. on last word of title like “… Press”). */
+  superScriptOverlayWrap: {
     position: 'absolute',
     zIndex: 2,
+  },
+  superScriptOverlayText: {
     ...TYPOGRAPHY.legal,
     fontWeight: '700',
     lineHeight: SUPER_SCRIPT_LINE_HEIGHT,

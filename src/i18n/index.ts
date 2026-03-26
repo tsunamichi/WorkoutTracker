@@ -169,6 +169,7 @@ type TranslationKey =
   | 'viewHistory'
   | 'hideHistory'
   | 'noHistoryRecordedYet'
+  | 'latestExerciseLog'
   | 'alertCompleteExerciseTitle'
   | 'alertCompleteExerciseMessage'
   | 'alertResetExerciseTitle'
@@ -199,6 +200,7 @@ type TranslationKey =
   | 'deleteExerciseTitle'
   | 'deleteExerciseMessage'
   | 'delete'
+  | 'remove'
   | 'featureComingSoon'
   | 'noExercisesLeft'
   | 'deleteTemplateInstead'
@@ -468,6 +470,10 @@ type TranslationKey =
   | 'unit'
   | 'defaultRestTime'
   | 'restTime'
+  | 'exploreV2TimerLabelRest'
+  | 'exploreV2TimerLabelSwitchSides'
+  | 'exploreV2TimerLabelLeftSide'
+  | 'exploreV2TimerLabelRightSide'
   | 'betweenSets'
   | 'monthlyProgressCheck'
   | 'monthlyProgressReminder'
@@ -480,6 +486,7 @@ type TranslationKey =
   | 'addWeightEntry'
   | 'weightPlaceholder'
   | 'cancel'
+  | 'close'
   | 'add'
   | 'addWorkoutFor'
   | 'singleWorkoutDescription'
@@ -1062,6 +1069,10 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     unit: 'unit',
     defaultRestTime: 'Default Rest Time',
     restTime: 'rest time',
+    exploreV2TimerLabelRest: 'Rest',
+    exploreV2TimerLabelSwitchSides: 'Switch sides',
+    exploreV2TimerLabelLeftSide: 'Left side',
+    exploreV2TimerLabelRightSide: 'Right side',
     betweenSets: 'between sets',
     monthlyProgressCheck: 'Monthly progress check',
     monthlyProgressReminder: 'Reminder on day {day} of each month',
@@ -1076,6 +1087,7 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     addWeightEntry: 'Add Weight Entry',
     weightPlaceholder: 'Weight ({unit})',
     cancel: 'Cancel',
+    close: 'Close',
     remove: 'Remove',
     add: 'Add',
     addWorkoutFor: 'Add workout for',
@@ -1667,6 +1679,10 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     unit: 'unidad',
     defaultRestTime: 'Descanso por defecto',
     restTime: 'descanso',
+    exploreV2TimerLabelRest: 'Descanso',
+    exploreV2TimerLabelSwitchSides: 'Cambia de lado',
+    exploreV2TimerLabelLeftSide: 'Lado izquierdo',
+    exploreV2TimerLabelRightSide: 'Lado derecho',
     betweenSets: 'entre series',
     monthlyProgressCheck: 'Revision mensual',
     monthlyProgressReminder: 'Recordatorio el dia {day} de cada mes',
@@ -1681,6 +1697,7 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     addWeightEntry: 'Agregar peso',
     weightPlaceholder: 'Peso ({unit})',
     cancel: 'Cancelar',
+    close: 'Cerrar',
     remove: 'Eliminar',
     add: 'Agregar',
     addWorkoutFor: 'Agregar entrenamiento para',

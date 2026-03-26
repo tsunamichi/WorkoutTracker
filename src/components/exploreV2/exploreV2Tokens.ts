@@ -68,6 +68,9 @@ export const EXPLORE_V2 = {
     restTimerHeaderInk: '#915100',
     /** Rest timer active — unit suffixes in Completed list (kg, reps, s) */
     restTimerCompletedUnitInk: '#C87000',
+    /** Work timer active — Completed / Up Next card fills (matches page blue family) */
+    workTimerCompleteCardBg: '#002CEA',
+    workTimerUpNextCardBg: '#0028D3',
   },
   motion: {
     currentExitMs: 300,

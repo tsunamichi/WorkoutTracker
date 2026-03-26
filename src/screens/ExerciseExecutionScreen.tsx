@@ -481,6 +481,8 @@ export function ExerciseExecutionScreen() {
 
   const [showAddExerciseDrawer, setShowAddExerciseDrawer] = useState(false);
   const exploreV2TimerBandProgress = useSharedValue(0);
+  /** 1 while explore-v2 work timer surface is active — tints page + card rim blue vs rest orange */
+  const exploreV2WorkBlueProgress = useSharedValue(0);
   /** Measured height of `exploreV2Root` — drives % split (stack vs timer) as pixel heights */
   const exploreV2RootHeight = useSharedValue(0);
   const executionMode: ExecutionMode = 'explore-v2';
@@ -556,8 +558,26 @@ export function ExerciseExecutionScreen() {
   const [inlineRestTotal, setInlineRestTotal] = useState(0);
   const [inlineRestPaused, setInlineRestPaused] = useState(false);
   const [inlineRestIsLastSet, setInlineRestIsLastSet] = useState(false);
+  /** Explore v2: time-based work + switch-sides use the same hero strip as rest (no bottom sheet). */
+  const [inlineExploreWorkActive, setInlineExploreWorkActive] = useState(false);
+  const [inlineExploreSwitchActive, setInlineExploreSwitchActive] = useState(false);
+  const [inlineExploreWorkTimeLeft, setInlineExploreWorkTimeLeft] = useState(0);
+  const [inlineExploreSwitchTimeLeft, setInlineExploreSwitchTimeLeft] = useState(0);
+  const [inlineExploreWorkPaused, setInlineExploreWorkPaused] = useState(false);
+  const [inlineExploreSwitchPaused, setInlineExploreSwitchPaused] = useState(false);
   const inlineRestEndTimeRef = useRef<number>(0);
   const inlineRestTotalMsRef = useRef<number>(0);
+  const inlineExploreWorkEndRef = useRef(0);
+  const inlineExploreWorkTotalMsRef = useRef(0);
+  const inlineExploreWorkStartRef = useRef(0);
+  const inlineExploreSwitchEndRef = useRef(0);
+  const inlineExploreSwitchTotalMsRef = useRef(0);
+  const inlineExploreSwitchStartRef = useRef(0);
+  /** After first work leg of a per-side time-based exercise, true until `handleComplete` */
+  const exploreWorkAwaitingSecondLegRef = useRef(false);
+  const exploreWorkDurationSecRef = useRef(30);
+  /** Which countdown owns the RAF/interval (rest | work | switch) */
+  const exploreActiveCountdownRef = useRef<'rest' | 'work' | 'switch' | null>(null);
   const inlineRestProgress = useRef(new Animated.Value(1)).current;
   const restStagger = useRef({
     timerLabel: new Animated.Value(0),
@@ -592,13 +612,30 @@ export function ExerciseExecutionScreen() {
   const REST_EASE = ReanimatedEasing.bezier(...EXPLORE_V2.motion.rest.restTransitionEase);
   const REST_MS = EXPLORE_V2.motion.rest.colorMs;
 
+  const exploreV2RestHeroBg = '#FFA424';
+
   useEffect(() => {
     if (executionMode !== 'explore-v2') return;
-    exploreV2TimerBandProgress.value = withTiming(inlineRestActive ? 1 : 0, {
+    const bandUp =
+      inlineRestActive || inlineExploreWorkActive || inlineExploreSwitchActive;
+    exploreV2TimerBandProgress.value = withTiming(bandUp ? 1 : 0, {
       duration: REST_MS,
       easing: REST_EASE,
     });
-  }, [executionMode, inlineRestActive]);
+  }, [
+    executionMode,
+    inlineRestActive,
+    inlineExploreWorkActive,
+    inlineExploreSwitchActive,
+  ]);
+
+  useEffect(() => {
+    if (executionMode !== 'explore-v2') return;
+    exploreV2WorkBlueProgress.value = withTiming(inlineExploreWorkActive ? 1 : 0, {
+      duration: REST_MS,
+      easing: REST_EASE,
+    });
+  }, [executionMode, inlineExploreWorkActive]);
 
   /** Idle: timer 0%, stack 100%. Rest: timer `REST_TIMER_FRAC`, stack `REST_STACK_FRAC` of content height */
   const exploreV2TimerBandAnimatedStyle = useAnimatedStyle(() => {
@@ -619,21 +656,23 @@ export function ExerciseExecutionScreen() {
     };
   }, [screenHeight, REST_STACK_FRAC]);
 
-  const exploreV2PageBgAnimatedStyle = useAnimatedStyle(() => ({
-    backgroundColor: interpolateColor(
-      exploreV2TimerBandProgress.value,
-      [0, 1],
-      [EXPLORE_V2.colors.pageBg, '#FFA424'],
-    ),
-  }));
+  const exploreV2PageBgAnimatedStyle = useAnimatedStyle(() => {
+    const p = exploreV2TimerBandProgress.value;
+    const w = exploreV2WorkBlueProgress.value;
+    const activeTint = interpolateColor(w, [0, 1], [exploreV2RestHeroBg, COLORS.info]);
+    return {
+      backgroundColor: interpolateColor(p, [0, 1], [EXPLORE_V2.colors.pageBg, activeTint]),
+    };
+  });
 
-  const exploreV2ContentWrapBgAnimatedStyle = useAnimatedStyle(() => ({
-    backgroundColor: interpolateColor(
-      exploreV2TimerBandProgress.value,
-      [0, 1],
-      [EXPLORE_V2.colors.pageBg, '#FFA424'],
-    ),
-  }));
+  const exploreV2ContentWrapBgAnimatedStyle = useAnimatedStyle(() => {
+    const p = exploreV2TimerBandProgress.value;
+    const w = exploreV2WorkBlueProgress.value;
+    const activeTint = interpolateColor(w, [0, 1], [exploreV2RestHeroBg, COLORS.info]);
+    return {
+      backgroundColor: interpolateColor(p, [0, 1], [EXPLORE_V2.colors.pageBg, activeTint]),
+    };
+  });
   const exploreV2HeaderInk = '#1F1F1F';
   const historyOpacity = useRef(new Animated.Value(0)).current;
   
@@ -728,16 +767,47 @@ export function ExerciseExecutionScreen() {
   const restRafRef = useRef<number | null>(null);
   const restStartTimeRef = useRef<number>(0);
 
-  // Inline rest timer: border progress at 60fps (RAF), countdown text + completion at interval.
+  // Inline rest / work / switch countdown: shared border progress (RAF) + 1s resolution completion.
+  // Completion handlers use refs (wired after `handleComplete`) to avoid stale closures.
+  const exploreCountdownOnRestDoneRef = useRef<() => void>(() => {});
+  const exploreCountdownOnWorkDoneRef = useRef<() => void>(() => {});
+  const exploreCountdownOnSwitchDoneRef = useRef<() => void>(() => {});
+
   useEffect(() => {
-    if (!inlineRestActive || inlineRestPaused) return;
+    const mode: 'rest' | 'work' | 'switch' | null =
+      inlineExploreWorkActive && !inlineExploreWorkPaused
+        ? 'work'
+        : inlineExploreSwitchActive && !inlineExploreSwitchPaused
+          ? 'switch'
+          : inlineRestActive && !inlineRestPaused
+            ? 'rest'
+            : null;
+    exploreActiveCountdownRef.current = mode;
+
+    if (!mode) return;
 
     const tick = () => {
-      const totalMs = inlineRestTotalMsRef.current;
-      const endTime = inlineRestEndTimeRef.current;
+      const m = exploreActiveCountdownRef.current;
+      if (!m) return;
+      let totalMs = 0;
+      let endTime = 0;
+      let startTime = 0;
+      if (m === 'work') {
+        totalMs = inlineExploreWorkTotalMsRef.current;
+        endTime = inlineExploreWorkEndRef.current;
+        startTime = inlineExploreWorkStartRef.current;
+      } else if (m === 'switch') {
+        totalMs = inlineExploreSwitchTotalMsRef.current;
+        endTime = inlineExploreSwitchEndRef.current;
+        startTime = inlineExploreSwitchStartRef.current;
+      } else {
+        totalMs = inlineRestTotalMsRef.current;
+        endTime = inlineRestEndTimeRef.current;
+        startTime = restStartTimeRef.current;
+      }
       if (totalMs <= 0) return;
       const now = Date.now();
-      const elapsed = now - restStartTimeRef.current;
+      const elapsed = now - startTime;
       const timeLeft = Math.max(0, endTime - now);
       const progress =
         elapsed < REST_BORDER_INTRO_MS ? 1 : Math.min(1, timeLeft / totalMs);
@@ -747,17 +817,32 @@ export function ExerciseExecutionScreen() {
     restRafRef.current = requestAnimationFrame(tick);
 
     const interval = setInterval(() => {
-      const timeLeft = Math.max(0, inlineRestEndTimeRef.current - Date.now());
+      const m = exploreActiveCountdownRef.current;
+      if (!m) return;
+      let end = 0;
+      if (m === 'work') end = inlineExploreWorkEndRef.current;
+      else if (m === 'switch') end = inlineExploreSwitchEndRef.current;
+      else end = inlineRestEndTimeRef.current;
+      const timeLeft = Math.max(0, end - Date.now());
       const remainingSec = Math.max(0, Math.ceil(timeLeft / 1000));
-      setInlineRestTimeLeft(remainingSec);
+      if (m === 'work') setInlineExploreWorkTimeLeft(remainingSec);
+      else if (m === 'switch') setInlineExploreSwitchTimeLeft(remainingSec);
+      else setInlineRestTimeLeft(remainingSec);
+
       if (remainingSec <= 0) {
         clearInterval(interval);
         if (restRafRef.current != null) {
           cancelAnimationFrame(restRafRef.current);
           restRafRef.current = null;
         }
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        runRestStaggerOut(() => inlineRestDismissRef.current());
+        if (m === 'rest') {
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          runRestStaggerOut(() => exploreCountdownOnRestDoneRef.current());
+        } else if (m === 'work') {
+          exploreCountdownOnWorkDoneRef.current();
+        } else {
+          exploreCountdownOnSwitchDoneRef.current();
+        }
       }
     }, 200);
 
@@ -768,7 +853,14 @@ export function ExerciseExecutionScreen() {
       }
       clearInterval(interval);
     };
-  }, [inlineRestActive, inlineRestPaused]);
+  }, [
+    inlineRestActive,
+    inlineRestPaused,
+    inlineExploreWorkActive,
+    inlineExploreWorkPaused,
+    inlineExploreSwitchActive,
+    inlineExploreSwitchPaused,
+  ]);
 
   const localRestRef = useRef<number | null>(localRestOverride);
   localRestRef.current = localRestOverride;
@@ -786,6 +878,33 @@ export function ExerciseExecutionScreen() {
     setInlineRestActive(true);
     inlineRestProgress.setValue(1);
   }, [settings.restTimerDefaultSeconds]);
+
+  const EXPLORE_V2_SWITCH_SIDES_SEC = 10;
+
+  const startInlineExploreSwitch = useCallback(() => {
+    const totalMs = EXPLORE_V2_SWITCH_SIDES_SEC * 1000;
+    setInlineExploreWorkActive(false);
+    inlineExploreSwitchStartRef.current = Date.now();
+    setInlineExploreSwitchPaused(false);
+    setInlineExploreSwitchTimeLeft(EXPLORE_V2_SWITCH_SIDES_SEC);
+    inlineExploreSwitchEndRef.current = Date.now() + totalMs;
+    inlineExploreSwitchTotalMsRef.current = totalMs;
+    setInlineExploreSwitchActive(true);
+    inlineRestProgress.setValue(1);
+  }, []);
+
+  const startInlineExploreWork = useCallback((durationSec: number) => {
+    const sec = Math.max(1, Math.round(durationSec));
+    const totalMs = sec * 1000;
+    setInlineExploreSwitchActive(false);
+    inlineExploreWorkStartRef.current = Date.now();
+    setInlineExploreWorkPaused(false);
+    setInlineExploreWorkTimeLeft(sec);
+    inlineExploreWorkEndRef.current = Date.now() + totalMs;
+    inlineExploreWorkTotalMsRef.current = totalMs;
+    setInlineExploreWorkActive(true);
+    inlineRestProgress.setValue(1);
+  }, []);
 
   const inlineRestDismissAndAdvance = () => {
     setInlineRestActive(false);
@@ -807,6 +926,12 @@ export function ExerciseExecutionScreen() {
 
   const inlineRestDismissRef = useRef(inlineRestDismissAndAdvance);
   inlineRestDismissRef.current = inlineRestDismissAndAdvance;
+
+  useEffect(() => {
+    exploreCountdownOnRestDoneRef.current = () => {
+      inlineRestDismissRef.current();
+    };
+  }, []);
 
   const handleInlineRestPauseToggle = () => {
     if (inlineRestPaused) {
@@ -839,6 +964,89 @@ export function ExerciseExecutionScreen() {
     if (end <= 0) return 0;
     return Math.max(0, Math.ceil((end - Date.now()) / 1000));
   }, [exploreV2RestSkipDisplayHoldSec, inlineRestActive, inlineRestPaused, inlineRestTimeLeft]);
+
+  const exploreV2HeroTimerDisplaySec = useMemo(() => {
+    if (inlineExploreWorkActive) {
+      if (inlineExploreWorkPaused) return inlineExploreWorkTimeLeft;
+      const end = inlineExploreWorkEndRef.current;
+      if (end <= 0) return 0;
+      return Math.max(0, Math.ceil((end - Date.now()) / 1000));
+    }
+    if (inlineExploreSwitchActive) {
+      if (inlineExploreSwitchPaused) return inlineExploreSwitchTimeLeft;
+      const end = inlineExploreSwitchEndRef.current;
+      if (end <= 0) return 0;
+      return Math.max(0, Math.ceil((end - Date.now()) / 1000));
+    }
+    return exploreV2RestTimerDisplaySec;
+  }, [
+    inlineExploreWorkActive,
+    inlineExploreWorkPaused,
+    inlineExploreWorkTimeLeft,
+    inlineExploreSwitchActive,
+    inlineExploreSwitchPaused,
+    inlineExploreSwitchTimeLeft,
+    exploreV2RestTimerDisplaySec,
+  ]);
+
+  const exploreV2TimerPhase = useMemo(() => {
+    if (executionMode !== 'explore-v2') return 'none' as const;
+    if (inlineRestActive) return 'rest' as const;
+    if (inlineExploreSwitchActive) return 'switchSides' as const;
+    if (inlineExploreWorkActive) return 'work' as const;
+    return 'none' as const;
+  }, [
+    executionMode,
+    inlineRestActive,
+    inlineExploreSwitchActive,
+    inlineExploreWorkActive,
+  ]);
+
+  const exploreV2TimerContextLabel = useMemo(() => {
+    if (executionMode !== 'explore-v2') return null;
+    if (inlineRestActive) return t('exploreV2TimerLabelRest');
+    if (inlineExploreSwitchActive) return t('exploreV2TimerLabelSwitchSides');
+    if (inlineExploreWorkActive) {
+      const group = exerciseGroups[expandedGroupIndex];
+      const ex = group?.exercises[activeExerciseIndex];
+      if (!ex?.isPerSide) return null;
+      return exploreWorkAwaitingSecondLegRef.current
+        ? t('exploreV2TimerLabelRightSide')
+        : t('exploreV2TimerLabelLeftSide');
+    }
+    return null;
+  }, [
+    executionMode,
+    t,
+    inlineRestActive,
+    inlineExploreSwitchActive,
+    inlineExploreWorkActive,
+    expandedGroupIndex,
+    exerciseGroups,
+    activeExerciseIndex,
+  ]);
+
+  const handleExploreV2HeroPauseToggle = () => {
+    if (inlineExploreWorkActive) {
+      if (inlineExploreWorkPaused) {
+        inlineExploreWorkEndRef.current = Date.now() + inlineExploreWorkTimeLeft * 1000;
+        setInlineExploreWorkPaused(false);
+      } else {
+        setInlineExploreWorkPaused(true);
+      }
+      return;
+    }
+    if (inlineExploreSwitchActive) {
+      if (inlineExploreSwitchPaused) {
+        inlineExploreSwitchEndRef.current = Date.now() + inlineExploreSwitchTimeLeft * 1000;
+        setInlineExploreSwitchPaused(false);
+      } else {
+        setInlineExploreSwitchPaused(true);
+      }
+      return;
+    }
+    handleInlineRestPauseToggle();
+  };
 
   // Track keyboard visibility for in-drawer Save button
   useEffect(() => {
@@ -874,7 +1082,9 @@ export function ExerciseExecutionScreen() {
       const currentRound = currentRounds[group.id] || 0;
       // Don't treat the active group as "completed" while its rest timer is running —
       // otherwise it jumps to the top mid-timer and snaps back when done
-      const isActiveWithTimer = inlineRestActive && index === expandedGroupIndex;
+      const isActiveWithTimer =
+        (inlineRestActive || inlineExploreWorkActive || inlineExploreSwitchActive) &&
+        index === expandedGroupIndex;
       const isCompleted = currentRound >= group.totalRounds && !isActiveWithTimer;
       const completionTime = completionTimestamps[group.id] || 0;
       return { group, index, isCompleted, completionTime };
@@ -897,7 +1107,16 @@ export function ExerciseExecutionScreen() {
     
     // Combine: completed first, then incomplete
     return [...completed.map(g => g.group), ...sortedIncomplete.map(g => g.group)];
-  }, [exerciseGroups, expandedGroupIndex, hasLoggedAnySet, currentRounds, completionTimestamps, inlineRestActive]);
+  }, [
+    exerciseGroups,
+    expandedGroupIndex,
+    hasLoggedAnySet,
+    currentRounds,
+    completionTimestamps,
+    inlineRestActive,
+    inlineExploreWorkActive,
+    inlineExploreSwitchActive,
+  ]);
   
   // Map to track original indices for group IDs
   const groupIdToOriginalIndex = useMemo(() => {
@@ -1485,7 +1704,13 @@ export function ExerciseExecutionScreen() {
   
   const handleComplete = async () => {
     if (expandedGroupIndex < 0) return;
-    
+
+    exploreWorkAwaitingSecondLegRef.current = false;
+    setInlineExploreWorkActive(false);
+    setInlineExploreSwitchActive(false);
+    setInlineExploreWorkPaused(false);
+    setInlineExploreSwitchPaused(false);
+
     const currentGroup = exerciseGroups[expandedGroupIndex];
     const currentRound = currentRounds[currentGroup.id] || 0;
     // Use ref so we always have the latest index (e.g. after advancing within same round in superset)
@@ -1535,8 +1760,22 @@ export function ExerciseExecutionScreen() {
       const nextExIsLast = nextExAfterRest >= currentGroup.exercises.length - 1;
       setInlineRestIsLastSet(isLastGroup && nextRoundIsLast && nextExIsLast);
       if (currentExercise.isTimeBased) {
-        setIsExerciseTimerPhase(false);
-        setShowTimer(true);
+        if (executionMode === 'explore-v2') {
+          counterShrinkAnim.setValue(1);
+          startInlineRest();
+          runRestStaggerIn();
+          if (allExercisesComplete && isLastRound) {
+            nextLabelAnim.setValue(0);
+            requestAnimationFrame(() => {
+              Animated.timing(counterShrinkAnim, {
+                toValue: 0, duration: 350, easing: Easing.out(Easing.cubic), useNativeDriver: false,
+              }).start();
+            });
+          }
+        } else {
+          setIsExerciseTimerPhase(false);
+          setShowTimer(true);
+        }
       } else {
         counterShrinkAnim.setValue(1);
         startInlineRest();
@@ -1620,10 +1859,64 @@ export function ExerciseExecutionScreen() {
     });
     advanceToNext(allExercisesComplete, newCompletedSets);
   };
-  
+
+  const handleCompleteRef = useRef(handleComplete);
+  handleCompleteRef.current = handleComplete;
+
+  useLayoutEffect(() => {
+    exploreCountdownOnWorkDoneRef.current = () => {
+      const gi = expandedGroupIndex;
+      const group = exerciseGroups[gi];
+      const exIdx = activeExerciseIndexRef.current;
+      const ex = group?.exercises[exIdx];
+      if (!group || !ex) {
+        setInlineExploreWorkActive(false);
+        return;
+      }
+      if (ex.isPerSide && !exploreWorkAwaitingSecondLegRef.current) {
+        exploreWorkAwaitingSecondLegRef.current = true;
+        setInlineExploreWorkActive(false);
+        startInlineExploreSwitch();
+        return;
+      }
+      exploreWorkAwaitingSecondLegRef.current = false;
+      setInlineExploreWorkActive(false);
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      void handleCompleteRef.current();
+    };
+    exploreCountdownOnSwitchDoneRef.current = () => {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Medium);
+      setInlineExploreSwitchActive(false);
+      startInlineExploreWork(exploreWorkDurationSecRef.current);
+    };
+  }, [expandedGroupIndex, exerciseGroups, startInlineExploreSwitch, startInlineExploreWork]);
+
+  const handleSkipExploreV2Timer = () => {
+    if (inlineRestActive) {
+      handleInlineRestSkip();
+      return;
+    }
+    if (inlineExploreSwitchActive) {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      setInlineExploreSwitchActive(false);
+      startInlineExploreWork(exploreWorkDurationSecRef.current);
+      return;
+    }
+    if (inlineExploreWorkActive) {
+      exploreWorkAwaitingSecondLegRef.current = false;
+      setInlineExploreWorkActive(false);
+      void handleCompleteRef.current();
+    }
+  };
+
   const advanceToNext = async (allExercisesComplete: boolean, newCompletedSets: Set<string>) => {
     setShowTimer(false);
     setInlineRestActive(false);
+    setInlineExploreWorkActive(false);
+    setInlineExploreSwitchActive(false);
+    setInlineExploreWorkPaused(false);
+    setInlineExploreSwitchPaused(false);
+    exploreWorkAwaitingSecondLegRef.current = false;
     
     const currentGroup = exerciseGroups[expandedGroupIndex];
     if (!currentGroup) {
@@ -1797,8 +2090,22 @@ export function ExerciseExecutionScreen() {
     if (currentExercise.isTimeBased) {
       const roundForTimer = currentRounds[currentGroup.id] ?? 0;
       pendingTimerSetRef.current = { exerciseId: currentExercise.id, round: roundForTimer };
-      setIsExerciseTimerPhase(true);
-      setShowTimer(true);
+      if (executionMode === 'explore-v2' && type === 'main') {
+        exploreWorkAwaitingSecondLegRef.current = false;
+        const displayVals = getSetDisplayValues(
+          currentExercise.id,
+          roundForTimer,
+          currentExercise.weight ?? 0,
+          Number(currentExercise.reps) ?? 0,
+        );
+        const sec = Number(displayVals.reps) || 30;
+        exploreWorkDurationSecRef.current = sec;
+        startInlineExploreWork(sec);
+        runRestStaggerIn();
+      } else {
+        setIsExerciseTimerPhase(true);
+        setShowTimer(true);
+      }
     } else {
       // For reps-based exercises, mark as complete immediately
       await handleComplete();
@@ -1814,7 +2121,13 @@ export function ExerciseExecutionScreen() {
   const handleRest = () => {
     setShowMenu(false);
     pendingTimerSetRef.current = null;
-    setShowTimer(true);
+    if (executionMode === 'explore-v2' && type === 'main') {
+      counterShrinkAnim.setValue(1);
+      startInlineRest();
+      runRestStaggerIn();
+    } else {
+      setShowTimer(true);
+    }
   };
 
   const handleCompleteAll = () => {
@@ -2525,8 +2838,9 @@ export function ExerciseExecutionScreen() {
                   exploreV2FrontGroupIndex !== null &&
                   canShowPrimaryCTAExploreV2(exploreV2FrontGroupIndex)
                 }
-                inlineRestActive={inlineRestActive}
-                onSkipRest={handleInlineRestSkip}
+                onSkipRest={handleSkipExploreV2Timer}
+                exploreV2TimerPhase={exploreV2TimerPhase}
+                exploreV2WorkBlueProgress={exploreV2WorkBlueProgress}
                 allComplete={isExploreV2WorkoutComplete}
                 type={type}
                 progressionGroups={progressionGroups}
@@ -2540,13 +2854,22 @@ export function ExerciseExecutionScreen() {
                 onOpenAddExercise={() => setShowAddExerciseDrawer(true)}
                 onRemoveGroupFromUpNext={removeGroupFromWorkoutByIndex}
                 allowAddExercise={type === 'main'}
-                timerThemeActive={inlineRestActive}
+                timerThemeActive={
+                  exploreV2TimerPhase === 'rest' || exploreV2TimerPhase === 'switchSides'
+                }
                 restThemeProgress={exploreV2TimerBandProgress}
+                getExerciseHistoryForDrawer={getExerciseHistoryForDrawer}
+                exerciseHistoryRefreshKey={refreshKey}
+                progressionValuesByItemId={progressionValuesByItemId}
               />
             </AnimatedReanimated.View>
             <View
               style={styles.exploreV2TimerOverlay}
-              pointerEvents={inlineRestActive ? 'box-none' : 'none'}
+              pointerEvents={
+                inlineRestActive || inlineExploreWorkActive || inlineExploreSwitchActive
+                  ? 'box-none'
+                  : 'none'
+              }
             >
               <View
                 style={[
@@ -2556,16 +2879,31 @@ export function ExerciseExecutionScreen() {
                     width: screenWidth - insets.left - insets.right,
                   },
                 ]}
-                pointerEvents={inlineRestActive ? 'box-none' : 'none'}
+                pointerEvents={
+                  inlineRestActive || inlineExploreWorkActive || inlineExploreSwitchActive
+                    ? 'box-none'
+                    : 'none'
+                }
               >
                 <ExploreV2TimerArea
                   layoutVariant="overlay"
-                  active={inlineRestActive}
+                  active={
+                    inlineRestActive || inlineExploreWorkActive || inlineExploreSwitchActive
+                  }
                   layoutProgress={exploreV2TimerBandProgress}
-                  timeLeftSec={exploreV2RestTimerDisplaySec}
-                  paused={inlineRestPaused}
-                  onPauseToggle={handleInlineRestPauseToggle}
+                  timeLeftSec={exploreV2HeroTimerDisplaySec}
+                  paused={
+                    inlineRestActive
+                      ? inlineRestPaused
+                      : inlineExploreWorkActive
+                        ? inlineExploreWorkPaused
+                        : inlineExploreSwitchPaused
+                  }
+                  onPauseToggle={handleExploreV2HeroPauseToggle}
                   progress={inlineRestProgress}
+                  contextLabel={exploreV2TimerContextLabel}
+                  workTimerVisualActive={inlineExploreWorkActive}
+                  exploreV2WorkBlueProgress={exploreV2WorkBlueProgress}
                 />
               </View>
             </View>
@@ -3293,7 +3631,7 @@ export function ExerciseExecutionScreen() {
       {/* Timer Sheet */}
       {expandedGroupIndex >= 0 && exerciseGroups[expandedGroupIndex] && (
         <SetTimerSheet
-          visible={showTimer}
+          visible={showTimer && executionMode !== 'explore-v2'}
           onComplete={() => {
             // CRITICAL: Do not call advanceToNext (or any setState) in this tick. Defer to next frame + macrotask so we are never in the same commit as SetTimerSheet (fixes "useInsertionEffect must not schedule updates").
             const currentGroup = exerciseGroups[expandedGroupIndex];

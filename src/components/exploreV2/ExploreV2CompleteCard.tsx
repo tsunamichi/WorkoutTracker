@@ -4,7 +4,7 @@ import { Platform } from 'react-native';
 import Animated, { useAnimatedStyle, interpolateColor, type SharedValue } from 'react-native-reanimated';
 import { EXPLORE_V2 } from './exploreV2Tokens';
 import { EXPLORE_V2_PALETTES } from './exploreV2ColorSystem';
-import { TYPOGRAPHY } from '../../constants';
+import { COLORS, TYPOGRAPHY } from '../../constants';
 import { IconChevronDown } from '../icons';
 import { formatWeightForLoad } from '../../utils/weight';
 import type { ExploreV2Group } from './exploreV2Types';
@@ -23,6 +23,7 @@ type Props = {
   coveredBottomRadius: number;
   timerThemeActive: boolean;
   restThemeProgress: SharedValue<number>;
+  exploreV2WorkBlueProgress: SharedValue<number>;
 };
 
 const palette = EXPLORE_V2_PALETTES.complete;
@@ -50,31 +51,61 @@ export function ExploreV2CompleteCard({
   coveredBottomRadius,
   timerThemeActive: _timerThemeActive,
   restThemeProgress,
+  exploreV2WorkBlueProgress,
 }: Props) {
-  const headerChromeAnimatedStyle = useAnimatedStyle(() => ({
-    color: interpolateColor(restThemeProgress.value, [0, 1], [IDLE_HEADER_INK, EXPLORE_V2.colors.restTimerHeaderInk]),
-  }));
-  const completedUnitAnimatedStyle = useAnimatedStyle(() => ({
-    color: interpolateColor(
+  const headerChromeAnimatedStyle = useAnimatedStyle(() => {
+    const b = restThemeProgress.value;
+    const w = exploreV2WorkBlueProgress.value;
+    const pRest = b * (1 - w);
+    const pWork = b * w;
+    const restCol = interpolateColor(pRest, [0, 1], [IDLE_HEADER_INK, EXPLORE_V2.colors.restTimerHeaderInk]);
+    return {
+      color: interpolateColor(pWork, [0, 1], [restCol, EXPLORE_V2.colors.pageBg]),
+    };
+  });
+  const completedUnitAnimatedStyle = useAnimatedStyle(() => {
+    const w = exploreV2WorkBlueProgress.value;
+    const unitRest = interpolateColor(
       restThemeProgress.value,
       [0, 1],
       [IDLE_UNIT_INK, EXPLORE_V2.colors.restTimerCompletedUnitInk],
-    ),
-  }));
+    );
+    return {
+      color: interpolateColor(w, [0, 1], [unitRest, EXPLORE_V2.colors.pageBg]),
+    };
+  });
   const chevronIdleOpacityStyle = useAnimatedStyle(() => ({
-    opacity: 1 - restThemeProgress.value,
+    opacity: 1 - restThemeProgress.value * (1 - exploreV2WorkBlueProgress.value),
   }));
   const chevronTimerOpacityStyle = useAnimatedStyle(() => ({
-    opacity: restThemeProgress.value,
+    opacity: restThemeProgress.value * (1 - exploreV2WorkBlueProgress.value),
+  }));
+  const chevronWorkOpacityStyle = useAnimatedStyle(() => ({
+    opacity: restThemeProgress.value * exploreV2WorkBlueProgress.value,
   }));
 
   const bottomCornerRadius = isExpanded ? frontBottomRadius : coveredBottomRadius;
-  const shellAnimatedStyle = useAnimatedStyle(() => ({
-    backgroundColor: interpolateColor(restThemeProgress.value, [0, 1], [palette.main, '#F3940F']),
-    borderColor: interpolateColor(restThemeProgress.value, [0, 1], [EXPLORE_V2.colors.pageBg, '#FFA424']),
-  }));
-  const scrollContentAnimatedStyle = useAnimatedStyle(() => ({
-    backgroundColor: interpolateColor(restThemeProgress.value, [0, 1], [palette.main, '#F3940F']),
+  const workCompleteBg = EXPLORE_V2.colors.workTimerCompleteCardBg;
+  const shellAnimatedStyle = useAnimatedStyle(() => {
+    const b = restThemeProgress.value;
+    const w = exploreV2WorkBlueProgress.value;
+    const whenUpBg = interpolateColor(w, [0, 1], ['#F3940F', workCompleteBg]);
+    const whenUpBorder = interpolateColor(w, [0, 1], ['#FFA424', COLORS.info]);
+    return {
+      backgroundColor: interpolateColor(b, [0, 1], [palette.main, whenUpBg]),
+      borderColor: interpolateColor(b, [0, 1], [EXPLORE_V2.colors.pageBg, whenUpBorder]),
+    };
+  });
+  const scrollContentAnimatedStyle = useAnimatedStyle(() => {
+    const b = restThemeProgress.value;
+    const w = exploreV2WorkBlueProgress.value;
+    const whenUpBg = interpolateColor(w, [0, 1], ['#F3940F', workCompleteBg]);
+    return {
+      backgroundColor: interpolateColor(b, [0, 1], [palette.main, whenUpBg]),
+    };
+  });
+  const rowTitleInkStyle = useAnimatedStyle(() => ({
+    color: interpolateColor(exploreV2WorkBlueProgress.value, [0, 1], [CURRENT_CARD_SURFACE, EXPLORE_V2.colors.pageBg]),
   }));
   const rows = completedGroupIndexes.flatMap(gi => {
     const g = exerciseGroups[gi];
@@ -105,6 +136,9 @@ export function ExploreV2CompleteCard({
           <Animated.View style={[styles.chevronLayer, chevronTimerOpacityStyle]} pointerEvents="none">
             <IconChevronDown size={18} color={EXPLORE_V2.colors.restTimerHeaderInk} />
           </Animated.View>
+          <Animated.View style={[styles.chevronLayer, chevronWorkOpacityStyle]} pointerEvents="none">
+            <IconChevronDown size={18} color={EXPLORE_V2.colors.pageBg} />
+          </Animated.View>
         </View>
       </Pressable>
       <Animated.ScrollView
@@ -125,9 +159,9 @@ export function ExploreV2CompleteCard({
             activeOpacity={0.75}
           >
             <View style={styles.nameCol}>
-              <Text style={[styles.name, { color: CURRENT_CARD_SURFACE }]} numberOfLines={2}>
+              <Animated.Text style={[styles.name, rowTitleInkStyle]} numberOfLines={2}>
                 {ex.exerciseName}
-              </Text>
+              </Animated.Text>
             </View>
             <View style={styles.valCol}>
               {Array.from({ length: g.totalRounds }).map((_, roundIdx) => {
@@ -143,18 +177,18 @@ export function ExploreV2CompleteCard({
                     {vals.weight > 0 && (
                       <View style={styles.valWithUnit}>
                         <View style={styles.valueFixedSlot}>
-                          <Text style={[styles.val, styles.valueTextRight, { color: CURRENT_CARD_SURFACE }]}>
+                          <Animated.Text style={[styles.val, styles.valueTextRight, rowTitleInkStyle]}>
                             {formatWeightForLoad(vals.weight, useKg)}
-                          </Text>
+                          </Animated.Text>
                         </View>
                         <Animated.Text style={[styles.valUnit, completedUnitAnimatedStyle]}>{weightUnit}</Animated.Text>
                       </View>
                     )}
                     <View style={styles.valWithUnit}>
                       <View style={styles.valueFixedSlot}>
-                        <Text style={[styles.val, styles.valueTextRight, { color: CURRENT_CARD_SURFACE }]}>
+                        <Animated.Text style={[styles.val, styles.valueTextRight, rowTitleInkStyle]}>
                           {vals.reps}
-                        </Text>
+                        </Animated.Text>
                       </View>
                       <Animated.Text style={[styles.valUnit, completedUnitAnimatedStyle]}>
                         {ex.isTimeBased ? 's' : 'reps'}

@@ -20,26 +20,33 @@ import Animated, {
   Easing,
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
+import { COLORS } from '../../constants';
 import { EXPLORE_V2 } from './exploreV2Tokens';
 import type { ExploreV2Group } from './exploreV2Types';
 import type { PrimaryRevealedCard } from './exploreV2Types';
 import { ExploreV2CompleteCard } from './ExploreV2CompleteCard';
 import { ExploreV2UpNextCard } from './ExploreV2UpNextCard';
 import { ExploreV2CurrentCard } from './ExploreV2CurrentCard';
-import { ExploreV2CurrentOverflowSheet } from './ExploreV2CurrentOverflowSheet';
+import type { ExerciseDrawerHistoryEntry } from './ExploreV2CurrentOverflowSheet';
 import { getExploreV2RadiusTokens } from './exploreV2Geometry';
 
 const EXIT_EASE = Easing.bezier(...EXPLORE_V2.motion.currentExitEase);
 const ENTER_EASE = Easing.bezier(...EXPLORE_V2.motion.currentEnterEase);
 const EXIT_ANTICIPATION_EASE = Easing.out(Easing.cubic);
 const PEEK = EXPLORE_V2.peekHeaderHeight;
+/** Vertical offset applied to all wallet card layers (Complete / Up Next / Current) */
+const CARD_STACK_NUDGE_DOWN = 8;
 const STACK_BOTTOM_GAP = 0;
 const STACK_SIDE_GAP = 4;
 const STACK_DEVICE_BOTTOM_GAP = 2;
-/** Small inset so the back card’s top radius isn’t clipped by the shell mask */
-const WALLET_STACK_TOP_INSET = 2;
 const CURRENT_IN_PROGRESS_PEEK_VISIBLE_HEIGHT = 136;
+/** Extra visible strip for collapsed Up Next when Completed is the primary card (wallet). */
+const COMPLETE_PRIMARY_UPNEXT_LIFT = 20;
 const REST_STACK_FRAC = EXPLORE_V2.layout.restStackHeightFraction;
+const EXIT_ANTICIPATION_PX = EXPLORE_V2.motion.currentExitAnticipationPx;
+const EXIT_ANTICIPATION_MS = EXPLORE_V2.motion.currentExitAnticipationMs;
+const MOTION_EXIT_MS = EXPLORE_V2.motion.currentExitMs;
+const MOTION_ENTER_MS = EXPLORE_V2.motion.currentEnterMs;
 const EXPLORE_V2_DEBUG_LAYOUT = false;
 // Temporary debug mode for clipping/geometry inspection.
 // Set to false to disable all debug overlays.
@@ -83,8 +90,9 @@ export type ExploreV2ExecutionRootProps = {
   handleStart: () => Promise<void>;
   openExploreDetailSheet: (groupIndex: number, exerciseIndex: number) => void;
   showPrimaryCta: boolean;
-  inlineRestActive: boolean;
   onSkipRest: () => void;
+  exploreV2TimerPhase: 'none' | 'work' | 'switchSides' | 'rest';
+  exploreV2WorkBlueProgress: SharedValue<number>;
   allComplete: boolean;
   type: 'warmup' | 'main' | 'core';
   progressionGroups: Array<{ id: string; name: string; exerciseIds: string[] }>;
@@ -103,6 +111,18 @@ export type ExploreV2ExecutionRootProps = {
   timerThemeActive: boolean;
   /** 0 = idle chrome, 1 = rest — drives smooth color transitions (synced with screen rest timer) */
   restThemeProgress: SharedValue<number>;
+  /** Same source as legacy exercise drawer history (template + library id). */
+  getExerciseHistoryForDrawer: (
+    templateItemId: string,
+    libraryExerciseId?: string,
+  ) => ExerciseDrawerHistoryEntry[];
+  /** Bumps history when sessions / progress refresh (same role as detail sheet `refreshKey`). */
+  exerciseHistoryRefreshKey: number;
+  /** Per template exercise id — suggested load deltas for progression ↑ on hero metrics */
+  progressionValuesByItemId: Record<
+    string,
+    { weight: number; reps: number; weightDelta: number; repsDelta: number }
+  >;
 };
 
 export function ExploreV2ExecutionRoot(props: ExploreV2ExecutionRootProps) {
@@ -132,8 +152,9 @@ export function ExploreV2ExecutionRoot(props: ExploreV2ExecutionRootProps) {
     handleStart,
     openExploreDetailSheet,
     showPrimaryCta,
-    inlineRestActive,
     onSkipRest,
+    exploreV2TimerPhase,
+    exploreV2WorkBlueProgress,
     allComplete,
     type,
     progressionGroups,
@@ -147,6 +168,9 @@ export function ExploreV2ExecutionRoot(props: ExploreV2ExecutionRootProps) {
     allowAddExercise,
     timerThemeActive,
     restThemeProgress,
+    getExerciseHistoryForDrawer,
+    exerciseHistoryRefreshKey,
+    progressionValuesByItemId,
   } = props;
   const radius = useMemo(
     () => getExploreV2RadiusTokens(screenWidth, insets.bottom),
@@ -165,6 +189,13 @@ export function ExploreV2ExecutionRoot(props: ExploreV2ExecutionRootProps) {
 
   const [primaryRevealed, setPrimaryRevealed] = useState<PrimaryRevealedCard>('up_next');
   const [overflowOpen, setOverflowOpen] = useState(false);
+
+  useEffect(() => {
+    if (primaryRevealed !== 'current') {
+      setOverflowOpen(false);
+    }
+  }, [primaryRevealed]);
+
   const [stackShellHeight, setStackShellHeight] = useState(0);
   /** After last set logged: keep Current mounted until slide-down exit finishes */
   const exitCompleteRef = useRef(true);
@@ -182,6 +213,12 @@ export function ExploreV2ExecutionRoot(props: ExploreV2ExecutionRootProps) {
   const primaryRevealedSV = useSharedValue<'up_next' | 'current' | 'complete'>('up_next');
   const hasCompletePresentSV = useSharedValue(false);
   const currentGroupHasLoggedSetsSV = useSharedValue(false);
+  /** Mirrors exitCompleteRef for UI-thread slide logic (avoids runOnUI + module worklets). */
+  const exitCompleteSV = useSharedValue(1);
+  /** Window height fallback for layout when root measure is still 0 */
+  const screenHeightSV = useSharedValue(screenHeight);
+  /** Bumps when layout-affecting props change — drives useAnimatedReaction instead of runOnUI from JS effects */
+  const walletSlideApplyToken = useSharedValue(0);
   /** Frozen Current layer height while exit animation runs (hasCurrent became false) */
   const currentExitLayerHeightSV = useSharedValue(0);
 
@@ -189,19 +226,36 @@ export function ExploreV2ExecutionRoot(props: ExploreV2ExecutionRootProps) {
     const Hroot =
       exploreLayoutRootHeight.value > 0 ? exploreLayoutRootHeight.value : screenHeight * 0.55;
     return Math.max(PEEK, interpolate(restThemeProgress.value, [0, 1], [Hroot, Hroot * REST_STACK_FRAC]));
-  });
+  }, [screenHeight]);
 
   const setLastCurrentExpandedH = useCallback((h: number) => {
     lastCurrentExpandedHRef.current = h;
   }, []);
 
-  useAnimatedReaction(
-    () => structuralWalletH.value,
-    s => {
-      if (!hasCurrentSV.value) return;
-      const curH = Math.max(PEEK, s - (hasCompletePresentSV.value ? 2 * PEEK : PEEK));
-      runOnJS(setLastCurrentExpandedH)(curH);
+  /** UI-thread exit sequence — useCallback worklet so runOnUI receives a real worklet (Babel). */
+  const runExitSlideSequence = useCallback(
+    (slideY: SharedValue<number>, targetSlideY: number, onFinished: () => void) => {
+      'worklet';
+      const start = slideY.value;
+      const pullBack = start - EXIT_ANTICIPATION_PX;
+      slideY.value = withSequence(
+        withTiming(pullBack, {
+          duration: EXIT_ANTICIPATION_MS,
+          easing: EXIT_ANTICIPATION_EASE,
+        }),
+        withTiming(
+          targetSlideY,
+          {
+            duration: MOTION_EXIT_MS,
+            easing: EXIT_EASE,
+          },
+          finished => {
+            if (finished) runOnJS(onFinished)();
+          },
+        ),
+      );
     },
+    [],
   );
 
   /** Slides the card in from below the stack when Current appears or the group changes. */
@@ -217,14 +271,25 @@ export function ExploreV2ExecutionRoot(props: ExploreV2ExecutionRootProps) {
   }
 
   useLayoutEffect(() => {
+    screenHeightSV.value = screenHeight;
     hasCurrentSV.value = hasCurrent;
     primaryRevealedSV.value = primaryRevealed;
     hasCompletePresentSV.value = hasCompletePresent;
     currentGroupHasLoggedSetsSV.value = currentGroupHasLoggedSets;
+    exitCompleteSV.value = exitCompleteRef.current ? 1 : 0;
     if (!hasCurrent && lastCurrentGroupRef.current && !exitCompleteRef.current) {
       currentExitLayerHeightSV.value = lastCurrentExpandedHRef.current;
     }
-  }, [hasCurrent, primaryRevealed, hasCompletePresent, currentGroupHasLoggedSets]);
+    walletSlideApplyToken.value = walletSlideApplyToken.value + 1;
+  }, [
+    hasCurrent,
+    currentGroupIndex,
+    primaryRevealed,
+    hasCompletePresent,
+    currentGroupHasLoggedSets,
+    exitTick,
+    screenHeight,
+  ]);
 
   const isExitAnimating = useMemo(
     () => !hasCurrent && !exitCompleteRef.current && lastCurrentGroupRef.current !== null,
@@ -293,7 +358,7 @@ export function ExploreV2ExecutionRoot(props: ExploreV2ExecutionRootProps) {
     setExitTick(t => t + 1);
   }, [currentSlideY]);
 
-  /** After last set: slide Current fully down off-screen before unmounting */
+  /** After last set: slide Current fully down off-screen before unmounting (UI runtime only). */
   useLayoutEffect(() => {
     if (hasCurrent) {
       exitAnimStartedRef.current = false;
@@ -304,106 +369,62 @@ export function ExploreV2ExecutionRoot(props: ExploreV2ExecutionRootProps) {
     }
     exitAnimStartedRef.current = true;
     const h = lastCurrentExpandedHRef.current;
-    const start = currentSlideY.value;
-    const pullBack =
-      start - EXPLORE_V2.motion.currentExitAnticipationPx;
-    currentSlideY.value = withSequence(
-      withTiming(pullBack, {
-        duration: EXPLORE_V2.motion.currentExitAnticipationMs,
-        easing: EXIT_ANTICIPATION_EASE,
-      }),
-      withTiming(
-        h,
-        {
-          duration: EXPLORE_V2.motion.currentExitMs,
-          easing: EXIT_EASE,
-        },
-        finished => {
-          if (finished) runOnJS(onCurrentExitFinished)();
-        },
-      ),
-    );
-  }, [hasCurrent, onCurrentExitFinished, currentSlideY]);
+    runOnUI(runExitSlideSequence)(currentSlideY, h, onCurrentExitFinished);
+  }, [hasCurrent, onCurrentExitFinished, currentSlideY, runExitSlideSequence]);
 
-  /**
-   * Bottom-pinned Current slide — targets derived on UI thread so they track rest intro/exit.
-   * (No logged sets: slide Current fully out when not primary; in-progress: collapsed peek.)
-   */
-  useEffect(() => {
-    if (!hasCurrent) {
-      if (exitCompleteRef.current) {
-        runOnUI(() => {
-          'worklet';
-          const Hroot =
-            exploreLayoutRootHeight.value > 0 ? exploreLayoutRootHeight.value : screenHeight * 0.55;
-          const sw = Math.max(
-            PEEK,
-            interpolate(restThemeProgress.value, [0, 1], [Hroot, Hroot * REST_STACK_FRAC]),
-          );
-          const currentH = Math.max(PEEK, sw - (hasCompletePresentSV.value ? 2 * PEEK : PEEK));
+  /** Bottom-pinned Current + Up Next slides — runs on UI thread via useAnimatedReaction (no runOnUI(moduleWorklet)). */
+  useAnimatedReaction(
+    () => walletSlideApplyToken.value,
+    (_token, _prev) => {
+      const lerpWallet = (p: number, a: number, b: number) => a + (b - a) * p;
+      const p = restThemeProgress.value;
+      const Hroot =
+        exploreLayoutRootHeight.value > 0 ? exploreLayoutRootHeight.value : screenHeightSV.value * 0.55;
+      const sw = Math.max(PEEK, lerpWallet(p, Hroot, Hroot * REST_STACK_FRAC));
+
+      const hasCurrentW = hasCurrentSV.value;
+      const exitComplete = exitCompleteSV.value === 1;
+      const hasCompleteW = hasCompletePresentSV.value;
+      const logged = currentGroupHasLoggedSetsSV.value;
+      const pr = primaryRevealedSV.value;
+      const primaryCode = pr === 'up_next' ? 0 : pr === 'current' ? 1 : 2;
+
+      /** Stack overlap geometry — layer boxes stay tall; collapse is translateY + isExpanded on cards */
+      const currentH = Math.max(PEEK, sw - (hasCompleteW ? 2 * PEEK : PEEK));
+
+      if (!hasCurrentW) {
+        if (exitComplete) {
           currentSlideY.value = currentH;
-        })();
+        }
+      } else {
+        runOnJS(setLastCurrentExpandedH)(currentH);
+        const hiddenTarget = logged
+          ? Math.max(0, currentH - CURRENT_IN_PROGRESS_PEEK_VISIBLE_HEIGHT)
+          : currentH;
+        const target = primaryCode === 1 ? 0 : hiddenTarget;
+        const isEntering = primaryCode === 1;
+        currentSlideY.value = withTiming(target, {
+          duration: isEntering ? MOTION_ENTER_MS : MOTION_EXIT_MS,
+          easing: isEntering ? ENTER_EASE : EXIT_EASE,
+        });
       }
-      return;
-    }
-    runOnUI(() => {
-      'worklet';
-      const Hroot =
-        exploreLayoutRootHeight.value > 0 ? exploreLayoutRootHeight.value : screenHeight * 0.55;
-      const sw = Math.max(
-        PEEK,
-        interpolate(restThemeProgress.value, [0, 1], [Hroot, Hroot * REST_STACK_FRAC]),
-      );
-      const currentH = Math.max(PEEK, sw - (hasCompletePresentSV.value ? 2 * PEEK : PEEK));
-      const hiddenTarget = currentGroupHasLoggedSetsSV.value
-        ? Math.max(0, currentH - CURRENT_IN_PROGRESS_PEEK_VISIBLE_HEIGHT)
-        : currentH;
-      const target = primaryRevealedSV.value === 'current' ? 0 : hiddenTarget;
-      const isEntering = primaryRevealedSV.value === 'current';
-      currentSlideY.value = withTiming(target, {
-        duration: isEntering ? EXPLORE_V2.motion.currentEnterMs : EXPLORE_V2.motion.currentExitMs,
-        easing: isEntering ? ENTER_EASE : EXIT_EASE,
-      });
-    })();
-  }, [
-    hasCurrent,
-    currentGroupIndex,
-    primaryRevealed,
-    exitTick,
-    screenHeight,
-    exploreLayoutRootHeight,
-    restThemeProgress,
-    currentGroupHasLoggedSets,
-  ]);
 
-  /** Up Next motion: when Completed is primary, slide Up Next to header-peek tab. */
-  useEffect(() => {
-    runOnUI(() => {
-      'worklet';
-      const Hroot =
-        exploreLayoutRootHeight.value > 0 ? exploreLayoutRootHeight.value : screenHeight * 0.55;
-      const sw = Math.max(
-        PEEK,
-        interpolate(restThemeProgress.value, [0, 1], [Hroot, Hroot * REST_STACK_FRAC]),
-      );
-      const upNextH = Math.max(PEEK, sw - (hasCompletePresentSV.value ? PEEK : 0));
+      const upNextH = Math.max(PEEK, sw - (hasCompleteW ? PEEK : 0));
       const extraVisibleForCurrent =
-        hasCurrentSV.value && currentGroupHasLoggedSetsSV.value
-          ? CURRENT_IN_PROGRESS_PEEK_VISIBLE_HEIGHT
-          : 0;
-      const upNextVisibleWhenComplete = PEEK + extraVisibleForCurrent;
-      const hiddenTarget = Math.max(0, upNextH - upNextVisibleWhenComplete);
-      const target = primaryRevealedSV.value === 'complete' ? hiddenTarget : 0;
-      const isRevealing = primaryRevealedSV.value === 'complete';
-      const duration = isRevealing
-        ? EXPLORE_V2.motion.currentExitMs
-        : EXPLORE_V2.motion.currentEnterMs;
-      upNextSlideY.value = withTiming(target, {
-        duration,
-        easing: isRevealing ? EXIT_EASE : ENTER_EASE,
+        hasCurrentW && logged ? CURRENT_IN_PROGRESS_PEEK_VISIBLE_HEIGHT : 0;
+      const upNextVisibleWhenComplete =
+        PEEK +
+        extraVisibleForCurrent +
+        (primaryCode === 2 ? COMPLETE_PRIMARY_UPNEXT_LIFT : 0);
+      const hiddenUpNext = Math.max(0, upNextH - upNextVisibleWhenComplete);
+      const upNextTarget = primaryCode === 2 ? hiddenUpNext : 0;
+      const revealingComplete = primaryCode === 2;
+      upNextSlideY.value = withTiming(upNextTarget, {
+        duration: revealingComplete ? MOTION_EXIT_MS : MOTION_ENTER_MS,
+        easing: revealingComplete ? EXIT_EASE : ENTER_EASE,
       });
-    })();
-  }, [primaryRevealed, upNextSlideY, hasCurrent, currentGroupHasLoggedSets, screenHeight, exploreLayoutRootHeight, restThemeProgress]);
+    },
+  );
 
   const triggerCurrentBlockNudge = useCallback(() => {
     currentBlockNudgeY.value = withSequence(
@@ -436,9 +457,9 @@ export function ExploreV2ExecutionRoot(props: ExploreV2ExecutionRootProps) {
       right: 0,
       bottom: STACK_BOTTOM_GAP,
       height,
-      transform: [{ translateY: currentSlideY.value + currentBlockNudgeY.value }],
+      transform: [{ translateY: currentSlideY.value + currentBlockNudgeY.value + CARD_STACK_NUDGE_DOWN }],
     };
-  });
+  }, [screenHeight]);
 
   /** Keep collapsed Current translateY in sync with wallet height during rest intro/exit (no JS lag). */
   useAnimatedReaction(
@@ -456,13 +477,25 @@ export function ExploreV2ExecutionRoot(props: ExploreV2ExecutionRootProps) {
   );
 
   const aUpNext = useAnimatedStyle(() => ({
-    transform: [{ translateY: upNextSlideY.value }],
+    transform: [{ translateY: upNextSlideY.value + CARD_STACK_NUDGE_DOWN }],
   }));
 
   const rootFillAnimatedStyle = useAnimatedStyle(() => {
-    const bg = interpolateColor(restThemeProgress.value, [0, 1], [EXPLORE_V2.colors.pageBg, '#FFA424']);
+    const b = restThemeProgress.value;
+    const w = exploreV2WorkBlueProgress.value;
+    const whenUp = interpolateColor(w, [0, 1], ['#FFA424', COLORS.info]);
     return {
-      backgroundColor: bg,
+      backgroundColor: interpolateColor(b, [0, 1], [EXPLORE_V2.colors.pageBg, whenUp]),
+    };
+  });
+
+  /** Stack outline — matches page (orange rest / blue work) */
+  const walletBorderOverlayAnimatedStyle = useAnimatedStyle(() => {
+    const b = restThemeProgress.value;
+    const w = exploreV2WorkBlueProgress.value;
+    const whenUp = interpolateColor(w, [0, 1], ['#FFA424', COLORS.info]);
+    return {
+      borderColor: interpolateColor(b, [0, 1], [EXPLORE_V2.colors.pageBg, whenUp]),
     };
   });
 
@@ -492,9 +525,9 @@ export function ExploreV2ExecutionRoot(props: ExploreV2ExecutionRootProps) {
   );
 
   const onLogNextSet = useCallback(async () => {
-    if (!showPrimaryCta || inlineRestActive) return;
+    if (!showPrimaryCta || exploreV2TimerPhase !== 'none') return;
     await handleStart();
-  }, [showPrimaryCta, inlineRestActive, handleStart]);
+  }, [showPrimaryCta, exploreV2TimerPhase, handleStart]);
 
   const focusExercise = useMemo(() => {
     const g = displayCurrentGroup;
@@ -508,6 +541,11 @@ export function ExploreV2ExecutionRoot(props: ExploreV2ExecutionRootProps) {
     const g = progressionGroups.find(pg => pg.exerciseIds.includes(libId));
     return g?.id ?? null;
   }, [focusExercise, progressionGroups, type]);
+
+  const focusExerciseHistory = useMemo(() => {
+    if (!focusExercise) return [];
+    return getExerciseHistoryForDrawer(focusExercise.id, (focusExercise as any).exerciseId);
+  }, [focusExercise, completedSets, localValues, exerciseHistoryRefreshKey]);
 
   /** Must render in every stack branch while exiting — otherwise `hasCurrent` → false swaps layout and unmounts before the slide runs */
   const currentExerciseLayer =
@@ -537,21 +575,75 @@ export function ExploreV2ExecutionRoot(props: ExploreV2ExecutionRootProps) {
           useKg={useKg}
           weightUnit={weightUnit}
           getBarbellMode={getBarbellMode}
+          progressionValuesByItemId={progressionValuesByItemId}
           onLogNextSet={onLogNextSet}
           onSkipRest={onSkipRest}
-          onOpenOverflow={() => setOverflowOpen(true)}
+          exploreV2TimerPhase={exploreV2TimerPhase}
+          exploreV2WorkBlueProgress={exploreV2WorkBlueProgress}
           preStart={preStart}
           onCollapsedPress={() => {
             Haptics.selectionAsync();
             setPrimaryRevealed('current');
           }}
           showPrimaryCta={showPrimaryCta}
-          inlineRestActive={inlineRestActive}
           showCollapsedWhenSecondary={visibleCurrentHasLoggedSets}
           frontBottomRadius={radius.frontBottomRadius}
           coveredBottomRadius={radius.frontBottomRadius}
           timerThemeActive={timerThemeActive}
           restThemeProgress={restThemeProgress}
+          settingsOverflow={
+            focusExercise
+              ? {
+                  visible: overflowOpen,
+                  onClose: () => setOverflowOpen(false),
+                  onOpenSheet: () => {
+                    if (exploreV2TimerPhase === 'none') setOverflowOpen(true);
+                  },
+                  inlineRestActive: exploreV2TimerPhase !== 'none',
+                  restThemeProgress,
+                  exercise: focusExercise,
+                  templateItemId: focusExercise.id,
+                  libraryExerciseId: (focusExercise as any).exerciseId,
+                  history: focusExerciseHistory,
+                  useKg,
+                  weightUnit,
+                  timeBased: timeBasedOverrides[focusExercise.id] ?? focusExercise.isTimeBased ?? false,
+                  onTimeBasedChange: v =>
+                    setTimeBasedOverrides(p => ({ ...p, [focusExercise.id]: v })),
+                  perSide: perSideOverrides[focusExercise.id] ?? focusExercise.isPerSide ?? false,
+                  onPerSideChange: v =>
+                    setPerSideOverrides(p => ({ ...p, [focusExercise.id]: v })),
+                  progressionGroups,
+                  currentProgressionGroupId: progressionGroupId,
+                  onProgressionGroupSelect: async optId => {
+                    const libId = (focusExercise as any).exerciseId || focusExercise.id;
+                    const currentGroupPg = progressionGroups.find(pg => pg.exerciseIds.includes(libId));
+                    if (currentGroupPg && optId !== currentGroupPg.id) {
+                      await updateProgressionGroup(currentGroupPg.id, {
+                        exerciseIds: currentGroupPg.exerciseIds.filter(id => id !== libId),
+                      });
+                    }
+                    if (optId) {
+                      const target = progressionGroups.find(pg => pg.id === optId);
+                      if (target) {
+                        await updateProgressionGroup(target.id, {
+                          exerciseIds: [...target.exerciseIds, libId],
+                        });
+                      }
+                    }
+                  },
+                  onSwap: () => {
+                    setOverflowOpen(false);
+                    onSwapExercise();
+                  },
+                  onDelete: async () => {
+                    setOverflowOpen(false);
+                    await onRemoveExercise(focusExercise);
+                  },
+                  type,
+                }
+              : undefined
+          }
         />
       </Animated.View>
     ) : null;
@@ -560,7 +652,7 @@ export function ExploreV2ExecutionRoot(props: ExploreV2ExecutionRootProps) {
     return (
       <Animated.View style={[styles.completeOnly, walletShellRadii]}>
         <Animated.View style={[styles.rootFill, rootFillAnimatedStyle]}>
-          <Animated.View style={[styles.layerBottom, aCompleteLayerHeight]}>
+          <Animated.View style={[styles.layerBottom, styles.cardStackNudgeDown, aCompleteLayerHeight]}>
             <ExploreV2CompleteCard
               completedGroupIndexes={completedExerciseIndexes}
               exerciseGroups={exerciseGroups}
@@ -574,6 +666,7 @@ export function ExploreV2ExecutionRoot(props: ExploreV2ExecutionRootProps) {
               coveredBottomRadius={radius.frontBottomRadius}
               timerThemeActive={timerThemeActive}
               restThemeProgress={restThemeProgress}
+              exploreV2WorkBlueProgress={exploreV2WorkBlueProgress}
             />
           </Animated.View>
           {EXPLORE_V2_DEBUG_SHELL_BORDER ? (
@@ -591,10 +684,11 @@ export function ExploreV2ExecutionRoot(props: ExploreV2ExecutionRootProps) {
             />
           ) : null}
         </Animated.View>
-        <View
+        <Animated.View
           pointerEvents="none"
           style={[
             styles.walletBorderOverlay,
+            walletBorderOverlayAnimatedStyle,
             walletShellRadii,
             { zIndex: WALLET_BORDER_OVERLAY_Z },
           ]}
@@ -646,6 +740,7 @@ export function ExploreV2ExecutionRoot(props: ExploreV2ExecutionRootProps) {
               coveredBottomRadius={radius.frontBottomRadius}
               timerThemeActive={timerThemeActive}
               restThemeProgress={restThemeProgress}
+              exploreV2WorkBlueProgress={exploreV2WorkBlueProgress}
             />
           </Animated.View>
           {currentExerciseLayer}
@@ -658,6 +753,7 @@ export function ExploreV2ExecutionRoot(props: ExploreV2ExecutionRootProps) {
           <Animated.View
             style={[
               styles.layerBottom,
+              styles.cardStackNudgeDown,
               aCompleteLayerHeight,
               {
                 bottom: STACK_BOTTOM_GAP,
@@ -681,6 +777,7 @@ export function ExploreV2ExecutionRoot(props: ExploreV2ExecutionRootProps) {
               coveredBottomRadius={radius.frontBottomRadius}
               timerThemeActive={timerThemeActive}
               restThemeProgress={restThemeProgress}
+              exploreV2WorkBlueProgress={exploreV2WorkBlueProgress}
             />
           </Animated.View>
           <Animated.View
@@ -713,6 +810,7 @@ export function ExploreV2ExecutionRoot(props: ExploreV2ExecutionRootProps) {
               coveredBottomRadius={radius.frontBottomRadius}
               timerThemeActive={timerThemeActive}
               restThemeProgress={restThemeProgress}
+              exploreV2WorkBlueProgress={exploreV2WorkBlueProgress}
             />
           </Animated.View>
           {currentExerciseLayer}
@@ -726,6 +824,7 @@ export function ExploreV2ExecutionRoot(props: ExploreV2ExecutionRootProps) {
             <Animated.View
               style={[
                 styles.layerBottom,
+                styles.cardStackNudgeDown,
                 aCompleteLayerHeight,
                 {
                   bottom: STACK_BOTTOM_GAP,
@@ -749,6 +848,7 @@ export function ExploreV2ExecutionRoot(props: ExploreV2ExecutionRootProps) {
                 coveredBottomRadius={radius.frontBottomRadius}
                 timerThemeActive={timerThemeActive}
                 restThemeProgress={restThemeProgress}
+                exploreV2WorkBlueProgress={exploreV2WorkBlueProgress}
               />
             </Animated.View>
           ) : null}
@@ -782,56 +882,13 @@ export function ExploreV2ExecutionRoot(props: ExploreV2ExecutionRootProps) {
               coveredBottomRadius={radius.frontBottomRadius}
               timerThemeActive={timerThemeActive}
               restThemeProgress={restThemeProgress}
+              exploreV2WorkBlueProgress={exploreV2WorkBlueProgress}
             />
           </Animated.View>
           {currentExerciseLayer}
         </View>
       )}
 
-      {focusExercise && displayCurrentGroup && (
-        <ExploreV2CurrentOverflowSheet
-          visible={overflowOpen}
-          onClose={() => setOverflowOpen(false)}
-          exercise={focusExercise}
-          templateItemId={focusExercise.id}
-          libraryExerciseId={(focusExercise as any).exerciseId}
-          useKg={useKg}
-          getBarbellMode={getBarbellMode}
-          setBarbellMode={setBarbellMode}
-          timeBased={timeBasedOverrides[focusExercise.id] ?? focusExercise.isTimeBased ?? false}
-          onTimeBasedChange={v => setTimeBasedOverrides(p => ({ ...p, [focusExercise.id]: v }))}
-          perSide={perSideOverrides[focusExercise.id] ?? focusExercise.isPerSide ?? false}
-          onPerSideChange={v => setPerSideOverrides(p => ({ ...p, [focusExercise.id]: v }))}
-          progressionGroups={progressionGroups}
-          currentProgressionGroupId={progressionGroupId}
-          onProgressionGroupSelect={async optId => {
-            const libId = (focusExercise as any).exerciseId || focusExercise.id;
-            const currentGroupPg = progressionGroups.find(pg => pg.exerciseIds.includes(libId));
-            if (currentGroupPg && optId !== currentGroupPg.id) {
-              await updateProgressionGroup(currentGroupPg.id, {
-                exerciseIds: currentGroupPg.exerciseIds.filter(id => id !== libId),
-              });
-            }
-            if (optId) {
-              const target = progressionGroups.find(pg => pg.id === optId);
-              if (target) {
-                await updateProgressionGroup(target.id, {
-                  exerciseIds: [...target.exerciseIds, libId],
-                });
-              }
-            }
-          }}
-          onSwap={() => {
-            setOverflowOpen(false);
-            onSwapExercise();
-          }}
-          onDelete={async () => {
-            setOverflowOpen(false);
-            await onRemoveExercise(focusExercise);
-          }}
-          type={type}
-        />
-      )}
       {EXPLORE_V2_DEBUG_CLIP ? (
         <View pointerEvents="none" style={styles.debugRootMask} />
       ) : null}
@@ -859,10 +916,11 @@ export function ExploreV2ExecutionRoot(props: ExploreV2ExecutionRootProps) {
         </View>
       ) : null}
       </Animated.View>
-      <View
+      <Animated.View
         pointerEvents="none"
         style={[
           styles.walletBorderOverlay,
+          walletBorderOverlayAnimatedStyle,
           walletShellRadii,
           { zIndex: WALLET_BORDER_OVERLAY_Z },
         ]}
@@ -891,7 +949,6 @@ const styles = StyleSheet.create({
   walletBorderOverlay: {
     ...StyleSheet.absoluteFillObject,
     borderWidth: 2,
-    borderColor: '#FF0000',
     backgroundColor: 'transparent',
     ...(Platform.OS === 'ios' ? { borderCurve: 'continuous' as const } : {}),
   },
@@ -902,7 +959,6 @@ const styles = StyleSheet.create({
     marginBottom: STACK_DEVICE_BOTTOM_GAP,
     minHeight: 0,
     overflow: 'hidden',
-    paddingTop: WALLET_STACK_TOP_INSET,
     ...(Platform.OS === 'ios' ? { borderCurve: 'continuous' as const } : {}),
   },
   /** Fills wallet band; back cards use absolute fill so they are not height-squished. */
@@ -911,7 +967,6 @@ const styles = StyleSheet.create({
     position: 'relative',
     overflow: 'hidden',
     minHeight: 0,
-    paddingTop: WALLET_STACK_TOP_INSET,
   },
   /** Bottom-pinned fixed-height card layer */
   layerBottom: {
@@ -919,7 +974,11 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: STACK_BOTTOM_GAP,
-    overflow: 'visible',
+    overflow: 'hidden',
+  },
+  /** Shared with CARD_STACK_NUDGE_DOWN — moves Complete layers to match Up Next / Current */
+  cardStackNudgeDown: {
+    transform: [{ translateY: CARD_STACK_NUDGE_DOWN }],
   },
   debugOverlay: {
     position: 'absolute',

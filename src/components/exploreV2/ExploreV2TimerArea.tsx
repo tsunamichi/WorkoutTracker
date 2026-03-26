@@ -13,6 +13,7 @@ import Animated, {
   useSharedValue,
   withTiming,
 } from 'react-native-reanimated';
+import { TYPOGRAPHY } from '../../constants';
 import { EXPLORE_V2 } from './exploreV2Tokens';
 import { EXPLORE_V2_CHROME } from './exploreV2ColorSystem';
 
@@ -32,6 +33,11 @@ type Props = {
   onPauseToggle: () => void;
   /** 0–1 progress for border / track */
   progress: RNAnimated.Value;
+  /** Short line under the time (e.g. Rest, Left side) — overlay layout only in practice */
+  contextLabel?: string | null;
+  /** Explore v2 work timer: digits + label use idle page ink; border softens on blue */
+  workTimerVisualActive?: boolean;
+  exploreV2WorkBlueProgress?: SharedValue<number>;
 };
 
 const TIMER_MOTION = EXPLORE_V2.motion.timer;
@@ -45,7 +51,9 @@ const REST_MS = EXPLORE_V2.motion.rest.colorMs;
 /** Fraction of layout progress before hero digits read as fully visible (≈ stagger ms / REST_MS) */
 const VALUE_START = Math.min(0.45, EXPLORE_V2.motion.rest.timerValueStaggerMs / REST_MS + 0.08);
 
-function DigitSlot({ char }: { char: string }) {
+const TIMER_SHELL_HAIRLINE = StyleSheet.hairlineWidth;
+
+function DigitSlot({ char, color }: { char: string; color: string }) {
   const previousRef = useRef(char);
   const [fromChar, setFromChar] = useState(char);
   const [toChar, setToChar] = useState(char);
@@ -101,10 +109,12 @@ function DigitSlot({ char }: { char: string }) {
     ],
   }));
 
+  const digitStyle = [styles.timeHero, styles.timeHeroOffset, { color }];
+
   if (char === ' ') {
     return (
       <View style={styles.digitSlot}>
-        <Text style={[styles.timeHero, styles.timeHeroOffset, styles.slotGhost]}>0</Text>
+        <Text style={[styles.timeHero, styles.timeHeroOffset, { color }, styles.slotGhost]}>0</Text>
       </View>
     );
   }
@@ -112,11 +122,11 @@ function DigitSlot({ char }: { char: string }) {
   return (
     <View style={styles.digitSlot}>
       {!isAnimating ? (
-        <Text style={[styles.timeHero, styles.timeHeroOffset]}>{toChar}</Text>
+        <Text style={digitStyle}>{toChar}</Text>
       ) : (
         <>
-          <Animated.Text style={[styles.timeHero, styles.digitOverlay, outgoing]}>{fromChar}</Animated.Text>
-          <Animated.Text style={[styles.timeHero, styles.digitOverlay, incoming]}>{toChar}</Animated.Text>
+          <Animated.Text style={[styles.timeHero, styles.digitOverlay, outgoing, { color }]}>{fromChar}</Animated.Text>
+          <Animated.Text style={[styles.timeHero, styles.digitOverlay, incoming, { color }]}>{toChar}</Animated.Text>
         </>
       )}
     </View>
@@ -132,8 +142,14 @@ export function ExploreV2TimerArea({
   paused,
   onPauseToggle,
   progress: _progress,
+  contextLabel,
+  workTimerVisualActive = false,
+  exploreV2WorkBlueProgress,
 }: Props) {
   const isOverlay = layoutVariant === 'overlay';
+  const heroInk = workTimerVisualActive
+    ? EXPLORE_V2.colors.pageBg
+    : EXPLORE_V2_CHROME.timerHeroText;
   const totalSec = Math.max(0, timeLeftSec);
   const minutes = Math.floor(totalSec / 60);
   const seconds = totalSec % 60;
@@ -159,9 +175,13 @@ export function ExploreV2TimerArea({
     };
   });
 
+  /** Hairline chrome for rest; width → 0 on work blue so no soft box around the hero */
   const innerBorderStyle = useAnimatedStyle(() => {
     const p = layoutProgress.value;
+    const w = exploreV2WorkBlueProgress?.value ?? 0;
+    const widthWhenUp = interpolate(w, [0, 1], [TIMER_SHELL_HAIRLINE, 0]);
     return {
+      borderWidth: interpolate(p, [0, 1], [0, widthWhenUp]),
       borderColor: interpolateColor(
         p,
         [0, 1],
@@ -197,19 +217,47 @@ export function ExploreV2TimerArea({
                 disabled={!active}
                 style={({ pressed }) => [styles.timerValuePressable, pressed && active && styles.timerValuePressablePressed]}
                 accessibilityRole="button"
-                accessibilityLabel={paused ? 'Resume rest timer' : 'Pause rest timer'}
+                accessibilityLabel={
+                  contextLabel
+                    ? paused
+                      ? `Resume timer, ${contextLabel}`
+                      : `Pause timer, ${contextLabel}`
+                    : paused
+                      ? 'Resume rest timer'
+                      : 'Pause rest timer'
+                }
               >
-                <Animated.View style={[styles.timerValueWrap, valueStyle]}>
-                  <View style={styles.slotRow}>
-                    {showMinuteTens ? <DigitSlot char={mTens} /> : null}
-                    <DigitSlot char={mOnes} />
-                    <View style={styles.colonSlot}>
-                      <Text style={[styles.timeHero, styles.timeHeroOffset]}>:</Text>
+                <View
+                  style={[
+                    styles.timerHeroCluster,
+                    contextLabel ? styles.timerHeroClusterWithLabel : null,
+                  ]}
+                >
+                  <Animated.View style={[styles.timerValueWrap, valueStyle]}>
+                    <View style={styles.slotRow}>
+                      {showMinuteTens ? <DigitSlot char={mTens} color={heroInk} /> : null}
+                      <DigitSlot char={mOnes} color={heroInk} />
+                      <View style={styles.colonSlot}>
+                        <Text style={[styles.timeHero, styles.timeHeroOffset, { color: heroInk }]}>:</Text>
+                      </View>
+                      <DigitSlot char={sTens} color={heroInk} />
+                      <DigitSlot char={sOnes} color={heroInk} />
                     </View>
-                    <DigitSlot char={sTens} />
-                    <DigitSlot char={sOnes} />
-                  </View>
-                </Animated.View>
+                  </Animated.View>
+                  {contextLabel ? (
+                    <Animated.View
+                      style={[styles.contextLabelWrap, valueStyle]}
+                      pointerEvents="none"
+                    >
+                      <Text
+                        style={[styles.contextLabelText, { color: heroInk }]}
+                        numberOfLines={1}
+                      >
+                        {contextLabel}
+                      </Text>
+                    </Animated.View>
+                  ) : null}
+                </View>
               </Pressable>
             </View>
           </>
@@ -236,7 +284,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     overflow: 'hidden',
     backgroundColor: 'transparent',
-    borderWidth: StyleSheet.hairlineWidth,
+    borderWidth: 0,
   },
   innerOverlay: {
     alignSelf: 'stretch',
@@ -246,7 +294,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     overflow: 'hidden',
     backgroundColor: 'transparent',
-    borderWidth: StyleSheet.hairlineWidth,
+    borderWidth: 0,
   },
   timerContent: {
     flex: 1,
@@ -274,6 +322,29 @@ const styles = StyleSheet.create({
     paddingBottom: 4,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  timerHeroCluster: {
+    position: 'relative',
+    width: TIMER_LABEL_WIDTH,
+    alignItems: 'center',
+    alignSelf: 'center',
+  },
+  /** Room for absolutely positioned subtitle aligned to timer column */
+  timerHeroClusterWithLabel: {
+    paddingBottom: 22,
+    minHeight: TIMER_DIGIT_SLOT_HEIGHT + 18,
+  },
+  contextLabelWrap: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+  },
+  contextLabelText: {
+    ...TYPOGRAPHY.body,
+    opacity: 0.92,
+    textAlign: 'center',
   },
   timerValuePressable: {
     alignItems: 'center',
@@ -322,7 +393,6 @@ const styles = StyleSheet.create({
     includeFontPadding: false,
     textAlignVertical: 'center',
     letterSpacing: -0.5,
-    color: EXPLORE_V2_CHROME.timerHeroText,
     fontVariant: ['tabular-nums'],
   },
   timeHeroOffset: {
