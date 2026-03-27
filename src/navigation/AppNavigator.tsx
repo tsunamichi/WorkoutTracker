@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Pressable, Animated, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, Pressable, Animated } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
@@ -43,8 +43,8 @@ import { WorkoutCreationOptionsScreen } from '../screens/WorkoutCreationOptionsS
 import { ProgressionScreen } from '../screens/ProgressionScreen';
 import { ProgressionDefaultsScreen } from '../screens/ProgressionDefaultsScreen';
 import { ProgressionGroupDetailScreen } from '../screens/ProgressionGroupDetailScreen';
-import { IconCalendar, IconHistory, IconSwap, IconAdd, IconStopwatch, IconPlay, IconCore, IconWarmup } from '../components/icons';
-import { COLORS, TYPOGRAPHY, SPACING, CARDS, BORDER_RADIUS } from '../constants';
+import { IconCalendar, IconHistory, IconAdd, IconStopwatch, IconPlay, IconCore, IconWarmup } from '../components/icons';
+import { COLORS, TYPOGRAPHY, SPACING } from '../constants';
 import { useStore } from '../store';
 import { CycleTemplateId } from '../types/workout';
 import { Weekday } from '../types/manualCycle';
@@ -107,25 +107,14 @@ const TAB_ICON_SIZE = 24;
 const TAB_ICON_GAP = 4;
 const LABEL_CENTER_OFFSET = (TAB_ICON_SIZE + TAB_ICON_GAP) / 2;
 
-// Dark theme colors for swap drawer
-const LIGHT_COLORS = {
-  secondary: '#FFFFFF',
-  textMeta: '#8E8E93',
-  border: '#38383A',
-};
-
 function TabNavigator() {
   const navigation = useNavigation();
   const route = useRoute();
   const insets = useSafeAreaInsets();
-  const { cycles, cyclePlans, getActiveCyclePlan, getCyclePlanEffectiveEndDate, swapWorkoutAssignments, workoutTemplates, scheduleWorkout, scheduledWorkouts, getMainCompletion, detectCycleConflicts, applyCyclePlan, updateCyclePlan, repeatCyclePlan } = useStore();
+  const { cyclePlans, workoutTemplates, scheduleWorkout, scheduledWorkouts, detectCycleConflicts, applyCyclePlan, updateCyclePlan, repeatCyclePlan } = useStore();
   const { t } = useTranslation();
   const [activeTab, setActiveTab] = React.useState<'Schedule' | 'Progress'>('Schedule');
   const [isViewingToday, setIsViewingToday] = React.useState(true);
-  const [swapDrawerVisible, setSwapDrawerVisible] = React.useState(false);
-  const [swapDrawerData, setSwapDrawerData] = React.useState<{ selectedDate: string; weekDays: any[]; isRestDay?: boolean } | null>(null);
-  const [pressedSwapItemDate, setPressedSwapItemDate] = React.useState<string | null>(null);
-  
   // NEW: State for Add Workout flow
   const [addWorkoutSheetVisible, setAddWorkoutSheetVisible] = React.useState(false);
   const [addWorkoutDate, setAddWorkoutDate] = React.useState<string>('');
@@ -191,11 +180,6 @@ function TabNavigator() {
   const handleTabBarLayout = (event: any) => {
     const { width } = event.nativeEvent.layout;
     setTabBarWidth(width);
-  };
-  
-  const handleOpenSwapDrawer = (selectedDate: string, weekDays: any[], isRestDay?: boolean) => {
-    setSwapDrawerData({ selectedDate, weekDays, isRestDay });
-    setSwapDrawerVisible(true);
   };
   
   // NEW: Handler for opening Add Workout flow
@@ -447,7 +431,6 @@ function TabNavigator() {
       {activeTab === 'Schedule' ? (
         <TodayScreen 
           onDateChange={(isToday) => setIsViewingToday(isToday)}
-          onOpenSwapDrawer={handleOpenSwapDrawer}
           onOpenAddWorkout={handleOpenAddWorkout}
           onOpenBonusDrawer={() => setBonusDrawerVisible(true)}
         />
@@ -598,115 +581,6 @@ function TabNavigator() {
             </View>
             </View>}
       
-      {/* Swap Workout Drawer - Renders at TabNavigator level, above bottom nav */}
-      <BottomDrawer
-        visible={swapDrawerVisible}
-        onClose={() => setSwapDrawerVisible(false)}
-      >
-        <View style={styles.swapSheetContent}>
-          <Text style={styles.swapSheetTitle}>{swapDrawerData?.isRestDay ? t('selectWorkout') : t('swapWorkout')}</Text>
-          <ScrollView 
-            style={styles.swapSheetScrollView}
-            contentContainerStyle={styles.swapSheetScrollContent}
-            showsVerticalScrollIndicator={false}
-            bounces={false}
-          >
-          {swapDrawerData && (() => {
-            const { selectedDate } = swapDrawerData;
-            const activeCyclePlan = getActiveCyclePlan();
-
-            if (!activeCyclePlan) {
-              return (
-                <View style={styles.swapSheetEmpty}>
-                  <Text style={styles.swapSheetEmptyText}>{t('noOtherDaysThisWeek')}</Text>
-                </View>
-              );
-            }
-
-            const planId = activeCyclePlan.id;
-            const cycleStart = dayjs(activeCyclePlan.startDate);
-            const effectiveEnd = dayjs(getCyclePlanEffectiveEndDate(activeCyclePlan));
-
-            const cycleWorkouts = scheduledWorkouts.filter(sw => {
-              if (sw.source !== 'cycle') return false;
-              if (sw.programId !== planId && sw.cyclePlanId !== planId) return false;
-              if (sw.date === selectedDate) return false;
-              if (dayjs(sw.date).isAfter(effectiveEnd, 'day')) return false;
-              const completion = getMainCompletion(sw.id);
-              if (sw.isLocked || completion.percentage === 100 || completion.percentage > 0) return false;
-              return true;
-            }).sort((a, b) => a.date.localeCompare(b.date));
-
-            // Group by week number relative to cycle start
-            const weekGroups: { weekNum: number; workouts: typeof cycleWorkouts }[] = [];
-            const weekMap = new Map<number, typeof cycleWorkouts>();
-            cycleWorkouts.forEach(sw => {
-              const weekNum = Math.floor(dayjs(sw.date).diff(cycleStart, 'day') / 7) + 1;
-              if (!weekMap.has(weekNum)) weekMap.set(weekNum, []);
-              weekMap.get(weekNum)!.push(sw);
-            });
-            Array.from(weekMap.entries())
-              .sort(([a], [b]) => a - b)
-              .forEach(([weekNum, workouts]) => weekGroups.push({ weekNum, workouts }));
-
-            if (weekGroups.length === 0) {
-              return (
-                <View style={styles.swapSheetEmpty}>
-                  <Text style={styles.swapSheetEmptyText}>{t('noOtherDaysThisWeek')}</Text>
-                </View>
-              );
-            }
-
-            const totalWeeks = activeCyclePlan.weeks;
-
-            return (
-              <>
-                {weekGroups.map((group, gIdx) => (
-                  <React.Fragment key={group.weekNum}>
-                    {totalWeeks > 1 && (
-                      <Text style={[styles.swapSheetSectionTitle, gIdx > 0 && { marginTop: SPACING.lg }]}>
-                        {`Week ${group.weekNum}`}
-                      </Text>
-                    )}
-                    {group.workouts.map((sw) => (
-                      <View key={sw.id} style={styles.swapSheetItemWrapper}>
-                        <View style={[
-                          styles.swapSheetItem,
-                          pressedSwapItemDate === sw.date && styles.swapSheetItemPressed
-                        ]}>
-                          <TouchableOpacity
-                            style={styles.swapSheetItemInner}
-                            onPress={async () => {
-                              await swapWorkoutAssignments(selectedDate, sw.date);
-                              setSwapDrawerVisible(false);
-                              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                            }}
-                            onPressIn={() => setPressedSwapItemDate(sw.date)}
-                            onPressOut={() => setPressedSwapItemDate(null)}
-                            activeOpacity={1}
-                          >
-                            <View>
-                              <Text style={styles.swapSheetItemTitle}>
-                                {sw.titleSnapshot}
-                              </Text>
-                              <Text style={styles.swapSheetItemSubtitle}>
-                                {dayjs(sw.date).format('dddd, MMM D')}
-                              </Text>
-                            </View>
-                            {swapDrawerData?.isRestDay ? <IconAdd size={24} color="#817B77" /> : <IconSwap size={24} color="#817B77" />}
-                          </TouchableOpacity>
-                        </View>
-                      </View>
-                    ))}
-                  </React.Fragment>
-                ))}
-              </>
-            );
-          })()}
-          </ScrollView>
-        </View>
-      </BottomDrawer>
-      
       {/* Bonus type picker drawer - above bottom nav */}
       <BottomDrawer
         visible={bonusDrawerVisible}
@@ -845,105 +719,6 @@ const styles = StyleSheet.create({
   },
   tabLabel: {
     ...TYPOGRAPHY.metaBold,
-  },
-  
-  // Swap Drawer Styles
-  swapSheetContent: {
-    paddingHorizontal: SPACING.xxl,
-    flex: 1,
-  },
-  swapSheetTitle: {
-    ...TYPOGRAPHY.h2,
-    color: LIGHT_COLORS.secondary,
-    marginBottom: SPACING.xl,
-  },
-  swapSheetScrollView: {
-    flex: 1,
-  },
-  swapSheetScrollContent: {
-    paddingBottom: SPACING.xl,
-  },
-  swapSheetSection: {
-    marginBottom: SPACING.xl,
-  },
-  swapSheetSectionTitle: {
-    ...TYPOGRAPHY.meta,
-    color: LIGHT_COLORS.textMeta,
-    marginBottom: SPACING.md,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  createNewWorkoutButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: SPACING.md,
-    paddingHorizontal: SPACING.lg,
-    borderRadius: BORDER_RADIUS.md,
-    borderWidth: 2,
-    borderColor: COLORS.accentPrimary,
-    borderStyle: 'dashed',
-    backgroundColor: COLORS.backgroundCanvas,
-    gap: SPACING.xs,
-  },
-  createNewWorkoutButtonText: {
-    ...TYPOGRAPHY.bodyBold,
-    color: COLORS.accentPrimary,
-  },
-  swapCreateButton: {
-    flexDirection: 'row',
-    width: '100%',
-    height: 56,
-    backgroundColor: COLORS.accentPrimaryDimmed,
-    borderRadius: BORDER_RADIUS.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 24,
-    gap: 8,
-  },
-  swapCreateButtonText: {
-    ...TYPOGRAPHY.meta,
-    color: COLORS.accentPrimary,
-  },
-  swapSheetItemWrapper: {
-    marginBottom: SPACING.md,
-  },
-  swapSheetItem: {
-    backgroundColor: CARDS.cardDeepDimmed.outer.backgroundColor,
-    borderRadius: CARDS.cardDeepDimmed.outer.borderRadius,
-    borderCurve: CARDS.cardDeepDimmed.outer.borderCurve,
-    borderWidth: CARDS.cardDeepDimmed.outer.borderWidth,
-    borderColor: CARDS.cardDeepDimmed.outer.borderColor,
-    overflow: CARDS.cardDeepDimmed.outer.overflow,
-  },
-  swapSheetItemPressed: {
-    borderColor: LIGHT_COLORS.textMeta,
-  },
-  swapSheetItemInner: {
-    ...CARDS.cardDeepDimmed.inner,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: SPACING.lg,
-    paddingHorizontal: SPACING.xxl,
-  },
-  swapSheetItemTitle: {
-    ...TYPOGRAPHY.h3,
-    color: LIGHT_COLORS.secondary,
-    marginBottom: SPACING.xs,
-  },
-  swapSheetItemSubtitle: {
-    ...TYPOGRAPHY.meta,
-    color: LIGHT_COLORS.textMeta,
-  },
-  swapSheetEmpty: {
-    paddingVertical: SPACING.xxxl,
-    alignItems: 'center',
-  },
-  swapSheetEmptyText: {
-    ...TYPOGRAPHY.body,
-    color: LIGHT_COLORS.textMeta,
-    textAlign: 'center',
   },
   bonusDrawerContent: {
     paddingHorizontal: SPACING.xxl,

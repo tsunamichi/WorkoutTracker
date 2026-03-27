@@ -93,6 +93,10 @@ export const COLORS = {
   // Core colors — dark palette
   background: '#121212',         // Default background
   backgroundCanvas: '#0D0D0D',   // Page/canvas background
+  /** Light page canvas (schedule, explore-style) */
+  canvasLight: '#F5F4F4',
+  /** Primary ink on light canvas — text, icons, dark surfaces */
+  inkCharcoal: '#1F1F1F',
   backgroundContainer: '#1C1C1E', // Header/nav/card containers
   canvas: '#1C1C1E',             // Card/container background
   container: '#2C2C2E',          // Elevated secondary container

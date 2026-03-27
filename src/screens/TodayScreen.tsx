@@ -1,14 +1,23 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useCallback, useMemo, useRef } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Modal, ScrollView, Alert, Share, Dimensions } from 'react-native';
+import Animated, {
+  cancelAnimation,
+  Easing,
+  runOnJS,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+} from 'react-native-reanimated';
 import Svg, { Circle, Path } from 'react-native-svg';
 import * as Haptics from 'expo-haptics';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { useStore } from '../store';
 import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS, CARDS } from '../constants';
-import { IconCheckmark, IconSwap, IconAdd, IconSettings, IconCalendar, IconPause, IconPlay, IconCore, IconWarmup, IconStopwatch } from '../components/icons';
-import { ExpandableCalendarStrip } from '../components/calendar/ExpandableCalendarStrip';
+import { IconCheckmark, IconAdd, IconSettings, IconCalendar, IconPlay, IconCore, IconWarmup, IconStopwatch, IconChevronDown } from '../components/icons';
 import { DiagonalLinePattern } from '../components/common/DiagonalLinePattern';
+import { EXPLORE_V2_PALETTES } from '../components/exploreV2/exploreV2ColorSystem';
+import { ScheduleWorkoutCardStack } from '../components/schedule/ScheduleWorkoutCardStack';
 import { CycleControlSheet } from '../components/CycleControlSheet';
 import { ShareCycleDrawer } from '../components/ShareCycleDrawer';
 import dayjs from 'dayjs';
@@ -109,31 +118,34 @@ async function seedDevData() {
   console.log('🌱 Seed data created: PPL Week (Feb 10-16) with 3 completed workouts');
 }
 
-const DAYS_SHORT = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+/** ISO weekday 1–7 (Mon–Sun) → two-letter labels */
+const ISO_DAY_TWO_LETTER = ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'] as const;
 
-// Dark theme colors
-const LIGHT_COLORS = {
-  backgroundCanvas: '#0D0D0D',
-  backgroundContainer: '#1C1C1E',
-  secondary: '#FFFFFF',
-  textSecondary: '#AEAEB2',
-  textMeta: '#8E8E93',
-  border: '#38383A',
-  accentPrimary: COLORS.accentPrimary,
-  dayButtonActive: COLORS.accentPrimary,
-  dayButtonActiveText: COLORS.backgroundCanvas,
-  progressDot: '#48484A',
-  progressDotActive: '#FFFFFF',
+type WeekStripDay = {
+  dateStr: string;
+  dayNumber: number;
+  dayLetters: string;
+  isToday: boolean;
+  isSelected: boolean;
+  scheduledWorkout: ScheduledWorkout | undefined;
+  isCompleted: boolean;
+  isLocked: boolean;
+  completionPercentage: number;
 };
+
+/** Reserve vertical space above home indicator for pinned Extras bar */
+const EXTRAS_PIN_BAR_HEIGHT = 56;
+
+const SCHEDULE_CARD_MAX_EXERCISES = 6;
+const SCHEDULE_CARD_EXERCISES_WHEN_MORE = 5;
 
 interface TodayScreenProps {
   onDateChange?: (isToday: boolean) => void;
-  onOpenSwapDrawer?: (selectedDate: string, weekDays: any[], isRestDay?: boolean) => void;
   onOpenAddWorkout?: (date: string) => void;
   onOpenBonusDrawer?: () => void;
 }
 
-export function TodayScreen({ onDateChange, onOpenSwapDrawer, onOpenAddWorkout, onOpenBonusDrawer }: TodayScreenProps) {
+export function TodayScreen({ onDateChange, onOpenAddWorkout, onOpenBonusDrawer }: TodayScreenProps) {
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
   const {
@@ -174,7 +186,7 @@ export function TodayScreen({ onDateChange, onOpenSwapDrawer, onOpenAddWorkout, 
   const [showCycleSheet, setShowCycleSheet] = useState(false);
   const [showShareCycleSheet, setShowShareCycleSheet] = useState(false);
   const [shareCyclePlan, setShareCyclePlan] = useState<CyclePlan | undefined>(undefined);
-  const [isCalendarExpanded, setIsCalendarExpanded] = useState(false);
+  const [extrasExpanded, setExtrasExpanded] = useState(false);
 
   // TEMP: Seed dev data on mount (remove after use)
   const [seeded, setSeeded] = useState(false);
@@ -351,19 +363,48 @@ export function TodayScreen({ onDateChange, onOpenSwapDrawer, onOpenAddWorkout, 
   
   const scheduleLabel = t('schedule');
 
-  // Month/year label for calendar (same range as ExpandableCalendarStrip: 5 weeks centered on selected)
-  const calendarMonthLabel = useMemo(() => {
-    const centerWeekStart = dayjs(selectedDate).startOf('isoWeek');
-    const first = centerWeekStart.add(-2, 'week');
-    const last = centerWeekStart.add(2, 'week').add(6, 'day');
-    if (first.month() === last.month()) {
-      return first.format('MMMM YYYY');
-    }
-    return `${first.format('MMM')} - ${last.format('MMM YYYY')}`;
-  }, [selectedDate]);
+  const buildStripForCenter = useCallback(
+    (centerDateStr: string): WeekStripDay[] => {
+      const center = dayjs(centerDateStr);
+      const out: WeekStripDay[] = [];
+      for (let o = -3; o <= 3; o++) {
+        const date = center.add(o, 'day');
+        const dateStr = date.format('YYYY-MM-DD');
+        const isTodayDate = date.isSame(today, 'day');
+        const scheduledWorkout = getScheduledWorkout(dateStr);
+        let completionPercentage = 0;
+        if (scheduledWorkout) {
+          completionPercentage = getMainCompletion(scheduledWorkout.id).percentage;
+        }
+        const isLocked = scheduledWorkout?.isLocked || false;
+        const isCompleted =
+          completionPercentage === 100 || isLocked || scheduledWorkout?.status === 'completed';
+        out.push({
+          dateStr,
+          dayNumber: date.date(),
+          dayLetters: ISO_DAY_TWO_LETTER[date.isoWeekday() - 1],
+          isToday: isTodayDate,
+          isSelected: dateStr === centerDateStr,
+          scheduledWorkout,
+          isCompleted,
+          isLocked,
+          completionPercentage,
+        });
+      }
+      return out;
+    },
+    [today, getScheduledWorkout, getMainCompletion, refreshTrigger],
+  );
+
+  // Centered week strip: selected date ±3 days (7 days)
+  const stripDays = React.useMemo(
+    () => buildStripForCenter(selectedDate),
+    [selectedDate, buildStripForCenter],
+  );
 
   // Get workouts for this week (SCHEDULE-FIRST: Only use ScheduledWorkout)
-  const weekDays = React.useMemo(() => DAYS_SHORT.map((dayLetter, index) => {
+  const weekDays = React.useMemo(() => {
+    return [0, 1, 2, 3, 4, 5, 6].map(index => {
     const date = weekStart.add(index, 'day');
     const dateStr = date.format('YYYY-MM-DD');
     const isToday = date.isSame(today, 'day');
@@ -384,7 +425,7 @@ export function TodayScreen({ onDateChange, onOpenSwapDrawer, onOpenAddWorkout, 
     const isCompleted = completionPercentage === 100 || isLocked || scheduledWorkout?.status === 'completed';
     
     return {
-      dayLetter,
+      dayLetter: ISO_DAY_TWO_LETTER[date.isoWeekday() - 1],
       dayNumber: date.date(),
       date: dateStr,
       dateObj: date,
@@ -394,7 +435,8 @@ export function TodayScreen({ onDateChange, onOpenSwapDrawer, onOpenAddWorkout, 
       isLocked, // NEW: track if workout is locked
       completionPercentage,
     };
-  }), [
+  });
+  }, [
     weekStart, 
     scheduledWorkouts, 
     getScheduledWorkout, 
@@ -404,52 +446,77 @@ export function TodayScreen({ onDateChange, onOpenSwapDrawer, onOpenAddWorkout, 
   
   // Get selected day's workout (weekDays always covers the selected date's week)
   const selectedDay = weekDays.find(d => d.date === selectedDate);
-  
-  // Check if there are eligible workouts to swap with (using new architecture)
-  const hasEligibleWorkoutsToSwap = (currentDate: string) => {
-    const currentDay = weekDays.find(d => d.date === currentDate);
-    const hasCurrentWorkout = !!currentDay?.scheduledWorkout;
-    
-    if (currentDay?.isCompleted || currentDay?.isLocked) {
-      return false;
-    }
-    
-    if (!hasCurrentWorkout && activeCyclePlan) {
-      // Rest day: check ALL unstarted cycle workouts (past + future)
-      const planId = activeCyclePlan.id;
-      const effectiveEnd = getCyclePlanEffectiveEndDate(activeCyclePlan);
-      return scheduledWorkouts.some(sw => {
-        if (sw.source !== 'cycle') return false;
-        if (sw.programId !== planId && sw.cyclePlanId !== planId) return false;
-        if (sw.date === currentDate) return false;
-        if (dayjs(sw.date).isAfter(effectiveEnd, 'day')) return false;
-        const completion = getMainCompletion(sw.id);
-        if (sw.isLocked || completion.percentage === 100 || completion.percentage > 0) return false;
-        return true;
-      });
-    }
-    
-    // Day with workout: check current week for swap targets
-    const eligibleDays = weekDays.filter(day => 
-      !day.isLocked && 
-      day.date !== currentDate &&
-      !day.isCompleted
-    );
-    const unStartedWorkouts = eligibleDays.filter(day => {
-      if (!day.scheduledWorkout) return false;
-      return day.completionPercentage === 0;
-    });
-    const restDays = eligibleDays.filter(day => !day.scheduledWorkout);
-    return unStartedWorkouts.length > 0 || restDays.length > 0;
-  };
+
+  /**
+   * Planned / not-yet-started workouts from the selected day forward for the swipe deck.
+   * `in_progress` is excluded (anchored on the calendar day it was started; see store pull-forward on first set).
+   */
+  const remainingWorkoutsQueue = React.useMemo(() => {
+    const isDeckEligible = (sw: ScheduledWorkout) => {
+      if (sw.status === 'in_progress') return false;
+      const mc = getMainCompletion(sw.id);
+      return !(
+        sw.isLocked ||
+        mc.percentage === 100 ||
+        sw.status === 'completed'
+      );
+    };
+    return scheduledWorkouts
+      .filter(sw => !dayjs(sw.date).isBefore(selectedDate, 'day'))
+      .filter(isDeckEligible)
+      .sort((a, b) => a.date.localeCompare(b.date) || a.id.localeCompare(b.id));
+  }, [scheduledWorkouts, selectedDate, getMainCompletion, refreshTrigger]);
   
   const handleAddOrCreateWorkout = (currentDate: string) => {
     onOpenAddWorkout?.(currentDate);
   };
   
-  const handleDayChange = (newDate: string) => {
-    setSelectedDate(newDate);
-  };
+  const [stripViewportWidth, setStripViewportWidth] = useState(0);
+  const [slideOutgoingStrip, setSlideOutgoingStrip] = useState<WeekStripDay[] | null>(null);
+  const slidePrevDateRef = useRef(selectedDate);
+  const weekStripSlideX = useSharedValue(0);
+
+  const finishWeekStripSlide = useCallback(() => {
+    weekStripSlideX.value = 0;
+    setSlideOutgoingStrip(null);
+  }, []);
+
+  const handleDayChange = useCallback(
+    (newDate: string) => {
+      if (newDate === selectedDate) return;
+      slidePrevDateRef.current = selectedDate;
+      setSlideOutgoingStrip(stripDays);
+      setSelectedDate(newDate);
+    },
+    [selectedDate, stripDays],
+  );
+
+  useLayoutEffect(() => {
+    if (!slideOutgoingStrip || stripViewportWidth <= 0) return;
+    const dayDelta = dayjs(selectedDate).diff(dayjs(slidePrevDateRef.current), 'day');
+    if (dayDelta === 0) {
+      finishWeekStripSlide();
+      return;
+    }
+    cancelAnimation(weekStripSlideX);
+    weekStripSlideX.value = 0;
+    const w = stripViewportWidth;
+    const targetX = dayDelta > 0 ? -w : w;
+    weekStripSlideX.value = withTiming(
+      targetX,
+      {
+        duration: Math.min(560, 220 + Math.abs(dayDelta) * 55),
+        easing: Easing.inOut(Easing.cubic),
+      },
+      finished => {
+        if (finished) runOnJS(finishWeekStripSlide)();
+      },
+    );
+  }, [slideOutgoingStrip, stripViewportWidth, selectedDate, finishWeekStripSlide]);
+
+  const weekStripSlideAnimatedStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: weekStripSlideX.value }],
+  }));
 
   const handleResumeCycleOnDay = async (resumeDateStr: string) => {
     if (!activeCyclePlan) return;
@@ -471,31 +538,86 @@ export function TodayScreen({ onDateChange, onOpenSwapDrawer, onOpenAddWorkout, 
   
   const isInPastCycle = selectedDateCyclePlan ? !selectedDateCyclePlan.active : false;
 
-  const handleWorkoutPress = () => {
-    if (selectedDay?.scheduledWorkout) {
-      const sw = selectedDay.scheduledWorkout;
+  const navigateToWorkoutExecution = useCallback(
+    (sw: ScheduledWorkout) => {
       const mainCompletion = getMainCompletion(sw.id);
       const isCompleted = sw.isLocked || mainCompletion.percentage === 100;
-
       if (isInPastCycle && !isCompleted) return;
-      
       (navigation as any).navigate('ExerciseExecution', {
         workoutKey: sw.id,
         workoutTemplateId: sw.templateId,
         type: 'main',
       });
+    },
+    [getMainCompletion, isInPastCycle, navigation],
+  );
+
+  const handleWorkoutPress = () => {
+    if (selectedDay?.scheduledWorkout) {
+      navigateToWorkoutExecution(selectedDay.scheduledWorkout);
     }
   };
   
-  // Match device corner radius (iPhone rounded corners)
-  const deviceCornerRadius = insets.bottom > 0 ? 40 : 24;
-  
+  const isScheduleFutureDay = dayjs(selectedDate).isAfter(today, 'day');
+
+  const showWeekStripDualPanel = slideOutgoingStrip != null && stripViewportWidth > 0;
+
+  const renderWeekStripCells = (days: WeekStripDay[], keyPrefix: string) =>
+    days.map(d => (
+      <View key={`${keyPrefix}-${d.dateStr}`} style={styles.weekStripCell}>
+        <TouchableOpacity
+          style={styles.weekStripCellTouchable}
+          onPress={() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            handleDayChange(d.dateStr);
+          }}
+          activeOpacity={0.75}
+          accessibilityRole="button"
+          accessibilityLabel={`${d.dayLetters} ${d.dayNumber}`}
+          accessibilityState={{ selected: d.isSelected }}
+        >
+          <View style={styles.weekStripCellSlideContent}>
+            {d.isSelected ? (
+              <View style={styles.weekStripSelectedPill}>
+                <Text style={[styles.weekStripDayLetters, styles.weekStripTextOnSelection]}>
+                  {d.dayLetters}
+                </Text>
+                <View style={styles.weekStripNumWrap}>
+                  <Text
+                    style={[
+                      styles.weekStripNum,
+                      d.isToday && styles.weekStripNumToday,
+                      styles.weekStripTextOnSelection,
+                    ]}
+                  >
+                    {d.dayNumber}
+                  </Text>
+                </View>
+              </View>
+            ) : (
+              <>
+                <Text style={styles.weekStripDayLetters}>{d.dayLetters}</Text>
+                <View style={styles.weekStripNumWrap}>
+                  <Text
+                    style={[
+                      styles.weekStripNum,
+                      d.isToday && styles.weekStripNumToday,
+                    ]}
+                  >
+                    {d.dayNumber}
+                  </Text>
+                </View>
+              </>
+            )}
+          </View>
+        </TouchableOpacity>
+      </View>
+    ));
+
   return (
       <View style={styles.gradient}>
-        <SafeAreaView style={styles.container} edges={[]}>
-          {/* Unified header + calendar card */}
-          <View style={[styles.calendarCard, { paddingTop: insets.top }]}>
-            {/* Header row: Schedule title + icons */}
+        <SafeAreaView style={styles.scheduleScreenRoot} edges={[]}>
+          <View style={[styles.scheduleHeaderStack, { paddingTop: insets.top }]}>
             <View style={styles.topBar}>
               <Text style={styles.headerTitle}>{scheduleLabel}</Text>
               <View style={styles.headerRight}>
@@ -503,12 +625,12 @@ export function TodayScreen({ onDateChange, onOpenSwapDrawer, onOpenAddWorkout, 
                   <TouchableOpacity
                     style={styles.settingsButton}
                     onPress={() => {
-                      setSelectedDate(today.format('YYYY-MM-DD'));
                       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                      handleDayChange(today.format('YYYY-MM-DD'));
                     }}
                     activeOpacity={1}
                   >
-                    <IconCalendar size={24} color="#FFFFFF" />
+                    <IconCalendar size={24} color={COLORS.inkCharcoal} />
                   </TouchableOpacity>
                 )}
                 <TouchableOpacity
@@ -516,11 +638,10 @@ export function TodayScreen({ onDateChange, onOpenSwapDrawer, onOpenAddWorkout, 
                   onPress={() => (navigation as any).navigate('Profile')}
                   activeOpacity={1}
                 >
-                  <IconSettings size={24} color="#FFFFFF" />
+                  <IconSettings size={24} color={COLORS.inkCharcoal} />
                 </TouchableOpacity>
               </View>
             </View>
-            {/* Cycle chip + month/year on one row */}
             <View style={styles.cycleChipAndMonthRow}>
               <TouchableOpacity
                 style={[
@@ -563,33 +684,52 @@ export function TodayScreen({ onDateChange, onOpenSwapDrawer, onOpenAddWorkout, 
                   </Text>
                 )}
               </TouchableOpacity>
-              {isCalendarExpanded && (
-                <View style={styles.calendarMonthLabelWrap}>
-                  <Text style={styles.calendarMonthLabel} numberOfLines={1}>
-                    {calendarMonthLabel}
-                  </Text>
-                </View>
-              )}
             </View>
 
-            {/* Calendar strip */}
-            <ExpandableCalendarStrip
-              hideMonthLabel
-              onExpandedChange={setIsCalendarExpanded}
-              selectedDate={selectedDate}
-              onSelectDate={handleDayChange}
-              cyclePlans={cyclePlans}
-              scheduledWorkouts={scheduledWorkouts}
-              getScheduledWorkout={getScheduledWorkout}
-              getMainCompletion={getMainCompletion}
-            />
+            <View style={styles.weekStripRow}>
+              <View
+                style={styles.weekStripClip}
+                onLayout={e => {
+                  const w = e.nativeEvent.layout.width;
+                  if (w > 0) setStripViewportWidth(w);
+                }}
+              >
+                <Animated.View
+                  style={[
+                    styles.weekStripSlideRowInner,
+                    showWeekStripDualPanel
+                      ? { width: stripViewportWidth * 2 }
+                      : { width: '100%', alignSelf: 'stretch' },
+                    weekStripSlideAnimatedStyle,
+                  ]}
+                >
+                  {showWeekStripDualPanel && slideOutgoingStrip ? (
+                    <View style={[styles.weekStripPanel, { width: stripViewportWidth }]}>
+                      {renderWeekStripCells(slideOutgoingStrip, 'out')}
+                    </View>
+                  ) : null}
+                  <View
+                    style={[
+                      styles.weekStripPanel,
+                      showWeekStripDualPanel ? { width: stripViewportWidth } : { flex: 1, minWidth: 0 },
+                    ]}
+                  >
+                    {renderWeekStripCells(stripDays, 'in')}
+                  </View>
+                </Animated.View>
+              </View>
+            </View>
           </View>
-            
-            {/* Day Detail Content - scrollable when bonus list is long */}
-            {(
+
               <ScrollView
                 style={styles.contentScroll}
-                contentContainerStyle={[styles.contentScrollContent, { paddingBottom: insets.bottom + 56 }]}
+                contentContainerStyle={[
+                  styles.contentScrollContent,
+                  {
+                    paddingBottom: SPACING.lg + (isScheduleFutureDay ? insets.bottom + 8 : EXTRAS_PIN_BAR_HEIGHT),
+                    flexGrow: 1,
+                  },
+                ]}
                 showsVerticalScrollIndicator={true}
                 keyboardShouldPersistTaps="handled"
               >
@@ -632,6 +772,14 @@ export function TodayScreen({ onDateChange, onOpenSwapDrawer, onOpenAddWorkout, 
                     </View>
                   </TouchableOpacity>
                 </View>
+              ) : remainingWorkoutsQueue.length > 0 ? (
+                <ScheduleWorkoutCardStack
+                  queue={remainingWorkoutsQueue}
+                  exercises={exercises}
+                  getMainCompletion={getMainCompletion}
+                  isInPastCycle={isInPastCycle}
+                  onOpenWorkout={navigateToWorkoutExecution}
+                />
               ) : selectedDay?.scheduledWorkout ? (
                 <View style={styles.workoutCard}>
                       <TouchableOpacity
@@ -643,86 +791,71 @@ export function TodayScreen({ onDateChange, onOpenSwapDrawer, onOpenAddWorkout, 
                       >
                     {(() => {
                       const sw = selectedDay.scheduledWorkout;
-                      
-                      // Calculate completion: use mainCompletion % OR locked/status (e.g. after "Complete" or recoverCompletion)
                       const mainCompletion = getMainCompletion(sw.id);
                       const completionPercentage = mainCompletion.percentage;
-                      const isCompleted = completionPercentage === 100 || sw.isLocked === true || sw.status === 'completed';
-                      
-                      // Determine button state
+                      const isCompleted =
+                        completionPercentage === 100 || sw.isLocked === true || sw.status === 'completed';
                       const progress = isCompleted ? 1 : completionPercentage / 100;
-                      const isSkipped = isInPastCycle && !isCompleted;
-                      let buttonState = t('start');
-                      if (isSkipped) {
-                        buttonState = t('skipped');
-                      } else if (isCompleted) {
-                        buttonState = t('workoutComplete');
-                      } else if (completionPercentage > 0) {
-                        buttonState = t('resume');
-                      }
-                      
+                      const orderedExercises = [...(sw.exercisesSnapshot ?? [])].sort(
+                        (a, b) => a.order - b.order,
+                      );
+                      const exerciseDisplayName = (ex: (typeof orderedExercises)[0]) => {
+                        const lib = exercises.find(e => e.id === ex.exerciseId);
+                        return lib?.name ?? ex.exerciseId;
+                      };
+                      const exTotal = orderedExercises.length;
+                      const visibleExercises =
+                        exTotal <= SCHEDULE_CARD_MAX_EXERCISES
+                          ? orderedExercises
+                          : orderedExercises.slice(0, SCHEDULE_CARD_EXERCISES_WHEN_MORE);
+                      const moreExercisesCount =
+                        exTotal > SCHEDULE_CARD_MAX_EXERCISES
+                          ? exTotal - SCHEDULE_CARD_EXERCISES_WHEN_MORE
+                          : 0;
+
                       return (
-                        <>
-                          <View style={styles.workoutCardContent}>
-                          {/* Top Row: Workout Name + Progress/Checkmark */}
-                          <View style={styles.workoutCardHeader}>
-                            <Text style={styles.workoutName}>{sw.titleSnapshot}</Text>
+                        <View style={styles.workoutCardContent}>
+                          <View style={styles.workoutTitleSection}>
+                            <Text style={styles.workoutName} numberOfLines={4}>
+                              {sw.titleSnapshot}
+                            </Text>
                             {!isCompleted && progress > 0 ? (
-                              <View style={styles.progressIndicator}>
-                                <Text style={styles.progressText}>{completionPercentage}%</Text>
-                                <Svg height="16" width="16" viewBox="0 0 16 16" style={styles.progressCircle}>
-                                  <Circle cx="8" cy="8" r="8" fill={COLORS.accentPrimaryDimmed} />
-                                  <Path
-                                    d={`M 8 8 L 8 0 A 8 8 0 ${progress > 0.5 ? 1 : 0} 1 ${
-                                      8 + 8 * Math.sin(2 * Math.PI * progress)
-                                    } ${
-                                      8 - 8 * Math.cos(2 * Math.PI * progress)
-                                    } Z`}
-                                    fill={COLORS.signalWarning}
-                                  />
-                                </Svg>
+                              <View style={styles.workoutProgressRow}>
+                                <View style={styles.progressIndicator}>
+                                  <Text style={styles.progressText}>{completionPercentage}%</Text>
+                                  <Svg height="16" width="16" viewBox="0 0 16 16" style={styles.progressCircle}>
+                                    <Circle cx="8" cy="8" r="8" fill={COLORS.accentPrimaryDimmed} />
+                                    <Path
+                                      d={`M 8 8 L 8 0 A 8 8 0 ${progress > 0.5 ? 1 : 0} 1 ${
+                                        8 + 8 * Math.sin(2 * Math.PI * progress)
+                                      } ${8 - 8 * Math.cos(2 * Math.PI * progress)} Z`}
+                                      fill={COLORS.signalWarning}
+                                    />
+                                  </Svg>
+                                </View>
                               </View>
                             ) : null}
                           </View>
-                          
-                          {/* Exercises Count and Program Name */}
-                          <Text style={styles.workoutExercises}>
-                              {sw.exercisesSnapshot?.length || 0}{' '}
-                              {(sw.exercisesSnapshot?.length || 0) === 1 ? t('exercise') : t('exercises')}
-                              {sw.programName && (
-                                <Text style={styles.workoutMeta}>
-                                  {' • '}{sw.programName}
-                                </Text>
-                              )}
-                          </Text>
+                          <View style={styles.workoutExerciseList}>
+                            {visibleExercises.map(ex => (
+                              <Text
+                                key={ex.id}
+                                style={styles.workoutExerciseListItem}
+                                numberOfLines={1}
+                                ellipsizeMode="tail"
+                              >
+                                {exerciseDisplayName(ex)}
+                              </Text>
+                            ))}
+                            {moreExercisesCount > 0 ? (
+                              <Text style={styles.workoutMoreExercises} numberOfLines={1}>
+                                {moreExercisesCount === 1
+                                  ? '+ 1 more exercise'
+                                  : `+ ${moreExercisesCount} more exercises`}
+                              </Text>
+                            ) : null}
                           </View>
-                          
-                          {/* Footer: Action Button */}
-                          <View style={styles.workoutCardFooter} pointerEvents="none">
-                            <View style={[
-                              styles.startButton,
-                              isCompleted && styles.startButtonCompletedNoBg,
-                              isSkipped && styles.startButtonCompletedNoBg,
-                              !isCompleted && !isSkipped && selectedDate !== today.format('YYYY-MM-DD') && dayjs(selectedDate).isBefore(today, 'day') && styles.startButtonPast,
-                              !isCompleted && !isSkipped && dayjs(selectedDate).isAfter(today, 'day') && styles.startButtonFuture,
-                            ]}>
-                              {isCompleted ? (
-                                <View style={styles.startButtonCompletedRow}>
-                                  <IconCheckmark size={16} color={COLORS.successBright} />
-                                  <Text style={[styles.startButtonText, styles.startButtonTextCompleted]}>{buttonState}</Text>
-                                </View>
-                              ) : isSkipped ? (
-                                <Text style={[styles.startButtonText, { color: COLORS.textMeta }]}>{buttonState}</Text>
-                              ) : (
-                                <Text style={[
-                                  styles.startButtonText,
-                                  selectedDate !== today.format('YYYY-MM-DD') && dayjs(selectedDate).isBefore(today, 'day') && styles.startButtonTextPast,
-                                  dayjs(selectedDate).isAfter(today, 'day') && styles.startButtonTextFuture,
-                                ]}>{buttonState}</Text>
-                              )}
-                            </View>
-                          </View>
-                        </>
+                        </View>
                       );
                     })()}
                       </TouchableOpacity>
@@ -761,157 +894,185 @@ export function TodayScreen({ onDateChange, onOpenSwapDrawer, onOpenAddWorkout, 
               )}
 
               <View style={styles.cardActionsContainer}>
-                {/* Per Product Spec: Show actions based on workout existence and lock status */}
-                {isPausedDay ? (
-                  null
-                ) : selectedDay?.scheduledWorkout ? (
-                  /* Workout EXISTS: Show swap button only on today (not locked, completed, or in progress) */
-                  selectedDate === today.format('YYYY-MM-DD') && !selectedDay.isLocked && !selectedDay.isCompleted && selectedDay.completionPercentage === 0 && (
-                    <TouchableOpacity 
-                      style={styles.swapButton}
-                      onPress={() => onOpenSwapDrawer?.(selectedDate, weekDays)}
-                      activeOpacity={1}
-                    >
-                      <IconSwap size={24} color={COLORS.textMeta} />
-                      <Text style={styles.swapButtonText}>{t('swap')}</Text>
-                    </TouchableOpacity>
-                  )
-                ) : (
-                  /* Only show Add Workout when the selected date is in an active cycle (rest day). When no cycles in progress, only "Create new one" is shown above. */
-                  !dayjs(selectedDate).isBefore(today, 'day') && activeCyclePlan && selectedDateCyclePlan?.active && !selectedDay?.scheduledWorkout ? (
-                    <TouchableOpacity
-                      style={styles.addWorkoutButton}
-                      onPress={() => handleAddOrCreateWorkout(selectedDate)}
-                      activeOpacity={1}
-                    >
-                      <IconAdd size={24} color={COLORS.accentPrimary} />
-                      <Text style={styles.addWorkoutButtonText}>{t('addWorkout')}</Text>
-                    </TouchableOpacity>
-                  ) : null
-                )}
-              </View>
-              </View>
-              </View>
-              
-              {/* Bonus Section — only visible on today */}
-              {(() => {
-                const todayDate = today.format('YYYY-MM-DD');
-                const isToday = selectedDate === todayDate;
-                const isPastDay = dayjs(selectedDate).isBefore(today, 'day');
-                const isFutureDay = dayjs(selectedDate).isAfter(today, 'day');
-                
-                if (isFutureDay) return null;
-                
-                const rawBonusItems = getBonusLogsForDate(selectedDate);
-                // Latest added first
-                const bonusItems = [...rawBonusItems].sort(
-                  (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-                );
-                const count = bonusItems.length;
-                const contentWidth = Dimensions.get('window').width - SPACING.xxl * 2;
-                const carouselCardWidth = (contentWidth - SPACING.sm) / 2;
-                const carouselSnapInterval = carouselCardWidth + SPACING.sm;
-
-                const BonusTypeIcon = ({ type, size = 16 }: { type: BonusType; size?: number }) => {
-                  if (type === 'timer') return <IconStopwatch size={size} color={COLORS.textMeta} />;
-                  if (type === 'warmup') return <IconWarmup size={size} color={COLORS.textMeta} />;
-                  return <IconCore size={size} color={COLORS.textMeta} />;
-                };
-
-                const renderBonusCard = (item: typeof bonusItems[0], inCarousel?: boolean, carouselWidth?: number) => (
+                {!isPausedDay &&
+                !selectedDay?.scheduledWorkout &&
+                !dayjs(selectedDate).isBefore(today, 'day') &&
+                activeCyclePlan &&
+                selectedDateCyclePlan?.active ? (
                   <TouchableOpacity
-                    key={item.id}
-                    style={[
-                      inCarousel
-                        ? [styles.bonusCarouselCard, carouselWidth !== undefined && { width: carouselWidth }]
-                        : count === 2
-                          ? styles.bonusCardHalf
-                          : styles.bonusCardWrapper,
-                    ]}
-                    onPress={() => (navigation as any).navigate('BonusDetail', { bonusLogId: item.id })}
-                    activeOpacity={0.85}
+                    style={styles.addWorkoutButton}
+                    onPress={() => handleAddOrCreateWorkout(selectedDate)}
+                    activeOpacity={1}
                   >
-                    <View style={styles.bonusPresetCard}>
-                      <View style={[styles.bonusPresetCardInner, count === 2 && styles.bonusPresetCardInnerCompact]}>
-                        <Text style={styles.bonusPresetCardName} numberOfLines={2}>{item.presetName}</Text>
-                        <View style={styles.bonusPresetCardBottomRow}>
-                          {item.status === 'completed' ? (
-                            <View style={styles.bonusPresetCardCta}>
-                              <IconCheckmark size={16} color={COLORS.successBright} />
-                            </View>
-                          ) : (
-                            <View style={styles.bonusPresetCardCta} pointerEvents="none">
-                              <Text style={styles.bonusPresetCardCtaStart}>{t('start')}</Text>
-                              <IconPlay size={10} color={COLORS.accentPrimary} />
-                            </View>
-                          )}
-                          <BonusTypeIcon type={item.type} size={20} />
-                        </View>
-                      </View>
-                    </View>
+                    <IconAdd size={24} color={COLORS.accentPrimary} />
+                    <Text style={styles.addWorkoutButtonText}>{t('addWorkout')}</Text>
                   </TouchableOpacity>
-                );
-
-                return (
-                  <View style={styles.bonusSection}>
-                    <View style={styles.bonusSectionHeader}>
-                      <Text style={styles.intervalsSectionTitle}>{t('bonus')}</Text>
-                    </View>
-                    {count === 0 && isPastDay && (
-                      <Text style={styles.noIntervalsText}>{t('noBonusPerformedThisDay')}</Text>
-                    )}
-                    {count === 0 && isToday && (
-                      <TouchableOpacity
-                        style={styles.addIntervalCardButton}
-                        onPress={() => onOpenBonusDrawer?.()}
-                        activeOpacity={0.7}
-                      >
-                        <DiagonalLinePattern width="100%" height={56} borderRadius={16} />
-                        <IconAdd size={24} color={COLORS.text} />
-                        <Text style={styles.addIntervalCardText}>{t('addBonus')}</Text>
-                      </TouchableOpacity>
-                    )}
-                    {count === 1 && (
-                      <View style={styles.bonusCardsRow}>
-                        {renderBonusCard(bonusItems[0])}
-                      </View>
-                    )}
-                    {count === 2 && (
-                      <View style={styles.bonusCardsRow}>
-                        {bonusItems.map(renderBonusCard)}
-                      </View>
-                    )}
-                    {count >= 3 && (
-                      <ScrollView
-                        horizontal
-                        showsHorizontalScrollIndicator={false}
-                        contentContainerStyle={styles.bonusCarouselContent}
-                        style={styles.bonusCarousel}
-                        snapToInterval={carouselSnapInterval}
-                        snapToAlignment="start"
-                        decelerationRate="fast"
-                      >
-                        {bonusItems.map((item) => renderBonusCard(item, true, carouselCardWidth))}
-                      </ScrollView>
-                    )}
-                    {isToday && count > 0 && (
-                      <TouchableOpacity
-                        style={[styles.addIntervalCardButton, styles.addIntervalCardButtonBelow]}
-                        onPress={() => onOpenBonusDrawer?.()}
-                        activeOpacity={0.7}
-                      >
-                        <DiagonalLinePattern width="100%" height={56} borderRadius={16} />
-                        <IconAdd size={24} color={COLORS.text} />
-                        <Text style={styles.addIntervalCardText}>{t('addBonus')}</Text>
-                      </TouchableOpacity>
-                    )}
-                  </View>
-                );
-              })()}
-              
+                ) : null}
+              </View>
+              </View>
+              </View>
               </ScrollView>
-            )}
-            
+
+          {!isScheduleFutureDay &&
+            (() => {
+              const todayDate = today.format('YYYY-MM-DD');
+              const isTodaySelected = selectedDate === todayDate;
+              const isPastDay = dayjs(selectedDate).isBefore(today, 'day');
+
+              const rawBonusItems = getBonusLogsForDate(selectedDate);
+              const bonusItems = [...rawBonusItems].sort(
+                (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+              );
+              const count = bonusItems.length;
+              const contentWidth = Dimensions.get('window').width - SPACING.xxl * 2;
+              const carouselCardWidth = (contentWidth - SPACING.sm) / 2;
+              const carouselSnapInterval = carouselCardWidth + SPACING.sm;
+
+              const BonusTypeIcon = ({ type, size = 16 }: { type: BonusType; size?: number }) => {
+                if (type === 'timer') return <IconStopwatch size={size} color={COLORS.textMeta} />;
+                if (type === 'warmup') return <IconWarmup size={size} color={COLORS.textMeta} />;
+                return <IconCore size={size} color={COLORS.textMeta} />;
+              };
+
+              const renderBonusCard = (
+                item: (typeof bonusItems)[0],
+                inCarousel?: boolean,
+                carouselWidth?: number,
+              ) => (
+                <TouchableOpacity
+                  key={item.id}
+                  style={[
+                    inCarousel
+                      ? [styles.bonusCarouselCard, carouselWidth !== undefined && { width: carouselWidth }]
+                      : count === 2
+                        ? styles.bonusCardHalf
+                        : styles.bonusCardWrapper,
+                  ]}
+                  onPress={() => (navigation as any).navigate('BonusDetail', { bonusLogId: item.id })}
+                  activeOpacity={0.85}
+                >
+                  <View style={styles.bonusPresetCard}>
+                    <View style={[styles.bonusPresetCardInner, count === 2 && styles.bonusPresetCardInnerCompact]}>
+                      <Text style={styles.bonusPresetCardName} numberOfLines={2}>
+                        {item.presetName}
+                      </Text>
+                      <View style={styles.bonusPresetCardBottomRow}>
+                        {item.status === 'completed' ? (
+                          <View style={styles.bonusPresetCardCta}>
+                            <IconCheckmark size={16} color={COLORS.successBright} />
+                          </View>
+                        ) : (
+                          <View style={styles.bonusPresetCardCta} pointerEvents="none">
+                            <Text style={styles.bonusPresetCardCtaStart}>{t('start')}</Text>
+                            <IconPlay size={10} color={COLORS.accentPrimary} />
+                          </View>
+                        )}
+                        <BonusTypeIcon type={item.type} size={20} />
+                      </View>
+                    </View>
+                  </View>
+                </TouchableOpacity>
+              );
+
+              const extrasPanel = (
+                <View style={styles.extrasPanelInner}>
+                  <View style={styles.bonusSectionHeader}>
+                    <Text style={styles.intervalsSectionTitle}>{t('extras')}</Text>
+                  </View>
+                  {count === 0 && isPastDay && (
+                    <Text style={styles.noIntervalsText}>{t('noBonusPerformedThisDay')}</Text>
+                  )}
+                  {count === 0 && isTodaySelected && (
+                    <TouchableOpacity
+                      style={styles.addIntervalCardButton}
+                      onPress={() => onOpenBonusDrawer?.()}
+                      activeOpacity={0.7}
+                    >
+                      <DiagonalLinePattern width="100%" height={56} borderRadius={16} />
+                      <IconAdd size={24} color={COLORS.inkCharcoal} />
+                        <Text style={styles.addIntervalCardText}>{t('addBonus')}</Text>
+                      </TouchableOpacity>
+                    )}
+                    {count === 1 && <View style={styles.bonusCardsRow}>{renderBonusCard(bonusItems[0])}</View>}
+                  {count === 2 && (
+                    <View style={styles.bonusCardsRow}>
+                      {bonusItems.map(item => renderBonusCard(item))}
+                    </View>
+                  )}
+                  {count >= 3 && (
+                    <ScrollView
+                      horizontal
+                      showsHorizontalScrollIndicator={false}
+                      contentContainerStyle={styles.bonusCarouselContent}
+                      style={styles.bonusCarousel}
+                      snapToInterval={carouselSnapInterval}
+                      snapToAlignment="start"
+                      decelerationRate="fast"
+                    >
+                      {bonusItems.map(item => renderBonusCard(item, true, carouselCardWidth))}
+                    </ScrollView>
+                  )}
+                  {isTodaySelected && count > 0 && (
+                    <TouchableOpacity
+                      style={[styles.addIntervalCardButton, styles.addIntervalCardButtonBelow]}
+                      onPress={() => onOpenBonusDrawer?.()}
+                      activeOpacity={0.7}
+                    >
+                      <DiagonalLinePattern width="100%" height={56} borderRadius={16} />
+                      <IconAdd size={24} color={COLORS.inkCharcoal} />
+                      <Text style={styles.addIntervalCardText}>{t('addBonus')}</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              );
+
+              return (
+                <>
+                  {extrasExpanded && (
+                    <View
+                      style={[
+                        styles.extrasPanel,
+                        { maxHeight: Dimensions.get('window').height * 0.4 },
+                      ]}
+                    >
+                      <ScrollView
+                        nestedScrollEnabled
+                        showsVerticalScrollIndicator={false}
+                        style={styles.extrasPanelScroll}
+                        contentContainerStyle={styles.extrasPanelScrollContent}
+                      >
+                        {extrasPanel}
+                      </ScrollView>
+                    </View>
+                  )}
+                  <View style={[styles.extrasPinBarWrap, { paddingBottom: insets.bottom }]}>
+                    <TouchableOpacity
+                      style={styles.extrasPinBar}
+                      onPress={() => {
+                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                        setExtrasExpanded(v => !v);
+                      }}
+                      activeOpacity={0.85}
+                      accessibilityRole="button"
+                      accessibilityLabel={t('extras')}
+                      accessibilityState={{ expanded: extrasExpanded }}
+                    >
+                      <View style={styles.extrasPinBarInner}>
+                        <View
+                          style={{
+                            transform: [{ rotate: extrasExpanded ? '0deg' : '180deg' }],
+                          }}
+                        >
+                          <IconChevronDown size={20} color={COLORS.inkCharcoal} />
+                        </View>
+                        <Text style={styles.extrasPinLabel}>{t('extras')}</Text>
+                      </View>
+                    </TouchableOpacity>
+                  </View>
+                </>
+              );
+            })()}
+
         </SafeAreaView>
 
         {/* Cycle Control Sheet */}
@@ -984,7 +1145,12 @@ export function TodayScreen({ onDateChange, onOpenSwapDrawer, onOpenAddWorkout, 
 const styles = StyleSheet.create({
   gradient: {
     flex: 1,
-    backgroundColor: COLORS.backgroundCanvas,
+    backgroundColor: COLORS.canvasLight,
+  },
+  scheduleScreenRoot: {
+    flex: 1,
+    flexDirection: 'column',
+    backgroundColor: 'transparent',
   },
   container: {
     flex: 1,
@@ -996,6 +1162,7 @@ const styles = StyleSheet.create({
   },
   contentScroll: {
     flex: 1,
+    minHeight: 0,
   },
   contentScrollContent: {
     padding: SPACING.xxl,
@@ -1007,7 +1174,7 @@ const styles = StyleSheet.create({
   cardsContainer: {
     position: 'relative',
     width: '100%',
-    minHeight: 160, // Fixed height to keep content consistent between workout and rest days
+    minHeight: 328,
   },
   absoluteCard: {
     position: 'absolute',
@@ -1031,12 +1198,12 @@ const styles = StyleSheet.create({
   },
   emptyTitle: {
     ...TYPOGRAPHY.h3,
-    color: COLORS.textMeta,
+    color: COLORS.inkCharcoal,
     marginBottom: SPACING.xs,
   },
   emptyText: {
     ...TYPOGRAPHY.h3,
-    color: COLORS.text,
+    color: COLORS.inkCharcoal,
     textAlign: 'center',
     marginBottom: SPACING.xl,
   },
@@ -1056,13 +1223,111 @@ const styles = StyleSheet.create({
     color: COLORS.backgroundCanvas,
   },
   
-  // Unified header + calendar card
-  calendarCard: {
-    backgroundColor: COLORS.backgroundContainer,
-    borderBottomLeftRadius: 24,
-    borderBottomRightRadius: 24,
-    paddingBottom: SPACING.xs,
-    marginBottom: 4,
+  scheduleHeaderStack: {
+    backgroundColor: 'transparent',
+    paddingBottom: SPACING.sm,
+  },
+  weekStripRow: {
+    paddingHorizontal: SPACING.md,
+    paddingTop: SPACING.sm,
+    alignItems: 'stretch',
+  },
+  weekStripClip: {
+    width: '100%',
+    overflow: 'hidden',
+  },
+  weekStripSlideRowInner: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+  },
+  weekStripPanel: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-end',
+  },
+  weekStripCell: {
+    flex: 1,
+    flexBasis: 0,
+    minWidth: 0,
+    alignItems: 'center',
+    paddingVertical: 4,
+  },
+  weekStripCellTouchable: {
+    width: '100%',
+    alignItems: 'center',
+  },
+  weekStripCellSlideContent: {
+    alignItems: 'center',
+    width: '100%',
+  },
+  weekStripDayLetters: {
+    ...TYPOGRAPHY.note,
+    color: COLORS.inkCharcoal,
+    fontVariant: ['tabular-nums'],
+  },
+  weekStripSelectedPill: {
+    backgroundColor: EXPLORE_V2_PALETTES.complete.main,
+    borderRadius: 10,
+    paddingTop: 10,
+    alignItems: 'center',
+    alignSelf: 'center',
+  },
+  weekStripTextOnSelection: {
+    color: EXPLORE_V2_PALETTES.complete.dark,
+  },
+  weekStripNumWrap: {
+    minWidth: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: 'transparent',
+  },
+  weekStripNum: {
+    ...TYPOGRAPHY.h3,
+    color: COLORS.inkCharcoal,
+    fontVariant: ['tabular-nums'],
+  },
+  weekStripNumToday: {
+    fontWeight: '600',
+  },
+  extrasPanel: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: 'rgba(31, 31, 31, 0.12)',
+    backgroundColor: COLORS.canvasLight,
+  },
+  extrasPanelScroll: {
+    flexGrow: 0,
+  },
+  extrasPanelScrollContent: {
+    paddingBottom: SPACING.md,
+  },
+  extrasPanelInner: {
+    paddingHorizontal: SPACING.xxl,
+    paddingTop: SPACING.md,
+  },
+  extrasPinBarWrap: {
+    backgroundColor: COLORS.canvasLight,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: 'rgba(31, 31, 31, 0.12)',
+  },
+  extrasPinBar: {
+    minHeight: EXTRAS_PIN_BAR_HEIGHT,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: SPACING.sm,
+  },
+  extrasPinBarInner: {
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+  },
+  extrasPinLabel: {
+    ...TYPOGRAPHY.body,
+    fontWeight: '600',
+    color: COLORS.inkCharcoal,
   },
   topBar: {
     flexDirection: 'row',
@@ -1073,7 +1338,7 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     ...TYPOGRAPHY.h3,
-    color: LIGHT_COLORS.secondary,
+    color: COLORS.inkCharcoal,
   },
   headerRight: {
     flexDirection: 'row',
@@ -1107,7 +1372,7 @@ const styles = StyleSheet.create({
   },
   scheduleSubtitle: {
     ...TYPOGRAPHY.meta,
-    color: LIGHT_COLORS.textMeta,
+    color: COLORS.inkCharcoal,
   },
   scheduleSubtitlePauseIcon: {
     marginLeft: SPACING.xs,
@@ -1117,21 +1382,8 @@ const styles = StyleSheet.create({
   cycleChipAndMonthRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    justifyContent: 'space-between',
+    justifyContent: 'flex-start',
     gap: SPACING.md,
-  },
-  calendarMonthLabelWrap: {
-    height: 28,
-    minHeight: 28,
-    justifyContent: 'center',
-    marginRight: 24,
-    marginTop: 4,
-  },
-  calendarMonthLabel: {
-    ...TYPOGRAPHY.legal,
-    color: COLORS.textMeta,
-    lineHeight: 28,
-    textTransform: 'uppercase',
   },
   cycleChipRow: {
     alignSelf: 'flex-start',
@@ -1172,7 +1424,7 @@ const styles = StyleSheet.create({
     color: COLORS.signalNegative,
   },
   cycleChipNameFinished: {
-    color: COLORS.textMeta,
+    color: COLORS.inkCharcoal,
   },
   cycleChipStatusText: {
     fontSize: 13,
@@ -1180,7 +1432,7 @@ const styles = StyleSheet.create({
     color: COLORS.accentPrimary,
   },
   cycleChipTextFinished: {
-    color: COLORS.textMeta,
+    color: COLORS.inkCharcoal,
   },
   cycleChipTextPaused: {
     color: COLORS.signalNegative,
@@ -1188,7 +1440,7 @@ const styles = StyleSheet.create({
   cycleChipTextNone: {
     fontSize: 13,
     fontWeight: '600' as const,
-    color: COLORS.textMeta,
+    color: COLORS.inkCharcoal,
   },
 
   // Pause Banner
@@ -1241,7 +1493,7 @@ const styles = StyleSheet.create({
   },
   pausedCardMeta: {
     ...TYPOGRAPHY.meta,
-    color: COLORS.text,
+    color: COLORS.inkCharcoal,
     marginTop: 4,
     marginBottom: 24,
   },
@@ -1254,41 +1506,60 @@ const styles = StyleSheet.create({
 
   // Workout Card
   workoutCard: {
-    backgroundColor: COLORS.accentPrimaryDimmed,
+    backgroundColor: COLORS.inkCharcoal,
     borderRadius: CARDS.cardDeep.outer.borderRadius,
     borderCurve: CARDS.cardDeep.outer.borderCurve,
     overflow: CARDS.cardDeep.outer.overflow,
+    borderWidth: 2,
+    borderColor: COLORS.canvasLight,
     width: '100%',
+    minHeight: 300,
   },
   workoutCardInner: {
-    ...CARDS.cardDeep.inner,
-    paddingHorizontal: 4,
-    paddingTop: 16,
-    paddingBottom: 4,
+    flex: 1,
+    minHeight: 300,
+    padding: 16,
+    justifyContent: 'flex-start',
+    borderRadius: CARDS.cardDeep.inner.borderRadius,
+    borderCurve: CARDS.cardDeep.inner.borderCurve,
+    backgroundColor: 'transparent',
   },
   workoutCardContent: {
-    paddingHorizontal: 20,
-    position: 'relative',
+    flexGrow: 1,
+    flexShrink: 1,
+    minHeight: 0,
+    width: '100%',
   },
-  workoutCardHeader: {
+  workoutProgressRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'baseline',
-    marginBottom: 2,
+    justifyContent: 'flex-end',
+    marginTop: 8,
+    marginBottom: 4,
+  },
+  /** Workout title + optional progress; 64px below before exercise list */
+  workoutTitleSection: {
+    paddingBottom: 64,
+    width: '100%',
   },
   workoutName: {
-    ...TYPOGRAPHY.h2,
-    color: LIGHT_COLORS.secondary,
-    flex: 1,
+    ...TYPOGRAPHY.displayLarge,
+    fontWeight: '400',
+    color: COLORS.canvasLight,
+    flexShrink: 1,
   },
-  workoutExercises: {
-    ...TYPOGRAPHY.meta,
-    color: LIGHT_COLORS.textMeta,
-    marginBottom: 20,
+  workoutExerciseList: {
+    gap: 10,
+    width: '100%',
   },
-  workoutMeta: {
-    ...TYPOGRAPHY.meta,
-    color: LIGHT_COLORS.textMeta,
+  workoutExerciseListItem: {
+    ...TYPOGRAPHY.body,
+    color: COLORS.canvasLight,
+    opacity: 0.9,
+  },
+  workoutMoreExercises: {
+    ...TYPOGRAPHY.body,
+    color: COLORS.canvasLight,
+    opacity: 0.65,
   },
   programLabel: {
     ...TYPOGRAPHY.meta,
@@ -1330,7 +1601,7 @@ const styles = StyleSheet.create({
   },
   progressText: {
     ...TYPOGRAPHY.meta,
-    color: COLORS.textMeta,
+    color: COLORS.canvasLight,
   },
   workoutProgress: {
     ...TYPOGRAPHY.body,
@@ -1368,7 +1639,7 @@ const styles = StyleSheet.create({
   },
   startButtonText: {
     ...TYPOGRAPHY.metaBold,
-    color: COLORS.backgroundCanvas,
+    color: COLORS.inkCharcoal,
     textAlign: 'left',
   },
   startButtonTextCompleted: {
@@ -1380,7 +1651,10 @@ const styles = StyleSheet.create({
   startButtonTextFuture: {
     color: COLORS.accentPrimary,
   },
-  
+  startButtonTextSkippedOnCard: {
+    color: 'rgba(245, 244, 244, 0.55)',
+  },
+
   // Completed Badge
   completedBadge: {
     width: 32,
@@ -1411,7 +1685,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   restDayQuestionGray: {
-    color: COLORS.text,
+    color: COLORS.inkCharcoal,
   },
   createCycleButton: {
     width: '100%',
@@ -1428,7 +1702,7 @@ const styles = StyleSheet.create({
     color: COLORS.accentPrimary,
   },
   restDayQuestionBlack: {
-    color: COLORS.text,
+    color: COLORS.inkCharcoal,
   },
   addWorkoutButton: {
     flexDirection: 'row',
@@ -1447,24 +1721,6 @@ const styles = StyleSheet.create({
     color: COLORS.accentPrimary,
   },
   
-  // Swap Button
-  swapButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-  },
-  swapButtonText: {
-    ...TYPOGRAPHY.metaBold,
-    color: COLORS.textMeta,
-  },
-  swapIconWrapper: {
-    width: 16,
-    height: 16,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  
   cardActionsContainer: {
     alignItems: 'center',
     marginTop: SPACING.lg,
@@ -1479,7 +1735,7 @@ const styles = StyleSheet.create({
   },
   intervalsSectionTitle: {
     ...TYPOGRAPHY.meta,
-    color: COLORS.text,
+    color: COLORS.inkCharcoal,
     textTransform: 'uppercase',
   },
   bonusShowAllText: {
@@ -1502,7 +1758,7 @@ const styles = StyleSheet.create({
   },
   addIntervalCardText: {
     ...TYPOGRAPHY.metaBold,
-    color: COLORS.text,
+    color: COLORS.inkCharcoal,
   },
   addIntervalButton: {
     flexDirection: 'row',
@@ -1514,7 +1770,7 @@ const styles = StyleSheet.create({
   },
   addIntervalButtonText: {
     ...TYPOGRAPHY.metaBold,
-    color: COLORS.text,
+    color: COLORS.inkCharcoal,
   },
   bonusCardWrapper: {
     marginBottom: SPACING.sm,
@@ -1594,14 +1850,10 @@ const styles = StyleSheet.create({
   },
   noIntervalsText: {
     ...TYPOGRAPHY.body,
-    color: COLORS.textMeta,
+    color: COLORS.inkCharcoal,
     marginTop: SPACING.sm,
   },
   
-  // Bonus Section
-  bonusSection: {
-    marginTop: 56,
-  },
   bonusCardLeft: {
     flex: 1,
     marginRight: SPACING.md,

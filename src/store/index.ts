@@ -14,6 +14,19 @@ import { cloudSyncService } from '../services/cloudSync';
 
 dayjs.extend(isoWeek);
 
+/** First start from planned: anchor workout on today's date if that day has no other scheduled instance (deck pull-forward). */
+function scheduledDateWhenPullForwardToToday(
+  sw: ScheduledWorkout,
+  all: ScheduledWorkout[],
+  isBecomingInProgressFromPlanned: boolean,
+): string {
+  if (!isBecomingInProgressFromPlanned) return sw.date;
+  const todayStr = dayjs().format('YYYY-MM-DD');
+  if (sw.date === todayStr) return sw.date;
+  const conflict = all.some(o => o.date === todayStr && o.id !== sw.id);
+  return conflict ? sw.date : todayStr;
+}
+
 interface WorkoutStore {
   // State
   cycles: Cycle[];
@@ -3663,9 +3676,13 @@ export const useStore = create<WorkoutStore>((set, get) => ({
         const completedItems = completed
           ? [...new Set([...existingCompletedItems, warmupItemId])]
           : existingCompletedItems.filter(id => id !== warmupItemId);
-        
+
+        const becomingInProgress = sw.status === 'planned' && completed;
+        const nextDate = scheduledDateWhenPullForwardToToday(sw, get().scheduledWorkouts, becomingInProgress);
+
         return {
           ...sw,
+          date: nextDate,
           warmupCompletion: {
             ...existingCompletion,
             completedItems,
@@ -3748,9 +3765,13 @@ export const useStore = create<WorkoutStore>((set, get) => ({
         const completedItems = completed
           ? [...new Set([...existingCompletedItems, accessoryItemId])]
           : existingCompletedItems.filter(id => id !== accessoryItemId);
-        
+
+        const becomingInProgress = sw.status === 'planned' && completed;
+        const nextDate = scheduledDateWhenPullForwardToToday(sw, get().scheduledWorkouts, becomingInProgress);
+
         return {
           ...sw,
+          date: nextDate,
           accessoryCompletion: {
             ...existingCompletion,
             completedItems,
@@ -3829,9 +3850,13 @@ export const useStore = create<WorkoutStore>((set, get) => ({
         const completedItems = completed
           ? [...new Set([...existingCompletedItems, mainItemId])]
           : existingCompletedItems.filter(id => id !== mainItemId);
-        
+
+        const becomingInProgress = sw.status === 'planned' && completed;
+        const nextDate = scheduledDateWhenPullForwardToToday(sw, get().scheduledWorkouts, becomingInProgress);
+
         return {
           ...sw,
+          date: nextDate,
           mainCompletion: {
             ...existingCompletion,
             completedItems,

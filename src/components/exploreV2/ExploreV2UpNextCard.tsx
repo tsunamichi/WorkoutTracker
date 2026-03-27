@@ -123,7 +123,7 @@ type UpNextQueueRowProps = {
 
 const palette = EXPLORE_V2_PALETTES.upNext;
 const HEADER_INK = '#464646';
-const ROW_NAME_INK = '#1F1F1F';
+const ROW_NAME_INK = COLORS.inkCharcoal;
 /** Idle superscript — animated to `EXPLORE_V2.colors.restTimerHeaderInk` when rest timer is on */
 const ROW_SUPER_INK = '#787878';
 

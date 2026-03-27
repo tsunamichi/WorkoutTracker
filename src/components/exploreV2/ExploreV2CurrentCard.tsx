@@ -30,7 +30,7 @@ import {
   type ExploreV2CurrentSettingsOverflowProps,
 } from './ExploreV2CurrentOverflowSheet';
 
-const CANVAS_INK = '#F5F4F4';
+const CANVAS_INK = COLORS.canvasLight;
 const VALUE_INK = '#FFA424';
 const UNIT_INK = '#464646';
 /** “Skip rest time” CTA pill — solid dark so orange label stays legible */

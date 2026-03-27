@@ -135,6 +135,7 @@ type TranslationKey =
   | 'timesCompleted'
   | 'addInterval'
   | 'bonus'
+  | 'extras'
   | 'addBonus'
   | 'noBonusPerformedThisDay'
   | 'timer'
@@ -731,6 +732,7 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     addTimer: 'Add Timer',
     addInterval: 'Add',
     bonus: 'Bonus',
+    extras: 'Extras',
     addBonus: 'Add Bonus',
     noBonusPerformedThisDay: 'No bonus performed this day',
     timer: 'Timer',
@@ -1340,6 +1342,7 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     addTimer: 'Agregar Temporizador',
     addInterval: 'Agregar',
     bonus: 'Bonus',
+    extras: 'Extras',
     addBonus: 'Agregar Bonus',
     noBonusPerformedThisDay: 'No se realizó bonus este día',
     timer: 'Temporizador',

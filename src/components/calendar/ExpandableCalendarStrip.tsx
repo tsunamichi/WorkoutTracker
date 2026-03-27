@@ -93,7 +93,7 @@ export function ExpandableCalendarStrip({
 
   // Build cycle color map and plan ID map: date -> color, date -> planId
   // Process inactive plans first so active plans always take priority on overlapping dates.
-  // When a cycle is paused, the strip extends to the new effective end date and
+  // When a cycle is paused, the visible range extends to the new effective end date and
   // skips the paused gap (days between today and pausedUntil).
   const { cycleColorMap, dateToPlanId, pausedDates } = useMemo(() => {
     const colorMap: Record<string, string> = {};
@@ -202,7 +202,7 @@ export function ExpandableCalendarStrip({
   // Compute row-level cycle band info: show bands for ALL cycles (past and active).
   // Each row can have multiple bands if different plans cover different date ranges.
   // For simplicity, we render a single contiguous band per row per plan, grouped by planId.
-  // Only show strip for the cycle that contains the selected date (and preview if any)
+  // Only show cycle bands for the plan that contains the selected date (and preview if any)
   const selectedPlanId = dateToPlanId[selectedDate] ?? null;
   type BandInfo = { color: string; startIndex: number; endIndex: number; planId: string; pausedStartIndex: number | null; pausedEndIndex: number | null; isFinished: boolean };
   const weekBandInfo = useMemo(() => {
