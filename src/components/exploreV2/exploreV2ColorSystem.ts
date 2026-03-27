@@ -3,6 +3,8 @@
  * Edit EXPLORE_V2_CARD_MAINS only; soft / dark / muted derive from each main.
  */
 
+import { COLORS } from '../../constants';
+
 export type CardRole = 'complete' | 'upNext' | 'current';
 
 export type CardPalette = {
@@ -65,8 +67,8 @@ export function getCardPalette(mainHex: string): CardPalette {
 export const EXPLORE_V2_CARD_MAINS: Record<CardRole, string> = {
   /** Muted mauve / back archive layer */
   complete: '#E5E5E5',
-  /** Soft lavender queue layer */
-  upNext: '#D9D9D9',
+  /** Soft lavender queue layer — matches core `containerSecondary` */
+  upNext: COLORS.containerSecondary,
   /** Primary current workspace */
   current: '#1F1F1F',
 };

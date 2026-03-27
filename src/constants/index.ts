@@ -79,8 +79,19 @@ function adjustLightness(hex: string, amount: number): string {
   return hslToHex(hsl.h, hsl.s, hsl.l);
 }
 
-// Base accent color — vivid lime, used sparingly for CTAs & highlights
-const ACCENT_PRIMARY = '#F9B000';
+/** Hex `#RRGGBB` / `#RGB` → `rgba(r,g,b,a)`. */
+export function hexToRgba(hex: string, alpha: number): string {
+  const raw = hex.replace('#', '').trim();
+  const full = raw.length === 3 ? raw.split('').map(c => c + c).join('') : raw;
+  const n = parseInt(full, 16);
+  const r = (n >> 16) & 255;
+  const g = (n >> 8) & 255;
+  const b = n & 255;
+  return `rgba(${r},${g},${b},${alpha})`;
+}
+
+// Base accent color — spec accent-primary
+const ACCENT_PRIMARY = '#FFA424';
 const SIGNAL_NEGATIVE = '#FF453A';
 const BASE_GREEN = '#00351D';
 const SIGNAL_POSITIVE = BASE_GREEN;
@@ -88,6 +99,11 @@ const BASE_FAILURE = '#FF005B';
 const BASE_INFO = '#062FFF';
 const SIGNAL_WARNING = '#FFD60A';
 const BORDER_DIMMED = 'rgba(255, 255, 255, 0.06)';
+
+/** Core token — shared by container-secondary and text-on-primary (spec). */
+const CONTAINER_SECONDARY = '#D9D9D9';
+/** Spec accent-secondary-soft (single source for soft teal + textMetaTimer). */
+const ACCENT_SECONDARY_SOFT = '#014C47';
 
 export const COLORS = {
   // Core colors — dark palette
@@ -97,6 +113,14 @@ export const COLORS = {
   canvasLight: '#F5F4F4',
   /** Primary ink on light canvas — text, icons, dark surfaces */
   inkCharcoal: '#1F1F1F',
+  /** Mid gray surface (Up Next idle, section bands) */
+  containerSecondary: CONTAINER_SECONDARY,
+  /** Spec container-primary — primary dark surfaces (e.g. execution current card) */
+  containerPrimary: '#1F1F1F',
+  /** Spec container-tertiary — lighter gray surfaces (e.g. selected calendar pill) */
+  containerTertiary: '#E5E5E5',
+  /** Text/icons on `container-primary` / dark hero card surfaces */
+  textOnPrimary: CONTAINER_SECONDARY,
   backgroundContainer: '#1C1C1E', // Header/nav/card containers
   canvas: '#1C1C1E',             // Card/container background
   container: '#2C2C2E',          // Elevated secondary container
@@ -106,7 +130,7 @@ export const COLORS = {
   cycleStripBackground: 'rgba(13, 13, 13, 0.3)',
 
   // Primary actions
-  primary: ACCENT_PRIMARY,              // Lime for CTAs
+  primary: ACCENT_PRIMARY,              // Spec accent-primary
   primarySoft: '#1A1C0D',              // Very dark lime tint
   
   // Secondary/accent
@@ -117,13 +141,25 @@ export const COLORS = {
   accentPrimaryDark: adjustLightness(ACCENT_PRIMARY, -15),
   todayIndicator: BASE_INFO,  // Current day label & selected box
   accentPrimaryDimmed: '#372E1A',       // Subtle lime tint bg for selected states
-  accentSecondary: '#2C2C2E',           // Secondary accent color for buttons
-  
+  /** Spec accent-secondary (teal) */
+  accentSecondary: '#00ACA1',
+  /** Spec accent-secondary-soft — schedule pie incomplete, muted teal surfaces */
+  accentSecondarySoft: ACCENT_SECONDARY_SOFT,
+  /** Work timer (time-based) — page tint */
+  backgroundTimer: '#C1FF24',
+  /** Work timer — Completed card surface */
+  containerTertiaryTimer: '#B1EF15',
+  /** Work timer — Up Next card surface */
+  containerSecondaryTimer: '#9BD508',
+  /** accent-secondary-soft @ 60% — work-timer header chrome (Complete / Up Next) */
+  textMetaTimer: hexToRgba(ACCENT_SECONDARY_SOFT, 0.6),
+
   // Text — white on dark
   text: '#FFFFFF',                  // Default text color
   textPrimary: '#FFFFFF',           // Primary text
   textSecondary: '#AEAEB2',        // Secondary text
-  textMeta: '#8E8E93',             // Metadata/labels
+  /** Spec text-meta (light canvas) */
+  textMeta: '#585858',
   textMetaSoft: '#48484A',         // Soft metadata/dividers
   textDisabled: '#48484A',         // Disabled text
   

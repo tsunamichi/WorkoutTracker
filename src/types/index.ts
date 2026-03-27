@@ -140,9 +140,13 @@ export interface ProgressPhoto {
   notes?: string;
 }
 
+/** Accent / execution color preset (Settings → Appearance). */
+export type AppColorThemeId = 'original' | 'v1' | 'v3';
+
 export interface AppSettings {
   useKg: boolean;
   language?: 'en' | 'es';
+  colorTheme?: AppColorThemeId;
   monthlyProgressReminderEnabled: boolean;
   monthlyProgressReminderDay: number;
   restTimerDefaultSeconds: number;

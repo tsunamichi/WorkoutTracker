@@ -3,9 +3,11 @@ import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert, Linking } 
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import { useStore } from '../store';
+import type { AppColorThemeId } from '../types';
+import { useAppTheme } from '../theme/useAppTheme';
 import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS } from '../constants';
 import { TimerValueSheet } from '../components/timer/TimerValueSheet';
-import { IconArrowLeft, IconTriangle } from '../components/icons';
+import { IconArrowLeft, IconTriangle, IconCheckmark } from '../components/icons';
 import { Toggle } from '../components/Toggle';
 import { useTranslation } from '../i18n/useTranslation';
 import { signInWithApple, getCurrentUser, signOut, isAppleSignInAvailable, AuthUser } from '../services/authService';
@@ -27,6 +29,7 @@ interface ProfileScreenProps {
 export function ProfileScreen({ navigation }: ProfileScreenProps) {
   const insets = useSafeAreaInsets();
   const { settings, updateSettings, initialize } = useStore();
+  const { colors: themeColors } = useAppTheme();
   const [showRestTimePicker, setShowRestTimePicker] = useState(false);
   const [notificationsSystemEnabled, setNotificationsSystemEnabled] = useState<boolean | null>(null);
   const [authUser, setAuthUser] = useState<AuthUser | null>(null);
@@ -116,6 +119,12 @@ export function ProfileScreen({ navigation }: ProfileScreenProps) {
   const languageEmoji = language === 'es' ? '🇪🇸' : '🇬🇧';
   const restTimeFormatted = `${Math.floor(settings.restTimerDefaultSeconds / 60)}:${(settings.restTimerDefaultSeconds % 60).toString().padStart(2, '0')}`;
   const unitLabel = settings.useKg ? 'kg' : 'lb';
+  const activeColorTheme: AppColorThemeId = settings.colorTheme ?? 'original';
+
+  const handleColorTheme = (id: AppColorThemeId) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    void updateSettings({ colorTheme: id });
+  };
 
   return (
     <View style={styles.container}>
@@ -177,6 +186,36 @@ export function ProfileScreen({ navigation }: ProfileScreenProps) {
             <Text style={styles.columnCardValue}>{restTimeFormatted}</Text>
             <Text style={styles.columnCardLabel}>{t('restTime')}</Text>
           </TouchableOpacity>
+        </View>
+
+        <Text style={styles.sectionTitle}>{t('colorTheme')}</Text>
+        <View style={styles.settingCard}>
+          <Text style={[styles.settingDescription, styles.themeHint]}>{t('colorThemeFootnote')}</Text>
+          {(
+            [
+              { id: 'original' as const, label: t('colorThemeOriginal') },
+              { id: 'v1' as const, label: t('colorThemeV1') },
+              { id: 'v3' as const, label: t('colorThemeV3') },
+            ] as const
+          ).map((opt, i) => (
+            <React.Fragment key={opt.id}>
+              {i > 0 ? <View style={styles.themeOptionDivider} /> : null}
+              <TouchableOpacity
+                style={styles.settingRow}
+                activeOpacity={0.7}
+                onPress={() => handleColorTheme(opt.id)}
+              >
+                <View style={styles.settingInfo}>
+                  <Text style={styles.settingLabel}>{opt.label}</Text>
+                </View>
+                {activeColorTheme === opt.id ? (
+                  <IconCheckmark size={22} color={themeColors.accentPrimary} />
+                ) : (
+                  <View style={{ width: 22 }} />
+                )}
+              </TouchableOpacity>
+            </React.Fragment>
+          ))}
         </View>
 
         {/* Progression Rules */}
@@ -538,6 +577,14 @@ const styles = StyleSheet.create({
   settingDescription: {
     ...TYPOGRAPHY.meta,
     color: COLORS.textMeta,
+  },
+  themeHint: {
+    marginBottom: SPACING.md,
+  },
+  themeOptionDivider: {
+    height: 1,
+    backgroundColor: COLORS.borderDimmed,
+    marginVertical: SPACING.sm,
   },
   settingChevron: {
     marginLeft: SPACING.sm,

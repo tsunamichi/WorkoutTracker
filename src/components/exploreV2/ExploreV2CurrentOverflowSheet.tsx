@@ -22,15 +22,12 @@ import Reanimated, {
 } from 'react-native-reanimated';
 import { Toggle } from '../Toggle';
 import { EXPLORE_V2 } from './exploreV2Tokens';
-import { EXPLORE_V2_CHROME } from './exploreV2ColorSystem';
 import dayjs from 'dayjs';
 import { COLORS, SPACING, TYPOGRAPHY } from '../../constants';
+import { useAppTheme } from '../../theme/useAppTheme';
 import { formatWeightForLoad } from '../../utils/weight';
 import type { ExploreV2Exercise } from './exploreV2Types';
 import { useTranslation } from '../../i18n/useTranslation';
-
-/** Same ink as Completed / Up Next header labels */
-const HEADER_INK = '#464646';
 
 const PANEL_TOP_RADIUS = 16;
 const DRAWER_TOP_DIVIDER_H = 1;
@@ -59,9 +56,6 @@ export const EXPLORE_V2_CURRENT_SETTINGS_COLLAPSED_STACK_H =
 
 /** Horizontal inset + full-bleed math for settings body / actions row */
 const CONTENT_PAD_H = 24;
-
-/** Matches the dark (near-black) read of the disabled Log pill — same hex as `SKIP_REST_CTA_BG` in ExploreV2CurrentCard. */
-const DRAWER_SURFACE = '#161616';
 
 function progressionPillLabel(name: string): string {
   const s = name.replace(/^Main\s+/i, '').replace(/\bAccessories\b/g, 'Accessory').trim();
@@ -145,6 +139,7 @@ export function ExploreV2CurrentOverflowPanel({
   interactive = true,
 }: PanelProps) {
   const { t } = useTranslation();
+  const { colors: themeColors, explore } = useAppTheme();
   const [scrollContentHeight, setScrollContentHeight] = useState(0);
 
   /** Same timing / motion as ExploreV2UpNextCard add exercise ↔ chevron swap. */
@@ -266,8 +261,14 @@ export function ExploreV2CurrentOverflowPanel({
       style={[styles.panelOuter, shellAnimStyle]}
     >
       {/** Outside rounded clip so the hairline spans the full drawer width (true full bleed). */}
-      <View style={styles.drawerTopDivider} />
-      <View style={[styles.panelSoftBase, bodyFillsSlot ? styles.panelSoftFill : styles.panelSoftHug]}>
+      <View style={[styles.drawerTopDivider, { backgroundColor: themeColors.accentSecondarySoft }]} />
+      <View
+        style={[
+          styles.panelSoftBase,
+          bodyFillsSlot ? styles.panelSoftFill : styles.panelSoftHug,
+          { backgroundColor: themeColors.containerPrimary },
+        ]}
+      >
         <Pressable
           style={[styles.drawerHeaderRow, visible ? styles.drawerHeaderRowExpanded : styles.drawerHeaderRowCollapsed]}
           onPress={onHeaderPress}
@@ -279,10 +280,30 @@ export function ExploreV2CurrentOverflowPanel({
           <View style={styles.settingsHeaderBtn}>
             <View style={styles.settingsHeaderSwapSlot}>
               <Animated.View style={[styles.settingsHeaderLayer, settingsHeaderLayerStyle]} pointerEvents="none">
-                <Text style={styles.settingsLinkText}>{t('settings')}</Text>
+                <Text
+                  style={[
+                    styles.settingsLinkText,
+                    {
+                      color: themeColors.containerSecondary,
+                      borderBottomColor: themeColors.containerSecondary,
+                    },
+                  ]}
+                >
+                  {t('settings')}
+                </Text>
               </Animated.View>
               <Animated.View style={[styles.settingsHeaderLayer, closeHeaderLayerStyle]} pointerEvents="none">
-                <Text style={styles.settingsLinkText}>{t('done')}</Text>
+                <Text
+                  style={[
+                    styles.settingsLinkText,
+                    {
+                      color: themeColors.containerSecondary,
+                      borderBottomColor: themeColors.containerSecondary,
+                    },
+                  ]}
+                >
+                  {t('done')}
+                </Text>
               </Animated.View>
             </View>
           </View>
@@ -302,17 +323,19 @@ export function ExploreV2CurrentOverflowPanel({
               {!latestPriorWorkout ? (
                 <View style={styles.historyLeadRow}>
                   <Text style={styles.historyLeadLabel}>Last log</Text>
-                  <Text style={styles.historyDateMuted}>{t('noHistoryRecordedYet')}</Text>
+                  <Text style={[styles.historyDateMuted, { color: themeColors.accentSecondary }]}>
+                    {t('noHistoryRecordedYet')}
+                  </Text>
                 </View>
               ) : (
                 <View style={styles.historyBlock}>
                   <View style={styles.historyDataRow}>
                     <View style={styles.historyLeftColumn}>
                       <Text style={styles.historyLeadLabel}>Last log</Text>
-                      <Text style={styles.historyDateMuted}>
+                      <Text style={[styles.historyDateMuted, { color: themeColors.accentSecondary }]}>
                         {dayjs(latestPriorWorkout.date).format('MMMM D')}
                         {getOrdinalSuffix(dayjs(latestPriorWorkout.date).date())}
-        </Text>
+                      </Text>
                     </View>
                     <View style={styles.historySetsColumn}>
                       {latestPriorWorkout.sets.map((set, setIndex) => (
@@ -333,13 +356,16 @@ export function ExploreV2CurrentOverflowPanel({
               )}
 
               <View style={styles.sectionDivider} />
-              <Text style={styles.sectionAfter}>Exercise setup</Text>
+              <Text style={[styles.sectionAfter, { color: themeColors.accentSecondarySoft }]}>Exercise setup</Text>
         <View style={styles.row}>
                 <Text style={styles.labelMeta}>Use timer</Text>
                 <Toggle
                   label=""
                   hideLabel
                   value={timeBased}
+                  trackOffColor={explore.skipRestCtaBg}
+                  thumbOnColor={explore.skipRestCtaBg}
+                  thumbOffColor={themeColors.containerSecondary}
                   onValueChange={() => {
                     const next = !timeBased;
                     onTimeBasedChange(next);
@@ -347,7 +373,9 @@ export function ExploreV2CurrentOverflowPanel({
                   }}
                 />
         </View>
-              <Text style={styles.helperText}>Track each set by duration instead of reps</Text>
+              <Text style={[styles.helperText, { color: themeColors.accentSecondary }]}>
+                Track each set by duration instead of reps
+              </Text>
         <View style={styles.row}>
                 <Text style={[styles.labelMeta, !timeBased && styles.labelDisabled]}>Alternate sides</Text>
                 <Toggle
@@ -355,15 +383,22 @@ export function ExploreV2CurrentOverflowPanel({
                   hideLabel
                   value={perSide}
                   disabled={!timeBased}
+                  trackOffColor={explore.skipRestCtaBg}
+                  thumbOnColor={explore.skipRestCtaBg}
+                  thumbOffColor={themeColors.containerSecondary}
                   onValueChange={() => onPerSideChange(!perSide)}
                 />
         </View>
-              <Text style={styles.helperText}>Runs the timer once per side for each set</Text>
+              <Text style={[styles.helperText, { color: themeColors.accentSecondary }]}>
+                Runs the timer once per side for each set
+              </Text>
 
         {type === 'main' && (
           <>
                   <View style={styles.sectionDivider} />
-                  <Text style={styles.sectionAfterTight}>Auto progression</Text>
+                  <Text style={[styles.sectionAfterTight, { color: themeColors.accentSecondarySoft }]}>
+                    Auto progression
+                  </Text>
             <View style={styles.pillRow}>
               {progressionGroups.map(g => (
                 <TouchableOpacity
@@ -385,11 +420,15 @@ export function ExploreV2CurrentOverflowPanel({
 
             <View style={styles.actionsWrap}>
         <View style={styles.actions}>
-          <TouchableOpacity style={styles.actionCell} onPress={onSwap} activeOpacity={0.75}>
+          <TouchableOpacity
+            style={[styles.actionCell, { backgroundColor: explore.skipRestCtaBg }]}
+            onPress={onSwap}
+            activeOpacity={0.75}
+          >
             <Text style={styles.actionText}>Swap exercise</Text>
           </TouchableOpacity>
           <TouchableOpacity
-            style={styles.actionCell}
+            style={[styles.actionCell, { backgroundColor: explore.skipRestCtaBg }]}
             onPress={() => {
               Alert.alert(t('deleteExerciseTitle'), t('deleteExerciseMessage'), [
                 { text: t('cancel'), style: 'cancel' },
@@ -424,7 +463,6 @@ const styles = StyleSheet.create({
   },
   /** Soft surface + rounded corners; divider sits above so the hairline isn’t corner-clipped. */
   panelSoftBase: {
-    backgroundColor: DRAWER_SURFACE,
     overflow: 'hidden',
     borderTopLeftRadius: PANEL_TOP_RADIUS,
     borderTopRightRadius: PANEL_TOP_RADIUS,
@@ -445,7 +483,6 @@ const styles = StyleSheet.create({
     height: DRAWER_TOP_DIVIDER_H,
     alignSelf: 'stretch',
     width: '100%',
-    backgroundColor: EXPLORE_V2.colors.divider,
     flexShrink: 0,
   },
   /** Centered header — matches ExploreV2UpNextCard `addExerciseBtn` / `addExerciseText` */
@@ -484,15 +521,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  /** Underlined link style; ink matches Explore page background */
+  /** Underlined link — colors from theme (container-secondary) at runtime */
   settingsLinkText: {
     ...TYPOGRAPHY.legal,
     fontWeight: '500',
     flexShrink: 0,
     paddingBottom: 2,
     borderBottomWidth: 1,
-    color: EXPLORE_V2.colors.pageBg,
-    borderBottomColor: EXPLORE_V2.colors.pageBg,
   },
   /** Collapsed shell − 1px divider (header row = 48px) */
   drawerHeaderRowCollapsed: {
@@ -526,11 +561,9 @@ const styles = StyleSheet.create({
     paddingTop: 8,
     paddingBottom: 0,
   },
-  /** Same plane as settings body (`DRAWER_SURFACE`); inherits scrollContent horizontal inset. */
   actionsWrap: {
     marginTop: 44,
     alignSelf: 'stretch',
-    backgroundColor: DRAWER_SURFACE,
   },
   sectionDivider: {
     alignSelf: 'stretch',
@@ -544,7 +577,6 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     letterSpacing: 0.6,
     textTransform: 'uppercase',
-    color: COLORS.textMeta,
     paddingTop: 16,
     marginTop: 0,
     marginBottom: 8,
@@ -554,7 +586,6 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     letterSpacing: 0.6,
     textTransform: 'uppercase',
-    color: COLORS.textMeta,
     paddingTop: 16,
     marginTop: 0,
     marginBottom: 12,
@@ -580,7 +611,6 @@ const styles = StyleSheet.create({
   },
   helperText: {
     ...TYPOGRAPHY.meta,
-    color: COLORS.textMeta,
     marginTop: -4,
     marginBottom: 8,
     maxWidth: '82%',
@@ -618,7 +648,6 @@ const styles = StyleSheet.create({
     gap: 10,
     height: 48,
     paddingHorizontal: 12,
-    backgroundColor: EXPLORE_V2_CHROME.ctaPillBg,
     borderRadius: 14,
     ...(Platform.OS === 'ios' ? { borderCurve: 'continuous' as const } : {}),
   },
@@ -644,7 +673,6 @@ const styles = StyleSheet.create({
   },
   historyDateMuted: {
     ...TYPOGRAPHY.meta,
-    color: COLORS.textMeta,
     marginTop: 2,
   },
   historyDataRow: {

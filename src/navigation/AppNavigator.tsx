@@ -46,6 +46,7 @@ import { ProgressionGroupDetailScreen } from '../screens/ProgressionGroupDetailS
 import { IconCalendar, IconHistory, IconAdd, IconStopwatch, IconPlay, IconCore, IconWarmup } from '../components/icons';
 import { COLORS, TYPOGRAPHY, SPACING } from '../constants';
 import { useStore } from '../store';
+import { useAppTheme } from '../theme/useAppTheme';
 import { CycleTemplateId } from '../types/workout';
 import { Weekday } from '../types/manualCycle';
 import { navigate } from './navigationService';
@@ -112,6 +113,7 @@ function TabNavigator() {
   const route = useRoute();
   const insets = useSafeAreaInsets();
   const { cyclePlans, workoutTemplates, scheduleWorkout, scheduledWorkouts, detectCycleConflicts, applyCyclePlan, updateCyclePlan, repeatCyclePlan } = useStore();
+  const { colors: tabThemeColors } = useAppTheme();
   const { t } = useTranslation();
   const [activeTab, setActiveTab] = React.useState<'Schedule' | 'Progress'>('Schedule');
   const [isViewingToday, setIsViewingToday] = React.useState(true);
@@ -131,15 +133,23 @@ function TabNavigator() {
   const progressIconOpacity = React.useRef(new Animated.Value(0)).current;
   const [tabBarWidth, setTabBarWidth] = React.useState(0);
   
-  // Animate label colors: dark on active lime pill, muted when inactive
-  const scheduleLabelColor = indicatorPosition.interpolate({
-    inputRange: [0, 1],
-    outputRange: [COLORS.backgroundCanvas, COLORS.accentPrimary],
-  });
-  const progressLabelColor = indicatorPosition.interpolate({
-    inputRange: [0, 1],
-    outputRange: [COLORS.accentPrimary, COLORS.backgroundCanvas],
-  });
+  // Animate label colors: dark on active accent pill, muted when inactive
+  const scheduleLabelColor = React.useMemo(
+    () =>
+      indicatorPosition.interpolate({
+        inputRange: [0, 1],
+        outputRange: [COLORS.backgroundCanvas, tabThemeColors.accentPrimary],
+      }),
+    [indicatorPosition, tabThemeColors.accentPrimary],
+  );
+  const progressLabelColor = React.useMemo(
+    () =>
+      indicatorPosition.interpolate({
+        inputRange: [0, 1],
+        outputRange: [tabThemeColors.accentPrimary, COLORS.backgroundCanvas],
+      }),
+    [indicatorPosition, tabThemeColors.accentPrimary],
+  );
   
   const switchTab = React.useCallback((tab: 'Schedule' | 'Progress') => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -494,7 +504,7 @@ function TabNavigator() {
             >
               <IconCalendar 
                 size={24} 
-                color={activeTab === 'Schedule' ? COLORS.backgroundCanvas : COLORS.accentPrimary} 
+                color={activeTab === 'Schedule' ? COLORS.backgroundCanvas : tabThemeColors.accentPrimary} 
               />
             </Animated.View>
             <Animated.View
@@ -551,7 +561,7 @@ function TabNavigator() {
             >
               <IconHistory 
                 size={24} 
-                color={activeTab === 'Progress' ? COLORS.backgroundCanvas : COLORS.accentPrimary} 
+                color={activeTab === 'Progress' ? COLORS.backgroundCanvas : tabThemeColors.accentPrimary} 
               />
             </Animated.View>
             <Animated.View

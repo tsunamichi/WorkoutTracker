@@ -164,6 +164,15 @@ type RouteParams = {
   };
 };
 
+/** Store completion ids are `${templateExerciseId}-set-${round}`. */
+function templateExerciseHasLoggedSets(completedSets: Set<string>, templateExerciseId: string): boolean {
+  const prefix = `${templateExerciseId}-set-`;
+  for (const id of completedSets) {
+    if (id.startsWith(prefix)) return true;
+  }
+  return false;
+}
+
 export function ExerciseExecutionScreen() {
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
   const navigation = useNavigation();
@@ -659,7 +668,7 @@ export function ExerciseExecutionScreen() {
   const exploreV2PageBgAnimatedStyle = useAnimatedStyle(() => {
     const p = exploreV2TimerBandProgress.value;
     const w = exploreV2WorkBlueProgress.value;
-    const activeTint = interpolateColor(w, [0, 1], [exploreV2RestHeroBg, COLORS.info]);
+    const activeTint = interpolateColor(w, [0, 1], [exploreV2RestHeroBg, COLORS.backgroundTimer]);
     return {
       backgroundColor: interpolateColor(p, [0, 1], [EXPLORE_V2.colors.pageBg, activeTint]),
     };
@@ -668,7 +677,7 @@ export function ExerciseExecutionScreen() {
   const exploreV2ContentWrapBgAnimatedStyle = useAnimatedStyle(() => {
     const p = exploreV2TimerBandProgress.value;
     const w = exploreV2WorkBlueProgress.value;
-    const activeTint = interpolateColor(w, [0, 1], [exploreV2RestHeroBg, COLORS.info]);
+    const activeTint = interpolateColor(w, [0, 1], [exploreV2RestHeroBg, COLORS.backgroundTimer]);
     return {
       backgroundColor: interpolateColor(p, [0, 1], [EXPLORE_V2.colors.pageBg, activeTint]),
     };
@@ -2321,61 +2330,72 @@ export function ExerciseExecutionScreen() {
     });
   };
 
-  const handleSwap = () => {
-    setShowMenu(false);
-    
-    // Check if any sets have been logged
-    const hasLoggedSets = completedSets.size > 0;
-    
-    if (hasLoggedSets) {
-      // Show alert that requires reset first
-      Alert.alert(
-        t('resetRequired'),
-        t('resetRequiredMessage'),
-        [
-          { text: t('cancel'), style: 'cancel' },
-          {
-            text: t('reset'),
-            style: 'destructive',
-            onPress: async () => {
-              // Clear completion in store first (completedSets derives automatically)
-              if (type === 'warmup') {
-                await resetWarmupCompletion(workoutKey);
-              } else if (type === 'core') {
-                await resetAccessoryCompletion(workoutKey);
-              } else if (type === 'main') {
-                await resetMainCompletion(workoutKey);
-              }
-              
-              if (currentSessionId) {
-                await deleteSession(currentSessionId);
-                setCurrentSessionId(null);
-              }
-              
-              LayoutAnimation.configureNext(CARD_TRANSITION);
-              setCompletionTimestamps({});
-              setExpandedGroupIndex(0);
-              setActiveExerciseIndex(0);
-              setHasLoggedAnySet(false);
-              setLocalValues({});
-              
-              // Show feedback
-              await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-              
-              // Now open swap modal (main) or navigate to editor (warmup/core)
-              if (type === 'main') {
-                setTimeout(() => setShowSwapModal(true), 400);
-              } else if (type === 'warmup') {
-                (navigation as any).navigate('WarmupEditor', { templateId: workoutTemplateId, workoutKey });
-              } else if (type === 'core') {
-                (navigation as any).navigate('AccessoriesEditor', { templateId: workoutTemplateId, workoutKey });
-              }
-            },
-          },
-        ]
-      );
+  const clearLoggedSetsForTemplateExercise = async (templateExerciseId: string) => {
+    const st = useStore.getState();
+    let items: string[] = [];
+    if (type === 'warmup') {
+      items = st.getWarmupCompletion(workoutKey, workoutTemplateId).completedItems;
+    } else if (type === 'core') {
+      items = st.getAccessoryCompletion(workoutKey, workoutTemplateId).completedItems;
     } else {
-      // No sets logged (or main workout): open swap modal or navigate to editor
+      items = st.getMainCompletion(workoutKey).completedItems;
+    }
+    const prefix = `${templateExerciseId}-set-`;
+    const toClear = items.filter(id => id.startsWith(prefix));
+    const updateFn =
+      type === 'warmup'
+        ? updateWarmupCompletion
+        : type === 'core'
+          ? updateAccessoryCompletion
+          : updateMainCompletion;
+    for (const setId of toClear) {
+      await updateFn(workoutKey, setId, false);
+    }
+    setLocalValues(prev => {
+      const next = { ...prev };
+      Object.keys(next).forEach(k => {
+        if (k.startsWith(prefix)) delete next[k];
+      });
+      return next;
+    });
+    const st2 = useStore.getState();
+    let remaining = 0;
+    if (type === 'warmup') {
+      remaining = st2.getWarmupCompletion(workoutKey, workoutTemplateId).completedItems.length;
+    } else if (type === 'core') {
+      remaining = st2.getAccessoryCompletion(workoutKey, workoutTemplateId).completedItems.length;
+    } else {
+      remaining = st2.getMainCompletion(workoutKey).completedItems.length;
+    }
+    setHasLoggedAnySet(remaining > 0);
+  };
+
+  /** Swap is allowed whenever this template exercise has no logged sets; other exercises are irrelevant. */
+  const handleSwap = (templateExerciseIdFromOverflow?: string) => {
+    setShowMenu(false);
+
+    if (templateExerciseIdFromOverflow) {
+      for (let gi = 0; gi < exerciseGroups.length; gi++) {
+        const ei = exerciseGroups[gi].exercises.findIndex(ex => ex.id === templateExerciseIdFromOverflow);
+        if (ei >= 0) {
+          setExpandedGroupIndex(gi);
+          setActiveExerciseIndex(ei);
+          break;
+        }
+      }
+    }
+
+    const targetId =
+      templateExerciseIdFromOverflow ??
+      (() => {
+        const gIdx = expandedGroupIndex >= 0 ? expandedGroupIndex : 0;
+        const group = exerciseGroups[gIdx];
+        if (!group?.exercises?.length) return null;
+        const ei = Math.min(Math.max(0, activeExerciseIndex), group.exercises.length - 1);
+        return group.exercises[ei]?.id ?? null;
+      })();
+
+    const openSwapEditor = () => {
       if (type === 'main') {
         setTimeout(() => setShowSwapModal(true), 400);
       } else if (type === 'warmup') {
@@ -2383,7 +2403,30 @@ export function ExerciseExecutionScreen() {
       } else if (type === 'core') {
         (navigation as any).navigate('AccessoriesEditor', { templateId: workoutTemplateId, workoutKey });
       }
+    };
+
+    if (!targetId) {
+      openSwapEditor();
+      return;
     }
+
+    if (!templateExerciseHasLoggedSets(completedSets, targetId)) {
+      openSwapEditor();
+      return;
+    }
+
+    Alert.alert(t('swapClearExerciseLogsTitle'), t('swapClearExerciseLogsMessage'), [
+      { text: t('cancel'), style: 'cancel' },
+      {
+        text: t('clearLogsAndSwap'),
+        style: 'destructive',
+        onPress: async () => {
+          await clearLoggedSetsForTemplateExercise(targetId);
+          await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+          openSwapEditor();
+        },
+      },
+    ]);
   };
 
   /** Remove all template items in an exercise group (Explore v2 Up Next trash). */
@@ -2902,7 +2945,7 @@ export function ExerciseExecutionScreen() {
                   onPauseToggle={handleExploreV2HeroPauseToggle}
                   progress={inlineRestProgress}
                   contextLabel={exploreV2TimerContextLabel}
-                  workTimerVisualActive={inlineExploreWorkActive}
+                  workTimerVisualActive={inlineExploreWorkActive || inlineExploreSwitchActive}
                   exploreV2WorkBlueProgress={exploreV2WorkBlueProgress}
                 />
               </View>
@@ -3909,12 +3952,13 @@ export function ExerciseExecutionScreen() {
                 <TouchableOpacity
                   style={styles.exploreActionCell}
                   onPress={() => {
+                    if (!exploreDetailExercise) return;
                     if (exploreDetailGroupIndex !== null) {
                       setExpandedGroupIndex(exploreDetailGroupIndex);
                       setActiveExerciseIndex(exploreDetailExerciseIndex);
                     }
                     setShowExploreDetailSheet(false);
-                    setTimeout(() => setShowSwapModal(true), 300);
+                    handleSwap(exploreDetailExercise.id);
                   }}
                   activeOpacity={0.7}
                 >
@@ -4709,6 +4753,10 @@ export function ExerciseExecutionScreen() {
                   onPress={() => {
                     setShowExerciseSettingsMenu(false);
                     setShowAdjustmentDrawer(false);
+                    if (menuGrpIdx >= 0) {
+                      setExpandedGroupIndex(menuGrpIdx);
+                      setActiveExerciseIndex(menuExIdx);
+                    }
                     setTimeout(() => setShowSwapModal(true), 400);
                   }}
                   activeOpacity={0.7}

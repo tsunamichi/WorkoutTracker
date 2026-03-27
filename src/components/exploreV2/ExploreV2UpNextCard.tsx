@@ -11,6 +11,7 @@ import { Swipeable, TouchableOpacity as GestureTouchableOpacity } from 'react-na
 import { EXPLORE_V2 } from './exploreV2Tokens';
 import { EXPLORE_V2_PALETTES } from './exploreV2ColorSystem';
 import { COLORS, TYPOGRAPHY } from '../../constants';
+import { useAppTheme } from '../../theme/useAppTheme';
 import { IconChevronDown, IconTrash } from '../icons';
 import type { ExploreV2Group } from './exploreV2Types';
 
@@ -140,32 +141,36 @@ function UpNextQueueRow({
   onSwipeableOpen,
   onSwipeableClose,
 }: UpNextQueueRowProps) {
-  const workUpNextBg = EXPLORE_V2.colors.workTimerUpNextCardBg;
+  const { explore: ex } = useAppTheme();
+  const workUpNextBg = ex.workTimerUpNextCardBg;
+  const amberBand = ex.amberBand;
+  const restHeaderInk = ex.restTimerHeaderInk;
+  const pageBg = EXPLORE_V2.colors.pageBg;
   const rowFrontBgStyle = useAnimatedStyle(() => {
     const b = restThemeProgress.value;
     const w = exploreV2WorkBlueProgress.value;
     const g = restChromeGateSV.value;
     const rowFillAtBand = interpolateColor(w, [0, 1], [
-      interpolateColor(b * g, [0, 1], [EXPLORE_V2_PALETTES.upNext.main, '#E78B0B']),
+      interpolateColor(b * g, [0, 1], [EXPLORE_V2_PALETTES.upNext.main, amberBand]),
       workUpNextBg,
     ]);
     return {
       backgroundColor: interpolateColor(b, [0, 1], [EXPLORE_V2_PALETTES.upNext.main, rowFillAtBand]),
     };
-  });
+  }, [amberBand, workUpNextBg]);
   const superscriptColorStyle = useAnimatedStyle(() => {
     const b = restThemeProgress.value;
     const w = exploreV2WorkBlueProgress.value;
     const g = restChromeGateSV.value;
     const p = b * g * (1 - w);
-    const restCol = interpolateColor(p, [0, 1], [ROW_SUPER_INK, EXPLORE_V2.colors.restTimerHeaderInk]);
+    const restCol = interpolateColor(p, [0, 1], [ROW_SUPER_INK, restHeaderInk]);
     return {
-      color: interpolateColor(b * w, [0, 1], [restCol, EXPLORE_V2.colors.pageBg]),
+      color: interpolateColor(b * w, [0, 1], [restCol, pageBg]),
     };
-  });
+  }, [restHeaderInk, pageBg]);
   const rowNameInkStyle = useAnimatedStyle(() => ({
-    color: interpolateColor(exploreV2WorkBlueProgress.value, [0, 1], [ROW_NAME_INK, EXPLORE_V2.colors.pageBg]),
-  }));
+    color: interpolateColor(exploreV2WorkBlueProgress.value, [0, 1], [ROW_NAME_INK, pageBg]),
+  }), [pageBg]);
   const swipeProgressRef = useRef<Animated.AnimatedInterpolation<number> | null>(null);
   const borderPrimedRef = useRef(false);
   const [rowBorderLayer, setRowBorderLayer] = useState(false);
@@ -298,6 +303,14 @@ export function ExploreV2UpNextCard({
   restThemeProgress,
   exploreV2WorkBlueProgress,
 }: Props) {
+  const { explore: ex, colors: themeColors } = useAppTheme();
+  const workUpNextBg = ex.workTimerUpNextCardBg;
+  const amberBand = ex.amberBand;
+  const warmActivity = ex.warmActivity;
+  const backgroundTimer = themeColors.backgroundTimer;
+  const accentPrimaryDark = themeColors.accentPrimaryDark;
+  const textMetaTimer = themeColors.textMetaTimer;
+  const textPrimary = themeColors.textPrimary;
   /** Mirrors `timerThemeActive` on UI thread — multiplies theme progress so chrome snaps idle when rest ends. */
   const restChromeGateSV = useSharedValue(timerThemeActive ? 1 : 0);
   useLayoutEffect(() => {
@@ -320,31 +333,31 @@ export function ExploreV2UpNextCard({
     }
   }, []);
 
-  const workUpNextBg = EXPLORE_V2.colors.workTimerUpNextCardBg;
+  const pageBgChrome = EXPLORE_V2.colors.pageBg;
+  /** Rest band (b, w=0): “Up Next” + chevrons → accent-primary-dark; work (w=1) → text-meta-timer. No gate on b so chrome tracks orange rest even if phase flags lag. */
   const headerChromeAnimatedStyle = useAnimatedStyle(() => {
     const b = restThemeProgress.value;
     const w = exploreV2WorkBlueProgress.value;
-    const g = restChromeGateSV.value;
-    const pRest = b * g * (1 - w);
+    const pRest = b * (1 - w);
     const pWork = b * w;
-    const restCol = interpolateColor(pRest, [0, 1], [HEADER_INK, EXPLORE_V2.colors.restTimerHeaderInk]);
+    const restCol = interpolateColor(pRest, [0, 1], [HEADER_INK, accentPrimaryDark]);
     return {
-      color: interpolateColor(pWork, [0, 1], [restCol, EXPLORE_V2.colors.pageBg]),
+      color: interpolateColor(pWork, [0, 1], [restCol, textMetaTimer]),
     };
-  });
+  }, [accentPrimaryDark, textMetaTimer]);
+  /** Rest band: link uses text-primary; work phase → text-meta-timer. */
   const addExerciseLinkAnimatedStyle = useAnimatedStyle(() => {
     const b = restThemeProgress.value;
     const w = exploreV2WorkBlueProgress.value;
-    const g = restChromeGateSV.value;
-    const pRest = b * g * (1 - w);
+    const pRest = b * (1 - w);
     const pWork = b * w;
-    const restCol = interpolateColor(pRest, [0, 1], [HEADER_INK, EXPLORE_V2.colors.restTimerHeaderInk]);
-    const c = interpolateColor(pWork, [0, 1], [restCol, EXPLORE_V2.colors.pageBg]);
+    const restCol = interpolateColor(pRest, [0, 1], [HEADER_INK, textPrimary]);
+    const c = interpolateColor(pWork, [0, 1], [restCol, textMetaTimer]);
     return {
       color: c,
       borderBottomColor: c,
     };
-  });
+  }, [textPrimary, textMetaTimer]);
   const chevronIdleOpacityStyle = useAnimatedStyle(() => ({
     opacity: 1 - restThemeProgress.value * (1 - exploreV2WorkBlueProgress.value),
   }));
@@ -359,21 +372,21 @@ export function ExploreV2UpNextCard({
   const shellAnimatedStyle = useAnimatedStyle(() => {
     const b = restThemeProgress.value;
     const w = exploreV2WorkBlueProgress.value;
-    const whenUpBg = interpolateColor(w, [0, 1], ['#E78B0B', workUpNextBg]);
-    const whenUpBorder = interpolateColor(w, [0, 1], ['#FFA424', COLORS.info]);
+    const whenUpBg = interpolateColor(w, [0, 1], [amberBand, workUpNextBg]);
+    const whenUpBorder = interpolateColor(w, [0, 1], [warmActivity, backgroundTimer]);
     return {
       backgroundColor: interpolateColor(b, [0, 1], [palette.main, whenUpBg]),
-      borderColor: interpolateColor(b, [0, 1], [EXPLORE_V2.colors.pageBg, whenUpBorder]),
+      borderColor: interpolateColor(b, [0, 1], [pageBgChrome, whenUpBorder]),
     };
-  });
+  }, [amberBand, workUpNextBg, warmActivity, backgroundTimer, pageBgChrome]);
   const scrollBgAnimatedStyle = useAnimatedStyle(() => {
     const b = restThemeProgress.value;
     const w = exploreV2WorkBlueProgress.value;
-    const whenUpBg = interpolateColor(w, [0, 1], ['#E78B0B', workUpNextBg]);
+    const whenUpBg = interpolateColor(w, [0, 1], [amberBand, workUpNextBg]);
     return {
       backgroundColor: interpolateColor(b, [0, 1], [palette.main, whenUpBg]),
     };
-  });
+  }, [amberBand, workUpNextBg]);
   const showAddExercise = isExpanded && allowAddExercise;
   const swapProgress = useRef(new Animated.Value(showAddExercise ? 1 : 0)).current;
 
@@ -440,10 +453,10 @@ export function ExploreV2UpNextCard({
               <IconChevronDown size={18} color={HEADER_INK} />
             </Reanimated.View>
             <Reanimated.View style={[styles.chevronLayer, chevronTimerOpacityStyle]} pointerEvents="none">
-              <IconChevronDown size={18} color={EXPLORE_V2.colors.restTimerHeaderInk} />
+              <IconChevronDown size={18} color={accentPrimaryDark} />
             </Reanimated.View>
             <Reanimated.View style={[styles.chevronLayer, chevronWorkOpacityStyle]} pointerEvents="none">
-              <IconChevronDown size={18} color={EXPLORE_V2.colors.pageBg} />
+              <IconChevronDown size={18} color={textMetaTimer} />
             </Reanimated.View>
           </Animated.View>
         </View>

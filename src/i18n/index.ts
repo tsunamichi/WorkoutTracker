@@ -49,6 +49,7 @@ type TranslationKey =
   | 'resume'
   | 'edit'
   | 'restDayTitle'
+  | 'notToday'
   | 'pastCycle'
   | 'noWorkoutsScheduled'
   | 'swap'
@@ -462,6 +463,11 @@ type TranslationKey =
   | 'resetProgressMessage'
   | 'profile'
   | 'settings'
+  | 'colorTheme'
+  | 'colorThemeOriginal'
+  | 'colorThemeV1'
+  | 'colorThemeV3'
+  | 'colorThemeFootnote'
   | 'language'
   | 'english'
   | 'spanish'
@@ -547,6 +553,9 @@ type TranslationKey =
   | 'change'
   | 'resetRequired'
   | 'resetRequiredMessage'
+  | 'swapClearExerciseLogsTitle'
+  | 'swapClearExerciseLogsMessage'
+  | 'clearLogsAndSwap'
   | 'completeAll'
   | 'skipWorkout'
   | 'adjustValues'
@@ -714,6 +723,7 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     resume: 'Resume',
     edit: 'Edit',
     restDayTitle: 'This is your rest day',
+    notToday: 'Not today!',
     pastCycle: 'Past cycle',
     noWorkoutsScheduled: 'No workouts scheduled',
     swap: 'Swap',
@@ -1062,6 +1072,11 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     resetProgressMessage: 'Clear all progress for this workout? This cannot be undone.',
     profile: 'Profile',
     settings: 'Settings',
+    colorTheme: 'Color theme',
+    colorThemeOriginal: 'Original',
+    colorThemeV1: 'V1',
+    colorThemeV3: 'V3',
+    colorThemeFootnote: 'Accents and workout execution colors (e.g. Current card).',
     language: 'Language',
     english: 'English',
     spanish: 'Spanish',
@@ -1163,6 +1178,10 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     change: 'Change',
     resetRequired: 'Reset Required',
     resetRequiredMessage: 'You must reset your progress before swapping exercises. This will clear all logged sets.',
+    swapClearExerciseLogsTitle: 'Swap exercise',
+    swapClearExerciseLogsMessage:
+      'This exercise has logged sets. Those logs will be removed so you can swap it. Progress on other exercises is unchanged.',
+    clearLogsAndSwap: 'Clear logs & swap',
     completeAll: 'Complete All',
     skipWorkout: 'Skip Workout',
     repeatCycle: 'Repeat Last Cycle',
@@ -1324,6 +1343,7 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     resume: 'Reanudar',
     edit: 'Editar',
     restDayTitle: 'Es tu dia de descanso',
+    notToday: '¡Hoy no!',
     pastCycle: 'Ciclo anterior',
     noWorkoutsScheduled: 'No hay entrenamientos',
     swap: 'Cambiar',
@@ -1673,6 +1693,11 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     resetProgressMessage: 'Borrar todo el progreso? No se puede deshacer.',
     profile: 'Perfil',
     settings: 'Configuracion',
+    colorTheme: 'Tema de color',
+    colorThemeOriginal: 'Original',
+    colorThemeV1: 'V1',
+    colorThemeV3: 'V3',
+    colorThemeFootnote: 'Acentos y colores de entrenamiento (tarjeta Actual, etc.).',
     language: 'Idioma',
     english: 'Ingles',
     spanish: 'Espanol',
@@ -1774,6 +1799,10 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     change: 'Cambiar',
     resetRequired: 'Reinicio Requerido',
     resetRequiredMessage: 'Debes reiniciar tu progreso antes de cambiar ejercicios. Esto borrará todos los sets registrados.',
+    swapClearExerciseLogsTitle: 'Cambiar ejercicio',
+    swapClearExerciseLogsMessage:
+      'Este ejercicio tiene sets registrados. Se borrarán esos registros para poder cambiarlo. El progreso en otros ejercicios no cambia.',
+    clearLogsAndSwap: 'Borrar registros y cambiar',
     completeAll: 'Completar Todo',
     skipWorkout: 'Omitir Entrenamiento',
     repeatCycle: 'Repetir Último Ciclo',

@@ -9,9 +9,24 @@ interface ToggleProps {
   disabled?: boolean;
   /** When true, do not render the label (e.g. when stacking label above externally) */
   hideLabel?: boolean;
+  /** Track color when off (non-disabled). Default `#48484A`. */
+  trackOffColor?: string;
+  /** Thumb color when on (non-disabled). Default `COLORS.backgroundCanvas`. */
+  thumbOnColor?: string;
+  /** Thumb color when off (non-disabled). Default `#FFFFFF`. */
+  thumbOffColor?: string;
 }
 
-export function Toggle({ label, value, onValueChange, disabled = false, hideLabel = false }: ToggleProps) {
+export function Toggle({
+  label,
+  value,
+  onValueChange,
+  disabled = false,
+  hideLabel = false,
+  trackOffColor,
+  thumbOnColor,
+  thumbOffColor,
+}: ToggleProps) {
   const animatedValue = React.useRef(new Animated.Value(value ? 1 : 0)).current;
 
   React.useEffect(() => {
@@ -22,9 +37,13 @@ export function Toggle({ label, value, onValueChange, disabled = false, hideLabe
     }).start();
   }, [value, animatedValue]);
 
+  const trackOff = trackOffColor ?? '#48484A';
+  const thumbOn = thumbOnColor ?? COLORS.backgroundCanvas;
+  const thumbOff = thumbOffColor ?? '#FFFFFF';
+
   const trackColor = animatedValue.interpolate({
     inputRange: [0, 1],
-    outputRange: disabled ? ['#38383A', '#38383A'] : ['#48484A', COLORS.accentPrimary], // Track: dark when off, lime when on
+    outputRange: disabled ? ['#38383A', '#38383A'] : [trackOff, COLORS.accentPrimary],
   });
 
   const thumbTranslateX = animatedValue.interpolate({
@@ -34,7 +53,7 @@ export function Toggle({ label, value, onValueChange, disabled = false, hideLabe
 
   const thumbColor = animatedValue.interpolate({
     inputRange: [0, 1],
-    outputRange: disabled ? ['#48484A', '#48484A'] : ['#FFFFFF', COLORS.backgroundCanvas], // Thumb: white when off, dark canvas when on
+    outputRange: disabled ? ['#48484A', '#48484A'] : [thumbOff, thumbOn],
   });
 
   return (

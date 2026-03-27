@@ -224,6 +224,7 @@ interface WorkoutStore {
 const DEFAULT_SETTINGS: AppSettings = {
   useKg: false,
   language: 'en',
+  colorTheme: 'original',
   monthlyProgressReminderEnabled: true,
   monthlyProgressReminderDay: 1,
   restTimerDefaultSeconds: 120,

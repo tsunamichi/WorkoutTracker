@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useLayoutEffect, useCallback, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Modal, ScrollView, Alert, Share, Dimensions } from 'react-native';
 import Animated, {
   cancelAnimation,
@@ -8,6 +8,7 @@ import Animated, {
   useSharedValue,
   withTiming,
 } from 'react-native-reanimated';
+import { Gesture, GestureDetector, TouchableOpacity as GHTouchableOpacity } from 'react-native-gesture-handler';
 import Svg, { Circle, Path } from 'react-native-svg';
 import * as Haptics from 'expo-haptics';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -16,13 +17,13 @@ import { useStore } from '../store';
 import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS, CARDS } from '../constants';
 import { IconCheckmark, IconAdd, IconSettings, IconCalendar, IconPlay, IconCore, IconWarmup, IconStopwatch, IconChevronDown } from '../components/icons';
 import { DiagonalLinePattern } from '../components/common/DiagonalLinePattern';
-import { EXPLORE_V2_PALETTES } from '../components/exploreV2/exploreV2ColorSystem';
 import { ScheduleWorkoutCardStack } from '../components/schedule/ScheduleWorkoutCardStack';
 import { CycleControlSheet } from '../components/CycleControlSheet';
 import { ShareCycleDrawer } from '../components/ShareCycleDrawer';
 import dayjs from 'dayjs';
 import isoWeek from 'dayjs/plugin/isoWeek';
 import { useTranslation } from '../i18n/useTranslation';
+import { useAppTheme } from '../theme/useAppTheme';
 import { formatWeightForLoad } from '../utils/weight';
 import type { BonusType, CyclePlan } from '../types/training';
 import type { ScheduledWorkout } from '../types/training';
@@ -136,6 +137,9 @@ type WeekStripDay = {
 /** Reserve vertical space above home indicator for pinned Extras bar */
 const EXTRAS_PIN_BAR_HEIGHT = 56;
 
+/** Week strip: swipe snap animation (ms) */
+const WEEK_STRIP_PAN_MS = 240;
+
 const SCHEDULE_CARD_MAX_EXERCISES = 6;
 const SCHEDULE_CARD_EXERCISES_WHEN_MORE = 5;
 
@@ -174,6 +178,7 @@ export function TodayScreen({ onDateChange, onOpenAddWorkout, onOpenBonusDrawer 
 
   const today = dayjs();
   const { t } = useTranslation();
+  const { colors: themeColors } = useAppTheme();
 
   // One-time repair for paused cycle schedule (safe to remove after fix is applied)
   React.useEffect(() => {
@@ -363,12 +368,17 @@ export function TodayScreen({ onDateChange, onOpenAddWorkout, onOpenBonusDrawer 
   
   const scheduleLabel = t('schedule');
 
-  const buildStripForCenter = useCallback(
-    (centerDateStr: string): WeekStripDay[] => {
-      const center = dayjs(centerDateStr);
+  /** Monday (YYYY-MM-DD) of the week currently shown in the strip (tap does not change this; swipe does). */
+  const [visibleWeekMonday, setVisibleWeekMonday] = useState(() =>
+    today.startOf('isoWeek').format('YYYY-MM-DD'),
+  );
+
+  const buildWeekStripDaysForWeek = useCallback(
+    (weekMondayStr: string, selectedDateStr: string): WeekStripDay[] => {
+      const monday = dayjs(weekMondayStr).startOf('day');
       const out: WeekStripDay[] = [];
-      for (let o = -3; o <= 3; o++) {
-        const date = center.add(o, 'day');
+      for (let i = 0; i < 7; i++) {
+        const date = monday.add(i, 'day');
         const dateStr = date.format('YYYY-MM-DD');
         const isTodayDate = date.isSame(today, 'day');
         const scheduledWorkout = getScheduledWorkout(dateStr);
@@ -384,7 +394,7 @@ export function TodayScreen({ onDateChange, onOpenAddWorkout, onOpenBonusDrawer 
           dayNumber: date.date(),
           dayLetters: ISO_DAY_TWO_LETTER[date.isoWeekday() - 1],
           isToday: isTodayDate,
-          isSelected: dateStr === centerDateStr,
+          isSelected: dateStr === selectedDateStr,
           scheduledWorkout,
           isCompleted,
           isLocked,
@@ -396,10 +406,26 @@ export function TodayScreen({ onDateChange, onOpenAddWorkout, onOpenBonusDrawer 
     [today, getScheduledWorkout, getMainCompletion, refreshTrigger],
   );
 
-  // Centered week strip: selected date ±3 days (7 days)
-  const stripDays = React.useMemo(
-    () => buildStripForCenter(selectedDate),
-    [selectedDate, buildStripForCenter],
+  const prevWeekMondayStr = useMemo(
+    () => dayjs(visibleWeekMonday).subtract(1, 'week').format('YYYY-MM-DD'),
+    [visibleWeekMonday],
+  );
+  const nextWeekMondayStr = useMemo(
+    () => dayjs(visibleWeekMonday).add(1, 'week').format('YYYY-MM-DD'),
+    [visibleWeekMonday],
+  );
+
+  const prevWeekStripDays = useMemo(
+    () => buildWeekStripDaysForWeek(prevWeekMondayStr, selectedDate),
+    [buildWeekStripDaysForWeek, prevWeekMondayStr, selectedDate],
+  );
+  const currWeekStripDays = useMemo(
+    () => buildWeekStripDaysForWeek(visibleWeekMonday, selectedDate),
+    [buildWeekStripDaysForWeek, visibleWeekMonday, selectedDate],
+  );
+  const nextWeekStripDays = useMemo(
+    () => buildWeekStripDaysForWeek(nextWeekMondayStr, selectedDate),
+    [buildWeekStripDaysForWeek, nextWeekMondayStr, selectedDate],
   );
 
   // Get workouts for this week (SCHEDULE-FIRST: Only use ScheduledWorkout)
@@ -448,12 +474,13 @@ export function TodayScreen({ onDateChange, onOpenAddWorkout, onOpenBonusDrawer 
   const selectedDay = weekDays.find(d => d.date === selectedDate);
 
   /**
-   * Planned / not-yet-started workouts from the selected day forward for the swipe deck.
-   * `in_progress` is excluded (anchored on the calendar day it was started; see store pull-forward on first set).
+   * Swipe deck for the selected date:
+   * - If this calendar day has an in-progress workout (`sw.date === selectedDate`), the deck is **only**
+   *   that workout (so returning from execution still shows it; store may pull `date` to today on first set).
+   * - Otherwise: planned, not-finished workouts from this day forward (remaining queue for other days).
    */
   const remainingWorkoutsQueue = React.useMemo(() => {
-    const isDeckEligible = (sw: ScheduledWorkout) => {
-      if (sw.status === 'in_progress') return false;
+    const isNotFinished = (sw: ScheduledWorkout) => {
       const mc = getMainCompletion(sw.id);
       return !(
         sw.isLocked ||
@@ -461,9 +488,21 @@ export function TodayScreen({ onDateChange, onOpenAddWorkout, onOpenBonusDrawer 
         sw.status === 'completed'
       );
     };
+
+    const onSelectedDate = scheduledWorkouts.filter(sw => sw.date === selectedDate);
+    const inProgressOnSelectedDay = onSelectedDate.filter(
+      sw => sw.status === 'in_progress' && isNotFinished(sw),
+    );
+    if (inProgressOnSelectedDay.length > 0) {
+      return [...inProgressOnSelectedDay].sort((a, b) => a.id.localeCompare(b.id));
+    }
+
+    const isPlannedDeckTile = (sw: ScheduledWorkout) =>
+      sw.status === 'planned' && isNotFinished(sw);
+
     return scheduledWorkouts
       .filter(sw => !dayjs(sw.date).isBefore(selectedDate, 'day'))
-      .filter(isDeckEligible)
+      .filter(isPlannedDeckTile)
       .sort((a, b) => a.date.localeCompare(b.date) || a.id.localeCompare(b.id));
   }, [scheduledWorkouts, selectedDate, getMainCompletion, refreshTrigger]);
   
@@ -472,50 +511,98 @@ export function TodayScreen({ onDateChange, onOpenAddWorkout, onOpenBonusDrawer 
   };
   
   const [stripViewportWidth, setStripViewportWidth] = useState(0);
-  const [slideOutgoingStrip, setSlideOutgoingStrip] = useState<WeekStripDay[] | null>(null);
-  const slidePrevDateRef = useRef(selectedDate);
-  const weekStripSlideX = useSharedValue(0);
+  const stripWidthSV = useSharedValue(0);
+  const weekStripTranslateX = useSharedValue(0);
+  const panStartTranslateX = useSharedValue(0);
 
-  const finishWeekStripSlide = useCallback(() => {
-    weekStripSlideX.value = 0;
-    setSlideOutgoingStrip(null);
+  const applyWeekNavigateNext = useCallback(() => {
+    setVisibleWeekMonday(m => dayjs(m).add(1, 'week').format('YYYY-MM-DD'));
+    setSelectedDate(d => dayjs(d).add(1, 'week').format('YYYY-MM-DD'));
   }, []);
 
-  const handleDayChange = useCallback(
-    (newDate: string) => {
-      if (newDate === selectedDate) return;
-      slidePrevDateRef.current = selectedDate;
-      setSlideOutgoingStrip(stripDays);
-      setSelectedDate(newDate);
+  const applyWeekNavigatePrev = useCallback(() => {
+    setVisibleWeekMonday(m => dayjs(m).subtract(1, 'week').format('YYYY-MM-DD'));
+    setSelectedDate(d => dayjs(d).subtract(1, 'week').format('YYYY-MM-DD'));
+  }, []);
+
+  React.useLayoutEffect(() => {
+    if (stripViewportWidth <= 0) return;
+    stripWidthSV.value = stripViewportWidth;
+    weekStripTranslateX.value = -stripViewportWidth;
+  }, [visibleWeekMonday, stripViewportWidth]);
+
+  const handleSelectDay = useCallback(
+    (dateStr: string) => {
+      if (dateStr === selectedDate) return;
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      setSelectedDate(dateStr);
     },
-    [selectedDate, stripDays],
+    [selectedDate],
   );
 
-  useLayoutEffect(() => {
-    if (!slideOutgoingStrip || stripViewportWidth <= 0) return;
-    const dayDelta = dayjs(selectedDate).diff(dayjs(slidePrevDateRef.current), 'day');
-    if (dayDelta === 0) {
-      finishWeekStripSlide();
-      return;
-    }
-    cancelAnimation(weekStripSlideX);
-    weekStripSlideX.value = 0;
-    const w = stripViewportWidth;
-    const targetX = dayDelta > 0 ? -w : w;
-    weekStripSlideX.value = withTiming(
-      targetX,
-      {
-        duration: Math.min(560, 220 + Math.abs(dayDelta) * 55),
-        easing: Easing.inOut(Easing.cubic),
-      },
-      finished => {
-        if (finished) runOnJS(finishWeekStripSlide)();
-      },
-    );
-  }, [slideOutgoingStrip, stripViewportWidth, selectedDate, finishWeekStripSlide]);
+  const goToTodayStrip = useCallback(() => {
+    const d = today.format('YYYY-MM-DD');
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setSelectedDate(d);
+    setVisibleWeekMonday(dayjs(d).startOf('isoWeek').format('YYYY-MM-DD'));
+  }, [today]);
 
-  const weekStripSlideAnimatedStyle = useAnimatedStyle(() => ({
-    transform: [{ translateX: weekStripSlideX.value }],
+  const weekPanGesture = useMemo(
+    () =>
+      Gesture.Pan()
+        .activeOffsetX([-14, 14])
+        .failOffsetY([-12, 12])
+        .onStart(() => {
+          cancelAnimation(weekStripTranslateX);
+          panStartTranslateX.value = weekStripTranslateX.value;
+        })
+        .onUpdate(e => {
+          'worklet';
+          const w = stripWidthSV.value;
+          if (w <= 0) return;
+          let x = panStartTranslateX.value + e.translationX;
+          const minX = -2 * w;
+          const maxX = 0;
+          const rubber = 0.22;
+          if (x < minX) x = minX + (x - minX) * rubber;
+          else if (x > maxX) x = maxX + (x - maxX) * rubber;
+          weekStripTranslateX.value = x;
+        })
+        .onEnd(e => {
+          'worklet';
+          const w = stripWidthSV.value;
+          if (w <= 0) return;
+          const x = weekStripTranslateX.value;
+          const vx = e.velocityX;
+          const threshold = w * 0.2;
+          const rest = -w;
+          let target = rest;
+          if (x <= rest - threshold || vx < -420) {
+            target = -2 * w;
+          } else if (x >= rest + threshold || vx > 420) {
+            target = 0;
+          }
+          const timing = {
+            duration: WEEK_STRIP_PAN_MS,
+            easing: Easing.out(Easing.cubic),
+          };
+          if (target === -2 * w) {
+            weekStripTranslateX.value = withTiming(-2 * w, timing, finished => {
+              if (finished) runOnJS(applyWeekNavigateNext)();
+            });
+          } else if (target === 0) {
+            weekStripTranslateX.value = withTiming(0, timing, finished => {
+              if (finished) runOnJS(applyWeekNavigatePrev)();
+            });
+          } else {
+            weekStripTranslateX.value = withTiming(rest, timing);
+          }
+        }),
+    [applyWeekNavigateNext, applyWeekNavigatePrev, panStartTranslateX, stripWidthSV, weekStripTranslateX],
+  );
+
+  const weekStripTrackAnimatedStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: weekStripTranslateX.value }],
   }));
 
   const handleResumeCycleOnDay = async (resumeDateStr: string) => {
@@ -560,17 +647,12 @@ export function TodayScreen({ onDateChange, onOpenAddWorkout, onOpenBonusDrawer 
   
   const isScheduleFutureDay = dayjs(selectedDate).isAfter(today, 'day');
 
-  const showWeekStripDualPanel = slideOutgoingStrip != null && stripViewportWidth > 0;
-
   const renderWeekStripCells = (days: WeekStripDay[], keyPrefix: string) =>
     days.map(d => (
       <View key={`${keyPrefix}-${d.dateStr}`} style={styles.weekStripCell}>
-        <TouchableOpacity
+        <GHTouchableOpacity
           style={styles.weekStripCellTouchable}
-          onPress={() => {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-            handleDayChange(d.dateStr);
-          }}
+          onPress={() => handleSelectDay(d.dateStr)}
           activeOpacity={0.75}
           accessibilityRole="button"
           accessibilityLabel={`${d.dayLetters} ${d.dayNumber}`}
@@ -586,8 +668,8 @@ export function TodayScreen({ onDateChange, onOpenAddWorkout, onOpenBonusDrawer 
                   <Text
                     style={[
                       styles.weekStripNum,
-                      d.isToday && styles.weekStripNumToday,
                       styles.weekStripTextOnSelection,
+                      styles.weekStripNumSelected,
                     ]}
                   >
                     {d.dayNumber}
@@ -601,7 +683,6 @@ export function TodayScreen({ onDateChange, onOpenAddWorkout, onOpenBonusDrawer 
                   <Text
                     style={[
                       styles.weekStripNum,
-                      d.isToday && styles.weekStripNumToday,
                     ]}
                   >
                     {d.dayNumber}
@@ -610,24 +691,45 @@ export function TodayScreen({ onDateChange, onOpenAddWorkout, onOpenBonusDrawer 
               </>
             )}
           </View>
-        </TouchableOpacity>
+        </GHTouchableOpacity>
       </View>
     ));
 
   return (
-      <View style={styles.gradient}>
+      <View style={[styles.gradient, { backgroundColor: themeColors.canvasLight }]}>
         <SafeAreaView style={styles.scheduleScreenRoot} edges={[]}>
           <View style={[styles.scheduleHeaderStack, { paddingTop: insets.top }]}>
             <View style={styles.topBar}>
-              <Text style={styles.headerTitle}>{scheduleLabel}</Text>
+              <TouchableOpacity
+                style={styles.scheduleHeaderLeft}
+                activeOpacity={0.7}
+                accessibilityRole="button"
+                accessibilityLabel={
+                  cycleChipState === 'none'
+                    ? `${scheduleLabel}, ${t('startACycle')}`
+                    : `${scheduleLabel}, ${cycleChipName}, ${cycleChipStatus}`
+                }
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  if (cycleChipState === 'none') {
+                    onOpenAddWorkout?.(selectedDate);
+                  } else {
+                    setShowCycleSheet(true);
+                  }
+                }}
+              >
+                <Text style={styles.headerTitle}>{scheduleLabel}</Text>
+                <Text style={styles.scheduleCycleMetaLine} numberOfLines={1}>
+                  {cycleChipState === 'none'
+                    ? t('startACycle')
+                    : `${cycleChipName} · ${cycleChipStatus}`}
+                </Text>
+              </TouchableOpacity>
               <View style={styles.headerRight}>
                 {selectedDate !== today.format('YYYY-MM-DD') && (
                   <TouchableOpacity
                     style={styles.settingsButton}
-                    onPress={() => {
-                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                      handleDayChange(today.format('YYYY-MM-DD'));
-                    }}
+                    onPress={goToTodayStrip}
                     activeOpacity={1}
                   >
                     <IconCalendar size={24} color={COLORS.inkCharcoal} />
@@ -642,82 +744,43 @@ export function TodayScreen({ onDateChange, onOpenAddWorkout, onOpenBonusDrawer 
                 </TouchableOpacity>
               </View>
             </View>
-            <View style={styles.cycleChipAndMonthRow}>
-              <TouchableOpacity
-                style={[
-                  styles.cycleChip,
-                  cycleChipState === 'paused' && styles.cycleChipPaused,
-                  cycleChipState === 'finished' && styles.cycleChipFinished,
-                  cycleChipState === 'none' && styles.cycleChipNone,
-                  styles.cycleChipRow,
-                ]}
-                activeOpacity={0.7}
-                onPress={() => {
-                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                  if (cycleChipState === 'none') {
-                    onOpenAddWorkout?.(selectedDate);
-                  } else {
-                    setShowCycleSheet(true);
-                  }
-                }}
-              >
-                {cycleChipState === 'none' ? (
-                  <Text style={styles.cycleChipTextNone} numberOfLines={1}>
-                    {t('startACycle')}
-                  </Text>
-                ) : (
-                  <Text numberOfLines={1}>
-                    <Text style={[
-                      styles.cycleChipName,
-                      cycleChipState === 'paused' && styles.cycleChipNamePaused,
-                      cycleChipState === 'finished' && styles.cycleChipNameFinished,
-                    ]}>
-                      {cycleChipName}
-                    </Text>
-                    <Text style={[
-                      styles.cycleChipStatusText,
-                      cycleChipState === 'paused' && styles.cycleChipTextPaused,
-                      cycleChipState === 'finished' && styles.cycleChipTextFinished,
-                    ]}>
-                      {' · '}{cycleChipStatus}
-                    </Text>
-                  </Text>
-                )}
-              </TouchableOpacity>
-            </View>
 
             <View style={styles.weekStripRow}>
-              <View
-                style={styles.weekStripClip}
-                onLayout={e => {
-                  const w = e.nativeEvent.layout.width;
-                  if (w > 0) setStripViewportWidth(w);
-                }}
-              >
-                <Animated.View
-                  style={[
-                    styles.weekStripSlideRowInner,
-                    showWeekStripDualPanel
-                      ? { width: stripViewportWidth * 2 }
-                      : { width: '100%', alignSelf: 'stretch' },
-                    weekStripSlideAnimatedStyle,
-                  ]}
+              <GestureDetector gesture={weekPanGesture}>
+                <View
+                  style={styles.weekStripClip}
+                  onLayout={e => {
+                    const w = e.nativeEvent.layout.width;
+                    if (w > 0) setStripViewportWidth(w);
+                  }}
                 >
-                  {showWeekStripDualPanel && slideOutgoingStrip ? (
-                    <View style={[styles.weekStripPanel, { width: stripViewportWidth }]}>
-                      {renderWeekStripCells(slideOutgoingStrip, 'out')}
+                  {stripViewportWidth > 0 ? (
+                    <Animated.View
+                      style={[
+                        styles.weekStripSlideRowInner,
+                        { width: stripViewportWidth * 3 },
+                        weekStripTrackAnimatedStyle,
+                      ]}
+                    >
+                      <View style={[styles.weekStripPanel, { width: stripViewportWidth }]}>
+                        {renderWeekStripCells(prevWeekStripDays, 'p')}
+                      </View>
+                      <View style={[styles.weekStripPanel, { width: stripViewportWidth }]}>
+                        {renderWeekStripCells(currWeekStripDays, 'c')}
+                      </View>
+                      <View style={[styles.weekStripPanel, { width: stripViewportWidth }]}>
+                        {renderWeekStripCells(nextWeekStripDays, 'n')}
+                      </View>
+                    </Animated.View>
+                  ) : (
+                    <View style={styles.weekStripSlideRowInner}>
+                      <View style={[styles.weekStripPanel, { flex: 1 }]}>
+                        {renderWeekStripCells(currWeekStripDays, 'c')}
+                      </View>
                     </View>
-                  ) : null}
-                  <View
-                    style={[
-                      styles.weekStripPanel,
-                      showWeekStripDualPanel ? { width: stripViewportWidth } : { flex: 1, minWidth: 0 },
-                    ]}
-                  >
-                    {renderWeekStripCells(stripDays, 'in')}
-                  </View>
-                </Animated.View>
-              </View>
+                  )}
+                </View>
+              </GestureDetector>
             </View>
           </View>
 
@@ -1145,7 +1208,6 @@ export function TodayScreen({ onDateChange, onOpenAddWorkout, onOpenBonusDrawer 
 const styles = StyleSheet.create({
   gradient: {
     flex: 1,
-    backgroundColor: COLORS.canvasLight,
   },
   scheduleScreenRoot: {
     flex: 1,
@@ -1262,18 +1324,18 @@ const styles = StyleSheet.create({
   },
   weekStripDayLetters: {
     ...TYPOGRAPHY.note,
-    color: COLORS.inkCharcoal,
+    color: COLORS.textMeta,
     fontVariant: ['tabular-nums'],
   },
   weekStripSelectedPill: {
-    backgroundColor: EXPLORE_V2_PALETTES.complete.main,
+    backgroundColor: COLORS.containerTertiary,
     borderRadius: 10,
     paddingTop: 10,
     alignItems: 'center',
     alignSelf: 'center',
   },
   weekStripTextOnSelection: {
-    color: EXPLORE_V2_PALETTES.complete.dark,
+    color: COLORS.inkCharcoal,
   },
   weekStripNumWrap: {
     minWidth: 40,
@@ -1286,11 +1348,11 @@ const styles = StyleSheet.create({
   },
   weekStripNum: {
     ...TYPOGRAPHY.h3,
-    color: COLORS.inkCharcoal,
+    color: COLORS.textMeta,
     fontVariant: ['tabular-nums'],
   },
-  weekStripNumToday: {
-    fontWeight: '600',
+  weekStripNumSelected: {
+    fontWeight: '500' as const,
   },
   extrasPanel: {
     borderTopWidth: StyleSheet.hairlineWidth,
@@ -1309,8 +1371,6 @@ const styles = StyleSheet.create({
   },
   extrasPinBarWrap: {
     backgroundColor: COLORS.canvasLight,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: 'rgba(31, 31, 31, 0.12)',
   },
   extrasPinBar: {
     minHeight: EXTRAS_PIN_BAR_HEIGHT,
@@ -1331,18 +1391,21 @@ const styles = StyleSheet.create({
   },
   topBar: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'stretch',
     justifyContent: 'space-between',
     minHeight: 48,
     paddingHorizontal: SPACING.xxl,
+    marginBottom: 12,
   },
   headerTitle: {
     ...TYPOGRAPHY.h3,
+    fontWeight: '500' as const,
     color: COLORS.inkCharcoal,
   },
   headerRight: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: SPACING.md,
   },
   settingsButton: {
@@ -1352,95 +1415,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
 
-  scheduleTitleTouchable: {
+  /** Title + cycle line; tap opens cycle control (or start cycle when none). */
+  scheduleHeaderLeft: {
     flex: 1,
     minWidth: 0,
+    marginRight: SPACING.sm,
     justifyContent: 'center',
   },
-  scheduleTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    minWidth: 0,
-  },
-  scheduleSubtitleTouchable: {
-    paddingHorizontal: SPACING.xxl,
-    marginBottom: 12,
-  },
-  scheduleSubtitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  scheduleSubtitle: {
-    ...TYPOGRAPHY.meta,
-    color: COLORS.inkCharcoal,
-  },
-  scheduleSubtitlePauseIcon: {
-    marginLeft: SPACING.xs,
-  },
-
-  // Cycle Chip
-  cycleChipAndMonthRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'flex-start',
-    gap: SPACING.md,
-  },
-  cycleChipRow: {
-    alignSelf: 'flex-start',
-    marginLeft: SPACING.xxl,
-    marginTop: SPACING.xs,
-    marginBottom: 12,
-  },
-  cycleChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: COLORS.cycleStripBackground,
-    paddingHorizontal: 10,
-    height: 28,
-    borderRadius: 14,
-    gap: 4,
-    maxWidth: 220,
-  },
-  cycleChipPaused: {
-    backgroundColor: 'rgba(255, 69, 58, 0.15)',
-  },
-  cycleChipFinished: {
-    backgroundColor: 'transparent',
-    borderWidth: 1,
-    borderColor: COLORS.container,
-  },
-  cycleChipNone: {
-    backgroundColor: 'transparent',
-    borderWidth: 1,
-    borderColor: COLORS.container,
-  },
-  cycleChipName: {
-    fontSize: 13,
-    fontWeight: '600' as const,
-    color: COLORS.accentPrimary,
-  },
-  cycleChipNamePaused: {
-    color: COLORS.signalNegative,
-  },
-  cycleChipNameFinished: {
-    color: COLORS.inkCharcoal,
-  },
-  cycleChipStatusText: {
-    fontSize: 13,
-    fontWeight: '400' as const,
-    color: COLORS.accentPrimary,
-  },
-  cycleChipTextFinished: {
-    color: COLORS.inkCharcoal,
-  },
-  cycleChipTextPaused: {
-    color: COLORS.signalNegative,
-  },
-  cycleChipTextNone: {
-    fontSize: 13,
-    fontWeight: '600' as const,
-    color: COLORS.inkCharcoal,
+  scheduleCycleMetaLine: {
+    ...TYPOGRAPHY.body,
+    color: COLORS.textMeta,
+    marginTop: 2,
   },
 
   // Pause Banner

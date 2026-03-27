@@ -14,6 +14,7 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 import { TYPOGRAPHY } from '../../constants';
+import { useAppTheme } from '../../theme/useAppTheme';
 import { EXPLORE_V2 } from './exploreV2Tokens';
 import { EXPLORE_V2_CHROME } from './exploreV2ColorSystem';
 
@@ -35,7 +36,7 @@ type Props = {
   progress: RNAnimated.Value;
   /** Short line under the time (e.g. Rest, Left side) — overlay layout only in practice */
   contextLabel?: string | null;
-  /** Explore v2 work timer: digits + label use idle page ink; border softens on blue */
+  /** Work / switch-sides hero: digits + context label use header ink (`inkCharcoal`) on timer tint */
   workTimerVisualActive?: boolean;
   exploreV2WorkBlueProgress?: SharedValue<number>;
 };
@@ -146,10 +147,10 @@ export function ExploreV2TimerArea({
   workTimerVisualActive = false,
   exploreV2WorkBlueProgress,
 }: Props) {
+  const { colors: themeColors } = useAppTheme();
   const isOverlay = layoutVariant === 'overlay';
-  const heroInk = workTimerVisualActive
-    ? EXPLORE_V2.colors.pageBg
-    : EXPLORE_V2_CHROME.timerHeroText;
+  /** Match explore-v2 header title ink (`inkCharcoal` / `#1F1F1F`) on lime work + switch-sides band */
+  const heroInk = workTimerVisualActive ? themeColors.inkCharcoal : EXPLORE_V2_CHROME.timerHeroText;
   const totalSec = Math.max(0, timeLeftSec);
   const minutes = Math.floor(totalSec / 60);
   const seconds = totalSec % 60;

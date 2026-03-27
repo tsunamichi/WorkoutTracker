@@ -20,7 +20,7 @@ import Animated, {
   Easing,
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
-import { COLORS } from '../../constants';
+import { useAppTheme } from '../../theme/useAppTheme';
 import { EXPLORE_V2 } from './exploreV2Tokens';
 import type { ExploreV2Group } from './exploreV2Types';
 import type { PrimaryRevealedCard } from './exploreV2Types';
@@ -97,7 +97,8 @@ export type ExploreV2ExecutionRootProps = {
   type: 'warmup' | 'main' | 'core';
   progressionGroups: Array<{ id: string; name: string; exerciseIds: string[] }>;
   updateProgressionGroup: (id: string, patch: { exerciseIds: string[] }) => Promise<void>;
-  onSwapExercise: () => void;
+  /** Template item id of the exercise being swapped (drives per-exercise log checks on the screen). */
+  onSwapExercise: (templateExerciseId: string) => void;
   onRemoveExercise: (exercise: ExploreV2Group['exercises'][0]) => Promise<void>;
   /** Measured height of explore v2 content root — same SharedValue as ExerciseExecutionScreen `exploreV2RootHeight`. */
   exploreLayoutRootHeight: SharedValue<number>;
@@ -172,6 +173,9 @@ export function ExploreV2ExecutionRoot(props: ExploreV2ExecutionRootProps) {
     exerciseHistoryRefreshKey,
     progressionValuesByItemId,
   } = props;
+  const { explore: exRoot, colors: themeColorsRoot } = useAppTheme();
+  const warmActivityRoot = exRoot.warmActivity;
+  const backgroundTimerRoot = themeColorsRoot.backgroundTimer;
   const radius = useMemo(
     () => getExploreV2RadiusTokens(screenWidth, insets.bottom),
     [screenWidth, insets.bottom],
@@ -483,21 +487,21 @@ export function ExploreV2ExecutionRoot(props: ExploreV2ExecutionRootProps) {
   const rootFillAnimatedStyle = useAnimatedStyle(() => {
     const b = restThemeProgress.value;
     const w = exploreV2WorkBlueProgress.value;
-    const whenUp = interpolateColor(w, [0, 1], ['#FFA424', COLORS.info]);
+    const whenUp = interpolateColor(w, [0, 1], [warmActivityRoot, backgroundTimerRoot]);
     return {
       backgroundColor: interpolateColor(b, [0, 1], [EXPLORE_V2.colors.pageBg, whenUp]),
     };
-  });
+  }, [warmActivityRoot, backgroundTimerRoot]);
 
-  /** Stack outline — matches page (orange rest / blue work) */
+  /** Stack outline — matches page (orange rest / lime work timer) */
   const walletBorderOverlayAnimatedStyle = useAnimatedStyle(() => {
     const b = restThemeProgress.value;
     const w = exploreV2WorkBlueProgress.value;
-    const whenUp = interpolateColor(w, [0, 1], ['#FFA424', COLORS.info]);
+    const whenUp = interpolateColor(w, [0, 1], [warmActivityRoot, backgroundTimerRoot]);
     return {
       borderColor: interpolateColor(b, [0, 1], [EXPLORE_V2.colors.pageBg, whenUp]),
     };
-  });
+  }, [warmActivityRoot, backgroundTimerRoot]);
 
   const onSelectUpNext = useCallback(
     (gi: number) => {
@@ -634,7 +638,7 @@ export function ExploreV2ExecutionRoot(props: ExploreV2ExecutionRootProps) {
                   },
                   onSwap: () => {
                     setOverflowOpen(false);
-                    onSwapExercise();
+                    onSwapExercise(focusExercise.id);
                   },
                   onDelete: async () => {
                     setOverflowOpen(false);

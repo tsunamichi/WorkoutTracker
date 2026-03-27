@@ -113,7 +113,8 @@ export default function App() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
-        <StatusBar style="light" />
+        {/* Dark icons/text on light app chrome (Schedule, etc.). Override per-screen if needed. */}
+        <StatusBar style="dark" />
         <RootErrorBoundary onFatal={setFatalError}>
           <RootNavigator />
         </RootErrorBoundary>

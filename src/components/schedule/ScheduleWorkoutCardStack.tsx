@@ -6,7 +6,7 @@ import {
   TouchableOpacity,
   useWindowDimensions,
 } from 'react-native';
-import Svg, { Circle, Line, Path } from 'react-native-svg';
+import Svg, { Circle, Path } from 'react-native-svg';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
   Extrapolate,
@@ -21,6 +21,8 @@ import Animated, {
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { COLORS, SPACING, TYPOGRAPHY, CARDS } from '../../constants';
+import { useTranslation } from '../../i18n/useTranslation';
+import { useAppTheme } from '../../theme/useAppTheme';
 import { EXPLORE_V2_PALETTES, mixHex } from '../exploreV2/exploreV2ColorSystem';
 import type { ScheduledWorkout, WorkoutTemplateExercise } from '../../types/training';
 import type { Exercise } from '../../types';
@@ -41,11 +43,22 @@ const DEEP_PEEK_INSET_FRAC = 0.105;
 const STACK_HEIGHT = FRONT_BOTTOM + FRONT_H;
 
 const SWIPE_FRACTION = 0.22;
-const SPRING_CFG = { damping: 28, stiffness: 280 };
+/** Spring when the front card is released without discarding — slight overshoot / bounce. */
+const SPRING_RETURN_CFG = { damping: 14, stiffness: 260, mass: 0.85 };
+/** Peek stack layout / colors stay fixed until drag exceeds this (px), then morph with swipe. */
+const PEEK_MORPH_DRAG_START_PX = 40;
+/** Front-card “Not today” / defer fill / content fade — starts early and finishes quickly (independent of peek morph). */
+const DEFER_CHROME_START_PX = 6;
+/** Defer chrome completes by this fraction of the swipe commit threshold (snappy vs peek). */
+const DEFER_CHROME_END_FRAC_OF_THRESHOLD = 0.38;
+/** `translateX` within ±this is treated as neutral for label alignment. */
+const SWIPE_ALIGN_DEAD_PX = 3;
+/** Max horizontal drag: stop when ~90% of the card is off-screen (10% still visible). */
+const MAX_DRAG_WIDTH_FRACTION = 0.9;
 /** Max Z-rotation (deg) at full horizontal drag; swipe left → negative tilt, swipe right → positive. */
 const MAX_SWIPE_TILT_DEG = 2.75;
 
-const HERO_PIE_OUTLINE = 2.5;
+const HERO_PIE_OUTLINE = 8;
 
 /** SVG path for a circular sector from 12 o'clock, clockwise (progress 0–1). */
 function heroPieSectorPath(cx: number, cy: number, r: number, progress: number): string {
@@ -61,16 +74,17 @@ function heroPieSectorPath(cx: number, cy: number, r: number, progress: number):
   return `M ${cx} ${cy} L ${x1} ${y1} A ${r} ${r} 0 ${largeArc} 1 ${x2} ${y2} Z`;
 }
 
-/** Pie-style progress: gold segment + bronze remainder, black rim and radial dividers (no label). */
+/** Pie-style progress: complete wedge = accent-primary, incomplete = accent-secondary-soft, rim = card surface. */
 function HeroProgressPie({ progress }: { progress: number }) {
+  const { explore: ex, colors: themeColors } = useAppTheme();
   const p = Math.min(1, Math.max(0, progress));
   const size = HERO_BUBBLE_SIZE;
   const cx = size / 2;
   const cy = size / 2;
   const r = size / 2 - HERO_PIE_OUTLINE / 2;
-  const rim = COLORS.inkCharcoal;
-  const remainder = COLORS.accentPrimaryDimmed;
-  const done = COLORS.accentPrimary;
+  const rim = ex.surfaceCurrentCard;
+  const remainder = themeColors.accentSecondarySoft;
+  const done = themeColors.accentPrimary;
   const sector = heroPieSectorPath(cx, cy, r, p);
 
   const endAngle = -Math.PI / 2 + p * 2 * Math.PI;
@@ -86,10 +100,15 @@ function HeroProgressPie({ progress }: { progress: number }) {
         {p > 0 && p < 1 ? <Path d={sector} fill={done} /> : null}
         {p >= 1 ? <Circle cx={cx} cy={cy} r={r} fill={done} /> : null}
         {p > 0 && p < 1 ? (
-          <>
-            <Line x1={cx} y1={cy} x2={sx} y2={sy} stroke={rim} strokeWidth={HERO_PIE_OUTLINE} />
-            <Line x1={cx} y1={cy} x2={rx} y2={ry} stroke={rim} strokeWidth={HERO_PIE_OUTLINE} />
-          </>
+          <Path
+            d={`M ${sx} ${sy} L ${cx} ${cy} L ${rx} ${ry}`}
+            stroke={rim}
+            strokeWidth={HERO_PIE_OUTLINE}
+            fill="none"
+            strokeLinecap="butt"
+            strokeLinejoin="miter"
+            strokeMiterlimit={16}
+          />
         ) : null}
         <Circle cx={cx} cy={cy} r={r} fill="none" stroke={rim} strokeWidth={HERO_PIE_OUTLINE} />
       </Svg>
@@ -133,15 +152,14 @@ function DeckCardFace({
   getMainCompletion,
   variant,
   peekTextColor,
-  peekMutedColor,
 }: {
   sw: ScheduledWorkout;
   exercises: Exercise[];
   getMainCompletion: (id: string) => { percentage: number };
   variant: 'front' | 'peek';
   peekTextColor?: string;
-  peekMutedColor?: string;
 }) {
+  const { colors: themeColors } = useAppTheme();
   const mc = getMainCompletion(sw.id);
   const progress = mc.percentage / 100;
   const ordered = [...(sw.exercisesSnapshot ?? [])].sort((a, b) => a.order - b.order);
@@ -154,11 +172,7 @@ function DeckCardFace({
     variant === 'front'
       ? styles.workoutExerciseCount
       : [styles.workoutExerciseCount, { color: peekTextColor! }];
-  const muscleStyle =
-    variant === 'front'
-      ? styles.workoutInvolvedMuscles
-      : [styles.workoutInvolvedMuscles, { color: peekMutedColor! }];
-
+  const involvedStyle = [styles.workoutInvolvedMuscles, { color: themeColors.accentSecondary }];
   return (
     <>
       <View style={styles.cardHeader}>
@@ -175,7 +189,7 @@ function DeckCardFace({
         {exerciseCount === 1 ? '1 exercise' : `${exerciseCount} exercises`}
       </Text>
       {involvedLine ? (
-        <Text style={muscleStyle} numberOfLines={2}>
+        <Text style={involvedStyle} numberOfLines={2}>
           {involvedLine}
         </Text>
       ) : null}
@@ -189,41 +203,34 @@ function DeckCardFacePeekAnimated({
   exercises,
   getMainCompletion,
   translateX,
+  morphStartPx,
   growEndPx,
   primaryFrom,
   primaryTo,
-  mutedFrom,
-  mutedTo,
 }: {
   sw: ScheduledWorkout;
   exercises: Exercise[];
   getMainCompletion: (id: string) => { percentage: number };
   translateX: SharedValue<number>;
+  morphStartPx: number;
   growEndPx: number;
   primaryFrom: string;
   primaryTo: string;
-  mutedFrom: string;
-  mutedTo: string;
 }) {
+  const { colors: themeColors } = useAppTheme();
   const mc = getMainCompletion(sw.id);
   const progress = mc.percentage / 100;
   const ordered = [...(sw.exercisesSnapshot ?? [])].sort((a, b) => a.order - b.order);
   const exerciseCount = ordered.length;
   const involvedLine = formatTopTwoMuscles(involvedCategoriesForWorkout(ordered, exercises));
+  const involvedStyle = [styles.workoutInvolvedMuscles, { color: themeColors.accentSecondary }];
 
   const primaryTextStyle = useAnimatedStyle(() => {
     const ax = Math.abs(translateX.value);
     return {
-      color: interpolateColor(ax, [0, growEndPx], [primaryFrom, primaryTo], 'RGB'),
+      color: interpolateColor(ax, [0, morphStartPx, growEndPx], [primaryFrom, primaryFrom, primaryTo], 'RGB'),
     };
-  });
-
-  const mutedTextStyle = useAnimatedStyle(() => {
-    const ax = Math.abs(translateX.value);
-    return {
-      color: interpolateColor(ax, [0, growEndPx], [mutedFrom, mutedTo], 'RGB'),
-    };
-  });
+  }, [growEndPx, morphStartPx, primaryFrom, primaryTo]);
 
   return (
     <>
@@ -241,9 +248,9 @@ function DeckCardFacePeekAnimated({
         {exerciseCount === 1 ? '1 exercise' : `${exerciseCount} exercises`}
       </Animated.Text>
       {involvedLine ? (
-        <Animated.Text style={[styles.workoutInvolvedMuscles, mutedTextStyle]} numberOfLines={2}>
+        <Text style={involvedStyle} numberOfLines={2}>
           {involvedLine}
-        </Animated.Text>
+        </Text>
       ) : null}
     </>
   );
@@ -262,9 +269,15 @@ export function ScheduleWorkoutCardStack({
   isInPastCycle,
   onOpenWorkout,
 }: Props) {
+  const { t } = useTranslation();
+  const { explore, colors: themeColors } = useAppTheme();
   const { width: windowWidth } = useWindowDimensions();
   const contentWidth = Math.max(0, windowWidth - SPACING.xxl * 2);
   const swipeThreshold = contentWidth * SWIPE_FRACTION;
+  const deferChromeEndPx = Math.max(
+    DEFER_CHROME_START_PX + 14,
+    swipeThreshold * DEFER_CHROME_END_FRAC_OF_THRESHOLD,
+  );
 
   const [activeIndex, setActiveIndex] = React.useState(0);
   const queueKey = useMemo(() => queue.map(sw => sw.id).join('|'), [queue]);
@@ -276,8 +289,6 @@ export function ScheduleWorkoutCardStack({
     () => mixHex(EXPLORE_V2_PALETTES.complete.main, '#FFFFFF', 0.14),
     [],
   );
-  /** Muted line on front (charcoal) — target for muscle text as next card becomes front. */
-  const metaOnCharcoal = useMemo(() => mixHex(COLORS.canvasLight, COLORS.inkCharcoal, 0.38), []);
 
   useEffect(() => {
     setActiveIndex(0);
@@ -320,7 +331,7 @@ export function ScheduleWorkoutCardStack({
         .activeOffsetX([-18, 18])
         .failOffsetY([-12, 12])
         .onUpdate(e => {
-          const max = contentWidth * 0.35;
+          const max = contentWidth * MAX_DRAG_WIDTH_FRACTION;
           let x = e.translationX;
           if (!canAdvance) x = x * 0.25;
           translateX.value = Math.max(-max, Math.min(max, x));
@@ -337,15 +348,20 @@ export function ScheduleWorkoutCardStack({
               },
             );
           } else {
-            translateX.value = withSpring(0, SPRING_CFG);
+            translateX.value = withSpring(0, SPRING_RETURN_CFG);
           }
         }),
     [canAdvance, contentWidth, swipeThreshold, translateX, commitSwipeAdvance],
   );
 
-  const maxDragPx = contentWidth * 0.35;
+  const maxDragPx = contentWidth * MAX_DRAG_WIDTH_FRACTION;
 
-  const frontAnimatedStyle = useAnimatedStyle(() => {
+  /** Horizontal slide only — defer label sits outside the tilt layer so it stays screen-level. */
+  const frontShellTranslateStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: translateX.value }],
+  }));
+
+  const frontCardTiltStyle = useAnimatedStyle(() => {
     const x = translateX.value;
     const tiltDeg = interpolate(
       x,
@@ -354,69 +370,155 @@ export function ScheduleWorkoutCardStack({
       Extrapolate.CLAMP,
     );
     return {
-      transform: [{ translateX: x }, { rotateZ: `${tiltDeg}deg` }],
+      transform: [{ rotateZ: `${tiltDeg}deg` }],
     };
   }, [maxDragPx]);
 
-  /** Distance along X at which peek layers reach their “committed swipe” layout. */
-  const peekGrowEndPx = Math.max(swipeThreshold, maxDragPx * 0.5);
+  /** Distance along X at which peek layers reach their “committed swipe” layout (always > morph start). */
+  const peekGrowEndPx = Math.max(
+    PEEK_MORPH_DRAG_START_PX + 1,
+    swipeThreshold,
+    maxDragPx * 0.5,
+  );
 
   const upNextMain = EXPLORE_V2_PALETTES.upNext.main;
   const upNextDark = EXPLORE_V2_PALETTES.upNext.dark;
-  const upNextMuted = EXPLORE_V2_PALETTES.upNext.muted;
   const completeMain = EXPLORE_V2_PALETTES.complete.main;
   const completeDark = EXPLORE_V2_PALETTES.complete.dark;
-  const completeMuted = EXPLORE_V2_PALETTES.complete.muted;
-  const frontCardBg = COLORS.inkCharcoal;
-  const canvasLight = COLORS.canvasLight;
+  const frontCardBg = explore.surfaceCurrentCard;
+  /** Same surface as Explore Up Next swipe/remove strip CTA family (`appTheme.explore.skipRestCtaBg`). */
+  const scheduleSwipeDeferBg = explore.skipRestCtaBg;
+  const canvasLight = themeColors.canvasLight;
+  const morphStart = PEEK_MORPH_DRAG_START_PX;
+  const deferStart = DEFER_CHROME_START_PX;
+  const deferEnd = deferChromeEndPx;
+
+  const frontCardFillAnimatedStyle = useAnimatedStyle(() => {
+    const ax = Math.abs(translateX.value);
+    return {
+      backgroundColor: interpolateColor(
+        ax,
+        [0, deferStart, deferEnd],
+        [frontCardBg, frontCardBg, scheduleSwipeDeferBg],
+        'RGB',
+      ),
+    };
+  }, [deferEnd, deferStart, frontCardBg, scheduleSwipeDeferBg]);
+
+  const frontContentFadeAnimatedStyle = useAnimatedStyle(() => {
+    const ax = Math.abs(translateX.value);
+    return {
+      opacity: interpolate(ax, [0, deferStart, deferEnd], [1, 1, 0], Extrapolate.CLAMP),
+    };
+  }, [deferEnd, deferStart]);
+
+  const notTodayOverlayAnimatedStyle = useAnimatedStyle(() => {
+    const x = translateX.value;
+    const ax = Math.abs(x);
+    const opacity = interpolate(ax, [0, deferStart, deferEnd], [0, 0, 1], Extrapolate.CLAMP);
+    let alignItems: 'center' | 'flex-end' | 'flex-start' = 'center';
+    if (x > SWIPE_ALIGN_DEAD_PX) alignItems = 'flex-start';
+    else if (x < -SWIPE_ALIGN_DEAD_PX) alignItems = 'flex-end';
+    return {
+      opacity,
+      justifyContent: 'center' as const,
+      alignItems,
+      paddingHorizontal: SPACING.lg,
+    };
+  }, [deferEnd, deferStart]);
+
+  const notTodayTextAnimatedStyle = useAnimatedStyle(() => {
+    const x = translateX.value;
+    if (x > SWIPE_ALIGN_DEAD_PX) return { textAlign: 'left' as const };
+    if (x < -SWIPE_ALIGN_DEAD_PX) return { textAlign: 'right' as const };
+    return { textAlign: 'center' as const };
+  }, []);
 
   const midPeekAnimatedStyle = useAnimatedStyle(() => {
     const ax = Math.abs(translateX.value);
-    const bottom = interpolate(ax, [0, peekGrowEndPx], [MID_PEEK_BOTTOM, FRONT_BOTTOM], Extrapolate.CLAMP);
-    const inset = interpolate(ax, [0, peekGrowEndPx], [MID_PEEK_INSET_FRAC * contentWidth, 0], Extrapolate.CLAMP);
-    const backgroundColor = interpolateColor(ax, [0, peekGrowEndPx], [upNextMain, frontCardBg], 'RGB');
+    const bottom = interpolate(
+      ax,
+      [0, morphStart, peekGrowEndPx],
+      [MID_PEEK_BOTTOM, MID_PEEK_BOTTOM, FRONT_BOTTOM],
+      Extrapolate.CLAMP,
+    );
+    const inset = interpolate(
+      ax,
+      [0, morphStart, peekGrowEndPx],
+      [MID_PEEK_INSET_FRAC * contentWidth, MID_PEEK_INSET_FRAC * contentWidth, 0],
+      Extrapolate.CLAMP,
+    );
+    const backgroundColor = interpolateColor(
+      ax,
+      [0, morphStart, peekGrowEndPx],
+      [upNextMain, upNextMain, frontCardBg],
+      'RGB',
+    );
     return {
       bottom,
       left: inset,
       right: inset,
       backgroundColor,
     };
-  }, [contentWidth, peekGrowEndPx, upNextMain, frontCardBg]);
+  }, [contentWidth, peekGrowEndPx, morphStart, upNextMain, frontCardBg]);
 
   const backPeekAnimatedStyle = useAnimatedStyle(() => {
     const ax = Math.abs(translateX.value);
-    const bottom = interpolate(ax, [0, peekGrowEndPx], [BACK_PEEK_BOTTOM, MID_PEEK_BOTTOM], Extrapolate.CLAMP);
-    const inset = interpolate(
+    const bottom = interpolate(
       ax,
-      [0, peekGrowEndPx],
-      [BACK_PEEK_INSET_FRAC * contentWidth, MID_PEEK_INSET_FRAC * contentWidth],
+      [0, morphStart, peekGrowEndPx],
+      [BACK_PEEK_BOTTOM, BACK_PEEK_BOTTOM, MID_PEEK_BOTTOM],
       Extrapolate.CLAMP,
     );
-    const backgroundColor = interpolateColor(ax, [0, peekGrowEndPx], [completeMain, upNextMain], 'RGB');
+    const inset = interpolate(
+      ax,
+      [0, morphStart, peekGrowEndPx],
+      [
+        BACK_PEEK_INSET_FRAC * contentWidth,
+        BACK_PEEK_INSET_FRAC * contentWidth,
+        MID_PEEK_INSET_FRAC * contentWidth,
+      ],
+      Extrapolate.CLAMP,
+    );
+    const backgroundColor = interpolateColor(
+      ax,
+      [0, morphStart, peekGrowEndPx],
+      [completeMain, completeMain, upNextMain],
+      'RGB',
+    );
     return {
       bottom,
       left: inset,
       right: inset,
       backgroundColor,
     };
-  }, [contentWidth, peekGrowEndPx, completeMain, upNextMain]);
+  }, [contentWidth, peekGrowEndPx, morphStart, completeMain, upNextMain]);
 
   const deepPeekAnimatedStyle = useAnimatedStyle(() => {
     const ax = Math.abs(translateX.value);
     const inset = interpolate(
       ax,
-      [0, peekGrowEndPx],
-      [DEEP_PEEK_INSET_FRAC * contentWidth, BACK_PEEK_INSET_FRAC * contentWidth],
+      [0, morphStart, peekGrowEndPx],
+      [
+        DEEP_PEEK_INSET_FRAC * contentWidth,
+        DEEP_PEEK_INSET_FRAC * contentWidth,
+        BACK_PEEK_INSET_FRAC * contentWidth,
+      ],
       Extrapolate.CLAMP,
     );
-    const backgroundColor = interpolateColor(ax, [0, peekGrowEndPx], [deepTuckBg, completeMain], 'RGB');
+    const backgroundColor = interpolateColor(
+      ax,
+      [0, morphStart, peekGrowEndPx],
+      [deepTuckBg, deepTuckBg, completeMain],
+      'RGB',
+    );
     return {
       bottom: BACK_PEEK_BOTTOM,
       left: inset,
       right: inset,
       backgroundColor,
     };
-  }, [contentWidth, peekGrowEndPx, deepTuckBg, completeMain]);
+  }, [contentWidth, peekGrowEndPx, morphStart, deepTuckBg, completeMain]);
 
   if (!activeWorkout) return null;
 
@@ -439,7 +541,7 @@ export function ScheduleWorkoutCardStack({
         <Animated.View
           key={`peek-deep-${deep.id}`}
           pointerEvents="none"
-          style={[styles.peekDeckCard, deepPeekAnimatedStyle, { height: FRONT_H, zIndex: 2 }]}
+          style={[styles.peekDeckCard, deepPeekAnimatedStyle, { height: FRONT_H, zIndex: 2, borderColor: canvasLight }]}
         >
           <View style={[styles.workoutCardInner, styles.peekCardInner]}>
             <View style={styles.workoutCardContent}>
@@ -449,7 +551,6 @@ export function ScheduleWorkoutCardStack({
                 getMainCompletion={getMainCompletion}
                 variant="peek"
                 peekTextColor={completeDark}
-                peekMutedColor={completeMuted}
               />
             </View>
           </View>
@@ -460,7 +561,7 @@ export function ScheduleWorkoutCardStack({
         <Animated.View
           key={`peek-back-${back.id}`}
           pointerEvents="none"
-          style={[styles.peekDeckCard, backPeekAnimatedStyle, { height: FRONT_H, zIndex: 3 }]}
+          style={[styles.peekDeckCard, backPeekAnimatedStyle, { height: FRONT_H, zIndex: 3, borderColor: canvasLight }]}
         >
           <View style={[styles.workoutCardInner, styles.peekCardInner]}>
             <View style={styles.workoutCardContent}>
@@ -469,11 +570,10 @@ export function ScheduleWorkoutCardStack({
                 exercises={exercises}
                 getMainCompletion={getMainCompletion}
                 translateX={translateX}
+                morphStartPx={morphStart}
                 growEndPx={peekGrowEndPx}
                 primaryFrom={completeDark}
                 primaryTo={upNextDark}
-                mutedFrom={completeMuted}
-                mutedTo={upNextMuted}
               />
             </View>
           </View>
@@ -484,7 +584,7 @@ export function ScheduleWorkoutCardStack({
         <Animated.View
           key={`peek-mid-${mid.id}`}
           pointerEvents="none"
-          style={[styles.peekDeckCard, midPeekAnimatedStyle, { height: FRONT_H, zIndex: 4 }]}
+          style={[styles.peekDeckCard, midPeekAnimatedStyle, { height: FRONT_H, zIndex: 4, borderColor: canvasLight }]}
         >
           <View style={[styles.workoutCardInner, styles.peekCardInner]}>
             <View style={styles.workoutCardContent}>
@@ -493,11 +593,10 @@ export function ScheduleWorkoutCardStack({
                 exercises={exercises}
                 getMainCompletion={getMainCompletion}
                 translateX={translateX}
+                morphStartPx={morphStart}
                 growEndPx={peekGrowEndPx}
                 primaryFrom={upNextDark}
                 primaryTo={canvasLight}
-                mutedFrom={upNextMuted}
-                mutedTo={metaOnCharcoal}
               />
             </View>
           </View>
@@ -513,25 +612,40 @@ export function ScheduleWorkoutCardStack({
               height: FRONT_H,
               zIndex: 5,
             },
-            frontAnimatedStyle,
+            frontShellTranslateStyle,
           ]}
         >
-          <View style={styles.workoutCard} testID="workout-card">
-            <TouchableOpacity
-              style={styles.workoutCardInner}
-              onPress={handlePressCard}
-              activeOpacity={1}
-              disabled={isInPastCycle && completionPercentage < 100}
+          <View style={styles.frontShellInner}>
+            <Animated.View style={[styles.frontTiltLayer, frontCardTiltStyle]}>
+              <Animated.View
+                style={[styles.workoutCard, frontCardFillAnimatedStyle, { borderColor: canvasLight }]}
+                testID="workout-card"
+              >
+                <TouchableOpacity
+                  style={styles.workoutCardInner}
+                  onPress={handlePressCard}
+                  activeOpacity={1}
+                  disabled={isInPastCycle && completionPercentage < 100}
+                >
+                  <View style={styles.workoutCardContent}>
+                    <Animated.View style={[styles.frontCardContentWrap, frontContentFadeAnimatedStyle]}>
+                      <DeckCardFace
+                        sw={activeWorkout}
+                        exercises={exercises}
+                        getMainCompletion={getMainCompletion}
+                        variant="front"
+                      />
+                    </Animated.View>
+                  </View>
+                </TouchableOpacity>
+              </Animated.View>
+            </Animated.View>
+            <Animated.View
+              pointerEvents="none"
+              style={[styles.notTodayOverlay, notTodayOverlayAnimatedStyle]}
             >
-              <View style={styles.workoutCardContent}>
-                <DeckCardFace
-                  sw={activeWorkout}
-                  exercises={exercises}
-                  getMainCompletion={getMainCompletion}
-                  variant="front"
-                />
-              </View>
-            </TouchableOpacity>
+              <Animated.Text style={[styles.notTodayText, notTodayTextAnimatedStyle]}>{t('notToday')}</Animated.Text>
+            </Animated.View>
           </View>
         </Animated.View>
       </GestureDetector>
@@ -549,7 +663,6 @@ const styles = StyleSheet.create({
     borderRadius: CARDS.cardDeep.outer.borderRadius,
     borderCurve: CARDS.cardDeep.outer.borderCurve,
     borderWidth: 2,
-    borderColor: COLORS.canvasLight,
     overflow: 'hidden',
   },
   peekCardInner: {
@@ -561,13 +674,19 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
   },
+  frontShellInner: {
+    flex: 1,
+    width: '100%',
+    position: 'relative',
+  },
+  frontTiltLayer: {
+    ...StyleSheet.absoluteFillObject,
+  },
   workoutCard: {
-    backgroundColor: COLORS.inkCharcoal,
     borderRadius: CARDS.cardDeep.outer.borderRadius,
     borderCurve: CARDS.cardDeep.outer.borderCurve,
     overflow: CARDS.cardDeep.outer.overflow,
     borderWidth: 2,
-    borderColor: COLORS.canvasLight,
     width: '100%',
     flex: 1,
   },
@@ -586,6 +705,20 @@ const styles = StyleSheet.create({
     minHeight: 0,
     width: '100%',
     flexDirection: 'column',
+    position: 'relative',
+  },
+  frontCardContentWrap: {
+    flex: 1,
+    minHeight: 0,
+    width: '100%',
+  },
+  notTodayOverlay: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  notTodayText: {
+    ...TYPOGRAPHY.displayLarge,
+    fontWeight: '600',
+    color: COLORS.textOnPrimary,
   },
   cardHeader: {
     flexShrink: 0,
@@ -593,7 +726,7 @@ const styles = StyleSheet.create({
   workoutName: {
     ...TYPOGRAPHY.displayLarge,
     fontWeight: '400',
-    color: COLORS.canvasLight,
+    color: COLORS.textOnPrimary,
     flexShrink: 1,
   },
   titleToBubbleGap: {
@@ -612,13 +745,11 @@ const styles = StyleSheet.create({
   },
   workoutExerciseCount: {
     ...TYPOGRAPHY.body,
-    color: COLORS.canvasLight,
+    color: COLORS.textOnPrimary,
     fontWeight: '500',
   },
   workoutInvolvedMuscles: {
     ...TYPOGRAPHY.meta,
-    color: COLORS.canvasLight,
-    opacity: 0.85,
     marginTop: 4,
   },
   heroBubbleWrap: {

@@ -20,6 +20,7 @@ import Reanimated, {
 } from 'react-native-reanimated';
 import { EXPLORE_V2 } from './exploreV2Tokens';
 import { COLORS, TYPOGRAPHY } from '../../constants';
+import { useAppTheme } from '../../theme/useAppTheme';
 import { formatWeightForLoad, fromDisplayWeight } from '../../utils/weight';
 import { applyForwardPropagationForExerciseRounds } from '../../utils/exerciseLocalValues';
 import type { ExploreV2Group, PrimaryRevealedCard } from './exploreV2Types';
@@ -31,10 +32,6 @@ import {
 } from './ExploreV2CurrentOverflowSheet';
 
 const CANVAS_INK = COLORS.canvasLight;
-const VALUE_INK = '#FFA424';
-const UNIT_INK = '#464646';
-/** “Skip rest time” CTA pill — solid dark so orange label stays legible */
-const SKIP_REST_CTA_BG = '#161616';
 
 type Props = {
   group: ExploreV2Group;
@@ -111,6 +108,10 @@ type SetHeroPageProps = {
   getBarbellMode: Props['getBarbellMode'];
   metricsEditable: boolean;
   heroValueColor: string;
+  heroUnitInk: string;
+  perSideLabelColor: string;
+  perSideValueColor: string;
+  perSideUnitColor: string;
   pageWidth: number;
   commitsRef: React.MutableRefObject<Record<string, () => void>>;
   progressionValuesByItemId: Props['progressionValuesByItemId'];
@@ -128,6 +129,10 @@ function CurrentSetHeroPage({
   getBarbellMode,
   metricsEditable,
   heroValueColor,
+  heroUnitInk,
+  perSideLabelColor,
+  perSideValueColor,
+  perSideUnitColor,
   pageWidth,
   commitsRef,
   progressionValuesByItemId,
@@ -273,12 +278,12 @@ function CurrentSetHeroPage({
           <View style={styles.perSideRow}>
             <View style={styles.perSideCluster}>
               <View style={styles.perSideNumUnit}>
-                <Text style={[styles.perSideValue, { color: CANVAS_INK }]}>
+                <Text style={[styles.perSideValue, { color: perSideValueColor }]}>
                   {formatWeightForLoad(weightPerSideLbs, useKg)}
                 </Text>
-                <Text style={[styles.perSideUnit, { color: CANVAS_INK }]}>{weightUnit}</Text>
+                <Text style={[styles.perSideUnit, { color: perSideUnitColor }]}>{weightUnit}</Text>
               </View>
-              <Text style={[styles.perSideLabel, { color: UNIT_INK }]}>weight per side</Text>
+              <Text style={[styles.perSideLabel, { color: perSideLabelColor }]}>weight per side</Text>
             </View>
           </View>
         ) : null}
@@ -306,7 +311,7 @@ function CurrentSetHeroPage({
                 ↑
               </Text>
             ) : null}
-            <Text style={[styles.valueMetric, { color: UNIT_INK }]}>{weightUnit}</Text>
+            <Text style={[styles.valueMetric, { color: heroUnitInk }]}>{weightUnit}</Text>
           </View>
         </View>
         <View style={styles.valueRow}>
@@ -332,7 +337,7 @@ function CurrentSetHeroPage({
                 ↑
               </Text>
             ) : null}
-            <Text style={[styles.valueMetric, { color: UNIT_INK }]}>
+            <Text style={[styles.valueMetric, { color: heroUnitInk }]}>
               {heroEx.isTimeBased ? 'sec' : 'reps'}
             </Text>
           </View>
@@ -368,6 +373,15 @@ export function ExploreV2CurrentCard({
   settingsOverflow,
   progressionValuesByItemId,
 }: Props) {
+  const theme = useAppTheme();
+  const { explore: ex, colors: themeColors } = theme;
+  const accentPrimary = themeColors.accentPrimary;
+  const accentPrimaryDimmed = themeColors.accentPrimaryDimmed;
+  const accentSecondarySoft = themeColors.accentSecondarySoft;
+  const warmActivity = ex.warmActivity;
+  const skipRestCtaBg = ex.skipRestCtaBg;
+  const heroInk = ex.heroValueInk;
+  const ctaPillLabelInk = ex.ctaPillText;
   const isPrimary = primaryRevealed === 'current';
   const [drawerSlotHeight, setDrawerSlotHeight] = useState(0);
   const bottomCornerRadius = isPrimary ? frontBottomRadius : coveredBottomRadius;
@@ -437,44 +451,46 @@ export function ExploreV2CurrentCard({
             : 'Log next set';
   const collapsedSecondary = !isPrimary && showCollapsedWhenSecondary;
   const metricsEditable = isPrimary && !heroTimerActive;
-  const heroValueColor = heroTimerActive ? '#464646' : VALUE_INK;
+  const heroValueColor = heroTimerActive ? accentSecondarySoft : accentPrimary;
 
   const logEnabledForSlot =
     nextIncompleteIndex < 0 || carouselIndex === nextIncompleteIndex;
   const logPressable =
     heroTimerActive || (showPrimaryCta && logEnabledForSlot);
 
-  const surfaceColor = '#1F1F1F';
+  const settingsDrawerOpen = Boolean(settingsOverflow?.visible && isPrimary);
+  const surfaceColor = settingsDrawerOpen ? skipRestCtaBg : themeColors.containerPrimary;
+  const backgroundTimer = themeColors.backgroundTimer;
   const shellAnimatedStyle = useAnimatedStyle(() => {
     const p = restThemeProgress.value;
     const w = exploreV2WorkBlueProgress.value;
-    const activeBorder = interpolateColor(w, [0, 1], ['#FFA424', COLORS.info]);
+    const activeBorder = interpolateColor(w, [0, 1], [warmActivity, backgroundTimer]);
     return {
       borderColor: interpolateColor(p, [0, 1], [EXPLORE_V2.colors.pageBg, activeBorder]),
     };
-  });
+  }, [warmActivity, backgroundTimer]);
   const ctaBgStyle = useAnimatedStyle(() => {
     if (exploreV2TimerPhase === 'rest' || exploreV2TimerPhase === 'work' || exploreV2TimerPhase === 'switchSides') {
-      return { backgroundColor: SKIP_REST_CTA_BG };
+      return { backgroundColor: skipRestCtaBg };
     }
     return {
-      backgroundColor: interpolateColor(restThemeProgress.value, [0, 1], [VALUE_INK, '#464646']),
+      backgroundColor: interpolateColor(restThemeProgress.value, [0, 1], [accentPrimary, accentPrimaryDimmed]),
     };
-  }, [exploreV2TimerPhase]);
+  }, [exploreV2TimerPhase, skipRestCtaBg, accentPrimary, accentPrimaryDimmed]);
   const ctaLabelStyle = useAnimatedStyle(() => {
     if (exploreV2TimerPhase === 'work' && isPrimary) {
-      return { color: COLORS.info };
+      return { color: accentPrimary };
     }
     if (exploreV2TimerPhase === 'rest' && isPrimary) {
-      return { color: VALUE_INK };
+      return { color: heroInk };
     }
     if (exploreV2TimerPhase === 'switchSides' && isPrimary) {
-      return { color: VALUE_INK };
+      return { color: heroInk };
     }
     return {
-      color: interpolateColor(restThemeProgress.value, [0, 1], ['#1F1F1F', CANVAS_INK]),
+      color: interpolateColor(restThemeProgress.value, [0, 1], [ctaPillLabelInk, CANVAS_INK]),
     };
-  }, [exploreV2TimerPhase, isPrimary]);
+  }, [exploreV2TimerPhase, isPrimary, accentPrimary, heroInk, ctaPillLabelInk]);
   const heroColumnReserveStyle = useAnimatedStyle(() => {
     const reserve =
       settingsOverflow && isPrimary
@@ -536,9 +552,16 @@ export function ExploreV2CurrentCard({
         <View style={styles.topBlock}>
           <View style={styles.topBlockContent}>
             <View style={styles.headerBar}>
-              <Text style={[styles.eyebrow, { color: CANVAS_INK }]}>Current</Text>
+              <Text
+                style={[
+                  styles.eyebrow,
+                  { color: heroTimerActive ? accentSecondarySoft : themeColors.accentSecondary },
+                ]}
+              >
+                Current
+              </Text>
             </View>
-            <Text style={[styles.exerciseName, { color: CANVAS_INK }]} numberOfLines={2}>
+            <Text style={[styles.exerciseName, { color: themeColors.containerSecondary }]} numberOfLines={2}>
               {displayExerciseName}
             </Text>
           </View>
@@ -586,6 +609,10 @@ export function ExploreV2CurrentCard({
                         getBarbellMode={getBarbellMode}
                         metricsEditable={metricsEditable}
                         heroValueColor={heroValueColor}
+                        heroUnitInk={heroTimerActive ? accentSecondarySoft : themeColors.accentSecondarySoft}
+                        perSideLabelColor={heroTimerActive ? accentSecondarySoft : themeColors.accentSecondary}
+                        perSideValueColor={heroTimerActive ? accentSecondarySoft : themeColors.accentSecondary}
+                        perSideUnitColor={heroTimerActive ? accentSecondarySoft : themeColors.accentSecondary}
                         pageWidth={pageWidth}
                         commitsRef={commitsRef}
                         progressionValuesByItemId={progressionValuesByItemId}
@@ -597,11 +624,7 @@ export function ExploreV2CurrentCard({
 
               <View style={styles.footerRow}>
                 <AnimatedTouchableOpacity
-                  style={[
-                    styles.ctaPill,
-                    ctaBgStyle,
-                    !logPressable && styles.ctaPillDisabled,
-                  ]}
+                  style={[styles.ctaPill, ctaBgStyle, !logPressable && styles.ctaPillDisabled]}
                   onPress={onLogPress}
                   disabled={!logPressable}
                   activeOpacity={0.88}
@@ -633,15 +656,30 @@ export function ExploreV2CurrentCard({
                             style={[
                               styles.paginationDigit,
                               isView && styles.paginationInView,
-                              !isView && done && styles.paginationDone,
-                              !isView && !done && styles.paginationDefault,
+                              heroTimerActive
+                                ? { color: accentSecondarySoft }
+                                : {
+                                    color: isView
+                                      ? themeColors.containerSecondary
+                                      : themeColors.accentSecondary,
+                                  },
+                              !heroTimerActive && !isView && done ? styles.paginationDoneDim : null,
                             ]}
                           >
                             {i + 1}
                           </Text>
                           {isNext ? (
                             <View style={styles.paginationNextDotWrap} pointerEvents="none">
-                              <View style={styles.paginationNextDot} />
+                              <View
+                                style={[
+                                  styles.paginationNextDot,
+                                  {
+                                    backgroundColor: heroTimerActive
+                                      ? accentSecondarySoft
+                                      : themeColors.containerSecondary,
+                                  },
+                                ]}
+                              />
                             </View>
                           ) : null}
                         </View>
@@ -836,7 +874,7 @@ const styles = StyleSheet.create({
     right: -12,
     fontSize: 16,
     lineHeight: 16,
-    fontWeight: '700',
+    fontWeight: '600',
   },
   valueMetric: {
     fontSize: 80,
@@ -889,7 +927,6 @@ const styles = StyleSheet.create({
     width: 4,
     height: 4,
     borderRadius: 2,
-    backgroundColor: '#FFFFFF',
   },
   paginationDigit: {
     ...TYPOGRAPHY.legal,
@@ -898,21 +935,16 @@ const styles = StyleSheet.create({
     minWidth: 18,
     textAlign: 'center',
   },
-  paginationDefault: {
-    color: 'rgba(245,244,244,0.45)',
-  },
-  paginationDone: {
-    color: 'rgba(245,244,244,0.32)',
+  paginationDoneDim: {
+    opacity: 0.45,
   },
   paginationInView: {
-    color: '#FFFFFF',
-    fontWeight: '700',
+    fontWeight: '600',
   },
   ctaPill: {
     paddingVertical: 17,
     paddingHorizontal: 32,
     borderRadius: 14,
-    backgroundColor: VALUE_INK,
     flexShrink: 0,
     ...(Platform.OS === 'ios' ? { borderCurve: 'continuous' as const } : {}),
   },
@@ -922,7 +954,6 @@ const styles = StyleSheet.create({
   ctaPillText: {
     ...TYPOGRAPHY.legal,
     fontWeight: '500',
-    color: '#1F1F1F',
     letterSpacing: 0.2,
   },
 });
