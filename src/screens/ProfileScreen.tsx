@@ -195,6 +195,7 @@ export function ProfileScreen({ navigation }: ProfileScreenProps) {
             [
               { id: 'original' as const, label: t('colorThemeOriginal') },
               { id: 'v1' as const, label: t('colorThemeV1') },
+              { id: 'v2' as const, label: t('colorThemeV2') },
               { id: 'v3' as const, label: t('colorThemeV3') },
             ] as const
           ).map((opt, i) => (

@@ -3,7 +3,7 @@
  * Structural neutrals (canvas, ink, card grays) stay on COLORS.
  */
 
-import { COLORS } from '../constants';
+import { COLORS, hexToRgba } from '../constants';
 import type { AppColorThemeId } from '../types';
 import { mixHex } from '../components/exploreV2/exploreV2ColorSystem';
 
@@ -29,6 +29,10 @@ export type ExploreAccentTokens = {
   skipRestCtaBg: string;
   ctaPillBg: string;
   ctaPillText: string;
+  /**
+   * Workout card face (schedule deck + Explore Current). In `buildAppTheme`, keep this equal to
+   * `colors.containerPrimary` for each id so execution and schedule never drift.
+   */
   surfaceCurrentCard: string;
 };
 
@@ -75,7 +79,7 @@ const ORIGINAL_EXPLORE: ExploreAccentTokens = {
 };
 
 export function normalizeColorThemeId(raw: unknown): AppColorThemeId {
-  if (raw === 'v1' || raw === 'v3') return raw;
+  if (raw === 'v1' || raw === 'v2' || raw === 'v3') return raw;
   return 'original';
 }
 
@@ -84,7 +88,7 @@ export function buildAppTheme(id: AppColorThemeId): AppTheme {
     return {
       id,
       colors: { ...COLORS },
-      explore: { ...ORIGINAL_EXPLORE },
+      explore: { ...ORIGINAL_EXPLORE, surfaceCurrentCard: COLORS.containerPrimary },
     };
   }
 
@@ -125,17 +129,66 @@ export function buildAppTheme(id: AppColorThemeId): AppTheme {
     };
   }
 
+  if (id === 'v2') {
+    /** Navy card + pink primary + blue secondaries (spec tokens). */
+    const brandPrimary = '#FF9ECD';
+    const navy = '#00254A';
+    const secondary = '#4F67FF';
+    const secondarySoft = '#13347E';
+    const backgroundTimerV2 = '#3299FF';
+    const containerTertiaryTimerV2 = '#278BEE';
+    const containerSecondaryTimerV2 = '#1F7DDA';
+
+    return {
+      id: 'v2',
+      colors: {
+        ...COLORS,
+        ...accentSurfaces(brandPrimary),
+        accentPrimaryDark: '#A34F78',
+        secondary,
+        secondarySoft: secondarySoft,
+        accentSecondary: secondary,
+        accentSecondarySoft: secondarySoft,
+        todayIndicator: mixHex(secondary, '#FFFFFF', 0.22),
+        info: mixHex(secondary, navy, 0.25),
+        canvasLight: '#F5F5F5',
+        containerPrimary: navy,
+        textMetaTimer: hexToRgba(secondarySoft, 0.6),
+        backgroundTimer: backgroundTimerV2,
+        containerTertiaryTimer: containerTertiaryTimerV2,
+        containerSecondaryTimer: containerSecondaryTimerV2,
+      },
+      explore: {
+        heroValueInk: brandPrimary,
+        heroUnitInk: mixHex(secondary, '#EEF0FF', 0.4),
+        heroValueDimmed: mixHex(secondarySoft, '#A8B4FF', 0.35),
+        warmActivity: brandPrimary,
+        activityInfo: secondary,
+        amberBand: '#E86BA8',
+        amberBandComplete: '#F07AB5',
+        workTimerCompleteCardBg: containerTertiaryTimerV2,
+        workTimerUpNextCardBg: containerSecondaryTimerV2,
+        restTimerHeaderInk: '#9A5C7A',
+        restTimerCompletedUnitInk: '#B86E90',
+        skipRestCtaBg: mixHex(navy, '#000000', 0.58),
+        ctaPillBg: brandPrimary,
+        ctaPillText: navy,
+        surfaceCurrentCard: navy,
+      },
+    };
+  }
+
   // v3 — violet / indigo
   const accent = '#A855F7';
-  const secondary = '#6366F1';
+  const secondaryV3 = '#6366F1';
   const v3Surfaces = accentSurfaces(accent);
   return {
-    id,
+    id: 'v3',
     colors: {
       ...COLORS,
       ...v3Surfaces,
-      secondary,
-      secondarySoft: mixHex(secondary, '#121018', 0.55),
+      secondary: secondaryV3,
+      secondarySoft: mixHex(secondaryV3, '#121018', 0.55),
       todayIndicator: '#7C3AED',
       info: '#4F46E5',
     },
@@ -154,7 +207,7 @@ export function buildAppTheme(id: AppColorThemeId): AppTheme {
       skipRestCtaBg: '#161616',
       ctaPillBg: '#C084FC',
       ctaPillText: '#1E1B2E',
-      surfaceCurrentCard: '#1F1F1F',
+      surfaceCurrentCard: COLORS.containerPrimary,
     },
   };
 }

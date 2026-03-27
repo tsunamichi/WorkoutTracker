@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Animated } from 'react-native';
 import { COLORS, SPACING, TYPOGRAPHY } from '../constants';
+import { useAppTheme } from '../theme/useAppTheme';
 
 interface ToggleProps {
   label: string;
@@ -27,6 +28,7 @@ export function Toggle({
   thumbOnColor,
   thumbOffColor,
 }: ToggleProps) {
+  const { colors: themeColors } = useAppTheme();
   const animatedValue = React.useRef(new Animated.Value(value ? 1 : 0)).current;
 
   React.useEffect(() => {
@@ -43,7 +45,7 @@ export function Toggle({
 
   const trackColor = animatedValue.interpolate({
     inputRange: [0, 1],
-    outputRange: disabled ? ['#38383A', '#38383A'] : [trackOff, COLORS.accentPrimary],
+    outputRange: disabled ? ['#38383A', '#38383A'] : [trackOff, themeColors.accentPrimary],
   });
 
   const thumbTranslateX = animatedValue.interpolate({

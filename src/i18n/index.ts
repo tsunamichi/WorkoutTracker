@@ -466,6 +466,7 @@ type TranslationKey =
   | 'colorTheme'
   | 'colorThemeOriginal'
   | 'colorThemeV1'
+  | 'colorThemeV2'
   | 'colorThemeV3'
   | 'colorThemeFootnote'
   | 'language'
@@ -1075,8 +1076,10 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     colorTheme: 'Color theme',
     colorThemeOriginal: 'Original',
     colorThemeV1: 'V1',
+    colorThemeV2: 'V2',
     colorThemeV3: 'V3',
-    colorThemeFootnote: 'Accents and workout execution colors (e.g. Current card).',
+    colorThemeFootnote:
+      'Accents and workout execution colors (e.g. Current card). Saved on this device only — if the simulator and your phone look different, pick the same option on both in Profile.',
     language: 'Language',
     english: 'English',
     spanish: 'Spanish',
@@ -1696,8 +1699,10 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     colorTheme: 'Tema de color',
     colorThemeOriginal: 'Original',
     colorThemeV1: 'V1',
+    colorThemeV2: 'V2',
     colorThemeV3: 'V3',
-    colorThemeFootnote: 'Acentos y colores de entrenamiento (tarjeta Actual, etc.).',
+    colorThemeFootnote:
+      'Acentos y colores de entrenamiento (tarjeta Actual, etc.). Se guarda solo en este dispositivo: si el simulador y el teléfono se ven distintos, elige la misma opción en Perfil en ambos.',
     language: 'Idioma',
     english: 'Ingles',
     spanish: 'Espanol',

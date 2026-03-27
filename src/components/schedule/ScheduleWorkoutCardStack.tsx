@@ -596,7 +596,7 @@ export function ScheduleWorkoutCardStack({
                 morphStartPx={morphStart}
                 growEndPx={peekGrowEndPx}
                 primaryFrom={upNextDark}
-                primaryTo={canvasLight}
+                primaryTo={themeColors.textOnPrimary}
               />
             </View>
           </View>

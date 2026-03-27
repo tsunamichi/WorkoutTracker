@@ -266,7 +266,7 @@ export function ExploreV2CurrentOverflowPanel({
         style={[
           styles.panelSoftBase,
           bodyFillsSlot ? styles.panelSoftFill : styles.panelSoftHug,
-          { backgroundColor: themeColors.containerPrimary },
+          { backgroundColor: explore.surfaceCurrentCard },
         ]}
       >
         <Pressable

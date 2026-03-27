@@ -326,14 +326,18 @@ export function ExploreV2ExecutionRoot(props: ExploreV2ExecutionRootProps) {
     shouldShowCurrentLayer && visibleCurrentHasLoggedSets && primaryRevealed !== 'current';
 
   useEffect(() => {
-    if (hasCurrent) {
-      setPrimaryRevealed('current');
+    if (!hasCurrent) {
+      if (!isExitAnimating) {
+        setPrimaryRevealed('up_next');
+      }
       return;
     }
-    if (!isExitAnimating) {
-      setPrimaryRevealed('up_next');
+    // Fresh workout (no logs yet): stay on Up Next until the user opens a group from the queue.
+    // `onSelectUpNext` sets primary to Current; resuming with progress auto-opens Current below.
+    if (completedSets.size > 0) {
+      setPrimaryRevealed('current');
     }
-  }, [hasCurrent, isExitAnimating]);
+  }, [hasCurrent, isExitAnimating, completedSets.size]);
 
   useEffect(() => {
     if (!EXPLORE_V2_DEBUG_LAYOUT || !__DEV__) return;

@@ -459,7 +459,7 @@ export function ExploreV2CurrentCard({
     heroTimerActive || (showPrimaryCta && logEnabledForSlot);
 
   const settingsDrawerOpen = Boolean(settingsOverflow?.visible && isPrimary);
-  const surfaceColor = settingsDrawerOpen ? skipRestCtaBg : themeColors.containerPrimary;
+  const surfaceColor = settingsDrawerOpen ? skipRestCtaBg : ex.surfaceCurrentCard;
   const backgroundTimer = themeColors.backgroundTimer;
   const shellAnimatedStyle = useAnimatedStyle(() => {
     const p = restThemeProgress.value;

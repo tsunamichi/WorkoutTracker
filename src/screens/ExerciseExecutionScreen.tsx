@@ -36,6 +36,7 @@ import { useNavigation, useRoute, RouteProp, useFocusEffect } from '@react-navig
 import Svg, { Circle, Path } from 'react-native-svg';
 import * as Haptics from 'expo-haptics';
 import { useStore } from '../store';
+import { useAppTheme } from '../theme/useAppTheme';
 import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS, CARDS } from '../constants';
 import { IconArrowLeft, IconCheck, IconCheckmark, IconAddLine, IconMinusLine, IconTrash, IconEdit, IconMenu, IconHistory, IconRestart, IconSkip, IconSwap, IconArrowRight, IconAdd, IconPause, IconPlay, IconAddTime, IconChevronDown } from '../components/icons';
 import { BottomDrawer } from '../components/common/BottomDrawer';
@@ -229,6 +230,8 @@ export function ExerciseExecutionScreen() {
     progressionGroups,
     updateProgressionGroup,
   } = useStore();
+
+  const appTheme = useAppTheme();
   
   const getDetailedWorkoutProgress = () => useStore.getState().detailedWorkoutProgress;
   
@@ -622,6 +625,10 @@ export function ExerciseExecutionScreen() {
   const REST_MS = EXPLORE_V2.motion.rest.colorMs;
 
   const exploreV2RestHeroBg = '#FFA424';
+  const exploreV2TimerPageRestTint =
+    appTheme.id === 'v2' ? appTheme.colors.accentPrimary : exploreV2RestHeroBg;
+  /** Work / exercise timer phase — always themed `backgroundTimer` (v2: blue; other themes: default lime). */
+  const exploreV2TimerPageWorkTint = appTheme.colors.backgroundTimer;
 
   useEffect(() => {
     if (executionMode !== 'explore-v2') return;
@@ -668,20 +675,20 @@ export function ExerciseExecutionScreen() {
   const exploreV2PageBgAnimatedStyle = useAnimatedStyle(() => {
     const p = exploreV2TimerBandProgress.value;
     const w = exploreV2WorkBlueProgress.value;
-    const activeTint = interpolateColor(w, [0, 1], [exploreV2RestHeroBg, COLORS.backgroundTimer]);
+    const activeTint = interpolateColor(w, [0, 1], [exploreV2TimerPageRestTint, exploreV2TimerPageWorkTint]);
     return {
       backgroundColor: interpolateColor(p, [0, 1], [EXPLORE_V2.colors.pageBg, activeTint]),
     };
-  });
+  }, [exploreV2TimerPageRestTint, exploreV2TimerPageWorkTint]);
 
   const exploreV2ContentWrapBgAnimatedStyle = useAnimatedStyle(() => {
     const p = exploreV2TimerBandProgress.value;
     const w = exploreV2WorkBlueProgress.value;
-    const activeTint = interpolateColor(w, [0, 1], [exploreV2RestHeroBg, COLORS.backgroundTimer]);
+    const activeTint = interpolateColor(w, [0, 1], [exploreV2TimerPageRestTint, exploreV2TimerPageWorkTint]);
     return {
       backgroundColor: interpolateColor(p, [0, 1], [EXPLORE_V2.colors.pageBg, activeTint]),
     };
-  });
+  }, [exploreV2TimerPageRestTint, exploreV2TimerPageWorkTint]);
   const exploreV2HeaderInk = '#1F1F1F';
   const historyOpacity = useRef(new Animated.Value(0)).current;
   
@@ -1204,10 +1211,11 @@ export function ExerciseExecutionScreen() {
           setExpandedGroupIndex(lastActiveGroupIndex);
         }
       } else {
-        setExpandedGroupIndex(0);
+        setExpandedGroupIndex(executionMode === 'explore-v2' ? -1 : 0);
       }
     } else {
-      setExpandedGroupIndex(0);
+      // Explore v2: no group is "current" until the user picks from Up Next or logs progress.
+      setExpandedGroupIndex(executionMode === 'explore-v2' ? -1 : 0);
     }
 
     // Restore localValues: prefer session (source of truth for edits) then detailedWorkoutProgress

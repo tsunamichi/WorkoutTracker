@@ -60,52 +60,8 @@ const LIST_PADDING_RIGHT = 24;
 const HEADER_PADDING_RIGHT = 12;
 
 const SUPER_SCRIPT_FONT_SIZE = TYPOGRAPHY.legal.fontSize;
-const SUPER_SCRIPT_LINE_HEIGHT = TYPOGRAPHY.legal.fontSize;
-/** Extra right inset so the title text wraps before the overlay column (overlay is outside text flow). */
-const TITLE_SUPER_RESERVE_RIGHT = Math.ceil(SUPER_SCRIPT_FONT_SIZE * 1.6);
-/** Nudge right from line end; large values can hit swipe row `overflow: hidden` (clamped below) */
-const SUPER_SCRIPT_OFFSET_RIGHT = 16;
-const SUPER_SCRIPT_OFFSET_DOWN = 4;
-
-function estimateSuperscriptWidthPx(digitCount: number, fontSize: number): number {
-  return Math.ceil(fontSize * 0.55 * Math.max(1, digitCount));
-}
-
-type TextLineMetrics = { x: number; y: number; width: number; height: number; text: string };
-
-/** Top-left of overlay: last line top + right-align superscript to line end (title ends with last word). */
-function superscriptOverlayPosition(
-  lines: TextLineMetrics[] | undefined,
-  supWidthPx: number,
-  titleBlockWidthPx: number | undefined,
-): { top: number; left: number } | null {
-  if (!lines?.length) return null;
-  const last = lines[lines.length - 1];
-  let left = last.x + last.width - supWidthPx + SUPER_SCRIPT_OFFSET_RIGHT;
-  const top = last.y + SUPER_SCRIPT_OFFSET_DOWN;
-  /** Keep inside the title box so swipe row clip doesn’t hide the count (common on single full-width lines). */
-  if (titleBlockWidthPx != null && titleBlockWidthPx > 0) {
-    const maxLeft = titleBlockWidthPx - TITLE_SUPER_RESERVE_RIGHT - supWidthPx;
-    const minLeft = 0;
-    left = Math.max(minLeft, Math.min(left, maxLeft));
-  }
-  return { top, left };
-}
-
-/** When `onTextLayout` hasn’t run yet (or lines are empty), pin count to the top-right of the title block. */
-function superscriptFallbackPosition(
-  titleBlockWidthPx: number | undefined,
-  supWidthPx: number,
-): { top: number; left: number } | null {
-  if (titleBlockWidthPx == null || titleBlockWidthPx <= 0) return null;
-  return {
-    top: SUPER_SCRIPT_OFFSET_DOWN,
-    left: Math.max(
-      0,
-      titleBlockWidthPx - TITLE_SUPER_RESERVE_RIGHT - supWidthPx + SUPER_SCRIPT_OFFSET_RIGHT,
-    ),
-  };
-}
+/** Slight lift so the set count reads as a superscript next to displayLarge body text. */
+const SUPER_SCRIPT_TRANSLATE_Y = Platform.OS === 'ios' ? -5 : -4;
 
 type UpNextQueueRowProps = {
   group: ExploreV2Group;
@@ -174,19 +130,9 @@ function UpNextQueueRow({
   const swipeProgressRef = useRef<Animated.AnimatedInterpolation<number> | null>(null);
   const borderPrimedRef = useRef(false);
   const [rowBorderLayer, setRowBorderLayer] = useState(false);
-  const [titleLines, setTitleLines] = useState<TextLineMetrics[] | null>(null);
-  const [titleBlockWidth, setTitleBlockWidth] = useState<number | undefined>(undefined);
 
   const title = groupTitle(group);
   const roundsStr = String(group.totalRounds);
-  const supWidthPx = estimateSuperscriptWidthPx(roundsStr.length, SUPER_SCRIPT_FONT_SIZE);
-  const overlayPos =
-    superscriptOverlayPosition(titleLines ?? undefined, supWidthPx, titleBlockWidth) ??
-    superscriptFallbackPosition(titleBlockWidth, supWidthPx);
-
-  useEffect(() => {
-    setTitleLines(null);
-  }, [title]);
 
   return (
     <View style={isLast ? undefined : styles.rowSeamOverlap}>
@@ -229,43 +175,12 @@ function UpNextQueueRow({
               accessibilityLabel={`${title}, ${roundsStr} rounds`}
             >
               <View style={styles.nameBlock}>
-                <View
-                  style={styles.nameTitleWrap}
-                  onLayout={e => {
-                    const w = e.nativeEvent.layout.width;
-                    if (w > 0) setTitleBlockWidth(w);
-                  }}
-                >
-                  <Reanimated.Text
-                    style={[styles.name, rowNameInkStyle]}
-                    numberOfLines={2}
-                    onTextLayout={e => {
-                      const lines = e.nativeEvent.lines.map(l => ({
-                        x: l.x,
-                        y: l.y,
-                        width: l.width,
-                        height: l.height,
-                        text: l.text,
-                      }));
-                      setTitleLines(lines.length > 0 ? lines : null);
-                    }}
-                  >
-                    {title}
+                <Reanimated.Text style={[styles.name, rowNameInkStyle]} numberOfLines={2}>
+                  {title}
+                  <Reanimated.Text style={[styles.superScriptInline, superscriptColorStyle]}>
+                    {roundsStr}
                   </Reanimated.Text>
-                  {overlayPos ? (
-                    <View
-                      pointerEvents="none"
-                      style={[
-                        styles.superScriptOverlayWrap,
-                        { top: overlayPos.top, left: overlayPos.left },
-                      ]}
-                    >
-                      <Reanimated.Text style={[styles.superScriptOverlayText, superscriptColorStyle]}>
-                        {roundsStr}
-                      </Reanimated.Text>
-                    </View>
-                  ) : null}
-                </View>
+                </Reanimated.Text>
               </View>
             </GestureTouchableOpacity>
           </Reanimated.View>
@@ -667,28 +582,17 @@ const styles = StyleSheet.create({
     flexShrink: 1,
     minWidth: 0,
   },
-  nameTitleWrap: {
-    position: 'relative',
-    flexShrink: 1,
-    minWidth: 0,
-    paddingRight: TITLE_SUPER_RESERVE_RIGHT,
-  },
   name: {
     ...TYPOGRAPHY.displayLarge,
     fontWeight: '400',
     flexShrink: 1,
   },
-  /** Non-interactive wrapper so set-count never steals taps (e.g. on last word of title like “… Press”). */
-  superScriptOverlayWrap: {
-    position: 'absolute',
-    zIndex: 2,
-  },
-  superScriptOverlayText: {
-    ...TYPOGRAPHY.legal,
+  /** Inline with title so wrap position matches single-line (overlay + line metrics broke on multi-line). */
+  superScriptInline: {
+    fontSize: SUPER_SCRIPT_FONT_SIZE,
     fontWeight: '700',
-    lineHeight: SUPER_SCRIPT_LINE_HEIGHT,
     includeFontPadding: false,
-    textAlign: 'right',
+    transform: [{ translateY: SUPER_SCRIPT_TRANSLATE_Y }],
   },
   emptyBlock: {
     paddingVertical: 8,

@@ -141,7 +141,7 @@ export interface ProgressPhoto {
 }
 
 /** Accent / execution color preset (Settings → Appearance). */
-export type AppColorThemeId = 'original' | 'v1' | 'v3';
+export type AppColorThemeId = 'original' | 'v1' | 'v2' | 'v3';
 
 export interface AppSettings {
   useKg: boolean;
