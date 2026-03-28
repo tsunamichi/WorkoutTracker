@@ -1103,9 +1103,26 @@ export const useStore = create<WorkoutStore>((set, get) => ({
         });
       }
       
-      // Migrate ScheduledWorkouts: add snapshots, completion states, isLocked
+      // Migrate + normalize ScheduledWorkouts: add snapshots/completion state and retro-lock completed items.
       if (scheduledWorkouts.length > 0) {
         finalScheduledWorkouts = scheduledWorkouts.map((sw: any) => {
+          const totalSets = Array.isArray(sw.exercisesSnapshot)
+            ? sw.exercisesSnapshot.reduce((acc: number, item: any) => {
+                if (Array.isArray(item?.sets)) return acc + item.sets.length;
+                if (typeof item?.sets === 'number') return acc + item.sets;
+                return acc;
+              }, 0)
+            : 0;
+          const completedSetCount = Array.isArray(sw.mainCompletion?.completedItems)
+            ? sw.mainCompletion.completedItems.length
+            : 0;
+          const inferredCompleted = totalSets > 0 && completedSetCount >= totalSets;
+          const shouldBeLocked =
+            sw.isLocked === true ||
+            sw.status === 'completed' ||
+            !!sw.completedAt ||
+            inferredCompleted;
+
           const needsMigration = 
             sw.titleSnapshot === undefined ||
             sw.warmupSnapshot === undefined ||
@@ -1116,13 +1133,13 @@ export const useStore = create<WorkoutStore>((set, get) => ({
             sw.accessoryCompletion === undefined ||
             sw.isLocked === undefined ||
             sw.programId === undefined;
-          
-          if (needsMigration) {
+
+          if (needsMigration || (shouldBeLocked && (sw.isLocked !== true || sw.status !== 'completed'))) {
             scheduledMigrationNeeded = true;
-            
+
             // Get template to create snapshots if missing
             const template = workoutTemplates.find((t: any) => t.id === sw.templateId);
-            
+
             return {
               ...sw,
               titleSnapshot: sw.titleSnapshot ?? (template?.name || 'Workout'),
@@ -1133,13 +1150,16 @@ export const useStore = create<WorkoutStore>((set, get) => ({
               mainCompletion: sw.mainCompletion ?? { completedItems: [] },
               workoutCompletion: sw.workoutCompletion ?? { completedExercises: {}, completedSets: {} },
               accessoryCompletion: sw.accessoryCompletion ?? { completedItems: [] },
-              isLocked: sw.isLocked ?? (sw.status === 'completed'),
+              isLocked: shouldBeLocked,
+              status: shouldBeLocked ? 'completed' : (sw.status ?? 'planned'),
               programId: sw.programId ?? (sw.cyclePlanId || null),
               programName: sw.programName ?? null,
               weekIndex: sw.weekIndex ?? null,
               dayIndex: sw.dayIndex ?? null,
               startedAt: sw.startedAt ?? null,
-              completedAt: sw.completedAt ?? (sw.status === 'completed' ? new Date().toISOString() : null),
+              completedAt: shouldBeLocked
+                ? (sw.completedAt ?? new Date().toISOString())
+                : (sw.completedAt ?? null),
             };
           }
           return sw;
@@ -1646,13 +1666,13 @@ export const useStore = create<WorkoutStore>((set, get) => ({
     const scheduled1 = currentScheduled.find(s => s.date === date1);
     const scheduled2 = currentScheduled.find(s => s.date === date2);
     
-    // HARD LOCK ENFORCEMENT: Cannot swap locked (completed) workouts
-    if (scheduled1?.isLocked || scheduled1?.status === 'completed') {
-      console.warn('⚠️ Cannot swap locked (completed) workout on date1:', date1, { isLocked: scheduled1?.isLocked, status: scheduled1?.status });
+    // Immutable once started or completed: cannot swap to another day.
+    if (scheduled1?.isLocked || scheduled1?.status === 'completed' || scheduled1?.status === 'in_progress') {
+      console.warn('⚠️ Cannot swap started/completed workout on date1:', date1, { isLocked: scheduled1?.isLocked, status: scheduled1?.status });
       return;
     }
-    if (scheduled2?.isLocked || scheduled2?.status === 'completed') {
-      console.warn('⚠️ Cannot swap locked (completed) workout on date2:', date2, { isLocked: scheduled2?.isLocked, status: scheduled2?.status });
+    if (scheduled2?.isLocked || scheduled2?.status === 'completed' || scheduled2?.status === 'in_progress') {
+      console.warn('⚠️ Cannot swap started/completed workout on date2:', date2, { isLocked: scheduled2?.isLocked, status: scheduled2?.status });
       return;
     }
     
@@ -3897,18 +3917,18 @@ export const useStore = create<WorkoutStore>((set, get) => ({
       return { success: false, error: 'workout_not_found' };
     }
     
-    // HARD LOCK: Cannot move completed workouts
-    if (workout.isLocked) {
-      console.warn('⚠️ Cannot move locked (completed) workout');
+    // Immutable once started or completed: cannot move to another date.
+    if (workout.isLocked || workout.status === 'completed' || workout.status === 'in_progress') {
+      console.warn('⚠️ Cannot move started/completed workout');
       return { success: false, error: 'workout_locked' };
     }
     
     // Check if target date already has a workout
     const existing = get().scheduledWorkouts.find(sw => sw.date === toDate);
     if (existing) {
-      // If existing is locked, cannot replace
-      if (existing.isLocked) {
-        console.warn('⚠️ Cannot move to date with locked (completed) workout');
+      // Target date is immutable if workout there is already started/completed.
+      if (existing.isLocked || existing.status === 'completed' || existing.status === 'in_progress') {
+        console.warn('⚠️ Cannot move to date with started/completed workout');
         return { success: false, error: 'target_date_locked' };
       }
       // Otherwise, would require explicit user confirmation via conflict resolution

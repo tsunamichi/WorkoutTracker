@@ -490,6 +490,10 @@ export function TodayScreen({ onDateChange, onOpenAddWorkout, onOpenBonusDrawer 
     };
 
     const onSelectedDate = scheduledWorkouts.filter(sw => sw.date === selectedDate);
+    const finishedOnSelectedDay = onSelectedDate.filter(sw => !isNotFinished(sw));
+    if (finishedOnSelectedDay.length > 0) {
+      return [...finishedOnSelectedDay].sort((a, b) => a.id.localeCompare(b.id));
+    }
     const inProgressOnSelectedDay = onSelectedDate.filter(
       sw => sw.status === 'in_progress' && isNotFinished(sw),
     );
