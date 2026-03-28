@@ -28,11 +28,11 @@ import type { ScheduledWorkout, WorkoutTemplateExercise } from '../../types/trai
 import type { Exercise } from '../../types';
 
 const FRONT_BOTTOM = 28;
-/** Front card height (face); content sized to fit title + 32 + 200 pie + 32 + summary + inner padding (10 top / 16 bottom). */
-const FRONT_H = 370;
-const TITLE_TO_BUBBLE_GAP = 32;
-const BUBBLE_TO_COUNT_GAP = 32;
-const HERO_BUBBLE_SIZE = 200;
+/** Front card height (face) tuned to hug title + pie + summary with current spacing. */
+const FRONT_H = 330;
+const TITLE_TO_BUBBLE_GAP = 24;
+const BUBBLE_TO_COUNT_GAP = 24;
+const HERO_BUBBLE_SIZE = 180;
 /** Peek cards use full face height so pie + summary stay visible; depth comes from inset + bottom offset. */
 const MID_PEEK_BOTTOM = 14;
 const BACK_PEEK_BOTTOM = 0;
@@ -74,7 +74,7 @@ function heroPieSectorPath(cx: number, cy: number, r: number, progress: number):
   return `M ${cx} ${cy} L ${x1} ${y1} A ${r} ${r} 0 ${largeArc} 1 ${x2} ${y2} Z`;
 }
 
-/** Pie-style progress: complete wedge = accent-primary, incomplete = accent-secondary-soft, rim = card surface. */
+/** Pie-style progress: complete wedge = accent-primary, incomplete = container-primary-dark, rim = card surface. */
 function HeroProgressPie({ progress }: { progress: number }) {
   const { explore: ex, colors: themeColors } = useAppTheme();
   const p = Math.min(1, Math.max(0, progress));
@@ -83,7 +83,7 @@ function HeroProgressPie({ progress }: { progress: number }) {
   const cy = size / 2;
   const r = size / 2 - HERO_PIE_OUTLINE / 2;
   const rim = ex.surfaceCurrentCard;
-  const remainder = themeColors.accentSecondarySoft;
+  const remainder = themeColors.containerPrimaryDark;
   const done = themeColors.accentPrimary;
   const sector = heroPieSectorPath(cx, cy, r, p);
 
@@ -122,6 +122,7 @@ type Props = {
   getMainCompletion: (scheduledWorkoutId: string) => { percentage: number };
   isInPastCycle: boolean;
   onOpenWorkout: (sw: ScheduledWorkout) => void;
+  onActiveWorkoutChange?: (sw: ScheduledWorkout | undefined) => void;
 };
 
 /** Unique `Exercise.category` values in workout order (body areas targeted in this codebase). */
@@ -268,6 +269,7 @@ export function ScheduleWorkoutCardStack({
   getMainCompletion,
   isInPastCycle,
   onOpenWorkout,
+  onActiveWorkoutChange,
 }: Props) {
   const { t } = useTranslation();
   const { explore, colors: themeColors } = useAppTheme();
@@ -303,6 +305,10 @@ export function ScheduleWorkoutCardStack({
   const deep = n > 3 ? queue[(idx + 3) % n] : undefined;
 
   const canAdvance = n > 1;
+
+  useEffect(() => {
+    onActiveWorkoutChange?.(activeWorkout);
+  }, [activeWorkout, onActiveWorkoutChange]);
 
   const advanceDeck = useCallback(() => {
     setActiveIndex(i => {

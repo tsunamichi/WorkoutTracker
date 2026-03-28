@@ -11,6 +11,7 @@ import { kgToLbs } from '../utils/weight';
 import { cloudBackupService } from '../services/cloudBackup';
 import { migrateOldStorageKeys } from '../utils/dataMigration';
 import { cloudSyncService } from '../services/cloudSync';
+import { createNewExerciseItem } from '../utils/exerciseMigration';
 
 dayjs.extend(isoWeek);
 
@@ -186,6 +187,10 @@ interface WorkoutStore {
   moveScheduledWorkout: (workoutId: string, toDate: string) => Promise<{ success: boolean; error?: string }>;
   duplicateScheduledWorkout: (workoutId: string, toDate: string) => Promise<{ success: boolean; error?: string }>;
   updateScheduledWorkoutSnapshots: (workoutId: string, updates: { warmupSnapshot?: any[]; exercisesSnapshot?: any[]; accessorySnapshot?: any[] }) => Promise<void>;
+  ensureScheduledWorkoutWarmup: (workoutId: string) => Promise<void>;
+  setScheduledWorkoutWarmupProfile: (workoutId: string, profile: 'upper' | 'legs') => Promise<void>;
+  ensureScheduledWorkoutCore: (workoutId: string) => Promise<void>;
+  setScheduledWorkoutCorePreset: (workoutId: string, presetId: string) => Promise<void>;
   
   // Warm-up Completion (independent from workout completion)
   updateWarmupCompletion: (workoutId: string, warmupItemId: string, completed: boolean) => Promise<void>;
@@ -219,6 +224,62 @@ interface WorkoutStore {
   removeProgressionRule: (exerciseId: string) => Promise<void>;
   getEffectiveProgressionRule: (exerciseId: string) => EffectiveProgressionRule | null;
   getLastCompletedLogForExercise: (exerciseId: string) => LastLogForExercise | null;
+}
+
+const AUTO_WARMUP_TEMPLATES = {
+  upper: [
+    { exerciseName: '90/90 Hips', sets: 1, reps: 6, weight: 0, isTimeBased: false, isPerSide: true },
+    { exerciseName: 'Quadruped T-Spine Rotation', sets: 2, reps: 6, weight: 0, isTimeBased: false, isPerSide: true, cycleId: 'c1', cycleOrder: 0 },
+    { exerciseName: 'Scapular Push-Ups', sets: 2, reps: 8, weight: 0, isTimeBased: false, cycleId: 'c1', cycleOrder: 1 },
+    { exerciseName: 'Band External Rotation', sets: 3, reps: 8, weight: 0, isTimeBased: false, isPerSide: true, cycleId: 'c2', cycleOrder: 0 },
+    { exerciseName: 'Curl Hold', sets: 3, reps: 45, weight: 0, isTimeBased: true, cycleId: 'c2', cycleOrder: 1 },
+  ],
+  legs: [
+    { exerciseName: '90/90 Hips', sets: 2, reps: 6, weight: 0, isTimeBased: false, isPerSide: true, cycleId: 'c1', cycleOrder: 0 },
+    { exerciseName: "World's Greatest Stretch", sets: 2, reps: 5, weight: 0, isTimeBased: false, isPerSide: true, cycleId: 'c1', cycleOrder: 1 },
+    { exerciseName: 'Half-Kneeling Hip Flexor', sets: 2, reps: 30, weight: 0, isTimeBased: true, isPerSide: true, cycleId: 'c1', cycleOrder: 2 },
+    { exerciseName: 'Knee-to-Wall Ankle', sets: 2, reps: 6, weight: 0, isTimeBased: false, isPerSide: true, cycleId: 'c2', cycleOrder: 0 },
+    { exerciseName: 'Wall Sit', sets: 2, reps: 45, weight: 0, isTimeBased: true, cycleId: 'c2', cycleOrder: 1 },
+  ],
+} as const;
+
+function inferWarmupProfileForWorkout(sw: ScheduledWorkout, exercises: Exercise[]): 'upper' | 'legs' {
+  const title = (sw.titleSnapshot || '').toLowerCase();
+  if (/\b(lower|legs?|hinge|glute|hamstring|quad|calf)\b/.test(title)) return 'legs';
+  if (/\b(upper|push|pull|chest|back|shoulder|arm)\b/.test(title)) return 'upper';
+
+  let lowerSignals = 0;
+  let upperSignals = 0;
+  for (const item of sw.exercisesSnapshot || []) {
+    const ex = exercises.find(e => e.id === item.exerciseId);
+    const bucket = `${ex?.category ?? ''}`.toLowerCase();
+    if (/(legs?|glute|hamstring|quad|calf|lower)/.test(bucket)) lowerSignals += 1;
+    else if (/(chest|back|shoulder|arm|upper)/.test(bucket)) upperSignals += 1;
+  }
+  return lowerSignals >= upperSignals && lowerSignals > 0 ? 'legs' : 'upper';
+}
+
+function buildAutoWarmupItems(profile: 'upper' | 'legs', workoutId: string) {
+  const cycleMap = new Map<string, string>();
+  return AUTO_WARMUP_TEMPLATES[profile].map(item => {
+    let mappedCycleId: string | undefined;
+    if (item.cycleId) {
+      if (!cycleMap.has(item.cycleId)) {
+        cycleMap.set(item.cycleId, `${workoutId}-warmup-${item.cycleId}`);
+      }
+      mappedCycleId = cycleMap.get(item.cycleId);
+    }
+    return createNewExerciseItem({
+      exerciseName: item.exerciseName,
+      totalSets: item.sets,
+      repsPerSet: item.reps,
+      weightPerSet: item.weight,
+      isTimeBased: item.isTimeBased,
+      isPerSide: item.isPerSide,
+      cycleId: mappedCycleId,
+      cycleOrder: item.cycleOrder,
+    });
+  });
 }
 
 const DEFAULT_SETTINGS: AppSettings = {
@@ -3673,6 +3734,81 @@ export const useStore = create<WorkoutStore>((set, get) => ({
         ...(updates.accessorySnapshot !== undefined && { accessorySnapshot: updates.accessorySnapshot }),
       };
     });
+    set({ scheduledWorkouts });
+    await storage.saveScheduledWorkouts(scheduledWorkouts);
+  },
+
+  ensureScheduledWorkoutWarmup: async (workoutId) => {
+    const current = get().scheduledWorkouts.find(sw => sw.id === workoutId);
+    if (!current) return;
+    if ((current.warmupSnapshot || []).length > 0) return;
+
+    const profile = inferWarmupProfileForWorkout(current, get().exercises);
+    const warmupSnapshot = buildAutoWarmupItems(profile, workoutId);
+    const scheduledWorkouts = get().scheduledWorkouts.map(sw =>
+      sw.id === workoutId ? { ...sw, warmupSnapshot } : sw
+    );
+    set({ scheduledWorkouts });
+    await storage.saveScheduledWorkouts(scheduledWorkouts);
+  },
+
+  setScheduledWorkoutWarmupProfile: async (workoutId, profile) => {
+    const current = get().scheduledWorkouts.find(sw => sw.id === workoutId);
+    if (!current) return;
+    const warmupSnapshot = buildAutoWarmupItems(profile, workoutId);
+    const scheduledWorkouts = get().scheduledWorkouts.map(sw =>
+      sw.id === workoutId
+        ? {
+            ...sw,
+            warmupSnapshot,
+            warmupCompletion: { completedItems: [] },
+          }
+        : sw
+    );
+    set({ scheduledWorkouts });
+    await storage.saveScheduledWorkouts(scheduledWorkouts);
+  },
+
+  ensureScheduledWorkoutCore: async (workoutId) => {
+    const current = get().scheduledWorkouts.find(sw => sw.id === workoutId);
+    if (!current) return;
+    if ((current.accessorySnapshot || []).length > 0) return;
+
+    const upNext = get().getUpNextCoreSession();
+    const fallback = get().corePresets[0] ?? null;
+    const chosen = upNext ?? fallback;
+    if (!chosen) return;
+
+    const accessorySnapshot = chosen.items.map(item => ({ ...item }));
+    const scheduledWorkouts = get().scheduledWorkouts.map(sw =>
+      sw.id === workoutId
+        ? {
+            ...sw,
+            accessorySnapshot,
+            accessoryCompletion: { completedItems: [] },
+          }
+        : sw
+    );
+    set({ scheduledWorkouts });
+    await storage.saveScheduledWorkouts(scheduledWorkouts);
+  },
+
+  setScheduledWorkoutCorePreset: async (workoutId, presetId) => {
+    const current = get().scheduledWorkouts.find(sw => sw.id === workoutId);
+    if (!current) return;
+    const preset = get().corePresets.find(p => p.id === presetId);
+    if (!preset) return;
+
+    const accessorySnapshot = preset.items.map(item => ({ ...item }));
+    const scheduledWorkouts = get().scheduledWorkouts.map(sw =>
+      sw.id === workoutId
+        ? {
+            ...sw,
+            accessorySnapshot,
+            accessoryCompletion: { completedItems: [] },
+          }
+        : sw
+    );
     set({ scheduledWorkouts });
     await storage.saveScheduledWorkouts(scheduledWorkouts);
   },

@@ -172,8 +172,11 @@ export function TodayScreen({ onDateChange, onOpenAddWorkout, onOpenBonusDrawer 
     deleteCyclePlanCompletely,
     updateCyclePlan,
     repairPausedCycleSchedule,
+    ensureScheduledWorkoutWarmup,
+    ensureScheduledWorkoutCore,
     exercises,
     detailedWorkoutProgress,
+    hiitTimers,
   } = useStore();
 
   const today = dayjs();
@@ -192,6 +195,9 @@ export function TodayScreen({ onDateChange, onOpenAddWorkout, onOpenBonusDrawer 
   const [showShareCycleSheet, setShowShareCycleSheet] = useState(false);
   const [shareCyclePlan, setShareCyclePlan] = useState<CyclePlan | undefined>(undefined);
   const [extrasExpanded, setExtrasExpanded] = useState(false);
+  const [isTimerMode, setIsTimerMode] = useState(false);
+  const [selectedDeckWorkout, setSelectedDeckWorkout] = useState<ScheduledWorkout | undefined>(undefined);
+  const timerModeProgress = useSharedValue(0);
 
   // TEMP: Seed dev data on mount (remove after use)
   const [seeded, setSeeded] = useState(false);
@@ -608,6 +614,15 @@ export function TodayScreen({ onDateChange, onOpenAddWorkout, onOpenBonusDrawer 
   const weekStripTrackAnimatedStyle = useAnimatedStyle(() => ({
     transform: [{ translateX: weekStripTranslateX.value }],
   }));
+  const screenHeight = Dimensions.get('window').height;
+  const schedulePaneAnimatedStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: -screenHeight * timerModeProgress.value }],
+    opacity: 1 - timerModeProgress.value,
+  }), [screenHeight]);
+  const timerPaneAnimatedStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: screenHeight * (1 - timerModeProgress.value) }],
+    opacity: timerModeProgress.value,
+  }), [screenHeight]);
 
   const handleResumeCycleOnDay = async (resumeDateStr: string) => {
     if (!activeCyclePlan) return;
@@ -628,6 +643,21 @@ export function TodayScreen({ onDateChange, onOpenAddWorkout, onOpenBonusDrawer 
   };
   
   const isInPastCycle = selectedDateCyclePlan ? !selectedDateCyclePlan.active : false;
+  const timerTemplates = useMemo(() => hiitTimers.filter(timer => timer.isTemplate), [hiitTimers]);
+
+  const calculateTimerTotalTime = useCallback((timer: { work: number; workRest: number; sets: number; rounds: number; roundRest: number }) => {
+    const totalWorkTime = timer.work * timer.sets * timer.rounds;
+    const totalWorkRestTime = timer.workRest * Math.max(0, timer.sets - 1) * timer.rounds;
+    const totalRoundRestTime = timer.roundRest * Math.max(0, timer.rounds - 1);
+    const totalTime = totalWorkTime + totalWorkRestTime + totalRoundRestTime;
+    const mins = Math.floor(totalTime / 60);
+    const secs = totalTime % 60;
+    return secs > 0 ? `${mins}:${secs.toString().padStart(2, '0')}min` : `${mins}:00min`;
+  }, []);
+
+  useEffect(() => {
+    timerModeProgress.value = withTiming(isTimerMode ? 1 : 0, { duration: 260, easing: Easing.out(Easing.cubic) });
+  }, [isTimerMode, timerModeProgress]);
 
   const navigateToWorkoutExecution = useCallback(
     (sw: ScheduledWorkout) => {
@@ -648,6 +678,50 @@ export function TodayScreen({ onDateChange, onOpenAddWorkout, onOpenBonusDrawer 
       navigateToWorkoutExecution(selectedDay.scheduledWorkout);
     }
   };
+
+  useEffect(() => {
+    setSelectedDeckWorkout(undefined);
+  }, [selectedDate, remainingWorkoutsQueue]);
+
+  const warmupTargetWorkout = selectedDeckWorkout ?? remainingWorkoutsQueue[0] ?? selectedDay?.scheduledWorkout;
+  const warmupProfile: 'upper' | 'legs' = useMemo(() => {
+    const target = warmupTargetWorkout;
+    if (!target) return 'upper';
+    const title = (target.titleSnapshot || '').toLowerCase();
+    if (/\b(lower|legs?|hinge|glute|hamstring|quad|calf)\b/.test(title)) return 'legs';
+    if (/\b(upper|push|pull|chest|back|shoulder|arm)\b/.test(title)) return 'upper';
+    let lowerSignals = 0;
+    let upperSignals = 0;
+    for (const item of target.exercisesSnapshot || []) {
+      const ex = exercises.find(e => e.id === item.exerciseId);
+      const bucket = `${ex?.category ?? ''}`.toLowerCase();
+      if (/(legs?|glute|hamstring|quad|calf|lower)/.test(bucket)) lowerSignals += 1;
+      else if (/(chest|back|shoulder|arm|upper)/.test(bucket)) upperSignals += 1;
+    }
+    return lowerSignals >= upperSignals && lowerSignals > 0 ? 'legs' : 'upper';
+  }, [warmupTargetWorkout, exercises]);
+  const warmupCardTitle = warmupProfile === 'legs' ? 'Lower warm up' : 'Upper warm up';
+
+  const handleWarmupPress = useCallback(async () => {
+    const target = selectedDeckWorkout ?? remainingWorkoutsQueue[0] ?? selectedDay?.scheduledWorkout;
+    if (!target) return;
+    await ensureScheduledWorkoutWarmup(target.id);
+    (navigation as any).navigate('WarmupExecution', {
+      workoutKey: target.id,
+      workoutTemplateId: target.templateId,
+    });
+  }, [selectedDeckWorkout, remainingWorkoutsQueue, selectedDay?.scheduledWorkout, ensureScheduledWorkoutWarmup, navigation]);
+
+  const handleCorePress = useCallback(async () => {
+    const target = selectedDeckWorkout ?? remainingWorkoutsQueue[0] ?? selectedDay?.scheduledWorkout;
+    if (!target) return;
+    await ensureScheduledWorkoutCore(target.id);
+    (navigation as any).navigate('ExerciseExecution', {
+      workoutKey: target.id,
+      workoutTemplateId: target.templateId,
+      type: 'core',
+    });
+  }, [selectedDeckWorkout, remainingWorkoutsQueue, selectedDay?.scheduledWorkout, ensureScheduledWorkoutCore, navigation]);
   
   const isScheduleFutureDay = dayjs(selectedDate).isAfter(today, 'day');
 
@@ -702,6 +776,7 @@ export function TodayScreen({ onDateChange, onOpenAddWorkout, onOpenBonusDrawer 
   return (
       <View style={[styles.gradient, { backgroundColor: themeColors.canvasLight }]}>
         <SafeAreaView style={styles.scheduleScreenRoot} edges={[]}>
+          <Animated.View style={[styles.schedulePane, schedulePaneAnimatedStyle]}>
           <View style={[styles.scheduleHeaderStack, { paddingTop: insets.top }]}>
             <View style={styles.topBar}>
               <TouchableOpacity
@@ -846,6 +921,7 @@ export function TodayScreen({ onDateChange, onOpenAddWorkout, onOpenBonusDrawer 
                   getMainCompletion={getMainCompletion}
                   isInPastCycle={isInPastCycle}
                   onOpenWorkout={navigateToWorkoutExecution}
+                  onActiveWorkoutChange={setSelectedDeckWorkout}
                 />
               ) : selectedDay?.scheduledWorkout ? (
                 <View style={styles.workoutCard}>
@@ -891,7 +967,7 @@ export function TodayScreen({ onDateChange, onOpenAddWorkout, onOpenBonusDrawer 
                                 <View style={styles.progressIndicator}>
                                   <Text style={styles.progressText}>{completionPercentage}%</Text>
                                   <Svg height="16" width="16" viewBox="0 0 16 16" style={styles.progressCircle}>
-                                    <Circle cx="8" cy="8" r="8" fill={COLORS.accentPrimaryDimmed} />
+                                    <Circle cx="8" cy="8" r="8" fill={COLORS.containerPrimaryDark} />
                                     <Path
                                       d={`M 8 8 L 8 0 A 8 8 0 ${progress > 0.5 ? 1 : 0} 1 ${
                                         8 + 8 * Math.sin(2 * Math.PI * progress)
@@ -979,166 +1055,89 @@ export function TodayScreen({ onDateChange, onOpenAddWorkout, onOpenBonusDrawer 
               </View>
               </View>
               </ScrollView>
+          </Animated.View>
 
-          {!isScheduleFutureDay &&
-            (() => {
-              const todayDate = today.format('YYYY-MM-DD');
-              const isTodaySelected = selectedDate === todayDate;
-              const isPastDay = dayjs(selectedDate).isBefore(today, 'day');
-
-              const rawBonusItems = getBonusLogsForDate(selectedDate);
-              const bonusItems = [...rawBonusItems].sort(
-                (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
-              );
-              const count = bonusItems.length;
-              const contentWidth = Dimensions.get('window').width - SPACING.xxl * 2;
-              const carouselCardWidth = (contentWidth - SPACING.sm) / 2;
-              const carouselSnapInterval = carouselCardWidth + SPACING.sm;
-
-              const BonusTypeIcon = ({ type, size = 16 }: { type: BonusType; size?: number }) => {
-                if (type === 'timer') return <IconStopwatch size={size} color={COLORS.textMeta} />;
-                if (type === 'warmup') return <IconWarmup size={size} color={COLORS.textMeta} />;
-                return <IconCore size={size} color={COLORS.textMeta} />;
-              };
-
-              const renderBonusCard = (
-                item: (typeof bonusItems)[0],
-                inCarousel?: boolean,
-                carouselWidth?: number,
-              ) => (
-                <TouchableOpacity
-                  key={item.id}
-                  style={[
-                    inCarousel
-                      ? [styles.bonusCarouselCard, carouselWidth !== undefined && { width: carouselWidth }]
-                      : count === 2
-                        ? styles.bonusCardHalf
-                        : styles.bonusCardWrapper,
-                  ]}
-                  onPress={() => (navigation as any).navigate('BonusDetail', { bonusLogId: item.id })}
-                  activeOpacity={0.85}
-                >
-                  <View style={styles.bonusPresetCard}>
-                    <View style={[styles.bonusPresetCardInner, count === 2 && styles.bonusPresetCardInnerCompact]}>
-                      <Text style={styles.bonusPresetCardName} numberOfLines={2}>
-                        {item.presetName}
-                      </Text>
-                      <View style={styles.bonusPresetCardBottomRow}>
-                        {item.status === 'completed' ? (
-                          <View style={styles.bonusPresetCardCta}>
-                            <IconCheckmark size={16} color={COLORS.successBright} />
-                          </View>
-                        ) : (
-                          <View style={styles.bonusPresetCardCta} pointerEvents="none">
-                            <Text style={styles.bonusPresetCardCtaStart}>{t('start')}</Text>
-                            <IconPlay size={10} color={COLORS.accentPrimary} />
-                          </View>
-                        )}
-                        <BonusTypeIcon type={item.type} size={20} />
-                      </View>
-                    </View>
+          {!isScheduleFutureDay && !isTimerMode ? (
+            <View style={[styles.footerActionsWrap, { paddingBottom: insets.bottom }]}>
+              <View style={styles.footerEntryRow}>
+                <TouchableOpacity style={styles.footerEntryCard} activeOpacity={0.85} onPress={() => void handleWarmupPress()}>
+                  <Text style={styles.footerEntryTitle}>{warmupCardTitle}</Text>
+                  <View style={styles.footerEntryIconCircle}>
+                    <IconWarmup size={24} color={COLORS.accentPrimary} />
                   </View>
                 </TouchableOpacity>
-              );
-
-              const extrasPanel = (
-                <View style={styles.extrasPanelInner}>
-                  <View style={styles.bonusSectionHeader}>
-                    <Text style={styles.intervalsSectionTitle}>{t('extras')}</Text>
+                <TouchableOpacity style={styles.footerEntryCard} activeOpacity={0.85} onPress={() => void handleCorePress()}>
+                  <Text style={styles.footerEntryTitle}>Core</Text>
+                  <View style={styles.footerEntryIconSquare}>
+                    <IconCore size={24} color={COLORS.accentPrimary} />
                   </View>
-                  {count === 0 && isPastDay && (
-                    <Text style={styles.noIntervalsText}>{t('noBonusPerformedThisDay')}</Text>
-                  )}
-                  {count === 0 && isTodaySelected && (
-                    <TouchableOpacity
-                      style={styles.addIntervalCardButton}
-                      onPress={() => onOpenBonusDrawer?.()}
-                      activeOpacity={0.7}
-                    >
-                      <DiagonalLinePattern width="100%" height={56} borderRadius={16} />
-                      <IconAdd size={24} color={COLORS.inkCharcoal} />
-                        <Text style={styles.addIntervalCardText}>{t('addBonus')}</Text>
-                      </TouchableOpacity>
-                    )}
-                    {count === 1 && <View style={styles.bonusCardsRow}>{renderBonusCard(bonusItems[0])}</View>}
-                  {count === 2 && (
-                    <View style={styles.bonusCardsRow}>
-                      {bonusItems.map(item => renderBonusCard(item))}
-                    </View>
-                  )}
-                  {count >= 3 && (
-                    <ScrollView
-                      horizontal
-                      showsHorizontalScrollIndicator={false}
-                      contentContainerStyle={styles.bonusCarouselContent}
-                      style={styles.bonusCarousel}
-                      snapToInterval={carouselSnapInterval}
-                      snapToAlignment="start"
-                      decelerationRate="fast"
-                    >
-                      {bonusItems.map(item => renderBonusCard(item, true, carouselCardWidth))}
-                    </ScrollView>
-                  )}
-                  {isTodaySelected && count > 0 && (
-                    <TouchableOpacity
-                      style={[styles.addIntervalCardButton, styles.addIntervalCardButtonBelow]}
-                      onPress={() => onOpenBonusDrawer?.()}
-                      activeOpacity={0.7}
-                    >
-                      <DiagonalLinePattern width="100%" height={56} borderRadius={16} />
-                      <IconAdd size={24} color={COLORS.inkCharcoal} />
-                      <Text style={styles.addIntervalCardText}>{t('addBonus')}</Text>
-                    </TouchableOpacity>
-                  )}
+                </TouchableOpacity>
+              </View>
+              <TouchableOpacity
+                style={styles.timerSwitchButton}
+                activeOpacity={0.85}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  setIsTimerMode(true);
+                }}
+              >
+                <View style={{ transform: [{ rotate: '180deg' }] }}>
+                  <IconChevronDown size={20} color={COLORS.inkCharcoal} />
                 </View>
-              );
+                <Text style={styles.timerSwitchText}>Timer</Text>
+              </TouchableOpacity>
+            </View>
+          ) : null}
 
-              return (
-                <>
-                  {extrasExpanded && (
-                    <View
-                      style={[
-                        styles.extrasPanel,
-                        { maxHeight: Dimensions.get('window').height * 0.4 },
-                      ]}
-                    >
-                      <ScrollView
-                        nestedScrollEnabled
-                        showsVerticalScrollIndicator={false}
-                        style={styles.extrasPanelScroll}
-                        contentContainerStyle={styles.extrasPanelScrollContent}
-                      >
-                        {extrasPanel}
-                      </ScrollView>
-                    </View>
-                  )}
-                  <View style={[styles.extrasPinBarWrap, { paddingBottom: insets.bottom }]}>
-                    <TouchableOpacity
-                      style={styles.extrasPinBar}
-                      onPress={() => {
-                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                        setExtrasExpanded(v => !v);
-                      }}
-                      activeOpacity={0.85}
-                      accessibilityRole="button"
-                      accessibilityLabel={t('extras')}
-                      accessibilityState={{ expanded: extrasExpanded }}
-                    >
-                      <View style={styles.extrasPinBarInner}>
-                        <View
-                          style={{
-                            transform: [{ rotate: extrasExpanded ? '0deg' : '180deg' }],
-                          }}
-                        >
-                          <IconChevronDown size={20} color={COLORS.inkCharcoal} />
-                        </View>
-                        <Text style={styles.extrasPinLabel}>{t('extras')}</Text>
+          <Animated.View pointerEvents={isTimerMode ? 'auto' : 'none'} style={[styles.timerModePane, timerPaneAnimatedStyle]}>
+            <View style={[styles.timerModeHeader, { paddingTop: insets.top + 8 }]}>
+              <TouchableOpacity
+                style={styles.timerSwitchButton}
+                activeOpacity={0.85}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  setIsTimerMode(false);
+                }}
+              >
+                <IconChevronDown size={20} color={COLORS.inkCharcoal} />
+                <Text style={styles.timerSwitchText}>Schedule</Text>
+              </TouchableOpacity>
+            </View>
+            <ScrollView
+              style={styles.timerModeScroll}
+              contentContainerStyle={[styles.timerModeScrollContent, { paddingBottom: insets.bottom + 24 }]}
+              showsVerticalScrollIndicator={false}
+            >
+              <Text style={styles.timerModeTitle}>{t('savedTimers')}</Text>
+              <View style={styles.timerGrid}>
+                {timerTemplates.map(timer => (
+                  <TouchableOpacity
+                    key={timer.id}
+                    style={styles.timerGridCard}
+                    onPress={() => (navigation as any).navigate('HIITTimerExecution', { timerId: timer.id })}
+                    onLongPress={() => (navigation as any).navigate('HIITTimerForm', { mode: 'edit', timerId: timer.id })}
+                    activeOpacity={0.85}
+                  >
+                    <View style={CARDS.cardDeepDimmed.outer}>
+                      <View style={[CARDS.cardDeepDimmed.inner, styles.timerGridCardInner]}>
+                        <Text style={styles.timerGridName} numberOfLines={2}>{timer.name}</Text>
+                        <Text style={styles.timerGridMeta}>{calculateTimerTotalTime(timer)}</Text>
                       </View>
-                    </TouchableOpacity>
-                  </View>
-                </>
-              );
-            })()}
+                    </View>
+                  </TouchableOpacity>
+                ))}
+              </View>
+              <TouchableOpacity
+                style={styles.addTimerCardButton}
+                onPress={() => (navigation as any).navigate('HIITTimerForm', { mode: 'create' })}
+                activeOpacity={0.75}
+              >
+                <DiagonalLinePattern width="100%" height={56} borderRadius={16} />
+                <IconAdd size={24} color={COLORS.inkCharcoal} />
+                <Text style={styles.addTimerCardText}>Add timer</Text>
+              </TouchableOpacity>
+            </ScrollView>
+          </Animated.View>
 
         </SafeAreaView>
 
@@ -1217,6 +1216,9 @@ const styles = StyleSheet.create({
     flex: 1,
     flexDirection: 'column',
     backgroundColor: 'transparent',
+  },
+  schedulePane: {
+    flex: 1,
   },
   container: {
     flex: 1,
@@ -1713,6 +1715,101 @@ const styles = StyleSheet.create({
   cardActionsContainer: {
     alignItems: 'center',
     marginTop: SPACING.lg,
+  },
+  footerActionsWrap: {
+    paddingHorizontal: SPACING.xxl,
+    paddingTop: SPACING.md,
+    backgroundColor: COLORS.canvasLight,
+  },
+  footerEntryRow: {
+    flexDirection: 'row',
+    gap: SPACING.md,
+  },
+  footerEntryCard: {
+    flex: 1,
+    backgroundColor: COLORS.containerTertiary,
+    borderRadius: 10,
+    paddingHorizontal: SPACING.lg,
+    paddingTop: SPACING.md,
+    paddingBottom: 12,
+    minHeight: 120,
+  },
+  footerEntryTitle: {
+    ...TYPOGRAPHY.body,
+    color: COLORS.inkCharcoal,
+    marginBottom: SPACING.md,
+  },
+  footerEntryIconCircle: {
+    width: 70,
+    height: 70,
+    borderRadius: 35,
+    backgroundColor: COLORS.inkCharcoal,
+    alignItems: 'center',
+    justifyContent: 'center',
+    alignSelf: 'flex-end',
+  },
+  footerEntryIconSquare: {
+    width: 70,
+    height: 70,
+    borderRadius: 18,
+    backgroundColor: COLORS.inkCharcoal,
+    alignItems: 'center',
+    justifyContent: 'center',
+    alignSelf: 'flex-end',
+  },
+  timerSwitchButton: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 24,
+    paddingVertical: SPACING.sm,
+    gap: 2,
+  },
+  timerSwitchText: {
+    ...TYPOGRAPHY.meta,
+    fontWeight: '400',
+    color: COLORS.inkCharcoal,
+    textDecorationLine: 'underline',
+  },
+  timerModePane: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: COLORS.canvasLight,
+  },
+  timerModeHeader: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingBottom: SPACING.sm,
+  },
+  timerModeScroll: {
+    flex: 1,
+  },
+  timerModeScrollContent: {
+    paddingHorizontal: SPACING.xxl,
+  },
+  timerModeTitle: {
+    ...TYPOGRAPHY.h2,
+    color: COLORS.inkCharcoal,
+    marginBottom: SPACING.md,
+  },
+  timerGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: SPACING.md,
+  },
+  timerGridCard: {
+    width: '48%',
+  },
+  timerGridCardInner: {
+    paddingVertical: SPACING.lg,
+    paddingHorizontal: SPACING.md,
+  },
+  timerGridName: {
+    ...TYPOGRAPHY.bodyBold,
+    color: COLORS.text,
+  },
+  timerGridMeta: {
+    ...TYPOGRAPHY.meta,
+    color: COLORS.textMeta,
+    marginTop: 4,
   },
   
   // Intervals / Bonus Section

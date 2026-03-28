@@ -223,9 +223,9 @@ export function ExploreV2UpNextCard({
   const amberBand = ex.amberBand;
   const warmActivity = ex.warmActivity;
   const backgroundTimer = themeColors.backgroundTimer;
-  const accentPrimaryDark = themeColors.accentPrimaryDark;
   const textMetaTimer = themeColors.textMetaTimer;
   const textPrimary = themeColors.textPrimary;
+  const textMeta = themeColors.textMeta;
   /** Mirrors `timerThemeActive` on UI thread — multiplies theme progress so chrome snaps idle when rest ends. */
   const restChromeGateSV = useSharedValue(timerThemeActive ? 1 : 0);
   useLayoutEffect(() => {
@@ -249,17 +249,17 @@ export function ExploreV2UpNextCard({
   }, []);
 
   const pageBgChrome = EXPLORE_V2.colors.pageBg;
-  /** Rest band (b, w=0): “Up Next” + chevrons → accent-primary-dark; work (w=1) → text-meta-timer. No gate on b so chrome tracks orange rest even if phase flags lag. */
+  /** Rest band (b, w=0): “Up Next” header → textMeta; work (w=1) → text-meta-timer. */
   const headerChromeAnimatedStyle = useAnimatedStyle(() => {
     const b = restThemeProgress.value;
     const w = exploreV2WorkBlueProgress.value;
     const pRest = b * (1 - w);
     const pWork = b * w;
-    const restCol = interpolateColor(pRest, [0, 1], [HEADER_INK, accentPrimaryDark]);
+    const restCol = interpolateColor(pRest, [0, 1], [HEADER_INK, textMeta]);
     return {
       color: interpolateColor(pWork, [0, 1], [restCol, textMetaTimer]),
     };
-  }, [accentPrimaryDark, textMetaTimer]);
+  }, [textMeta, textMetaTimer]);
   /** Rest band: link uses text-primary; work phase → text-meta-timer. */
   const addExerciseLinkAnimatedStyle = useAnimatedStyle(() => {
     const b = restThemeProgress.value;
@@ -368,7 +368,7 @@ export function ExploreV2UpNextCard({
               <IconChevronDown size={18} color={HEADER_INK} />
             </Reanimated.View>
             <Reanimated.View style={[styles.chevronLayer, chevronTimerOpacityStyle]} pointerEvents="none">
-              <IconChevronDown size={18} color={accentPrimaryDark} />
+              <IconChevronDown size={18} color={textMeta} />
             </Reanimated.View>
             <Reanimated.View style={[styles.chevronLayer, chevronWorkOpacityStyle]} pointerEvents="none">
               <IconChevronDown size={18} color={textMetaTimer} />
@@ -512,7 +512,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
   },
   headerLabel: {
-    ...TYPOGRAPHY.legal,
+    ...TYPOGRAPHY.meta,
     fontWeight: '500',
     letterSpacing: 0,
     textTransform: 'none',

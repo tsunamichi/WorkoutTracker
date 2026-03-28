@@ -33,10 +33,11 @@ export function WarmupExecutionScreen() {
   const { t } = useTranslation();
   
   const { workoutKey, workoutTemplateId } = route.params;
-  const { getWorkoutTemplate, updateWarmupCompletion, getWarmupCompletion, updateWorkoutTemplate, settings, warmupCompletionByKey } = useStore();
+  const { getWorkoutTemplate, scheduledWorkouts, updateWarmupCompletion, getWarmupCompletion, updateWorkoutTemplate, updateScheduledWorkoutSnapshots, settings, warmupCompletionByKey } = useStore();
   const template = getWorkoutTemplate(workoutTemplateId);
+  const scheduledWorkout = scheduledWorkouts.find(sw => sw.id === workoutKey);
   // Migrate old items to new structure on load
-  const rawWarmupItems = template?.warmupItems || [];
+  const rawWarmupItems = scheduledWorkout?.warmupSnapshot ?? template?.warmupItems ?? [];
   const warmupItems = migrateItemsArray(rawWarmupItems as any);
   const useKg = settings.useKg;
   const weightUnit = useKg ? 'kg' : 'lb';
@@ -402,6 +403,7 @@ export function WarmupExecutionScreen() {
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
             // Update the template to remove warmup items
             await updateWorkoutTemplate(workoutTemplateId, { warmupItems: [] });
+            await updateScheduledWorkoutSnapshots(workoutKey, { warmupSnapshot: [] });
             navigation.goBack();
           },
         },

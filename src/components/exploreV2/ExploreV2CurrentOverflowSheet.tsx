@@ -23,13 +23,12 @@ import Reanimated, {
 import { Toggle } from '../Toggle';
 import { EXPLORE_V2 } from './exploreV2Tokens';
 import dayjs from 'dayjs';
-import { COLORS, SPACING, TYPOGRAPHY } from '../../constants';
+import { COLORS, SPACING, TYPOGRAPHY, hexToRgba } from '../../constants';
 import { useAppTheme } from '../../theme/useAppTheme';
 import { formatWeightForLoad } from '../../utils/weight';
 import type { ExploreV2Exercise } from './exploreV2Types';
 import { useTranslation } from '../../i18n/useTranslation';
 
-const PANEL_TOP_RADIUS = 16;
 const DRAWER_TOP_DIVIDER_H = 1;
 /** Settings header row (Settings + chevron) */
 const DRAWER_HEADER_ROW_H = 48;
@@ -140,6 +139,7 @@ export function ExploreV2CurrentOverflowPanel({
 }: PanelProps) {
   const { t } = useTranslation();
   const { colors: themeColors, explore } = useAppTheme();
+  const accentSecondary20 = useMemo(() => hexToRgba(themeColors.accentSecondary, 0.2), [themeColors.accentSecondary]);
   const [scrollContentHeight, setScrollContentHeight] = useState(0);
 
   /** Same timing / motion as ExploreV2UpNextCard add exercise ↔ chevron swap. */
@@ -261,7 +261,7 @@ export function ExploreV2CurrentOverflowPanel({
       style={[styles.panelOuter, shellAnimStyle]}
     >
       {/** Outside rounded clip so the hairline spans the full drawer width (true full bleed). */}
-      <View style={[styles.drawerTopDivider, { backgroundColor: themeColors.accentSecondarySoft }]} />
+      <View style={[styles.drawerTopDivider, { backgroundColor: accentSecondary20 }]} />
       <View
         style={[
           styles.panelSoftBase,
@@ -284,8 +284,8 @@ export function ExploreV2CurrentOverflowPanel({
                   style={[
                     styles.settingsLinkText,
                     {
-                      color: themeColors.containerSecondary,
-                      borderBottomColor: themeColors.containerSecondary,
+                      color: themeColors.accentSecondary,
+                      borderBottomColor: themeColors.accentSecondary,
                     },
                   ]}
                 >
@@ -297,8 +297,8 @@ export function ExploreV2CurrentOverflowPanel({
                   style={[
                     styles.settingsLinkText,
                     {
-                      color: themeColors.containerSecondary,
-                      borderBottomColor: themeColors.containerSecondary,
+                      color: themeColors.accentSecondary,
+                      borderBottomColor: themeColors.accentSecondary,
                     },
                   ]}
                 >
@@ -342,11 +342,13 @@ export function ExploreV2CurrentOverflowPanel({
                         <View key={setIndex} style={styles.historySetRow}>
                           <View style={styles.historyValueColumn}>
                             <Text style={styles.historySetText}>{formatWeightForLoad(set.weight, useKg)}</Text>
-                            <Text style={styles.historySetUnit}>{weightUnit}</Text>
+                            <Text style={[styles.historySetUnit, { color: themeColors.accentSecondary }]}>{weightUnit}</Text>
                           </View>
                           <View style={styles.historyValueColumn}>
                             <Text style={styles.historySetText}>{set.reps}</Text>
-                            <Text style={styles.historySetUnit}>{timeBased ? 'secs' : 'reps'}</Text>
+                            <Text style={[styles.historySetUnit, { color: themeColors.accentSecondary }]}>
+                              {timeBased ? 'secs' : 'reps'}
+                            </Text>
                           </View>
                         </View>
                       ))}
@@ -355,15 +357,14 @@ export function ExploreV2CurrentOverflowPanel({
         </View>
               )}
 
-              <View style={styles.sectionDivider} />
-              <Text style={[styles.sectionAfter, { color: themeColors.accentSecondarySoft }]}>Exercise setup</Text>
+              <View style={[styles.sectionDivider, styles.useTimerDivider, { backgroundColor: accentSecondary20 }]} />
         <View style={styles.row}>
                 <Text style={styles.labelMeta}>Use timer</Text>
                 <Toggle
                   label=""
                   hideLabel
                   value={timeBased}
-                  trackOffColor={explore.skipRestCtaBg}
+                  trackOffColor={themeColors.containerPrimaryDark}
                   thumbOnColor={explore.skipRestCtaBg}
                   thumbOffColor={themeColors.containerSecondary}
                   onValueChange={() => {
@@ -377,29 +378,27 @@ export function ExploreV2CurrentOverflowPanel({
                 Track each set by duration instead of reps
               </Text>
         <View style={styles.row}>
-                <Text style={[styles.labelMeta, !timeBased && styles.labelDisabled]}>Alternate sides</Text>
+                <Text style={[styles.labelMeta, { color: timeBased ? COLORS.text : accentSecondary20 }]}>
+                  Alternate sides
+                </Text>
                 <Toggle
                   label=""
                   hideLabel
                   value={perSide}
                   disabled={!timeBased}
-                  trackOffColor={explore.skipRestCtaBg}
+                  trackOffColor={timeBased ? themeColors.containerPrimaryDark : accentSecondary20}
                   thumbOnColor={explore.skipRestCtaBg}
                   thumbOffColor={themeColors.containerSecondary}
                   onValueChange={() => onPerSideChange(!perSide)}
                 />
         </View>
-              <Text style={[styles.helperText, { color: themeColors.accentSecondary }]}>
+              <Text style={[styles.helperText, { color: timeBased ? themeColors.accentSecondary : accentSecondary20 }]}>
                 Runs the timer once per side for each set
               </Text>
 
         {type === 'main' && (
           <>
-                  <View style={styles.sectionDivider} />
-                  <Text style={[styles.sectionAfterTight, { color: themeColors.accentSecondarySoft }]}>
-                    Auto progression
-                  </Text>
-            <View style={styles.pillRow}>
+            <View style={styles.progressionCardsRow}>
               {progressionGroups.map(g => (
                 <TouchableOpacity
                   key={g.id}
@@ -408,12 +407,20 @@ export function ExploreV2CurrentOverflowPanel({
                           onProgressionGroupSelect(currentProgressionGroupId === g.id ? null : g.id)
                         }
                 >
+                  <View style={styles.pillIconPlaceholder} />
                   <Text style={styles.pillText} numberOfLines={1}>
                           {progressionPillLabel(g.name)}
                   </Text>
                 </TouchableOpacity>
               ))}
             </View>
+            <View
+              style={[
+                styles.sectionDivider,
+                styles.progressionCardsDivider,
+                { backgroundColor: accentSecondary20 },
+              ]}
+            />
           </>
         )}
             </View>
@@ -464,8 +471,8 @@ const styles = StyleSheet.create({
   /** Soft surface + rounded corners; divider sits above so the hairline isn’t corner-clipped. */
   panelSoftBase: {
     overflow: 'hidden',
-    borderTopLeftRadius: PANEL_TOP_RADIUS,
-    borderTopRightRadius: PANEL_TOP_RADIUS,
+    borderTopLeftRadius: 0,
+    borderTopRightRadius: 0,
     borderBottomLeftRadius: EXPLORE_V2.cardRadius,
     borderBottomRightRadius: EXPLORE_V2.cardRadius,
     ...(Platform.OS === 'ios' ? { borderCurve: 'continuous' as const } : {}),
@@ -617,15 +624,39 @@ const styles = StyleSheet.create({
   },
   pillRow: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
+    flexWrap: 'nowrap',
     gap: 8,
+    alignItems: 'stretch',
+  },
+  progressionCardsRow: {
+    marginTop: 24,
+    flexDirection: 'row',
+    flexWrap: 'nowrap',
+    gap: 8,
+    alignItems: 'stretch',
+  },
+  progressionCardsDivider: {
+    marginTop: 24,
+  },
+  useTimerDivider: {
+    marginBottom: 24,
   },
   pill: {
+    flex: 1,
+    height: 80,
     paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 999,
+    borderRadius: 12,
     borderWidth: 1,
     borderColor: EXPLORE_V2.colors.divider,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  pillIconPlaceholder: {
+    width: 20,
+    height: 20,
+    borderRadius: 6,
+    backgroundColor: COLORS.containerPrimaryDark,
+    marginBottom: 8,
   },
   pillOn: {
     borderColor: EXPLORE_V2.colors.accent,
@@ -634,6 +665,7 @@ const styles = StyleSheet.create({
   pillText: {
     ...TYPOGRAPHY.meta,
     color: EXPLORE_V2.colors.textPrimary,
+    textAlign: 'center',
   },
   actions: {
     flexDirection: 'row',

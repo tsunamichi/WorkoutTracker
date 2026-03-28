@@ -117,6 +117,8 @@ export const COLORS = {
   containerSecondary: CONTAINER_SECONDARY,
   /** Spec container-primary — primary dark surfaces (e.g. execution current card) */
   containerPrimary: '#1F1F1F',
+  /** Spec container-primary-dark — dark teal container used under pie remainders */
+  containerPrimaryDark: '#011D1B',
   /** Spec container-tertiary — lighter gray surfaces (e.g. selected calendar pill) */
   containerTertiary: '#E5E5E5',
   /** Text/icons on `container-primary` / dark hero card surfaces */
@@ -142,7 +144,7 @@ export const COLORS = {
   todayIndicator: BASE_INFO,  // Current day label & selected box
   accentPrimaryDimmed: '#372E1A',       // Subtle lime tint bg for selected states
   /** Spec accent-secondary (teal) */
-  accentSecondary: '#00ACA1',
+  accentSecondary: '#58A186',
   /** Spec accent-secondary-soft — schedule pie incomplete, muted teal surfaces */
   accentSecondarySoft: ACCENT_SECONDARY_SOFT,
   /** Work timer (time-based) — page tint */

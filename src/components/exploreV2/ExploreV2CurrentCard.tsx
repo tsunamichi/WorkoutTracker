@@ -19,7 +19,7 @@ import Reanimated, {
   type SharedValue,
 } from 'react-native-reanimated';
 import { EXPLORE_V2 } from './exploreV2Tokens';
-import { COLORS, TYPOGRAPHY } from '../../constants';
+import { COLORS, TYPOGRAPHY, hexToRgba } from '../../constants';
 import { useAppTheme } from '../../theme/useAppTheme';
 import { formatWeightForLoad, fromDisplayWeight } from '../../utils/weight';
 import { applyForwardPropagationForExerciseRounds } from '../../utils/exerciseLocalValues';
@@ -276,15 +276,9 @@ function CurrentSetHeroPage({
       <View style={styles.valuesBlock}>
         {showPerSideRow && weightPerSideLbs != null ? (
           <View style={styles.perSideRow}>
-            <View style={styles.perSideCluster}>
-              <View style={styles.perSideNumUnit}>
-                <Text style={[styles.perSideValue, { color: perSideValueColor }]}>
-                  {formatWeightForLoad(weightPerSideLbs, useKg)}
-                </Text>
-                <Text style={[styles.perSideUnit, { color: perSideUnitColor }]}>{weightUnit}</Text>
-              </View>
-              <Text style={[styles.perSideLabel, { color: perSideLabelColor }]}>weight per side</Text>
-            </View>
+            <Text style={[styles.perSideSingleLine, { color: perSideValueColor }]}>
+              {`${formatWeightForLoad(weightPerSideLbs, useKg)} ${weightUnit} weight per side`}
+            </Text>
           </View>
         ) : null}
 
@@ -378,6 +372,7 @@ export function ExploreV2CurrentCard({
   const accentPrimary = themeColors.accentPrimary;
   const accentPrimaryDimmed = themeColors.accentPrimaryDimmed;
   const accentSecondarySoft = themeColors.accentSecondarySoft;
+  const currentCardUnitInk = useMemo(() => hexToRgba(themeColors.accentSecondary, 0.2), [themeColors.accentSecondary]);
   const warmActivity = ex.warmActivity;
   const skipRestCtaBg = ex.skipRestCtaBg;
   const heroInk = ex.heroValueInk;
@@ -446,6 +441,8 @@ export function ExploreV2CurrentCard({
         ? 'Skip timer'
         : exploreV2TimerPhase === 'switchSides'
           ? 'Skip'
+          : activeHeroEx?.isTimeBased
+            ? 'Start timer'
           : !groupHasStarted
             ? 'Log first set'
             : 'Log next set';
@@ -609,7 +606,7 @@ export function ExploreV2CurrentCard({
                         getBarbellMode={getBarbellMode}
                         metricsEditable={metricsEditable}
                         heroValueColor={heroValueColor}
-                        heroUnitInk={heroTimerActive ? accentSecondarySoft : themeColors.accentSecondarySoft}
+                        heroUnitInk={currentCardUnitInk}
                         perSideLabelColor={heroTimerActive ? accentSecondarySoft : themeColors.accentSecondary}
                         perSideValueColor={heroTimerActive ? accentSecondarySoft : themeColors.accentSecondary}
                         perSideUnitColor={heroTimerActive ? accentSecondarySoft : themeColors.accentSecondary}
@@ -660,28 +657,13 @@ export function ExploreV2CurrentCard({
                                 ? { color: accentSecondarySoft }
                                 : {
                                     color: isView
-                                      ? themeColors.containerSecondary
+                                      ? accentPrimary
                                       : themeColors.accentSecondary,
                                   },
-                              !heroTimerActive && !isView && done ? styles.paginationDoneDim : null,
                             ]}
                           >
                             {i + 1}
                           </Text>
-                          {isNext ? (
-                            <View style={styles.paginationNextDotWrap} pointerEvents="none">
-                              <View
-                                style={[
-                                  styles.paginationNextDot,
-                                  {
-                                    backgroundColor: heroTimerActive
-                                      ? accentSecondarySoft
-                                      : themeColors.containerSecondary,
-                                  },
-                                ]}
-                              />
-                            </View>
-                          ) : null}
                         </View>
                       </TouchableOpacity>
                     );
@@ -782,7 +764,7 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   eyebrow: {
-    ...TYPOGRAPHY.legal,
+    ...TYPOGRAPHY.meta,
     fontWeight: '500',
     letterSpacing: 0,
     textTransform: 'none',
@@ -834,34 +816,15 @@ const styles = StyleSheet.create({
   perSideRow: {
     marginBottom: 0,
   },
-  perSideCluster: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    flexWrap: 'wrap',
-    gap: 3,
-  },
-  perSideNumUnit: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    gap: 2,
-  },
-  perSideValue: {
-    ...TYPOGRAPHY.body,
-    fontWeight: '400',
-  },
-  perSideUnit: {
-    ...TYPOGRAPHY.body,
-    fontWeight: '400',
-  },
-  perSideLabel: {
-    ...TYPOGRAPHY.body,
+  perSideSingleLine: {
+    ...TYPOGRAPHY.meta,
     fontWeight: '400',
   },
   valueRow: {
     flexDirection: 'row',
     alignItems: 'baseline',
     flexWrap: 'nowrap',
-    gap: 2,
+    gap: 8,
     marginBottom: 0,
   },
   /** Wraps unit only so ↑ is positioned over this label, not in the gap between weight/reps rows */
@@ -914,29 +877,12 @@ const styles = StyleSheet.create({
     position: 'relative',
     alignItems: 'center',
   },
-  /** Out of layout flow so row alignment uses digit baselines only */
-  paginationNextDotWrap: {
-    position: 'absolute',
-    top: '100%',
-    left: 0,
-    right: 0,
-    marginTop: 4,
-    alignItems: 'center',
-  },
-  paginationNextDot: {
-    width: 4,
-    height: 4,
-    borderRadius: 2,
-  },
   paginationDigit: {
     ...TYPOGRAPHY.legal,
     fontWeight: '600',
     fontVariant: ['tabular-nums'],
     minWidth: 18,
     textAlign: 'center',
-  },
-  paginationDoneDim: {
-    opacity: 0.45,
   },
   paginationInView: {
     fontWeight: '600',

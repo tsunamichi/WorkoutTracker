@@ -23,6 +23,7 @@ import {
 } from 'react-native';
 import AnimatedReanimated, {
   useSharedValue,
+  useDerivedValue,
   useAnimatedStyle,
   withTiming,
   withDelay,
@@ -208,6 +209,8 @@ export function ExerciseExecutionScreen() {
     settings,
     exercises: exercisesLibrary,
     resetWarmupCompletion,
+    setScheduledWorkoutWarmupProfile,
+    setScheduledWorkoutCorePreset,
     resetMainCompletion,
     resetAccessoryCompletion,
     getBarbellMode,
@@ -229,6 +232,10 @@ export function ExerciseExecutionScreen() {
     getLastCompletedLogForExercise,
     progressionGroups,
     updateProgressionGroup,
+    corePresets,
+    corePrograms,
+    getActiveCoreProgram,
+    getCoreSessionsByGroup,
   } = useStore();
 
   const appTheme = useAppTheme();
@@ -306,6 +313,17 @@ export function ExerciseExecutionScreen() {
     () => (workoutKey?.startsWith('sw-') ? scheduledWorkouts.find(sw => sw.id === workoutKey) : null),
     [scheduledWorkouts, workoutKey]
   );
+  const assignedCorePresetId = useMemo(() => {
+    if (type !== 'core' || !scheduledWorkout) return null;
+    const snapshot = scheduledWorkout.accessorySnapshot || [];
+    if (snapshot.length === 0) return null;
+    const matched = corePresets.find(preset =>
+      preset.items.length === snapshot.length &&
+      preset.items.every((item, idx) => item.id === snapshot[idx]?.id)
+    );
+    return matched?.id ?? null;
+  }, [type, scheduledWorkout, corePresets]);
+  const activeCoreProgramId = useMemo(() => getActiveCoreProgram()?.id ?? null, [getActiveCoreProgram, corePrograms]);
 
   // Get the appropriate items based on type. For scheduled workouts use snapshot so setIds match store.
   const items = useMemo(() => {
@@ -497,6 +515,13 @@ export function ExerciseExecutionScreen() {
   const exploreV2WorkBlueProgress = useSharedValue(0);
   /** Measured height of `exploreV2Root` — drives % split (stack vs timer) as pixel heights */
   const exploreV2RootHeight = useSharedValue(0);
+  /** CTA measured height and animated visibility (for smooth wallet expand/collapse). */
+  const exploreV2WarmupCtaMeasuredHeight = useSharedValue(0);
+  const exploreV2WarmupCtaProgress = useSharedValue(0);
+  const exploreV2WarmupCtaReservedHeight = useDerivedValue(
+    () => Math.max(0, exploreV2WarmupCtaMeasuredHeight.value * exploreV2WarmupCtaProgress.value),
+    []
+  );
   const executionMode: ExecutionMode = 'explore-v2';
   const [isExploreCompletedExpanded, setIsExploreCompletedExpanded] = useState(false);
   const [showExploreDetailSheet, setShowExploreDetailSheet] = useState(false);
@@ -612,6 +637,16 @@ export function ExerciseExecutionScreen() {
   const [exploreV2RestSkipDisplayHoldSec, setExploreV2RestSkipDisplayHoldSec] = useState<number | null>(null);
   const REST_TIMER_FRAC = EXPLORE_V2.layout.restTimerHeightFraction;
   const REST_STACK_FRAC = EXPLORE_V2.layout.restStackHeightFraction;
+  const MIN_WALLET_VISIBLE_HEIGHT = 180;
+  const exploreV2AvailableRootHeight = useDerivedValue(() => {
+    const measured = exploreV2RootHeight.value;
+    const reserved = exploreV2WarmupCtaReservedHeight.value;
+    const base = measured > 0 ? measured : screenHeight * 0.55;
+    return Math.max(0, base - reserved);
+  }, [screenHeight]);
+  const exploreV2BandsOffsetStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: exploreV2WarmupCtaReservedHeight.value }],
+  }));
 
   const onExploreV2RootLayout = useCallback(
     (e: LayoutChangeEvent) => {
@@ -620,6 +655,10 @@ export function ExerciseExecutionScreen() {
     },
     [exploreV2RootHeight],
   );
+  const onExploreV2WarmupCtaLayout = useCallback((e: any) => {
+    const h = e?.nativeEvent?.layout?.height ?? 0;
+    exploreV2WarmupCtaMeasuredHeight.value = h > 0 ? h : 0;
+  }, [exploreV2WarmupCtaMeasuredHeight]);
 
   const REST_EASE = ReanimatedEasing.bezier(...EXPLORE_V2.motion.rest.restTransitionEase);
   const REST_MS = EXPLORE_V2.motion.rest.colorMs;
@@ -655,22 +694,23 @@ export function ExerciseExecutionScreen() {
 
   /** Idle: timer 0%, stack 100%. Rest: timer `REST_TIMER_FRAC`, stack `REST_STACK_FRAC` of content height */
   const exploreV2TimerBandAnimatedStyle = useAnimatedStyle(() => {
-    const measured = exploreV2RootHeight.value;
-    const H = measured > 0 ? measured : screenHeight * 0.55;
+    const H = exploreV2AvailableRootHeight.value;
+    const restWalletHeight = Math.min(H, Math.max(H * REST_STACK_FRAC, MIN_WALLET_VISIBLE_HEIGHT));
+    const restTimerHeight = Math.max(0, H - restWalletHeight);
     return {
-      height: interpolate(exploreV2TimerBandProgress.value, [0, 1], [0, H * REST_TIMER_FRAC]),
+      height: interpolate(exploreV2TimerBandProgress.value, [0, 1], [0, restTimerHeight]),
       zIndex: 1,
     };
-  }, [screenHeight, REST_TIMER_FRAC]);
+  }, [REST_STACK_FRAC]);
 
   const exploreV2WalletBandAnimatedStyle = useAnimatedStyle(() => {
-    const measured = exploreV2RootHeight.value;
-    const H = measured > 0 ? measured : screenHeight * 0.55;
+    const H = exploreV2AvailableRootHeight.value;
+    const restWalletHeight = Math.min(H, Math.max(H * REST_STACK_FRAC, MIN_WALLET_VISIBLE_HEIGHT));
     return {
-      height: interpolate(exploreV2TimerBandProgress.value, [0, 1], [H, H * REST_STACK_FRAC]),
+      height: interpolate(exploreV2TimerBandProgress.value, [0, 1], [H, restWalletHeight]),
       zIndex: 2,
     };
-  }, [screenHeight, REST_STACK_FRAC]);
+  }, [REST_STACK_FRAC]);
 
   const exploreV2PageBgAnimatedStyle = useAnimatedStyle(() => {
     const p = exploreV2TimerBandProgress.value;
@@ -1388,7 +1428,6 @@ export function ExerciseExecutionScreen() {
       })
       .map(({ index }) => index);
   }, [exerciseGroups, currentRounds, completionTimestamps]);
-
   const upNextExercises = useMemo(() => {
     return exerciseGroups
       .map((group, index) => ({ group, index }))
@@ -2031,6 +2070,9 @@ export function ExerciseExecutionScreen() {
               const completed = getAccessoryCompletion(workoutKey, workoutTemplateId).completedItems;
               await logCoreSession(bonusLog.coreProgramId, bonusLog.coreSessionTemplateId, 'completed', completed);
             }
+          } else if (type === 'core' && activeCoreProgramId && assignedCorePresetId) {
+            const completed = getAccessoryCompletion(workoutKey, workoutTemplateId).completedItems;
+            await logCoreSession(activeCoreProgramId, assignedCorePresetId, 'completed', completed);
           }
           
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -2107,7 +2149,7 @@ export function ExerciseExecutionScreen() {
     if (currentExercise.isTimeBased) {
       const roundForTimer = currentRounds[currentGroup.id] ?? 0;
       pendingTimerSetRef.current = { exerciseId: currentExercise.id, round: roundForTimer };
-      if (executionMode === 'explore-v2' && type === 'main') {
+      if (executionMode === 'explore-v2') {
         exploreWorkAwaitingSecondLegRef.current = false;
         const displayVals = getSetDisplayValues(
           currentExercise.id,
@@ -2224,6 +2266,9 @@ export function ExerciseExecutionScreen() {
                 const completed = getAccessoryCompletion(workoutKey, workoutTemplateId).completedItems;
                 await logCoreSession(bonusLog.coreProgramId, bonusLog.coreSessionTemplateId, 'completed', completed);
               }
+            } else if (type === 'core' && activeCoreProgramId && assignedCorePresetId) {
+              const completed = getAccessoryCompletion(workoutKey, workoutTemplateId).completedItems;
+              await logCoreSession(activeCoreProgramId, assignedCorePresetId, 'completed', completed);
             }
             
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -2257,6 +2302,8 @@ export function ExerciseExecutionScreen() {
               if (bonusLog?.coreProgramId && bonusLog?.coreSessionTemplateId) {
                 await logCoreSession(bonusLog.coreProgramId, bonusLog.coreSessionTemplateId, 'skipped');
               }
+            } else if (type === 'core' && activeCoreProgramId && assignedCorePresetId) {
+              await logCoreSession(activeCoreProgramId, assignedCorePresetId, 'skipped');
             }
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
             navigation.goBack();
@@ -2789,6 +2836,83 @@ export function ExerciseExecutionScreen() {
     });
     return () => cancelAnimationFrame(id);
   }, [showExploreSetEditor, exploreSetEditorSetIndex]);
+  const showWarmupSwitchCta = executionMode === 'explore-v2' && type === 'warmup' && completedSets.size === 0;
+  const showCoreSwitchCta = executionMode === 'explore-v2' && type === 'core' && completedSets.size === 0 && !bonusLogId;
+  const shouldRenderWarmupSwitchCta = executionMode === 'explore-v2' && type === 'warmup';
+  const shouldRenderCoreSwitchCta = executionMode === 'explore-v2' && type === 'core' && !bonusLogId;
+  const showPreExecutionSwitchCta = showWarmupSwitchCta || showCoreSwitchCta;
+  const shouldRenderPreExecutionSwitchCta = shouldRenderWarmupSwitchCta || shouldRenderCoreSwitchCta;
+  useEffect(() => {
+    exploreV2WarmupCtaProgress.value = withTiming(showPreExecutionSwitchCta ? 1 : 0, {
+      duration: 220,
+      easing: ReanimatedEasing.out(ReanimatedEasing.cubic),
+    });
+  }, [showPreExecutionSwitchCta, exploreV2WarmupCtaProgress]);
+  const warmupSwitchCtaAnimatedStyle = useAnimatedStyle(() => ({
+    opacity: exploreV2WarmupCtaProgress.value,
+    transform: [{ translateY: interpolate(exploreV2WarmupCtaProgress.value, [0, 1], [-6, 0]) }],
+  }));
+  const handleSelectDifferentWarmup = useCallback(() => {
+    Alert.alert(
+      'Select a different warm up',
+      'Choose the warm up profile for this workout.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Upper warm up',
+          onPress: async () => {
+            await setScheduledWorkoutWarmupProfile(workoutKey, 'upper');
+            await resetWarmupCompletion(workoutKey);
+            setRefreshKey(k => k + 1);
+          },
+        },
+        {
+          text: 'Lower warm up',
+          onPress: async () => {
+            await setScheduledWorkoutWarmupProfile(workoutKey, 'legs');
+            await resetWarmupCompletion(workoutKey);
+            setRefreshKey(k => k + 1);
+          },
+        },
+      ],
+    );
+  }, [setScheduledWorkoutWarmupProfile, resetWarmupCompletion, workoutKey]);
+  const handleSelectDifferentCore = useCallback(() => {
+    const activeProgram = getActiveCoreProgram();
+    const inProgramOptions = activeProgram
+      ? (() => {
+          const sessions = getCoreSessionsByGroup(activeProgram.id);
+          const group = activeProgram.currentWeekIndex % 2 === 1 ? sessions.A : sessions.B;
+          return group;
+        })()
+      : [];
+    const options = inProgramOptions.length > 0 ? inProgramOptions : corePresets;
+    if (options.length === 0) {
+      Alert.alert('No core workouts found', 'Create a core workout first.');
+      return;
+    }
+    Alert.alert(
+      'Select a different core workout',
+      'Choose the core workout for this session.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        ...options.slice(0, 3).map(preset => ({
+          text: preset.name,
+          onPress: async () => {
+            await setScheduledWorkoutCorePreset(workoutKey, preset.id);
+            await resetAccessoryCompletion(workoutKey);
+            setRefreshKey(k => k + 1);
+          },
+        })),
+      ],
+    );
+  }, [getActiveCoreProgram, getCoreSessionsByGroup, corePresets, setScheduledWorkoutCorePreset, workoutKey, resetAccessoryCompletion]);
+  const preExecutionSwitchCtaLabel = shouldRenderWarmupSwitchCta
+    ? 'Select a different warm up'
+    : 'Select a different core workout';
+  const preExecutionSwitchCtaHandler = shouldRenderWarmupSwitchCta
+    ? handleSelectDifferentWarmup
+    : handleSelectDifferentCore;
   
   // Rest of the render logic from WarmupExecutionScreen...
   // (I'll keep this abbreviated for now, but it will include all the card rendering, drawer, timer, etc.)
@@ -2860,9 +2984,23 @@ export function ExerciseExecutionScreen() {
       <AnimatedReanimated.View style={[styles.contentWrap, exploreV2ContentWrapBgAnimatedStyle]}>
         {executionMode === 'explore-v2' ? (
           <View style={styles.exploreV2Root} onLayout={onExploreV2RootLayout}>
-            <AnimatedReanimated.View style={[styles.exploreV2TimerBand, exploreV2TimerBandAnimatedStyle]} />
-            <AnimatedReanimated.View style={[styles.exploreV2WalletBand, exploreV2WalletBandAnimatedStyle]}>
-              <ExploreV2ExecutionRoot
+            {shouldRenderPreExecutionSwitchCta ? (
+              <AnimatedReanimated.View style={[styles.preWarmupSwitchOverlay, styles.preWarmupSwitchRow, warmupSwitchCtaAnimatedStyle]} onLayout={onExploreV2WarmupCtaLayout}>
+                <TouchableOpacity
+                  onPress={preExecutionSwitchCtaHandler}
+                  activeOpacity={0.8}
+                  disabled={!showPreExecutionSwitchCta}
+                  accessibilityRole="button"
+                  accessibilityLabel={preExecutionSwitchCtaLabel}
+                >
+                  <Text style={styles.preWarmupSwitchText}>{preExecutionSwitchCtaLabel}</Text>
+                </TouchableOpacity>
+              </AnimatedReanimated.View>
+            ) : null}
+            <AnimatedReanimated.View style={[styles.exploreV2BandsColumn, exploreV2BandsOffsetStyle]}>
+              <AnimatedReanimated.View style={[styles.exploreV2TimerBand, exploreV2TimerBandAnimatedStyle]} />
+              <AnimatedReanimated.View style={[styles.exploreV2WalletBand, exploreV2WalletBandAnimatedStyle]}>
+                <ExploreV2ExecutionRoot
                 exerciseGroups={exerciseGroups}
                 exploreCurrentGroupIndex={exploreCurrentGroupIndex}
                 upNextExercises={upNextExercises}
@@ -2900,7 +3038,7 @@ export function ExerciseExecutionScreen() {
                 onRemoveExercise={async (exercise) => {
                   await removeExerciseFromWorkout(exercise as WarmupItem);
                 }}
-                exploreLayoutRootHeight={exploreV2RootHeight}
+                exploreLayoutRootHeight={exploreV2AvailableRootHeight}
                 currentGroupHasLoggedSets={exploreV2CurrentGroupHasLoggedSets}
                 onOpenAddExercise={() => setShowAddExerciseDrawer(true)}
                 onRemoveGroupFromUpNext={removeGroupFromWorkoutByIndex}
@@ -2912,7 +3050,8 @@ export function ExerciseExecutionScreen() {
                 getExerciseHistoryForDrawer={getExerciseHistoryForDrawer}
                 exerciseHistoryRefreshKey={refreshKey}
                 progressionValuesByItemId={progressionValuesByItemId}
-              />
+                />
+              </AnimatedReanimated.View>
             </AnimatedReanimated.View>
             <View
               style={styles.exploreV2TimerOverlay}
@@ -5179,6 +5318,31 @@ const styles = StyleSheet.create({
     backgroundColor: 'transparent',
     position: 'relative',
   },
+  exploreV2BandsColumn: {
+    flex: 1,
+    minHeight: 0,
+    position: 'relative',
+    zIndex: 10,
+    elevation: 2,
+  },
+  preWarmupSwitchOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 5,
+  },
+  preWarmupSwitchRow: {
+    paddingHorizontal: SPACING.xxl,
+    paddingTop: 8,
+    paddingBottom: 16,
+    alignItems: 'center',
+  },
+  preWarmupSwitchText: {
+    ...TYPOGRAPHY.meta,
+    color: COLORS.textMeta,
+    textDecorationLine: 'underline',
+  },
   /**
    * Rest timer hero — lowest z-index so the wallet stack paints on top (digits read “through” / behind cards).
    * pointerEvents set in JSX — idle must be `none` so cards stay tappable.
@@ -5186,6 +5350,7 @@ const styles = StyleSheet.create({
   exploreV2TimerOverlay: {
     ...StyleSheet.absoluteFillObject,
     zIndex: 0,
+    elevation: 0,
   },
   exploreV2TimerOverlayAnchor: {
     position: 'absolute',

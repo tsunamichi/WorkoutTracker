@@ -9,7 +9,7 @@ import { PlanHistoryDetailScreen } from '../screens/PlanHistoryDetailScreen';
 import { WorkoutBuilderScreen } from '../screens/WorkoutBuilderScreen';
 import { WorkoutTemplateDetailScreen } from '../screens/WorkoutTemplateDetailScreen';
 import { WarmupEditorScreen } from '../screens/WarmupEditorScreen';
-import { WarmupExecutionScreen } from '../screens/WarmupExecutionScreen';
+import { WarmupExecutionRedirectScreen } from '../screens/WarmupExecutionRedirectScreen';
 import { AccessoriesEditorScreen } from '../screens/AccessoriesEditorScreen';
 import { AccessoriesExecutionScreen } from '../screens/AccessoriesExecutionScreen';
 import { ExerciseExecutionScreen } from '../screens/ExerciseExecutionScreen';
@@ -785,7 +785,7 @@ export default function AppNavigator() {
         <Stack.Screen name="Workouts" component={WorkoutsScreen} />
         <Stack.Screen name="WorkoutTemplateDetail" component={WorkoutTemplateDetailScreen} />
         <Stack.Screen name="WarmupEditor" component={WarmupEditorScreen} />
-        <Stack.Screen name="WarmupExecution" component={WarmupExecutionScreen} />
+        <Stack.Screen name="WarmupExecution" component={WarmupExecutionRedirectScreen} />
         <Stack.Screen name="AccessoriesEditor" component={AccessoriesEditorScreen} />
         <Stack.Screen name="AccessoriesExecution" component={AccessoriesExecutionScreen} />
         <Stack.Screen name="ExerciseExecution" component={ExerciseExecutionScreen} />
