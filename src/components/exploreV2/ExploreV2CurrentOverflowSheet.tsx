@@ -400,18 +400,28 @@ export function ExploreV2CurrentOverflowPanel({
           <>
             <View style={styles.progressionCardsRow}>
               {progressionGroups.map(g => (
+                (() => {
+                  const isSelected = currentProgressionGroupId === g.id;
+                  return (
                 <TouchableOpacity
                   key={g.id}
-                  style={[styles.pill, currentProgressionGroupId === g.id && styles.pillOn]}
+                  style={[
+                    styles.pill,
+                    { borderColor: accentSecondary20 },
+                    isSelected && { backgroundColor: accentSecondary20 },
+                  ]}
                         onPress={() =>
-                          onProgressionGroupSelect(currentProgressionGroupId === g.id ? null : g.id)
+                          onProgressionGroupSelect(isSelected ? null : g.id)
                         }
+                  activeOpacity={1}
                 >
                   <View style={styles.pillIconPlaceholder} />
-                  <Text style={styles.pillText} numberOfLines={1}>
+                  <Text style={[styles.pillText, isSelected && { color: themeColors.accentPrimary }]} numberOfLines={1}>
                           {progressionPillLabel(g.name)}
                   </Text>
                 </TouchableOpacity>
+                  );
+                })()
               ))}
             </View>
             <View
@@ -647,7 +657,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: EXPLORE_V2.colors.divider,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -657,10 +666,6 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     backgroundColor: COLORS.containerPrimaryDark,
     marginBottom: 8,
-  },
-  pillOn: {
-    borderColor: EXPLORE_V2.colors.accent,
-    backgroundColor: 'rgba(200,255,61,0.12)',
   },
   pillText: {
     ...TYPOGRAPHY.meta,
