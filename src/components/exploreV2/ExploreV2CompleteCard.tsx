@@ -59,6 +59,7 @@ export function ExploreV2CompleteCard({
   const restCompletedUnitInk = ex.restTimerCompletedUnitInk;
   const textMetaTimer = themeColors.textMetaTimer;
   const textMeta = themeColors.textMeta;
+  const containerPrimary = themeColors.containerPrimary;
   const workCompleteBg = ex.workTimerCompleteCardBg;
   const amberComplete = ex.amberBandComplete;
   const warmActivity = ex.warmActivity;
@@ -69,11 +70,11 @@ export function ExploreV2CompleteCard({
     const w = exploreV2WorkBlueProgress.value;
     const pRest = b * (1 - w);
     const pWork = b * w;
-    const restCol = interpolateColor(pRest, [0, 1], [IDLE_HEADER_INK, textMeta]);
+    const restCol = interpolateColor(pRest, [0, 1], [containerPrimary, textMeta]);
     return {
       color: interpolateColor(pWork, [0, 1], [restCol, textMetaTimer]),
     };
-  }, [textMeta, textMetaTimer]);
+  }, [containerPrimary, textMeta, textMetaTimer]);
   const completedUnitAnimatedStyle = useAnimatedStyle(() => {
     const w = exploreV2WorkBlueProgress.value;
     const unitRest = interpolateColor(
@@ -141,7 +142,7 @@ export function ExploreV2CompleteCard({
         <Animated.Text style={[styles.headerLabel, headerChromeAnimatedStyle]}>Completed</Animated.Text>
         <View style={styles.countOrPlusSlot}>
           <Animated.View style={[styles.chevronLayer, chevronIdleOpacityStyle]} pointerEvents="none">
-            <IconChevronDown size={18} color={IDLE_HEADER_INK} />
+            <IconChevronDown size={18} color={textMeta} />
           </Animated.View>
           <Animated.View style={[styles.chevronLayer, chevronTimerOpacityStyle]} pointerEvents="none">
             <IconChevronDown size={18} color={textMeta} />

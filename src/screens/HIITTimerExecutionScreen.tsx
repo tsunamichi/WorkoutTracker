@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -9,22 +9,33 @@ import {
   Easing,
   Dimensions,
 } from 'react-native';
+import Svg, { Circle, Path } from 'react-native-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { LinearGradient } from 'expo-linear-gradient';
 import { Audio } from 'expo-av';
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
-import Svg, { Circle, Path } from 'react-native-svg';
 import dayjs from 'dayjs';
 import { useStore } from '../store';
-import { COLORS, SPACING, TYPOGRAPHY, GRADIENTS, BUTTONS, BORDER_RADIUS } from '../constants';
+import { COLORS, SPACING, TYPOGRAPHY } from '../constants';
 import { IconArrowLeft, IconMenu, IconEdit, IconTrash } from '../components/icons';
 import { useTranslation } from '../i18n/useTranslation';
 import { ActionSheet } from '../components/common/ActionSheet';
 import { ShapeConfetti } from '../components/common/ShapeConfetti';
-import { TimerControls } from '../components/timer/TimerControls';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/AppNavigator';
 import { AppState } from 'react-native';
+import Reanimated, {
+  Easing as ReanimatedEasing,
+  cancelAnimation,
+  interpolate,
+  useAnimatedStyle,
+  useSharedValue,
+  withRepeat,
+  withTiming,
+} from 'react-native-reanimated';
+import { ExploreV2TimerArea } from '../components/exploreV2/ExploreV2TimerArea';
+import { EXPLORE_V2 } from '../components/exploreV2/exploreV2Tokens';
+import { ExecutionScreenShell } from '../components/execution/ExecutionScreenShell';
+import { useAppTheme } from '../theme/useAppTheme';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'HIITTimerExecution'>;
 
@@ -39,15 +50,6 @@ const LIGHT_COLORS = {
   border: '#38383A',
 };
 
-const PHASE_COLORS = {
-  countdown: COLORS.signalWarning,
-  work: COLORS.info,
-  restYellow: COLORS.accentPrimary,
-  restRed: COLORS.failure,
-  complete: COLORS.signalPositive,
-};
-
-const MIN_SIZE = 180;
 const SCREEN_WIDTH = Dimensions.get('window').width;
 const CONTAINER_WIDTH = SCREEN_WIDTH - (SPACING.xxl * 2);
 
@@ -57,6 +59,7 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
   const { timerId, bonusLogId } = route.params as { timerId: string; bonusLogId?: string };
   const { hiitTimers, deleteHIITTimer, addHIITTimerSession, setActiveHIITTimer, updateBonusLog } = useStore();
   const { t } = useTranslation();
+  const { explore } = useAppTheme();
   
   // Get timer reactively - will update when hiitTimers changes
   const timer = React.useMemo(() => {
@@ -84,6 +87,15 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
   const [showGo, setShowGo] = useState(false);
   const [showConfetti, setShowConfetti] = useState(false);
   const [menuVisible, setMenuVisible] = useState(false);
+  const [placeholderHeight, setPlaceholderHeight] = useState(330);
+  const [placeholderWidth, setPlaceholderWidth] = useState(330);
+  const isRestPhase = currentPhase === 'workRest' || currentPhase === 'roundRest';
+  const heroLayoutProgress = useSharedValue(1);
+  const heroWorkBlueProgress = useSharedValue(0);
+  const restTransitionProgress = useSharedValue(isRestPhase ? 1 : 0);
+  const diamondPulseProgress = useSharedValue(0);
+  const heroProgress = useRef(new Animated.Value(1)).current;
+  const ambientTranslateX = useRef(new Animated.Value(0)).current;
   
   // Track if timer has been started (to determine if we need to show reset confirmation)
   const hasStartedRef = useRef(false);
@@ -118,6 +130,127 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
       deactivateKeepAwake('timer-running');
     };
   }, [isRunning]);
+
+  useEffect(() => {
+    heroWorkBlueProgress.value = withTiming(isRestPhase ? 0 : 1, { duration: 220 });
+    heroLayoutProgress.value = withTiming(currentPhase === 'complete' ? 0 : 1, { duration: 220 });
+  }, [currentPhase, isRestPhase, heroLayoutProgress, heroWorkBlueProgress]);
+
+  useEffect(() => {
+    restTransitionProgress.value = withTiming(isRestPhase ? 1 : 0, {
+      duration: 380,
+      easing: ReanimatedEasing.inOut(ReanimatedEasing.cubic),
+    });
+  }, [isRestPhase, restTransitionProgress]);
+
+  useEffect(() => {
+    if (isRestPhase) {
+      diamondPulseProgress.value = withRepeat(
+        withTiming(1, {
+          duration: 1300,
+          easing: ReanimatedEasing.inOut(ReanimatedEasing.quad),
+        }),
+        -1,
+        true,
+      );
+      return;
+    }
+    cancelAnimation(diamondPulseProgress);
+    diamondPulseProgress.value = 0;
+  }, [isRestPhase, diamondPulseProgress]);
+
+  const ambientLeftCircleStyle = useAnimatedStyle(() => {
+    const workDiameter = Math.max(1, Math.min(placeholderHeight, placeholderWidth));
+    const t = restTransitionProgress.value;
+    const diameter = workDiameter;
+    const leftInset = -workDiameter / 2;
+    const topInset = (placeholderHeight - diameter) / 2;
+    return {
+      width: diameter,
+      height: diameter,
+      borderRadius: diameter / 2,
+      left: leftInset,
+      top: topInset,
+      transform: [{ translateX: interpolate(t, [0, 1], [0, -placeholderWidth]) }],
+    };
+  });
+
+  const ambientRightCircleStyle = useAnimatedStyle(() => {
+    const workDiameter = Math.max(1, Math.min(placeholderHeight, placeholderWidth));
+    const t = restTransitionProgress.value;
+    const diameter = workDiameter;
+    const rightInset = placeholderWidth - workDiameter / 2;
+    const topInset = (placeholderHeight - diameter) / 2;
+    return {
+      width: diameter,
+      height: diameter,
+      borderRadius: diameter / 2,
+      left: rightInset,
+      top: topInset,
+      transform: [{ translateX: interpolate(t, [0, 1], [0, placeholderWidth]) }],
+    };
+  });
+
+  const ambientTrailingCircleStyle = useAnimatedStyle(() => {
+    const workDiameter = Math.max(1, Math.min(placeholderHeight, placeholderWidth));
+    const t = restTransitionProgress.value;
+    const diameter = workDiameter;
+    const rightInset = placeholderWidth - workDiameter / 2;
+    const topInset = (placeholderHeight - diameter) / 2;
+    return {
+      width: diameter,
+      height: diameter,
+      borderRadius: diameter / 2,
+      left: rightInset + placeholderWidth,
+      top: topInset,
+      transform: [{ translateX: interpolate(t, [0, 1], [0, placeholderWidth]) }],
+    };
+  });
+
+  const restDiamondStyle = useAnimatedStyle(() => {
+    const t = restTransitionProgress.value;
+    const pulse = diamondPulseProgress.value;
+    const baseScale = interpolate(t, [0, 1], [0.2, 1]);
+    const pulseScale = interpolate(pulse, [0, 1], [1, 1.08]);
+    return {
+      opacity: t,
+      transform: [{ rotate: '45deg' }, { scale: baseScale * pulseScale }],
+    };
+  });
+
+  useEffect(() => {
+    const travel = Math.max(1, placeholderWidth);
+    const activeAmbient = isRunning && currentPhase === 'work';
+    const aggressiveEase = Easing.bezier(0.8, 0.0, 0.2, 1.0);
+    ambientTranslateX.setValue(0);
+    if (!activeAmbient) {
+      ambientTranslateX.stopAnimation();
+      return;
+    }
+
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(ambientTranslateX, {
+          toValue: -travel,
+          duration: 1000,
+          easing: aggressiveEase,
+          useNativeDriver: true,
+        }),
+        Animated.delay(1000),
+        Animated.timing(ambientTranslateX, {
+          toValue: 0,
+          duration: 0,
+          useNativeDriver: true,
+        }),
+      ]),
+    );
+    loop.start();
+
+    return () => {
+      loop.stop();
+      ambientTranslateX.stopAnimation();
+    };
+  }, [placeholderWidth, ambientTranslateX, isRunning, currentPhase]);
   
   // Reload timer values when returning from edit screen
   useEffect(() => {
@@ -238,7 +371,7 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
   const currentRoundRef = useRef(currentRound);
   
   // Animated values
-  const sizeAnim = useRef(new Animated.Value(1)).current; // 1 = 100%, 0 = MIN_SIZE (JS driver for width/height)
+  const sizeAnim = useRef(new Animated.Value(1)).current;
   const textSizeAnim = useRef(new Animated.Value(1)).current; // Separate value for text scale (native driver)
   const colorAnim = useRef(new Animated.Value(0)).current; // For color transitions
   const borderRadiusAnim = useRef(new Animated.Value(CONTAINER_WIDTH / 2)).current;
@@ -1020,10 +1153,6 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
     );
   };
 
-  const handleToggleSound = () => {
-    setSoundEnabled(prev => !prev);
-  };
-
   const handleSkip = () => {
     if (!timer) return;
     
@@ -1172,6 +1301,13 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
     return remaining;
   };
 
+  const globalProgress = (() => {
+    const total = getTotalWorkoutTime();
+    const remaining = getRemainingWorkoutTime();
+    if (total <= 0) return 0;
+    return Math.max(0, Math.min(1, remaining / total));
+  })();
+
   const getDisplayText = () => {
     if (showGo) return t('go');
     if (currentPhase === 'countdown') return secondsRemaining.toString();
@@ -1184,248 +1320,140 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
     return null;
   };
 
-  // Memoize interpolations to prevent recreation on every render
-  const animatedSize = useMemo(() => {
-    return sizeAnim.interpolate({
-      inputRange: [0, 1],
-      outputRange: [MIN_SIZE, CONTAINER_WIDTH],
-    });
-  }, [sizeAnim]);
-
-  // Border radius ratio (as a fraction of container width)
-  const borderRadiusRatio = useMemo(() => {
-    return borderRadiusAnim.interpolate({
-      inputRange: [32, CONTAINER_WIDTH * 0.24, CONTAINER_WIDTH / 2],
-      outputRange: [32 / CONTAINER_WIDTH, 0.24, 0.5],
-      extrapolate: 'clamp',
-    });
-  }, [borderRadiusAnim]);
-
-  // Scaled border radius that maintains shape proportions
-  const scaledBorderRadius = useMemo(() => {
-    return Animated.multiply(animatedSize, borderRadiusRatio);
-  }, [animatedSize, borderRadiusRatio]);
-
-  // Inverse scale for text to keep it fixed size (native driver)
-  const textScale = useMemo(() => {
-    const minScale = MIN_SIZE / CONTAINER_WIDTH;
-    return textSizeAnim.interpolate({
-      inputRange: [0, 1],
-      outputRange: [1 / minScale, 1], // Inverse of the circle scale
-    });
-  }, [textSizeAnim]);
-
-  // Get background color based on current phase
-  const currentBackgroundColor = useMemo(() => {
-    if (currentPhase === 'workRest' || currentPhase === 'roundRest') {
-      // Interpolate between yellow and red during rest
-      return restColorAnim.interpolate({
-        inputRange: [0, 1],
-        outputRange: [PHASE_COLORS.restYellow, PHASE_COLORS.restRed],
-      });
-    }
-    
-    switch (currentPhase) {
-      case 'countdown':
-        return PHASE_COLORS.countdown;
-      case 'work':
-        return PHASE_COLORS.work;
-      case 'complete':
-        return PHASE_COLORS.complete;
-      default:
-        return PHASE_COLORS.countdown;
-    }
-  }, [currentPhase, restColorAnim]);
-
-  console.log(`🎨 Current phase: ${currentPhase}, seconds: ${secondsRemaining}`);
-
-  // Memoize pie chart progress to prevent errors during phase transitions
-  const pieChartProgress = useMemo(() => {
-    if (!timer) return 0;
-    const total = getTotalWorkoutTime();
-    const remaining = getRemainingWorkoutTime();
-    if (total <= 0 || remaining < 0) return 0;
-    const progress = remaining / total;
-    // Ensure progress is between 0 and 1
-    return Math.max(0, Math.min(1, progress));
-  }, [timer, currentPhase, currentSet, currentRound, secondsRemaining]);
-
   // Show empty state if timer is not found (will navigate back via useEffect)
   if (!timer) {
     return (
-      <View style={styles.container}>
+      <View style={[styles.container, { backgroundColor: isRestPhase ? COLORS.accentPrimary : COLORS.backgroundTimer }]}>
         <View style={styles.innerContainer} />
       </View>
     );
   }
 
-    return (
-      <View style={styles.container}>
+  return (
+    <View style={[styles.container, { backgroundColor: isRestPhase ? COLORS.accentPrimary : COLORS.backgroundTimer }]}>
       <ShapeConfetti active={showConfetti} />
-      <View style={[styles.innerContainer, { paddingBottom: insets.bottom }]}>
-        {/* Header */}
-        <View style={[styles.header, { paddingTop: insets.top }]}>
-          <View style={styles.topBar}>
-            <TouchableOpacity onPress={handleBack} style={styles.backButton}>
-              <IconArrowLeft size={24} color={LIGHT_COLORS.text} />
-            </TouchableOpacity>
-            <TouchableOpacity onPress={handleMenu} style={styles.menuButton}>
-              <IconMenu size={24} color={LIGHT_COLORS.text} />
-            </TouchableOpacity>
-          </View>
-          
-          {/* Page Title and Set/Round Info */}
-          <View style={styles.headerInfoContainer}>
-            <View style={styles.headerInfoLeft}>
-            <Text style={styles.pageTitle}>{timer.name}</Text>
-              <Text style={styles.progressInfo}>
-                <Text style={styles.progressLabel}>{t('setLabel')} </Text>
-                <Text style={styles.progressValue}>{currentSet}/{timer.sets}</Text>
-                <Text style={styles.progressLabel}>     {t('roundLabel')} </Text>
-                <Text style={styles.progressValue}>{currentRound}/{timer.rounds}</Text>
-              </Text>
-              </View>
-            
-            {/* Total Time - right aligned */}
-            <View style={styles.totalTimeContainer}>
-              <Text style={styles.totalTimeText}>{formatTime(getRemainingWorkoutTime())}</Text>
-              <Svg height="16" width="16" viewBox="0 0 16 16" style={styles.totalTimeCircle}>
-                {/* Background circle */}
-                <Circle
-                  cx="8"
-                  cy="8"
-                  r="8"
-                  fill={LIGHT_COLORS.border}
-                />
-                {/* Progress pie - starts full and drains */}
-                {pieChartProgress >= 0.999 ? (
-                  <Circle
-                    cx="8"
-                    cy="8"
-                    r="8"
-                    fill={LIGHT_COLORS.text}
-                  />
-                ) : pieChartProgress > 0 ? (
-                  <Path
-                    d={`M 8 8 L 8 0 A 8 8 0 ${pieChartProgress > 0.5 ? 1 : 0} 1 ${
-                      8 + 8 * Math.sin(2 * Math.PI * pieChartProgress)
-                    } ${
-                      8 - 8 * Math.cos(2 * Math.PI * pieChartProgress)
-                    } Z`}
-                    fill={LIGHT_COLORS.text}
-                  />
-                ) : null}
-              </Svg>
+      <ExecutionScreenShell
+        title="Timer"
+        pageBackground={isRestPhase ? COLORS.accentPrimary : COLORS.backgroundTimer}
+        headerInk="#1F1F1F"
+        onBack={handleBack}
+        onMenu={handleMenu}
+        hero={
+          currentPhase !== 'complete' ? (
+            <View style={styles.timerHeroWrap}>
+              <ExploreV2TimerArea
+                layoutVariant="overlay"
+                active={isRunning}
+                layoutProgress={heroLayoutProgress}
+                timeLeftSec={secondsRemaining}
+                paused={!isRunning}
+                onPauseToggle={handlePlayPause}
+                progress={heroProgress}
+                contextLabel={currentPhase === 'work' ? 'work' : 'rest'}
+                workTimerVisualActive={!isRestPhase}
+                exploreV2WorkBlueProgress={heroWorkBlueProgress}
+              />
             </View>
-            </View>
-          </View>
-
-        {/* Action Sheet Menu */}
-        <ActionSheet
-          visible={menuVisible}
-          onClose={() => setMenuVisible(false)}
-          items={[
-            {
-              icon: <IconEdit size={24} color={LIGHT_COLORS.text} />,
-              label: t('edit'),
-              onPress: handleEdit,
-            },
-            {
-              icon: <IconTrash size={24} color={COLORS.signalNegative} />,
-              label: t('delete'),
-              onPress: handleDelete,
-              destructive: true,
-            },
-          ]}
-        />
-
-        {/* Timer Circle */}
-          <View style={styles.timerContainer}>
-          
-          {/* Main timer circle - using width/height, with breathing during rest */}
-          {currentPhase !== 'complete' && (
-          <Animated.View
-            style={[
-              styles.circle,
-              {
-                width: Animated.multiply(animatedSize, breathingAnim), // Animate width with breathing
-                height: Animated.multiply(animatedSize, breathingAnim), // Animate height with breathing
-                borderRadius: Animated.multiply(scaledBorderRadius, breathingAnim), // Proportional border radius with breathing
-                backgroundColor: currentPhase === 'countdown' ? 'transparent' : currentBackgroundColor,
-              },
-            ]}
-          >
-            {/* Content container for text scaling */}
-            <View
-              style={{
-                width: '100%',
-                height: '100%',
-                justifyContent: 'center',
-                alignItems: 'center',
-              }}
-          >
-            {currentPhase === 'countdown' ? (
-                showGo ? (
-                  // "Go!" - show for 500ms then fade out
-                  <Animated.Text 
-                    style={[
-                      styles.timerText,
-                      { 
-                        opacity: textOpacityAnim,
-                        color: COLORS.text,
-                      }
-                    ]}
-                  >
-                    {getDisplayText()}
-                  </Animated.Text>
-                ) : (
-                  // Countdown numbers - fade and shrink
-                  <Animated.Text 
-                    style={[
-                      styles.timerText, 
-                      { 
-                        transform: [{ scale: textShrinkAnim }], // Shrink 20% as fading out
-                        opacity: textOpacityAnim, // Fade animation for countdown
-                        color: COLORS.text,
-                      }
-                    ]}
-                  >
-                {getDisplayText()}
-              </Animated.Text>
-                )
-              ) : currentPhase !== 'complete' ? (
-                // Work and rest phases - text stays fixed size (no scale transform)
-                <Text style={[styles.timerText, { color: currentPhase === 'work' ? COLORS.text : COLORS.backgroundCanvas }]}>
-                  {getDisplayText()}
-                </Text>
-              ) : null}
-            </View>
-          </Animated.View>
-          )}
-          
-          {/* Complete message on canvas (outside the circle) */}
-          {currentPhase === 'complete' && (
+          ) : (
+            <View style={styles.timerHeroWrap} />
+          )
+        }
+      >
+        <View style={[styles.timerCard, { height: '100%', marginBottom: 0, backgroundColor: explore.surfaceCurrentCard }]}>
+          {currentPhase === 'complete' ? (
             <View style={styles.completeMessageContainer}>
-                <Text style={styles.completeText}>{getDisplayText()}</Text>
-                {getSubtitleText() && (
-                  <Text style={styles.subtitleText}>{getSubtitleText()}</Text>
-                )}
+              <Text style={styles.completeText}>{getDisplayText()}</Text>
+              {getSubtitleText() && <Text style={styles.subtitleText}>{getSubtitleText()}</Text>}
             </View>
+          ) : (
+            <>
+              <View style={styles.cardInfoRow}>
+                <View>
+                  <Text style={styles.cardTitle} numberOfLines={1}>{timer.name}</Text>
+                  <Text style={styles.cardMeta}>
+                    <Text style={styles.cardMetaLabel}>Set </Text>
+                    <Text style={styles.cardMetaValue}>{currentSet}/{timer.sets}</Text>
+                    <Text>    </Text>
+                    <Text style={styles.cardMetaLabel}>Round </Text>
+                    <Text style={styles.cardMetaValue}>{currentRound}/{timer.rounds}</Text>
+                  </Text>
+                </View>
+                <View style={styles.cardMiniTimeRow}>
+                  <Text style={styles.cardMiniTime}>{formatTime(getRemainingWorkoutTime())}</Text>
+                  <View style={styles.cardMiniProgressBg}>
+                    <Svg height="14" width="14" viewBox="0 0 16 16" style={styles.cardMiniProgressCircle}>
+                      <Circle cx="8" cy="8" r="8" fill={COLORS.containerPrimaryDark} />
+                      {globalProgress >= 0.999 ? (
+                        <Circle cx="8" cy="8" r="8" fill={COLORS.canvasLight} />
+                      ) : globalProgress > 0 ? (
+                        <Path
+                          d={`M 8 8 L 8 0 A 8 8 0 ${globalProgress > 0.5 ? 1 : 0} 1 ${
+                            8 + 8 * Math.sin(2 * Math.PI * globalProgress)
+                          } ${
+                            8 - 8 * Math.cos(2 * Math.PI * globalProgress)
+                          } Z`}
+                          fill={COLORS.canvasLight}
+                        />
+                      ) : null}
+                    </Svg>
+                  </View>
+                </View>
+              </View>
+              <View
+                style={styles.timerCardPlaceholder}
+                onLayout={e => {
+                  const nextH = Math.round(e.nativeEvent.layout.height);
+                  const nextW = Math.round(e.nativeEvent.layout.width);
+                  if (nextH > 0 && nextH !== placeholderHeight) setPlaceholderHeight(nextH);
+                  if (nextW > 0 && nextW !== placeholderWidth) setPlaceholderWidth(nextW);
+                }}
+              >
+                <Animated.View
+                  style={[
+                    styles.ambientStrip,
+                    {
+                      width: placeholderWidth * 3,
+                      transform: [{ translateX: ambientTranslateX }],
+                    },
+                  ]}
+                >
+                  <Reanimated.View style={[styles.ambientCircle, ambientLeftCircleStyle]} />
+                  <Reanimated.View style={[styles.ambientCircle, ambientRightCircleStyle]} />
+                  <Reanimated.View style={[styles.ambientCircle, ambientTrailingCircleStyle]} />
+                </Animated.View>
+                <Reanimated.View style={[styles.restDiamond, restDiamondStyle]} />
+                <View style={styles.mainTimerCircle} />
+              </View>
+              <View style={styles.controlsRow}>
+                <TouchableOpacity style={styles.primaryActionBtn} onPress={handlePlayPause} activeOpacity={0.8}>
+                  <Text style={styles.primaryActionLabel}>{isRunning ? 'Pause' : 'Play'}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.skipActionBtn} onPress={handleSkip} activeOpacity={0.8}>
+                  <Text style={styles.skipActionLabel}>Skip</Text>
+                </TouchableOpacity>
+              </View>
+            </>
           )}
-          </View>
+        </View>
+      </ExecutionScreenShell>
 
-        {/* Controls */}
-        <TimerControls
-          isRunning={isRunning && currentPhase !== 'complete'}
-          soundEnabled={soundEnabled}
-          onTogglePause={handlePlayPause}
-          onToggleSound={handleToggleSound}
-          onSkip={handleSkip}
-          showRestart={currentPhase === 'complete'}
-          onRestart={handleRestart}
-          hideControlsWhenPaused={true}
-        />
-      </View>
+      <ActionSheet
+        visible={menuVisible}
+        onClose={() => setMenuVisible(false)}
+        items={[
+          {
+            icon: <IconEdit size={24} color={LIGHT_COLORS.text} />,
+            label: t('edit'),
+            onPress: handleEdit,
+          },
+          {
+            icon: <IconTrash size={24} color={COLORS.signalNegative} />,
+            label: t('delete'),
+            onPress: handleDelete,
+            destructive: true,
+          },
+        ]}
+      />
     </View>
   );
 }
@@ -1439,7 +1467,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   header: {
-    paddingBottom: SPACING.md,
+    paddingBottom: SPACING.sm,
   },
   topBar: {
     flexDirection: 'row',
@@ -1462,68 +1490,150 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
     marginRight: -4,
   },
-  headerInfoContainer: {
-    paddingHorizontal: SPACING.xxl,
-    paddingTop: SPACING.md,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-end',
-  },
-  headerInfoLeft: {
-    flexDirection: 'column',
-    gap: 8,
+  timerCard: {
     flex: 1,
+    marginHorizontal: EXPLORE_V2.margin,
+    marginBottom: 0,
+    borderTopLeftRadius: EXPLORE_V2.cardTopRadius,
+    borderTopRightRadius: EXPLORE_V2.cardTopRadius,
+    borderBottomLeftRadius: EXPLORE_V2.cardRadius,
+    borderBottomRightRadius: EXPLORE_V2.cardRadius,
+    backgroundColor: '#1F1F1F',
+    borderWidth: 0,
+    paddingTop: 16,
+    paddingLeft: 24,
+    paddingRight: 24,
+    paddingBottom: 24,
   },
-  pageTitle: {
-    ...TYPOGRAPHY.h2,
-    color: LIGHT_COLORS.text,
+  timerHeroWrap: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 6,
+    marginBottom: 14,
+    height: 128,
+    width: '100%',
   },
-  progressInfo: {
-    ...TYPOGRAPHY.body,
-    color: LIGHT_COLORS.textMeta,
-  },
-  progressLabel: {
-    color: LIGHT_COLORS.textMeta,
-  },
-  progressValue: {
-    color: LIGHT_COLORS.text,
-  },
-  totalTimeContainer: {
+  cardInfoRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    justifyContent: 'space-between',
+    marginBottom: 12,
+    columnGap: 12,
   },
-  totalTimeText: {
-    ...TYPOGRAPHY.body,
+  cardTitle: {
+    ...TYPOGRAPHY.h1,
     color: LIGHT_COLORS.text,
   },
-  totalTimeCircle: {
+  cardMeta: {
+    ...TYPOGRAPHY.legal,
+    marginTop: 4,
+  },
+  cardMetaLabel: {
+    color: COLORS.accentSecondary,
+  },
+  cardMetaValue: {
+    color: COLORS.containerSecondary,
+  },
+  cardMiniTimeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    columnGap: 8,
+    alignSelf: 'flex-start',
+    transform: [{ translateY: -1 }],
+  },
+  cardMiniTime: {
+    ...TYPOGRAPHY.legal,
+    color: COLORS.containerSecondary,
+  },
+  cardMiniProgressCircle: {
+    opacity: 0.95,
+  },
+  cardMiniProgressBg: {
     width: 16,
     height: 16,
+    borderRadius: 8,
+    backgroundColor: COLORS.containerPrimaryDark,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  timerContainer: {
+  timerCardPlaceholder: {
+    flex: 1,
+    minHeight: 330,
+    borderRadius: 0,
+    backgroundColor: 'transparent',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 48,
+    marginBottom: 48,
+    overflow: 'hidden',
+  },
+  ambientStrip: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    bottom: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  ambientCircle: {
+    position: 'absolute',
+    top: 0,
+    backgroundColor: COLORS.backgroundTimer,
+  },
+  restDiamond: {
+    position: 'absolute',
+    left: '50%',
+    top: '50%',
+    width: 198,
+    height: 198,
+    marginLeft: -99,
+    marginTop: -99,
+    borderRadius: 10,
+    backgroundColor: COLORS.accentPrimary,
+  },
+  mainTimerCircle: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 0,
+    bottom: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  controlsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-start',
+    width: '100%',
+    columnGap: 32,
+  },
+  primaryActionBtn: {
+    paddingVertical: 17,
+    paddingHorizontal: 32,
+    borderRadius: 14,
+    backgroundColor: COLORS.accentPrimary,
+  },
+  primaryActionLabel: {
+    ...TYPOGRAPHY.legal,
+    fontWeight: '500',
+    color: COLORS.backgroundCanvas,
+    letterSpacing: 0.2,
+  },
+  skipActionBtn: {
+    minHeight: 40,
+    justifyContent: 'center',
+    paddingHorizontal: 12,
+  },
+  skipActionLabel: {
+    ...TYPOGRAPHY.legal,
+    color: COLORS.accentPrimary,
+    fontWeight: '500',
+    letterSpacing: 0.2,
+  },
+  completeMessageContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    position: 'relative',
-  },
-  circle: {
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderCurve: 'continuous',
-  },
-  timerText: {
-    fontSize: 56,
-    fontWeight: '300',
-    color: '#FFFFFF',
-    textAlign: 'center',
-  },
-  completeMessageContainer: {
-    position: 'absolute',
-    justifyContent: 'center',
-    alignItems: 'center',
-    width: '100%',
-    height: '100%',
   },
   completeText: {
     ...TYPOGRAPHY.h2,

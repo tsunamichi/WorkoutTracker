@@ -60,38 +60,12 @@ function accentSurfaces(accent: string) {
   };
 }
 
-const ORIGINAL_EXPLORE: ExploreAccentTokens = {
-  heroValueInk: '#FFA424',
-  heroUnitInk: '#464646',
-  heroValueDimmed: '#464646',
-  warmActivity: '#FFA424',
-  activityInfo: COLORS.info,
-  amberBand: '#E78B0B',
-  amberBandComplete: '#F3940F',
-  workTimerCompleteCardBg: COLORS.containerTertiaryTimer,
-  workTimerUpNextCardBg: COLORS.containerSecondaryTimer,
-  restTimerHeaderInk: '#915100',
-  restTimerCompletedUnitInk: '#C87000',
-  skipRestCtaBg: '#161616',
-  ctaPillBg: '#FFA424',
-  ctaPillText: '#1F1F1F',
-  surfaceCurrentCard: '#1F1F1F',
-};
-
 export function normalizeColorThemeId(raw: unknown): AppColorThemeId {
-  if (raw === 'v1' || raw === 'v2' || raw === 'v3') return raw;
-  return 'original';
+  if (raw === 'v1' || raw === 'v2') return raw;
+  return 'v1';
 }
 
 export function buildAppTheme(id: AppColorThemeId): AppTheme {
-  if (id === 'original') {
-    return {
-      id,
-      colors: { ...COLORS },
-      explore: { ...ORIGINAL_EXPLORE, surfaceCurrentCard: COLORS.containerPrimary },
-    };
-  }
-
   if (id === 'v1') {
     /** Forest card + spec accent-primary (#FFA424) + cyan accents (Schedule + Explore execution). */
     const brandPrimary = COLORS.accentPrimary;
@@ -178,36 +152,5 @@ export function buildAppTheme(id: AppColorThemeId): AppTheme {
     };
   }
 
-  // v3 — violet / indigo
-  const accent = '#A855F7';
-  const secondaryV3 = '#6366F1';
-  const v3Surfaces = accentSurfaces(accent);
-  return {
-    id: 'v3',
-    colors: {
-      ...COLORS,
-      ...v3Surfaces,
-      secondary: secondaryV3,
-      secondarySoft: mixHex(secondaryV3, '#121018', 0.55),
-      todayIndicator: '#7C3AED',
-      info: '#4F46E5',
-    },
-    explore: {
-      heroValueInk: '#C084FC',
-      heroUnitInk: '#4B4A5C',
-      heroValueDimmed: '#52506B',
-      warmActivity: '#C084FC',
-      activityInfo: '#6366F1',
-      amberBand: '#9333EA',
-      amberBandComplete: '#7C3AED',
-      workTimerCompleteCardBg: COLORS.containerTertiaryTimer,
-      workTimerUpNextCardBg: COLORS.containerSecondaryTimer,
-      restTimerHeaderInk: '#78350F',
-      restTimerCompletedUnitInk: '#9A3412',
-      skipRestCtaBg: '#161616',
-      ctaPillBg: '#C084FC',
-      ctaPillText: '#1E1B2E',
-      surfaceCurrentCard: COLORS.containerPrimary,
-    },
-  };
+  return buildAppTheme('v1');
 }

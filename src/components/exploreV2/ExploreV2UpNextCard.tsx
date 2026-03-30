@@ -7,7 +7,6 @@ import Reanimated, {
   useSharedValue,
   type SharedValue,
 } from 'react-native-reanimated';
-import { Swipeable, TouchableOpacity as GestureTouchableOpacity } from 'react-native-gesture-handler';
 import { EXPLORE_V2 } from './exploreV2Tokens';
 import { EXPLORE_V2_PALETTES } from './exploreV2ColorSystem';
 import { COLORS, TYPOGRAPHY } from '../../constants';
@@ -48,20 +47,34 @@ function groupTitle(g: ExploreV2Group) {
   return g.exercises.map(e => e.exerciseName).join(' + ');
 }
 
-const SWIPE_DELETE_WIDTH = 72;
 const UP_NEXT_ROW_PADDING_V = 12;
-/** Area revealed when row slides left (4% black). */
-const SWIPE_REVEAL_BACKGROUND = 'rgba(0, 0, 0, 0.04)';
 const SWIPE_DELETE_ICON_COLOR = '#FF3B30';
-const ROW_OPEN_BORDER = 'rgba(0, 0, 0, 0.18)';
 const ROW_BORDER_HAIRLINE = StyleSheet.hairlineWidth;
 /** Right inset for scroll/list (header uses HEADER_PADDING_RIGHT). */
 const LIST_PADDING_RIGHT = 24;
 const HEADER_PADDING_RIGHT = 12;
 
-const SUPER_SCRIPT_FONT_SIZE = TYPOGRAPHY.legal.fontSize;
-/** Slight lift so the set count reads as a superscript next to displayLarge body text. */
-const SUPER_SCRIPT_TRANSLATE_Y = Platform.OS === 'ios' ? -5 : -4;
+const SUPER_SCRIPT_FONT_SIZE = TYPOGRAPHY.body.fontSize;
+
+const SUPERSCRIPT_DIGITS: Record<string, string> = {
+  '0': '⁰',
+  '1': '¹',
+  '2': '²',
+  '3': '³',
+  '4': '⁴',
+  '5': '⁵',
+  '6': '⁶',
+  '7': '⁷',
+  '8': '⁸',
+  '9': '⁹',
+};
+
+function toSuperscriptDigits(value: string): string {
+  return value
+    .split('')
+    .map(ch => SUPERSCRIPT_DIGITS[ch] ?? ch)
+    .join('');
+}
 
 type UpNextQueueRowProps = {
   group: ExploreV2Group;
@@ -72,15 +85,13 @@ type UpNextQueueRowProps = {
   restThemeProgress: SharedValue<number>;
   restChromeGateSV: SharedValue<number>;
   exploreV2WorkBlueProgress: SharedValue<number>;
+  removeMode: boolean;
   onSelectGroup: (groupIndex: number) => void;
   onRemoveGroupFromUpNext: (groupIndex: number) => void | Promise<void>;
-  onSwipeableOpen: (direction: 'left' | 'right', swipeable: Swipeable) => void;
-  onSwipeableClose: (direction: 'left' | 'right', swipeable: Swipeable) => void;
 };
 
 const palette = EXPLORE_V2_PALETTES.upNext;
 const HEADER_INK = '#464646';
-const ROW_NAME_INK = COLORS.inkCharcoal;
 /** Idle superscript — animated to `EXPLORE_V2.colors.restTimerHeaderInk` when rest timer is on */
 const ROW_SUPER_INK = '#787878';
 
@@ -92,12 +103,11 @@ function UpNextQueueRow({
   restThemeProgress,
   restChromeGateSV,
   exploreV2WorkBlueProgress,
+  removeMode,
   onSelectGroup,
   onRemoveGroupFromUpNext,
-  onSwipeableOpen,
-  onSwipeableClose,
 }: UpNextQueueRowProps) {
-  const { explore: ex } = useAppTheme();
+  const { explore: ex, colors: themeColors } = useAppTheme();
   const workUpNextBg = ex.workTimerUpNextCardBg;
   const amberBand = ex.amberBand;
   const restHeaderInk = ex.restTimerHeaderInk;
@@ -125,77 +135,43 @@ function UpNextQueueRow({
     };
   }, [restHeaderInk, pageBg]);
   const rowNameInkStyle = useAnimatedStyle(() => ({
-    color: interpolateColor(exploreV2WorkBlueProgress.value, [0, 1], [ROW_NAME_INK, pageBg]),
-  }), [pageBg]);
-  const swipeProgressRef = useRef<Animated.AnimatedInterpolation<number> | null>(null);
-  const borderPrimedRef = useRef(false);
-  const [rowBorderLayer, setRowBorderLayer] = useState(false);
-
+    color: interpolateColor(exploreV2WorkBlueProgress.value, [0, 1], [themeColors.containerPrimary, pageBg]),
+  }), [pageBg, themeColors.containerPrimary]);
   const title = groupTitle(group);
   const roundsStr = String(group.totalRounds);
+  const roundsSuperscript = toSuperscriptDigits(roundsStr);
 
   return (
     <View style={isLast ? undefined : styles.rowSeamOverlap}>
-      <View style={styles.swipeRowFrame}>
-        <Swipeable
-          onSwipeableOpen={onSwipeableOpen}
-          onSwipeableClose={onSwipeableClose}
-          renderRightActions={(progress, _drag, swipeable) => {
-            swipeProgressRef.current = progress;
-            if (!borderPrimedRef.current) {
-              borderPrimedRef.current = true;
-              queueMicrotask(() => setRowBorderLayer(true));
-            }
-            return (
-              <View style={styles.swipeDeleteStrip}>
-                <GestureTouchableOpacity
-                  style={styles.swipeDeleteBtn}
-                  onPress={() => {
-                    swipeable.close();
-                    void onRemoveGroupFromUpNext(groupIndex);
-                  }}
-                  activeOpacity={0.85}
-                  accessibilityRole="button"
-                  accessibilityLabel="Remove from queue"
-                >
-                  <IconTrash size={22} color={SWIPE_DELETE_ICON_COLOR} />
-                </GestureTouchableOpacity>
-              </View>
-            );
-          }}
-          overshootRight={false}
-          friction={2}
+      <Reanimated.View style={[styles.rowSwipeFront, rowFrontBgStyle]}>
+        <TouchableOpacity
+          style={styles.rowMain}
+          disabled={groupHasProgress || removeMode}
+          onPress={() => onSelectGroup(groupIndex)}
+          activeOpacity={0.75}
+          accessibilityLabel={`${title}, ${roundsStr} rounds`}
         >
-          <Reanimated.View style={[styles.rowSwipeFront, rowFrontBgStyle]}>
-            <GestureTouchableOpacity
-              style={styles.rowMain}
-              disabled={groupHasProgress}
-              onPress={() => onSelectGroup(groupIndex)}
-              activeOpacity={0.75}
-              accessibilityLabel={`${title}, ${roundsStr} rounds`}
-            >
-              <View style={styles.nameBlock}>
-                <Reanimated.Text style={[styles.name, rowNameInkStyle]} numberOfLines={2}>
-                  {title}
-                  <Reanimated.Text style={[styles.superScriptInline, superscriptColorStyle]}>
-                    {roundsStr}
-                  </Reanimated.Text>
-                </Reanimated.Text>
-              </View>
-            </GestureTouchableOpacity>
-          </Reanimated.View>
-        </Swipeable>
-        {rowBorderLayer && swipeProgressRef.current != null ? (
-          <Animated.View
-            pointerEvents="none"
-            style={[
-              StyleSheet.absoluteFillObject,
-              styles.rowOpenBorderOverlay,
-              { opacity: swipeProgressRef.current },
-            ]}
-          />
+          <View style={styles.nameBlock}>
+            <Reanimated.Text style={[styles.name, rowNameInkStyle]} numberOfLines={2}>
+              {title}
+              <Reanimated.Text style={[styles.superScriptInline, superscriptColorStyle]}>
+                    {roundsSuperscript}
+              </Reanimated.Text>
+            </Reanimated.Text>
+          </View>
+        </TouchableOpacity>
+        {removeMode ? (
+          <TouchableOpacity
+            style={styles.inlineRemoveBtn}
+            onPress={() => void onRemoveGroupFromUpNext(groupIndex)}
+            activeOpacity={0.8}
+            accessibilityRole="button"
+            accessibilityLabel="Remove from queue"
+          >
+            <IconTrash size={20} color={SWIPE_DELETE_ICON_COLOR} />
+          </TouchableOpacity>
         ) : null}
-      </View>
+      </Reanimated.View>
     </View>
   );
 }
@@ -226,27 +202,14 @@ export function ExploreV2UpNextCard({
   const textMetaTimer = themeColors.textMetaTimer;
   const textPrimary = themeColors.textPrimary;
   const textMeta = themeColors.textMeta;
+  const containerPrimary = themeColors.containerPrimary;
   /** Mirrors `timerThemeActive` on UI thread — multiplies theme progress so chrome snaps idle when rest ends. */
   const restChromeGateSV = useSharedValue(timerThemeActive ? 1 : 0);
   useLayoutEffect(() => {
     restChromeGateSV.value = timerThemeActive ? 1 : 0;
   }, [timerThemeActive]);
 
-  const activeSwipeRowRef = useRef<Swipeable | null>(null);
-
-  const onQueueRowSwipeOpen = useCallback((_direction: 'left' | 'right', swipeable: Swipeable) => {
-    const prev = activeSwipeRowRef.current;
-    if (prev && prev !== swipeable) {
-      prev.close();
-    }
-    activeSwipeRowRef.current = swipeable;
-  }, []);
-
-  const onQueueRowSwipeClose = useCallback((_direction: 'left' | 'right', swipeable: Swipeable) => {
-    if (activeSwipeRowRef.current === swipeable) {
-      activeSwipeRowRef.current = null;
-    }
-  }, []);
+  const [removeMode, setRemoveMode] = useState(false);
 
   const pageBgChrome = EXPLORE_V2.colors.pageBg;
   /** Rest band (b, w=0): “Up Next” header → textMeta; work (w=1) → text-meta-timer. */
@@ -255,24 +218,18 @@ export function ExploreV2UpNextCard({
     const w = exploreV2WorkBlueProgress.value;
     const pRest = b * (1 - w);
     const pWork = b * w;
-    const restCol = interpolateColor(pRest, [0, 1], [HEADER_INK, textMeta]);
+    const restCol = interpolateColor(pRest, [0, 1], [containerPrimary, textMeta]);
     return {
       color: interpolateColor(pWork, [0, 1], [restCol, textMetaTimer]),
     };
-  }, [textMeta, textMetaTimer]);
-  /** Rest band: link uses text-primary; work phase → text-meta-timer. */
+  }, [containerPrimary, textMeta, textMetaTimer]);
+  /** Keep action links on meta color for visual consistency. */
   const addExerciseLinkAnimatedStyle = useAnimatedStyle(() => {
-    const b = restThemeProgress.value;
-    const w = exploreV2WorkBlueProgress.value;
-    const pRest = b * (1 - w);
-    const pWork = b * w;
-    const restCol = interpolateColor(pRest, [0, 1], [HEADER_INK, textPrimary]);
-    const c = interpolateColor(pWork, [0, 1], [restCol, textMetaTimer]);
     return {
-      color: c,
-      borderBottomColor: c,
+      color: textMeta,
+      borderBottomColor: textMeta,
     };
-  }, [textPrimary, textMetaTimer]);
+  }, [textMeta]);
   const chevronIdleOpacityStyle = useAnimatedStyle(() => ({
     opacity: 1 - restThemeProgress.value * (1 - exploreV2WorkBlueProgress.value),
   }));
@@ -302,26 +259,9 @@ export function ExploreV2UpNextCard({
       backgroundColor: interpolateColor(b, [0, 1], [palette.main, whenUpBg]),
     };
   }, [amberBand, workUpNextBg]);
-  const showAddExercise = isExpanded && allowAddExercise;
-  const swapProgress = useRef(new Animated.Value(showAddExercise ? 1 : 0)).current;
-
   useEffect(() => {
-    Animated.timing(swapProgress, {
-      toValue: showAddExercise ? 1 : 0,
-      duration: 180,
-      easing: Easing.out(Easing.cubic),
-      useNativeDriver: true,
-    }).start();
-  }, [showAddExercise, swapProgress]);
-
-  const addLayerStyle = {
-    opacity: swapProgress.interpolate({ inputRange: [0, 1], outputRange: [0, 1] }),
-    transform: [{ translateY: swapProgress.interpolate({ inputRange: [0, 1], outputRange: [-8, 0] }) }],
-  };
-  const chevronLayerStyle = {
-    opacity: swapProgress.interpolate({ inputRange: [0, 1], outputRange: [1, 0] }),
-    transform: [{ translateY: swapProgress.interpolate({ inputRange: [0, 1], outputRange: [0, 8] }) }],
-  };
+    if (!isExpanded && removeMode) setRemoveMode(false);
+  }, [isExpanded, removeMode]);
 
   const showFullEmpty =
     upNextGroupIndexes.length === 0 && !hasCurrentExercise && !hasCompletePresent;
@@ -346,34 +286,15 @@ export function ExploreV2UpNextCard({
       <Pressable style={styles.headerRow} onPress={onHeaderPress}>
         <Reanimated.Text style={[styles.headerLabel, headerChromeAnimatedStyle]}>Up Next</Reanimated.Text>
         <View style={styles.countOrPlusSlot}>
-          <Animated.View
-            style={[styles.addExerciseLayer, addLayerStyle]}
-            pointerEvents={showAddExercise ? 'box-none' : 'none'}
-          >
-            <TouchableOpacity
-              onPress={onOpenAddExercise}
-              hitSlop={10}
-              style={styles.addExerciseBtn}
-              accessibilityLabel="Add exercise"
-              activeOpacity={0.75}
-              disabled={!showAddExercise}
-            >
-              <Reanimated.Text style={[styles.addExerciseText, addExerciseLinkAnimatedStyle]} numberOfLines={1}>
-                Add exercise
-              </Reanimated.Text>
-            </TouchableOpacity>
-          </Animated.View>
-          <Animated.View style={[styles.chevronLayer, chevronLayerStyle]} pointerEvents="none">
-            <Reanimated.View style={[styles.chevronLayer, chevronIdleOpacityStyle]} pointerEvents="none">
-              <IconChevronDown size={18} color={HEADER_INK} />
-            </Reanimated.View>
-            <Reanimated.View style={[styles.chevronLayer, chevronTimerOpacityStyle]} pointerEvents="none">
-              <IconChevronDown size={18} color={textMeta} />
-            </Reanimated.View>
-            <Reanimated.View style={[styles.chevronLayer, chevronWorkOpacityStyle]} pointerEvents="none">
-              <IconChevronDown size={18} color={textMetaTimer} />
-            </Reanimated.View>
-          </Animated.View>
+          <Reanimated.View style={[styles.chevronLayer, chevronIdleOpacityStyle]} pointerEvents="none">
+            <IconChevronDown size={18} color={textMeta} />
+          </Reanimated.View>
+          <Reanimated.View style={[styles.chevronLayer, chevronTimerOpacityStyle]} pointerEvents="none">
+            <IconChevronDown size={18} color={textMeta} />
+          </Reanimated.View>
+          <Reanimated.View style={[styles.chevronLayer, chevronWorkOpacityStyle]} pointerEvents="none">
+            <IconChevronDown size={18} color={textMetaTimer} />
+          </Reanimated.View>
         </View>
       </Pressable>
       <View style={styles.scrollOuter}>
@@ -386,6 +307,31 @@ export function ExploreV2UpNextCard({
           removeClippedSubviews={false}
         >
           <View style={styles.scrollPad}>
+          {isExpanded ? (
+            <View style={styles.actionRow}>
+              <TouchableOpacity
+                onPress={onOpenAddExercise}
+                hitSlop={8}
+                style={styles.actionBtn}
+                accessibilityLabel="Add exercise"
+                activeOpacity={0.75}
+                disabled={!allowAddExercise}
+              >
+                <Reanimated.Text style={[styles.actionText, addExerciseLinkAnimatedStyle, !allowAddExercise && styles.actionDisabled]}>
+                  + add
+                </Reanimated.Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => setRemoveMode(v => !v)}
+                hitSlop={8}
+                style={styles.actionBtn}
+                accessibilityLabel="Toggle remove mode"
+                activeOpacity={0.75}
+              >
+                <Reanimated.Text style={[styles.removeText, addExerciseLinkAnimatedStyle]}>- remove</Reanimated.Text>
+              </TouchableOpacity>
+            </View>
+          ) : null}
           {showFullEmpty && (
             <View style={styles.emptyBlock}>
               <Text style={[styles.emptyTitle, { color: palette.dark }]}>No exercises yet</Text>
@@ -421,10 +367,9 @@ export function ExploreV2UpNextCard({
               restThemeProgress={restThemeProgress}
               restChromeGateSV={restChromeGateSV}
               exploreV2WorkBlueProgress={exploreV2WorkBlueProgress}
+              removeMode={removeMode}
               onSelectGroup={onSelectGroup}
               onRemoveGroupFromUpNext={onRemoveGroupFromUpNext}
-              onSwipeableOpen={onQueueRowSwipeOpen}
-              onSwipeableClose={onQueueRowSwipeClose}
             />
             );
           })}
@@ -480,36 +425,33 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     overflow: 'visible',
   },
-  /** Wide hit area for layout only — use `pointerEvents="box-none"` so empty space does not steal taps on the queue below. */
-  addExerciseLayer: {
-    position: 'absolute',
-    right: 0,
-    top: 0,
-    bottom: 0,
-    width: 200,
-    alignItems: 'flex-end',
-    justifyContent: 'center',
-    zIndex: 1,
-  },
   chevronLayer: {
     ...StyleSheet.absoluteFillObject,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  addExerciseBtn: {
-    minHeight: 30,
-    alignSelf: 'flex-end',
+  actionRow: {
+    paddingRight: 24,
+    marginBottom: 12,
     flexDirection: 'row',
+    columnGap: 24,
+    justifyContent: 'flex-start',
     alignItems: 'center',
-    justifyContent: 'center',
-    paddingRight: 12,
   },
-  addExerciseText: {
-    ...TYPOGRAPHY.legal,
-    fontWeight: '500',
-    flexShrink: 0,
-    paddingBottom: 2,
-    borderBottomWidth: 1,
+  actionBtn: {
+    paddingVertical: 2,
+  },
+  actionText: {
+    ...TYPOGRAPHY.displayLarge,
+    color: '#5A5A5A',
+    fontWeight: '400',
+  },
+  actionDisabled: {
+    opacity: 0.4,
+  },
+  removeText: {
+    ...TYPOGRAPHY.displayLarge,
+    fontWeight: '400',
   },
   headerLabel: {
     ...TYPOGRAPHY.meta,
@@ -544,15 +486,6 @@ const styles = StyleSheet.create({
   rowSeamOverlap: {
     marginBottom: -ROW_BORDER_HAIRLINE,
   },
-  swipeRowFrame: {
-    position: 'relative',
-    overflow: 'hidden',
-  },
-  rowOpenBorderOverlay: {
-    zIndex: 20,
-    borderWidth: ROW_BORDER_HAIRLINE,
-    borderColor: ROW_OPEN_BORDER,
-  },
   rowSwipeFront: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -563,20 +496,11 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingRight: 0,
   },
-  swipeDeleteStrip: {
-    width: SWIPE_DELETE_WIDTH,
-    alignSelf: 'stretch',
+  inlineRemoveBtn: {
+    width: 44,
+    height: 44,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: SWIPE_REVEAL_BACKGROUND,
-    zIndex: 2,
-  },
-  swipeDeleteBtn: {
-    flex: 1,
-    width: SWIPE_DELETE_WIDTH,
-    justifyContent: 'center',
-    alignItems: 'center',
-    minHeight: 44,
   },
   nameBlock: {
     flexShrink: 1,
@@ -592,7 +516,6 @@ const styles = StyleSheet.create({
     fontSize: SUPER_SCRIPT_FONT_SIZE,
     fontWeight: '700',
     includeFontPadding: false,
-    transform: [{ translateY: SUPER_SCRIPT_TRANSLATE_Y }],
   },
   emptyBlock: {
     paddingVertical: 8,

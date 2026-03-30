@@ -87,7 +87,7 @@ export type ExploreV2ExecutionRootProps = {
   setTimeBasedOverrides: React.Dispatch<React.SetStateAction<Record<string, boolean>>>;
   perSideOverrides: Record<string, boolean>;
   setPerSideOverrides: React.Dispatch<React.SetStateAction<Record<string, boolean>>>;
-  handleStart: () => Promise<void>;
+  handleStart: (payload?: { setId: string; values: { weight: number; reps: number } }) => Promise<void>;
   openExploreDetailSheet: (groupIndex: number, exerciseIndex: number) => void;
   showPrimaryCta: boolean;
   onSkipRest: () => void;
@@ -124,6 +124,8 @@ export type ExploreV2ExecutionRootProps = {
     string,
     { weight: number; reps: number; weightDelta: number; repsDelta: number }
   >;
+  /** Final-set celebration animation (Great Job) */
+  celebrateCompletion?: boolean;
 };
 
 export function ExploreV2ExecutionRoot(props: ExploreV2ExecutionRootProps) {
@@ -172,6 +174,7 @@ export function ExploreV2ExecutionRoot(props: ExploreV2ExecutionRootProps) {
     getExerciseHistoryForDrawer,
     exerciseHistoryRefreshKey,
     progressionValuesByItemId,
+    celebrateCompletion = false,
   } = props;
   const { explore: exRoot, colors: themeColorsRoot } = useAppTheme();
   const warmActivityRoot = exRoot.warmActivity;
@@ -268,6 +271,15 @@ export function ExploreV2ExecutionRoot(props: ExploreV2ExecutionRootProps) {
   const currentBlockNudgeY = useSharedValue(0);
   /** Slides Up Next down to a visible header tab when Completed is primary. */
   const upNextSlideY = useSharedValue<number>(0);
+  const completionCelebrateProgress = useSharedValue(0);
+
+  useEffect(() => {
+    completionCelebrateProgress.value = withTiming(celebrateCompletion ? 1 : 0, {
+      duration: celebrateCompletion ? 420 : 220,
+      easing: Easing.out(Easing.cubic),
+    });
+    if (celebrateCompletion) setPrimaryRevealed('current');
+  }, [celebrateCompletion, completionCelebrateProgress]);
 
   if (hasCurrent && currentGroup) {
     lastCurrentGroupRef.current = currentGroup;
@@ -459,13 +471,22 @@ export function ExploreV2ExecutionRoot(props: ExploreV2ExecutionRootProps) {
     );
     const live = Math.max(PEEK, sw - (hasCompletePresentSV.value ? 2 * PEEK : PEEK));
     const height = hasCurrentSV.value ? live : currentExitLayerHeightSV.value;
+    const centerLift = Math.max(0, (sw - height) / 2);
     return {
       position: 'absolute' as const,
       left: 0,
       right: 0,
       bottom: STACK_BOTTOM_GAP,
       height,
-      transform: [{ translateY: currentSlideY.value + currentBlockNudgeY.value + CARD_STACK_NUDGE_DOWN }],
+      transform: [
+        {
+          translateY:
+            currentSlideY.value +
+            currentBlockNudgeY.value +
+            CARD_STACK_NUDGE_DOWN -
+            centerLift * completionCelebrateProgress.value,
+        },
+      ],
     };
   }, [screenHeight]);
 
@@ -486,6 +507,10 @@ export function ExploreV2ExecutionRoot(props: ExploreV2ExecutionRootProps) {
 
   const aUpNext = useAnimatedStyle(() => ({
     transform: [{ translateY: upNextSlideY.value + CARD_STACK_NUDGE_DOWN }],
+  }));
+  const celebrationRecedeStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(completionCelebrateProgress.value, [0, 1], [1, 0.5]),
+    transform: [{ translateY: interpolate(completionCelebrateProgress.value, [0, 1], [0, 96]) }],
   }));
 
   const rootFillAnimatedStyle = useAnimatedStyle(() => {
@@ -532,10 +557,11 @@ export function ExploreV2ExecutionRoot(props: ExploreV2ExecutionRootProps) {
     ],
   );
 
-  const onLogNextSet = useCallback(async () => {
-    if (!showPrimaryCta || exploreV2TimerPhase !== 'none') return;
-    await handleStart();
-  }, [showPrimaryCta, exploreV2TimerPhase, handleStart]);
+  const onLogNextSet = useCallback(async (payload?: { setId: string; values: { weight: number; reps: number } }) => {
+    // CTA disabled state is handled in CurrentCard; avoid transient prop races blocking Log.
+    if (exploreV2TimerPhase !== 'none') return;
+    await handleStart(payload);
+  }, [exploreV2TimerPhase, handleStart]);
 
   const focusExercise = useMemo(() => {
     const g = displayCurrentGroup;
@@ -652,11 +678,13 @@ export function ExploreV2ExecutionRoot(props: ExploreV2ExecutionRootProps) {
                 }
               : undefined
           }
+          celebrationProgress={completionCelebrateProgress}
+          celebrationActive={celebrateCompletion}
         />
       </Animated.View>
     ) : null;
 
-  if (allComplete) {
+  if (allComplete && !celebrateCompletion) {
     return (
       <Animated.View style={[styles.completeOnly, walletShellRadii]}>
         <Animated.View style={[styles.rootFill, rootFillAnimatedStyle]}>
@@ -780,7 +808,7 @@ export function ExploreV2ExecutionRoot(props: ExploreV2ExecutionRootProps) {
                 Haptics.selectionAsync();
                 setPrimaryRevealed('complete');
               }}
-              isExpanded={primaryRevealed === 'complete'}
+              isExpanded={!celebrateCompletion && primaryRevealed === 'complete'}
               frontBottomRadius={radius.frontBottomRadius}
               coveredBottomRadius={radius.frontBottomRadius}
               timerThemeActive={timerThemeActive}
@@ -813,7 +841,7 @@ export function ExploreV2ExecutionRoot(props: ExploreV2ExecutionRootProps) {
               allowAddExercise={allowAddExercise}
               hasCurrentExercise={shouldShowCurrentLayer}
               hasCompletePresent={hasCompletePresent}
-              isExpanded={primaryRevealed === 'up_next'}
+              isExpanded={!celebrateCompletion && primaryRevealed === 'up_next'}
               frontBottomRadius={radius.frontBottomRadius}
               coveredBottomRadius={radius.frontBottomRadius}
               timerThemeActive={timerThemeActive}
@@ -834,6 +862,7 @@ export function ExploreV2ExecutionRoot(props: ExploreV2ExecutionRootProps) {
                 styles.layerBottom,
                 styles.cardStackNudgeDown,
                 aCompleteLayerHeight,
+                celebrationRecedeStyle,
                 {
                   bottom: STACK_BOTTOM_GAP,
                   zIndex: zComplete,
@@ -851,7 +880,7 @@ export function ExploreV2ExecutionRoot(props: ExploreV2ExecutionRootProps) {
                   Haptics.selectionAsync();
                   setPrimaryRevealed('complete');
                 }}
-                isExpanded={primaryRevealed === 'complete'}
+                isExpanded={!celebrateCompletion && primaryRevealed === 'complete'}
                 frontBottomRadius={radius.frontBottomRadius}
                 coveredBottomRadius={radius.frontBottomRadius}
                 timerThemeActive={timerThemeActive}
@@ -865,6 +894,7 @@ export function ExploreV2ExecutionRoot(props: ExploreV2ExecutionRootProps) {
               styles.layerBottom,
               aUpNextLayerHeight,
               aUpNext,
+              celebrationRecedeStyle,
               {
                 bottom: STACK_BOTTOM_GAP,
                 zIndex: zUpNext,
@@ -885,7 +915,7 @@ export function ExploreV2ExecutionRoot(props: ExploreV2ExecutionRootProps) {
               allowAddExercise={allowAddExercise}
               hasCurrentExercise={shouldShowCurrentLayer}
               hasCompletePresent={hasCompletePresent}
-              isExpanded={primaryRevealed === 'up_next'}
+              isExpanded={!celebrateCompletion && primaryRevealed === 'up_next'}
               frontBottomRadius={radius.frontBottomRadius}
               coveredBottomRadius={radius.frontBottomRadius}
               timerThemeActive={timerThemeActive}

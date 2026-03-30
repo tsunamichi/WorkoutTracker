@@ -486,6 +486,15 @@ export function TodayScreen({ onDateChange, onOpenAddWorkout, onOpenBonusDrawer 
    * - Otherwise: planned, not-finished workouts from this day forward (remaining queue for other days).
    */
   const remainingWorkoutsQueue = React.useMemo(() => {
+    const workoutDisplayDate = (sw: ScheduledWorkout) => {
+      if (sw.status === 'completed' && sw.completedAt) {
+        return dayjs(sw.completedAt).format('YYYY-MM-DD');
+      }
+      if (sw.status === 'in_progress' && sw.startedAt) {
+        return dayjs(sw.startedAt).format('YYYY-MM-DD');
+      }
+      return sw.date;
+    };
     const isNotFinished = (sw: ScheduledWorkout) => {
       const mc = getMainCompletion(sw.id);
       return !(
@@ -495,7 +504,7 @@ export function TodayScreen({ onDateChange, onOpenAddWorkout, onOpenBonusDrawer 
       );
     };
 
-    const onSelectedDate = scheduledWorkouts.filter(sw => sw.date === selectedDate);
+    const onSelectedDate = scheduledWorkouts.filter(sw => workoutDisplayDate(sw) === selectedDate);
     const finishedOnSelectedDay = onSelectedDate.filter(sw => !isNotFinished(sw));
     if (finishedOnSelectedDay.length > 0) {
       return [...finishedOnSelectedDay].sort((a, b) => a.id.localeCompare(b.id));

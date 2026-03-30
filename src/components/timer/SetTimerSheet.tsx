@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -16,9 +16,8 @@ import { Audio } from 'expo-av';
 import * as Haptics from 'expo-haptics';
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import { useStore } from '../../store';
-import { SPACING, TYPOGRAPHY, COLORS } from '../../constants';
-import { TimerControls } from './TimerControls';
-import { IconChevronDown } from '../icons';
+import { TYPOGRAPHY, COLORS } from '../../constants';
+import { IconPause, IconPlay } from '../icons';
 import { useTranslation } from '../../i18n/useTranslation';
 import { COUNTDOWN_SOUND, COMPLETE_SOUND } from '../../utils/sounds';
 
@@ -50,11 +49,7 @@ interface SetTimerSheetProps {
   restTimeOverride?: number | null; // Local rest time override (seconds), null = use global setting
 }
 
-const REST_COLOR_START = COLORS.accentPrimary;
-const REST_COLOR_END = COLORS.failure;
-const EXERCISE_COLOR = COLORS.info;
 const PRE_EXERCISE_COUNTDOWN = 5;
-const MIN_SIZE = 180;
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const CONTAINER_WIDTH = SCREEN_WIDTH - 96; // 48px padding on each side
 
@@ -93,8 +88,7 @@ export function SetTimerSheet({
   
   const [timeLeft, setTimeLeft] = useState(getInitialTime);
   const [isRunning, setIsRunning] = useState(false);
-  const [soundEnabled, setSoundEnabled] = useState(true);
-  const [labelWidth, setLabelWidth] = useState(0);
+  const soundEnabled = true;
   const [currentPhase, setCurrentPhase] = useState<'exercise' | 'rest' | 'switchSides'>(isExerciseTimerPhase ? 'exercise' : 'rest'); // Track phase internally
   const [preCountdown, setPreCountdown] = useState(-1);
   const [currentSide, setCurrentSide] = useState<'first' | 'second'>('first'); // Track which side we're on for per-side exercises
@@ -105,7 +99,6 @@ export function SetTimerSheet({
   const prevPreCountdownRef = useRef(preCountdown);
   
   const slideAnim = useRef(new Animated.Value(visible ? 1 : 0)).current;
-  const sizeAnim = useRef(new Animated.Value(1)).current; // 1 = 100%, 0 = MIN_SIZE
   const breathingAnim = useRef(new Animated.Value(1)).current; // For breathing animation (1 = 100%, 0.92 = 92%)
   const restColorAnim = useRef(new Animated.Value(0)).current; // For yellow to red transition (0 = yellow, 1 = red)
   const borderRadiusAnim = useRef(new Animated.Value(CONTAINER_WIDTH * 0.24)).current; // Squircle for exercise, circle for rest
@@ -214,21 +207,6 @@ export function SetTimerSheet({
       }
     };
   }, []);
-
-  // Animate size based on time remaining
-  useEffect(() => {
-    const totalTime = currentPhase === 'exercise' ? exerciseDuration : restTime;
-    const progress = totalTime > 0 ? timeLeft / totalTime : 0;
-    const isExerciseStart = currentPhase === 'exercise' && timeLeft === totalTime;
-    
-    // Animate size smoothly based on progress
-    Animated.timing(sizeAnim, {
-      toValue: progress,
-      duration: isExerciseStart ? 120 : 1000,
-      easing: isExerciseStart ? Easing.out(Easing.quad) : Easing.linear,
-      useNativeDriver: true,
-    }).start();
-  }, [timeLeft, currentPhase, exerciseDuration, restTime, sizeAnim]);
 
   const runExerciseEntryAnimation = useCallback(() => {
     exerciseEntryOpacity.stopAnimation();
@@ -339,7 +317,7 @@ export function SetTimerSheet({
   const promptNotificationPermissions = useCallback(() => {
     if (!Notifications || settings.notificationsPermissionPrompted) return;
     Notifications.getPermissionsAsync()
-      .then(permission => {
+      .then((permission: any) => {
         if (permission.granted || permission.ios?.status === 2) {
           updateSettings({
             notificationsPermissionPrompted: true,
@@ -397,7 +375,7 @@ export function SetTimerSheet({
           ]
         );
       })
-      .catch(error => {
+      .catch((error: unknown) => {
         console.log('⚠️ Failed to check notification permissions:', error instanceof Error ? error.message : error);
       });
   }, [
@@ -530,7 +508,6 @@ export function SetTimerSheet({
       
       // Reset and animate in
       slideAnim.setValue(0);
-      sizeAnim.setValue(1);
       breathingAnim.setValue(1);
       restColorAnim.setValue(0); // Start with yellow (or will be blue for exercise)
       Animated.spring(slideAnim, {
@@ -580,7 +557,6 @@ export function SetTimerSheet({
     exerciseDuration,
     restTime,
     slideAnim,
-    sizeAnim,
     breathingAnim,
     restColorAnim,
     workoutName,
@@ -862,10 +838,6 @@ export function SetTimerSheet({
     cancelTimerNotification();
   };
 
-  const handleToggleSound = () => {
-    setSoundEnabled(prev => !prev);
-  };
-
   const handleSkip = () => {
     setIsRunning(false);
     endTimeRef.current = null;
@@ -915,29 +887,12 @@ export function SetTimerSheet({
     inputRange: [0, 1],
     outputRange: [SCREEN_HEIGHT, 0],
   });
-
-  // Calculate circle size based on animation progress
-  const animatedScale = sizeAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [MIN_SIZE / CONTAINER_WIDTH, 1],
-  });
-
-  // Inverse scale for text (keeps text size constant)
-  const textScale = sizeAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [CONTAINER_WIDTH / MIN_SIZE, 1],
-  });
-
-  // Interpolate color: info for exercise timer, accentPrimary to failure for rest timer
-  const backgroundColor = currentPhase === 'exercise'
-    ? EXERCISE_COLOR
-    : restColorAnim.interpolate({
-        inputRange: [0, 1],
-        outputRange: [REST_COLOR_START, REST_COLOR_END],
-      });
-
-  // Timer text color: white (text) for exercise, dark (canvas) for rest/switchSides
-  const timerTextColor = currentPhase === 'exercise' ? COLORS.text : COLORS.backgroundCanvas;
+  const phaseLabel =
+    currentPhase === 'exercise'
+      ? 'work'
+      : currentPhase === 'switchSides'
+        ? 'switch sides'
+        : 'rest';
 
   const isPreCountdownActive = preCountdown >= 0 && currentPhase === 'exercise';
 
@@ -994,118 +949,59 @@ export function SetTimerSheet({
 
   return (
     <View style={styles.timerOverlay} pointerEvents="auto">
-      <TouchableOpacity 
-        style={styles.timerBackdrop} 
-        activeOpacity={1}
-        onPress={() => {}} // Block touches but don't close
-      />
-      
       <Animated.View 
         style={[
           styles.timerDrawer, 
           { 
             transform: [{ translateY }],
-            paddingBottom: 8, // 8px from bottom of screen
+            paddingBottom: 0,
           }
         ]}
       >
-        <View style={[styles.timerSheet, { paddingBottom: 8 + insets.bottom }]}>
-          {/* Next set indicator */}
-          <View style={styles.setIndicator}>
-              {currentPhase === 'switchSides' ? (
-                <Text style={styles.nextSetText}>Switch sides</Text>
-              ) : currentPhase === 'exercise' && isPerSide ? (
-                <Text style={styles.nextSetText}>
-                  {currentSide === 'first' ? 'Left side' : 'Right side'}
-                </Text>
-              ) : currentSet < totalSets ? (
-                <Text style={styles.nextSetText}>
-                  {t('nextSetOutOf')
-                    .replace('{current}', String(currentSet + 1))
-                    .replace('{total}', String(totalSets))}
-                </Text>
-              ) : nextExerciseName ? (
-                <Text style={styles.nextSetText}>
-                  Next exercise{' '}
-                  <Text style={styles.nextExerciseNameText}>{nextExerciseName}</Text>
-                </Text>
-              ) : (
-                <Text style={styles.nextSetText}>
-                  {t('setOf')
-                    .replace('{current}', String(currentSet))
-                    .replace('{total}', String(totalSets))}
-                </Text>
-              )}
-            </View>
-
-          {/* Animated Circle Timer */}
-          <View style={styles.timerContainer}>
-            <Animated.View
-              style={[
-                styles.circleContainer,
-                {
-                  transform: [
-                    { scale: animatedScale },
-                  ],
-                },
-              ]}
-            >
-              {/* Circle/Squircle background - show when not in pre-countdown */}
-              {!isPreCountdownActive && (
-                <Animated.View
-                  style={[
-                    styles.circle,
-                    {
-                      backgroundColor,
-                      borderRadius: borderRadiusAnim,
-                      transform: [{ scale: breathingAnim }],
-                    },
-                  ]}
-                />
-              )}
-              
-              {/* Text stays constant size, positioned absolutely on top */}
-              {isPreCountdownActive ? (
-                <Animated.View
-                  style={[
-                    styles.textContainer,
-                    {
-                      transform: [{ scale: textScale }, { scale: countdownTextScaleAnim }],
-                      opacity: countdownOpacityAnim,
-                      zIndex: 10,
-                    },
-                  ]}
-                >
-                  <Text style={[styles.timerText, styles.countdownText]}>
-                    {preCountdown === 0 ? t('go') : String(Math.max(preCountdown, 0))}
-                  </Text>
-                </Animated.View>
-              ) : (
-                <Animated.View
-                  style={[
-                    styles.textContainer,
-                    {
-                      transform: [{ scale: textScale }],
-                      zIndex: 10,
-                    },
-                  ]}
-                >
-                  <Text style={[styles.timerText, { color: timerTextColor }]}>{formatTime()}</Text>
-                </Animated.View>
-              )}
-            </Animated.View>
+        <View style={[styles.timerSheet, { paddingBottom: 16 + insets.bottom }]}>
+          <View style={styles.heroTimerBand}>
+            {isPreCountdownActive ? (
+              <Animated.View style={{ opacity: countdownOpacityAnim, transform: [{ scale: countdownTextScaleAnim }] }}>
+                <Text style={styles.heroTimerText}>{preCountdown === 0 ? t('go') : String(Math.max(preCountdown, 0))}</Text>
+              </Animated.View>
+            ) : (
+              <Text style={styles.heroTimerText}>{formatTime()}</Text>
+            )}
+            <Text style={styles.heroTimerLabel}>{phaseLabel}</Text>
           </View>
-
-          {/* Controls */}
-          <TimerControls
-            isRunning={isRunning || isPreCountdownActive}
-            soundEnabled={soundEnabled}
-            onTogglePause={handleTogglePauseWrapper}
-            onToggleSound={handleToggleSound}
-            onSkip={handleSkip}
-            hideControlsWhenPaused={!isPreCountdownActive}
-            disablePlayPause={isPreCountdownActive}
-          />
+          <View style={styles.currentCard}>
+            <View style={styles.currentHeaderRow}>
+              <Text style={styles.currentExercise} numberOfLines={1}>{exerciseName || 'Exercise'}</Text>
+              <Text style={styles.currentTopTime}>{formatTime()}</Text>
+            </View>
+            <View style={styles.currentMetaRow}>
+              <Text style={styles.currentMeta}>Set {currentSet}/{totalSets}</Text>
+              <Text style={styles.currentMeta}>
+                {currentPhase === 'switchSides'
+                  ? 'Switch sides'
+                  : currentPhase === 'exercise' && isPerSide
+                    ? currentSide === 'first'
+                      ? 'Left side'
+                      : 'Right side'
+                    : nextExerciseName
+                      ? `Next ${nextExerciseName}`
+                      : `Round ${currentSet}/${totalSets}`}
+              </Text>
+            </View>
+            <View style={styles.currentVisualPlaceholder}>
+              <View style={styles.placeholderCircleLeft} />
+              <View style={styles.placeholderCircleRight} />
+            </View>
+            <View style={styles.controlsRow}>
+              <TouchableOpacity style={styles.pauseBtn} onPress={handleTogglePauseWrapper} activeOpacity={0.8} disabled={isPreCountdownActive}>
+                {isRunning ? <IconPause size={20} color={COLORS.backgroundCanvas} /> : <IconPlay size={20} color={COLORS.backgroundCanvas} />}
+                <Text style={styles.pauseBtnText}>{isRunning ? 'Pause' : 'Resume'}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.skipBtn} onPress={handleSkip} activeOpacity={0.8}>
+                <Text style={styles.skipBtnText}>Skip</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
         </View>
       </Animated.View>
     </View>
@@ -1117,83 +1013,122 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     zIndex: 1000,
     justifyContent: 'flex-end',
-  },
-  timerBackdrop: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0, 0, 0, 0.4)',
+    backgroundColor: COLORS.backgroundCanvas,
   },
   timerDrawer: {
-    paddingHorizontal: 8,
+    flex: 1,
   },
   timerSheet: {
-    backgroundColor: COLORS.backgroundCanvas,
-    borderRadius: 40,
-    borderCurve: 'continuous',
+    flex: 1,
+    backgroundColor: '#C6FF18',
+    paddingTop: 88,
+    paddingHorizontal: 24,
+  },
+  heroTimerBand: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 28,
+  },
+  heroTimerText: {
+    fontSize: 84,
+    lineHeight: 88,
+    fontWeight: '400',
+    color: COLORS.backgroundCanvas,
+  },
+  heroTimerLabel: {
+    ...TYPOGRAPHY.body,
+    color: COLORS.backgroundCanvas,
+    marginTop: -8,
+  },
+  currentCard: {
+    flex: 1,
+    backgroundColor: '#012625',
+    borderRadius: 22,
+    paddingHorizontal: 18,
+    paddingTop: 16,
+    paddingBottom: 18,
     borderWidth: 1,
-    borderColor: COLORS.activeCard,
-    paddingTop: 32,
-    paddingHorizontal: 48,
+    borderColor: 'rgba(255,255,255,0.08)',
+  },
+  currentHeaderRow: {
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
   },
-  setIndicator: {
-    position: 'relative',
-    width: '100%',
-    marginBottom: 40,
-    paddingHorizontal: SPACING.lg,
-    alignItems: 'center',
+  currentExercise: {
+    ...TYPOGRAPHY.h2,
+    color: COLORS.canvasLight,
+    flex: 1,
+    marginRight: 12,
   },
-  labelWrapper: {
-    alignSelf: 'center',
-  },
-  chevronWrapper: {
-    position: 'absolute',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  nextSetText: {
+  currentTopTime: {
     ...TYPOGRAPHY.body,
-    color: COLORS.textMeta,
+    color: 'rgba(255,255,255,0.8)',
   },
-  nextExerciseNameText: {
+  currentMetaRow: {
+    marginTop: 6,
+    flexDirection: 'row',
+    columnGap: 20,
+  },
+  currentMeta: {
     ...TYPOGRAPHY.body,
-    color: COLORS.text,
+    color: 'rgba(184,220,216,0.75)',
   },
-  nextSetNumber: {
+  currentVisualPlaceholder: {
+    flex: 1,
+    marginTop: 16,
+    marginBottom: 14,
+    borderRadius: 14,
+    overflow: 'hidden',
+    backgroundColor: '#062E2D',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  placeholderCircleLeft: {
+    width: CONTAINER_WIDTH * 0.54,
+    height: CONTAINER_WIDTH * 0.54,
+    borderRadius: CONTAINER_WIDTH * 0.27,
+    backgroundColor: 'rgba(116,165,158,0.22)',
+    marginLeft: -CONTAINER_WIDTH * 0.27,
+  },
+  placeholderCircleRight: {
+    width: CONTAINER_WIDTH * 0.54,
+    height: CONTAINER_WIDTH * 0.54,
+    borderRadius: CONTAINER_WIDTH * 0.27,
+    backgroundColor: 'rgba(116,165,158,0.22)',
+    marginRight: -CONTAINER_WIDTH * 0.27,
+  },
+  controlsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  pauseBtn: {
+    minWidth: 120,
+    height: 48,
+    borderRadius: 14,
+    backgroundColor: '#FFB835',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    columnGap: 8,
+  },
+  pauseBtnText: {
     ...TYPOGRAPHY.body,
-    color: COLORS.text,
+    color: COLORS.backgroundCanvas,
+    fontWeight: '600',
   },
-  timerContainer: {
-    width: CONTAINER_WIDTH,
-    height: CONTAINER_WIDTH,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 40,
-  },
-  circleContainer: {
-    width: CONTAINER_WIDTH,
-    height: CONTAINER_WIDTH,
+  skipBtn: {
+    paddingHorizontal: 14,
+    height: 48,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  circle: {
-    ...StyleSheet.absoluteFillObject,
-    // borderRadius is animated, set in inline style
-    borderCurve: 'continuous',
-  },
-  textContainer: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    zIndex: 1,
-  },
-  timerText: {
-    fontSize: 56,
-    color: '#FFFFFF',
-    fontWeight: '300',
-    fontFamily: 'System',
-    textAlign: 'center',
-  },
-  countdownText: {
-    color: COLORS.text,
+  skipBtnText: {
+    ...TYPOGRAPHY.h3,
+    color: '#FFB835',
+    fontWeight: '500',
   },
 });
 

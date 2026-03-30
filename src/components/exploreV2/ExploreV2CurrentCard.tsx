@@ -44,7 +44,7 @@ type Props = {
   useKg: boolean;
   weightUnit: string;
   getBarbellMode: (id: string) => boolean;
-  onLogNextSet: () => Promise<void>;
+  onLogNextSet: (payload?: { setId: string; values: { weight: number; reps: number } }) => Promise<void>;
   /** Skip rest / work / switch-sides (explore v2 hero timers) */
   onSkipRest: () => void;
   exploreV2TimerPhase: 'none' | 'work' | 'switchSides' | 'rest';
@@ -64,6 +64,8 @@ type Props = {
     string,
     { weight: number; reps: number; weightDelta: number; repsDelta: number }
   >;
+  celebrationProgress?: SharedValue<number>;
+  celebrationActive?: boolean;
 };
 
 type SetSlot = { round: number; exerciseIndex: number };
@@ -113,7 +115,7 @@ type SetHeroPageProps = {
   perSideValueColor: string;
   perSideUnitColor: string;
   pageWidth: number;
-  commitsRef: React.MutableRefObject<Record<string, () => void>>;
+  commitsRef: React.MutableRefObject<Record<string, () => { weight: number; reps: number } | void>>;
   progressionValuesByItemId: Props['progressionValuesByItemId'];
 };
 
@@ -163,13 +165,33 @@ function CurrentSetHeroPage({
   const repsInputRef = useRef<React.ElementRef<typeof TextInput>>(null);
   const weightDraftRef = useRef(weightDefault);
   const repsDraftRef = useRef(repsDefault);
+  const weightDirtyRef = useRef(false);
+  const repsDirtyRef = useRef(false);
+  const skipBlurCommitUntilRef = useRef(0);
 
   const prevSetIdForInputsRef = useRef<string | null>(null);
   useEffect(() => {
-    if (prevSetIdForInputsRef.current === setId) return;
+    const isSetChanged = prevSetIdForInputsRef.current !== setId;
     prevSetIdForInputsRef.current = setId;
-    weightDraftRef.current = weightDefault;
-    repsDraftRef.current = repsDefault;
+
+    if (isSetChanged) {
+      weightDraftRef.current = weightDefault;
+      repsDraftRef.current = repsDefault;
+      weightDirtyRef.current = false;
+      repsDirtyRef.current = false;
+      return;
+    }
+
+    // Same set id can still receive external value updates (session recovery/propagation/reset).
+    // Keep drafts aligned unless user is actively editing that field.
+    if (!weightDirtyRef.current) {
+      weightDraftRef.current = weightDefault;
+      weightInputRef.current?.setNativeProps({ text: weightDefault });
+    }
+    if (!repsDirtyRef.current) {
+      repsDraftRef.current = repsDefault;
+      repsInputRef.current?.setNativeProps({ text: repsDefault });
+    }
   }, [setId, weightDefault, repsDefault]);
 
   const parseWeightFromDraft = useCallback((): number | null => {
@@ -189,6 +211,8 @@ function CurrentSetHeroPage({
   }, [heroEx.isTimeBased]);
 
   const commitWeight = useCallback(() => {
+    if (Date.now() < skipBlurCommitUntilRef.current) return;
+    if (!weightDirtyRef.current) return;
     const cleaned = weightDraftRef.current.replace(',', '.').trim();
     const n = parseFloat(cleaned);
     const wLbs = Number.isNaN(n) || n < 0 ? 0 : fromDisplayWeight(n, useKg);
@@ -207,6 +231,7 @@ function CurrentSetHeroPage({
     });
     const formatted = formatWeightForLoad(wLbs, useKg);
     weightDraftRef.current = formatted;
+    weightDirtyRef.current = false;
     weightInputRef.current?.setNativeProps({ text: formatted });
   }, [
     useKg,
@@ -221,6 +246,8 @@ function CurrentSetHeroPage({
   ]);
 
   const commitReps = useCallback(() => {
+    if (Date.now() < skipBlurCommitUntilRef.current) return;
+    if (!repsDirtyRef.current) return;
     const cleaned = repsDraftRef.current.replace(',', '.').trim();
     const n = parseFloat(cleaned);
     let r = 0;
@@ -229,7 +256,8 @@ function CurrentSetHeroPage({
     }
     const parsedWeight = parseWeightFromDraft();
     setLocalValues(prev => {
-      const w = parsedWeight ?? prev[setId]?.weight ?? heroVals.weight;
+      // Keep current card weight stable when reps are edited; only override if user entered a valid weight draft.
+      const w = parsedWeight ?? prev[setId]?.weight ?? heroW;
       return applyForwardPropagationForExerciseRounds(
         prev,
         heroEx.id,
@@ -242,29 +270,80 @@ function CurrentSetHeroPage({
     });
     const formatted = heroEx.isTimeBased ? String(r) : String(Math.round(r));
     repsDraftRef.current = formatted;
+    repsDirtyRef.current = false;
     repsInputRef.current?.setNativeProps({ text: formatted });
   }, [
     setId,
     setLocalValues,
     heroEx.isTimeBased,
     heroEx.id,
-    heroVals.weight,
+    heroW,
     heroRound,
     group.totalRounds,
     completedSets,
     parseWeightFromDraft,
   ]);
 
-  useEffect(() => {
-    const flush = () => {
-      commitWeight();
-      commitReps();
+  const commitBothDrafts = useCallback(() => {
+    // Ignore trailing blur commits fired by input focus changes during CTA taps.
+    skipBlurCommitUntilRef.current = Date.now() + 400;
+    const parsedWeight = parseWeightFromDraft();
+    const parsedReps = parseRepsFromDraft();
+    const effectiveParsedWeight = weightDirtyRef.current ? parsedWeight : null;
+    const effectiveParsedReps = repsDirtyRef.current ? parsedReps : null;
+    console.log('🧪 [ExploreV2Log] commitBothDrafts input', {
+      setId,
+      weightDraft: weightDraftRef.current,
+      repsDraft: repsDraftRef.current,
+      parsedWeight: effectiveParsedWeight,
+      parsedReps: effectiveParsedReps,
+      heroW,
+      heroR,
+    });
+    setLocalValues(prev => {
+      const w = effectiveParsedWeight ?? prev[setId]?.weight ?? heroW;
+      const r = effectiveParsedReps ?? prev[setId]?.reps ?? heroR;
+      console.log('🧪 [ExploreV2Log] commitBothDrafts resolved', {
+        setId,
+        previous: prev[setId],
+        resolvedWeight: w,
+        resolvedReps: r,
+      });
+      return applyForwardPropagationForExerciseRounds(
+        prev,
+        heroEx.id,
+        heroRound,
+        group.totalRounds,
+        completedSets,
+        setId,
+        { weight: w, reps: r },
+      );
+    });
+    weightDirtyRef.current = false;
+    repsDirtyRef.current = false;
+    return {
+      weight: effectiveParsedWeight ?? heroW,
+      reps: effectiveParsedReps ?? heroR,
     };
-    commitsRef.current[setId] = flush;
+  }, [
+    setLocalValues,
+    setId,
+    parseWeightFromDraft,
+    parseRepsFromDraft,
+    heroW,
+    heroR,
+    heroEx.id,
+    heroRound,
+    group.totalRounds,
+    completedSets,
+  ]);
+
+  useEffect(() => {
+    commitsRef.current[setId] = commitBothDrafts;
     return () => {
       delete commitsRef.current[setId];
     };
-  }, [setId, commitWeight, commitReps, commitsRef]);
+  }, [setId, commitBothDrafts, commitsRef]);
 
   const _barbellMode = getBarbellMode(heroEx.id);
   const weightPerSideLbs = heroW > 45 ? (heroW - 45) / 2 : null;
@@ -290,6 +369,7 @@ function CurrentSetHeroPage({
             defaultValue={weightDefault}
             onChangeText={t => {
               weightDraftRef.current = t;
+              weightDirtyRef.current = true;
             }}
             onBlur={commitWeight}
             keyboardType="decimal-pad"
@@ -316,6 +396,7 @@ function CurrentSetHeroPage({
             defaultValue={repsDefault}
             onChangeText={t => {
               repsDraftRef.current = t;
+              repsDirtyRef.current = true;
             }}
             onBlur={commitReps}
             keyboardType={heroEx.isTimeBased ? 'decimal-pad' : 'number-pad'}
@@ -366,6 +447,8 @@ export function ExploreV2CurrentCard({
   restThemeProgress,
   settingsOverflow,
   progressionValuesByItemId,
+  celebrationProgress,
+  celebrationActive = false,
 }: Props) {
   const theme = useAppTheme();
   const { explore: ex, colors: themeColors } = theme;
@@ -393,7 +476,7 @@ export function ExploreV2CurrentCard({
   const [carouselIndex, setCarouselIndex] = useState(0);
   const [pageWidth, setPageWidth] = useState(0);
   const scrollRef = useRef<ScrollView>(null);
-  const commitsRef = useRef<Record<string, () => void>>({});
+  const commitsRef = useRef<Record<string, () => { weight: number; reps: number } | void>>({});
   const prevIncompleteKeyRef = useRef<string | null>(null);
 
   const groupHasStarted = useMemo(
@@ -411,6 +494,16 @@ export function ExploreV2CurrentCard({
 
   const activeHeroEx = activeSlot ? group.exercises[activeSlot.exerciseIndex] : group.exercises[0];
   const activeSetId = activeSlot && activeHeroEx ? `${activeHeroEx.id}-set-${activeSlot.round}` : '';
+  const activeSetValues = useMemo(() => {
+    if (!activeHeroEx || !activeSlot) return undefined;
+    const defaults = getSetDisplayValues(
+      activeHeroEx.id,
+      activeSlot.round,
+      activeHeroEx.weight ?? 0,
+      Number(activeHeroEx.reps) ?? 0,
+    );
+    return localValues[activeSetId] ?? defaults;
+  }, [activeHeroEx, activeSlot, getSetDisplayValues, localValues, activeSetId]);
 
   useEffect(() => {
     if (pageWidth <= 0 || orderedSlots.length === 0) return;
@@ -466,6 +559,15 @@ export function ExploreV2CurrentCard({
       borderColor: interpolateColor(p, [0, 1], [EXPLORE_V2.colors.pageBg, activeBorder]),
     };
   }, [warmActivity, backgroundTimer]);
+  const shellCornerAnimatedStyle = useAnimatedStyle(() => {
+    const cp = celebrationProgress?.value ?? 0;
+    return {
+      borderTopLeftRadius: interpolate(cp, [0, 1], [EXPLORE_V2.cardTopRadius, 10]),
+      borderTopRightRadius: interpolate(cp, [0, 1], [EXPLORE_V2.cardTopRadius, 10]),
+      borderBottomLeftRadius: interpolate(cp, [0, 1], [bottomCornerRadius, 10]),
+      borderBottomRightRadius: interpolate(cp, [0, 1], [bottomCornerRadius, 10]),
+    };
+  }, [celebrationProgress, bottomCornerRadius]);
   const ctaBgStyle = useAnimatedStyle(() => {
     if (exploreV2TimerPhase === 'rest' || exploreV2TimerPhase === 'work' || exploreV2TimerPhase === 'switchSides') {
       return { backgroundColor: skipRestCtaBg };
@@ -520,13 +622,27 @@ export function ExploreV2CurrentCard({
   );
 
   const onLogPress = useCallback(() => {
+    console.log('🧪 [ExploreV2Log] onLogPress', {
+      activeSetId,
+      heroTimerActive,
+      carouselIndex,
+      nextIncompleteIndex,
+    });
     if (heroTimerActive) {
       onSkipRest();
       return;
     }
-    if (activeSetId) commitsRef.current[activeSetId]?.();
-    void onLogNextSet();
-  }, [heroTimerActive, onSkipRest, activeSetId, onLogNextSet]);
+    const committedValues = activeSetId ? commitsRef.current[activeSetId]?.() : undefined;
+    const values = committedValues ?? activeSetValues;
+    void onLogNextSet(activeSetId && values ? { setId: activeSetId, values } : undefined);
+  }, [heroTimerActive, onSkipRest, activeSetId, onLogNextSet, activeSetValues, carouselIndex, nextIncompleteIndex]);
+  const celebrationContentFadeStyle = useAnimatedStyle(() => ({
+    opacity: 1 - (celebrationProgress?.value ?? 0),
+  }), [celebrationProgress]);
+  const celebrationMessageStyle = useAnimatedStyle(() => ({
+    opacity: celebrationProgress?.value ?? 0,
+    transform: [{ translateY: interpolate(celebrationProgress?.value ?? 0, [0, 1], [12, 0]) }],
+  }), [celebrationProgress]);
 
   return (
     <KeyboardAvoidingView
@@ -538,14 +654,17 @@ export function ExploreV2CurrentCard({
         style={[
           styles.shell,
           shellAnimatedStyle,
+          shellCornerAnimatedStyle,
           {
             backgroundColor: surfaceColor,
             borderBottomLeftRadius: bottomCornerRadius,
             borderBottomRightRadius: bottomCornerRadius,
           },
           collapsedSecondary && styles.collapsedSecondarySurface,
+          celebrationActive && styles.celebrationActiveShell,
         ]}
       >
+        <Reanimated.View style={[styles.celebrationContentWrap, celebrationContentFadeStyle]}>
         <View style={styles.topBlock}>
           <View style={styles.topBlockContent}>
             <View style={styles.headerBar}>
@@ -698,6 +817,10 @@ export function ExploreV2CurrentCard({
             </View>
           ) : null}
         </View>
+        </Reanimated.View>
+        <Reanimated.View pointerEvents="none" style={[styles.completionMessageOverlay, celebrationMessageStyle]}>
+          <Text style={styles.completionMessageText}>Great Job!</Text>
+        </Reanimated.View>
         {collapsedSecondary ? (
           <TouchableOpacity
             style={styles.collapsedTapOverlay}
@@ -901,5 +1024,24 @@ const styles = StyleSheet.create({
     ...TYPOGRAPHY.legal,
     fontWeight: '500',
     letterSpacing: 0.2,
+  },
+  completionMessageOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  celebrationContentWrap: {
+    flex: 1,
+    minHeight: 0,
+  },
+  completionMessageText: {
+    ...TYPOGRAPHY.h1,
+    color: COLORS.canvasLight,
+    fontWeight: '400',
+  },
+  celebrationActiveShell: {
+    shadowOpacity: 0,
+    shadowRadius: 0,
+    elevation: 0,
   },
 });

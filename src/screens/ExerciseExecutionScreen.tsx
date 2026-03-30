@@ -633,6 +633,7 @@ export function ExerciseExecutionScreen() {
   const [showExerciseSettingsMenu, setShowExerciseSettingsMenu] = useState(false);
   const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
   const [showConfetti, setShowConfetti] = useState(false);
+  const [showCompletionCelebration, setShowCompletionCelebration] = useState(false);
   /** While rest UI collapses after skip — keep hero time from flashing 0:00 */
   const [exploreV2RestSkipDisplayHoldSec, setExploreV2RestSkipDisplayHoldSec] = useState<number | null>(null);
   const REST_TIMER_FRAC = EXPLORE_V2.layout.restTimerHeightFraction;
@@ -1386,12 +1387,19 @@ export function ExerciseExecutionScreen() {
     const group = exerciseGroups[expandedGroupIndex];
     if (!group) return null;
     const completedRounds = currentRounds[group.id] || 0;
-    if (completedRounds >= group.totalRounds) return null;
+    // Keep Current mounted during end-of-workout celebration so the "Great Job!" card can animate.
+    if (
+      completedRounds >= group.totalRounds &&
+      !(executionMode === 'explore-v2' && showCompletionCelebration)
+    ) {
+      return null;
+    }
     // Explore v1: "current" only exists after at least one set is logged
     if (executionMode === 'explore' && completedSets.size === 0) return null;
     return expandedGroupIndex;
   }, [
     executionMode,
+    showCompletionCelebration,
     completedSets.size,
     expandedGroupIndex,
     exerciseGroups,
@@ -1458,6 +1466,9 @@ export function ExerciseExecutionScreen() {
   const isExplorePreStart = executionMode === 'explore' && completedSets.size === 0;
   const isExploreWorkoutComplete = executionMode === 'explore' && allCurrentGroupsComplete;
   const isExploreV2WorkoutComplete = executionMode === 'explore-v2' && allCurrentGroupsComplete;
+  useEffect(() => {
+    if (!isExploreV2WorkoutComplete) setShowCompletionCelebration(false);
+  }, [isExploreV2WorkoutComplete]);
 
   const canExpandExercise = useCallback((groupIndex: number) => {
     if (executionMode !== 'explore') return true;
@@ -1758,7 +1769,7 @@ export function ExerciseExecutionScreen() {
     }
   };
   
-  const handleComplete = async () => {
+  const handleComplete = async (loggedSetOverride?: { setId: string; values: { weight: number; reps: number } }) => {
     if (expandedGroupIndex < 0) return;
 
     exploreWorkAwaitingSecondLegRef.current = false;
@@ -1791,6 +1802,12 @@ export function ExerciseExecutionScreen() {
     if (!hasLoggedAnySet) setHasLoggedAnySet(true);
     
     const setId = `${currentExercise.id}-set-${currentRound}`;
+    console.log('🧪 [ExploreV2Log] handleComplete start', {
+      setId,
+      expandedGroupIndex,
+      activeExerciseIndex: activeExerciseIndexRef.current,
+      completedSetsCountBefore: completedSets.size,
+    });
 
     // Build newCompletedSets synchronously for immediate logic checks
     const newCompletedSets = new Set(completedSets);
@@ -1802,21 +1819,44 @@ export function ExerciseExecutionScreen() {
       return newCompletedSets.has(exSetId);
     });
     
-    const isLastGroup = expandedGroupIndex === exerciseGroups.length - 1;
-    const isLastRound = currentRound + 1 >= currentGroup.totalRounds;
-    const isLastExercise = activeExerciseIndex === currentGroup.exercises.length - 1;
-    const isVeryLastSet = isLastGroup && isLastRound && (allExercisesComplete || isLastExercise);
+    const isSectionCompleteAfterThisSet = exerciseGroups.every(group => {
+      for (let round = 0; round < group.totalRounds; round++) {
+        for (const ex of group.exercises) {
+          if (!newCompletedSets.has(`${ex.id}-set-${round}`)) return false;
+        }
+      }
+      return true;
+    });
     
     // Start the rest timer BEFORE any await — this ensures inlineRestActive is true
     // when the store update triggers a re-render, preventing the action row from hiding
-    if (type === 'main' && !isVeryLastSet) {
-      const nextRoundAfterRest = allExercisesComplete ? currentRound + 1 : currentRound;
-      const nextRoundIsLast = nextRoundAfterRest + 1 >= currentGroup.totalRounds;
-      const nextExAfterRest = allExercisesComplete ? 0 : activeExerciseIndex + 1;
-      const nextExIsLast = nextExAfterRest >= currentGroup.exercises.length - 1;
-      setInlineRestIsLastSet(isLastGroup && nextRoundIsLast && nextExIsLast);
-      if (currentExercise.isTimeBased) {
-        if (executionMode === 'explore-v2') {
+    if (type === 'main' && !isSectionCompleteAfterThisSet) {
+      try {
+        const isLastGroup = expandedGroupIndex === exerciseGroups.length - 1;
+        const isLastRound = currentRound + 1 >= currentGroup.totalRounds;
+        const nextRoundAfterRest = allExercisesComplete ? currentRound + 1 : currentRound;
+        const nextRoundIsLast = nextRoundAfterRest + 1 >= currentGroup.totalRounds;
+        const nextExAfterRest = allExercisesComplete ? 0 : activeExerciseIndex + 1;
+        const nextExIsLast = nextExAfterRest >= currentGroup.exercises.length - 1;
+        setInlineRestIsLastSet(isLastGroup && nextRoundIsLast && nextExIsLast);
+        if (currentExercise.isTimeBased) {
+          if (executionMode === 'explore-v2') {
+            counterShrinkAnim.setValue(1);
+            startInlineRest();
+            runRestStaggerIn();
+            if (allExercisesComplete && isLastRound) {
+              nextLabelAnim.setValue(0);
+              requestAnimationFrame(() => {
+                Animated.timing(counterShrinkAnim, {
+                  toValue: 0, duration: 350, easing: Easing.out(Easing.cubic), useNativeDriver: false,
+                }).start();
+              });
+            }
+          } else {
+            setIsExerciseTimerPhase(false);
+            setShowTimer(true);
+          }
+        } else {
           counterShrinkAnim.setValue(1);
           startInlineRest();
           runRestStaggerIn();
@@ -1828,22 +1868,9 @@ export function ExerciseExecutionScreen() {
               }).start();
             });
           }
-        } else {
-          setIsExerciseTimerPhase(false);
-          setShowTimer(true);
         }
-      } else {
-        counterShrinkAnim.setValue(1);
-        startInlineRest();
-        runRestStaggerIn();
-        if (allExercisesComplete && isLastRound) {
-          nextLabelAnim.setValue(0);
-          requestAnimationFrame(() => {
-            Animated.timing(counterShrinkAnim, {
-              toValue: 0, duration: 350, easing: Easing.out(Easing.cubic), useNativeDriver: false,
-            }).start();
-          });
-        }
+      } catch (error) {
+        console.error('❌ Failed to start post-log timer flow', error);
       }
     }
     
@@ -1856,14 +1883,43 @@ export function ExerciseExecutionScreen() {
     } else if (type === 'main') {
       await updateMainCompletion(workoutKey, setId, true);
     }
+    console.log('🧪 [ExploreV2Log] completion persisted', {
+      setId,
+      type,
+      mainCompletedItems: type === 'main' ? getMainCompletion(workoutKey).completedItems.length : undefined,
+    });
     
     // Keep detailedWorkoutProgress in sync so other screens see progress.
     // Use template item id (currentExercise.id) as the key so history/previous log lookups match.
     const templateItemId = currentExercise.id;
     const setValues = localValuesRef.current[setId];
     const displayVals = getSetDisplayValues(currentExercise.id, currentRound, currentExercise.weight ?? 0, Number(currentExercise.reps) ?? 0);
-    const savedWeight = setValues?.weight ?? displayVals.weight ?? currentExercise.weight ?? 0;
-    const savedReps = setValues?.reps ?? displayVals.reps ?? Number(currentExercise.reps) ?? 0;
+    const overrideForThisSet = loggedSetOverride?.setId === setId ? loggedSetOverride.values : undefined;
+    const savedWeight = overrideForThisSet?.weight ?? setValues?.weight ?? displayVals.weight ?? currentExercise.weight ?? 0;
+    const savedReps = overrideForThisSet?.reps ?? setValues?.reps ?? displayVals.reps ?? Number(currentExercise.reps) ?? 0;
+    console.log('🧪 [ExploreV2Log] value snapshot', {
+      setId,
+      localValues: setValues,
+      displayVals,
+      savedWeight,
+      savedReps,
+      overrideForThisSet,
+    });
+    // Ensure the just-logged values deterministically carry to future unlogged rounds
+    // for this same exercise even across rapid re-renders.
+    setLocalValues(prev => {
+      const next = {
+        ...prev,
+        [setId]: { weight: savedWeight, reps: savedReps },
+      };
+      for (let r = currentRound + 1; r < currentGroup.totalRounds; r++) {
+        const sid = `${currentExercise.id}-set-${r}`;
+        if (!newCompletedSets.has(sid)) {
+          next[sid] = { weight: savedWeight, reps: savedReps };
+        }
+      }
+      return next;
+    });
     const existingProgress = useStore.getState().detailedWorkoutProgress[workoutKey]?.exercises[templateItemId];
     const existingSets = (existingProgress as any)?.sets || [];
     const updatedSets = [...existingSets.filter((s: any) => s.setNumber !== currentRound), {
@@ -1891,13 +1947,13 @@ export function ExerciseExecutionScreen() {
     
     // For main exercises with inline timer: save and return (timer handles advancement)
     // For warmup/core: save session then always advance immediately
-    if (type === 'main' && !isVeryLastSet) {
+    if (type === 'main' && !isSectionCompleteAfterThisSet) {
       await saveSession(newCompletedSets);
       return;
     }
     
     // Save session before advancing for warmup/core (previously only saved on group complete)
-    if ((type === 'warmup' || type === 'core') && !isVeryLastSet) {
+    if ((type === 'warmup' || type === 'core') && !isSectionCompleteAfterThisSet) {
       await saveSession(newCompletedSets);
     }
     
@@ -2076,10 +2132,19 @@ export function ExerciseExecutionScreen() {
           }
           
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-          setShowConfetti(true);
+          const shouldCelebrateExploreV2 = executionMode === 'explore-v2' && type === 'main';
+          if (shouldCelebrateExploreV2) {
+            setShowConfetti(false);
+          } else {
+            setShowConfetti(true);
+          }
           LayoutAnimation.configureNext(CARD_TRANSITION);
-          setExpandedGroupIndex(-1);
-          setActiveExerciseIndex(0);
+          if (shouldCelebrateExploreV2) {
+            setShowCompletionCelebration(true);
+          } else {
+            setExpandedGroupIndex(-1);
+            setActiveExerciseIndex(0);
+          }
         }
       } else {
         // Same group, next round — keep card expanded until all sets in this superset are logged
@@ -2130,7 +2195,7 @@ export function ExerciseExecutionScreen() {
     }
   };
   
-  const handleStart = async () => {
+  const handleStart = async (loggedSetOverride?: { setId: string; values: { weight: number; reps: number } }) => {
     if (expandedGroupIndex < 0) return;
     
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -2167,7 +2232,7 @@ export function ExerciseExecutionScreen() {
       }
     } else {
       // For reps-based exercises, mark as complete immediately
-      await handleComplete();
+      await handleComplete(loggedSetOverride);
     }
   };
   
@@ -2188,6 +2253,7 @@ export function ExerciseExecutionScreen() {
       setShowTimer(true);
     }
   };
+
 
   const handleCompleteAll = () => {
     setShowMenu(false);
@@ -2272,11 +2338,20 @@ export function ExerciseExecutionScreen() {
             }
             
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-            setShowConfetti(true);
+            const shouldCelebrateExploreV2 = executionMode === 'explore-v2' && type === 'main';
+            if (shouldCelebrateExploreV2) {
+              setShowConfetti(false);
+            } else {
+              setShowConfetti(true);
+            }
             if (type === 'main') {
-              LayoutAnimation.configureNext(CARD_TRANSITION);
-              setExpandedGroupIndex(-1);
-              setActiveExerciseIndex(0);
+              if (shouldCelebrateExploreV2) {
+                setShowCompletionCelebration(true);
+              } else {
+                LayoutAnimation.configureNext(CARD_TRANSITION);
+                setExpandedGroupIndex(-1);
+                setActiveExerciseIndex(0);
+              }
             } else {
               navigation.goBack();
             }
@@ -2965,7 +3040,7 @@ export function ExerciseExecutionScreen() {
               </View>
             )}
           </View>
-          {!isInPastCycle && (
+          {!isInPastCycle ? (
             <TouchableOpacity
               testID="menu-button"
               style={styles.menuButton}
@@ -2974,8 +3049,7 @@ export function ExerciseExecutionScreen() {
             >
               <IconMenu size={24} color={executionMode === 'explore-v2' ? exploreV2HeaderInk : '#FFFFFF'} />
             </TouchableOpacity>
-          )}
-          {isInPastCycle && (
+          ) : (
             <View style={styles.menuSpacer} />
           )}
         </View>
@@ -3050,6 +3124,7 @@ export function ExerciseExecutionScreen() {
                 getExerciseHistoryForDrawer={getExerciseHistoryForDrawer}
                 exerciseHistoryRefreshKey={refreshKey}
                 progressionValuesByItemId={progressionValuesByItemId}
+                celebrateCompletion={showCompletionCelebration}
                 />
               </AnimatedReanimated.View>
             </AnimatedReanimated.View>

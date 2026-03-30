@@ -119,7 +119,7 @@ export function ProfileScreen({ navigation }: ProfileScreenProps) {
   const languageEmoji = language === 'es' ? '🇪🇸' : '🇬🇧';
   const restTimeFormatted = `${Math.floor(settings.restTimerDefaultSeconds / 60)}:${(settings.restTimerDefaultSeconds % 60).toString().padStart(2, '0')}`;
   const unitLabel = settings.useKg ? 'kg' : 'lb';
-  const activeColorTheme: AppColorThemeId = settings.colorTheme ?? 'original';
+  const activeColorTheme: AppColorThemeId = settings.colorTheme ?? 'v1';
 
   const handleColorTheme = (id: AppColorThemeId) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -193,10 +193,8 @@ export function ProfileScreen({ navigation }: ProfileScreenProps) {
           <Text style={[styles.settingDescription, styles.themeHint]}>{t('colorThemeFootnote')}</Text>
           {(
             [
-              { id: 'original' as const, label: t('colorThemeOriginal') },
               { id: 'v1' as const, label: t('colorThemeV1') },
               { id: 'v2' as const, label: t('colorThemeV2') },
-              { id: 'v3' as const, label: t('colorThemeV3') },
             ] as const
           ).map((opt, i) => (
             <React.Fragment key={opt.id}>

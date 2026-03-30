@@ -285,7 +285,7 @@ function buildAutoWarmupItems(profile: 'upper' | 'legs', workoutId: string) {
 const DEFAULT_SETTINGS: AppSettings = {
   useKg: false,
   language: 'en',
-  colorTheme: 'original',
+  colorTheme: 'v1',
   monthlyProgressReminderEnabled: true,
   monthlyProgressReminderDay: 1,
   restTimerDefaultSeconds: 120,

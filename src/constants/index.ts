@@ -161,7 +161,7 @@ export const COLORS = {
   textPrimary: '#FFFFFF',           // Primary text
   textSecondary: '#AEAEB2',        // Secondary text
   /** Spec text-meta (light canvas) */
-  textMeta: '#585858',
+  textMeta: '#828282',
   textMetaSoft: '#48484A',         // Soft metadata/dividers
   textDisabled: '#48484A',         // Disabled text
   
