@@ -39,12 +39,11 @@ import * as Haptics from 'expo-haptics';
 import { useStore } from '../store';
 import { useAppTheme } from '../theme/useAppTheme';
 import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS, CARDS } from '../constants';
-import { IconArrowLeft, IconCheck, IconCheckmark, IconAddLine, IconMinusLine, IconTrash, IconEdit, IconMenu, IconHistory, IconRestart, IconSkip, IconSwap, IconArrowRight, IconAdd, IconPause, IconPlay, IconAddTime, IconChevronDown } from '../components/icons';
+import { IconArrowLeft, IconCheck, IconCheckmark, IconAddLine, IconMinusLine, IconTrash, IconEdit, IconMenu, IconHistory, IconRestart, IconSkip, IconSwap, IconArrowRight, IconAdd, IconPause, IconPlay, IconAddTime, IconChevronDown, IconClose } from '../components/icons';
 import { BottomDrawer } from '../components/common/BottomDrawer';
 import { NextLabel } from '../components/common/NextLabel';
 import { SetTimerSheet } from '../components/timer/SetTimerSheet';
-import { TimerValueSheet } from '../components/timer/TimerValueSheet';
-import { ActionSheet, type ActionSheetItem } from '../components/common/ActionSheet';
+import { ExecutionTopDrawer } from '../components/common/ExecutionTopDrawer';
 import { Toggle } from '../components/Toggle';
 import { ShapeConfetti } from '../components/common/ShapeConfetti';
 import { DeviceEdgeTimer } from '../components/common/DeviceEdgeTimer';
@@ -602,6 +601,11 @@ export function ExerciseExecutionScreen() {
   const [inlineExploreSwitchTimeLeft, setInlineExploreSwitchTimeLeft] = useState(0);
   const [inlineExploreWorkPaused, setInlineExploreWorkPaused] = useState(false);
   const [inlineExploreSwitchPaused, setInlineExploreSwitchPaused] = useState(false);
+  const exploreDisplayedSecRef = useRef<{ rest: number; work: number; switch: number }>({
+    rest: -1,
+    work: -1,
+    switch: -1,
+  });
   const inlineRestEndTimeRef = useRef<number>(0);
   const inlineRestTotalMsRef = useRef<number>(0);
   const inlineExploreWorkEndRef = useRef(0);
@@ -625,7 +629,6 @@ export function ExerciseExecutionScreen() {
   const buttonLabelOpacity = useRef(new Animated.Value(1)).current;
   const counterShrinkAnim = useRef(new Animated.Value(1)).current;
   const [showMenu, setShowMenu] = useState(false);
-  const [showRestTimePicker, setShowRestTimePicker] = useState(false);
   const [localRestOverride, setLocalRestOverride] = useState<number | null>(null);
   const [showExerciseHistory, setShowExerciseHistory] = useState(false);
   const [showSwapModal, setShowSwapModal] = useState(false);
@@ -882,9 +885,20 @@ export function ExerciseExecutionScreen() {
       else end = inlineRestEndTimeRef.current;
       const timeLeft = Math.max(0, end - Date.now());
       const remainingSec = Math.max(0, Math.ceil(timeLeft / 1000));
-      if (m === 'work') setInlineExploreWorkTimeLeft(remainingSec);
-      else if (m === 'switch') setInlineExploreSwitchTimeLeft(remainingSec);
-      else setInlineRestTimeLeft(remainingSec);
+      if (m === 'work') {
+        if (exploreDisplayedSecRef.current.work !== remainingSec) {
+          exploreDisplayedSecRef.current.work = remainingSec;
+          setInlineExploreWorkTimeLeft(remainingSec);
+        }
+      } else if (m === 'switch') {
+        if (exploreDisplayedSecRef.current.switch !== remainingSec) {
+          exploreDisplayedSecRef.current.switch = remainingSec;
+          setInlineExploreSwitchTimeLeft(remainingSec);
+        }
+      } else if (exploreDisplayedSecRef.current.rest !== remainingSec) {
+        exploreDisplayedSecRef.current.rest = remainingSec;
+        setInlineRestTimeLeft(remainingSec);
+      }
 
       if (remainingSec <= 0) {
         clearInterval(interval);
@@ -922,6 +936,7 @@ export function ExerciseExecutionScreen() {
   const localRestRef = useRef<number | null>(localRestOverride);
   localRestRef.current = localRestOverride;
 
+
   const startInlineRest = useCallback(() => {
     const restSeconds = localRestRef.current ?? settings.restTimerDefaultSeconds;
     const totalMs = restSeconds * 1000;
@@ -929,6 +944,7 @@ export function ExerciseExecutionScreen() {
     setExploreV2RestSkipDisplayHoldSec(null);
     setInlineRestTotal(restSeconds);
     setInlineRestTimeLeft(restSeconds);
+    exploreDisplayedSecRef.current.rest = restSeconds;
     setInlineRestPaused(false);
     inlineRestEndTimeRef.current = Date.now() + totalMs;
     inlineRestTotalMsRef.current = totalMs;
@@ -944,6 +960,7 @@ export function ExerciseExecutionScreen() {
     inlineExploreSwitchStartRef.current = Date.now();
     setInlineExploreSwitchPaused(false);
     setInlineExploreSwitchTimeLeft(EXPLORE_V2_SWITCH_SIDES_SEC);
+    exploreDisplayedSecRef.current.switch = EXPLORE_V2_SWITCH_SIDES_SEC;
     inlineExploreSwitchEndRef.current = Date.now() + totalMs;
     inlineExploreSwitchTotalMsRef.current = totalMs;
     setInlineExploreSwitchActive(true);
@@ -957,6 +974,7 @@ export function ExerciseExecutionScreen() {
     inlineExploreWorkStartRef.current = Date.now();
     setInlineExploreWorkPaused(false);
     setInlineExploreWorkTimeLeft(sec);
+    exploreDisplayedSecRef.current.work = sec;
     inlineExploreWorkEndRef.current = Date.now() + totalMs;
     inlineExploreWorkTotalMsRef.current = totalMs;
     setInlineExploreWorkActive(true);
@@ -1828,8 +1846,7 @@ export function ExerciseExecutionScreen() {
       return true;
     });
     
-    // Start the rest timer BEFORE any await — this ensures inlineRestActive is true
-    // when the store update triggers a re-render, preventing the action row from hiding
+    // Start timers after wallet motion settles so transitions feel stable.
     if (type === 'main' && !isSectionCompleteAfterThisSet) {
       try {
         const isLastGroup = expandedGroupIndex === exerciseGroups.length - 1;
@@ -1839,24 +1856,26 @@ export function ExerciseExecutionScreen() {
         const nextExAfterRest = allExercisesComplete ? 0 : activeExerciseIndex + 1;
         const nextExIsLast = nextExAfterRest >= currentGroup.exercises.length - 1;
         setInlineRestIsLastSet(isLastGroup && nextRoundIsLast && nextExIsLast);
-        if (currentExercise.isTimeBased) {
-          if (executionMode === 'explore-v2') {
-            counterShrinkAnim.setValue(1);
-            startInlineRest();
-            runRestStaggerIn();
-            if (allExercisesComplete && isLastRound) {
-              nextLabelAnim.setValue(0);
-              requestAnimationFrame(() => {
-                Animated.timing(counterShrinkAnim, {
-                  toValue: 0, duration: 350, easing: Easing.out(Easing.cubic), useNativeDriver: false,
-                }).start();
-              });
+        const runStartRest = () => {
+          if (currentExercise.isTimeBased) {
+            if (executionMode === 'explore-v2') {
+              counterShrinkAnim.setValue(1);
+              startInlineRest();
+              runRestStaggerIn();
+              if (allExercisesComplete && isLastRound) {
+                nextLabelAnim.setValue(0);
+                requestAnimationFrame(() => {
+                  Animated.timing(counterShrinkAnim, {
+                    toValue: 0, duration: 350, easing: Easing.out(Easing.cubic), useNativeDriver: false,
+                  }).start();
+                });
+              }
+            } else {
+              setIsExerciseTimerPhase(false);
+              setShowTimer(true);
             }
-          } else {
-            setIsExerciseTimerPhase(false);
-            setShowTimer(true);
+            return;
           }
-        } else {
           counterShrinkAnim.setValue(1);
           startInlineRest();
           runRestStaggerIn();
@@ -1868,7 +1887,8 @@ export function ExerciseExecutionScreen() {
               }).start();
             });
           }
-        }
+        };
+        runStartRest();
       } catch (error) {
         console.error('❌ Failed to start post-log timer flow', error);
       }
@@ -2253,6 +2273,37 @@ export function ExerciseExecutionScreen() {
       setShowTimer(true);
     }
   };
+
+  const handleRemoveSection = useCallback(() => {
+    setShowMenu(false);
+    setTimeout(() => {
+      Alert.alert(
+        type === 'warmup' ? t('removeWarmup') : 'Remove Core',
+        type === 'warmup'
+          ? t('removeWarmupConfirmation')
+          : 'Are you sure you want to remove the core exercises from this workout?',
+        [
+          {
+            text: t('cancel'),
+            style: 'cancel',
+          },
+          {
+            text: t('remove'),
+            style: 'destructive',
+            onPress: async () => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+              if (type === 'warmup') {
+                await updateWorkoutTemplate(workoutTemplateId, { warmupItems: [] });
+              } else if (type === 'core') {
+                await updateWorkoutTemplate(workoutTemplateId, { accessoryItems: [] });
+              }
+              navigation.goBack();
+            },
+          },
+        ]
+      );
+    }, 300);
+  }, [navigation, t, type, updateWorkoutTemplate, workoutTemplateId]);
 
 
   const handleCompleteAll = () => {
@@ -2653,13 +2704,6 @@ export function ExerciseExecutionScreen() {
     return template?.name || 'Workout';
   };
 
-  const restTimerMenuLabel = (() => {
-    const s = localRestOverride ?? settings.restTimerDefaultSeconds;
-    const mm = Math.floor(s / 60);
-    const ss = s % 60;
-    return `${mm}:${ss.toString().padStart(2, '0')}`;
-  })();
-
   // Helper function to get ordinal suffix for dates
   const getOrdinalSuffix = (day: number) => {
     if (day > 3 && day < 21) return 'th';
@@ -2988,6 +3032,12 @@ export function ExerciseExecutionScreen() {
   const preExecutionSwitchCtaHandler = shouldRenderWarmupSwitchCta
     ? handleSelectDifferentWarmup
     : handleSelectDifferentCore;
+  const handleOpenAddExerciseDrawer = useCallback(() => {
+    setShowAddExerciseDrawer(true);
+  }, []);
+  const handleRemoveExerciseFromExplore = useCallback(async (exercise: any) => {
+    await removeExerciseFromWorkout(exercise as WarmupItem);
+  }, [removeExerciseFromWorkout]);
   
   // Rest of the render logic from WarmupExecutionScreen...
   // (I'll keep this abbreviated for now, but it will include all the card rendering, drawer, timer, etc.)
@@ -3009,16 +3059,17 @@ export function ExerciseExecutionScreen() {
         <View style={styles.topBar}>
           <TouchableOpacity
             testID="back-button"
-            style={styles.backButton}
+            style={[styles.backButton, showMenu && styles.headerDimmed]}
             onPress={() => {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
               navigation.goBack();
             }}
             activeOpacity={1}
+            disabled={showMenu}
           >
             <IconArrowLeft size={24} color={executionMode === 'explore-v2' ? exploreV2HeaderInk : '#FFFFFF'} />
           </TouchableOpacity>
-          <View style={styles.topBarCenter}>
+          <View style={[styles.topBarCenter, showMenu && styles.headerDimmed]} pointerEvents={showMenu ? 'none' : 'auto'}>
             <Text
               testID="header-title"
               numberOfLines={1}
@@ -3044,10 +3095,14 @@ export function ExerciseExecutionScreen() {
             <TouchableOpacity
               testID="menu-button"
               style={styles.menuButton}
-              onPress={() => setShowMenu(true)}
+              onPress={() => (showMenu ? setShowMenu(false) : setShowMenu(true))}
               activeOpacity={1}
             >
-              <IconMenu size={24} color={executionMode === 'explore-v2' ? exploreV2HeaderInk : '#FFFFFF'} />
+              {showMenu ? (
+                <IconClose size={24} color={executionMode === 'explore-v2' ? exploreV2HeaderInk : '#FFFFFF'} />
+              ) : (
+                <IconMenu size={24} color={executionMode === 'explore-v2' ? exploreV2HeaderInk : '#FFFFFF'} />
+              )}
             </TouchableOpacity>
           ) : (
             <View style={styles.menuSpacer} />
@@ -3055,7 +3110,22 @@ export function ExerciseExecutionScreen() {
         </View>
       </View>
       
-      <AnimatedReanimated.View style={[styles.contentWrap, exploreV2ContentWrapBgAnimatedStyle]}>
+      {/* Top execution drawer */}
+      <ExecutionTopDrawer
+        visible={showMenu}
+        onClose={() => setShowMenu(false)}
+        restTimeSeconds={localRestOverride ?? settings.restTimerDefaultSeconds}
+        onRestTimeChange={setLocalRestOverride}
+        onComplete={type === 'main' && !allCurrentGroupsComplete ? handleCompleteAll : undefined}
+        onReset={handleReset}
+        onSecondaryDestructive={type === 'main' ? undefined : handleRemoveSection}
+        secondaryDestructiveLabel={type === 'warmup' ? t('removeWarmup') : t('remove')}
+      />
+
+      <AnimatedReanimated.View
+        style={[styles.contentWrap, exploreV2ContentWrapBgAnimatedStyle, showMenu && styles.contentDimmed]}
+        pointerEvents={showMenu ? 'none' : 'auto'}
+      >
         {executionMode === 'explore-v2' ? (
           <View style={styles.exploreV2Root} onLayout={onExploreV2RootLayout}>
             {shouldRenderPreExecutionSwitchCta ? (
@@ -3109,12 +3179,10 @@ export function ExerciseExecutionScreen() {
                 progressionGroups={progressionGroups}
                 updateProgressionGroup={updateProgressionGroup}
                 onSwapExercise={handleSwap}
-                onRemoveExercise={async (exercise) => {
-                  await removeExerciseFromWorkout(exercise as WarmupItem);
-                }}
+                onRemoveExercise={handleRemoveExerciseFromExplore}
                 exploreLayoutRootHeight={exploreV2AvailableRootHeight}
                 currentGroupHasLoggedSets={exploreV2CurrentGroupHasLoggedSets}
-                onOpenAddExercise={() => setShowAddExerciseDrawer(true)}
+                onOpenAddExercise={handleOpenAddExerciseDrawer}
                 onRemoveGroupFromUpNext={removeGroupFromWorkoutByIndex}
                 allowAddExercise={type === 'main'}
                 timerThemeActive={
@@ -4748,121 +4816,6 @@ export function ExerciseExecutionScreen() {
         </View>
       </Modal>
 
-      {/* Action Sheet Menu */}
-      <ActionSheet
-        visible={showMenu}
-        onClose={() => setShowMenu(false)}
-        items={
-          type === 'main' ? (allCurrentGroupsComplete ? [
-            {
-              icon: <IconAdd size={24} color="#FFFFFF" />,
-              label: t('addExercise'),
-              onPress: () => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                setShowMenu(false);
-                setTimeout(() => setShowAddExerciseDrawer(true), 350);
-              },
-              singleRow: true,
-            },
-            {
-              icon: <IconAddTime size={24} color="#FFFFFF" />,
-              label: restTimerMenuLabel,
-              onPress: () => {
-                setShowMenu(false);
-                setTimeout(() => setShowRestTimePicker(true), 350);
-              },
-              singleRow: true,
-            },
-            {
-              icon: <IconRestart size={24} color={COLORS.signalNegative} />,
-              label: t('reset'),
-              onPress: handleReset,
-              destructive: true,
-            },
-          ] : [
-            {
-              icon: <IconAdd size={24} color="#FFFFFF" />,
-              label: t('addExercise'),
-              onPress: () => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                setShowMenu(false);
-                setTimeout(() => setShowAddExerciseDrawer(true), 350);
-              },
-              singleRow: true,
-            },
-            {
-              icon: <IconAddTime size={24} color="#FFFFFF" />,
-              label: restTimerMenuLabel,
-              onPress: () => {
-                setShowMenu(false);
-                setTimeout(() => setShowRestTimePicker(true), 350);
-              },
-              singleRow: true,
-            },
-            {
-              icon: <IconRestart size={24} color={COLORS.signalNegative} />,
-              label: t('reset'),
-              onPress: handleReset,
-              destructive: true,
-            },
-            {
-              icon: <IconCheck size={24} color={COLORS.successBright} checkColor={COLORS.container} />,
-              label: t('complete'),
-              onPress: handleCompleteAll,
-              labelColor: COLORS.successBright,
-            },
-          ]) : (allCurrentGroupsComplete ? [
-            {
-              icon: <IconRestart size={24} color={COLORS.signalNegative} />,
-              label: t('reset'),
-              onPress: handleReset,
-              destructive: true,
-            },
-          ] : [
-            {
-              icon: <IconRestart size={24} color={COLORS.signalNegative} />,
-              label: t('reset'),
-              onPress: handleReset,
-              destructive: true,
-            },
-            {
-              icon: <IconTrash size={24} color={COLORS.error} />,
-              label: t('remove'),
-              onPress: () => {
-                setShowMenu(false);
-                setTimeout(() => {
-                  Alert.alert(
-                    type === 'warmup' ? t('removeWarmup') : 'Remove Core',
-                    type === 'warmup' ? t('removeWarmupConfirmation') : 'Are you sure you want to remove the core exercises from this workout?',
-                    [
-                      {
-                        text: t('cancel'),
-                        style: 'cancel',
-                      },
-                      {
-                        text: t('remove'),
-                        style: 'destructive',
-                        onPress: async () => {
-                          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                          // Update the template to remove items
-                          if (type === 'warmup') {
-                            await updateWorkoutTemplate(workoutTemplateId, { warmupItems: [] });
-                          } else if (type === 'core') {
-                            await updateWorkoutTemplate(workoutTemplateId, { accessoryItems: [] });
-                          }
-                          navigation.goBack();
-                        },
-                      },
-                    ]
-                  );
-                }, 300);
-              },
-              destructive: true,
-            },
-          ])
-        }
-      />
-      
       {/* Exercise Settings overflow menu: 3 toggles (stacked, label + toggle per line) then Swap, Remove */}
       {(() => {
         const menuGrpIdx = drawerGroupIndex ?? expandedGroupIndex;
@@ -5067,24 +5020,6 @@ export function ExerciseExecutionScreen() {
           onClose={() => setShowAddExerciseDrawer(false)}
         />
       </BottomDrawer>
-
-      {/* Local Rest Timer Picker */}
-      <TimerValueSheet
-        visible={showRestTimePicker}
-        onClose={() => setShowRestTimePicker(false)}
-        title="Workout Rest Time"
-        label=""
-        value={localRestOverride ?? settings.restTimerDefaultSeconds}
-        min={15}
-        max={300}
-        step={5}
-        onSave={(seconds) => {
-          setLocalRestOverride(seconds);
-          setShowRestTimePicker(false);
-        }}
-        formatValue={(val) => `${Math.floor(val / 60)}:${(val % 60).toString().padStart(2, '0')}`}
-        accentColor={COLORS.info}
-      />
 
     </AnimatedReanimated.View>
   );
@@ -5309,6 +5244,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.sm,
     minWidth: 0,
   },
+  headerDimmed: {
+    opacity: 0.3,
+  },
   /** Workout title — 20px via TYPOGRAPHY.h3 */
   headerTitle: {
     ...TYPOGRAPHY.h3,
@@ -5377,6 +5315,9 @@ const styles = StyleSheet.create({
   contentWrap: {
     flex: 1,
     backgroundColor: EXPLORE_V2.colors.pageBg,
+  },
+  contentDimmed: {
+    opacity: 0.3,
   },
   /** Solid rest theme — matches timer / chrome (#FFA424) */
   containerExploreV2RestTimer: {

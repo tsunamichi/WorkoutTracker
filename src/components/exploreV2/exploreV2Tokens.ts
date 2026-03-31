@@ -73,11 +73,39 @@ export const EXPLORE_V2 = {
     workTimerUpNextCardBg: '#9BD508',
   },
   motion: {
-    currentExitMs: 300,
+    duration: {
+      micro: 140,
+      quick: 220,
+      exit: 260,
+      standard: 320,
+      cardEnter: 380,
+      page: 420,
+    },
+    easing: {
+      smoothEnter: [0.22, 1, 0.36, 1] as const,
+      smoothExit: [0.32, 0.72, 0, 1] as const,
+      standard: [0.2, 0, 0, 1] as const,
+      inOut: [0.42, 0, 0.58, 1] as const,
+      linear: [0, 0, 1, 1] as const,
+    },
+    anticipation: {
+      subtleOffset: 8,
+      subtleDuration: 75,
+      heroOffset: 10,
+      heroDuration: 85,
+    },
+    /** Shared full-surface handoff for mode changes (work/rest, screen-level variants) */
+    surfaceTransition: {
+      durationMs: 320,
+      ease: [0.22, 1, 0.36, 1] as const,
+      translateYPx: 10,
+      minOpacity: 0.96,
+    },
+    currentExitMs: 260,
     /** Brief opposite motion before Current slides off the deck (px up, then exit down) */
-    currentExitAnticipationPx: 14,
-    currentExitAnticipationMs: 110,
-    currentEnterMs: 420,
+    currentExitAnticipationPx: 8,
+    currentExitAnticipationMs: 75,
+    currentEnterMs: 380,
     currentExitEase: [0.32, 0.72, 0, 1] as const,
     currentEnterEase: [0.22, 1, 0.36, 1] as const,
     currentExitScale: 0.985,
@@ -99,12 +127,12 @@ export const EXPLORE_V2 = {
       timerContainerExitEase: [0.32, 0.72, 0, 1] as const,
       timerDigitEase: [0.22, 0.61, 0.36, 1] as const,
     },
-    stackLayoutTransitionMs: 420,
+    stackLayoutTransitionMs: 320,
     stackLayoutTransitionEase: [0.42, 0, 0.58, 1] as const,
     /** Official rest timer — color + spatial choreography (entry/exit) */
     rest: {
       /** Rest entry/exit — stack shrink + colors + shared timer progress */
-      colorMs: 420,
+      colorMs: 320,
       /** Legacy — prefer `restTransitionEase` for the shared progress driver */
       colorEase: [0.22, 1, 0.36, 1] as const,
       /** Band + stack + colors: ease-in-out so resize doesn’t feel front-loaded (Material-like) */

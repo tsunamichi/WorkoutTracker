@@ -116,7 +116,7 @@ export const COLORS = {
   /** Mid gray surface (Up Next idle, section bands) */
   containerSecondary: CONTAINER_SECONDARY,
   /** Spec container-primary — primary dark surfaces (e.g. execution current card) */
-  containerPrimary: '#1F1F1F',
+  containerPrimary: '#002E29',
   /** Spec container-primary-dark — dark teal container used under pie remainders */
   containerPrimaryDark: '#011D1B',
   /** Spec container-tertiary — lighter gray surfaces (e.g. selected calendar pill) */

@@ -70,7 +70,7 @@ export function buildAppTheme(id: AppColorThemeId): AppTheme {
     /** Forest card + spec accent-primary (#FFA424) + cyan accents (Schedule + Explore execution). */
     const brandPrimary = COLORS.accentPrimary;
     const cyan = '#26C2B4';
-    const forest = '#002D29';
+    const forest = '#002E29';
     return {
       id,
       colors: {

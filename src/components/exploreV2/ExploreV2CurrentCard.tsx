@@ -291,24 +291,9 @@ function CurrentSetHeroPage({
     const parsedReps = parseRepsFromDraft();
     const effectiveParsedWeight = weightDirtyRef.current ? parsedWeight : null;
     const effectiveParsedReps = repsDirtyRef.current ? parsedReps : null;
-    console.log('🧪 [ExploreV2Log] commitBothDrafts input', {
-      setId,
-      weightDraft: weightDraftRef.current,
-      repsDraft: repsDraftRef.current,
-      parsedWeight: effectiveParsedWeight,
-      parsedReps: effectiveParsedReps,
-      heroW,
-      heroR,
-    });
     setLocalValues(prev => {
       const w = effectiveParsedWeight ?? prev[setId]?.weight ?? heroW;
       const r = effectiveParsedReps ?? prev[setId]?.reps ?? heroR;
-      console.log('🧪 [ExploreV2Log] commitBothDrafts resolved', {
-        setId,
-        previous: prev[setId],
-        resolvedWeight: w,
-        resolvedReps: r,
-      });
       return applyForwardPropagationForExerciseRounds(
         prev,
         heroEx.id,
@@ -570,26 +555,26 @@ export function ExploreV2CurrentCard({
   }, [celebrationProgress, bottomCornerRadius]);
   const ctaBgStyle = useAnimatedStyle(() => {
     if (exploreV2TimerPhase === 'rest' || exploreV2TimerPhase === 'work' || exploreV2TimerPhase === 'switchSides') {
-      return { backgroundColor: skipRestCtaBg };
+      return { backgroundColor: accentPrimary };
     }
     return {
       backgroundColor: interpolateColor(restThemeProgress.value, [0, 1], [accentPrimary, accentPrimaryDimmed]),
     };
-  }, [exploreV2TimerPhase, skipRestCtaBg, accentPrimary, accentPrimaryDimmed]);
+  }, [exploreV2TimerPhase, accentPrimary, accentPrimaryDimmed]);
   const ctaLabelStyle = useAnimatedStyle(() => {
     if (exploreV2TimerPhase === 'work' && isPrimary) {
-      return { color: accentPrimary };
+      return { color: themeColors.containerPrimary };
     }
     if (exploreV2TimerPhase === 'rest' && isPrimary) {
-      return { color: heroInk };
+      return { color: themeColors.containerPrimary };
     }
     if (exploreV2TimerPhase === 'switchSides' && isPrimary) {
-      return { color: heroInk };
+      return { color: themeColors.containerPrimary };
     }
     return {
       color: interpolateColor(restThemeProgress.value, [0, 1], [ctaPillLabelInk, CANVAS_INK]),
     };
-  }, [exploreV2TimerPhase, isPrimary, accentPrimary, heroInk, ctaPillLabelInk]);
+  }, [exploreV2TimerPhase, isPrimary, themeColors.containerPrimary, ctaPillLabelInk]);
   const heroColumnReserveStyle = useAnimatedStyle(() => {
     const reserve =
       settingsOverflow && isPrimary
@@ -622,12 +607,6 @@ export function ExploreV2CurrentCard({
   );
 
   const onLogPress = useCallback(() => {
-    console.log('🧪 [ExploreV2Log] onLogPress', {
-      activeSetId,
-      heroTimerActive,
-      carouselIndex,
-      nextIncompleteIndex,
-    });
     if (heroTimerActive) {
       onSkipRest();
       return;
@@ -692,130 +671,132 @@ export function ExploreV2CurrentCard({
         </View>
 
         <View style={styles.heroCtaContainer}>
-          <Reanimated.View style={[styles.heroColumn, heroColumnReserveStyle]}>
-            <View style={styles.heroUpper}>
-              <View
-                style={styles.carouselViewport}
-                onLayout={e => {
-                  const w = e.nativeEvent.layout.width;
-                  if (w > 0 && w !== pageWidth) setPageWidth(w);
-                }}
-              >
-                {orderedSlots.length > 0 && pageWidth > 0 ? (
-                  <ScrollView
-                    ref={scrollRef}
-                    horizontal
-                    pagingEnabled
-                    showsHorizontalScrollIndicator={false}
-                    keyboardShouldPersistTaps="handled"
-                    onMomentumScrollEnd={onCarouselScrollEnd}
-                    scrollEventThrottle={16}
+          <>
+              <Reanimated.View style={[styles.heroColumn, heroColumnReserveStyle]}>
+                <View style={styles.heroUpper}>
+                  <View
+                    style={styles.carouselViewport}
+                    onLayout={e => {
+                      const w = e.nativeEvent.layout.width;
+                      if (w > 0 && w !== pageWidth) setPageWidth(w);
+                    }}
                   >
-                    {orderedSlots.map(slot => (
-                      <CurrentSetHeroPage
-                        key={slotKey(slot)}
-                        slot={slot}
-                        group={group}
-                        completedSets={completedSets}
-                        getSetDisplayValues={getSetDisplayValues}
-                        localValues={localValues}
-                        setLocalValues={setLocalValues}
-                        useKg={useKg}
-                        weightUnit={weightUnit}
-                        getBarbellMode={getBarbellMode}
-                        metricsEditable={metricsEditable}
-                        heroValueColor={heroValueColor}
-                        heroUnitInk={currentCardUnitInk}
-                        perSideLabelColor={heroTimerActive ? accentSecondarySoft : themeColors.accentSecondary}
-                        perSideValueColor={heroTimerActive ? accentSecondarySoft : themeColors.accentSecondary}
-                        perSideUnitColor={heroTimerActive ? accentSecondarySoft : themeColors.accentSecondary}
-                        pageWidth={pageWidth}
-                        commitsRef={commitsRef}
-                        progressionValuesByItemId={progressionValuesByItemId}
-                      />
-                    ))}
-                  </ScrollView>
-                ) : null}
-              </View>
-
-              <View style={styles.footerRow}>
-                <AnimatedTouchableOpacity
-                  style={[styles.ctaPill, ctaBgStyle, !logPressable && styles.ctaPillDisabled]}
-                  onPress={onLogPress}
-                  disabled={!logPressable}
-                  activeOpacity={0.88}
-                >
-                  <Reanimated.Text style={[styles.ctaPillText, ctaLabelStyle]}>{ctaLabel}</Reanimated.Text>
-                </AnimatedTouchableOpacity>
-
-                <View style={styles.paginationWrap}>
-                  {orderedSlots.map((slot, i) => {
-                    const ex = group.exercises[slot.exerciseIndex];
-                    const sid = `${ex.id}-set-${slot.round}`;
-                    const done = completedSets.has(sid);
-                    const isView = i === carouselIndex;
-                    const isNext =
-                      nextIncomplete != null &&
-                      slot.round === nextIncomplete.round &&
-                      slot.exerciseIndex === nextIncomplete.exerciseIndex;
-                    return (
-                      <TouchableOpacity
-                        key={slotKey(slot)}
-                        onPress={() => scrollToSetIndex(i)}
-                        hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
-                        accessibilityRole="button"
-                        accessibilityLabel={`Set ${i + 1}`}
-                        accessibilityState={{ selected: isView }}
+                    {orderedSlots.length > 0 && pageWidth > 0 ? (
+                      <ScrollView
+                        ref={scrollRef}
+                        horizontal
+                        pagingEnabled
+                        showsHorizontalScrollIndicator={false}
+                        keyboardShouldPersistTaps="handled"
+                        onMomentumScrollEnd={onCarouselScrollEnd}
+                        scrollEventThrottle={16}
                       >
-                        <View style={styles.paginationItem}>
-                          <Text
-                            style={[
-                              styles.paginationDigit,
-                              isView && styles.paginationInView,
-                              heroTimerActive
-                                ? { color: accentSecondarySoft }
-                                : {
-                                    color: isView
-                                      ? accentPrimary
-                                      : themeColors.accentSecondary,
-                                  },
-                            ]}
+                        {orderedSlots.map(slot => (
+                          <CurrentSetHeroPage
+                            key={slotKey(slot)}
+                            slot={slot}
+                            group={group}
+                            completedSets={completedSets}
+                            getSetDisplayValues={getSetDisplayValues}
+                            localValues={localValues}
+                            setLocalValues={setLocalValues}
+                            useKg={useKg}
+                            weightUnit={weightUnit}
+                            getBarbellMode={getBarbellMode}
+                            metricsEditable={metricsEditable}
+                            heroValueColor={heroValueColor}
+                            heroUnitInk={currentCardUnitInk}
+                            perSideLabelColor={heroTimerActive ? accentSecondarySoft : themeColors.accentSecondary}
+                            perSideValueColor={heroTimerActive ? accentSecondarySoft : themeColors.accentSecondary}
+                            perSideUnitColor={heroTimerActive ? accentSecondarySoft : themeColors.accentSecondary}
+                            pageWidth={pageWidth}
+                            commitsRef={commitsRef}
+                            progressionValuesByItemId={progressionValuesByItemId}
+                          />
+                        ))}
+                      </ScrollView>
+                    ) : null}
+                  </View>
+
+                  <View style={styles.footerRow}>
+                    <AnimatedTouchableOpacity
+                      style={[styles.ctaPill, ctaBgStyle, !logPressable && styles.ctaPillDisabled]}
+                      onPress={onLogPress}
+                      disabled={!logPressable}
+                      activeOpacity={0.88}
+                    >
+                      <Reanimated.Text style={[styles.ctaPillText, ctaLabelStyle]}>{ctaLabel}</Reanimated.Text>
+                    </AnimatedTouchableOpacity>
+
+                    <View style={styles.paginationWrap}>
+                      {orderedSlots.map((slot, i) => {
+                        const ex = group.exercises[slot.exerciseIndex];
+                        const sid = `${ex.id}-set-${slot.round}`;
+                        const done = completedSets.has(sid);
+                        const isView = i === carouselIndex;
+                        const isNext =
+                          nextIncomplete != null &&
+                          slot.round === nextIncomplete.round &&
+                          slot.exerciseIndex === nextIncomplete.exerciseIndex;
+                        return (
+                          <TouchableOpacity
+                            key={slotKey(slot)}
+                            onPress={() => scrollToSetIndex(i)}
+                            hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
+                            accessibilityRole="button"
+                            accessibilityLabel={`Set ${i + 1}`}
+                            accessibilityState={{ selected: isView }}
                           >
-                            {i + 1}
-                          </Text>
-                        </View>
-                      </TouchableOpacity>
-                    );
-                  })}
+                            <View style={styles.paginationItem}>
+                              <Text
+                                style={[
+                                  styles.paginationDigit,
+                                  isView && styles.paginationInView,
+                                  heroTimerActive
+                                    ? { color: accentSecondarySoft }
+                                    : {
+                                        color: isView
+                                          ? accentPrimary
+                                          : themeColors.accentSecondary,
+                                      },
+                                ]}
+                              >
+                                {i + 1}
+                              </Text>
+                            </View>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+                  </View>
                 </View>
-              </View>
-            </View>
-          </Reanimated.View>
+              </Reanimated.View>
 
-          {settingsOverflow?.visible && isPrimary ? (
-            <Pressable
-              style={[StyleSheet.absoluteFillObject, styles.settingsBackdrop]}
-              onPress={() => settingsOverflow.onClose()}
-              accessibilityRole="button"
-              accessibilityLabel="Dismiss settings"
-            />
-          ) : null}
-
-          {settingsOverflow && isPrimary ? (
-            <View
-              style={styles.drawerSlot}
-              pointerEvents="box-none"
-              onLayout={e => setDrawerSlotHeight(e.nativeEvent.layout.height)}
-            >
-              {drawerSlotHeight > 0 ? (
-                <ExploreV2CurrentOverflowPanel
-                  containerHeight={drawerSlotHeight}
-                  interactive={isPrimary}
-                  {...settingsOverflow}
+              {settingsOverflow?.visible && isPrimary ? (
+                <Pressable
+                  style={[StyleSheet.absoluteFillObject, styles.settingsBackdrop]}
+                  onPress={() => settingsOverflow.onClose()}
+                  accessibilityRole="button"
+                  accessibilityLabel="Dismiss settings"
                 />
               ) : null}
-            </View>
-          ) : null}
+
+              {settingsOverflow && isPrimary ? (
+                <View
+                  style={styles.drawerSlot}
+                  pointerEvents="box-none"
+                  onLayout={e => setDrawerSlotHeight(e.nativeEvent.layout.height)}
+                >
+                  {drawerSlotHeight > 0 ? (
+                    <ExploreV2CurrentOverflowPanel
+                      containerHeight={drawerSlotHeight}
+                      interactive={isPrimary}
+                      {...settingsOverflow}
+                    />
+                  ) : null}
+                </View>
+              ) : null}
+          </>
         </View>
         </Reanimated.View>
         <Reanimated.View pointerEvents="none" style={[styles.completionMessageOverlay, celebrationMessageStyle]}>

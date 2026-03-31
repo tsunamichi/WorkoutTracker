@@ -27,6 +27,7 @@ import Reanimated, {
   Easing as ReanimatedEasing,
   cancelAnimation,
   interpolate,
+  runOnJS,
   useAnimatedStyle,
   useSharedValue,
   withRepeat,
@@ -52,6 +53,7 @@ const LIGHT_COLORS = {
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
 const CONTAINER_WIDTH = SCREEN_WIDTH - (SPACING.xxl * 2);
+const SURFACE_TRANSITION = EXPLORE_V2.motion.surfaceTransition;
 
 
 export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
@@ -89,11 +91,13 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
   const [menuVisible, setMenuVisible] = useState(false);
   const [placeholderHeight, setPlaceholderHeight] = useState(330);
   const [placeholderWidth, setPlaceholderWidth] = useState(330);
+  const [renderedRestPhase, setRenderedRestPhase] = useState(false);
   const isRestPhase = currentPhase === 'workRest' || currentPhase === 'roundRest';
   const heroLayoutProgress = useSharedValue(1);
   const heroWorkBlueProgress = useSharedValue(0);
   const restTransitionProgress = useSharedValue(isRestPhase ? 1 : 0);
   const diamondPulseProgress = useSharedValue(0);
+  const surfaceSwapProgress = useSharedValue(1);
   const heroProgress = useRef(new Animated.Value(1)).current;
   const ambientTranslateX = useRef(new Animated.Value(0)).current;
   
@@ -135,6 +139,25 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
     heroWorkBlueProgress.value = withTiming(isRestPhase ? 0 : 1, { duration: 220 });
     heroLayoutProgress.value = withTiming(currentPhase === 'complete' ? 0 : 1, { duration: 220 });
   }, [currentPhase, isRestPhase, heroLayoutProgress, heroWorkBlueProgress]);
+
+  useEffect(() => {
+    if (isRestPhase === renderedRestPhase) return;
+    surfaceSwapProgress.value = withTiming(
+      0,
+      {
+        duration: SURFACE_TRANSITION.durationMs / 2,
+        easing: ReanimatedEasing.bezier(...SURFACE_TRANSITION.ease),
+      },
+      finished => {
+        if (!finished) return;
+        runOnJS(setRenderedRestPhase)(isRestPhase);
+        surfaceSwapProgress.value = withTiming(1, {
+          duration: SURFACE_TRANSITION.durationMs / 2,
+          easing: ReanimatedEasing.bezier(...SURFACE_TRANSITION.ease),
+        });
+      },
+    );
+  }, [isRestPhase, renderedRestPhase, surfaceSwapProgress]);
 
   useEffect(() => {
     restTransitionProgress.value = withTiming(isRestPhase ? 1 : 0, {
@@ -215,6 +238,14 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
     return {
       opacity: t,
       transform: [{ rotate: '45deg' }, { scale: baseScale * pulseScale }],
+    };
+  });
+
+  const surfaceTransitionStyle = useAnimatedStyle(() => {
+    const p = surfaceSwapProgress.value;
+    return {
+      opacity: interpolate(p, [0, 1], [SURFACE_TRANSITION.minOpacity, 1]),
+      transform: [{ translateY: interpolate(p, [0, 1], [SURFACE_TRANSITION.translateYPx, 0]) }],
     };
   });
 
@@ -1323,43 +1354,44 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
   // Show empty state if timer is not found (will navigate back via useEffect)
   if (!timer) {
     return (
-      <View style={[styles.container, { backgroundColor: isRestPhase ? COLORS.accentPrimary : COLORS.backgroundTimer }]}>
+      <View style={[styles.container, { backgroundColor: renderedRestPhase ? COLORS.accentPrimary : COLORS.backgroundTimer }]}>
         <View style={styles.innerContainer} />
       </View>
     );
   }
 
   return (
-    <View style={[styles.container, { backgroundColor: isRestPhase ? COLORS.accentPrimary : COLORS.backgroundTimer }]}>
+    <View style={[styles.container, { backgroundColor: renderedRestPhase ? COLORS.accentPrimary : COLORS.backgroundTimer }]}>
       <ShapeConfetti active={showConfetti} />
-      <ExecutionScreenShell
-        title="Timer"
-        pageBackground={isRestPhase ? COLORS.accentPrimary : COLORS.backgroundTimer}
-        headerInk="#1F1F1F"
-        onBack={handleBack}
-        onMenu={handleMenu}
-        hero={
-          currentPhase !== 'complete' ? (
-            <View style={styles.timerHeroWrap}>
-              <ExploreV2TimerArea
-                layoutVariant="overlay"
-                active={isRunning}
-                layoutProgress={heroLayoutProgress}
-                timeLeftSec={secondsRemaining}
-                paused={!isRunning}
-                onPauseToggle={handlePlayPause}
-                progress={heroProgress}
-                contextLabel={currentPhase === 'work' ? 'work' : 'rest'}
-                workTimerVisualActive={!isRestPhase}
-                exploreV2WorkBlueProgress={heroWorkBlueProgress}
-              />
-            </View>
-          ) : (
-            <View style={styles.timerHeroWrap} />
-          )
-        }
-      >
-        <View style={[styles.timerCard, { height: '100%', marginBottom: 0, backgroundColor: explore.surfaceCurrentCard }]}>
+      <Reanimated.View style={[styles.surfaceTransitionWrap, surfaceTransitionStyle]}>
+        <ExecutionScreenShell
+          title="Timer"
+          pageBackground={renderedRestPhase ? COLORS.accentPrimary : COLORS.backgroundTimer}
+          headerInk="#1F1F1F"
+          onBack={handleBack}
+          onMenu={handleMenu}
+          hero={
+            currentPhase !== 'complete' ? (
+              <View style={styles.timerHeroWrap}>
+                <ExploreV2TimerArea
+                  layoutVariant="overlay"
+                  active={isRunning}
+                  layoutProgress={heroLayoutProgress}
+                  timeLeftSec={secondsRemaining}
+                  paused={!isRunning}
+                  onPauseToggle={handlePlayPause}
+                  progress={heroProgress}
+                  contextLabel={currentPhase === 'work' ? 'work' : 'rest'}
+                  workTimerVisualActive={!isRestPhase}
+                  exploreV2WorkBlueProgress={heroWorkBlueProgress}
+                />
+              </View>
+            ) : (
+              <View style={styles.timerHeroWrap} />
+            )
+          }
+        >
+          <View style={[styles.timerCard, { height: '100%', marginBottom: 0, backgroundColor: explore.surfaceCurrentCard }]}>
           {currentPhase === 'complete' ? (
             <View style={styles.completeMessageContainer}>
               <Text style={styles.completeText}>{getDisplayText()}</Text>
@@ -1434,8 +1466,9 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
               </View>
             </>
           )}
-        </View>
-      </ExecutionScreenShell>
+          </View>
+        </ExecutionScreenShell>
+      </Reanimated.View>
 
       <ActionSheet
         visible={menuVisible}
@@ -1492,8 +1525,8 @@ const styles = StyleSheet.create({
   },
   timerCard: {
     flex: 1,
-    marginHorizontal: EXPLORE_V2.margin,
-    marginBottom: 0,
+    marginHorizontal: 8,
+    marginBottom: 8,
     borderTopLeftRadius: EXPLORE_V2.cardTopRadius,
     borderTopRightRadius: EXPLORE_V2.cardTopRadius,
     borderBottomLeftRadius: EXPLORE_V2.cardRadius,
@@ -1512,6 +1545,9 @@ const styles = StyleSheet.create({
     marginBottom: 14,
     height: 128,
     width: '100%',
+  },
+  surfaceTransitionWrap: {
+    flex: 1,
   },
   cardInfoRow: {
     flexDirection: 'row',

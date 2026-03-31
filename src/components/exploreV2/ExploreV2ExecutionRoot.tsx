@@ -30,23 +30,29 @@ import { ExploreV2CurrentCard } from './ExploreV2CurrentCard';
 import type { ExerciseDrawerHistoryEntry } from './ExploreV2CurrentOverflowSheet';
 import { getExploreV2RadiusTokens } from './exploreV2Geometry';
 
-const EXIT_EASE = Easing.bezier(...EXPLORE_V2.motion.currentExitEase);
-const ENTER_EASE = Easing.bezier(...EXPLORE_V2.motion.currentEnterEase);
+const EXIT_EASE = Easing.bezier(...EXPLORE_V2.motion.easing.smoothExit);
+const ENTER_EASE = Easing.bezier(...EXPLORE_V2.motion.easing.smoothEnter);
 const EXIT_ANTICIPATION_EASE = Easing.out(Easing.cubic);
 const PEEK = EXPLORE_V2.peekHeaderHeight;
 /** Vertical offset applied to all wallet card layers (Complete / Up Next / Current) */
 const CARD_STACK_NUDGE_DOWN = 8;
 const STACK_BOTTOM_GAP = 0;
-const STACK_SIDE_GAP = 4;
+const STACK_SIDE_GAP = 8;
 const STACK_DEVICE_BOTTOM_GAP = 2;
 const CURRENT_IN_PROGRESS_PEEK_VISIBLE_HEIGHT = 136;
 /** Extra visible strip for collapsed Up Next when Completed is the primary card (wallet). */
 const COMPLETE_PRIMARY_UPNEXT_LIFT = 20;
 const REST_STACK_FRAC = EXPLORE_V2.layout.restStackHeightFraction;
-const EXIT_ANTICIPATION_PX = EXPLORE_V2.motion.currentExitAnticipationPx;
-const EXIT_ANTICIPATION_MS = EXPLORE_V2.motion.currentExitAnticipationMs;
-const MOTION_EXIT_MS = EXPLORE_V2.motion.currentExitMs;
-const MOTION_ENTER_MS = EXPLORE_V2.motion.currentEnterMs;
+const EXIT_ANTICIPATION_PX = EXPLORE_V2.motion.anticipation.subtleOffset;
+const EXIT_ANTICIPATION_MS = EXPLORE_V2.motion.anticipation.subtleDuration;
+const MOTION_EXIT_MS = EXPLORE_V2.motion.duration.exit;
+const MOTION_ENTER_MS = EXPLORE_V2.motion.duration.cardEnter;
+const CURRENT_OPEN_MS = EXPLORE_V2.motion.duration.standard;
+const CURRENT_CLOSE_MS = EXPLORE_V2.motion.duration.quick;
+const UP_NEXT_HIDE_MS = EXPLORE_V2.motion.duration.quick;
+const UP_NEXT_SHOW_MS = EXPLORE_V2.motion.duration.standard;
+const CELEBRATION_ENTER_MS = EXPLORE_V2.motion.duration.page;
+const CELEBRATION_EXIT_MS = EXPLORE_V2.motion.duration.quick;
 const EXPLORE_V2_DEBUG_LAYOUT = false;
 // Temporary debug mode for clipping/geometry inspection.
 // Set to false to disable all debug overlays.
@@ -128,7 +134,7 @@ export type ExploreV2ExecutionRootProps = {
   celebrateCompletion?: boolean;
 };
 
-export function ExploreV2ExecutionRoot(props: ExploreV2ExecutionRootProps) {
+function ExploreV2ExecutionRootComponent(props: ExploreV2ExecutionRootProps) {
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const {
@@ -207,7 +213,6 @@ export function ExploreV2ExecutionRoot(props: ExploreV2ExecutionRootProps) {
   /** After last set logged: keep Current mounted until slide-down exit finishes */
   const exitCompleteRef = useRef(true);
   const lastCurrentGroupRef = useRef<ExploreV2Group | null>(null);
-  const lastCurrentExpandedHRef = useRef(0);
   const exitAnimStartedRef = useRef(false);
   const [exitTick, setExitTick] = useState(0);
   const hasCompletePresent = completedExerciseIndexes.length > 0;
@@ -234,10 +239,6 @@ export function ExploreV2ExecutionRoot(props: ExploreV2ExecutionRootProps) {
       exploreLayoutRootHeight.value > 0 ? exploreLayoutRootHeight.value : screenHeight * 0.55;
     return Math.max(PEEK, interpolate(restThemeProgress.value, [0, 1], [Hroot, Hroot * REST_STACK_FRAC]));
   }, [screenHeight]);
-
-  const setLastCurrentExpandedH = useCallback((h: number) => {
-    lastCurrentExpandedHRef.current = h;
-  }, []);
 
   /** UI-thread exit sequence — useCallback worklet so runOnUI receives a real worklet (Babel). */
   const runExitSlideSequence = useCallback(
@@ -275,8 +276,8 @@ export function ExploreV2ExecutionRoot(props: ExploreV2ExecutionRootProps) {
 
   useEffect(() => {
     completionCelebrateProgress.value = withTiming(celebrateCompletion ? 1 : 0, {
-      duration: celebrateCompletion ? 420 : 220,
-      easing: Easing.out(Easing.cubic),
+      duration: celebrateCompletion ? CELEBRATION_ENTER_MS : CELEBRATION_EXIT_MS,
+      easing: Easing.bezier(...EXPLORE_V2.motion.easing.smoothEnter),
     });
     if (celebrateCompletion) setPrimaryRevealed('current');
   }, [celebrateCompletion, completionCelebrateProgress]);
@@ -293,9 +294,6 @@ export function ExploreV2ExecutionRoot(props: ExploreV2ExecutionRootProps) {
     hasCompletePresentSV.value = hasCompletePresent;
     currentGroupHasLoggedSetsSV.value = currentGroupHasLoggedSets;
     exitCompleteSV.value = exitCompleteRef.current ? 1 : 0;
-    if (!hasCurrent && lastCurrentGroupRef.current && !exitCompleteRef.current) {
-      currentExitLayerHeightSV.value = lastCurrentExpandedHRef.current;
-    }
     walletSlideApplyToken.value = walletSlideApplyToken.value + 1;
   }, [
     hasCurrent,
@@ -373,10 +371,10 @@ export function ExploreV2ExecutionRoot(props: ExploreV2ExecutionRootProps) {
     exitAnimStartedRef.current = false;
     exitCompleteRef.current = true;
     lastCurrentGroupRef.current = null;
-    const h = lastCurrentExpandedHRef.current;
+    const h = currentExitLayerHeightSV.value;
     currentSlideY.value = h;
     setExitTick(t => t + 1);
-  }, [currentSlideY]);
+  }, [currentSlideY, currentExitLayerHeightSV]);
 
   /** After last set: slide Current fully down off-screen before unmounting (UI runtime only). */
   useLayoutEffect(() => {
@@ -388,9 +386,9 @@ export function ExploreV2ExecutionRoot(props: ExploreV2ExecutionRootProps) {
       return;
     }
     exitAnimStartedRef.current = true;
-    const h = lastCurrentExpandedHRef.current;
+    const h = currentExitLayerHeightSV.value;
     runOnUI(runExitSlideSequence)(currentSlideY, h, onCurrentExitFinished);
-  }, [hasCurrent, onCurrentExitFinished, currentSlideY, runExitSlideSequence]);
+  }, [hasCurrent, onCurrentExitFinished, currentSlideY, currentExitLayerHeightSV, runExitSlideSequence]);
 
   /** Bottom-pinned Current + Up Next slides — runs on UI thread via useAnimatedReaction (no runOnUI(moduleWorklet)). */
   useAnimatedReaction(
@@ -417,16 +415,18 @@ export function ExploreV2ExecutionRoot(props: ExploreV2ExecutionRootProps) {
           currentSlideY.value = currentH;
         }
       } else {
-        runOnJS(setLastCurrentExpandedH)(currentH);
+        currentExitLayerHeightSV.value = currentH;
         const hiddenTarget = logged
           ? Math.max(0, currentH - CURRENT_IN_PROGRESS_PEEK_VISIBLE_HEIGHT)
           : currentH;
         const target = primaryCode === 1 ? 0 : hiddenTarget;
         const isEntering = primaryCode === 1;
-        currentSlideY.value = withTiming(target, {
-          duration: isEntering ? MOTION_ENTER_MS : MOTION_EXIT_MS,
-          easing: isEntering ? ENTER_EASE : EXIT_EASE,
-        });
+        if (Math.abs(currentSlideY.value - target) > 0.5) {
+          currentSlideY.value = withTiming(target, {
+            duration: isEntering ? CURRENT_OPEN_MS : CURRENT_CLOSE_MS,
+            easing: isEntering ? ENTER_EASE : EXIT_EASE,
+          });
+        }
       }
 
       const upNextH = Math.max(PEEK, sw - (hasCompleteW ? PEEK : 0));
@@ -439,18 +439,20 @@ export function ExploreV2ExecutionRoot(props: ExploreV2ExecutionRootProps) {
       const hiddenUpNext = Math.max(0, upNextH - upNextVisibleWhenComplete);
       const upNextTarget = primaryCode === 2 ? hiddenUpNext : 0;
       const revealingComplete = primaryCode === 2;
-      upNextSlideY.value = withTiming(upNextTarget, {
-        duration: revealingComplete ? MOTION_EXIT_MS : MOTION_ENTER_MS,
-        easing: revealingComplete ? EXIT_EASE : ENTER_EASE,
-      });
+      if (Math.abs(upNextSlideY.value - upNextTarget) > 0.5) {
+        upNextSlideY.value = withTiming(upNextTarget, {
+          duration: revealingComplete ? UP_NEXT_HIDE_MS : UP_NEXT_SHOW_MS,
+          easing: revealingComplete ? EXIT_EASE : ENTER_EASE,
+        });
+      }
     },
   );
 
   const triggerCurrentBlockNudge = useCallback(() => {
     currentBlockNudgeY.value = withSequence(
-      withTiming(-8, { duration: 65, easing: Easing.out(Easing.quad) }),
-      withTiming(2, { duration: 95, easing: Easing.out(Easing.cubic) }),
-      withTiming(0, { duration: 140, easing: Easing.out(Easing.cubic) }),
+      withTiming(-4, { duration: 45, easing: Easing.out(Easing.quad) }),
+      withTiming(1, { duration: 65, easing: Easing.out(Easing.cubic) }),
+      withTiming(0, { duration: 90, easing: Easing.out(Easing.cubic) }),
     );
   }, [currentBlockNudgeY]);
 
@@ -966,6 +968,8 @@ export function ExploreV2ExecutionRoot(props: ExploreV2ExecutionRootProps) {
     </Animated.View>
   );
 }
+
+export const ExploreV2ExecutionRoot = React.memo(ExploreV2ExecutionRootComponent);
 
 const styles = StyleSheet.create({
   root: {

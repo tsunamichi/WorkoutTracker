@@ -131,7 +131,7 @@ const styles = StyleSheet.create({
     flex: EXPLORE_V2.layout.restStackHeightFraction,
     minHeight: 0,
     overflow: 'visible',
-    paddingBottom: 4,
+    paddingBottom: 8,
     backgroundColor: 'transparent',
   },
 });

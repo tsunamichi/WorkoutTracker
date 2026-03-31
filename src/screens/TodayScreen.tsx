@@ -6,10 +6,10 @@ import Animated, {
   runOnJS,
   useAnimatedStyle,
   useSharedValue,
+  withDelay,
   withTiming,
 } from 'react-native-reanimated';
 import { Gesture, GestureDetector, TouchableOpacity as GHTouchableOpacity } from 'react-native-gesture-handler';
-import Svg, { Circle, Path } from 'react-native-svg';
 import * as Haptics from 'expo-haptics';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
@@ -140,8 +140,6 @@ const EXTRAS_PIN_BAR_HEIGHT = 56;
 /** Week strip: swipe snap animation (ms) */
 const WEEK_STRIP_PAN_MS = 240;
 
-const SCHEDULE_CARD_MAX_EXERCISES = 6;
-const SCHEDULE_CARD_EXERCISES_WHEN_MORE = 5;
 
 interface TodayScreenProps {
   onDateChange?: (isToday: boolean) => void;
@@ -198,6 +196,7 @@ export function TodayScreen({ onDateChange, onOpenAddWorkout, onOpenBonusDrawer 
   const [isTimerMode, setIsTimerMode] = useState(false);
   const [selectedDeckWorkout, setSelectedDeckWorkout] = useState<ScheduledWorkout | undefined>(undefined);
   const timerModeProgress = useSharedValue(0);
+  const timerHeaderProgress = useSharedValue(0);
 
   // TEMP: Seed dev data on mount (remove after use)
   const [seeded, setSeeded] = useState(false);
@@ -626,12 +625,14 @@ export function TodayScreen({ onDateChange, onOpenAddWorkout, onOpenBonusDrawer 
   const screenHeight = Dimensions.get('window').height;
   const schedulePaneAnimatedStyle = useAnimatedStyle(() => ({
     transform: [{ translateY: -screenHeight * timerModeProgress.value }],
-    opacity: 1 - timerModeProgress.value,
   }), [screenHeight]);
   const timerPaneAnimatedStyle = useAnimatedStyle(() => ({
     transform: [{ translateY: screenHeight * (1 - timerModeProgress.value) }],
-    opacity: timerModeProgress.value,
   }), [screenHeight]);
+  const timerHeaderAnimatedStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: 20 * (1 - timerHeaderProgress.value) }],
+    opacity: timerHeaderProgress.value,
+  }));
 
   const handleResumeCycleOnDay = async (resumeDateStr: string) => {
     if (!activeCyclePlan) return;
@@ -665,8 +666,19 @@ export function TodayScreen({ onDateChange, onOpenAddWorkout, onOpenBonusDrawer 
   }, []);
 
   useEffect(() => {
-    timerModeProgress.value = withTiming(isTimerMode ? 1 : 0, { duration: 260, easing: Easing.out(Easing.cubic) });
+    timerModeProgress.value = withTiming(isTimerMode ? 1 : 0, { duration: 420, easing: Easing.out(Easing.cubic) });
   }, [isTimerMode, timerModeProgress]);
+
+  useEffect(() => {
+    if (isTimerMode) {
+      timerHeaderProgress.value = withDelay(
+        500,
+        withTiming(1, { duration: 420, easing: Easing.out(Easing.cubic) }),
+      );
+      return;
+    }
+    timerHeaderProgress.value = withTiming(0, { duration: 420, easing: Easing.out(Easing.cubic) });
+  }, [isTimerMode, timerHeaderProgress]);
 
   const navigateToWorkoutExecution = useCallback(
     (sw: ScheduledWorkout) => {
@@ -681,12 +693,6 @@ export function TodayScreen({ onDateChange, onOpenAddWorkout, onOpenBonusDrawer 
     },
     [getMainCompletion, isInPastCycle, navigation],
   );
-
-  const handleWorkoutPress = () => {
-    if (selectedDay?.scheduledWorkout) {
-      navigateToWorkoutExecution(selectedDay.scheduledWorkout);
-    }
-  };
 
   useEffect(() => {
     setSelectedDeckWorkout(undefined);
@@ -761,6 +767,7 @@ export function TodayScreen({ onDateChange, onOpenAddWorkout, onOpenBonusDrawer 
                   >
                     {d.dayNumber}
                   </Text>
+                  {d.isToday ? <View style={styles.weekStripTodayDot} /> : null}
                 </View>
               </View>
             ) : (
@@ -774,6 +781,7 @@ export function TodayScreen({ onDateChange, onOpenAddWorkout, onOpenBonusDrawer 
                   >
                     {d.dayNumber}
                   </Text>
+                  {d.isToday ? <View style={styles.weekStripTodayDot} /> : null}
                 </View>
               </>
             )}
@@ -933,85 +941,14 @@ export function TodayScreen({ onDateChange, onOpenAddWorkout, onOpenBonusDrawer 
                   onActiveWorkoutChange={setSelectedDeckWorkout}
                 />
               ) : selectedDay?.scheduledWorkout ? (
-                <View style={styles.workoutCard}>
-                      <TouchableOpacity
-                        testID="workout-card"
-                        style={styles.workoutCardInner}
-                        onPress={handleWorkoutPress}
-                        activeOpacity={1}
-                        disabled={isInPastCycle && !(selectedDay.scheduledWorkout.isLocked || getMainCompletion(selectedDay.scheduledWorkout.id).percentage === 100)}
-                      >
-                    {(() => {
-                      const sw = selectedDay.scheduledWorkout;
-                      const mainCompletion = getMainCompletion(sw.id);
-                      const completionPercentage = mainCompletion.percentage;
-                      const isCompleted =
-                        completionPercentage === 100 || sw.isLocked === true || sw.status === 'completed';
-                      const progress = isCompleted ? 1 : completionPercentage / 100;
-                      const orderedExercises = [...(sw.exercisesSnapshot ?? [])].sort(
-                        (a, b) => a.order - b.order,
-                      );
-                      const exerciseDisplayName = (ex: (typeof orderedExercises)[0]) => {
-                        const lib = exercises.find(e => e.id === ex.exerciseId);
-                        return lib?.name ?? ex.exerciseId;
-                      };
-                      const exTotal = orderedExercises.length;
-                      const visibleExercises =
-                        exTotal <= SCHEDULE_CARD_MAX_EXERCISES
-                          ? orderedExercises
-                          : orderedExercises.slice(0, SCHEDULE_CARD_EXERCISES_WHEN_MORE);
-                      const moreExercisesCount =
-                        exTotal > SCHEDULE_CARD_MAX_EXERCISES
-                          ? exTotal - SCHEDULE_CARD_EXERCISES_WHEN_MORE
-                          : 0;
-
-                      return (
-                        <View style={styles.workoutCardContent}>
-                          <View style={styles.workoutTitleSection}>
-                            <Text style={styles.workoutName} numberOfLines={4}>
-                              {sw.titleSnapshot}
-                            </Text>
-                            {!isCompleted && progress > 0 ? (
-                              <View style={styles.workoutProgressRow}>
-                                <View style={styles.progressIndicator}>
-                                  <Text style={styles.progressText}>{completionPercentage}%</Text>
-                                  <Svg height="16" width="16" viewBox="0 0 16 16" style={styles.progressCircle}>
-                                    <Circle cx="8" cy="8" r="8" fill={COLORS.containerPrimaryDark} />
-                                    <Path
-                                      d={`M 8 8 L 8 0 A 8 8 0 ${progress > 0.5 ? 1 : 0} 1 ${
-                                        8 + 8 * Math.sin(2 * Math.PI * progress)
-                                      } ${8 - 8 * Math.cos(2 * Math.PI * progress)} Z`}
-                                      fill={COLORS.signalWarning}
-                                    />
-                                  </Svg>
-                                </View>
-                              </View>
-                            ) : null}
-                          </View>
-                          <View style={styles.workoutExerciseList}>
-                            {visibleExercises.map(ex => (
-                              <Text
-                                key={ex.id}
-                                style={styles.workoutExerciseListItem}
-                                numberOfLines={1}
-                                ellipsizeMode="tail"
-                              >
-                                {exerciseDisplayName(ex)}
-                              </Text>
-                            ))}
-                            {moreExercisesCount > 0 ? (
-                              <Text style={styles.workoutMoreExercises} numberOfLines={1}>
-                                {moreExercisesCount === 1
-                                  ? '+ 1 more exercise'
-                                  : `+ ${moreExercisesCount} more exercises`}
-                              </Text>
-                            ) : null}
-                          </View>
-                        </View>
-                      );
-                    })()}
-                      </TouchableOpacity>
-                </View>
+                <ScheduleWorkoutCardStack
+                  queue={[selectedDay.scheduledWorkout]}
+                  exercises={exercises}
+                  getMainCompletion={getMainCompletion}
+                  isInPastCycle={isInPastCycle}
+                  onOpenWorkout={navigateToWorkoutExecution}
+                  onActiveWorkoutChange={setSelectedDeckWorkout}
+                />
               ) : (
                 /* Per Product Spec: Empty Day State */
                 <View style={styles.restDayContainer}>
@@ -1064,42 +1001,42 @@ export function TodayScreen({ onDateChange, onOpenAddWorkout, onOpenBonusDrawer 
               </View>
               </View>
               </ScrollView>
-          </Animated.View>
-
-          {!isScheduleFutureDay && !isTimerMode ? (
-            <View style={[styles.footerActionsWrap, { paddingBottom: insets.bottom }]}>
-              <View style={styles.footerEntryRow}>
-                <TouchableOpacity style={styles.footerEntryCard} activeOpacity={0.85} onPress={() => void handleWarmupPress()}>
-                  <Text style={styles.footerEntryTitle}>{warmupCardTitle}</Text>
-                  <View style={styles.footerEntryIconCircle}>
-                    <IconWarmup size={24} color={COLORS.accentPrimary} />
-                  </View>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.footerEntryCard} activeOpacity={0.85} onPress={() => void handleCorePress()}>
-                  <Text style={styles.footerEntryTitle}>Core</Text>
-                  <View style={styles.footerEntryIconSquare}>
-                    <IconCore size={24} color={COLORS.accentPrimary} />
-                  </View>
-                </TouchableOpacity>
-              </View>
-              <TouchableOpacity
-                style={styles.timerSwitchButton}
-                activeOpacity={0.85}
-                onPress={() => {
-                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                  setIsTimerMode(true);
-                }}
-              >
-                <View style={{ transform: [{ rotate: '180deg' }] }}>
-                  <IconChevronDown size={20} color={COLORS.inkCharcoal} />
+          <View
+            pointerEvents={isTimerMode ? 'none' : 'auto'}
+            style={[styles.footerActionsWrap, { paddingBottom: insets.bottom }]}
+          >
+            <View style={styles.footerEntryRow}>
+              <TouchableOpacity style={styles.footerEntryCard} activeOpacity={0.85} onPress={() => void handleWarmupPress()}>
+                <Text style={styles.footerEntryTitle}>{warmupCardTitle}</Text>
+                <View style={styles.footerEntryIconCircle}>
+                  <IconWarmup size={24} color={COLORS.accentPrimary} />
                 </View>
-                <Text style={styles.timerSwitchText}>Timer</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.footerEntryCard} activeOpacity={0.85} onPress={() => void handleCorePress()}>
+                <Text style={styles.footerEntryTitle}>Core</Text>
+                <View style={styles.footerEntryIconSquare}>
+                  <IconCore size={24} color={COLORS.accentPrimary} />
+                </View>
               </TouchableOpacity>
             </View>
-          ) : null}
+            <TouchableOpacity
+              style={styles.timerSwitchButton}
+              activeOpacity={0.85}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                setIsTimerMode(true);
+              }}
+            >
+              <View style={{ transform: [{ rotate: '180deg' }] }}>
+                <IconChevronDown size={20} color={COLORS.inkCharcoal} />
+              </View>
+              <Text style={styles.timerSwitchText}>Timer</Text>
+            </TouchableOpacity>
+          </View>
+          </Animated.View>
 
           <Animated.View pointerEvents={isTimerMode ? 'auto' : 'none'} style={[styles.timerModePane, timerPaneAnimatedStyle]}>
-            <View style={[styles.timerModeHeader, { paddingTop: insets.top + 8 }]}>
+            <Animated.View style={[styles.timerModeHeader, { paddingTop: insets.top + 8 }, timerHeaderAnimatedStyle]}>
               <TouchableOpacity
                 style={styles.timerSwitchButton}
                 activeOpacity={0.85}
@@ -1108,10 +1045,10 @@ export function TodayScreen({ onDateChange, onOpenAddWorkout, onOpenBonusDrawer 
                   setIsTimerMode(false);
                 }}
               >
-                <IconChevronDown size={20} color={COLORS.inkCharcoal} />
                 <Text style={styles.timerSwitchText}>Schedule</Text>
+                <IconChevronDown size={20} color={COLORS.inkCharcoal} />
               </TouchableOpacity>
-            </View>
+            </Animated.View>
             <ScrollView
               style={styles.timerModeScroll}
               contentContainerStyle={[styles.timerModeScrollContent, { paddingBottom: insets.bottom + 24 }]}
@@ -1306,12 +1243,13 @@ const styles = StyleSheet.create({
   },
   weekStripRow: {
     paddingHorizontal: SPACING.md,
-    paddingTop: SPACING.sm,
+    paddingTop: 0,
     alignItems: 'stretch',
   },
   weekStripClip: {
     width: '100%',
     overflow: 'hidden',
+    paddingBottom: 10,
   },
   weekStripSlideRowInner: {
     flexDirection: 'row',
@@ -1344,22 +1282,31 @@ const styles = StyleSheet.create({
   },
   weekStripSelectedPill: {
     backgroundColor: COLORS.containerTertiary,
-    borderRadius: 10,
+    borderRadius: 6,
     paddingTop: 10,
     alignItems: 'center',
     alignSelf: 'center',
   },
   weekStripTextOnSelection: {
-    color: COLORS.inkCharcoal,
+    color: COLORS.containerPrimary,
   },
   weekStripNumWrap: {
-    minWidth: 40,
+    minWidth: 36,
     height: 40,
     borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 2,
+    marginTop: -2,
+    borderWidth: 0,
     borderColor: 'transparent',
+  },
+  weekStripTodayDot: {
+    position: 'absolute',
+    bottom: -10,
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: COLORS.containerPrimary,
   },
   weekStripNum: {
     ...TYPOGRAPHY.h3,

@@ -108,22 +108,8 @@ function UpNextQueueRow({
   onRemoveGroupFromUpNext,
 }: UpNextQueueRowProps) {
   const { explore: ex, colors: themeColors } = useAppTheme();
-  const workUpNextBg = ex.workTimerUpNextCardBg;
-  const amberBand = ex.amberBand;
   const restHeaderInk = ex.restTimerHeaderInk;
   const pageBg = EXPLORE_V2.colors.pageBg;
-  const rowFrontBgStyle = useAnimatedStyle(() => {
-    const b = restThemeProgress.value;
-    const w = exploreV2WorkBlueProgress.value;
-    const g = restChromeGateSV.value;
-    const rowFillAtBand = interpolateColor(w, [0, 1], [
-      interpolateColor(b * g, [0, 1], [EXPLORE_V2_PALETTES.upNext.main, amberBand]),
-      workUpNextBg,
-    ]);
-    return {
-      backgroundColor: interpolateColor(b, [0, 1], [EXPLORE_V2_PALETTES.upNext.main, rowFillAtBand]),
-    };
-  }, [amberBand, workUpNextBg]);
   const superscriptColorStyle = useAnimatedStyle(() => {
     const b = restThemeProgress.value;
     const w = exploreV2WorkBlueProgress.value;
@@ -143,10 +129,10 @@ function UpNextQueueRow({
 
   return (
     <View style={isLast ? undefined : styles.rowSeamOverlap}>
-      <Reanimated.View style={[styles.rowSwipeFront, rowFrontBgStyle]}>
+      <Reanimated.View style={styles.rowSwipeFront}>
         <TouchableOpacity
           style={styles.rowMain}
-          disabled={groupHasProgress || removeMode}
+          disabled={removeMode}
           onPress={() => onSelectGroup(groupIndex)}
           activeOpacity={0.75}
           accessibilityLabel={`${title}, ${roundsStr} rounds`}
@@ -307,31 +293,29 @@ export function ExploreV2UpNextCard({
           removeClippedSubviews={false}
         >
           <View style={styles.scrollPad}>
-          {isExpanded ? (
-            <View style={styles.actionRow}>
-              <TouchableOpacity
-                onPress={onOpenAddExercise}
-                hitSlop={8}
-                style={styles.actionBtn}
-                accessibilityLabel="Add exercise"
-                activeOpacity={0.75}
-                disabled={!allowAddExercise}
-              >
-                <Reanimated.Text style={[styles.actionText, addExerciseLinkAnimatedStyle, !allowAddExercise && styles.actionDisabled]}>
-                  + add
-                </Reanimated.Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={() => setRemoveMode(v => !v)}
-                hitSlop={8}
-                style={styles.actionBtn}
-                accessibilityLabel="Toggle remove mode"
-                activeOpacity={0.75}
-              >
-                <Reanimated.Text style={[styles.removeText, addExerciseLinkAnimatedStyle]}>- remove</Reanimated.Text>
-              </TouchableOpacity>
-            </View>
-          ) : null}
+          <View style={styles.actionRow}>
+            <TouchableOpacity
+              onPress={onOpenAddExercise}
+              hitSlop={8}
+              style={styles.actionBtn}
+              accessibilityLabel="Add exercise"
+              activeOpacity={0.75}
+              disabled={!allowAddExercise}
+            >
+              <Reanimated.Text style={[styles.actionText, addExerciseLinkAnimatedStyle, !allowAddExercise && styles.actionDisabled]}>
+                + add
+              </Reanimated.Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => setRemoveMode(v => !v)}
+              hitSlop={8}
+              style={styles.actionBtn}
+              accessibilityLabel="Toggle remove mode"
+              activeOpacity={0.75}
+            >
+              <Reanimated.Text style={[styles.removeText, addExerciseLinkAnimatedStyle]}>- remove</Reanimated.Text>
+            </TouchableOpacity>
+          </View>
           {showFullEmpty && (
             <View style={styles.emptyBlock}>
               <Text style={[styles.emptyTitle, { color: palette.dark }]}>No exercises yet</Text>
