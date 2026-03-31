@@ -59,6 +59,7 @@ export function ExploreV2CompleteCard({
   const restCompletedUnitInk = ex.restTimerCompletedUnitInk;
   const textMetaTimer = themeColors.textMetaTimer;
   const textMeta = themeColors.textMeta;
+  const accentPrimaryDark = themeColors.accentPrimaryDark;
   const containerPrimary = themeColors.containerPrimary;
   const workCompleteBg = ex.workTimerCompleteCardBg;
   const amberComplete = ex.amberBandComplete;
@@ -70,11 +71,11 @@ export function ExploreV2CompleteCard({
     const w = exploreV2WorkBlueProgress.value;
     const pRest = b * (1 - w);
     const pWork = b * w;
-    const restCol = interpolateColor(pRest, [0, 1], [containerPrimary, textMeta]);
+    const restCol = interpolateColor(pRest, [0, 1], [containerPrimary, accentPrimaryDark]);
     return {
       color: interpolateColor(pWork, [0, 1], [restCol, textMetaTimer]),
     };
-  }, [containerPrimary, textMeta, textMetaTimer]);
+  }, [containerPrimary, accentPrimaryDark, textMetaTimer]);
   const completedUnitAnimatedStyle = useAnimatedStyle(() => {
     const w = exploreV2WorkBlueProgress.value;
     const unitRest = interpolateColor(
@@ -145,7 +146,7 @@ export function ExploreV2CompleteCard({
             <IconChevronDown size={18} color={textMeta} />
           </Animated.View>
           <Animated.View style={[styles.chevronLayer, chevronTimerOpacityStyle]} pointerEvents="none">
-            <IconChevronDown size={18} color={textMeta} />
+            <IconChevronDown size={18} color={accentPrimaryDark} />
           </Animated.View>
           <Animated.View style={[styles.chevronLayer, chevronWorkOpacityStyle]} pointerEvents="none">
             <IconChevronDown size={18} color={textMetaTimer} />
@@ -250,6 +251,7 @@ const styles = StyleSheet.create({
     paddingLeft: 24,
     paddingRight: 12,
     paddingBottom: 0,
+    overflow: 'hidden',
   },
   peekTapOverlay: {
     ...StyleSheet.absoluteFillObject,
@@ -258,9 +260,10 @@ const styles = StyleSheet.create({
   countOrPlusSlot: {
     position: 'relative',
     width: 38,
-    height: 38,
+    height: 32,
     alignItems: 'center',
     justifyContent: 'center',
+    overflow: 'visible',
   },
   countOrPlusButton: {
     width: 38,
@@ -269,10 +272,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   headerLabel: {
-    ...TYPOGRAPHY.meta,
+    ...TYPOGRAPHY.legal,
     fontWeight: '500',
     letterSpacing: 0,
-    textTransform: 'none',
+    textTransform: 'uppercase',
   },
   headerCount: {
     fontSize: 15,

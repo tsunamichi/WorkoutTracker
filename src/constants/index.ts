@@ -140,7 +140,7 @@ export const COLORS = {
   secondarySoft: '#1C2A3A',      // Soft blue background
   accentPrimary: ACCENT_PRIMARY,
   accentPrimaryLight: adjustLightness(ACCENT_PRIMARY, 15),
-  accentPrimaryDark: adjustLightness(ACCENT_PRIMARY, -15),
+  accentPrimaryDark: '#8C5509',
   todayIndicator: BASE_INFO,  // Current day label & selected box
   accentPrimaryDimmed: '#372E1A',       // Subtle lime tint bg for selected states
   /** Spec accent-secondary (teal) */

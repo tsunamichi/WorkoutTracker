@@ -3166,7 +3166,6 @@ export function ExerciseExecutionScreen() {
                 perSideOverrides={perSideOverrides}
                 setPerSideOverrides={setPerSideOverrides}
                 handleStart={handleStart}
-                openExploreDetailSheet={openExploreDetailSheet}
                 showPrimaryCta={
                   exploreV2FrontGroupIndex !== null &&
                   canShowPrimaryCTAExploreV2(exploreV2FrontGroupIndex)

@@ -186,6 +186,7 @@ export function ExploreV2UpNextCard({
   const warmActivity = ex.warmActivity;
   const backgroundTimer = themeColors.backgroundTimer;
   const textMetaTimer = themeColors.textMetaTimer;
+  const accentPrimaryDark = themeColors.accentPrimaryDark;
   const textPrimary = themeColors.textPrimary;
   const textMeta = themeColors.textMeta;
   const containerPrimary = themeColors.containerPrimary;
@@ -204,18 +205,24 @@ export function ExploreV2UpNextCard({
     const w = exploreV2WorkBlueProgress.value;
     const pRest = b * (1 - w);
     const pWork = b * w;
-    const restCol = interpolateColor(pRest, [0, 1], [containerPrimary, textMeta]);
+    const restCol = interpolateColor(pRest, [0, 1], [containerPrimary, accentPrimaryDark]);
     return {
       color: interpolateColor(pWork, [0, 1], [restCol, textMetaTimer]),
     };
-  }, [containerPrimary, textMeta, textMetaTimer]);
+  }, [containerPrimary, accentPrimaryDark, textMetaTimer]);
   /** Keep action links on meta color for visual consistency. */
   const addExerciseLinkAnimatedStyle = useAnimatedStyle(() => {
+    const b = restThemeProgress.value;
+    const w = exploreV2WorkBlueProgress.value;
+    const pRest = b * (1 - w);
+    const pWork = b * w;
+    const restCol = interpolateColor(pRest, [0, 1], [textMeta, accentPrimaryDark]);
+    const color = interpolateColor(pWork, [0, 1], [restCol, textMetaTimer]);
     return {
-      color: textMeta,
-      borderBottomColor: textMeta,
+      color,
+      borderBottomColor: color,
     };
-  }, [textMeta]);
+  }, [textMeta, accentPrimaryDark, textMetaTimer]);
   const chevronIdleOpacityStyle = useAnimatedStyle(() => ({
     opacity: 1 - restThemeProgress.value * (1 - exploreV2WorkBlueProgress.value),
   }));
@@ -269,14 +276,14 @@ export function ExploreV2UpNextCard({
       {!isExpanded ? (
         <Pressable style={styles.peekTapOverlay} onPress={onHeaderPress} />
       ) : null}
-      <Pressable style={styles.headerRow} onPress={onHeaderPress}>
+      <Pressable style={[styles.headerRow, !hasCompletePresent && styles.headerRowNoComplete]} onPress={onHeaderPress}>
         <Reanimated.Text style={[styles.headerLabel, headerChromeAnimatedStyle]}>Up Next</Reanimated.Text>
         <View style={styles.countOrPlusSlot}>
           <Reanimated.View style={[styles.chevronLayer, chevronIdleOpacityStyle]} pointerEvents="none">
             <IconChevronDown size={18} color={textMeta} />
           </Reanimated.View>
           <Reanimated.View style={[styles.chevronLayer, chevronTimerOpacityStyle]} pointerEvents="none">
-            <IconChevronDown size={18} color={textMeta} />
+            <IconChevronDown size={18} color={accentPrimaryDark} />
           </Reanimated.View>
           <Reanimated.View style={[styles.chevronLayer, chevronWorkOpacityStyle]} pointerEvents="none">
             <IconChevronDown size={18} color={textMetaTimer} />
@@ -397,6 +404,9 @@ const styles = StyleSheet.create({
     paddingBottom: 0,
     overflow: 'hidden',
   },
+  headerRowNoComplete: {
+    paddingTop: 0,
+  },
   peekTapOverlay: {
     ...StyleSheet.absoluteFillObject,
     zIndex: 1,
@@ -438,10 +448,10 @@ const styles = StyleSheet.create({
     fontWeight: '400',
   },
   headerLabel: {
-    ...TYPOGRAPHY.meta,
+    ...TYPOGRAPHY.legal,
     fontWeight: '500',
     letterSpacing: 0,
-    textTransform: 'none',
+    textTransform: 'uppercase',
   },
   headerCount: {
     ...TYPOGRAPHY.legal,

@@ -76,6 +76,7 @@ export function buildAppTheme(id: AppColorThemeId): AppTheme {
       colors: {
         ...COLORS,
         ...accentSurfaces(brandPrimary),
+        accentPrimaryDark: '#8C5509',
         secondary: cyan,
         secondarySoft: mixHex(cyan, '#121018', 0.5),
         todayIndicator: mixHex(cyan, '#121018', 0.22),

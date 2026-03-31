@@ -94,7 +94,6 @@ export type ExploreV2ExecutionRootProps = {
   perSideOverrides: Record<string, boolean>;
   setPerSideOverrides: React.Dispatch<React.SetStateAction<Record<string, boolean>>>;
   handleStart: (payload?: { setId: string; values: { weight: number; reps: number } }) => Promise<void>;
-  openExploreDetailSheet: (groupIndex: number, exerciseIndex: number) => void;
   showPrimaryCta: boolean;
   onSkipRest: () => void;
   exploreV2TimerPhase: 'none' | 'work' | 'switchSides' | 'rest';
@@ -159,7 +158,6 @@ function ExploreV2ExecutionRootComponent(props: ExploreV2ExecutionRootProps) {
     perSideOverrides,
     setPerSideOverrides,
     handleStart,
-    openExploreDetailSheet,
     showPrimaryCta,
     onSkipRest,
     exploreV2TimerPhase,
@@ -508,7 +506,13 @@ function ExploreV2ExecutionRootComponent(props: ExploreV2ExecutionRootProps) {
   );
 
   const aUpNext = useAnimatedStyle(() => ({
-    transform: [{ translateY: upNextSlideY.value + CARD_STACK_NUDGE_DOWN }],
+    transform: [
+      {
+        translateY:
+          upNextSlideY.value +
+          (hasCompletePresentSV.value ? CARD_STACK_NUDGE_DOWN : 0),
+      },
+    ],
   }));
   const celebrationRecedeStyle = useAnimatedStyle(() => ({
     opacity: interpolate(completionCelebrateProgress.value, [0, 1], [1, 0.5]),
@@ -558,6 +562,10 @@ function ExploreV2ExecutionRootComponent(props: ExploreV2ExecutionRootProps) {
       triggerCurrentBlockNudge,
     ],
   );
+
+  const onSelectCompletedExercise = useCallback(() => {
+    // Disabled for now; completed-row tap design is pending.
+  }, []);
 
   const onLogNextSet = useCallback(async (payload?: { setId: string; values: { weight: number; reps: number } }) => {
     // CTA disabled state is handled in CurrentCard; avoid transient prop races blocking Log.
@@ -686,7 +694,7 @@ function ExploreV2ExecutionRootComponent(props: ExploreV2ExecutionRootProps) {
       </Animated.View>
     ) : null;
 
-  if (allComplete && !celebrateCompletion) {
+  if (allComplete && !celebrateCompletion && primaryRevealed !== 'current') {
     return (
       <Animated.View style={[styles.completeOnly, walletShellRadii]}>
         <Animated.View style={[styles.rootFill, rootFillAnimatedStyle]}>
@@ -697,7 +705,7 @@ function ExploreV2ExecutionRootComponent(props: ExploreV2ExecutionRootProps) {
               getSetDisplayValues={getSetDisplayValues}
               useKg={useKg}
               weightUnit={weightUnit}
-              onOpenExercise={(gi, ei) => openExploreDetailSheet(gi, ei)}
+              onOpenExercise={onSelectCompletedExercise}
               onHeaderPress={() => {}}
               isExpanded
               frontBottomRadius={radius.frontBottomRadius}
@@ -805,7 +813,7 @@ function ExploreV2ExecutionRootComponent(props: ExploreV2ExecutionRootProps) {
               getSetDisplayValues={getSetDisplayValues}
               useKg={useKg}
               weightUnit={weightUnit}
-              onOpenExercise={(gi, ei) => openExploreDetailSheet(gi, ei)}
+              onOpenExercise={onSelectCompletedExercise}
               onHeaderPress={() => {
                 Haptics.selectionAsync();
                 setPrimaryRevealed('complete');
@@ -877,7 +885,7 @@ function ExploreV2ExecutionRootComponent(props: ExploreV2ExecutionRootProps) {
                 getSetDisplayValues={getSetDisplayValues}
                 useKg={useKg}
                 weightUnit={weightUnit}
-                onOpenExercise={(gi, ei) => openExploreDetailSheet(gi, ei)}
+                onOpenExercise={onSelectCompletedExercise}
                 onHeaderPress={() => {
                   Haptics.selectionAsync();
                   setPrimaryRevealed('complete');

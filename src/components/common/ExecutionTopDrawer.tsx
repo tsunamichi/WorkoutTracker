@@ -10,8 +10,9 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
-import Reanimated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
+import Reanimated, { Easing, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { COLORS, TYPOGRAPHY } from '../../constants';
+import { EXPLORE_V2 } from '../exploreV2/exploreV2Tokens';
 
 type Props = {
   visible: boolean;
@@ -48,6 +49,7 @@ export function ExecutionTopDrawer({
   const dragStartValueRef = useRef(restTimeSeconds);
   const localRestRef = useRef(restTimeSeconds);
   const lastHapticValueRef = useRef(restTimeSeconds);
+  const actionCount = (onComplete ? 1 : 0) + 1 + (onSecondaryDestructive ? 1 : 0);
 
   useEffect(() => {
     localRestRef.current = localRestSeconds;
@@ -61,12 +63,14 @@ export function ExecutionTopDrawer({
   }, [visible, restTimeSeconds]);
 
   useEffect(() => {
-    const expandedHeight = 420 + insets.top;
+    // Dynamic estimated height: keeps open animation snappy while avoiding large empty space.
+    const expandedHeight = 236 + actionCount * 56 + insets.top;
     const target = visible ? expandedHeight : 0;
     animatedHeight.value = withTiming(target, {
-      duration: visible ? 200 : 160,
+      duration: EXPLORE_V2.motion.duration.quick,
+      easing: Easing.bezier(...EXPLORE_V2.motion.easing.smoothExit),
     });
-  }, [visible, insets.top, animatedHeight]);
+  }, [visible, insets.top, animatedHeight, actionCount]);
 
   const drawerAnimatedStyle = useAnimatedStyle(() => ({
     height: animatedHeight.value,

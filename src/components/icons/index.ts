@@ -3,6 +3,7 @@ export { IconAddLine } from './IconAddLine';
 export { IconAddTime } from './IconAddTime';
 export { IconAI } from './IconAI';
 export { IconArrowLeft } from './IconArrowLeft';
+export { IconArrowDiagonal } from './IconArrowDiagonal';
 export { IconArrowRight } from './IconArrowRight';
 export { IconCalendar } from './IconCalendar';
 export { IconCheck } from './IconCheck';

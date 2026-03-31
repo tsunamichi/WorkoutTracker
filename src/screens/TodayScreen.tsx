@@ -15,7 +15,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { useStore } from '../store';
 import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS, CARDS } from '../constants';
-import { IconCheckmark, IconAdd, IconSettings, IconCalendar, IconPlay, IconCore, IconWarmup, IconStopwatch, IconChevronDown } from '../components/icons';
+import { IconCheckmark, IconAdd, IconSettings, IconCalendar, IconPlay, IconStopwatch, IconChevronDown, IconArrowDiagonal } from '../components/icons';
 import { DiagonalLinePattern } from '../components/common/DiagonalLinePattern';
 import { ScheduleWorkoutCardStack } from '../components/schedule/ScheduleWorkoutCardStack';
 import { CycleControlSheet } from '../components/CycleControlSheet';
@@ -1007,16 +1007,22 @@ export function TodayScreen({ onDateChange, onOpenAddWorkout, onOpenBonusDrawer 
           >
             <View style={styles.footerEntryRow}>
               <TouchableOpacity style={styles.footerEntryCard} activeOpacity={0.85} onPress={() => void handleWarmupPress()}>
-                <Text style={styles.footerEntryTitle}>{warmupCardTitle}</Text>
-                <View style={styles.footerEntryIconCircle}>
-                  <IconWarmup size={24} color={COLORS.accentPrimary} />
+                <View style={styles.footerEntryTopRow}>
+                  <Text style={styles.footerEntryMeta}>{warmupProfile === 'legs' ? 'Lower Body' : 'Upper Body'}</Text>
+                  <View style={styles.footerEntryChevron}>
+                    <IconArrowDiagonal size={8} color={COLORS.textMeta} />
+                  </View>
                 </View>
+                <Text style={styles.footerEntryTitle}>Warm up</Text>
               </TouchableOpacity>
               <TouchableOpacity style={styles.footerEntryCard} activeOpacity={0.85} onPress={() => void handleCorePress()}>
-                <Text style={styles.footerEntryTitle}>Core</Text>
-                <View style={styles.footerEntryIconSquare}>
-                  <IconCore size={24} color={COLORS.accentPrimary} />
+                <View style={styles.footerEntryTopRow}>
+                  <Text style={styles.footerEntryMeta}>Balance</Text>
+                  <View style={styles.footerEntryChevron}>
+                    <IconArrowDiagonal size={8} color={COLORS.textMeta} />
+                  </View>
                 </View>
+                <Text style={styles.footerEntryTitle}>Core</Text>
               </TouchableOpacity>
             </View>
             <TouchableOpacity
@@ -1685,33 +1691,33 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: COLORS.containerTertiary,
     borderRadius: 10,
-    paddingHorizontal: SPACING.lg,
-    paddingTop: SPACING.md,
+    paddingLeft: SPACING.lg,
+    paddingRight: 6,
+    paddingTop: 10,
     paddingBottom: 12,
-    minHeight: 120,
+    height: 112,
+    justifyContent: 'space-between',
+  },
+  footerEntryTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  footerEntryMeta: {
+    ...TYPOGRAPHY.legal,
+    color: COLORS.textMeta,
+    fontWeight: '500',
   },
   footerEntryTitle: {
-    ...TYPOGRAPHY.body,
-    color: COLORS.inkCharcoal,
-    marginBottom: SPACING.md,
+    ...TYPOGRAPHY.h3,
+    color: COLORS.containerPrimary,
+    fontWeight: '500',
   },
-  footerEntryIconCircle: {
-    width: 70,
-    height: 70,
-    borderRadius: 35,
-    backgroundColor: COLORS.containerPrimary,
+  footerEntryChevron: {
+    width: 28,
+    height: 28,
     alignItems: 'center',
     justifyContent: 'center',
-    alignSelf: 'flex-end',
-  },
-  footerEntryIconSquare: {
-    width: 70,
-    height: 70,
-    borderRadius: 18,
-    backgroundColor: COLORS.containerPrimary,
-    alignItems: 'center',
-    justifyContent: 'center',
-    alignSelf: 'flex-end',
   },
   timerSwitchButton: {
     alignItems: 'center',

@@ -868,10 +868,10 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   eyebrow: {
-    ...TYPOGRAPHY.meta,
+    ...TYPOGRAPHY.legal,
     fontWeight: '500',
     letterSpacing: 0,
-    textTransform: 'none',
+    textTransform: 'uppercase',
   },
   exerciseName: {
     ...TYPOGRAPHY.displayLarge,
