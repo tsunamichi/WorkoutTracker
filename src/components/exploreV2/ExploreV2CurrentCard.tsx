@@ -443,6 +443,7 @@ export function ExploreV2CurrentCard({
   const accentPrimary = themeColors.accentPrimary;
   const accentPrimaryDimmed = themeColors.accentPrimaryDimmed;
   const accentSecondarySoft = themeColors.accentSecondarySoft;
+  const accentSecondaryDisabled = themeColors.accentSecondaryDisabled;
   const skipRestCtaBg = ex.skipRestCtaBg;
   const ctaPillLabelInk = ex.ctaPillText;
   const isPrimary = primaryRevealed === 'current';
@@ -527,10 +528,14 @@ export function ExploreV2CurrentCard({
             : 'Log next set';
   const collapsedSecondary = !isPrimary && showCollapsedWhenSecondary;
   const metricsEditable = isPrimary && !heroTimerActive;
-  const heroValueColor = heroTimerActive ? accentSecondarySoft : accentPrimary;
 
   const logEnabledForSlot =
     nextIncompleteIndex < 0 || carouselIndex === nextIncompleteIndex;
+  const inactiveSetPreview = !heroTimerActive && !logEnabledForSlot;
+  const useDisabledHeroPalette = heroTimerActive || inactiveSetPreview;
+  const heroValueColor = useDisabledHeroPalette ? accentSecondaryDisabled : accentPrimary;
+  const heroUnitColor = useDisabledHeroPalette ? accentSecondaryDisabled : accentPrimary;
+  const settingsDisabledTone = heroTimerActive ? accentSecondaryDisabled : accentSecondarySoft;
   const logPressable =
     heroTimerActive || (showPrimaryCta && logEnabledForSlot);
 
@@ -557,10 +562,13 @@ export function ExploreV2CurrentCard({
     if (exploreV2TimerPhase === 'rest' || exploreV2TimerPhase === 'work' || exploreV2TimerPhase === 'switchSides') {
       return { backgroundColor: accentPrimary };
     }
+    if (inactiveSetPreview) {
+      return { backgroundColor: accentSecondaryDisabled };
+    }
     return {
       backgroundColor: interpolateColor(restThemeProgress.value, [0, 1], [accentPrimary, accentPrimaryDimmed]),
     };
-  }, [exploreV2TimerPhase, accentPrimary, accentPrimaryDimmed]);
+  }, [exploreV2TimerPhase, inactiveSetPreview, accentPrimary, accentPrimaryDimmed, accentSecondaryDisabled]);
   const ctaLabelStyle = useAnimatedStyle(() => {
     if (exploreV2TimerPhase === 'work' && isPrimary) {
       return { color: themeColors.containerPrimary };
@@ -656,9 +664,9 @@ export function ExploreV2CurrentCard({
                     if (settingsOverflow.visible) settingsOverflow.onClose();
                     else settingsOverflow.onOpenSheet();
                   }}
-                  textStyle={styles.currentSettingsButtonText}
-                  color={accentSecondarySoft}
-                  underlineColor={accentSecondarySoft}
+                  textStyle={[styles.currentSettingsButtonText, { color: settingsDisabledTone }]}
+                  color={settingsDisabledTone}
+                  underlineColor={settingsDisabledTone}
                 />
               ) : null}
             </View>
@@ -711,8 +719,8 @@ export function ExploreV2CurrentCard({
                             getBarbellMode={getBarbellMode}
                             metricsEditable={metricsEditable}
                             heroValueColor={heroValueColor}
-                            unitLabelColor={accentPrimary}
-                            perSideLabelColor={accentSecondarySoft}
+                            unitLabelColor={heroUnitColor}
+                            perSideLabelColor={useDisabledHeroPalette ? accentSecondaryDisabled : accentSecondarySoft}
                             pageWidth={carouselViewportWidth}
                             commitsRef={commitsRef}
                             progressionValuesByItemId={progressionValuesByItemId}
@@ -724,7 +732,11 @@ export function ExploreV2CurrentCard({
 
                   <View style={styles.footerRow}>
                     <AnimatedTouchableOpacity
-                      style={[styles.ctaPill, ctaBgStyle, !logPressable && styles.ctaPillDisabled]}
+                      style={[
+                        styles.ctaPill,
+                        ctaBgStyle,
+                        !logPressable && !inactiveSetPreview && styles.ctaPillDisabled,
+                      ]}
                       onPress={onLogPress}
                       disabled={!logPressable}
                       activeOpacity={0.88}
@@ -757,7 +769,7 @@ export function ExploreV2CurrentCard({
                                   styles.paginationDigit,
                                   isView && styles.paginationInView,
                                   heroTimerActive
-                                    ? { color: accentSecondarySoft }
+                                    ? { color: accentSecondaryDisabled }
                                     : {
                                         color: isView
                                           ? accentPrimary

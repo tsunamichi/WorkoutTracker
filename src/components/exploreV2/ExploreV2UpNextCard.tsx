@@ -88,6 +88,7 @@ function UpNextQueueRow({
   const { explore: ex, colors: themeColors } = useAppTheme();
   const restHeaderInk = ex.restTimerHeaderInk;
   const pageBg = EXPLORE_V2.colors.pageBg;
+  const [roundAnchor, setRoundAnchor] = useState({ top: 0, left: 0 });
   const roundsColorStyle = useAnimatedStyle(() => {
     const b = restThemeProgress.value;
     const w = exploreV2WorkBlueProgress.value;
@@ -103,6 +104,24 @@ function UpNextQueueRow({
   }), [pageBg, themeColors.containerPrimary]);
   const title = groupTitle(group);
   const roundsStr = String(group.totalRounds);
+  const onNameTextLayout = useCallback((e: any) => {
+    const lines = e?.nativeEvent?.lines;
+    if (!Array.isArray(lines) || lines.length === 0) return;
+    const last = lines[lines.length - 1];
+    const fallbackLineHeight = TYPOGRAPHY.displayLarge.lineHeight ?? 36;
+    const nextTop =
+      typeof last?.y === 'number'
+        ? last.y
+        : Math.max(0, (lines.length - 1) * fallbackLineHeight);
+    const nextLeft =
+      typeof last?.width === 'number'
+        ? last.width + 6
+        : 6;
+    setRoundAnchor(prev =>
+      prev.top === nextTop && prev.left === nextLeft
+        ? prev
+        : { top: nextTop, left: nextLeft });
+  }, []);
 
   return (
     <View style={isLast ? undefined : styles.rowSeamOverlap}>
@@ -115,14 +134,22 @@ function UpNextQueueRow({
           accessibilityLabel={`${title}, ${roundsStr} rounds`}
         >
           <View style={styles.nameBlock}>
-            <View style={styles.nameLine}>
-              <Reanimated.Text style={[styles.name, rowNameInkStyle]} numberOfLines={2}>
-                {title}
-              </Reanimated.Text>
-              <Reanimated.Text style={[styles.roundsInline, roundsColorStyle]}>
-                {roundsStr}
-              </Reanimated.Text>
-            </View>
+            <Reanimated.Text
+              style={[styles.name, rowNameInkStyle]}
+              numberOfLines={2}
+              onTextLayout={onNameTextLayout}
+            >
+              {title}
+            </Reanimated.Text>
+            <Reanimated.Text
+              style={[
+                styles.roundsInline,
+                roundsColorStyle,
+                { top: roundAnchor.top, left: roundAnchor.left },
+              ]}
+            >
+              {roundsStr}
+            </Reanimated.Text>
           </View>
         </TouchableOpacity>
         {removeMode ? (
@@ -474,11 +501,7 @@ const styles = StyleSheet.create({
   nameBlock: {
     flexShrink: 1,
     minWidth: 0,
-  },
-  nameLine: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    minWidth: 0,
+    position: 'relative',
   },
   name: {
     ...TYPOGRAPHY.displayLarge,
@@ -491,8 +514,7 @@ const styles = StyleSheet.create({
     ...TYPOGRAPHY.body,
     fontWeight: '400',
     includeFontPadding: false,
-    marginLeft: 6,
-    marginTop: -2,
+    position: 'absolute',
   },
   emptyBlock: {
     paddingVertical: 8,

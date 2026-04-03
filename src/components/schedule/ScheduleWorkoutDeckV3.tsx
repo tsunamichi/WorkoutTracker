@@ -28,6 +28,9 @@ export type ScheduleDeckV3Item = {
   title: string;
   subtitle?: string;
   exerciseCount: number;
+  variant?: 'default' | 'completed';
+  cardBackgroundColor?: string;
+  cardTextColor?: string;
   onPress?: (origin?: { x: number; y: number; width: number; height: number; borderRadius: number }) => void;
 };
 
@@ -35,7 +38,9 @@ type Props = {
   items: ScheduleDeckV3Item[];
   mode: 'queue' | 'inProgress';
   inProgressItem?: ScheduleDeckV3Item;
+  initialIndex?: number;
 };
+type TouchNode = React.ElementRef<typeof TouchableOpacity>;
 
 function DeckCard({
   item,
@@ -46,22 +51,24 @@ function DeckCard({
   positionLabel: string;
   numberAnimatedStyle?: any;
 }) {
+  const cardBackgroundColor = item.cardBackgroundColor ?? COLORS.accentSecondarySoft;
+  const cardTextColor = item.cardTextColor ?? COLORS.containerPrimary;
   return (
-    <View style={styles.cardOuter}>
+    <View style={[styles.cardOuter, { backgroundColor: cardBackgroundColor }]}>
       <View style={styles.cardInner}>
-        <Animated.Text style={[styles.cardPositionLabel, numberAnimatedStyle]} numberOfLines={1}>
+        <Animated.Text style={[styles.cardPositionLabel, { color: cardTextColor }, numberAnimatedStyle]} numberOfLines={1}>
           {positionLabel}
         </Animated.Text>
-        <Text style={styles.cardTitle} numberOfLines={1}>
+        <Text style={[styles.cardTitle, { color: cardTextColor }]} numberOfLines={1}>
           {item.title}
         </Text>
-        <Text style={styles.cardMeta}>
+        <Text style={[styles.cardMeta, { color: cardTextColor }]}>
           {item.exerciseCount} {item.exerciseCount === 1 ? 'exercise' : 'exercises'}
         </Text>
-        {item.subtitle ? <Text style={styles.cardSubmeta}>{item.subtitle}</Text> : null}
+        {item.subtitle ? <Text style={[styles.cardSubmeta, { color: cardTextColor }]}>{item.subtitle}</Text> : null}
         <View style={styles.cardSpacer} />
         <View style={styles.cardFooter}>
-          <IconArrowDiagonal size={16} color={COLORS.containerPrimary} />
+          <IconArrowDiagonal size={16} color={cardTextColor} />
         </View>
       </View>
     </View>
@@ -85,11 +92,11 @@ function AnimatedCarouselItem({
   gap: number;
   scrollX: Animated.SharedValue<number>;
   snapInterval: number;
-  onPress: (item: ScheduleDeckV3Item, node?: TouchableOpacity | null) => void;
+  onPress: (item: ScheduleDeckV3Item, node?: TouchNode | null) => void;
   isLast: boolean;
   positionLabel: string;
 }) {
-  const itemRef = useRef<TouchableOpacity | null>(null);
+  const itemRef = useRef<TouchNode | null>(null);
   const animatedStyle = useAnimatedStyle(() => {
     const centerX = index * snapInterval;
     const progress = (scrollX.value - centerX) / snapInterval;
@@ -134,7 +141,7 @@ function AnimatedCarouselItem({
   );
 }
 
-export function ScheduleWorkoutDeckV3({ items, mode, inProgressItem }: Props) {
+export function ScheduleWorkoutDeckV3({ items, mode, inProgressItem, initialIndex = 0 }: Props) {
   const { width } = useWindowDimensions();
   const sideInset = 24;
   const viewportWidth = Math.max(0, width);
@@ -143,12 +150,17 @@ export function ScheduleWorkoutDeckV3({ items, mode, inProgressItem }: Props) {
 
   const queueItems = useMemo(() => items, [items]);
   const inProgressCard = inProgressItem ?? queueItems[0];
+  const clampedInitialIndex = useMemo(
+    () => Math.max(0, Math.min(initialIndex, Math.max(0, queueItems.length - 1))),
+    [initialIndex, queueItems.length],
+  );
 
-  const [currentIndex, setCurrentIndex] = useState(0);
+  const [currentIndex, setCurrentIndex] = useState(clampedInitialIndex);
   const isSwipingRef = useRef(false);
   const swipeUnlockTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const scrollX = useSharedValue(0);
-  const inProgressRef = useRef<TouchableOpacity | null>(null);
+  const inProgressRef = useRef<TouchNode | null>(null);
+  const listRef = useRef<FlatList<ScheduleDeckV3Item> | null>(null);
 
   useEffect(() => {
     setCurrentIndex(prev => {
@@ -156,6 +168,16 @@ export function ScheduleWorkoutDeckV3({ items, mode, inProgressItem }: Props) {
       return Math.min(prev, queueItems.length - 1);
     });
   }, [queueItems.length]);
+
+  useEffect(() => {
+    if (mode !== 'queue' || queueItems.length === 0) return;
+    setCurrentIndex(clampedInitialIndex);
+    const targetX = clampedInitialIndex * snapInterval;
+    requestAnimationFrame(() => {
+      listRef.current?.scrollToOffset({ offset: targetX, animated: false });
+      scrollX.value = targetX;
+    });
+  }, [mode, queueItems.length, clampedInitialIndex, snapInterval, scrollX]);
 
   useEffect(() => {
     return () => {
@@ -194,7 +216,7 @@ export function ScheduleWorkoutDeckV3({ items, mode, inProgressItem }: Props) {
     },
   });
 
-  const onCardPress = useCallback((item: ScheduleDeckV3Item, node?: TouchableOpacity | null) => {
+  const onCardPress = useCallback((item: ScheduleDeckV3Item, node?: TouchNode | null) => {
     if (isSwipingRef.current) return;
     if (!node || typeof (node as any).measureInWindow !== 'function') {
       item.onPress?.();
@@ -235,6 +257,7 @@ export function ScheduleWorkoutDeckV3({ items, mode, inProgressItem }: Props) {
   return (
     <View style={[styles.stackRoot, { height: STACK_HEIGHT }]}>
       <Animated.FlatList
+        ref={listRef}
         horizontal
         data={queueItems}
         keyExtractor={item => item.id}
@@ -284,7 +307,6 @@ const styles = StyleSheet.create({
     height: FRONT_H,
   },
   cardOuter: {
-    backgroundColor: COLORS.accentSecondarySoft,
     borderRadius: CARDS.cardDeep.outer.borderRadius,
     borderCurve: CARDS.cardDeep.outer.borderCurve,
     borderWidth: 2,

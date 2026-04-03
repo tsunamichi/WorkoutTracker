@@ -196,7 +196,8 @@ export function TodayScreen({ onDateChange, onOpenAddWorkout, onOpenBonusDrawer 
 
   const today = dayjs();
   const { t } = useTranslation();
-  const { colors: themeColors } = useAppTheme();
+  const { colors: themeColors, explore: exploreTheme } = useAppTheme();
+  const completedCardTextColor = exploreTheme.amberBand;
 
   // One-time repair for paused cycle schedule (safe to remove after fix is applied)
   React.useEffect(() => {
@@ -504,6 +505,15 @@ export function TodayScreen({ onDateChange, onOpenAddWorkout, onOpenBonusDrawer 
     (sw: ScheduledWorkout) => sw.status === 'in_progress' && hasWorkoutLogs(sw),
     [hasWorkoutLogs],
   );
+  const workoutDisplayDate = useCallback((sw: ScheduledWorkout) => {
+    if (sw.status === 'completed' && sw.completedAt) {
+      return dayjs(sw.completedAt).format('YYYY-MM-DD');
+    }
+    if (isWorkoutActuallyInProgress(sw) && sw.startedAt) {
+      return dayjs(sw.startedAt).format('YYYY-MM-DD');
+    }
+    return sw.date;
+  }, [isWorkoutActuallyInProgress]);
 
   /**
    * Swipe deck for the selected date:
@@ -511,15 +521,6 @@ export function TodayScreen({ onDateChange, onOpenAddWorkout, onOpenBonusDrawer 
    * - If selected day has an in-progress workout, keep it first but still include upcoming planned items.
    */
   const remainingWorkoutsQueue = React.useMemo(() => {
-    const workoutDisplayDate = (sw: ScheduledWorkout) => {
-      if (sw.status === 'completed' && sw.completedAt) {
-        return dayjs(sw.completedAt).format('YYYY-MM-DD');
-      }
-      if (isWorkoutActuallyInProgress(sw) && sw.startedAt) {
-        return dayjs(sw.startedAt).format('YYYY-MM-DD');
-      }
-      return sw.date;
-    };
     const isNotFinished = (sw: ScheduledWorkout) => {
       const mc = getMainCompletion(sw.id);
       return !(
@@ -586,8 +587,24 @@ export function TodayScreen({ onDateChange, onOpenAddWorkout, onOpenBonusDrawer 
     refreshTrigger,
     selectedDateCyclePlan,
     activeCyclePlan,
-    isWorkoutActuallyInProgress,
+    workoutDisplayDate,
   ]);
+  const completedWorkoutsForSelectedDay = useMemo(() => {
+    const selectedIsToday = selectedDate === today.format('YYYY-MM-DD');
+    if (!selectedIsToday) return [] as ScheduledWorkout[];
+    const isFinished = (sw: ScheduledWorkout) => {
+      const mc = getMainCompletion(sw.id);
+      return sw.isLocked || sw.status === 'completed' || mc.percentage === 100;
+    };
+    return scheduledWorkouts
+      .filter(sw => workoutDisplayDate(sw) === selectedDate)
+      .filter(isFinished)
+      .sort((a, b) => {
+        const aTs = dayjs(a.completedAt ?? a.startedAt ?? `${a.date}T00:00:00.000Z`).valueOf();
+        const bTs = dayjs(b.completedAt ?? b.startedAt ?? `${b.date}T00:00:00.000Z`).valueOf();
+        return bTs - aTs;
+      });
+  }, [selectedDate, today, scheduledWorkouts, getMainCompletion, workoutDisplayDate]);
   
   const handleAddOrCreateWorkout = (currentDate: string) => {
     onOpenAddWorkout?.(currentDate);
@@ -862,6 +879,30 @@ export function TodayScreen({ onDateChange, onOpenAddWorkout, onOpenBonusDrawer 
       }),
     [remainingWorkoutsQueue, exercises, navigateToWorkoutExecution],
   );
+  const completedTodayDeckItem: ScheduleDeckV3Item | undefined = useMemo(() => {
+    const sw = completedWorkoutsForSelectedDay[0];
+    if (!sw) return undefined;
+    const ordered = [...(sw.exercisesSnapshot ?? [])].sort((a, b) => a.order - b.order);
+    const exerciseCount = ordered.length;
+    return {
+      id: `completed-${sw.id}`,
+      title: sw.titleSnapshot,
+      subtitle: 'Completed',
+      exerciseCount,
+      variant: 'completed',
+      cardBackgroundColor: COLORS.accentPrimaryBackground,
+      cardTextColor: completedCardTextColor,
+      onPress: origin => navigateToWorkoutExecution(sw, origin),
+    };
+  }, [completedWorkoutsForSelectedDay, completedCardTextColor, navigateToWorkoutExecution]);
+  const carouselDeckItems: ScheduleDeckV3Item[] = useMemo(() => {
+    if (!completedTodayDeckItem) return deckItems;
+    return [completedTodayDeckItem, ...deckItems];
+  }, [completedTodayDeckItem, deckItems]);
+  const carouselInitialIndex = useMemo(() => {
+    if (!completedTodayDeckItem) return 0;
+    return carouselDeckItems.length > 1 ? 1 : 0;
+  }, [completedTodayDeckItem, carouselDeckItems.length]);
   const inProgressDeckItem = useMemo(() => {
     const sw = remainingWorkoutsQueue.find(isWorkoutActuallyInProgress);
     if (!sw) return undefined;
@@ -997,17 +1038,19 @@ export function TodayScreen({ onDateChange, onOpenAddWorkout, onOpenBonusDrawer 
               ) : remainingWorkoutsQueue.length > 0 ? (
                 <View style={styles.deckFullBleedWrap}>
                   <ScheduleWorkoutDeckV3
-                    items={deckItems}
+                    items={carouselDeckItems}
                     mode={deckMode}
                     inProgressItem={inProgressDeckItem}
+                    initialIndex={carouselInitialIndex}
                   />
                 </View>
               ) : selectedDay?.scheduledWorkout ? (
                 <View style={styles.deckFullBleedWrap}>
                   <ScheduleWorkoutDeckV3
-                    items={deckItems}
+                    items={carouselDeckItems}
                     mode={deckMode}
                     inProgressItem={inProgressDeckItem}
+                    initialIndex={carouselInitialIndex}
                   />
                 </View>
               ) : (
@@ -1050,8 +1093,6 @@ export function TodayScreen({ onDateChange, onOpenAddWorkout, onOpenBonusDrawer 
                     onPress={handleOpenCycleCalendar}
                     style={styles.cycleProgressAction}
                     textStyle={styles.profileLinkText}
-                    underlineOffset={2}
-                    underlineColor={COLORS.textPrimary}
                   />
                 ) : null}
                 {!isPausedDay &&
@@ -1315,6 +1356,7 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-end',
   },
   profileLinkText: {
+    ...TYPOGRAPHY.meta,
     color: COLORS.inkCharcoal,
   },
   scheduleHeaderTitle: {

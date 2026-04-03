@@ -92,6 +92,8 @@ export function hexToRgba(hex: string, alpha: number): string {
 
 // Base accent color — spec accent-primary
 const ACCENT_PRIMARY = '#FFA424';
+const ACCENT_PRIMARY_SOFT = hexToRgba(ACCENT_PRIMARY, 0.6);
+const ACCENT_PRIMARY_BACKGROUND = hexToRgba(ACCENT_PRIMARY, 0.16);
 const SIGNAL_NEGATIVE = '#FF453A';
 const BASE_GREEN = '#00351D';
 const SIGNAL_POSITIVE = BASE_GREEN;
@@ -106,6 +108,8 @@ const CONTAINER_SECONDARY = '#D9D9D9';
 const ACCENT_SECONDARY = '#58A186';
 /** Spec accent-secondary-soft. */
 const ACCENT_SECONDARY_SOFT = '#CFF0EE';
+/** Spec accent-secondary-disabled (accent-secondary-soft at 20% opacity). */
+const ACCENT_SECONDARY_DISABLED = hexToRgba(ACCENT_SECONDARY_SOFT, 0.2);
 
 export const COLORS = {
   // Core colors — dark palette
@@ -141,6 +145,8 @@ export const COLORS = {
   secondary: '#007AFF',          // Blue
   secondarySoft: '#1C2A3A',      // Soft blue background
   accentPrimary: ACCENT_PRIMARY,
+  accentPrimarySoft: ACCENT_PRIMARY_SOFT,
+  accentPrimaryBackground: ACCENT_PRIMARY_BACKGROUND,
   accentPrimaryLight: adjustLightness(ACCENT_PRIMARY, 15),
   accentPrimaryDark: '#8C5509',
   todayIndicator: BASE_INFO,  // Current day label & selected box
@@ -149,6 +155,8 @@ export const COLORS = {
   accentSecondary: ACCENT_SECONDARY,
   /** Spec accent-secondary-soft — schedule pie incomplete, muted teal surfaces */
   accentSecondarySoft: ACCENT_SECONDARY_SOFT,
+  /** Spec accent-secondary-disabled — disabled content on light surfaces */
+  accentSecondaryDisabled: ACCENT_SECONDARY_DISABLED,
   /** Work timer (time-based) — page tint */
   backgroundTimer: '#C1FF24',
   /** Work timer — Completed card surface */
