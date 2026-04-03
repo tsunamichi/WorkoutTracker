@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -6,7 +6,6 @@ import {
   TouchableOpacity,
   useWindowDimensions,
 } from 'react-native';
-import Svg, { Circle, Path } from 'react-native-svg';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
   Extrapolate,
@@ -26,13 +25,14 @@ import { useAppTheme } from '../../theme/useAppTheme';
 import { EXPLORE_V2_PALETTES, mixHex } from '../exploreV2/exploreV2ColorSystem';
 import type { ScheduledWorkout, WorkoutTemplateExercise } from '../../types/training';
 import type { Exercise } from '../../types';
+import { WorkoutProgressPattern } from './WorkoutProgressPattern';
 
 const FRONT_BOTTOM = 28;
 /** Front card height (face) tuned to hug title + pie + summary with current spacing. */
 const FRONT_H = 330;
-const TITLE_TO_BUBBLE_GAP = 24;
+const TITLE_TO_BUBBLE_GAP = 40;
 const BUBBLE_TO_COUNT_GAP = 24;
-const HERO_BUBBLE_SIZE = 180;
+const HERO_PATTERN_TARGET_HEIGHT = 180;
 /** Peek cards use full face height so pie + summary stay visible; depth comes from inset + bottom offset. */
 const MID_PEEK_BOTTOM = 14;
 const BACK_PEEK_BOTTOM = 0;
@@ -57,64 +57,6 @@ const SWIPE_ALIGN_DEAD_PX = 3;
 const MAX_DRAG_WIDTH_FRACTION = 0.9;
 /** Max Z-rotation (deg) at full horizontal drag; swipe left → negative tilt, swipe right → positive. */
 const MAX_SWIPE_TILT_DEG = 2.75;
-
-const HERO_PIE_OUTLINE = 8;
-
-/** SVG path for a circular sector from 12 o'clock, clockwise (progress 0–1). */
-function heroPieSectorPath(cx: number, cy: number, r: number, progress: number): string {
-  const p = Math.min(1, Math.max(0, progress));
-  if (p <= 0 || p >= 1) return '';
-  const start = -Math.PI / 2;
-  const x1 = cx + r * Math.cos(start);
-  const y1 = cy + r * Math.sin(start);
-  const end = start + p * 2 * Math.PI;
-  const x2 = cx + r * Math.cos(end);
-  const y2 = cy + r * Math.sin(end);
-  const largeArc = p > 0.5 ? 1 : 0;
-  return `M ${cx} ${cy} L ${x1} ${y1} A ${r} ${r} 0 ${largeArc} 1 ${x2} ${y2} Z`;
-}
-
-/** Pie-style progress: complete wedge = accent-primary, incomplete = container-primary-dark, rim = card surface. */
-function HeroProgressPie({ progress }: { progress: number }) {
-  const { explore: ex, colors: themeColors } = useAppTheme();
-  const p = Math.min(1, Math.max(0, progress));
-  const size = HERO_BUBBLE_SIZE;
-  const cx = size / 2;
-  const cy = size / 2;
-  const r = size / 2 - HERO_PIE_OUTLINE / 2;
-  const rim = ex.surfaceCurrentCard;
-  const remainder = themeColors.containerPrimaryDark;
-  const done = themeColors.accentPrimary;
-  const sector = heroPieSectorPath(cx, cy, r, p);
-
-  const endAngle = -Math.PI / 2 + p * 2 * Math.PI;
-  const rx = cx + r * Math.cos(endAngle);
-  const ry = cy + r * Math.sin(endAngle);
-  const sx = cx;
-  const sy = cy - r;
-
-  return (
-    <View style={styles.heroBubbleWrap}>
-      <Svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
-        {p < 1 ? <Circle cx={cx} cy={cy} r={r} fill={remainder} /> : null}
-        {p > 0 && p < 1 ? <Path d={sector} fill={done} /> : null}
-        {p >= 1 ? <Circle cx={cx} cy={cy} r={r} fill={done} /> : null}
-        {p > 0 && p < 1 ? (
-          <Path
-            d={`M ${sx} ${sy} L ${cx} ${cy} L ${rx} ${ry}`}
-            stroke={rim}
-            strokeWidth={HERO_PIE_OUTLINE}
-            fill="none"
-            strokeLinecap="butt"
-            strokeLinejoin="miter"
-            strokeMiterlimit={16}
-          />
-        ) : null}
-        <Circle cx={cx} cy={cy} r={r} fill="none" stroke={rim} strokeWidth={HERO_PIE_OUTLINE} />
-      </Svg>
-    </View>
-  );
-}
 
 type Props = {
   queue: ScheduledWorkout[];
@@ -147,92 +89,36 @@ function formatTopTwoMuscles(labels: string[]): string {
   return `${top[0]} & ${top[1]}`;
 }
 
-function DeckCardFace({
+function WorkoutCardBody({
   sw,
   exercises,
   getMainCompletion,
-  variant,
-  peekTextColor,
+  primaryTextStyle,
+  involvedTextColor,
+  debugRole,
+  debugKey,
+  visibleMode,
 }: {
   sw: ScheduledWorkout;
   exercises: Exercise[];
   getMainCompletion: (id: string) => { percentage: number };
-  variant: 'front' | 'peek';
-  peekTextColor?: string;
+  primaryTextStyle?: any;
+  involvedTextColor?: string;
+  debugRole: 'front' | 'mid' | 'back' | 'deep';
+  debugKey: string;
+  visibleMode: string;
 }) {
   const { colors: themeColors } = useAppTheme();
+  void debugKey;
+  void debugRole;
+  void visibleMode;
   const mc = getMainCompletion(sw.id);
   const progress = mc.percentage / 100;
   const ordered = [...(sw.exercisesSnapshot ?? [])].sort((a, b) => a.order - b.order);
   const exerciseCount = ordered.length;
   const involvedLine = formatTopTwoMuscles(involvedCategoriesForWorkout(ordered, exercises));
 
-  const titleStyle =
-    variant === 'front' ? styles.workoutName : [styles.workoutName, { color: peekTextColor! }];
-  const countStyle =
-    variant === 'front'
-      ? styles.workoutExerciseCount
-      : [styles.workoutExerciseCount, { color: peekTextColor! }];
-  const involvedStyle = [styles.workoutInvolvedMuscles, { color: themeColors.accentSecondary }];
-  return (
-    <>
-      <View style={styles.cardHeader}>
-        <Text style={titleStyle} numberOfLines={1} ellipsizeMode="tail">
-          {sw.titleSnapshot}
-        </Text>
-      </View>
-      <View style={styles.titleToBubbleGap} />
-      <View style={styles.heroBubbleRow}>
-        <HeroProgressPie progress={progress} />
-      </View>
-      <View style={styles.bubbleToCountGap} />
-      <Text style={countStyle}>
-        {exerciseCount === 1 ? '1 exercise' : `${exerciseCount} exercises`}
-      </Text>
-      {involvedLine ? (
-        <Text style={involvedStyle} numberOfLines={2}>
-          {involvedLine}
-        </Text>
-      ) : null}
-    </>
-  );
-}
-
-/** Peek layer with text colors that follow swipe progress (background interpolates on the shell). */
-function DeckCardFacePeekAnimated({
-  sw,
-  exercises,
-  getMainCompletion,
-  translateX,
-  morphStartPx,
-  growEndPx,
-  primaryFrom,
-  primaryTo,
-}: {
-  sw: ScheduledWorkout;
-  exercises: Exercise[];
-  getMainCompletion: (id: string) => { percentage: number };
-  translateX: SharedValue<number>;
-  morphStartPx: number;
-  growEndPx: number;
-  primaryFrom: string;
-  primaryTo: string;
-}) {
-  const { colors: themeColors } = useAppTheme();
-  const mc = getMainCompletion(sw.id);
-  const progress = mc.percentage / 100;
-  const ordered = [...(sw.exercisesSnapshot ?? [])].sort((a, b) => a.order - b.order);
-  const exerciseCount = ordered.length;
-  const involvedLine = formatTopTwoMuscles(involvedCategoriesForWorkout(ordered, exercises));
-  const involvedStyle = [styles.workoutInvolvedMuscles, { color: themeColors.accentSecondary }];
-
-  const primaryTextStyle = useAnimatedStyle(() => {
-    const ax = Math.abs(translateX.value);
-    return {
-      color: interpolateColor(ax, [0, morphStartPx, growEndPx], [primaryFrom, primaryFrom, primaryTo], 'RGB'),
-    };
-  }, [growEndPx, morphStartPx, primaryFrom, primaryTo]);
-
+  const involvedStyle = [styles.workoutInvolvedMuscles, { color: involvedTextColor ?? themeColors.accentSecondary }];
   return (
     <>
       <View style={styles.cardHeader}>
@@ -242,7 +128,11 @@ function DeckCardFacePeekAnimated({
       </View>
       <View style={styles.titleToBubbleGap} />
       <View style={styles.heroBubbleRow}>
-        <HeroProgressPie progress={progress} />
+        <WorkoutProgressPattern
+          workoutId={sw.id}
+          completionRatio={progress}
+          style={styles.heroPattern}
+        />
       </View>
       <View style={styles.bubbleToCountGap} />
       <Animated.Text style={[styles.workoutExerciseCount, primaryTextStyle]}>
@@ -281,9 +171,8 @@ export function ScheduleWorkoutCardStack({
     swipeThreshold * DEFER_CHROME_END_FRAC_OF_THRESHOLD,
   );
 
-  const [activeIndex, setActiveIndex] = React.useState(0);
+  const [activeCardId, setActiveCardId] = useState<string | null>(queue[0]?.id ?? null);
   const queueKey = useMemo(() => queue.map(sw => sw.id).join('|'), [queue]);
-  const pendingTranslateResetRef = useRef(false);
 
   const translateX = useSharedValue(0);
 
@@ -293,14 +182,23 @@ export function ScheduleWorkoutCardStack({
   );
 
   useEffect(() => {
-    setActiveIndex(0);
-    translateX.value = 0;
-  }, [queueKey, translateX]);
+    const ids = new Set(queue.map(sw => sw.id));
+    const hasActive = activeCardId ? ids.has(activeCardId) : false;
+    // Preserve current active card identity across queue updates when possible.
+    // Falling back to the first card only when the active card disappeared keeps
+    // shell/body ownership stable and avoids perceptible handoff jumps.
+    const nextActiveId = hasActive ? activeCardId : (queue[0]?.id ?? null);
+    setActiveCardId(nextActiveId);
+    if (!nextActiveId) {
+      translateX.value = 0;
+    }
+  }, [queueKey, queue, activeCardId, translateX]);
 
   const n = queue.length;
-  const idx = n === 0 ? 0 : Math.min(activeIndex, n - 1);
+  const idxById = activeCardId ? queue.findIndex(sw => sw.id === activeCardId) : -1;
+  const idx = n === 0 ? 0 : (idxById >= 0 ? idxById : 0);
   const activeWorkout = queue[idx];
-  const mid = n > 1 ? queue[(idx + 1) % n] : undefined;
+  const nextWorkout = n > 1 ? queue[(idx + 1) % n] : undefined;
   const back = n > 2 ? queue[(idx + 2) % n] : undefined;
   const deep = n > 3 ? queue[(idx + 3) % n] : undefined;
 
@@ -310,26 +208,12 @@ export function ScheduleWorkoutCardStack({
     onActiveWorkoutChange?.(activeWorkout);
   }, [activeWorkout, onActiveWorkoutChange]);
 
-  const advanceDeck = useCallback(() => {
-    setActiveIndex(i => {
-      const len = queue.length;
-      if (len <= 1) return 0;
-      return (i + 1) % len;
-    });
+  const commitSwipeAdvance = useCallback((committedId: string | null) => {
+    // Two-layer handoff: commit the already revealed next card directly.
+    translateX.value = 0;
+    if (committedId) setActiveCardId(committedId);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-  }, [queue.length]);
-
-  const commitSwipeAdvance = useCallback(() => {
-    pendingTranslateResetRef.current = true;
-    advanceDeck();
-  }, [advanceDeck]);
-
-  useLayoutEffect(() => {
-    if (pendingTranslateResetRef.current) {
-      pendingTranslateResetRef.current = false;
-      translateX.value = 0;
-    }
-  }, [activeIndex, translateX]);
+  }, [translateX]);
 
   const panGesture = useMemo(
     () =>
@@ -345,19 +229,20 @@ export function ScheduleWorkoutCardStack({
         .onEnd(e => {
           const absX = Math.abs(e.translationX);
           if (absX > swipeThreshold && canAdvance) {
+            const nextId = nextWorkout?.id ?? null;
             const exitLeft = e.translationX < 0;
             translateX.value = withTiming(
               exitLeft ? -contentWidth : contentWidth,
               { duration: 220 },
               finished => {
-                if (finished) runOnJS(commitSwipeAdvance)();
+                if (finished) runOnJS(commitSwipeAdvance)(nextId);
               },
             );
           } else {
             translateX.value = withSpring(0, SPRING_RETURN_CFG);
           }
         }),
-    [canAdvance, contentWidth, swipeThreshold, translateX, commitSwipeAdvance],
+    [canAdvance, contentWidth, swipeThreshold, translateX, commitSwipeAdvance, nextWorkout?.id],
   );
 
   const maxDragPx = contentWidth * MAX_DRAG_WIDTH_FRACTION;
@@ -416,7 +301,21 @@ export function ScheduleWorkoutCardStack({
     return {
       opacity: interpolate(ax, [0, deferStart, deferEnd], [1, 1, 0], Extrapolate.CLAMP),
     };
-  }, [deferEnd, deferStart]);
+  }, [deferStart, deferEnd]);
+
+  const backPrimaryTextStyle = useAnimatedStyle(() => {
+    const ax = Math.abs(translateX.value);
+    return {
+      color: interpolateColor(ax, [0, morphStart, peekGrowEndPx], [completeDark, completeDark, upNextDark], 'RGB'),
+    };
+  }, [morphStart, peekGrowEndPx, completeDark, upNextDark]);
+
+  const midPrimaryTextStyle = useAnimatedStyle(() => {
+    const ax = Math.abs(translateX.value);
+    return {
+      color: interpolateColor(ax, [0, morphStart, peekGrowEndPx], [upNextDark, upNextDark, themeColors.textOnPrimary], 'RGB'),
+    };
+  }, [morphStart, peekGrowEndPx, upNextDark, themeColors.textOnPrimary]);
 
   const notTodayOverlayAnimatedStyle = useAnimatedStyle(() => {
     const x = translateX.value;
@@ -467,6 +366,12 @@ export function ScheduleWorkoutCardStack({
       backgroundColor,
     };
   }, [contentWidth, peekGrowEndPx, morphStart, upNextMain, frontCardBg]);
+
+  const nextPeekContentAnimatedStyle = useAnimatedStyle(() => {
+    return {
+      opacity: Math.abs(translateX.value) >= peekGrowEndPx ? 1 : 0,
+    };
+  }, [peekGrowEndPx]);
 
   const backPeekAnimatedStyle = useAnimatedStyle(() => {
     const ax = Math.abs(translateX.value);
@@ -550,13 +455,15 @@ export function ScheduleWorkoutCardStack({
           style={[styles.peekDeckCard, deepPeekAnimatedStyle, { height: FRONT_H, zIndex: 2, borderColor: canvasLight }]}
         >
           <View style={[styles.workoutCardInner, styles.peekCardInner]}>
-            <View style={styles.workoutCardContent}>
-              <DeckCardFace
+            <View style={[styles.workoutCardContent, styles.peekCardContentHidden]}>
+              <WorkoutCardBody
                 sw={deep}
                 exercises={exercises}
                 getMainCompletion={getMainCompletion}
-                variant="peek"
-                peekTextColor={completeDark}
+                primaryTextStyle={{ color: completeDark }}
+                debugRole="deep"
+                debugKey={`peek-deep-${deep.id}`}
+                visibleMode="hidden"
               />
             </View>
           </View>
@@ -570,41 +477,39 @@ export function ScheduleWorkoutCardStack({
           style={[styles.peekDeckCard, backPeekAnimatedStyle, { height: FRONT_H, zIndex: 3, borderColor: canvasLight }]}
         >
           <View style={[styles.workoutCardInner, styles.peekCardInner]}>
-            <View style={styles.workoutCardContent}>
-              <DeckCardFacePeekAnimated
+            <View style={[styles.workoutCardContent, styles.peekCardContentHidden]}>
+              <WorkoutCardBody
                 sw={back}
                 exercises={exercises}
                 getMainCompletion={getMainCompletion}
-                translateX={translateX}
-                morphStartPx={morphStart}
-                growEndPx={peekGrowEndPx}
-                primaryFrom={completeDark}
-                primaryTo={upNextDark}
+                primaryTextStyle={backPrimaryTextStyle}
+                debugRole="back"
+                debugKey={`peek-back-${back.id}`}
+                visibleMode="hidden"
               />
             </View>
           </View>
         </Animated.View>
       ) : null}
 
-      {mid ? (
+      {nextWorkout ? (
         <Animated.View
-          key={`peek-mid-${mid.id}`}
+          key={`peek-mid-${nextWorkout.id}`}
           pointerEvents="none"
           style={[styles.peekDeckCard, midPeekAnimatedStyle, { height: FRONT_H, zIndex: 4, borderColor: canvasLight }]}
         >
           <View style={[styles.workoutCardInner, styles.peekCardInner]}>
-            <View style={styles.workoutCardContent}>
-              <DeckCardFacePeekAnimated
-                sw={mid}
+            <Animated.View style={[styles.workoutCardContent, nextPeekContentAnimatedStyle]}>
+              <WorkoutCardBody
+                sw={nextWorkout}
                 exercises={exercises}
                 getMainCompletion={getMainCompletion}
-                translateX={translateX}
-                morphStartPx={morphStart}
-                growEndPx={peekGrowEndPx}
-                primaryFrom={upNextDark}
-                primaryTo={themeColors.textOnPrimary}
+                primaryTextStyle={midPrimaryTextStyle}
+                debugRole="mid"
+                debugKey={`peek-mid-${nextWorkout.id}`}
+                visibleMode="animated-reveal"
               />
-            </View>
+            </Animated.View>
           </View>
         </Animated.View>
       ) : null}
@@ -635,11 +540,14 @@ export function ScheduleWorkoutCardStack({
                 >
                   <View style={styles.workoutCardContent}>
                     <Animated.View style={[styles.frontCardContentWrap, frontContentFadeAnimatedStyle]}>
-                      <DeckCardFace
+                      <WorkoutCardBody
                         sw={activeWorkout}
                         exercises={exercises}
                         getMainCompletion={getMainCompletion}
-                        variant="front"
+                        primaryTextStyle={{ color: COLORS.textOnPrimary }}
+                        debugRole="front"
+                        debugKey={`front-${activeWorkout.id}`}
+                        visibleMode="animated-front-fade"
                       />
                     </Animated.View>
                   </View>
@@ -713,6 +621,9 @@ const styles = StyleSheet.create({
     flexDirection: 'column',
     position: 'relative',
   },
+  peekCardContentHidden: {
+    opacity: 0,
+  },
   frontCardContentWrap: {
     flex: 1,
     minHeight: 0,
@@ -723,7 +634,7 @@ const styles = StyleSheet.create({
   },
   notTodayText: {
     ...TYPOGRAPHY.displayLarge,
-    fontWeight: '600',
+    fontWeight: '400',
     color: COLORS.textOnPrimary,
   },
   cardHeader: {
@@ -742,8 +653,8 @@ const styles = StyleSheet.create({
   heroBubbleRow: {
     flexShrink: 0,
     width: '100%',
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: 'stretch',
+    justifyContent: 'flex-start',
   },
   bubbleToCountGap: {
     height: BUBBLE_TO_COUNT_GAP,
@@ -758,11 +669,7 @@ const styles = StyleSheet.create({
     ...TYPOGRAPHY.meta,
     marginTop: 4,
   },
-  heroBubbleWrap: {
-    width: HERO_BUBBLE_SIZE,
-    height: HERO_BUBBLE_SIZE,
-    position: 'relative',
-    alignItems: 'center',
-    justifyContent: 'center',
+  heroPattern: {
+    minHeight: HERO_PATTERN_TARGET_HEIGHT,
   },
 });

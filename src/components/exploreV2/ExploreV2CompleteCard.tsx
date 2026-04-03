@@ -4,7 +4,7 @@ import { Platform } from 'react-native';
 import Animated, { useAnimatedStyle, interpolateColor, type SharedValue } from 'react-native-reanimated';
 import { EXPLORE_V2 } from './exploreV2Tokens';
 import { EXPLORE_V2_PALETTES } from './exploreV2ColorSystem';
-import { TYPOGRAPHY } from '../../constants';
+import { COLORS, TYPOGRAPHY } from '../../constants';
 import { useAppTheme } from '../../theme/useAppTheme';
 import { IconChevronDown } from '../icons';
 import { formatWeightForLoad } from '../../utils/weight';
@@ -25,19 +25,19 @@ type Props = {
   timerThemeActive: boolean;
   restThemeProgress: SharedValue<number>;
   exploreV2WorkBlueProgress: SharedValue<number>;
+  contentOnly?: boolean;
 };
 
 const palette = EXPLORE_V2_PALETTES.complete;
+const upNextPalette = EXPLORE_V2_PALETTES.upNext;
 /** Match Current card surface — used for row title + numerals on Completed list */
 const CURRENT_CARD_SURFACE = EXPLORE_V2_PALETTES.current.main;
 const IDLE_HEADER_INK = '#464646';
 const IDLE_UNIT_INK = '#787878';
 /** Vertical gap between set rows (logs) in the Completed list */
 const COMPLETE_SET_LOG_GAP = 2;
-/** Space below each exercise row — token + 12px */
-const COMPLETE_EXERCISE_ROW_MARGIN = EXPLORE_V2.exerciseListRowGap + 12;
 /** Fixed width for load / reps numerals in the Completed list */
-const COMPLETE_VALUE_WIDTH = 32;
+const COMPLETE_VALUE_WIDTH = 28;
 
 export function ExploreV2CompleteCard({
   completedGroupIndexes,
@@ -53,6 +53,7 @@ export function ExploreV2CompleteCard({
   timerThemeActive: _timerThemeActive,
   restThemeProgress,
   exploreV2WorkBlueProgress,
+  contentOnly = false,
 }: Props) {
   const { explore: ex, colors: themeColors } = useAppTheme();
   const pageBgChrome = EXPLORE_V2.colors.pageBg;
@@ -60,11 +61,11 @@ export function ExploreV2CompleteCard({
   const textMetaTimer = themeColors.textMetaTimer;
   const textMeta = themeColors.textMeta;
   const accentPrimaryDark = themeColors.accentPrimaryDark;
+  const accentPrimary = themeColors.accentPrimary;
+  const accentSecondarySoft = themeColors.accentSecondarySoft;
   const containerPrimary = themeColors.containerPrimary;
-  const workCompleteBg = ex.workTimerCompleteCardBg;
-  const amberComplete = ex.amberBandComplete;
-  const warmActivity = ex.warmActivity;
-  const backgroundTimer = themeColors.backgroundTimer;
+  const workUpNextBg = ex.workTimerUpNextCardBg;
+  const amberBand = ex.amberBand;
 
   const headerChromeAnimatedStyle = useAnimatedStyle(() => {
     const b = restThemeProgress.value;
@@ -101,21 +102,21 @@ export function ExploreV2CompleteCard({
   const shellAnimatedStyle = useAnimatedStyle(() => {
     const b = restThemeProgress.value;
     const w = exploreV2WorkBlueProgress.value;
-    const whenUpBg = interpolateColor(w, [0, 1], [amberComplete, workCompleteBg]);
-    const whenUpBorder = interpolateColor(w, [0, 1], [warmActivity, backgroundTimer]);
+    const pRest = b * (1 - w);
+    const whenUpBg = interpolateColor(w, [0, 1], [amberBand, workUpNextBg]);
     return {
-      backgroundColor: interpolateColor(b, [0, 1], [palette.main, whenUpBg]),
-      borderColor: interpolateColor(b, [0, 1], [pageBgChrome, whenUpBorder]),
+      backgroundColor: interpolateColor(b, [0, 1], [upNextPalette.main, whenUpBg]),
+      borderColor: interpolateColor(pRest, [0, 1], [accentSecondarySoft, accentPrimary]),
     };
-  }, [amberComplete, workCompleteBg, warmActivity, backgroundTimer, pageBgChrome]);
+  }, [amberBand, workUpNextBg, upNextPalette.main, accentSecondarySoft, accentPrimary]);
   const scrollContentAnimatedStyle = useAnimatedStyle(() => {
     const b = restThemeProgress.value;
     const w = exploreV2WorkBlueProgress.value;
-    const whenUpBg = interpolateColor(w, [0, 1], [amberComplete, workCompleteBg]);
+    const whenUpBg = interpolateColor(w, [0, 1], [amberBand, workUpNextBg]);
     return {
-      backgroundColor: interpolateColor(b, [0, 1], [palette.main, whenUpBg]),
+      backgroundColor: interpolateColor(b, [0, 1], [upNextPalette.main, whenUpBg]),
     };
-  }, [amberComplete, workCompleteBg]);
+  }, [amberBand, workUpNextBg, upNextPalette.main]);
   const rowTitleInkStyle = useAnimatedStyle(() => ({
     color: interpolateColor(exploreV2WorkBlueProgress.value, [0, 1], [CURRENT_CARD_SURFACE, pageBgChrome]),
   }), [pageBgChrome]);
@@ -125,45 +126,12 @@ export function ExploreV2CompleteCard({
     return g.exercises.map(ex => ({ gi, g, ex }));
   });
 
-  return (
-    <Animated.View
-      style={[
-        styles.shell,
-        shellAnimatedStyle,
-        {
-          borderBottomLeftRadius: bottomCornerRadius,
-          borderBottomRightRadius: bottomCornerRadius,
-        },
-      ]}
-    >
-      {!isExpanded ? (
-        <Pressable style={styles.peekTapOverlay} onPress={onHeaderPress} />
-      ) : null}
-      <Pressable style={styles.headerRow} onPress={onHeaderPress}>
-        <Animated.Text style={[styles.headerLabel, headerChromeAnimatedStyle]}>Completed</Animated.Text>
-        <View style={styles.countOrPlusSlot}>
-          <Animated.View style={[styles.chevronLayer, chevronIdleOpacityStyle]} pointerEvents="none">
-            <IconChevronDown size={18} color={textMeta} />
-          </Animated.View>
-          <Animated.View style={[styles.chevronLayer, chevronTimerOpacityStyle]} pointerEvents="none">
-            <IconChevronDown size={18} color={accentPrimaryDark} />
-          </Animated.View>
-          <Animated.View style={[styles.chevronLayer, chevronWorkOpacityStyle]} pointerEvents="none">
-            <IconChevronDown size={18} color={textMetaTimer} />
-          </Animated.View>
-        </View>
-      </Pressable>
-      <Animated.ScrollView
-        style={styles.scroll}
-        contentContainerStyle={[styles.scrollInner, scrollContentAnimatedStyle]}
-        nestedScrollEnabled
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
-      >
+  const rowsContent = (
+    <>
         {rows.map(({ gi, g, ex }, index) => (
           <TouchableOpacity
             key={`${g.id}-${ex.id}`}
-            style={[styles.row, index < rows.length - 1 && styles.rowGapAfter]}
+            style={[styles.row, index < rows.length - 1 && styles.rowWithDivider]}
             onPress={() => {
               const exIdx = g.exercises.findIndex(e => e.id === ex.id);
               onOpenExercise(gi, exIdx);
@@ -215,6 +183,59 @@ export function ExploreV2CompleteCard({
         {rows.length === 0 && (
           <Text style={[styles.empty, { color: palette.muted }]}>Nothing completed yet.</Text>
         )}
+    </>
+  );
+
+  if (contentOnly) {
+    return (
+      <Animated.ScrollView
+        style={styles.scroll}
+        contentContainerStyle={[styles.scrollInner, styles.scrollInnerContentOnly]}
+        nestedScrollEnabled
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
+        {rowsContent}
+      </Animated.ScrollView>
+    );
+  }
+
+  return (
+    <Animated.View
+      style={[
+        styles.shell,
+        shellAnimatedStyle,
+        {
+          borderBottomLeftRadius: bottomCornerRadius,
+          borderBottomRightRadius: bottomCornerRadius,
+        },
+      ]}
+    >
+      {!isExpanded ? (
+        <Pressable style={styles.peekTapOverlay} onPress={onHeaderPress} />
+      ) : null}
+      <Pressable style={styles.headerRow} onPress={onHeaderPress}>
+        <Animated.Text style={[styles.headerLabel, headerChromeAnimatedStyle]}>Completed</Animated.Text>
+        <View style={styles.countOrPlusSlot}>
+          <Animated.View style={[styles.chevronLayer, chevronIdleOpacityStyle]} pointerEvents="none">
+            <IconChevronDown size={18} color={textMeta} />
+          </Animated.View>
+          <Animated.View style={[styles.chevronLayer, chevronTimerOpacityStyle]} pointerEvents="none">
+            <IconChevronDown size={18} color={accentPrimaryDark} />
+          </Animated.View>
+          <Animated.View style={[styles.chevronLayer, chevronWorkOpacityStyle]} pointerEvents="none">
+            <IconChevronDown size={18} color={textMetaTimer} />
+          </Animated.View>
+        </View>
+      </Pressable>
+      <Animated.ScrollView
+        style={styles.scroll}
+        contentContainerStyle={[styles.scrollInner, scrollContentAnimatedStyle]}
+        nestedScrollEnabled
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
+        {rowsContent}
       </Animated.ScrollView>
     </Animated.View>
   );
@@ -228,7 +249,7 @@ const styles = StyleSheet.create({
     flexDirection: 'column',
     paddingTop: 10,
     borderWidth: 2,
-    borderColor: EXPLORE_V2.colors.pageBg,
+    borderColor: COLORS.accentSecondarySoft,
     borderTopLeftRadius: EXPLORE_V2.cardTopRadius,
     borderTopRightRadius: EXPLORE_V2.cardTopRadius,
     borderBottomLeftRadius: EXPLORE_V2.cardRadius,
@@ -292,15 +313,21 @@ const styles = StyleSheet.create({
     paddingTop: EXPLORE_V2.headerToContentGap,
     paddingBottom: pad.bottom,
   },
+  scrollInnerContentOnly: {
+    paddingTop: 12,
+  },
   row: {
     flexDirection: 'row',
     paddingVertical: 0,
   },
-  rowGapAfter: {
-    marginBottom: COMPLETE_EXERCISE_ROW_MARGIN,
+  rowWithDivider: {
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+    paddingBottom: 20,
+    marginBottom: 20,
   },
   nameCol: { flex: 1, paddingRight: 10 },
-  name: { ...TYPOGRAPHY.body, lineHeight: 22 },
+  name: { ...TYPOGRAPHY.meta, lineHeight: 20 },
   valCol: { alignItems: 'flex-end' },
   valRow: { flexDirection: 'row', gap: 20, justifyContent: 'flex-end' },
   valRowGapAfter: {
@@ -314,8 +341,8 @@ const styles = StyleSheet.create({
     textAlign: 'right',
     width: '100%',
   },
-  val: { ...TYPOGRAPHY.body },
-  valUnit: { ...TYPOGRAPHY.body },
+  val: { ...TYPOGRAPHY.meta },
+  valUnit: { ...TYPOGRAPHY.meta },
   chevronLayer: {
     ...StyleSheet.absoluteFillObject,
     alignItems: 'center',

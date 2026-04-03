@@ -22,6 +22,7 @@ import Animated, {
 import * as Haptics from 'expo-haptics';
 import { useAppTheme } from '../../theme/useAppTheme';
 import { EXPLORE_V2 } from './exploreV2Tokens';
+import { TYPOGRAPHY } from '../../constants';
 import type { ExploreV2Group } from './exploreV2Types';
 import type { PrimaryRevealedCard } from './exploreV2Types';
 import { ExploreV2CompleteCard } from './ExploreV2CompleteCard';
@@ -131,6 +132,7 @@ export type ExploreV2ExecutionRootProps = {
   >;
   /** Final-set celebration animation (Great Job) */
   celebrateCompletion?: boolean;
+  completedOnDateLabel?: string;
 };
 
 function ExploreV2ExecutionRootComponent(props: ExploreV2ExecutionRootProps) {
@@ -179,6 +181,7 @@ function ExploreV2ExecutionRootComponent(props: ExploreV2ExecutionRootProps) {
     exerciseHistoryRefreshKey,
     progressionValuesByItemId,
     celebrateCompletion = false,
+    completedOnDateLabel,
   } = props;
   const { explore: exRoot, colors: themeColorsRoot } = useAppTheme();
   const warmActivityRoot = exRoot.warmActivity;
@@ -532,11 +535,11 @@ function ExploreV2ExecutionRootComponent(props: ExploreV2ExecutionRootProps) {
   const walletBorderOverlayAnimatedStyle = useAnimatedStyle(() => {
     const b = restThemeProgress.value;
     const w = exploreV2WorkBlueProgress.value;
-    const whenUp = interpolateColor(w, [0, 1], [warmActivityRoot, backgroundTimerRoot]);
+    const pRest = b * (1 - w);
     return {
-      borderColor: interpolateColor(b, [0, 1], [EXPLORE_V2.colors.pageBg, whenUp]),
+      borderColor: interpolateColor(pRest, [0, 1], [themeColorsRoot.accentSecondarySoft, themeColorsRoot.accentPrimary]),
     };
-  }, [warmActivityRoot, backgroundTimerRoot]);
+  }, [themeColorsRoot.accentSecondarySoft, themeColorsRoot.accentPrimary]);
 
   const onSelectUpNext = useCallback(
     (gi: number) => {
@@ -698,7 +701,12 @@ function ExploreV2ExecutionRootComponent(props: ExploreV2ExecutionRootProps) {
     return (
       <Animated.View style={[styles.completeOnly, walletShellRadii]}>
         <Animated.View style={[styles.rootFill, rootFillAnimatedStyle]}>
-          <Animated.View style={[styles.layerBottom, styles.cardStackNudgeDown, aCompleteLayerHeight]}>
+          {completedOnDateLabel ? (
+            <View style={styles.completedOnMeta}>
+              <Text style={styles.completedOnLine}>Completed on {completedOnDateLabel}</Text>
+            </View>
+          ) : null}
+          <View style={styles.completeOnlyListWrap}>
             <ExploreV2CompleteCard
               completedGroupIndexes={completedExerciseIndexes}
               exerciseGroups={exerciseGroups}
@@ -713,8 +721,9 @@ function ExploreV2ExecutionRootComponent(props: ExploreV2ExecutionRootProps) {
               timerThemeActive={timerThemeActive}
               restThemeProgress={restThemeProgress}
               exploreV2WorkBlueProgress={exploreV2WorkBlueProgress}
+              contentOnly
             />
-          </Animated.View>
+          </View>
           {EXPLORE_V2_DEBUG_SHELL_BORDER ? (
             <View
               pointerEvents="none"
@@ -730,15 +739,6 @@ function ExploreV2ExecutionRootComponent(props: ExploreV2ExecutionRootProps) {
             />
           ) : null}
         </Animated.View>
-        <Animated.View
-          pointerEvents="none"
-          style={[
-            styles.walletBorderOverlay,
-            walletBorderOverlayAnimatedStyle,
-            walletShellRadii,
-            { zIndex: WALLET_BORDER_OVERLAY_Z },
-          ]}
-        />
       </Animated.View>
     );
   }
@@ -1005,11 +1005,27 @@ const styles = StyleSheet.create({
   completeOnly: {
     flex: 1,
     position: 'relative' as const,
-    marginHorizontal: STACK_SIDE_GAP,
+    marginHorizontal: 0,
     marginBottom: STACK_DEVICE_BOTTOM_GAP,
     minHeight: 0,
-    overflow: 'hidden',
+    overflow: 'visible',
     ...(Platform.OS === 'ios' ? { borderCurve: 'continuous' as const } : {}),
+  },
+  completedOnMeta: {
+    position: 'absolute',
+    top: 10,
+    left: 24,
+    right: 24,
+    zIndex: 10,
+  },
+  completedOnLine: {
+    ...TYPOGRAPHY.h3,
+    fontWeight: '500',
+    color: '#002E29',
+  },
+  completeOnlyListWrap: {
+    flex: 1,
+    marginTop: 78,
   },
   /** Fills wallet band; back cards use absolute fill so they are not height-squished. */
   stackFill: {

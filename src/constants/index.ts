@@ -102,8 +102,10 @@ const BORDER_DIMMED = 'rgba(255, 255, 255, 0.06)';
 
 /** Core token — shared by container-secondary and text-on-primary (spec). */
 const CONTAINER_SECONDARY = '#D9D9D9';
-/** Spec accent-secondary-soft (single source for soft teal + textMetaTimer). */
-const ACCENT_SECONDARY_SOFT = '#014C47';
+/** Spec accent-secondary (teal). */
+const ACCENT_SECONDARY = '#58A186';
+/** Spec accent-secondary-soft. */
+const ACCENT_SECONDARY_SOFT = '#CFF0EE';
 
 export const COLORS = {
   // Core colors — dark palette
@@ -144,7 +146,7 @@ export const COLORS = {
   todayIndicator: BASE_INFO,  // Current day label & selected box
   accentPrimaryDimmed: '#372E1A',       // Subtle lime tint bg for selected states
   /** Spec accent-secondary (teal) */
-  accentSecondary: '#58A186',
+  accentSecondary: ACCENT_SECONDARY,
   /** Spec accent-secondary-soft — schedule pie incomplete, muted teal surfaces */
   accentSecondarySoft: ACCENT_SECONDARY_SOFT,
   /** Work timer (time-based) — page tint */
@@ -153,12 +155,12 @@ export const COLORS = {
   containerTertiaryTimer: '#B1EF15',
   /** Work timer — Up Next card surface */
   containerSecondaryTimer: '#9BD508',
-  /** accent-secondary-soft @ 60% — work-timer header chrome (Complete / Up Next) */
-  textMetaTimer: hexToRgba(ACCENT_SECONDARY_SOFT, 0.6),
+  /** accent-secondary @ 60% — work-timer header chrome (Complete / Up Next) */
+  textMetaTimer: hexToRgba(ACCENT_SECONDARY, 0.6),
 
   // Text — white on dark
   text: '#FFFFFF',                  // Default text color
-  textPrimary: '#FFFFFF',           // Primary text
+  textPrimary: '#1F1F1F',           // Primary text
   textSecondary: '#AEAEB2',        // Secondary text
   /** Spec text-meta (light canvas) */
   textMeta: '#828282',
@@ -166,7 +168,7 @@ export const COLORS = {
   textDisabled: '#48484A',         // Disabled text
   
   // Borders & dividers — very subtle on dark
-  border: '#38383A',               // Subtle borders
+  border: 'rgba(88, 88, 88, 0.2)', // #585858 @ 20%
   disabledBorder: '#38383A',       // Disabled button border
   borderDimmed: BORDER_DIMMED,     // Dimmed dividers
   divider: BORDER_DIMMED,          // Dividers
@@ -255,7 +257,7 @@ export const TYPOGRAPHY = {
   displayLarge: {
     fontSize: 32,
     lineHeight: 36,
-    fontWeight: '600' as const,
+    fontWeight: '500' as const,
     letterSpacing: -0.4,
   },
 
@@ -310,6 +312,12 @@ export const TYPOGRAPHY = {
     lineHeight: 60,
     fontWeight: '400' as const,
     letterSpacing: -0.6,
+  },
+  /** Extra-large editable value display (Explore current card). */
+  valueDisplay: {
+    fontSize: 120,
+    lineHeight: 120,
+    fontWeight: '400' as const,
   },
   
   // Timer display

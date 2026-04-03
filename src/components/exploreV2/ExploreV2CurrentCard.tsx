@@ -30,6 +30,7 @@ import {
   EXPLORE_V2_CURRENT_SETTINGS_HERO_GAP,
   type ExploreV2CurrentSettingsOverflowProps,
 } from './ExploreV2CurrentOverflowSheet';
+import { UnderlinedActionButton } from '../common/UnderlinedActionButton';
 
 const CANVAS_INK = COLORS.canvasLight;
 
@@ -110,10 +111,8 @@ type SetHeroPageProps = {
   getBarbellMode: Props['getBarbellMode'];
   metricsEditable: boolean;
   heroValueColor: string;
-  heroUnitInk: string;
   perSideLabelColor: string;
-  perSideValueColor: string;
-  perSideUnitColor: string;
+  unitLabelColor: string;
   pageWidth: number;
   commitsRef: React.MutableRefObject<Record<string, () => { weight: number; reps: number } | void>>;
   progressionValuesByItemId: Props['progressionValuesByItemId'];
@@ -131,10 +130,8 @@ function CurrentSetHeroPage({
   getBarbellMode,
   metricsEditable,
   heroValueColor,
-  heroUnitInk,
   perSideLabelColor,
-  perSideValueColor,
-  perSideUnitColor,
+  unitLabelColor,
   pageWidth,
   commitsRef,
   progressionValuesByItemId,
@@ -332,20 +329,15 @@ function CurrentSetHeroPage({
 
   const _barbellMode = getBarbellMode(heroEx.id);
   const weightPerSideLbs = heroW > 45 ? (heroW - 45) / 2 : null;
-  const showPerSideRow = weightPerSideLbs != null && weightPerSideLbs > 0;
+  const perSideText =
+    weightPerSideLbs != null && weightPerSideLbs > 0
+      ? `${formatWeightForLoad(weightPerSideLbs, useKg)}/side`
+      : null;
   const prog = progressionValuesByItemId[heroEx.id];
 
   return (
     <View style={[styles.carouselPage, pageWidth > 0 ? { width: pageWidth } : { flex: 1 }]}>
       <View style={styles.valuesBlock}>
-        {showPerSideRow && weightPerSideLbs != null ? (
-          <View style={styles.perSideRow}>
-            <Text style={[styles.perSideSingleLine, { color: perSideValueColor }]}>
-              {`${formatWeightForLoad(weightPerSideLbs, useKg)} ${weightUnit} weight per side`}
-            </Text>
-          </View>
-        ) : null}
-
         <View style={styles.valueRow}>
           <TextInput
             ref={weightInputRef}
@@ -370,7 +362,10 @@ function CurrentSetHeroPage({
                 ↑
               </Text>
             ) : null}
-            <Text style={[styles.valueMetric, { color: heroUnitInk }]}>{weightUnit}</Text>
+            <Text style={[styles.valueMetric, { color: unitLabelColor }]}>{weightUnit}</Text>
+            {perSideText ? (
+              <Text style={[styles.perSideSingleLine, { color: perSideLabelColor }]}>{perSideText}</Text>
+            ) : null}
           </View>
         </View>
         <View style={styles.valueRow}>
@@ -397,7 +392,7 @@ function CurrentSetHeroPage({
                 ↑
               </Text>
             ) : null}
-            <Text style={[styles.valueMetric, { color: heroUnitInk }]}>
+            <Text style={[styles.valueMetric, { color: unitLabelColor }]}>
               {heroEx.isTimeBased ? 'sec' : 'reps'}
             </Text>
           </View>
@@ -440,10 +435,7 @@ export function ExploreV2CurrentCard({
   const accentPrimary = themeColors.accentPrimary;
   const accentPrimaryDimmed = themeColors.accentPrimaryDimmed;
   const accentSecondarySoft = themeColors.accentSecondarySoft;
-  const currentCardUnitInk = useMemo(() => hexToRgba(themeColors.accentSecondary, 0.2), [themeColors.accentSecondary]);
-  const warmActivity = ex.warmActivity;
   const skipRestCtaBg = ex.skipRestCtaBg;
-  const heroInk = ex.heroValueInk;
   const ctaPillLabelInk = ex.ctaPillText;
   const isPrimary = primaryRevealed === 'current';
   const [drawerSlotHeight, setDrawerSlotHeight] = useState(0);
@@ -535,15 +527,14 @@ export function ExploreV2CurrentCard({
 
   const settingsDrawerOpen = Boolean(settingsOverflow?.visible && isPrimary);
   const surfaceColor = settingsDrawerOpen ? skipRestCtaBg : ex.surfaceCurrentCard;
-  const backgroundTimer = themeColors.backgroundTimer;
   const shellAnimatedStyle = useAnimatedStyle(() => {
-    const p = restThemeProgress.value;
+    const b = restThemeProgress.value;
     const w = exploreV2WorkBlueProgress.value;
-    const activeBorder = interpolateColor(w, [0, 1], [warmActivity, backgroundTimer]);
+    const pRest = b * (1 - w);
     return {
-      borderColor: interpolateColor(p, [0, 1], [EXPLORE_V2.colors.pageBg, activeBorder]),
+      borderColor: interpolateColor(pRest, [0, 1], [accentSecondarySoft, accentPrimary]),
     };
-  }, [warmActivity, backgroundTimer]);
+  }, [accentSecondarySoft, accentPrimary]);
   const shellCornerAnimatedStyle = useAnimatedStyle(() => {
     const cp = celebrationProgress?.value ?? 0;
     return {
@@ -575,15 +566,9 @@ export function ExploreV2CurrentCard({
       color: interpolateColor(restThemeProgress.value, [0, 1], [ctaPillLabelInk, CANVAS_INK]),
     };
   }, [exploreV2TimerPhase, isPrimary, themeColors.containerPrimary, ctaPillLabelInk]);
-  const heroColumnReserveStyle = useAnimatedStyle(() => {
-    const reserve =
-      settingsOverflow && isPrimary
-        ? EXPLORE_V2_CURRENT_SETTINGS_HERO_GAP + EXPLORE_V2_CURRENT_SETTINGS_COLLAPSED_STACK_H
-        : 0;
-    return {
-      marginBottom: interpolate(restThemeProgress.value, [0, 1], [reserve, 0]),
-    };
-  }, [settingsOverflow, isPrimary]);
+  const heroColumnReserveStyle = useAnimatedStyle(() => ({
+    marginBottom: 0,
+  }));
 
   const onCarouselScrollEnd = useCallback(
     (e: NativeSyntheticEvent<NativeScrollEvent>) => {
@@ -650,13 +635,25 @@ export function ExploreV2CurrentCard({
               <Text
                 style={[
                   styles.eyebrow,
-                  { color: heroTimerActive ? accentSecondarySoft : themeColors.accentSecondary },
+                  { color: accentSecondarySoft },
                 ]}
               >
                 Current
               </Text>
+              {settingsOverflow && isPrimary ? (
+                <UnderlinedActionButton
+                  label="Settings"
+                  onPress={() => {
+                    if (settingsOverflow.visible) settingsOverflow.onClose();
+                    else settingsOverflow.onOpenSheet();
+                  }}
+                  textStyle={styles.currentSettingsButtonText}
+                  color={accentSecondarySoft}
+                  underlineColor={accentSecondarySoft}
+                />
+              ) : null}
             </View>
-            <Text style={[styles.exerciseName, { color: themeColors.containerSecondary }]} numberOfLines={2}>
+            <Text style={[styles.exerciseName, { color: accentSecondarySoft }]} numberOfLines={2}>
               {displayExerciseName}
             </Text>
           </View>
@@ -705,10 +702,8 @@ export function ExploreV2CurrentCard({
                             getBarbellMode={getBarbellMode}
                             metricsEditable={metricsEditable}
                             heroValueColor={heroValueColor}
-                            heroUnitInk={currentCardUnitInk}
-                            perSideLabelColor={heroTimerActive ? accentSecondarySoft : themeColors.accentSecondary}
-                            perSideValueColor={heroTimerActive ? accentSecondarySoft : themeColors.accentSecondary}
-                            perSideUnitColor={heroTimerActive ? accentSecondarySoft : themeColors.accentSecondary}
+                            unitLabelColor={accentPrimary}
+                            perSideLabelColor={accentSecondarySoft}
                             pageWidth={pageWidth}
                             commitsRef={commitsRef}
                             progressionValuesByItemId={progressionValuesByItemId}
@@ -757,7 +752,7 @@ export function ExploreV2CurrentCard({
                                     : {
                                         color: isView
                                           ? accentPrimary
-                                          : themeColors.accentSecondary,
+                                          : accentSecondarySoft,
                                       },
                                 ]}
                               >
@@ -781,7 +776,7 @@ export function ExploreV2CurrentCard({
                 />
               ) : null}
 
-              {settingsOverflow && isPrimary ? (
+              {settingsOverflow?.visible && isPrimary ? (
                 <View
                   style={styles.drawerSlot}
                   pointerEvents="box-none"
@@ -824,9 +819,9 @@ const styles = StyleSheet.create({
     paddingTop: 10,
     paddingLeft: pad.horizontal,
     paddingRight: 24,
-    paddingBottom: 24,
+    paddingBottom: 32,
     borderWidth: 2,
-    borderColor: EXPLORE_V2.colors.pageBg,
+    borderColor: COLORS.accentSecondarySoft,
     borderTopLeftRadius: EXPLORE_V2.cardTopRadius,
     borderTopRightRadius: EXPLORE_V2.cardTopRadius,
     borderBottomLeftRadius: EXPLORE_V2.cardRadius,
@@ -863,7 +858,7 @@ const styles = StyleSheet.create({
     height: 32,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'flex-start',
+    justifyContent: 'space-between',
     paddingTop: 2,
     width: '100%',
   },
@@ -873,10 +868,15 @@ const styles = StyleSheet.create({
     letterSpacing: 0,
     textTransform: 'uppercase',
   },
+  currentSettingsButtonText: {
+    ...TYPOGRAPHY.legal,
+    color: COLORS.accentSecondarySoft,
+  },
   exerciseName: {
     ...TYPOGRAPHY.displayLarge,
     fontWeight: '400',
     flexShrink: 1,
+    marginTop: 12,
   },
   heroCtaContainer: {
     width: '100%',
@@ -900,6 +900,10 @@ const styles = StyleSheet.create({
   carouselViewport: {
     width: '100%',
     minHeight: 200,
+    marginLeft: -pad.horizontal,
+    marginRight: -24,
+    paddingLeft: pad.horizontal,
+    paddingRight: 24,
   },
   carouselPage: {
     flexShrink: 0,
@@ -916,6 +920,7 @@ const styles = StyleSheet.create({
   },
   valuesBlock: {
     width: '100%',
+    paddingTop: 8,
   },
   perSideRow: {
     marginBottom: 0,
@@ -923,17 +928,20 @@ const styles = StyleSheet.create({
   perSideSingleLine: {
     ...TYPOGRAPHY.meta,
     fontWeight: '400',
+    marginTop: 2,
   },
   valueRow: {
     flexDirection: 'row',
-    alignItems: 'baseline',
+    alignItems: 'flex-start',
     flexWrap: 'nowrap',
     gap: 8,
     marginBottom: 0,
+    overflow: 'visible',
   },
   /** Wraps unit only so ↑ is positioned over this label, not in the gap between weight/reps rows */
   unitWithDelta: {
     position: 'relative',
+    paddingTop: 12,
   },
   heroDeltaLabel: {
     position: 'absolute',
@@ -944,18 +952,21 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   valueMetric: {
-    fontSize: 80,
+    ...TYPOGRAPHY.meta,
     fontWeight: '400',
-    letterSpacing: -0.5,
-    fontVariant: ['tabular-nums'],
   },
   valueInput: {
-    fontSize: 80,
-    fontWeight: '400',
+    ...TYPOGRAPHY.valueDisplay,
+    lineHeight: 132,
     letterSpacing: -0.5,
     fontVariant: ['tabular-nums'],
     minWidth: 48,
-    padding: 0,
+    height: 132,
+    textAlignVertical: 'top',
+    paddingTop: 4,
+    paddingBottom: 0,
+    paddingHorizontal: 12,
+    marginHorizontal: -12,
     margin: 0,
     borderWidth: 0,
     backgroundColor: 'transparent',

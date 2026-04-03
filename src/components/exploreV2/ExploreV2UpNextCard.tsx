@@ -183,8 +183,8 @@ export function ExploreV2UpNextCard({
   const { explore: ex, colors: themeColors } = useAppTheme();
   const workUpNextBg = ex.workTimerUpNextCardBg;
   const amberBand = ex.amberBand;
-  const warmActivity = ex.warmActivity;
-  const backgroundTimer = themeColors.backgroundTimer;
+  const accentPrimary = themeColors.accentPrimary;
+  const accentSecondarySoft = themeColors.accentSecondarySoft;
   const textMetaTimer = themeColors.textMetaTimer;
   const accentPrimaryDark = themeColors.accentPrimaryDark;
   const textPrimary = themeColors.textPrimary;
@@ -198,7 +198,6 @@ export function ExploreV2UpNextCard({
 
   const [removeMode, setRemoveMode] = useState(false);
 
-  const pageBgChrome = EXPLORE_V2.colors.pageBg;
   /** Rest band (b, w=0): “Up Next” header → textMeta; work (w=1) → text-meta-timer. */
   const headerChromeAnimatedStyle = useAnimatedStyle(() => {
     const b = restThemeProgress.value;
@@ -237,13 +236,13 @@ export function ExploreV2UpNextCard({
   const shellAnimatedStyle = useAnimatedStyle(() => {
     const b = restThemeProgress.value;
     const w = exploreV2WorkBlueProgress.value;
+    const pRest = b * (1 - w);
     const whenUpBg = interpolateColor(w, [0, 1], [amberBand, workUpNextBg]);
-    const whenUpBorder = interpolateColor(w, [0, 1], [warmActivity, backgroundTimer]);
     return {
       backgroundColor: interpolateColor(b, [0, 1], [palette.main, whenUpBg]),
-      borderColor: interpolateColor(b, [0, 1], [pageBgChrome, whenUpBorder]),
+      borderColor: interpolateColor(pRest, [0, 1], [accentSecondarySoft, accentPrimary]),
     };
-  }, [amberBand, workUpNextBg, warmActivity, backgroundTimer, pageBgChrome]);
+  }, [amberBand, workUpNextBg, accentSecondarySoft, accentPrimary]);
   const scrollBgAnimatedStyle = useAnimatedStyle(() => {
     const b = restThemeProgress.value;
     const w = exploreV2WorkBlueProgress.value;
@@ -379,7 +378,7 @@ const styles = StyleSheet.create({
     flexDirection: 'column',
     paddingTop: 10,
     borderWidth: 2,
-    borderColor: EXPLORE_V2.colors.pageBg,
+    borderColor: COLORS.accentSecondarySoft,
     borderTopLeftRadius: EXPLORE_V2.cardTopRadius,
     borderTopRightRadius: EXPLORE_V2.cardTopRadius,
     borderBottomLeftRadius: EXPLORE_V2.cardRadius,
