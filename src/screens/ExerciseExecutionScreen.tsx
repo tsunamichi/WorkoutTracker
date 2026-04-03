@@ -3165,20 +3165,20 @@ export function ExerciseExecutionScreen() {
       )}
       <View style={styles.header}>
         <View style={styles.topBar}>
-          <View style={[styles.topBarLeft, showMenu && styles.headerDimmed]} pointerEvents={showMenu ? 'none' : 'auto'}>
-            <TouchableOpacity
-              testID="back-button"
-              style={styles.backMetaButton}
-              onPress={() => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                runCloseToScheduleCard();
-              }}
-              activeOpacity={1}
-              disabled={showMenu}
-            >
+          <TouchableOpacity
+            testID="back-button"
+            style={[styles.topBarLeft, showMenu && styles.headerDimmed]}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              runCloseToScheduleCard();
+            }}
+            activeOpacity={1}
+            disabled={showMenu}
+          >
+            <View style={styles.backMetaButton}>
               <IconArrowLeft size={18} color={executionMode === 'explore-v2' ? COLORS.textMeta : 'rgba(255,255,255,0.72)'} />
               <Text style={[styles.backMetaText, executionMode === 'explore-v2' && styles.backMetaTextExploreV2]}>Schedule</Text>
-            </TouchableOpacity>
+            </View>
             <Text
               testID="header-title"
               numberOfLines={1}
@@ -3202,7 +3202,7 @@ export function ExerciseExecutionScreen() {
                 </TouchableOpacity>
               </View>
             )}
-          </View>
+          </TouchableOpacity>
           {!isInPastCycle ? (
             <UnderlinedActionButton
               label={showMenu ? 'Close' : 'Options'}
@@ -5344,10 +5344,8 @@ const styles = StyleSheet.create({
     marginLeft: -2,
   },
   backMetaText: {
-    ...TYPOGRAPHY.h3,
+    ...TYPOGRAPHY.legal,
     color: 'rgba(255,255,255,0.72)',
-    fontSize: TYPOGRAPHY.meta.fontSize,
-    lineHeight: TYPOGRAPHY.meta.lineHeight,
   },
   backMetaTextExploreV2: {
     color: COLORS.textMeta,

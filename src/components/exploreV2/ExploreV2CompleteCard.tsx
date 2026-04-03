@@ -218,13 +218,13 @@ export function ExploreV2CompleteCard({
         <Animated.Text style={[styles.headerLabel, headerChromeAnimatedStyle]}>Completed</Animated.Text>
         <View style={styles.countOrPlusSlot}>
           <Animated.View style={[styles.chevronLayer, chevronIdleOpacityStyle]} pointerEvents="none">
-            <IconChevronDown size={18} color={textMeta} />
+            <IconChevronDown size={18} color={COLORS.containerPrimary} />
           </Animated.View>
           <Animated.View style={[styles.chevronLayer, chevronTimerOpacityStyle]} pointerEvents="none">
-            <IconChevronDown size={18} color={accentPrimaryDark} />
+            <IconChevronDown size={18} color={COLORS.containerPrimary} />
           </Animated.View>
           <Animated.View style={[styles.chevronLayer, chevronWorkOpacityStyle]} pointerEvents="none">
-            <IconChevronDown size={18} color={textMetaTimer} />
+            <IconChevronDown size={18} color={COLORS.containerPrimary} />
           </Animated.View>
         </View>
       </Pressable>
@@ -247,7 +247,7 @@ const styles = StyleSheet.create({
   shell: {
     flex: 1,
     flexDirection: 'column',
-    paddingTop: 10,
+    paddingTop: EXPLORE_V2.cardHeader.topInset,
     borderWidth: 2,
     borderColor: COLORS.accentSecondarySoft,
     borderTopLeftRadius: EXPLORE_V2.cardTopRadius,
@@ -263,15 +263,14 @@ const styles = StyleSheet.create({
     ...(Platform.OS === 'ios' ? { borderCurve: 'continuous' as const } : {}),
   },
   headerRow: {
-    height: 32,
+    height: EXPLORE_V2.cardHeader.rowHeight,
     width: '100%',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingTop: 2,
+    paddingVertical: EXPLORE_V2.cardHeader.rowVerticalPadding,
     paddingLeft: 24,
     paddingRight: 12,
-    paddingBottom: 0,
     overflow: 'hidden',
   },
   peekTapOverlay: {

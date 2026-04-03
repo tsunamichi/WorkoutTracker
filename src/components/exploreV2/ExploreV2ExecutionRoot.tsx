@@ -35,14 +35,12 @@ const EXIT_EASE = Easing.bezier(...EXPLORE_V2.motion.easing.smoothExit);
 const ENTER_EASE = Easing.bezier(...EXPLORE_V2.motion.easing.smoothEnter);
 const EXIT_ANTICIPATION_EASE = Easing.out(Easing.cubic);
 const PEEK = EXPLORE_V2.peekHeaderHeight;
-/** Vertical offset applied to all wallet card layers (Complete / Up Next / Current) */
-const CARD_STACK_NUDGE_DOWN = 8;
 const STACK_BOTTOM_GAP = 0;
 const STACK_SIDE_GAP = 8;
 const STACK_DEVICE_BOTTOM_GAP = 2;
 const CURRENT_IN_PROGRESS_PEEK_VISIBLE_HEIGHT = 136;
-/** Extra visible strip for collapsed Up Next when Completed is the primary card (wallet). */
-const COMPLETE_PRIMARY_UPNEXT_LIFT = 20;
+/** Keep peeking strips consistent across states (no extra lift bias). */
+const COMPLETE_PRIMARY_UPNEXT_LIFT = 0;
 const REST_STACK_FRAC = EXPLORE_V2.layout.restStackHeightFraction;
 const EXIT_ANTICIPATION_PX = EXPLORE_V2.motion.anticipation.subtleOffset;
 const EXIT_ANTICIPATION_MS = EXPLORE_V2.motion.anticipation.subtleDuration;
@@ -230,15 +228,29 @@ function ExploreV2ExecutionRootComponent(props: ExploreV2ExecutionRootProps) {
   const exitCompleteSV = useSharedValue(1);
   /** Window height fallback for layout when root measure is still 0 */
   const screenHeightSV = useSharedValue(screenHeight);
+  /** Actual measured wallet container height (JS onLayout -> UI thread shared value). */
+  const stackShellHeightSV = useSharedValue(0);
   /** Bumps when layout-affecting props change — drives useAnimatedReaction instead of runOnUI from JS effects */
   const walletSlideApplyToken = useSharedValue(0);
   /** Frozen Current layer height while exit animation runs (hasCurrent became false) */
   const currentExitLayerHeightSV = useSharedValue(0);
 
   const structuralWalletH = useDerivedValue(() => {
+    const measured = stackShellHeightSV.value;
+    if (measured > 0) {
+      // Keep stack geometry locked to the allocated wallet container height.
+      // This prevents content-state changes (e.g. opening Current) from resizing the wallet.
+      return Math.max(PEEK, measured);
+    }
     const Hroot =
       exploreLayoutRootHeight.value > 0 ? exploreLayoutRootHeight.value : screenHeight * 0.55;
-    return Math.max(PEEK, interpolate(restThemeProgress.value, [0, 1], [Hroot, Hroot * REST_STACK_FRAC]));
+    const desired = Math.max(
+      PEEK,
+      interpolate(restThemeProgress.value, [0, 1], [Hroot, Hroot * REST_STACK_FRAC]),
+    );
+    const available = stackShellHeightSV.value > 0 ? stackShellHeightSV.value : desired;
+    // Never let a layer budget exceed the wallet container's measured height.
+    return Math.max(PEEK, Math.min(desired, available));
   }, [screenHeight]);
 
   /** UI-thread exit sequence — useCallback worklet so runOnUI receives a real worklet (Babel). */
@@ -397,9 +409,21 @@ function ExploreV2ExecutionRootComponent(props: ExploreV2ExecutionRootProps) {
     (_token, _prev) => {
       const lerpWallet = (p: number, a: number, b: number) => a + (b - a) * p;
       const p = restThemeProgress.value;
-      const Hroot =
-        exploreLayoutRootHeight.value > 0 ? exploreLayoutRootHeight.value : screenHeightSV.value * 0.55;
-      const sw = Math.max(PEEK, lerpWallet(p, Hroot, Hroot * REST_STACK_FRAC));
+      const measured = stackShellHeightSV.value;
+      const sw = measured > 0
+        ? Math.max(PEEK, measured)
+        : Math.max(
+            PEEK,
+            lerpWallet(
+              p,
+              exploreLayoutRootHeight.value > 0
+                ? exploreLayoutRootHeight.value
+                : screenHeightSV.value * 0.55,
+              (exploreLayoutRootHeight.value > 0
+                ? exploreLayoutRootHeight.value
+                : screenHeightSV.value * 0.55) * REST_STACK_FRAC,
+            ),
+          );
 
       const hasCurrentW = hasCurrentSV.value;
       const exitComplete = exitCompleteSV.value === 1;
@@ -466,12 +490,7 @@ function ExploreV2ExecutionRootComponent(props: ExploreV2ExecutionRootProps) {
   }));
 
   const aCurrent = useAnimatedStyle(() => {
-    const Hroot =
-      exploreLayoutRootHeight.value > 0 ? exploreLayoutRootHeight.value : screenHeight * 0.55;
-    const sw = Math.max(
-      PEEK,
-      interpolate(restThemeProgress.value, [0, 1], [Hroot, Hroot * REST_STACK_FRAC]),
-    );
+    const sw = structuralWalletH.value;
     const live = Math.max(PEEK, sw - (hasCompletePresentSV.value ? 2 * PEEK : PEEK));
     const height = hasCurrentSV.value ? live : currentExitLayerHeightSV.value;
     const centerLift = Math.max(0, (sw - height) / 2);
@@ -486,12 +505,11 @@ function ExploreV2ExecutionRootComponent(props: ExploreV2ExecutionRootProps) {
           translateY:
             currentSlideY.value +
             currentBlockNudgeY.value +
-            CARD_STACK_NUDGE_DOWN -
             centerLift * completionCelebrateProgress.value,
         },
       ],
     };
-  }, [screenHeight]);
+  }, []);
 
   /** Keep collapsed Current translateY in sync with wallet height during rest intro/exit (no JS lag). */
   useAnimatedReaction(
@@ -508,15 +526,16 @@ function ExploreV2ExecutionRootComponent(props: ExploreV2ExecutionRootProps) {
     },
   );
 
-  const aUpNext = useAnimatedStyle(() => ({
-    transform: [
-      {
-        translateY:
-          upNextSlideY.value +
-          (hasCompletePresentSV.value ? CARD_STACK_NUDGE_DOWN : 0),
-      },
-    ],
-  }));
+  const aUpNext = useAnimatedStyle(() => {
+    return {
+      transform: [
+        {
+          translateY:
+            upNextSlideY.value,
+        },
+      ],
+    };
+  });
   const celebrationRecedeStyle = useAnimatedStyle(() => ({
     opacity: interpolate(completionCelebrateProgress.value, [0, 1], [1, 0.5]),
     transform: [{ translateY: interpolate(completionCelebrateProgress.value, [0, 1], [0, 96]) }],
@@ -749,7 +768,11 @@ function ExploreV2ExecutionRootComponent(props: ExploreV2ExecutionRootProps) {
   return (
     <Animated.View
       style={[styles.root, walletShellRadii]}
-      onLayout={e => setStackShellHeight(e.nativeEvent.layout.height)}
+      onLayout={e => {
+        const h = e.nativeEvent.layout.height;
+        setStackShellHeight(h);
+        stackShellHeightSV.value = h;
+      }}
     >
       <Animated.View style={[styles.rootFill, rootFillAnimatedStyle]}>
       {!hasCurrent && !hasCompletePresent ? (
@@ -799,7 +822,6 @@ function ExploreV2ExecutionRootComponent(props: ExploreV2ExecutionRootProps) {
           <Animated.View
             style={[
               styles.layerBottom,
-              styles.cardStackNudgeDown,
               aCompleteLayerHeight,
               {
                 bottom: STACK_BOTTOM_GAP,
@@ -870,7 +892,6 @@ function ExploreV2ExecutionRootComponent(props: ExploreV2ExecutionRootProps) {
             <Animated.View
               style={[
                 styles.layerBottom,
-                styles.cardStackNudgeDown,
                 aCompleteLayerHeight,
                 celebrationRecedeStyle,
                 {
@@ -1041,10 +1062,6 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: STACK_BOTTOM_GAP,
     overflow: 'hidden',
-  },
-  /** Shared with CARD_STACK_NUDGE_DOWN — moves Complete layers to match Up Next / Current */
-  cardStackNudgeDown: {
-    transform: [{ translateY: CARD_STACK_NUDGE_DOWN }],
   },
   debugOverlay: {
     position: 'absolute',

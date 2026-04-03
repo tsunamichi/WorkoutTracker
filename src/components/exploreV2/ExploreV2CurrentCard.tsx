@@ -343,6 +343,8 @@ function CurrentSetHeroPage({
             ref={weightInputRef}
             key={`${setId}-weight`}
             style={[styles.valueInput, { color: heroValueColor }]}
+            allowFontScaling={false}
+            maxFontSizeMultiplier={1}
             defaultValue={weightDefault}
             onChangeText={t => {
               weightDraftRef.current = t;
@@ -357,12 +359,14 @@ function CurrentSetHeroPage({
             underlineColorAndroid="transparent"
           />
           <View style={styles.unitWithDelta}>
-            {prog && prog.weightDelta > 0 ? (
-              <Text style={[styles.heroDeltaLabel, { color: heroValueColor }]} numberOfLines={1}>
-                ↑
-              </Text>
-            ) : null}
-            <Text style={[styles.valueMetric, { color: unitLabelColor }]}>{weightUnit}</Text>
+            <View style={styles.unitLabelRow}>
+              <Text style={[styles.valueMetric, { color: unitLabelColor }]}>{weightUnit}</Text>
+              {prog && prog.weightDelta > 0 ? (
+                <Text style={[styles.heroDeltaLabel, { color: heroValueColor }]} numberOfLines={1}>
+                  ↑
+                </Text>
+              ) : null}
+            </View>
             {perSideText ? (
               <Text style={[styles.perSideSingleLine, { color: perSideLabelColor }]}>{perSideText}</Text>
             ) : null}
@@ -373,6 +377,8 @@ function CurrentSetHeroPage({
             ref={repsInputRef}
             key={`${setId}-reps`}
             style={[styles.valueInput, { color: heroValueColor }]}
+            allowFontScaling={false}
+            maxFontSizeMultiplier={1}
             defaultValue={repsDefault}
             onChangeText={t => {
               repsDraftRef.current = t;
@@ -387,14 +393,16 @@ function CurrentSetHeroPage({
             underlineColorAndroid="transparent"
           />
           <View style={styles.unitWithDelta}>
-            {prog && prog.repsDelta > 0 ? (
-              <Text style={[styles.heroDeltaLabel, { color: heroValueColor }]} numberOfLines={1}>
-                ↑
+            <View style={styles.unitLabelRow}>
+              <Text style={[styles.valueMetric, { color: unitLabelColor }]}>
+                {heroEx.isTimeBased ? 'sec' : 'reps'}
               </Text>
-            ) : null}
-            <Text style={[styles.valueMetric, { color: unitLabelColor }]}>
-              {heroEx.isTimeBased ? 'sec' : 'reps'}
-            </Text>
+              {prog && prog.repsDelta > 0 ? (
+                <Text style={[styles.heroDeltaLabel, { color: heroValueColor }]} numberOfLines={1}>
+                  ↑
+                </Text>
+              ) : null}
+            </View>
           </View>
         </View>
       </View>
@@ -452,6 +460,7 @@ export function ExploreV2CurrentCard({
 
   const [carouselIndex, setCarouselIndex] = useState(0);
   const [pageWidth, setPageWidth] = useState(0);
+  const carouselViewportWidth = Math.max(0, pageWidth - pad.horizontal - 24);
   const scrollRef = useRef<ScrollView>(null);
   const commitsRef = useRef<Record<string, () => { weight: number; reps: number } | void>>({});
   const prevIncompleteKeyRef = useRef<string | null>(null);
@@ -483,14 +492,14 @@ export function ExploreV2CurrentCard({
   }, [activeHeroEx, activeSlot, getSetDisplayValues, localValues, activeSetId]);
 
   useEffect(() => {
-    if (pageWidth <= 0 || orderedSlots.length === 0) return;
+    if (carouselViewportWidth <= 0 || orderedSlots.length === 0) return;
     const key = nextIncomplete ? slotKey(nextIncomplete) : 'all-done';
     const idx = nextIncompleteIndex >= 0 ? nextIncompleteIndex : 0;
 
     if (prevIncompleteKeyRef.current === null) {
       prevIncompleteKeyRef.current = key;
       setCarouselIndex(idx);
-      scrollRef.current?.scrollTo({ x: idx * pageWidth, animated: false });
+      scrollRef.current?.scrollTo({ x: idx * carouselViewportWidth, animated: false });
       return;
     }
 
@@ -498,10 +507,10 @@ export function ExploreV2CurrentCard({
       prevIncompleteKeyRef.current = key;
       if (nextIncompleteIndex >= 0) {
         setCarouselIndex(nextIncompleteIndex);
-        scrollRef.current?.scrollTo({ x: nextIncompleteIndex * pageWidth, animated: true });
+        scrollRef.current?.scrollTo({ x: nextIncompleteIndex * carouselViewportWidth, animated: true });
       }
     }
-  }, [pageWidth, nextIncomplete, nextIncompleteIndex, orderedSlots.length]);
+  }, [carouselViewportWidth, nextIncomplete, nextIncompleteIndex, orderedSlots.length]);
 
   const heroTimerActive = exploreV2TimerPhase !== 'none';
   const ctaLabel =
@@ -572,23 +581,23 @@ export function ExploreV2CurrentCard({
 
   const onCarouselScrollEnd = useCallback(
     (e: NativeSyntheticEvent<NativeScrollEvent>) => {
-      if (pageWidth <= 0) return;
+      if (carouselViewportWidth <= 0) return;
       const x = e.nativeEvent.contentOffset.x;
-      const i = Math.round(x / pageWidth);
+      const i = Math.round(x / carouselViewportWidth);
       const clamped = Math.max(0, Math.min(i, orderedSlots.length - 1));
       setCarouselIndex(clamped);
     },
-    [pageWidth, orderedSlots.length],
+    [carouselViewportWidth, orderedSlots.length],
   );
 
   const scrollToSetIndex = useCallback(
     (i: number) => {
-      if (pageWidth <= 0) return;
+      if (carouselViewportWidth <= 0) return;
       const clamped = Math.max(0, Math.min(i, orderedSlots.length - 1));
       setCarouselIndex(clamped);
-      scrollRef.current?.scrollTo({ x: clamped * pageWidth, animated: true });
+      scrollRef.current?.scrollTo({ x: clamped * carouselViewportWidth, animated: true });
     },
-    [pageWidth, orderedSlots.length],
+    [carouselViewportWidth, orderedSlots.length],
   );
 
   const onLogPress = useCallback(() => {
@@ -678,7 +687,7 @@ export function ExploreV2CurrentCard({
                       if (w > 0 && w !== pageWidth) setPageWidth(w);
                     }}
                   >
-                    {orderedSlots.length > 0 && pageWidth > 0 ? (
+                    {orderedSlots.length > 0 && carouselViewportWidth > 0 ? (
                       <ScrollView
                         ref={scrollRef}
                         horizontal
@@ -704,7 +713,7 @@ export function ExploreV2CurrentCard({
                             heroValueColor={heroValueColor}
                             unitLabelColor={accentPrimary}
                             perSideLabelColor={accentSecondarySoft}
-                            pageWidth={pageWidth}
+                            pageWidth={carouselViewportWidth}
                             commitsRef={commitsRef}
                             progressionValuesByItemId={progressionValuesByItemId}
                           />
@@ -816,7 +825,7 @@ const styles = StyleSheet.create({
   shell: {
     flex: 1,
     flexDirection: 'column',
-    paddingTop: 10,
+    paddingTop: EXPLORE_V2.cardHeader.topInset,
     paddingLeft: pad.horizontal,
     paddingRight: 24,
     paddingBottom: 32,
@@ -855,11 +864,11 @@ const styles = StyleSheet.create({
     zIndex: 1,
   },
   headerBar: {
-    height: 32,
+    height: EXPLORE_V2.cardHeader.rowHeight,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingTop: 2,
+    paddingVertical: EXPLORE_V2.cardHeader.rowVerticalPadding,
     width: '100%',
   },
   eyebrow: {
@@ -940,19 +949,25 @@ const styles = StyleSheet.create({
   },
   /** Wraps unit only so ↑ is positioned over this label, not in the gap between weight/reps rows */
   unitWithDelta: {
-    position: 'relative',
     paddingTop: 12,
   },
+  unitLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: 6,
+  },
   heroDeltaLabel: {
-    position: 'absolute',
-    top: 36,
-    right: -12,
-    fontSize: 16,
-    lineHeight: 16,
-    fontWeight: '600',
+    fontSize: 22,
+    lineHeight: 22,
+    fontWeight: '500',
+    width: 22,
+    height: 22,
+    textAlign: 'center',
+    marginLeft: -4,
+    transform: [{ translateY: -1 }],
   },
   valueMetric: {
-    ...TYPOGRAPHY.meta,
+    ...TYPOGRAPHY.displayLarge,
     fontWeight: '400',
   },
   valueInput: {

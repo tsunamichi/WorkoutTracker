@@ -54,28 +54,6 @@ const ROW_BORDER_HAIRLINE = StyleSheet.hairlineWidth;
 const LIST_PADDING_RIGHT = 24;
 const HEADER_PADDING_RIGHT = 12;
 
-const SUPER_SCRIPT_FONT_SIZE = TYPOGRAPHY.body.fontSize;
-
-const SUPERSCRIPT_DIGITS: Record<string, string> = {
-  '0': '⁰',
-  '1': '¹',
-  '2': '²',
-  '3': '³',
-  '4': '⁴',
-  '5': '⁵',
-  '6': '⁶',
-  '7': '⁷',
-  '8': '⁸',
-  '9': '⁹',
-};
-
-function toSuperscriptDigits(value: string): string {
-  return value
-    .split('')
-    .map(ch => SUPERSCRIPT_DIGITS[ch] ?? ch)
-    .join('');
-}
-
 type UpNextQueueRowProps = {
   group: ExploreV2Group;
   groupIndex: number;
@@ -92,8 +70,8 @@ type UpNextQueueRowProps = {
 
 const palette = EXPLORE_V2_PALETTES.upNext;
 const HEADER_INK = '#464646';
-/** Idle superscript — animated to `EXPLORE_V2.colors.restTimerHeaderInk` when rest timer is on */
-const ROW_SUPER_INK = '#787878';
+/** Idle rounds count ink — animated to `EXPLORE_V2.colors.restTimerHeaderInk` when rest timer is on */
+const ROW_ROUNDS_INK = '#787878';
 
 function UpNextQueueRow({
   group,
@@ -110,12 +88,12 @@ function UpNextQueueRow({
   const { explore: ex, colors: themeColors } = useAppTheme();
   const restHeaderInk = ex.restTimerHeaderInk;
   const pageBg = EXPLORE_V2.colors.pageBg;
-  const superscriptColorStyle = useAnimatedStyle(() => {
+  const roundsColorStyle = useAnimatedStyle(() => {
     const b = restThemeProgress.value;
     const w = exploreV2WorkBlueProgress.value;
     const g = restChromeGateSV.value;
     const p = b * g * (1 - w);
-    const restCol = interpolateColor(p, [0, 1], [ROW_SUPER_INK, restHeaderInk]);
+    const restCol = interpolateColor(p, [0, 1], [ROW_ROUNDS_INK, restHeaderInk]);
     return {
       color: interpolateColor(b * w, [0, 1], [restCol, pageBg]),
     };
@@ -125,7 +103,6 @@ function UpNextQueueRow({
   }), [pageBg, themeColors.containerPrimary]);
   const title = groupTitle(group);
   const roundsStr = String(group.totalRounds);
-  const roundsSuperscript = toSuperscriptDigits(roundsStr);
 
   return (
     <View style={isLast ? undefined : styles.rowSeamOverlap}>
@@ -138,12 +115,14 @@ function UpNextQueueRow({
           accessibilityLabel={`${title}, ${roundsStr} rounds`}
         >
           <View style={styles.nameBlock}>
-            <Reanimated.Text style={[styles.name, rowNameInkStyle]} numberOfLines={2}>
-              {title}
-              <Reanimated.Text style={[styles.superScriptInline, superscriptColorStyle]}>
-                    {roundsSuperscript}
+            <View style={styles.nameLine}>
+              <Reanimated.Text style={[styles.name, rowNameInkStyle]} numberOfLines={2}>
+                {title}
               </Reanimated.Text>
-            </Reanimated.Text>
+              <Reanimated.Text style={[styles.roundsInline, roundsColorStyle]}>
+                {roundsStr}
+              </Reanimated.Text>
+            </View>
           </View>
         </TouchableOpacity>
         {removeMode ? (
@@ -279,13 +258,13 @@ export function ExploreV2UpNextCard({
         <Reanimated.Text style={[styles.headerLabel, headerChromeAnimatedStyle]}>Up Next</Reanimated.Text>
         <View style={styles.countOrPlusSlot}>
           <Reanimated.View style={[styles.chevronLayer, chevronIdleOpacityStyle]} pointerEvents="none">
-            <IconChevronDown size={18} color={textMeta} />
+            <IconChevronDown size={18} color={COLORS.containerPrimary} />
           </Reanimated.View>
           <Reanimated.View style={[styles.chevronLayer, chevronTimerOpacityStyle]} pointerEvents="none">
-            <IconChevronDown size={18} color={accentPrimaryDark} />
+            <IconChevronDown size={18} color={COLORS.containerPrimary} />
           </Reanimated.View>
           <Reanimated.View style={[styles.chevronLayer, chevronWorkOpacityStyle]} pointerEvents="none">
-            <IconChevronDown size={18} color={textMetaTimer} />
+            <IconChevronDown size={18} color={COLORS.containerPrimary} />
           </Reanimated.View>
         </View>
       </Pressable>
@@ -376,7 +355,7 @@ const styles = StyleSheet.create({
   shell: {
     flex: 1,
     flexDirection: 'column',
-    paddingTop: 10,
+    paddingTop: EXPLORE_V2.cardHeader.topInset,
     borderWidth: 2,
     borderColor: COLORS.accentSecondarySoft,
     borderTopLeftRadius: EXPLORE_V2.cardTopRadius,
@@ -392,19 +371,18 @@ const styles = StyleSheet.create({
     ...(Platform.OS === 'ios' ? { borderCurve: 'continuous' as const } : {}),
   },
   headerRow: {
-    height: 32,
+    height: EXPLORE_V2.cardHeader.rowHeight,
     width: '100%',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingTop: 2,
+    paddingVertical: EXPLORE_V2.cardHeader.rowVerticalPadding,
     paddingLeft: 24,
     paddingRight: HEADER_PADDING_RIGHT,
-    paddingBottom: 0,
     overflow: 'hidden',
   },
   headerRowNoComplete: {
-    paddingTop: 0,
+    paddingVertical: EXPLORE_V2.cardHeader.rowVerticalPadding,
   },
   peekTapOverlay: {
     ...StyleSheet.absoluteFillObject,
@@ -412,7 +390,7 @@ const styles = StyleSheet.create({
   },
   countOrPlusSlot: {
     width: 38,
-    height: 32,
+    height: EXPLORE_V2.cardHeader.rowHeight,
     position: 'relative',
     alignItems: 'center',
     justifyContent: 'center',
@@ -425,7 +403,7 @@ const styles = StyleSheet.create({
   },
   actionRow: {
     paddingRight: 24,
-    marginBottom: 12,
+    marginBottom: 32,
     flexDirection: 'row',
     columnGap: 24,
     justifyContent: 'flex-start',
@@ -435,16 +413,14 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
   },
   actionText: {
-    ...TYPOGRAPHY.displayLarge,
+    ...TYPOGRAPHY.h1,
     color: '#5A5A5A',
-    fontWeight: '400',
   },
   actionDisabled: {
     opacity: 0.4,
   },
   removeText: {
-    ...TYPOGRAPHY.displayLarge,
-    fontWeight: '400',
+    ...TYPOGRAPHY.h1,
   },
   headerLabel: {
     ...TYPOGRAPHY.legal,
@@ -473,7 +449,7 @@ const styles = StyleSheet.create({
   scrollPad: {
     paddingLeft: pad.horizontal,
     paddingRight: 0,
-    paddingTop: EXPLORE_V2.headerToContentGap,
+    paddingTop: 32,
     paddingBottom: pad.bottom,
   },
   rowSeamOverlap: {
@@ -499,16 +475,24 @@ const styles = StyleSheet.create({
     flexShrink: 1,
     minWidth: 0,
   },
+  nameLine: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    minWidth: 0,
+  },
   name: {
     ...TYPOGRAPHY.displayLarge,
     fontWeight: '400',
     flexShrink: 1,
+    minWidth: 0,
   },
-  /** Inline with title so wrap position matches single-line (overlay + line metrics broke on multi-line). */
-  superScriptInline: {
-    fontSize: SUPER_SCRIPT_FONT_SIZE,
-    fontWeight: '700',
+  /** Inline rounds count, rendered as regular text (not superscript). */
+  roundsInline: {
+    ...TYPOGRAPHY.body,
+    fontWeight: '400',
     includeFontPadding: false,
+    marginLeft: 6,
+    marginTop: -2,
   },
   emptyBlock: {
     paddingVertical: 8,

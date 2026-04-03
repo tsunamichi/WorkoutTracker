@@ -8,12 +8,20 @@ import { EXPLORE_V2_CHROME } from './exploreV2ColorSystem';
 export { EXPLORE_V2_CARD_MAINS, EXPLORE_V2_CHROME, EXPLORE_V2_PALETTES, getCardPalette, mixHex } from './exploreV2ColorSystem';
 export type { CardPalette, CardRole } from './exploreV2ColorSystem';
 
+const CARD_HEADER_TOP_INSET = 10;
+const CARD_HEADER_ROW_HEIGHT = 32;
+const CARD_HEADER_ROW_VERTICAL_PADDING = 0;
+const PEEK_HEADER_HEIGHT = CARD_HEADER_TOP_INSET + CARD_HEADER_ROW_HEIGHT + CARD_HEADER_TOP_INSET;
+
 export const EXPLORE_V2 = {
   margin: 4,
   /** Space between stacked card layers (negative overlap for a softer “wallet” read) */
   stackOverlap: 14,
-  /** Visible header strip when a card is covered by the card in front */
-  peekHeaderHeight: 54,
+  /**
+   * Visible header strip when a card is covered by the card in front.
+   * Computed from header geometry so top and bottom strip spacing stay symmetric.
+   */
+  peekHeaderHeight: PEEK_HEADER_HEIGHT,
   timerAreaHeight: 64,
   /** Match iOS-style device corner radius on card bottoms */
   cardRadius: 40,
@@ -24,6 +32,12 @@ export const EXPLORE_V2 = {
     top: 16,
     horizontal: 24,
     bottom: 24,
+  },
+  /** Shared card header spacing across Completed / Up Next / Current. */
+  cardHeader: {
+    topInset: CARD_HEADER_TOP_INSET,
+    rowHeight: CARD_HEADER_ROW_HEIGHT,
+    rowVerticalPadding: CARD_HEADER_ROW_VERTICAL_PADDING,
   },
   /** Expanded Current card — fixed height (wallet layer) */
   currentCardExpandedHeight: 460,
