@@ -31,6 +31,8 @@ type Props = {
   timerThemeActive: boolean;
   restThemeProgress: SharedValue<number>;
   exploreV2WorkBlueProgress: SharedValue<number>;
+  menuThemeActive: boolean;
+  menuToneProgress: SharedValue<number>;
 };
 
 function groupHasAnyLoggedSet(group: ExploreV2Group, completedSets: Set<string>): boolean {
@@ -62,14 +64,14 @@ type UpNextQueueRowProps = {
   restThemeProgress: SharedValue<number>;
   restChromeGateSV: SharedValue<number>;
   exploreV2WorkBlueProgress: SharedValue<number>;
+  menuThemeActive: boolean;
+  menuToneProgress: SharedValue<number>;
   removeMode: boolean;
   onSelectGroup: (groupIndex: number) => void;
   onRemoveGroupFromUpNext: (groupIndex: number) => void | Promise<void>;
 };
 
 const HEADER_INK = '#464646';
-/** Idle rounds count ink — animated to `EXPLORE_V2.colors.restTimerHeaderInk` when rest timer is on */
-const ROW_ROUNDS_INK = '#787878';
 
 function UpNextQueueRow({
   group,
@@ -79,34 +81,48 @@ function UpNextQueueRow({
   restThemeProgress,
   restChromeGateSV,
   exploreV2WorkBlueProgress,
+  menuThemeActive,
+  menuToneProgress,
   removeMode,
   onSelectGroup,
   onRemoveGroupFromUpNext,
 }: UpNextQueueRowProps) {
-  const { explore: ex, colors: themeColors } = useAppTheme();
-  const restHeaderInk = ex.restTimerHeaderInk;
+  const { colors: themeColors } = useAppTheme();
   const pageBg = themeColors.canvasLight;
+  const menuMutedInk = themeColors.textMeta;
+  const textMeta = themeColors.textMeta;
+  const accentPrimaryDark = themeColors.accentPrimaryDark;
+  const textMetaTimer = themeColors.textMetaTimer;
   const [roundAnchor, setRoundAnchor] = useState({ top: 0, left: 0 });
   const roundsColorStyle = useAnimatedStyle(() => {
     const b = restThemeProgress.value;
     const w = exploreV2WorkBlueProgress.value;
     const g = restChromeGateSV.value;
-    const p = b * g * (1 - w);
-    const restCol = interpolateColor(p, [0, 1], [ROW_ROUNDS_INK, restHeaderInk]);
+    const pRest = b * g * (1 - w);
+    const pWork = b * w;
+    const restCol = interpolateColor(pRest, [0, 1], [textMeta, accentPrimaryDark]);
+    const base = interpolateColor(pWork, [0, 1], [restCol, textMetaTimer]);
     return {
-      color: interpolateColor(b * w, [0, 1], [restCol, pageBg]),
+      color: interpolateColor(menuToneProgress.value, [0, 1], [base, menuMutedInk]),
     };
-  }, [restHeaderInk, pageBg]);
+  }, [textMeta, accentPrimaryDark, textMetaTimer, menuToneProgress, menuMutedInk, pageBg]);
   const rowNameInkStyle = useAnimatedStyle(() => ({
-    color: interpolateColor(exploreV2WorkBlueProgress.value, [0, 1], [themeColors.containerPrimary, pageBg]),
-  }), [pageBg, themeColors.containerPrimary]);
+    color: interpolateColor(
+      menuToneProgress.value,
+      [0, 1],
+      [
+        interpolateColor(exploreV2WorkBlueProgress.value, [0, 1], [themeColors.containerPrimary, pageBg]),
+        menuMutedInk,
+      ],
+    ),
+  }), [pageBg, themeColors.containerPrimary, menuMutedInk, exploreV2WorkBlueProgress, menuToneProgress]);
   const title = groupTitle(group);
   const roundsStr = String(group.totalRounds);
   const onNameTextLayout = useCallback((e: any) => {
     const lines = e?.nativeEvent?.lines;
     if (!Array.isArray(lines) || lines.length === 0) return;
     const last = lines[lines.length - 1];
-    const fallbackLineHeight = TYPOGRAPHY.displayLarge.lineHeight ?? 36;
+    const fallbackLineHeight = TYPOGRAPHY.h2.lineHeight ?? 32;
     const nextTop =
       typeof last?.y === 'number'
         ? last.y
@@ -183,6 +199,8 @@ export function ExploreV2UpNextCard({
   timerThemeActive,
   restThemeProgress,
   exploreV2WorkBlueProgress,
+  menuThemeActive,
+  menuToneProgress,
 }: Props) {
   const { explore: ex, colors: themeColors } = useAppTheme();
   const workUpNextBg = ex.workTimerUpNextCardBg;
@@ -195,6 +213,8 @@ export function ExploreV2UpNextCard({
   const textMeta = themeColors.textMeta;
   const containerPrimary = themeColors.containerPrimary;
   const upNextBaseBg = themeColors.containerSecondary;
+  const menuMutedBg = '#CFC9CC';
+  const menuMutedInk = themeColors.textMeta;
   /** Mirrors `timerThemeActive` on UI thread — multiplies theme progress so chrome snaps idle when rest ends. */
   const restChromeGateSV = useSharedValue(timerThemeActive ? 1 : 0);
   useLayoutEffect(() => {
@@ -210,10 +230,11 @@ export function ExploreV2UpNextCard({
     const pRest = b * (1 - w);
     const pWork = b * w;
     const restCol = interpolateColor(pRest, [0, 1], [containerPrimary, accentPrimaryDark]);
+    const baseColor = interpolateColor(pWork, [0, 1], [restCol, textMetaTimer]);
     return {
-      color: interpolateColor(pWork, [0, 1], [restCol, textMetaTimer]),
+      color: interpolateColor(menuToneProgress.value, [0, 1], [baseColor, menuMutedInk]),
     };
-  }, [containerPrimary, accentPrimaryDark, textMetaTimer]);
+  }, [containerPrimary, accentPrimaryDark, textMetaTimer, menuMutedInk, menuToneProgress]);
   /** Keep action links on meta color for visual consistency. */
   const addExerciseLinkAnimatedStyle = useAnimatedStyle(() => {
     const b = restThemeProgress.value;
@@ -221,12 +242,13 @@ export function ExploreV2UpNextCard({
     const pRest = b * (1 - w);
     const pWork = b * w;
     const restCol = interpolateColor(pRest, [0, 1], [textMeta, accentPrimaryDark]);
-    const color = interpolateColor(pWork, [0, 1], [restCol, textMetaTimer]);
+    const baseColor = interpolateColor(pWork, [0, 1], [restCol, textMetaTimer]);
+    const color = interpolateColor(menuToneProgress.value, [0, 1], [baseColor, menuMutedInk]);
     return {
       color,
       borderBottomColor: color,
     };
-  }, [textMeta, accentPrimaryDark, textMetaTimer]);
+  }, [textMeta, accentPrimaryDark, textMetaTimer, menuMutedInk, menuToneProgress]);
   const chevronIdleOpacityStyle = useAnimatedStyle(() => ({
     opacity: 1 - restThemeProgress.value * (1 - exploreV2WorkBlueProgress.value),
   }));
@@ -243,19 +265,22 @@ export function ExploreV2UpNextCard({
     const w = exploreV2WorkBlueProgress.value;
     const pRest = b * (1 - w);
     const whenUpBg = interpolateColor(w, [0, 1], [amberBand, workUpNextBg]);
+    const baseBg = interpolateColor(b, [0, 1], [upNextBaseBg, whenUpBg]);
+    const baseBorder = interpolateColor(pRest, [0, 1], [themeColors.canvasLight, accentPrimary]);
     return {
-      backgroundColor: interpolateColor(b, [0, 1], [upNextBaseBg, whenUpBg]),
-      borderColor: interpolateColor(pRest, [0, 1], [themeColors.canvasLight, accentPrimary]),
+      backgroundColor: interpolateColor(menuToneProgress.value, [0, 1], [baseBg, menuMutedBg]),
+      borderColor: baseBorder,
     };
-  }, [upNextBaseBg, amberBand, workUpNextBg, themeColors.canvasLight, accentPrimary]);
+  }, [upNextBaseBg, amberBand, workUpNextBg, themeColors.canvasLight, accentPrimary, menuMutedBg, menuToneProgress]);
   const scrollBgAnimatedStyle = useAnimatedStyle(() => {
     const b = restThemeProgress.value;
     const w = exploreV2WorkBlueProgress.value;
     const whenUpBg = interpolateColor(w, [0, 1], [amberBand, workUpNextBg]);
+    const baseBg = interpolateColor(b, [0, 1], [upNextBaseBg, whenUpBg]);
     return {
-      backgroundColor: interpolateColor(b, [0, 1], [upNextBaseBg, whenUpBg]),
+      backgroundColor: interpolateColor(menuToneProgress.value, [0, 1], [baseBg, menuMutedBg]),
     };
-  }, [upNextBaseBg, amberBand, workUpNextBg]);
+  }, [upNextBaseBg, amberBand, workUpNextBg, menuMutedBg, menuToneProgress]);
   useEffect(() => {
     if (!isExpanded && removeMode) setRemoveMode(false);
   }, [isExpanded, removeMode]);
@@ -284,13 +309,13 @@ export function ExploreV2UpNextCard({
         <Reanimated.Text style={[styles.headerLabel, headerChromeAnimatedStyle]}>Up Next</Reanimated.Text>
         <View style={styles.countOrPlusSlot}>
           <Reanimated.View style={[styles.chevronLayer, chevronIdleOpacityStyle]} pointerEvents="none">
-            <IconChevronDown size={18} color={themeColors.containerPrimary} />
+            <IconChevronDown size={18} color={menuThemeActive ? menuMutedInk : themeColors.containerPrimary} />
           </Reanimated.View>
           <Reanimated.View style={[styles.chevronLayer, chevronTimerOpacityStyle]} pointerEvents="none">
-            <IconChevronDown size={18} color={themeColors.containerPrimary} />
+            <IconChevronDown size={18} color={menuThemeActive ? menuMutedInk : themeColors.containerPrimary} />
           </Reanimated.View>
           <Reanimated.View style={[styles.chevronLayer, chevronWorkOpacityStyle]} pointerEvents="none">
-            <IconChevronDown size={18} color={themeColors.containerPrimary} />
+            <IconChevronDown size={18} color={menuThemeActive ? menuMutedInk : themeColors.containerPrimary} />
           </Reanimated.View>
         </View>
       </Pressable>
@@ -329,8 +354,8 @@ export function ExploreV2UpNextCard({
           </View>
           {showFullEmpty && (
             <View style={styles.emptyBlock}>
-              <Text style={[styles.emptyTitle, { color: themeColors.containerPrimary }]}>No exercises yet</Text>
-              <Text style={[styles.emptySub, { color: themeColors.textMeta }]}>
+              <Text style={[styles.emptyTitle, { color: menuThemeActive ? menuMutedInk : themeColors.containerPrimary }]}>No exercises yet</Text>
+              <Text style={[styles.emptySub, { color: menuThemeActive ? menuMutedInk : themeColors.textMeta }]}>
                 Add an exercise to start building this workout.
               </Text>
               {allowAddExercise ? (
@@ -342,7 +367,7 @@ export function ExploreV2UpNextCard({
           )}
 
           {showQueueEmptyOnly && (
-            <Text style={[styles.queueEmpty, { color: themeColors.textMeta }]}>
+            <Text style={[styles.queueEmpty, { color: menuThemeActive ? menuMutedInk : themeColors.textMeta }]}>
               Nothing in the queue. Add an exercise or finish your current set.
             </Text>
           )}
@@ -362,6 +387,8 @@ export function ExploreV2UpNextCard({
               restThemeProgress={restThemeProgress}
               restChromeGateSV={restChromeGateSV}
               exploreV2WorkBlueProgress={exploreV2WorkBlueProgress}
+              menuThemeActive={menuThemeActive}
+              menuToneProgress={menuToneProgress}
               removeMode={removeMode}
               onSelectGroup={onSelectGroup}
               onRemoveGroupFromUpNext={onRemoveGroupFromUpNext}
@@ -503,7 +530,7 @@ const styles = StyleSheet.create({
     position: 'relative',
   },
   name: {
-    ...TYPOGRAPHY.displayLarge,
+    ...TYPOGRAPHY.h2,
     fontWeight: '400',
     flexShrink: 1,
     minWidth: 0,

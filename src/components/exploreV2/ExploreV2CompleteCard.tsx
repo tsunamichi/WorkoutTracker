@@ -24,6 +24,8 @@ type Props = {
   timerThemeActive: boolean;
   restThemeProgress: SharedValue<number>;
   exploreV2WorkBlueProgress: SharedValue<number>;
+  menuThemeActive: boolean;
+  menuToneProgress: SharedValue<number>;
   contentOnly?: boolean;
 };
 
@@ -48,6 +50,8 @@ export function ExploreV2CompleteCard({
   timerThemeActive: _timerThemeActive,
   restThemeProgress,
   exploreV2WorkBlueProgress,
+  menuThemeActive,
+  menuToneProgress,
   contentOnly = false,
 }: Props) {
   const { explore: ex, colors: themeColors } = useAppTheme();
@@ -62,6 +66,8 @@ export function ExploreV2CompleteCard({
   const upNextBaseBg = themeColors.containerSecondary;
   const workUpNextBg = ex.workTimerUpNextCardBg;
   const amberBand = ex.amberBand;
+  const menuMutedBg = '#CFC9CC';
+  const menuMutedInk = themeColors.textMeta;
 
   const headerChromeAnimatedStyle = useAnimatedStyle(() => {
     const b = restThemeProgress.value;
@@ -69,10 +75,11 @@ export function ExploreV2CompleteCard({
     const pRest = b * (1 - w);
     const pWork = b * w;
     const restCol = interpolateColor(pRest, [0, 1], [containerPrimary, accentPrimaryDark]);
+    const baseColor = interpolateColor(pWork, [0, 1], [restCol, textMetaTimer]);
     return {
-      color: interpolateColor(pWork, [0, 1], [restCol, textMetaTimer]),
+      color: interpolateColor(menuToneProgress.value, [0, 1], [baseColor, menuMutedInk]),
     };
-  }, [containerPrimary, accentPrimaryDark, textMetaTimer]);
+  }, [containerPrimary, accentPrimaryDark, textMetaTimer, menuMutedInk, menuToneProgress]);
   const completedUnitAnimatedStyle = useAnimatedStyle(() => {
     const w = exploreV2WorkBlueProgress.value;
     const unitRest = interpolateColor(
@@ -80,10 +87,11 @@ export function ExploreV2CompleteCard({
       [0, 1],
       [IDLE_UNIT_INK, restCompletedUnitInk],
     );
+    const baseColor = interpolateColor(w, [0, 1], [unitRest, pageBgChrome]);
     return {
-      color: interpolateColor(w, [0, 1], [unitRest, pageBgChrome]),
+      color: interpolateColor(menuToneProgress.value, [0, 1], [baseColor, menuMutedInk]),
     };
-  }, [restCompletedUnitInk, pageBgChrome]);
+  }, [restCompletedUnitInk, pageBgChrome, menuMutedInk, menuToneProgress]);
   const chevronIdleOpacityStyle = useAnimatedStyle(() => ({
     opacity: 1 - restThemeProgress.value * (1 - exploreV2WorkBlueProgress.value),
   }));
@@ -100,22 +108,32 @@ export function ExploreV2CompleteCard({
     const w = exploreV2WorkBlueProgress.value;
     const pRest = b * (1 - w);
     const whenUpBg = interpolateColor(w, [0, 1], [amberBand, workUpNextBg]);
+    const baseBg = interpolateColor(b, [0, 1], [upNextBaseBg, whenUpBg]);
+    const baseBorder = interpolateColor(pRest, [0, 1], [themeColors.canvasLight, accentPrimary]);
     return {
-      backgroundColor: interpolateColor(b, [0, 1], [upNextBaseBg, whenUpBg]),
-      borderColor: interpolateColor(pRest, [0, 1], [themeColors.canvasLight, accentPrimary]),
+      backgroundColor: interpolateColor(menuToneProgress.value, [0, 1], [baseBg, menuMutedBg]),
+      borderColor: baseBorder,
     };
-  }, [upNextBaseBg, amberBand, workUpNextBg, themeColors.canvasLight, accentPrimary]);
+  }, [upNextBaseBg, amberBand, workUpNextBg, themeColors.canvasLight, accentPrimary, menuMutedBg, menuToneProgress]);
   const scrollContentAnimatedStyle = useAnimatedStyle(() => {
     const b = restThemeProgress.value;
     const w = exploreV2WorkBlueProgress.value;
     const whenUpBg = interpolateColor(w, [0, 1], [amberBand, workUpNextBg]);
+    const baseBg = interpolateColor(b, [0, 1], [upNextBaseBg, whenUpBg]);
     return {
-      backgroundColor: interpolateColor(b, [0, 1], [upNextBaseBg, whenUpBg]),
+      backgroundColor: interpolateColor(menuToneProgress.value, [0, 1], [baseBg, menuMutedBg]),
     };
-  }, [upNextBaseBg, amberBand, workUpNextBg]);
+  }, [upNextBaseBg, amberBand, workUpNextBg, menuMutedBg, menuToneProgress]);
   const rowTitleInkStyle = useAnimatedStyle(() => ({
-    color: interpolateColor(exploreV2WorkBlueProgress.value, [0, 1], [containerPrimary, pageBgChrome]),
-  }), [containerPrimary, pageBgChrome]);
+    color: interpolateColor(
+      menuToneProgress.value,
+      [0, 1],
+      [
+        interpolateColor(exploreV2WorkBlueProgress.value, [0, 1], [containerPrimary, pageBgChrome]),
+        menuMutedInk,
+      ],
+    ),
+  }), [containerPrimary, pageBgChrome, menuMutedInk, exploreV2WorkBlueProgress, menuToneProgress]);
   const rows = completedGroupIndexes.flatMap(gi => {
     const g = exerciseGroups[gi];
     if (!g) return [];
@@ -181,7 +199,7 @@ export function ExploreV2CompleteCard({
           </TouchableOpacity>
         ))}
         {rows.length === 0 && (
-          <Text style={[styles.empty, { color: textMeta }]}>Nothing completed yet.</Text>
+          <Text style={[styles.empty, { color: menuThemeActive ? menuMutedInk : textMeta }]}>Nothing completed yet.</Text>
         )}
     </>
   );
@@ -218,13 +236,13 @@ export function ExploreV2CompleteCard({
         <Animated.Text style={[styles.headerLabel, headerChromeAnimatedStyle]}>Completed</Animated.Text>
         <View style={styles.countOrPlusSlot}>
           <Animated.View style={[styles.chevronLayer, chevronIdleOpacityStyle]} pointerEvents="none">
-            <IconChevronDown size={18} color={themeColors.containerPrimary} />
+            <IconChevronDown size={18} color={menuThemeActive ? menuMutedInk : themeColors.containerPrimary} />
           </Animated.View>
           <Animated.View style={[styles.chevronLayer, chevronTimerOpacityStyle]} pointerEvents="none">
-            <IconChevronDown size={18} color={themeColors.containerPrimary} />
+            <IconChevronDown size={18} color={menuThemeActive ? menuMutedInk : themeColors.containerPrimary} />
           </Animated.View>
           <Animated.View style={[styles.chevronLayer, chevronWorkOpacityStyle]} pointerEvents="none">
-            <IconChevronDown size={18} color={themeColors.containerPrimary} />
+            <IconChevronDown size={18} color={menuThemeActive ? menuMutedInk : themeColors.containerPrimary} />
           </Animated.View>
         </View>
       </Pressable>

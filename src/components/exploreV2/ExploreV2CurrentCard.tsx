@@ -57,6 +57,10 @@ type Props = {
   /** Rest timer band active — dims hero numerals */
   timerThemeActive: boolean;
   restThemeProgress: SharedValue<number>;
+  /** Wallet is sliding for top menu; use muted menu colorway. */
+  menuThemeActive: boolean;
+  /** Menu tone progress (0 idle -> 1 toned) for color interpolation. */
+  menuToneProgress: SharedValue<number>;
   /** In-card settings overlay (slides up over hero + footer) */
   settingsOverflow?: ExploreV2CurrentSettingsOverflowProps;
   progressionValuesByItemId: Record<
@@ -431,6 +435,8 @@ export function ExploreV2CurrentCard({
   coveredBottomRadius,
   timerThemeActive,
   restThemeProgress,
+  menuThemeActive,
+  menuToneProgress,
   settingsOverflow,
   progressionValuesByItemId,
   celebrationProgress,
@@ -444,8 +450,9 @@ export function ExploreV2CurrentCard({
   const accentSecondarySoft = themeColors.accentSecondarySoft;
   const accentSecondaryDisabled = themeColors.accentSecondaryDisabled;
   const containerTertiary = themeColors.containerTertiary;
+  const menuMutedBg = '#CFC9CC';
+  const menuMutedInk = themeColors.textMeta;
   const skipRestCtaBg = ex.skipRestCtaBg;
-  const ctaPillLabelInk = ex.ctaPillText;
   const isPrimary = primaryRevealed === 'current';
   const [drawerSlotHeight, setDrawerSlotHeight] = useState(0);
   const bottomCornerRadius = isPrimary ? frontBottomRadius : coveredBottomRadius;
@@ -461,7 +468,7 @@ export function ExploreV2CurrentCard({
 
   const [carouselIndex, setCarouselIndex] = useState(0);
   const [pageWidth, setPageWidth] = useState(0);
-  const carouselViewportWidth = Math.max(0, pageWidth - pad.horizontal - 24);
+  const carouselViewportWidth = Math.max(0, pageWidth);
   const scrollRef = useRef<ScrollView>(null);
   const commitsRef = useRef<Record<string, () => { weight: number; reps: number } | void>>({});
   const prevIncompleteKeyRef = useRef<string | null>(null);
@@ -533,16 +540,40 @@ export function ExploreV2CurrentCard({
     nextIncompleteIndex < 0 || carouselIndex === nextIncompleteIndex;
   const inactiveSetPreview = !heroTimerActive && !logEnabledForSlot;
   const useDisabledHeroPalette = heroTimerActive || inactiveSetPreview;
-  const heroValueColor = useDisabledHeroPalette ? accentSecondaryDisabled : accentPrimary;
-  const heroUnitColor = useDisabledHeroPalette ? accentSecondaryDisabled : accentPrimary;
+  const v2DisabledInk = hexToRgba(containerTertiary, 0.2);
+  const heroValueColor = menuThemeActive
+    ? menuMutedInk
+    : (isV2Theme && useDisabledHeroPalette
+      ? v2DisabledInk
+      : (useDisabledHeroPalette ? accentSecondaryDisabled : accentPrimary));
+  const heroUnitColor = menuThemeActive
+    ? menuMutedInk
+    : (isV2Theme && useDisabledHeroPalette
+      ? v2DisabledInk
+      : (useDisabledHeroPalette ? accentSecondaryDisabled : accentPrimary));
   const settingsDisabledTone = heroTimerActive ? accentSecondaryDisabled : accentSecondarySoft;
-  const currentHeaderInk = isV2Theme ? containerTertiary : accentSecondarySoft;
-  const settingsInk = isV2Theme ? containerTertiary : settingsDisabledTone;
+  const currentHeaderInk = menuThemeActive ? menuMutedInk : (isV2Theme ? containerTertiary : accentSecondarySoft);
+  const settingsInk = menuThemeActive
+    ? menuMutedInk
+    : (isV2Theme
+      ? (heroTimerActive ? v2DisabledInk : containerTertiary)
+      : settingsDisabledTone);
   const perSideInk = isV2Theme
-    ? containerTertiary
+    ? (useDisabledHeroPalette ? v2DisabledInk : containerTertiary)
     : (useDisabledHeroPalette ? accentSecondaryDisabled : accentSecondarySoft);
-  const inactivePaginationInk = isV2Theme ? containerTertiary : accentSecondarySoft;
-  const inactivePaginationInkDisabled = isV2Theme ? containerTertiary : accentSecondaryDisabled;
+  const perSideLabelColor = menuThemeActive
+    ? menuMutedInk
+    : (useDisabledHeroPalette ? heroUnitColor : perSideInk);
+  const inactivePaginationInk = menuThemeActive
+    ? menuMutedInk
+    : (isV2Theme
+      ? (useDisabledHeroPalette ? v2DisabledInk : containerTertiary)
+      : accentSecondarySoft);
+  const inactivePaginationInkDisabled = menuThemeActive
+    ? menuMutedInk
+    : (isV2Theme
+      ? (useDisabledHeroPalette ? v2DisabledInk : containerTertiary)
+      : accentSecondaryDisabled);
   const logPressable =
     heroTimerActive || (showPrimaryCta && logEnabledForSlot);
 
@@ -552,10 +583,13 @@ export function ExploreV2CurrentCard({
     const b = restThemeProgress.value;
     const w = exploreV2WorkBlueProgress.value;
     const pRest = b * (1 - w);
+    const baseBorder = interpolateColor(pRest, [0, 1], [themeColors.canvasLight, accentPrimary]);
+    const menuP = menuToneProgress.value;
     return {
-      borderColor: interpolateColor(pRest, [0, 1], [themeColors.canvasLight, accentPrimary]),
+      borderColor: baseBorder,
+      backgroundColor: interpolateColor(menuP, [0, 1], [surfaceColor, menuMutedBg]),
     };
-  }, [themeColors.canvasLight, accentPrimary]);
+  }, [themeColors.canvasLight, accentPrimary, menuToneProgress, surfaceColor, menuMutedBg]);
   const shellCornerAnimatedStyle = useAnimatedStyle(() => {
     const cp = celebrationProgress?.value ?? 0;
     return {
@@ -566,30 +600,23 @@ export function ExploreV2CurrentCard({
     };
   }, [celebrationProgress, bottomCornerRadius]);
   const ctaBgStyle = useAnimatedStyle(() => {
-    if (exploreV2TimerPhase === 'rest' || exploreV2TimerPhase === 'work' || exploreV2TimerPhase === 'switchSides') {
-      return { backgroundColor: accentPrimary };
-    }
-    if (inactiveSetPreview) {
-      return { backgroundColor: accentSecondaryDisabled };
-    }
+    const isCtaDisabled = !logPressable || inactiveSetPreview;
+    const baseBg =
+      isCtaDisabled
+        ? (isV2Theme ? v2DisabledInk : accentSecondaryDisabled)
+        : exploreV2TimerPhase === 'rest' || exploreV2TimerPhase === 'work' || exploreV2TimerPhase === 'switchSides'
+        ? accentPrimary
+        : interpolateColor(restThemeProgress.value, [0, 1], [accentPrimary, accentPrimaryDimmed]);
     return {
-      backgroundColor: interpolateColor(restThemeProgress.value, [0, 1], [accentPrimary, accentPrimaryDimmed]),
+      backgroundColor: interpolateColor(menuToneProgress.value, [0, 1], [baseBg, menuMutedBg]),
     };
-  }, [exploreV2TimerPhase, inactiveSetPreview, accentPrimary, accentPrimaryDimmed, accentSecondaryDisabled]);
+  }, [exploreV2TimerPhase, inactiveSetPreview, logPressable, isV2Theme, v2DisabledInk, accentPrimary, accentPrimaryDimmed, accentSecondaryDisabled, menuMutedBg, menuToneProgress, restThemeProgress]);
   const ctaLabelStyle = useAnimatedStyle(() => {
-    if (exploreV2TimerPhase === 'work' && isPrimary) {
-      return { color: themeColors.containerPrimary };
-    }
-    if (exploreV2TimerPhase === 'rest' && isPrimary) {
-      return { color: themeColors.containerPrimary };
-    }
-    if (exploreV2TimerPhase === 'switchSides' && isPrimary) {
-      return { color: themeColors.containerPrimary };
-    }
+    const baseColor = themeColors.containerPrimary;
     return {
-      color: interpolateColor(restThemeProgress.value, [0, 1], [ctaPillLabelInk, themeColors.canvasLight]),
+      color: interpolateColor(menuToneProgress.value, [0, 1], [baseColor, menuMutedInk]),
     };
-  }, [exploreV2TimerPhase, isPrimary, themeColors.containerPrimary, themeColors.canvasLight, ctaPillLabelInk]);
+  }, [themeColors.containerPrimary, menuMutedInk, menuToneProgress]);
   const heroColumnReserveStyle = useAnimatedStyle(() => ({
     marginBottom: 0,
   }));
@@ -644,7 +671,6 @@ export function ExploreV2CurrentCard({
           shellAnimatedStyle,
           shellCornerAnimatedStyle,
           {
-            backgroundColor: surfaceColor,
             borderBottomLeftRadius: bottomCornerRadius,
             borderBottomRightRadius: bottomCornerRadius,
           },
@@ -727,7 +753,7 @@ export function ExploreV2CurrentCard({
                             metricsEditable={metricsEditable}
                             heroValueColor={heroValueColor}
                             unitLabelColor={heroUnitColor}
-                            perSideLabelColor={perSideInk}
+                            perSideLabelColor={perSideLabelColor}
                             pageWidth={carouselViewportWidth}
                             commitsRef={commitsRef}
                             progressionValuesByItemId={progressionValuesByItemId}
@@ -904,7 +930,7 @@ const styles = StyleSheet.create({
     ...TYPOGRAPHY.legal,
   },
   exerciseName: {
-    ...TYPOGRAPHY.displayLarge,
+    ...TYPOGRAPHY.h2,
     fontWeight: '400',
     flexShrink: 1,
     marginTop: 12,
@@ -929,12 +955,10 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   carouselViewport: {
-    width: '100%',
+    alignSelf: 'stretch',
     minHeight: 200,
     marginLeft: -pad.horizontal,
     marginRight: -24,
-    paddingLeft: pad.horizontal,
-    paddingRight: 24,
   },
   carouselPage: {
     flexShrink: 0,
@@ -952,6 +976,8 @@ const styles = StyleSheet.create({
   valuesBlock: {
     width: '100%',
     paddingTop: 8,
+    paddingLeft: pad.horizontal,
+    paddingRight: 24,
   },
   perSideRow: {
     marginBottom: 0,
@@ -965,13 +991,16 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-start',
     flexWrap: 'nowrap',
+    justifyContent: 'flex-start',
+    width: '100%',
     gap: 8,
     marginBottom: 0,
     overflow: 'visible',
   },
   /** Wraps unit only so ↑ is positioned over this label, not in the gap between weight/reps rows */
   unitWithDelta: {
-    paddingTop: 12,
+    paddingTop: 8,
+    flexShrink: 0,
   },
   unitLabelRow: {
     flexDirection: 'row',
@@ -989,21 +1018,23 @@ const styles = StyleSheet.create({
     transform: [{ translateY: -1 }],
   },
   valueMetric: {
-    ...TYPOGRAPHY.displayLarge,
+    ...TYPOGRAPHY.h2,
     fontWeight: '400',
   },
   valueInput: {
-    ...TYPOGRAPHY.valueDisplay,
-    lineHeight: 132,
+    fontSize: 96,
+    lineHeight: 104,
+    height: 116,
+    fontWeight: '400',
     letterSpacing: -0.5,
     fontVariant: ['tabular-nums'],
-    minWidth: 48,
-    height: 132,
-    textAlignVertical: 'top',
-    paddingTop: 4,
+    minWidth: 0,
+    flexShrink: 1,
+    includeFontPadding: false,
+    textAlignVertical: 'center',
+    paddingTop: 0,
     paddingBottom: 0,
-    paddingHorizontal: 12,
-    marginHorizontal: -12,
+    paddingHorizontal: 0,
     margin: 0,
     borderWidth: 0,
     backgroundColor: 'transparent',
@@ -1013,7 +1044,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     width: '100%',
-    marginTop: 40,
+    marginTop: 24,
     gap: 12,
   },
   paginationWrap: {

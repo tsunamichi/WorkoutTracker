@@ -118,6 +118,10 @@ export type ExploreV2ExecutionRootProps = {
   timerThemeActive: boolean;
   /** 0 = idle chrome, 1 = rest — drives smooth color transitions (synced with screen rest timer) */
   restThemeProgress: SharedValue<number>;
+  /** Execution top menu open state — force muted wallet colorway */
+  menuThemeActive: boolean;
+  /** Menu tone transition progress (0 idle -> 1 toned) */
+  menuToneProgress: SharedValue<number>;
   /** Same source as legacy exercise drawer history (template + library id). */
   getExerciseHistoryForDrawer: (
     templateItemId: string,
@@ -178,6 +182,8 @@ function ExploreV2ExecutionRootComponent(props: ExploreV2ExecutionRootProps) {
     allowAddExercise,
     timerThemeActive,
     restThemeProgress,
+    menuThemeActive,
+    menuToneProgress,
     getExerciseHistoryForDrawer,
     exerciseHistoryRefreshKey,
     progressionValuesByItemId,
@@ -660,6 +666,8 @@ function ExploreV2ExecutionRootComponent(props: ExploreV2ExecutionRootProps) {
           coveredBottomRadius={radius.frontBottomRadius}
           timerThemeActive={timerThemeActive}
           restThemeProgress={restThemeProgress}
+          menuThemeActive={menuThemeActive}
+          menuToneProgress={menuToneProgress}
           settingsOverflow={
             focusExercise
               ? {
@@ -750,6 +758,8 @@ function ExploreV2ExecutionRootComponent(props: ExploreV2ExecutionRootProps) {
               timerThemeActive={timerThemeActive}
               restThemeProgress={restThemeProgress}
               exploreV2WorkBlueProgress={exploreV2WorkBlueProgress}
+              menuThemeActive={menuThemeActive}
+              menuToneProgress={menuToneProgress}
               contentOnly
             />
           </View>
@@ -820,6 +830,8 @@ function ExploreV2ExecutionRootComponent(props: ExploreV2ExecutionRootProps) {
               timerThemeActive={timerThemeActive}
               restThemeProgress={restThemeProgress}
               exploreV2WorkBlueProgress={exploreV2WorkBlueProgress}
+              menuThemeActive={menuThemeActive}
+              menuToneProgress={menuToneProgress}
             />
           </Animated.View>
           {currentExerciseLayer}
@@ -856,6 +868,8 @@ function ExploreV2ExecutionRootComponent(props: ExploreV2ExecutionRootProps) {
               timerThemeActive={timerThemeActive}
               restThemeProgress={restThemeProgress}
               exploreV2WorkBlueProgress={exploreV2WorkBlueProgress}
+              menuThemeActive={menuThemeActive}
+              menuToneProgress={menuToneProgress}
             />
           </Animated.View>
           <Animated.View
@@ -889,6 +903,8 @@ function ExploreV2ExecutionRootComponent(props: ExploreV2ExecutionRootProps) {
               timerThemeActive={timerThemeActive}
               restThemeProgress={restThemeProgress}
               exploreV2WorkBlueProgress={exploreV2WorkBlueProgress}
+              menuThemeActive={menuThemeActive}
+              menuToneProgress={menuToneProgress}
             />
           </Animated.View>
           {currentExerciseLayer}
@@ -927,6 +943,8 @@ function ExploreV2ExecutionRootComponent(props: ExploreV2ExecutionRootProps) {
                 timerThemeActive={timerThemeActive}
                 restThemeProgress={restThemeProgress}
                 exploreV2WorkBlueProgress={exploreV2WorkBlueProgress}
+                menuThemeActive={menuThemeActive}
+                menuToneProgress={menuToneProgress}
               />
             </Animated.View>
           ) : null}
@@ -962,6 +980,8 @@ function ExploreV2ExecutionRootComponent(props: ExploreV2ExecutionRootProps) {
               timerThemeActive={timerThemeActive}
               restThemeProgress={restThemeProgress}
               exploreV2WorkBlueProgress={exploreV2WorkBlueProgress}
+              menuThemeActive={menuThemeActive}
+              menuToneProgress={menuToneProgress}
             />
           </Animated.View>
           {currentExerciseLayer}

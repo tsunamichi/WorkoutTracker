@@ -8,11 +8,11 @@ import {
   type GestureResponderEvent,
   type LayoutChangeEvent,
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import Reanimated, { Easing, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
-import { COLORS, TYPOGRAPHY } from '../../constants';
+import { TYPOGRAPHY } from '../../constants';
 import { EXPLORE_V2 } from '../exploreV2/exploreV2Tokens';
+import { useAppTheme } from '../../theme/useAppTheme';
 
 type Props = {
   visible: boolean;
@@ -41,7 +41,8 @@ export function ExecutionTopDrawer({
   maxRestSeconds = 300,
   stepSeconds = 5,
 }: Props) {
-  const insets = useSafeAreaInsets();
+  const appTheme = useAppTheme();
+  const { colors: themeColors } = appTheme;
   const [localRestSeconds, setLocalRestSeconds] = useState(restTimeSeconds);
   const animatedHeight = useSharedValue(0);
   const sliderWidthRef = useRef(0);
@@ -63,14 +64,14 @@ export function ExecutionTopDrawer({
   }, [visible, restTimeSeconds]);
 
   useEffect(() => {
-    // Dynamic estimated height: keeps open animation snappy while avoiding large empty space.
-    const expandedHeight = 236 + actionCount * 56 + insets.top;
+    // No card chrome/padding: keep menu compact and content-driven.
+    const expandedHeight = 132 + actionCount * 52;
     const target = visible ? expandedHeight : 0;
     animatedHeight.value = withTiming(target, {
-      duration: EXPLORE_V2.motion.duration.quick,
-      easing: Easing.bezier(...EXPLORE_V2.motion.easing.smoothExit),
+      duration: visible ? 420 : 240,
+      easing: Easing.out(Easing.cubic),
     });
-  }, [visible, insets.top, animatedHeight, actionCount]);
+  }, [visible, animatedHeight, actionCount]);
 
   const drawerAnimatedStyle = useAnimatedStyle(() => ({
     height: animatedHeight.value,
@@ -128,13 +129,13 @@ export function ExecutionTopDrawer({
   return (
     <Reanimated.View style={[styles.drawerContainer, drawerAnimatedStyle]}>
       <View
-        style={[styles.sheetWrap, { paddingTop: 24 }]}
+        style={styles.sheetWrap}
         pointerEvents={visible ? 'auto' : 'none'}
       >
         <View style={styles.sheet}>
           <View style={styles.timerSection}>
-            <Text style={styles.timerLabel}>REST TIME</Text>
-            <Text style={styles.timerValue}>{formatTime}</Text>
+            <Text style={[styles.timerLabel, { color: themeColors.textMeta }]}>REST TIME</Text>
+            <Text style={[styles.timerValue, { color: themeColors.containerPrimary }]}>{formatTime}</Text>
 
             <View
               style={styles.sliderTouchArea}
@@ -143,10 +144,10 @@ export function ExecutionTopDrawer({
               }}
               {...panResponder.panHandlers}
             >
-              <View style={styles.sliderTrack} />
-              <View style={[styles.sliderFill, { width: `${progress * 100}%` }]} />
-              <View style={[styles.sliderThumb, { left: `${progress * 100}%` }]}>
-                <View style={styles.sliderThumbInner} />
+              <View style={[styles.sliderTrack, { backgroundColor: themeColors.border }]} />
+              <View style={[styles.sliderFill, { width: `${progress * 100}%`, backgroundColor: themeColors.containerPrimary }]} />
+              <View style={[styles.sliderThumb, { left: `${progress * 100}%`, backgroundColor: themeColors.canvasLight }]}>
+                <View style={[styles.sliderThumbInner, { backgroundColor: themeColors.containerPrimary }]} />
               </View>
             </View>
           </View>
@@ -160,7 +161,7 @@ export function ExecutionTopDrawer({
               }}
               activeOpacity={0.7}
             >
-              <Text style={styles.completeText}>Mark as complete</Text>
+              <Text style={[styles.completeText, { color: themeColors.containerPrimary }]}>Mark as complete</Text>
             </TouchableOpacity>
           ) : null}
 
@@ -172,7 +173,7 @@ export function ExecutionTopDrawer({
             }}
             activeOpacity={0.7}
           >
-            <Text style={styles.resetText}>Reset workout</Text>
+            <Text style={[styles.resetText, { color: themeColors.signalNegative }]}>Reset workout</Text>
           </TouchableOpacity>
           {onSecondaryDestructive ? (
             <TouchableOpacity
@@ -183,7 +184,7 @@ export function ExecutionTopDrawer({
               }}
               activeOpacity={0.7}
             >
-              <Text style={styles.resetText}>{secondaryDestructiveLabel ?? 'Remove'}</Text>
+              <Text style={[styles.resetText, { color: themeColors.signalNegative }]}>{secondaryDestructiveLabel ?? 'Remove'}</Text>
             </TouchableOpacity>
           ) : null}
         </View>
@@ -197,26 +198,22 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     width: '100%',
   },
-  sheetWrap: {
-    paddingHorizontal: 16,
-  },
+  sheetWrap: {},
   sheet: {
-    backgroundColor: COLORS.canvasLight,
-    borderRadius: 24,
-    paddingHorizontal: 20,
-    paddingBottom: 20,
-    paddingTop: 24,
+    backgroundColor: 'transparent',
+    borderRadius: 0,
+    paddingHorizontal: 0,
+    paddingBottom: 0,
+    paddingTop: 0,
   },
   timerSection: {
-    marginBottom: 24,
+    marginBottom: 16,
   },
   timerLabel: {
     ...TYPOGRAPHY.legal,
-    color: COLORS.textMeta,
   },
   timerValue: {
     ...TYPOGRAPHY.timer,
-    color: COLORS.containerPrimary,
     marginTop: 8,
   },
   sliderTouchArea: {
@@ -228,21 +225,18 @@ const styles = StyleSheet.create({
   sliderTrack: {
     height: 2,
     borderRadius: 2,
-    backgroundColor: COLORS.containerTertiary,
   },
   sliderFill: {
     position: 'absolute',
     left: 0,
     height: 2,
     borderRadius: 2,
-    backgroundColor: COLORS.containerPrimary,
   },
   sliderThumb: {
     position: 'absolute',
     width: 16,
     height: 16,
     borderRadius: 8,
-    backgroundColor: COLORS.canvasLight,
     marginLeft: -8,
     alignItems: 'center',
     justifyContent: 'center',
@@ -251,18 +245,15 @@ const styles = StyleSheet.create({
     width: 12,
     height: 12,
     borderRadius: 6,
-    backgroundColor: COLORS.containerPrimary,
   },
   textAction: {
     paddingVertical: 16,
   },
   completeText: {
     ...TYPOGRAPHY.h1,
-    color: COLORS.containerPrimary,
   },
   resetText: {
     ...TYPOGRAPHY.h1,
-    color: COLORS.signalNegative,
   },
 });
 

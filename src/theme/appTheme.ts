@@ -112,7 +112,7 @@ export function buildAppTheme(id: AppColorThemeId): AppTheme {
     const canvasLightV2 = '#E6DCE1';
     const canvasContainerV2 = '#EDE5E9';
     const containerTertiaryV2 = '#E0FB60';
-    const containerSecondaryV2 = '#CBE659';
+    const containerSecondaryV2 = '#E0FB60';
 
     return {
       id: 'v2',

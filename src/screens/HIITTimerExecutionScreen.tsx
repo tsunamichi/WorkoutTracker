@@ -95,7 +95,7 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
   const [placeholderWidth, setPlaceholderWidth] = useState(330);
   const [renderedRestPhase, setRenderedRestPhase] = useState(false);
   const timerPageBackground = isV2Theme
-    ? themeColors.canvasLight
+    ? (renderedRestPhase ? themeColors.accentPrimary : themeColors.containerTertiary)
     : (renderedRestPhase ? COLORS.accentPrimary : COLORS.backgroundTimer);
   const timerCardBackground = isV2Theme ? themeColors.containerPrimary : explore.surfaceCurrentCard;
   const timerInk = isV2Theme ? themeColors.containerTertiary : LIGHT_COLORS.text;

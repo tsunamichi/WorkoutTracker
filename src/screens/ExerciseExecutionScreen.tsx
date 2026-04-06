@@ -75,6 +75,8 @@ const CARD_COLLAPSED_HEIGHT = 48;
 const CARD_EXPANDED_MAX_HEIGHT = 520;
 // Overlapped shell/content timing: coordinated transform, not sequential
 const SHELL_EXPAND_MS = 230;
+const EXECUTION_MENU_TOP_MARGIN = 64;
+const EXECUTION_MENU_CONTENT_GAP = 0;
 const METRICS_ENTER_DELAY_MS = 10;
 const ACTION_ENTER_DELAY_MS = 40;
 const CONTENT_ENTER_MS = 160;
@@ -347,7 +349,6 @@ export function ExerciseExecutionScreen() {
     opacity: scheduleTransitionContentProgress.value,
     transform: [{ translateY: interpolate(scheduleTransitionContentProgress.value, [0, 1], [20, 0], 'clamp') }],
   }));
-  
   const getDetailedWorkoutProgress = () => useStore.getState().detailedWorkoutProgress;
   
   const [refreshKey, setRefreshKey] = useState(0);
@@ -738,7 +739,11 @@ export function ExerciseExecutionScreen() {
   const buttonLabelOpacity = useRef(new Animated.Value(1)).current;
   const counterShrinkAnim = useRef(new Animated.Value(1)).current;
   const [showMenu, setShowMenu] = useState(false);
+  const [menuThemeActive, setMenuThemeActive] = useState(false);
+  const [headerMeasuredHeight, setHeaderMeasuredHeight] = useState(0);
   const [localRestOverride, setLocalRestOverride] = useState<number | null>(null);
+  const menuSlideProgress = useSharedValue(0);
+  const menuToneProgress = useSharedValue(0);
   const [showExerciseHistory, setShowExerciseHistory] = useState(false);
   const [showSwapModal, setShowSwapModal] = useState(false);
   const [swapSearchQuery, setSwapSearchQuery] = useState('');
@@ -783,6 +788,21 @@ export function ExerciseExecutionScreen() {
   const exploreV2BasePageBg = schedulePageBg;
   /** Work / exercise timer phase — always themed `backgroundTimer` (v2: blue; other themes: default lime). */
   const exploreV2TimerPageWorkTint = appTheme.colors.backgroundTimer;
+  const menuOnCompleteEnabled = type === 'main' && !allCurrentGroupsComplete;
+  const menuHasSecondaryDestructive = type !== 'main';
+  const menuActionCount =
+    (menuOnCompleteEnabled ? 1 : 0) +
+    1 +
+    (menuHasSecondaryDestructive ? 1 : 0);
+  const menuExpandedHeight = 132 + menuActionCount * 52;
+  const menuSlideContentStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(menuToneProgress.value, [0, 1], [1, 0.7]),
+    transform: [
+      {
+        translateY: interpolate(menuSlideProgress.value, [0, 1], [0, menuExpandedHeight + EXECUTION_MENU_CONTENT_GAP]),
+      },
+    ],
+  }));
 
   useEffect(() => {
     if (executionMode !== 'explore-v2') return;
@@ -806,6 +826,22 @@ export function ExerciseExecutionScreen() {
       easing: REST_EASE,
     });
   }, [executionMode, inlineExploreWorkActive]);
+
+  useEffect(() => {
+    menuSlideProgress.value = withTiming(showMenu ? 1 : 0, {
+      duration: showMenu ? 420 : 240,
+      easing: showMenu
+        ? ReanimatedEasing.out(ReanimatedEasing.cubic)
+        : ReanimatedEasing.out(ReanimatedEasing.cubic),
+    });
+    menuToneProgress.value = withTiming(showMenu ? 1 : 0, {
+      duration: showMenu ? 420 : 240,
+      easing: showMenu
+        ? ReanimatedEasing.out(ReanimatedEasing.cubic)
+        : ReanimatedEasing.out(ReanimatedEasing.cubic),
+    });
+    setMenuThemeActive(showMenu);
+  }, [showMenu, menuSlideProgress, menuToneProgress]);
 
   /** Idle: timer 0%, stack 100%. Rest: timer `REST_TIMER_FRAC`, stack `REST_STACK_FRAC` of content height */
   const exploreV2TimerBandAnimatedStyle = useAnimatedStyle(() => {
@@ -3177,7 +3213,15 @@ export function ExerciseExecutionScreen() {
           strokeWidth={4}
         />
       )}
-      <AnimatedReanimated.View style={[styles.header, scheduleHeaderRevealStyle]}>
+      <AnimatedReanimated.View
+        style={[styles.header, scheduleHeaderRevealStyle]}
+        onLayout={event => {
+          const nextHeight = Math.round(event.nativeEvent.layout.height);
+          if (nextHeight > 0 && nextHeight !== headerMeasuredHeight) {
+            setHeaderMeasuredHeight(nextHeight);
+          }
+        }}
+      >
         <View style={styles.topBar}>
           <TouchableOpacity
             testID="back-button"
@@ -3232,16 +3276,18 @@ export function ExerciseExecutionScreen() {
       </AnimatedReanimated.View>
       
       {/* Top execution drawer */}
-      <ExecutionTopDrawer
-        visible={showMenu}
-        onClose={() => setShowMenu(false)}
-        restTimeSeconds={localRestOverride ?? settings.restTimerDefaultSeconds}
-        onRestTimeChange={setLocalRestOverride}
-        onComplete={type === 'main' && !allCurrentGroupsComplete ? handleCompleteAll : undefined}
-        onReset={handleReset}
-        onSecondaryDestructive={type === 'main' ? undefined : handleRemoveSection}
-        secondaryDestructiveLabel={type === 'warmup' ? t('removeWarmup') : t('remove')}
-      />
+      <View style={[styles.executionTopDrawerOverlay, { top: headerMeasuredHeight + EXECUTION_MENU_TOP_MARGIN }]}>
+        <ExecutionTopDrawer
+          visible={showMenu}
+          onClose={() => setShowMenu(false)}
+          restTimeSeconds={localRestOverride ?? settings.restTimerDefaultSeconds}
+          onRestTimeChange={setLocalRestOverride}
+          onComplete={menuOnCompleteEnabled ? handleCompleteAll : undefined}
+          onReset={handleReset}
+          onSecondaryDestructive={menuHasSecondaryDestructive ? handleRemoveSection : undefined}
+          secondaryDestructiveLabel={type === 'warmup' ? t('removeWarmup') : t('remove')}
+        />
+      </View>
 
       <AnimatedReanimated.View
         onLayout={event => {
@@ -3253,8 +3299,8 @@ export function ExerciseExecutionScreen() {
           isScheduleOriginTransition && { backgroundColor: schedulePageBg },
           isScheduleOriginTransition && scheduleCardExpandAnimatedStyle,
           exploreV2ContentWrapBgAnimatedStyle,
-          showMenu && styles.contentDimmed,
           scheduleCardContentRevealStyle,
+          menuSlideContentStyle,
         ]}
         pointerEvents={showMenu ? 'none' : 'auto'}
       >
@@ -3323,6 +3369,8 @@ export function ExerciseExecutionScreen() {
                   exploreV2TimerPhase === 'rest' || exploreV2TimerPhase === 'switchSides'
                 }
                 restThemeProgress={exploreV2TimerBandProgress}
+                menuThemeActive={menuThemeActive}
+                menuToneProgress={menuToneProgress}
                 getExerciseHistoryForDrawer={getExerciseHistoryForDrawer}
                 exerciseHistoryRefreshKey={refreshKey}
                 progressionValuesByItemId={progressionValuesByItemId}
@@ -5383,6 +5431,12 @@ const styles = StyleSheet.create({
   menuSpacer: {
     width: 48,
     height: 48,
+  },
+  executionTopDrawerOverlay: {
+    position: 'absolute',
+    left: SPACING.xxl,
+    right: SPACING.xxl,
+    zIndex: 60,
   },
   headerDimmed: {
     opacity: 0.3,

@@ -254,7 +254,7 @@ export const TYPOGRAPHY = {
   },
   h2: {
     fontSize: 24,
-    fontWeight: '400' as const,
+    fontWeight: '500' as const,
   },
   h3: {
     fontSize: 20,
@@ -325,8 +325,8 @@ export const TYPOGRAPHY = {
   },
   /** Extra-large editable value display (Explore current card). */
   valueDisplay: {
-    fontSize: 120,
-    lineHeight: 120,
+    fontSize: 96,
+    lineHeight: 96,
     fontWeight: '400' as const,
   },
   

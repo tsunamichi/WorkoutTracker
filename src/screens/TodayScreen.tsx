@@ -756,19 +756,24 @@ export function TodayScreen({ onDateChange, onOpenAddWorkout, onOpenBonusDrawer 
   const headerDateLabel = formatDateWithOrdinal(selectedDate);
   /** Cycle row is now the lightweight entry point into full cycle/calendar management context. */
   const cyclePlanForHeader = selectedDateCyclePlan ?? activeCyclePlan;
-  const uncompletedCycleWorkoutsLeft = useMemo(() => {
-    if (!cyclePlanForHeader) return 0;
-    return scheduledWorkouts
-      .filter(
-        sw =>
-          sw.source === 'cycle' &&
-          (sw.programId === cyclePlanForHeader.id || sw.cyclePlanId === cyclePlanForHeader.id),
-      )
-      .filter(sw => {
-        const mainCompletion = getMainCompletion(sw.id);
-        return !(sw.isLocked || sw.status === 'completed' || mainCompletion.percentage === 100);
-      }).length;
+  const cycleCompletionForHeader = useMemo(() => {
+    if (!cyclePlanForHeader) {
+      return { completed: 0, total: 0 };
+    }
+    const cycleWorkouts = scheduledWorkouts.filter(
+      sw =>
+        sw.source === 'cycle' &&
+        (sw.programId === cyclePlanForHeader.id || sw.cyclePlanId === cyclePlanForHeader.id),
+    );
+    const completed = cycleWorkouts.filter(sw => {
+      const mainCompletion = getMainCompletion(sw.id);
+      return sw.isLocked || sw.status === 'completed' || mainCompletion.percentage === 100;
+    }).length;
+    return { completed, total: cycleWorkouts.length };
   }, [cyclePlanForHeader, scheduledWorkouts, getMainCompletion]);
+  const cycleCompletionLabel = useMemo(() => {
+    return `${cycleCompletionForHeader.completed} of ${cycleCompletionForHeader.total} completed`;
+  }, [cycleCompletionForHeader.completed, cycleCompletionForHeader.total]);
   const calculateTimerTotalTime = useCallback((timer: { work: number; workRest: number; sets: number; rounds: number; roundRest: number }) => {
     const totalWorkTime = timer.work * timer.sets * timer.rounds;
     const totalWorkRestTime = timer.workRest * Math.max(0, timer.sets - 1) * timer.rounds;
@@ -1152,7 +1157,7 @@ export function TodayScreen({ onDateChange, onOpenAddWorkout, onOpenBonusDrawer 
                 {cyclePlanForHeader ? (
                   <>
                     <TertiaryButton
-                      label="Cycle details"
+                      label={cycleCompletionLabel}
                       onPress={handleOpenCycleCalendar}
                       style={styles.cycleProgressAction}
                       textStyle={styles.profileLinkText}
