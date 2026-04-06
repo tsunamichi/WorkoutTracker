@@ -61,7 +61,9 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
   const { timerId, bonusLogId } = route.params as { timerId: string; bonusLogId?: string };
   const { hiitTimers, deleteHIITTimer, addHIITTimerSession, setActiveHIITTimer, updateBonusLog } = useStore();
   const { t } = useTranslation();
-  const { explore } = useAppTheme();
+  const theme = useAppTheme();
+  const { colors: themeColors, explore } = theme;
+  const isV2Theme = theme.id === 'v2';
   
   // Get timer reactively - will update when hiitTimers changes
   const timer = React.useMemo(() => {
@@ -92,6 +94,16 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
   const [placeholderHeight, setPlaceholderHeight] = useState(330);
   const [placeholderWidth, setPlaceholderWidth] = useState(330);
   const [renderedRestPhase, setRenderedRestPhase] = useState(false);
+  const timerPageBackground = isV2Theme
+    ? themeColors.canvasLight
+    : (renderedRestPhase ? COLORS.accentPrimary : COLORS.backgroundTimer);
+  const timerCardBackground = isV2Theme ? themeColors.containerPrimary : explore.surfaceCurrentCard;
+  const timerInk = isV2Theme ? themeColors.containerTertiary : LIGHT_COLORS.text;
+  const timerMetaInk = isV2Theme ? themeColors.containerTertiary : COLORS.accentSecondary;
+  const timerValueInk = isV2Theme ? themeColors.containerTertiary : COLORS.containerSecondary;
+  const timerHeaderInk = isV2Theme ? themeColors.containerPrimary : '#1F1F1F';
+  const miniProgressBg = isV2Theme ? themeColors.containerPrimaryDark : COLORS.containerPrimaryDark;
+  const miniProgressFill = isV2Theme ? themeColors.containerTertiary : COLORS.canvasLight;
   const isRestPhase = currentPhase === 'workRest' || currentPhase === 'roundRest';
   const heroLayoutProgress = useSharedValue(1);
   const heroWorkBlueProgress = useSharedValue(0);
@@ -1354,20 +1366,20 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
   // Show empty state if timer is not found (will navigate back via useEffect)
   if (!timer) {
     return (
-      <View style={[styles.container, { backgroundColor: renderedRestPhase ? COLORS.accentPrimary : COLORS.backgroundTimer }]}>
+      <View style={[styles.container, { backgroundColor: timerPageBackground }]}>
         <View style={styles.innerContainer} />
       </View>
     );
   }
 
   return (
-    <View style={[styles.container, { backgroundColor: renderedRestPhase ? COLORS.accentPrimary : COLORS.backgroundTimer }]}>
+    <View style={[styles.container, { backgroundColor: timerPageBackground }]}>
       <ShapeConfetti active={showConfetti} />
       <Reanimated.View style={[styles.surfaceTransitionWrap, surfaceTransitionStyle]}>
         <ExecutionScreenShell
           title="Timer"
-          pageBackground={renderedRestPhase ? COLORS.accentPrimary : COLORS.backgroundTimer}
-          headerInk="#1F1F1F"
+          pageBackground={timerPageBackground}
+          headerInk={timerHeaderInk}
           onBack={handleBack}
           onMenu={handleMenu}
           hero={
@@ -1391,32 +1403,32 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
             )
           }
         >
-          <View style={[styles.timerCard, { height: '100%', marginBottom: 0, backgroundColor: explore.surfaceCurrentCard }]}>
+          <View style={[styles.timerCard, { height: '100%', marginBottom: 0, backgroundColor: timerCardBackground }]}>
           {currentPhase === 'complete' ? (
             <View style={styles.completeMessageContainer}>
-              <Text style={styles.completeText}>{getDisplayText()}</Text>
-              {getSubtitleText() && <Text style={styles.subtitleText}>{getSubtitleText()}</Text>}
+              <Text style={[styles.completeText, { color: timerInk }]}>{getDisplayText()}</Text>
+              {getSubtitleText() && <Text style={[styles.subtitleText, { color: timerInk }]}>{getSubtitleText()}</Text>}
             </View>
           ) : (
             <>
               <View style={styles.cardInfoRow}>
                 <View>
-                  <Text style={styles.cardTitle} numberOfLines={1}>{timer.name}</Text>
+                  <Text style={[styles.cardTitle, { color: timerInk }]} numberOfLines={1}>{timer.name}</Text>
                   <Text style={styles.cardMeta}>
-                    <Text style={styles.cardMetaLabel}>Set </Text>
-                    <Text style={styles.cardMetaValue}>{currentSet}/{timer.sets}</Text>
+                    <Text style={[styles.cardMetaLabel, { color: timerMetaInk }]}>Set </Text>
+                    <Text style={[styles.cardMetaValue, { color: timerValueInk }]}>{currentSet}/{timer.sets}</Text>
                     <Text>    </Text>
-                    <Text style={styles.cardMetaLabel}>Round </Text>
-                    <Text style={styles.cardMetaValue}>{currentRound}/{timer.rounds}</Text>
+                    <Text style={[styles.cardMetaLabel, { color: timerMetaInk }]}>Round </Text>
+                    <Text style={[styles.cardMetaValue, { color: timerValueInk }]}>{currentRound}/{timer.rounds}</Text>
                   </Text>
                 </View>
                 <View style={styles.cardMiniTimeRow}>
-                  <Text style={styles.cardMiniTime}>{formatTime(getRemainingWorkoutTime())}</Text>
+                  <Text style={[styles.cardMiniTime, { color: timerValueInk }]}>{formatTime(getRemainingWorkoutTime())}</Text>
                   <View style={styles.cardMiniProgressBg}>
                     <Svg height="14" width="14" viewBox="0 0 16 16" style={styles.cardMiniProgressCircle}>
-                      <Circle cx="8" cy="8" r="8" fill={COLORS.containerPrimaryDark} />
+                      <Circle cx="8" cy="8" r="8" fill={miniProgressBg} />
                       {globalProgress >= 0.999 ? (
-                        <Circle cx="8" cy="8" r="8" fill={COLORS.canvasLight} />
+                        <Circle cx="8" cy="8" r="8" fill={miniProgressFill} />
                       ) : globalProgress > 0 ? (
                         <Path
                           d={`M 8 8 L 8 0 A 8 8 0 ${globalProgress > 0.5 ? 1 : 0} 1 ${
@@ -1424,7 +1436,7 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
                           } ${
                             8 - 8 * Math.cos(2 * Math.PI * globalProgress)
                           } Z`}
-                          fill={COLORS.canvasLight}
+                          fill={miniProgressFill}
                         />
                       ) : null}
                     </Svg>
@@ -1449,9 +1461,27 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
                     },
                   ]}
                 >
-                  <Reanimated.View style={[styles.ambientCircle, ambientLeftCircleStyle]} />
-                  <Reanimated.View style={[styles.ambientCircle, ambientRightCircleStyle]} />
-                  <Reanimated.View style={[styles.ambientCircle, ambientTrailingCircleStyle]} />
+                  <Reanimated.View
+                    style={[
+                      styles.ambientCircle,
+                      { backgroundColor: isV2Theme ? themeColors.containerTertiary : COLORS.backgroundTimer },
+                      ambientLeftCircleStyle,
+                    ]}
+                  />
+                  <Reanimated.View
+                    style={[
+                      styles.ambientCircle,
+                      { backgroundColor: isV2Theme ? themeColors.containerTertiary : COLORS.backgroundTimer },
+                      ambientRightCircleStyle,
+                    ]}
+                  />
+                  <Reanimated.View
+                    style={[
+                      styles.ambientCircle,
+                      { backgroundColor: isV2Theme ? themeColors.containerTertiary : COLORS.backgroundTimer },
+                      ambientTrailingCircleStyle,
+                    ]}
+                  />
                 </Animated.View>
                 <Reanimated.View style={[styles.restDiamond, restDiamondStyle]} />
                 <View style={styles.mainTimerCircle} />

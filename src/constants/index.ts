@@ -134,6 +134,8 @@ export const COLORS = {
   container: '#2C2C2E',          // Elevated secondary container
   cardBackground: '#1C1C1E',     // Card background
   activeCard: '#1C1C1E',         // Active/selected card state
+  /** Settings/profile card containers on light surfaces */
+  canvasContainer: '#1C1C1E',
   /** Active cycle strip and pill background (backgroundCanvas at 30% opacity) */
   cycleStripBackground: 'rgba(13, 13, 13, 0.3)',
 

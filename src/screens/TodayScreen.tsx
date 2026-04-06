@@ -196,7 +196,13 @@ export function TodayScreen({ onDateChange, onOpenAddWorkout, onOpenBonusDrawer 
 
   const today = dayjs();
   const { t } = useTranslation();
-  const { colors: themeColors, explore: exploreTheme } = useAppTheme();
+  const appTheme = useAppTheme();
+  const { colors: themeColors, explore: exploreTheme } = appTheme;
+  const isV2Theme = appTheme.id === 'v2';
+  const savedTimersPageBackground = isV2Theme ? themeColors.canvasLight : COLORS.canvasLight;
+  const savedTimersCardBackground = isV2Theme ? themeColors.canvasContainer : COLORS.containerTertiary;
+  const savedTimersInk = isV2Theme ? themeColors.containerPrimary : COLORS.containerPrimary;
+  const savedTimersMetaInk = isV2Theme ? themeColors.containerPrimary : COLORS.textMeta;
   const completedCardTextColor = exploreTheme.amberBand;
 
   // One-time repair for paused cycle schedule (safe to remove after fix is applied)
@@ -1206,7 +1212,10 @@ export function TodayScreen({ onDateChange, onOpenAddWorkout, onOpenBonusDrawer 
           </Animated.View>
           </Animated.View>
 
-          <Animated.View pointerEvents={isTimerMode ? 'auto' : 'none'} style={[styles.timerModePane, timerPaneAnimatedStyle]}>
+          <Animated.View
+            pointerEvents={isTimerMode ? 'auto' : 'none'}
+            style={[styles.timerModePane, { backgroundColor: savedTimersPageBackground }, timerPaneAnimatedStyle]}
+          >
             <Animated.View style={[styles.timerModeHeader, { paddingTop: insets.top + 8 }, timerHeaderAnimatedStyle]}>
               <View style={styles.timerSwitchButton}>
                 <TertiaryButton label="Schedule" onPress={() => {
@@ -1220,13 +1229,13 @@ export function TodayScreen({ onDateChange, onOpenAddWorkout, onOpenBonusDrawer 
               contentContainerStyle={[styles.timerModeScrollContent, { paddingBottom: insets.bottom + 24 }]}
               showsVerticalScrollIndicator={false}
             >
-              <Text style={styles.timerModeTitle}>{t('savedTimers')}</Text>
+              <Text style={[styles.timerModeTitle, { color: savedTimersInk }]}>{t('savedTimers')}</Text>
               <TouchableOpacity
                 style={styles.addTimerInlineAction}
                 onPress={() => (navigation as any).navigate('HIITTimerForm', { mode: 'create' })}
                 activeOpacity={0.75}
               >
-                <Text style={styles.addTimerCardText}>+ create timer</Text>
+                <Text style={[styles.addTimerCardText, { color: savedTimersInk }]}>+ create timer</Text>
               </TouchableOpacity>
               <View style={styles.timerGrid}>
                 {timerTemplates.map(timer => (
@@ -1237,14 +1246,14 @@ export function TodayScreen({ onDateChange, onOpenAddWorkout, onOpenBonusDrawer 
                     onLongPress={() => (navigation as any).navigate('HIITTimerForm', { mode: 'edit', timerId: timer.id })}
                     activeOpacity={0.85}
                   >
-                    <View style={[styles.footerEntryCard, styles.timerGridCardShell]}>
+                    <View style={[styles.footerEntryCard, styles.timerGridCardShell, { backgroundColor: savedTimersCardBackground }]}>
                       <View style={styles.footerEntryTopRow}>
-                        <Text style={styles.footerEntryMeta}>{calculateTimerTotalTime(timer)}</Text>
+                        <Text style={[styles.footerEntryMeta, { color: savedTimersMetaInk }]}>{calculateTimerTotalTime(timer)}</Text>
                         <View style={styles.footerEntryChevron}>
-                          <IconArrowDiagonal size={8} color={COLORS.textMeta} />
+                          <IconArrowDiagonal size={8} color={savedTimersMetaInk} />
                         </View>
                       </View>
-                      <Text style={styles.footerEntryTitle} numberOfLines={2}>{timer.name}</Text>
+                      <Text style={[styles.footerEntryTitle, { color: savedTimersInk }]} numberOfLines={2}>{timer.name}</Text>
                     </View>
                   </TouchableOpacity>
                 ))}

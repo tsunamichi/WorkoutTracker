@@ -110,6 +110,7 @@ export function buildAppTheme(id: AppColorThemeId): AppTheme {
     const cyan = '#26C2B4';
     const containerPrimaryV2 = '#133011';
     const canvasLightV2 = '#E6DCE1';
+    const canvasContainerV2 = '#EDE5E9';
     const containerTertiaryV2 = '#E0FB60';
     const containerSecondaryV2 = '#CBE659';
 
@@ -124,6 +125,7 @@ export function buildAppTheme(id: AppColorThemeId): AppTheme {
         todayIndicator: mixHex(cyan, '#121018', 0.22),
         info: mixHex(cyan, '#062A26', 0.35),
         canvasLight: canvasLightV2,
+        canvasContainer: canvasContainerV2,
         containerPrimary: containerPrimaryV2,
         containerSecondary: containerSecondaryV2,
         containerTertiary: containerTertiaryV2,

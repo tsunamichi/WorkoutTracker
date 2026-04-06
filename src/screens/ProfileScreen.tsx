@@ -5,7 +5,7 @@ import * as Haptics from 'expo-haptics';
 import { useStore } from '../store';
 import type { AppColorThemeId } from '../types';
 import { useAppTheme } from '../theme/useAppTheme';
-import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS } from '../constants';
+import { SPACING, TYPOGRAPHY, BORDER_RADIUS } from '../constants';
 import { TimerValueSheet } from '../components/timer/TimerValueSheet';
 import { IconArrowLeft, IconTriangle, IconCheckmark } from '../components/icons';
 import { Toggle } from '../components/Toggle';
@@ -127,20 +127,20 @@ export function ProfileScreen({ navigation }: ProfileScreenProps) {
   };
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: themeColors.canvasLight }]}>
       {/* Header */}
       <View style={[styles.header, { paddingTop: insets.top }]}>
         {/* Top Bar with Back button */}
         <View style={styles.topBar}>
           <TouchableOpacity onPress={handleBack} style={styles.backButton}>
-            <IconArrowLeft size={24} color={COLORS.text} />
+            <IconArrowLeft size={24} color={themeColors.text} />
           </TouchableOpacity>
           <View style={styles.backButton} />
         </View>
         
         {/* Page Title */}
         <View style={styles.pageTitleContainer}>
-          <Text style={styles.pageTitle}>{t('settings')}</Text>
+          <Text style={[styles.pageTitle, { color: themeColors.textPrimary }]}>{t('settings')}</Text>
         </View>
       </View>
 
@@ -150,47 +150,47 @@ export function ProfileScreen({ navigation }: ProfileScreenProps) {
         showsVerticalScrollIndicator={false}
       >
         {/* Global Settings title */}
-        <Text style={styles.sectionTitle}>Global Settings</Text>
+        <Text style={[styles.sectionTitle, { color: themeColors.textPrimary }]}>Global Settings</Text>
 
         {/* Group 1: Quick Settings - 3 Column Layout */}
         <View style={styles.threeColumnRow}>
           {/* Unit Card */}
           <TouchableOpacity 
-            style={styles.columnCard}
+            style={[styles.columnCard, { backgroundColor: themeColors.canvasContainer }]}
             onPress={handleToggleUnit}
             activeOpacity={0.7}
           >
-            <Text style={styles.columnCardValue}>{unitLabel}</Text>
-            <Text style={styles.columnCardLabel}>{t('unit')}</Text>
+            <Text style={[styles.columnCardValue, { color: themeColors.textPrimary }]}>{unitLabel}</Text>
+            <Text style={[styles.columnCardLabel, { color: themeColors.textPrimary }]}>{t('unit')}</Text>
           </TouchableOpacity>
 
           {/* Language Card */}
           <TouchableOpacity 
-            style={styles.columnCard}
+            style={[styles.columnCard, { backgroundColor: themeColors.canvasContainer }]}
             onPress={handleToggleLanguage}
             activeOpacity={0.7}
           >
             <Text style={styles.columnCardEmoji}>{languageEmoji}</Text>
-            <Text style={styles.columnCardLabel}>{t('language')}</Text>
+            <Text style={[styles.columnCardLabel, { color: themeColors.textPrimary }]}>{t('language')}</Text>
           </TouchableOpacity>
 
           {/* Rest Time Card */}
           <TouchableOpacity 
-            style={styles.columnCard}
+            style={[styles.columnCard, { backgroundColor: themeColors.canvasContainer }]}
             onPress={() => {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
               setShowRestTimePicker(true);
             }}
             activeOpacity={0.7}
           >
-            <Text style={styles.columnCardValue}>{restTimeFormatted}</Text>
-            <Text style={styles.columnCardLabel}>{t('restTime')}</Text>
+            <Text style={[styles.columnCardValue, { color: themeColors.textPrimary }]}>{restTimeFormatted}</Text>
+            <Text style={[styles.columnCardLabel, { color: themeColors.textPrimary }]}>{t('restTime')}</Text>
           </TouchableOpacity>
         </View>
 
-        <Text style={styles.sectionTitle}>{t('colorTheme')}</Text>
-        <View style={styles.settingCard}>
-          <Text style={[styles.settingDescription, styles.themeHint]}>{t('colorThemeFootnote')}</Text>
+        <Text style={[styles.sectionTitle, { color: themeColors.textPrimary }]}>{t('colorTheme')}</Text>
+        <View style={[styles.settingCard, { backgroundColor: themeColors.canvasContainer }]}>
+          <Text style={[styles.settingDescription, styles.themeHint, { color: themeColors.textPrimary }]}>{t('colorThemeFootnote')}</Text>
           {(
             [
               { id: 'v1' as const, label: t('colorThemeV1') },
@@ -198,14 +198,14 @@ export function ProfileScreen({ navigation }: ProfileScreenProps) {
             ] as const
           ).map((opt, i) => (
             <React.Fragment key={opt.id}>
-              {i > 0 ? <View style={styles.themeOptionDivider} /> : null}
+              {i > 0 ? <View style={[styles.themeOptionDivider, { backgroundColor: themeColors.borderDimmed }]} /> : null}
               <TouchableOpacity
                 style={styles.settingRow}
                 activeOpacity={0.7}
                 onPress={() => handleColorTheme(opt.id)}
               >
                 <View style={styles.settingInfo}>
-                  <Text style={styles.settingLabel}>{opt.label}</Text>
+                  <Text style={[styles.settingLabel, { color: themeColors.textPrimary }]}>{opt.label}</Text>
                 </View>
                 {activeColorTheme === opt.id ? (
                   <IconCheckmark size={22} color={themeColors.accentPrimary} />
@@ -219,7 +219,7 @@ export function ProfileScreen({ navigation }: ProfileScreenProps) {
 
         {/* Progression Rules */}
         <TouchableOpacity
-          style={styles.settingCard}
+          style={[styles.settingCard, { backgroundColor: themeColors.canvasContainer }]}
           activeOpacity={0.7}
           onPress={() => {
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -228,21 +228,21 @@ export function ProfileScreen({ navigation }: ProfileScreenProps) {
         >
           <View style={styles.settingRow}>
             <View style={[styles.settingInfo, { flexDirection: 'row', alignItems: 'center', gap: 12 }]}>
-              <Text style={styles.settingLabel}>Progression rules</Text>
+              <Text style={[styles.settingLabel, { color: themeColors.textPrimary }]}>Progression rules</Text>
             </View>
             <View style={{ transform: [{ rotate: '90deg' }] }}>
-              <IconTriangle size={12} color={COLORS.text} />
+              <IconTriangle size={12} color={themeColors.text} />
             </View>
           </View>
         </TouchableOpacity>
 
         {/* Group 2: Toggle Settings */}
-        <View style={styles.settingCard}>
+        <View style={[styles.settingCard, { backgroundColor: themeColors.canvasContainer }]}>
           {/* Timer Notifications */}
           <View style={styles.settingRow}>
             <View style={styles.settingInfo}>
-              <Text style={styles.settingLabel}>{t('timerNotifications')}</Text>
-              <Text style={styles.settingDescription}>
+              <Text style={[styles.settingLabel, { color: themeColors.textPrimary }]}>{t('timerNotifications')}</Text>
+              <Text style={[styles.settingDescription, { color: themeColors.textPrimary }]}>
                 {notificationsSystemEnabled === false
                   ? t('notificationSystemDisabled')
                   : t('timerNotificationsDescription')}
@@ -259,14 +259,14 @@ export function ProfileScreen({ navigation }: ProfileScreenProps) {
 
         {/* Account & Cloud Sync Section */}
         {isSupabaseConfigured() && (
-          <View style={styles.settingCard}>
+          <View style={[styles.settingCard, { backgroundColor: themeColors.canvasContainer }]}>
             {authUser ? (
               <>
                 {/* Signed in state */}
                 <View style={styles.settingRow}>
                   <View style={styles.settingInfo}>
-                    <Text style={styles.settingLabel}>Signed in with Apple</Text>
-                    <Text style={styles.settingDescription}>
+                    <Text style={[styles.settingLabel, { color: themeColors.textPrimary }]}>Signed in with Apple</Text>
+                    <Text style={[styles.settingDescription, { color: themeColors.textPrimary }]}>
                       {authUser.email || 'Private email relay'}
                       {cloudSyncInfo?.syncedAt
                         ? `\nLast sync: ${new Date(cloudSyncInfo.syncedAt).toLocaleString()}`
@@ -275,7 +275,7 @@ export function ProfileScreen({ navigation }: ProfileScreenProps) {
                   </View>
                 </View>
 
-                <View style={styles.settingDivider} />
+                <View style={[styles.settingDivider, { backgroundColor: themeColors.borderDimmed }]} />
 
                 {/* Sync Now */}
                 <TouchableOpacity
@@ -297,14 +297,14 @@ export function ProfileScreen({ navigation }: ProfileScreenProps) {
                   activeOpacity={0.7}
                 >
                   <View style={styles.settingInfo}>
-                    <Text style={styles.settingLabel}>
+                    <Text style={[styles.settingLabel, { color: themeColors.textPrimary }]}>
                       {isSyncing ? '⏳ Syncing...' : '☁️ Sync Now'}
                     </Text>
-                    <Text style={styles.settingDescription}>Upload your data to the cloud</Text>
+                    <Text style={[styles.settingDescription, { color: themeColors.textPrimary }]}>Upload your data to the cloud</Text>
                   </View>
                 </TouchableOpacity>
 
-                <View style={styles.settingDivider} />
+                <View style={[styles.settingDivider, { backgroundColor: themeColors.borderDimmed }]} />
 
                 {/* Restore from Cloud */}
                 <TouchableOpacity
@@ -342,12 +342,12 @@ export function ProfileScreen({ navigation }: ProfileScreenProps) {
                   activeOpacity={0.7}
                 >
                   <View style={styles.settingInfo}>
-                    <Text style={styles.settingLabel}>📥 Restore from Cloud</Text>
-                    <Text style={styles.settingDescription}>Download backup after reinstall</Text>
+                    <Text style={[styles.settingLabel, { color: themeColors.textPrimary }]}>📥 Restore from Cloud</Text>
+                    <Text style={[styles.settingDescription, { color: themeColors.textPrimary }]}>Download backup after reinstall</Text>
                   </View>
                 </TouchableOpacity>
 
-                <View style={styles.settingDivider} />
+                <View style={[styles.settingDivider, { backgroundColor: themeColors.borderDimmed }]} />
 
                 {/* Sign Out */}
                 <TouchableOpacity
@@ -374,7 +374,7 @@ export function ProfileScreen({ navigation }: ProfileScreenProps) {
                   activeOpacity={0.7}
                 >
                   <View style={styles.settingInfo}>
-                    <Text style={[styles.settingLabel, { color: COLORS.textMeta }]}>Sign Out</Text>
+                    <Text style={[styles.settingLabel, { color: themeColors.textPrimary }]}>Sign Out</Text>
                   </View>
                 </TouchableOpacity>
               </>
@@ -437,12 +437,12 @@ export function ProfileScreen({ navigation }: ProfileScreenProps) {
                   activeOpacity={0.7}
                 >
                   <View style={styles.settingInfo}>
-                    <Text style={styles.settingLabel}> Sign in with Apple</Text>
-                    <Text style={styles.settingDescription}>
+                    <Text style={[styles.settingLabel, { color: themeColors.textPrimary }]}> Sign in with Apple</Text>
+                    <Text style={[styles.settingDescription, { color: themeColors.textPrimary }]}>
                       Back up your data to the cloud. Survives app deletion and device changes.
                     </Text>
                   </View>
-                  <IconTriangle size={16} color={COLORS.text} />
+                  <IconTriangle size={16} color={themeColors.text} />
                 </TouchableOpacity>
               </>
             )}
@@ -471,7 +471,6 @@ export function ProfileScreen({ navigation }: ProfileScreenProps) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.backgroundCanvas,
   },
   header: {
     paddingBottom: SPACING.md,
@@ -497,7 +496,6 @@ const styles = StyleSheet.create({
   },
   pageTitle: {
     ...TYPOGRAPHY.h2,
-    color: COLORS.text,
   },
   scrollView: {
     flex: 1,
@@ -507,7 +505,6 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     ...TYPOGRAPHY.legal,
-    color: COLORS.textMeta,
     textTransform: 'uppercase',
     marginBottom: SPACING.sm,
   },
@@ -519,7 +516,6 @@ const styles = StyleSheet.create({
   },
   columnCard: {
     flex: 1,
-    backgroundColor: COLORS.activeCard,
     borderRadius: BORDER_RADIUS.md,
     paddingVertical: SPACING.lg,
     paddingHorizontal: SPACING.md,
@@ -529,7 +525,6 @@ const styles = StyleSheet.create({
   },
   columnCardValue: {
     ...TYPOGRAPHY.h2,
-    color: COLORS.text,
     marginBottom: SPACING.xs,
   },
   columnCardEmoji: {
@@ -538,12 +533,10 @@ const styles = StyleSheet.create({
   },
   columnCardLabel: {
     ...TYPOGRAPHY.meta,
-    color: COLORS.textMeta,
     textTransform: 'lowercase',
   },
   // Shared Setting Card
   settingCard: {
-    backgroundColor: COLORS.activeCard,
     borderRadius: BORDER_RADIUS.md,
     padding: SPACING.lg,
     marginBottom: SPACING.lg,
@@ -561,7 +554,6 @@ const styles = StyleSheet.create({
   },
   settingDivider: {
     height: 1,
-    backgroundColor: COLORS.borderDimmed,
     marginVertical: SPACING.lg,
   },
   settingInfo: {
@@ -570,19 +562,16 @@ const styles = StyleSheet.create({
   },
   settingLabel: {
     ...TYPOGRAPHY.bodyBold,
-    color: COLORS.text,
     marginBottom: SPACING.xs,
   },
   settingDescription: {
     ...TYPOGRAPHY.meta,
-    color: COLORS.textMeta,
   },
   themeHint: {
     marginBottom: SPACING.md,
   },
   themeOptionDivider: {
     height: 1,
-    backgroundColor: COLORS.borderDimmed,
     marginVertical: SPACING.sm,
   },
   settingChevron: {
@@ -590,6 +579,5 @@ const styles = StyleSheet.create({
   },
   chevronText: {
     ...TYPOGRAPHY.h2,
-    color: COLORS.textMeta,
   },
 });

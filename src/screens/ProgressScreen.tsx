@@ -24,79 +24,7 @@ type ExerciseSeries = {
   weightDates?: string[];
 };
 
-const DEBUG_USE_FAKE_PROGRESS_DATA = true;
 const MAX_PROGRESS_LOGS = 16;
-const DEBUG_PROGRESS_SERIES: ExerciseSeries[] = [
-  {
-    id: 'bench',
-    name: 'Bench Press',
-    metrics: {
-      weight: [135, 145, 145, 155, 150, 165, 162, 175],
-      reps: [8, 8, 9, 8, 8, 9, 8, 10],
-      time: [],
-    },
-    weightDates: ['2026-01-12', '2026-01-19', '2026-01-26', '2026-02-02', '2026-02-09', '2026-02-16', '2026-02-23', '2026-03-02'],
-  },
-  {
-    id: 'goblet-squat',
-    name: 'Goblet Squat',
-    metrics: {
-      weight: [50, 55, 55, 60, 58, 65, 65, 70],
-      reps: [10, 10, 11, 10, 10, 11, 12, 11],
-      time: [],
-    },
-    weightDates: ['2026-01-14', '2026-01-21', '2026-01-28', '2026-02-04', '2026-02-11', '2026-02-18', '2026-02-25', '2026-03-04'],
-  },
-  {
-    id: 'hip-thrust',
-    name: 'Hip Thrust',
-    metrics: {
-      weight: [95, 115, 125, 125, 145, 140, 155, 165],
-      reps: [10, 10, 8, 9, 8, 8, 8, 8],
-      time: [],
-    },
-    weightDates: ['2026-01-10', '2026-01-17', '2026-01-24', '2026-01-31', '2026-02-07', '2026-02-14', '2026-02-21', '2026-02-28'],
-  },
-];
-
-const SAMPLE_SERIES: ExerciseSeries[] = [
-  {
-    id: 'bench',
-    name: 'Bench Press',
-    metrics: {
-      weight: [135, 145, 145, 155, 165, 170, 185],
-      reps: [8, 8, 9, 8, 10, 10, 8],
-      time: [],
-    },
-  },
-  {
-    id: 'squat',
-    name: 'Squat',
-    metrics: {
-      weight: [185, 185, 195, 205, 205, 215],
-      reps: [8, 8, 8, 6, 8, 6],
-      time: [],
-    },
-  },
-  {
-    id: 'deadlift',
-    name: 'Deadlift',
-    metrics: {
-      weight: [225, 245, 245, 255, 275],
-      reps: [5, 5, 5, 5, 5],
-      time: [],
-    },
-  },
-  {
-    id: 'plank',
-    name: 'Plank',
-    metrics: {
-      weight: [],
-      reps: [],
-      time: [30, 45, 45, 60, 75],
-    },
-  },
-];
 
 function getRealExerciseSeries(params: {
   scheduledWorkouts: any[];
@@ -157,24 +85,6 @@ function getRealExerciseSeries(params: {
     const total = s.metrics.weight.length + s.metrics.reps.length + s.metrics.time.length;
     return total > 0;
   });
-}
-
-function pickPinnedExercises(series: ExerciseSeries[]): ExerciseSeries[] {
-  if (series.length === 0) return SAMPLE_SERIES.slice(0, 3);
-  const lower = (v: string) => v.toLowerCase();
-  const byName = (needle: string) => series.find(s => lower(s.name).includes(needle));
-  const preferred = [byName('bench'), byName('squat'), byName('deadlift')].filter(
-    (v): v is ExerciseSeries => !!v,
-  );
-  const used = new Set(preferred.map(p => p.id));
-  const rest = series
-    .filter(s => !used.has(s.id))
-    .sort(
-      (a, b) =>
-        (b.metrics.weight.length + b.metrics.reps.length + b.metrics.time.length) -
-        (a.metrics.weight.length + a.metrics.reps.length + a.metrics.time.length),
-    );
-  return [...preferred, ...rest].slice(0, 6);
 }
 
 function getInsight(values: number[]): string {
@@ -398,7 +308,7 @@ export function ProgressScreen() {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation();
   const route = useRoute<RouteProp<RouteParams, 'Progress'>>();
-  const { scheduledWorkouts, detailedWorkoutProgress, exercises } = useStore();
+  const { scheduledWorkouts, detailedWorkoutProgress, exercises, progressionGroups } = useStore();
   const theme = useAppTheme();
   const { colors: themeColors } = theme;
   const isV2Theme = theme.id === 'v2';
@@ -410,12 +320,29 @@ export function ProgressScreen() {
     [detailedWorkoutProgress, exercises, scheduledWorkouts],
   );
 
-  const sourceSeries = DEBUG_USE_FAKE_PROGRESS_DATA
-    ? DEBUG_PROGRESS_SERIES
-    : realSeries.length > 0
-      ? realSeries
-      : SAMPLE_SERIES;
-  const pinned = useMemo(() => pickPinnedExercises(sourceSeries), [sourceSeries]);
+  const mainGroupExerciseIds = useMemo(() => {
+    const isMainGroup = (name: string, id: string) => {
+      const n = name.trim().toLowerCase();
+      return n === 'main upper' || n === 'main lower' || id === 'pg-main-upper' || id === 'pg-main-lower';
+    };
+    return progressionGroups
+      .filter(group => isMainGroup(group.name, group.id))
+      .sort((a, b) => a.orderIndex - b.orderIndex)
+      .flatMap(group => group.exerciseIds)
+      .filter((exerciseId, index, all) => all.indexOf(exerciseId) === index);
+  }, [progressionGroups]);
+
+  const sourceSeries = useMemo(() => {
+    const byId = new Map(realSeries.map(item => [item.id, item]));
+    if (mainGroupExerciseIds.length > 0) {
+      return mainGroupExerciseIds
+        .map(exerciseId => byId.get(exerciseId))
+        .filter((item): item is ExerciseSeries => !!item);
+    }
+    return realSeries;
+  }, [mainGroupExerciseIds, realSeries]);
+
+  const pinned = sourceSeries;
   const routeExerciseName = route.params?.exerciseName?.trim().toLowerCase();
   const routeExerciseId = route.params?.exerciseId;
   const routeExerciseByName = routeExerciseName
@@ -424,14 +351,18 @@ export function ProgressScreen() {
   const initialExerciseId =
     (routeExerciseId && pinned.some(p => p.id === routeExerciseId)
       ? routeExerciseId
-      : (routeExerciseByName?.id ?? pinned[0]?.id)) ?? 'bench';
+      : (routeExerciseByName?.id ?? pinned[0]?.id)) ?? '';
 
   const [activeExerciseId, setActiveExerciseId] = useState(initialExerciseId);
   const [heldEntryIndex, setHeldEntryIndex] = useState<number | null>(null);
   const [transitionDirection, setTransitionDirection] = useState<1 | -1>(1);
   const exerciseTransition = React.useRef(new Animated.Value(1)).current;
 
-  const activeExercise = pinned.find(p => p.id === activeExerciseId) ?? pinned[0] ?? SAMPLE_SERIES[0];
+  const activeExercise = pinned.find(p => p.id === activeExerciseId) ?? pinned[0] ?? {
+    id: 'no-exercise',
+    name: 'No logged exercises',
+    metrics: { weight: [], reps: [], time: [] },
+  };
   const rawValues = activeExercise.metrics.weight;
   const values = useMemo(
     () => rawValues.slice(-MAX_PROGRESS_LOGS),
@@ -447,15 +378,13 @@ export function ProgressScreen() {
   const latest = values.length > 0 ? values[displayIndex] : 0;
   const insight = getInsight(values);
   const dateContext = useMemo(() => {
-    const fromMockFallback = visibleDates.length > 0
-      ? visibleDates
-      : Array.from({ length: Math.max(values.length, 1) }).map((_, idx) =>
-          dayjs().subtract(Math.max(values.length - 1 - idx, 0), 'week').format('YYYY-MM-DD'),
-        );
-    const first = dayjs(fromMockFallback[0]).format('MMM D');
-    const last = dayjs(fromMockFallback[fromMockFallback.length - 1]).format('MMM D');
+    if (visibleDates.length === 0) {
+      return { first: '--', last: '--' };
+    }
+    const first = dayjs(visibleDates[0]).format('MMM D');
+    const last = dayjs(visibleDates[visibleDates.length - 1]).format('MMM D');
     return { first, last };
-  }, [values.length, visibleDates]);
+  }, [visibleDates]);
   const selectedDateLabel = useMemo(() => {
     if (displayIndex < 0 || displayIndex >= visibleDates.length) return null;
     return dayjs(visibleDates[displayIndex]).format('MMM D');
