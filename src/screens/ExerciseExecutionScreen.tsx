@@ -195,6 +195,12 @@ export function ExerciseExecutionScreen() {
   const transitionSource = (route.params as any)?.transitionSource;
   const transitionOrigin = (route.params as any)?.transitionOrigin;
   const isScheduleOriginTransition = transitionSource === 'scheduleDeck' && !!transitionOrigin;
+  const [scheduleTransitionTargetFrame, setScheduleTransitionTargetFrame] = useState<{
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  } | null>(null);
   const scheduleTransitionProgress = useSharedValue(isScheduleOriginTransition ? 0 : 1);
   const scheduleTransitionContentProgress = useSharedValue(isScheduleOriginTransition ? 0 : 1);
   const isClosingFromHeaderRef = useRef(false);
@@ -282,8 +288,12 @@ export function ExerciseExecutionScreen() {
     if (!isScheduleOriginTransition || !transitionOrigin) return {};
     const originCenterX = transitionOrigin.x + transitionOrigin.width / 2;
     const originCenterY = transitionOrigin.y + transitionOrigin.height / 2;
-    const screenCenterX = screenWidth / 2;
-    const screenCenterY = screenHeight / 2;
+    const targetX = scheduleTransitionTargetFrame?.x ?? 0;
+    const targetY = scheduleTransitionTargetFrame?.y ?? 0;
+    const targetWidth = scheduleTransitionTargetFrame?.width ?? screenWidth;
+    const targetHeight = scheduleTransitionTargetFrame?.height ?? screenHeight;
+    const targetCenterX = targetX + targetWidth / 2;
+    const targetCenterY = targetY + targetHeight / 2;
     return {
       borderRadius: interpolate(
         scheduleTransitionProgress.value,
@@ -297,7 +307,7 @@ export function ExerciseExecutionScreen() {
           translateX: interpolate(
             scheduleTransitionProgress.value,
             [0, 1],
-            [originCenterX - screenCenterX, 0],
+            [originCenterX - targetCenterX, 0],
             'clamp',
           ),
         },
@@ -305,7 +315,7 @@ export function ExerciseExecutionScreen() {
           translateY: interpolate(
             scheduleTransitionProgress.value,
             [0, 1],
-            [originCenterY - screenCenterY, 0],
+            [originCenterY - targetCenterY, 0],
             'clamp',
           ),
         },
@@ -313,7 +323,7 @@ export function ExerciseExecutionScreen() {
           scaleX: interpolate(
             scheduleTransitionProgress.value,
             [0, 1],
-            [transitionOrigin.width / screenWidth, 1],
+            [transitionOrigin.width / targetWidth, 1],
             'clamp',
           ),
         },
@@ -321,17 +331,21 @@ export function ExerciseExecutionScreen() {
           scaleY: interpolate(
             scheduleTransitionProgress.value,
             [0, 1],
-            [transitionOrigin.height / screenHeight, 1],
+            [transitionOrigin.height / targetHeight, 1],
             'clamp',
           ),
         },
       ],
     };
-  }, [isScheduleOriginTransition, screenHeight, screenWidth, transitionOrigin]);
+  }, [isScheduleOriginTransition, scheduleTransitionTargetFrame, screenHeight, screenWidth, transitionOrigin]);
 
   const scheduleCardContentRevealStyle = useAnimatedStyle(() => ({
     opacity: scheduleTransitionContentProgress.value,
     transform: [{ translateY: interpolate(scheduleTransitionContentProgress.value, [0, 1], [12, 0], 'clamp') }],
+  }));
+  const scheduleHeaderRevealStyle = useAnimatedStyle(() => ({
+    opacity: scheduleTransitionContentProgress.value,
+    transform: [{ translateY: interpolate(scheduleTransitionContentProgress.value, [0, 1], [20, 0], 'clamp') }],
   }));
   
   const getDetailedWorkoutProgress = () => useStore.getState().detailedWorkoutProgress;
@@ -765,7 +779,8 @@ export function ExerciseExecutionScreen() {
   const exploreV2RestHeroBg = '#FFA424';
   const exploreV2TimerPageRestTint =
     appTheme.id === 'v2' ? appTheme.colors.accentPrimary : exploreV2RestHeroBg;
-  const exploreV2BasePageBg = appTheme.colors.accentSecondarySoft;
+  const schedulePageBg = appTheme.colors.canvasLight;
+  const exploreV2BasePageBg = schedulePageBg;
   /** Work / exercise timer phase — always themed `backgroundTimer` (v2: blue; other themes: default lime). */
   const exploreV2TimerPageWorkTint = appTheme.colors.backgroundTimer;
 
@@ -3151,7 +3166,6 @@ export function ExerciseExecutionScreen() {
         styles.container,
         { paddingTop: insets.top },
         exploreV2PageBgAnimatedStyle,
-        scheduleCardExpandAnimatedStyle,
       ]}
     >
       <ShapeConfetti active={showConfetti} />
@@ -3163,7 +3177,7 @@ export function ExerciseExecutionScreen() {
           strokeWidth={4}
         />
       )}
-      <View style={styles.header}>
+      <AnimatedReanimated.View style={[styles.header, scheduleHeaderRevealStyle]}>
         <View style={styles.topBar}>
           <TouchableOpacity
             testID="back-button"
@@ -3215,7 +3229,7 @@ export function ExerciseExecutionScreen() {
             <View style={styles.menuSpacer} />
           )}
         </View>
-      </View>
+      </AnimatedReanimated.View>
       
       {/* Top execution drawer */}
       <ExecutionTopDrawer
@@ -3230,8 +3244,14 @@ export function ExerciseExecutionScreen() {
       />
 
       <AnimatedReanimated.View
+        onLayout={event => {
+          const { x, y, width, height } = event.nativeEvent.layout;
+          setScheduleTransitionTargetFrame({ x, y, width, height });
+        }}
         style={[
           styles.contentWrap,
+          isScheduleOriginTransition && { backgroundColor: schedulePageBg },
+          isScheduleOriginTransition && scheduleCardExpandAnimatedStyle,
           exploreV2ContentWrapBgAnimatedStyle,
           showMenu && styles.contentDimmed,
           scheduleCardContentRevealStyle,
@@ -3291,6 +3311,9 @@ export function ExerciseExecutionScreen() {
                 updateProgressionGroup={updateProgressionGroup}
                 onSwapExercise={handleSwap}
                 onRemoveExercise={handleRemoveExerciseFromExplore}
+                onOpenProgressForExercise={({ exerciseId, exerciseName }) => {
+                  (navigation as any).navigate('Progress', { exerciseId, exerciseName });
+                }}
                 exploreLayoutRootHeight={exploreV2AvailableRootHeight}
                 currentGroupHasLoggedSets={exploreV2CurrentGroupHasLoggedSets}
                 onOpenAddExercise={handleOpenAddExerciseDrawer}

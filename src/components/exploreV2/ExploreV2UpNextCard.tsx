@@ -8,8 +8,7 @@ import Reanimated, {
   type SharedValue,
 } from 'react-native-reanimated';
 import { EXPLORE_V2 } from './exploreV2Tokens';
-import { EXPLORE_V2_PALETTES } from './exploreV2ColorSystem';
-import { COLORS, TYPOGRAPHY } from '../../constants';
+import { TYPOGRAPHY } from '../../constants';
 import { useAppTheme } from '../../theme/useAppTheme';
 import { IconChevronDown, IconTrash } from '../icons';
 import type { ExploreV2Group } from './exploreV2Types';
@@ -68,7 +67,6 @@ type UpNextQueueRowProps = {
   onRemoveGroupFromUpNext: (groupIndex: number) => void | Promise<void>;
 };
 
-const palette = EXPLORE_V2_PALETTES.upNext;
 const HEADER_INK = '#464646';
 /** Idle rounds count ink — animated to `EXPLORE_V2.colors.restTimerHeaderInk` when rest timer is on */
 const ROW_ROUNDS_INK = '#787878';
@@ -87,7 +85,7 @@ function UpNextQueueRow({
 }: UpNextQueueRowProps) {
   const { explore: ex, colors: themeColors } = useAppTheme();
   const restHeaderInk = ex.restTimerHeaderInk;
-  const pageBg = EXPLORE_V2.colors.pageBg;
+  const pageBg = themeColors.canvasLight;
   const [roundAnchor, setRoundAnchor] = useState({ top: 0, left: 0 });
   const roundsColorStyle = useAnimatedStyle(() => {
     const b = restThemeProgress.value;
@@ -196,6 +194,7 @@ export function ExploreV2UpNextCard({
   const textPrimary = themeColors.textPrimary;
   const textMeta = themeColors.textMeta;
   const containerPrimary = themeColors.containerPrimary;
+  const upNextBaseBg = themeColors.containerSecondary;
   /** Mirrors `timerThemeActive` on UI thread — multiplies theme progress so chrome snaps idle when rest ends. */
   const restChromeGateSV = useSharedValue(timerThemeActive ? 1 : 0);
   useLayoutEffect(() => {
@@ -245,18 +244,18 @@ export function ExploreV2UpNextCard({
     const pRest = b * (1 - w);
     const whenUpBg = interpolateColor(w, [0, 1], [amberBand, workUpNextBg]);
     return {
-      backgroundColor: interpolateColor(b, [0, 1], [palette.main, whenUpBg]),
-      borderColor: interpolateColor(pRest, [0, 1], [accentSecondarySoft, accentPrimary]),
+      backgroundColor: interpolateColor(b, [0, 1], [upNextBaseBg, whenUpBg]),
+      borderColor: interpolateColor(pRest, [0, 1], [themeColors.canvasLight, accentPrimary]),
     };
-  }, [amberBand, workUpNextBg, accentSecondarySoft, accentPrimary]);
+  }, [upNextBaseBg, amberBand, workUpNextBg, themeColors.canvasLight, accentPrimary]);
   const scrollBgAnimatedStyle = useAnimatedStyle(() => {
     const b = restThemeProgress.value;
     const w = exploreV2WorkBlueProgress.value;
     const whenUpBg = interpolateColor(w, [0, 1], [amberBand, workUpNextBg]);
     return {
-      backgroundColor: interpolateColor(b, [0, 1], [palette.main, whenUpBg]),
+      backgroundColor: interpolateColor(b, [0, 1], [upNextBaseBg, whenUpBg]),
     };
-  }, [amberBand, workUpNextBg]);
+  }, [upNextBaseBg, amberBand, workUpNextBg]);
   useEffect(() => {
     if (!isExpanded && removeMode) setRemoveMode(false);
   }, [isExpanded, removeMode]);
@@ -285,13 +284,13 @@ export function ExploreV2UpNextCard({
         <Reanimated.Text style={[styles.headerLabel, headerChromeAnimatedStyle]}>Up Next</Reanimated.Text>
         <View style={styles.countOrPlusSlot}>
           <Reanimated.View style={[styles.chevronLayer, chevronIdleOpacityStyle]} pointerEvents="none">
-            <IconChevronDown size={18} color={COLORS.containerPrimary} />
+            <IconChevronDown size={18} color={themeColors.containerPrimary} />
           </Reanimated.View>
           <Reanimated.View style={[styles.chevronLayer, chevronTimerOpacityStyle]} pointerEvents="none">
-            <IconChevronDown size={18} color={COLORS.containerPrimary} />
+            <IconChevronDown size={18} color={themeColors.containerPrimary} />
           </Reanimated.View>
           <Reanimated.View style={[styles.chevronLayer, chevronWorkOpacityStyle]} pointerEvents="none">
-            <IconChevronDown size={18} color={COLORS.containerPrimary} />
+            <IconChevronDown size={18} color={themeColors.containerPrimary} />
           </Reanimated.View>
         </View>
       </Pressable>
@@ -330,8 +329,8 @@ export function ExploreV2UpNextCard({
           </View>
           {showFullEmpty && (
             <View style={styles.emptyBlock}>
-              <Text style={[styles.emptyTitle, { color: palette.dark }]}>No exercises yet</Text>
-              <Text style={[styles.emptySub, { color: palette.muted }]}>
+              <Text style={[styles.emptyTitle, { color: themeColors.containerPrimary }]}>No exercises yet</Text>
+              <Text style={[styles.emptySub, { color: themeColors.textMeta }]}>
                 Add an exercise to start building this workout.
               </Text>
               {allowAddExercise ? (
@@ -343,7 +342,7 @@ export function ExploreV2UpNextCard({
           )}
 
           {showQueueEmptyOnly && (
-            <Text style={[styles.queueEmpty, { color: palette.muted }]}>
+            <Text style={[styles.queueEmpty, { color: themeColors.textMeta }]}>
               Nothing in the queue. Add an exercise or finish your current set.
             </Text>
           )}
@@ -384,7 +383,7 @@ const styles = StyleSheet.create({
     flexDirection: 'column',
     paddingTop: EXPLORE_V2.cardHeader.topInset,
     borderWidth: 2,
-    borderColor: COLORS.accentSecondarySoft,
+    borderColor: 'transparent',
     borderTopLeftRadius: EXPLORE_V2.cardTopRadius,
     borderTopRightRadius: EXPLORE_V2.cardTopRadius,
     borderBottomLeftRadius: EXPLORE_V2.cardRadius,

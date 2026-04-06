@@ -17,11 +17,13 @@ import Animated, {
 } from 'react-native-reanimated';
 import { CARDS, COLORS, SPACING, TYPOGRAPHY } from '../../constants';
 import { IconArrowDiagonal } from '../icons';
+import { useAppTheme } from '../../theme/useAppTheme';
 
 const FRONT_H = 330;
 const STACK_HEIGHT = FRONT_H;
 const CARD_GAP = -8;
 const PARALLAX_MAX = 8;
+const EXIT_SPREAD_X = 180;
 
 export type ScheduleDeckV3Item = {
   id: string;
@@ -31,6 +33,7 @@ export type ScheduleDeckV3Item = {
   variant?: 'default' | 'completed';
   cardBackgroundColor?: string;
   cardTextColor?: string;
+  footerLabel?: string;
   onPress?: (origin?: { x: number; y: number; width: number; height: number; borderRadius: number }) => void;
 };
 
@@ -39,6 +42,7 @@ type Props = {
   mode: 'queue' | 'inProgress';
   inProgressItem?: ScheduleDeckV3Item;
   initialIndex?: number;
+  chromeExitProgress?: Animated.SharedValue<number>;
 };
 type TouchNode = React.ElementRef<typeof TouchableOpacity>;
 
@@ -51,10 +55,12 @@ function DeckCard({
   positionLabel: string;
   numberAnimatedStyle?: any;
 }) {
-  const cardBackgroundColor = item.cardBackgroundColor ?? COLORS.accentSecondarySoft;
-  const cardTextColor = item.cardTextColor ?? COLORS.containerPrimary;
+  const { colors: themeColors } = useAppTheme();
+  const cardBackgroundColor = item.cardBackgroundColor ?? themeColors.containerSecondary;
+  const cardTextColor = item.cardTextColor ?? themeColors.containerPrimary;
+  const cardBorderColor = themeColors.canvasLight;
   return (
-    <View style={[styles.cardOuter, { backgroundColor: cardBackgroundColor }]}>
+    <View style={[styles.cardOuter, { backgroundColor: cardBackgroundColor, borderColor: cardBorderColor }]}>
       <View style={styles.cardInner}>
         <Animated.Text style={[styles.cardPositionLabel, { color: cardTextColor }, numberAnimatedStyle]} numberOfLines={1}>
           {positionLabel}
@@ -68,7 +74,11 @@ function DeckCard({
         {item.subtitle ? <Text style={[styles.cardSubmeta, { color: cardTextColor }]}>{item.subtitle}</Text> : null}
         <View style={styles.cardSpacer} />
         <View style={styles.cardFooter}>
-          <IconArrowDiagonal size={16} color={cardTextColor} />
+          {item.footerLabel ? (
+            <Text style={[styles.cardFooterLabel, { color: cardTextColor }]}>{item.footerLabel}</Text>
+          ) : (
+            <IconArrowDiagonal size={16} color={cardTextColor} />
+          )}
         </View>
       </View>
     </View>
@@ -85,6 +95,8 @@ function AnimatedCarouselItem({
   onPress,
   isLast,
   positionLabel,
+  activeIndex,
+  chromeExitProgress,
 }: {
   item: ScheduleDeckV3Item;
   index: number;
@@ -95,6 +107,8 @@ function AnimatedCarouselItem({
   onPress: (item: ScheduleDeckV3Item, node?: TouchNode | null) => void;
   isLast: boolean;
   positionLabel: string;
+  activeIndex: number;
+  chromeExitProgress?: Animated.SharedValue<number>;
 }) {
   const itemRef = useRef<TouchNode | null>(null);
   const animatedStyle = useAnimatedStyle(() => {
@@ -106,12 +120,18 @@ function AnimatedCarouselItem({
     // Subtle spread: zero at snap points, wider near mid-swipe, then settles.
     const spread = interpolate(absProgress, [0, 0.5, 1], [0, PARALLAX_MAX, 0], 'clamp');
     const direction = progress === 0 ? 0 : progress > 0 ? -1 : 1;
-    const translateX = direction * spread;
+    const baseTranslateX = direction * spread;
+    const exitP = chromeExitProgress?.value ?? 0;
+    const isActive = index === activeIndex;
+    const exitDirection = index < activeIndex ? -1 : 1;
+    const exitTranslateX = isActive ? 0 : exitDirection * EXIT_SPREAD_X * exitP;
+    const opacity = isActive ? 1 : 1 - exitP;
 
     return {
-      transform: [{ translateX }, { scale }],
+      opacity,
+      transform: [{ translateX: baseTranslateX + exitTranslateX }, { scale }],
     };
-  }, [index, snapInterval]);
+  }, [activeIndex, chromeExitProgress, index, snapInterval]);
   const numberParallaxStyle = useAnimatedStyle(() => {
     const centerX = index * snapInterval;
     const progress = (scrollX.value - centerX) / snapInterval;
@@ -141,7 +161,13 @@ function AnimatedCarouselItem({
   );
 }
 
-export function ScheduleWorkoutDeckV3({ items, mode, inProgressItem, initialIndex = 0 }: Props) {
+export function ScheduleWorkoutDeckV3({
+  items,
+  mode,
+  inProgressItem,
+  initialIndex = 0,
+  chromeExitProgress,
+}: Props) {
   const { width } = useWindowDimensions();
   const sideInset = 24;
   const viewportWidth = Math.max(0, width);
@@ -272,6 +298,8 @@ export function ScheduleWorkoutDeckV3({ items, mode, inProgressItem, initialInde
             onPress={onCardPress}
             isLast={index === queueItems.length - 1}
             positionLabel={String(index + 1)}
+            activeIndex={currentIndex}
+            chromeExitProgress={chromeExitProgress}
           />
         )}
         showsHorizontalScrollIndicator={false}
@@ -357,8 +385,13 @@ const styles = StyleSheet.create({
     marginTop: 10,
   },
   cardSubmeta: {
-    ...TYPOGRAPHY.meta,
-    marginTop: 4,
-    color: COLORS.accentSecondary,
+    ...TYPOGRAPHY.body,
+    fontWeight: '500',
+    marginTop: 12,
+    color: COLORS.containerPrimary,
+  },
+  cardFooterLabel: {
+    ...TYPOGRAPHY.legal,
+    fontWeight: '500',
   },
 });

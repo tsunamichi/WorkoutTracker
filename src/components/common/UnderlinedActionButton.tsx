@@ -2,7 +2,7 @@ import React from 'react';
 import { StyleSheet, Text, TouchableOpacity, View, type StyleProp, type TextStyle, type ViewStyle } from 'react-native';
 import { COLORS, TYPOGRAPHY } from '../../constants';
 
-type UnderlinedActionButtonProps = {
+export type TertiaryButtonProps = {
   label: string;
   onPress: () => void;
   activeOpacity?: number;
@@ -14,7 +14,7 @@ type UnderlinedActionButtonProps = {
   underlineHeight?: number;
 };
 
-export function UnderlinedActionButton({
+export function TertiaryButton({
   label,
   onPress,
   activeOpacity = 0.85,
@@ -24,27 +24,36 @@ export function UnderlinedActionButton({
   underlineColor,
   underlineOffset = 2,
   underlineHeight = StyleSheet.hairlineWidth,
-}: UnderlinedActionButtonProps) {
+}: TertiaryButtonProps) {
   const lineColor = underlineColor ?? color;
 
   return (
     <TouchableOpacity onPress={onPress} activeOpacity={activeOpacity} style={[styles.button, style]}>
-      <Text style={[styles.text, { color }, textStyle]}>{label}</Text>
-      <View style={[styles.underline, { backgroundColor: lineColor, marginTop: underlineOffset, height: underlineHeight }]} />
+      <View
+        style={[
+          styles.labelWrap,
+          { paddingBottom: underlineOffset, borderBottomColor: lineColor, borderBottomWidth: underlineHeight },
+        ]}
+      >
+        <Text style={[styles.text, { color }, textStyle]}>{label}</Text>
+      </View>
     </TouchableOpacity>
   );
 }
+
+// Backward compatibility for existing imports while we migrate usage.
+export const UnderlinedActionButton = TertiaryButton;
 
 const styles = StyleSheet.create({
   button: {
     alignItems: 'center',
     justifyContent: 'center',
   },
+  labelWrap: {
+    alignItems: 'center',
+  },
   text: {
     ...TYPOGRAPHY.legal,
     fontWeight: '400',
-  },
-  underline: {
-    width: '100%',
   },
 });

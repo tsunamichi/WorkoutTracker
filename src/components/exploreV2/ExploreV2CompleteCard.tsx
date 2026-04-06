@@ -3,8 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity, Pressable } from 'react-nativ
 import { Platform } from 'react-native';
 import Animated, { useAnimatedStyle, interpolateColor, type SharedValue } from 'react-native-reanimated';
 import { EXPLORE_V2 } from './exploreV2Tokens';
-import { EXPLORE_V2_PALETTES } from './exploreV2ColorSystem';
-import { COLORS, TYPOGRAPHY } from '../../constants';
+import { TYPOGRAPHY } from '../../constants';
 import { useAppTheme } from '../../theme/useAppTheme';
 import { IconChevronDown } from '../icons';
 import { formatWeightForLoad } from '../../utils/weight';
@@ -28,10 +27,6 @@ type Props = {
   contentOnly?: boolean;
 };
 
-const palette = EXPLORE_V2_PALETTES.complete;
-const upNextPalette = EXPLORE_V2_PALETTES.upNext;
-/** Match Current card surface — used for row title + numerals on Completed list */
-const CURRENT_CARD_SURFACE = EXPLORE_V2_PALETTES.current.main;
 const IDLE_HEADER_INK = '#464646';
 const IDLE_UNIT_INK = '#787878';
 /** Vertical gap between set rows (logs) in the Completed list */
@@ -56,7 +51,7 @@ export function ExploreV2CompleteCard({
   contentOnly = false,
 }: Props) {
   const { explore: ex, colors: themeColors } = useAppTheme();
-  const pageBgChrome = EXPLORE_V2.colors.pageBg;
+  const pageBgChrome = themeColors.canvasLight;
   const restCompletedUnitInk = ex.restTimerCompletedUnitInk;
   const textMetaTimer = themeColors.textMetaTimer;
   const textMeta = themeColors.textMeta;
@@ -64,6 +59,7 @@ export function ExploreV2CompleteCard({
   const accentPrimary = themeColors.accentPrimary;
   const accentSecondarySoft = themeColors.accentSecondarySoft;
   const containerPrimary = themeColors.containerPrimary;
+  const upNextBaseBg = themeColors.containerSecondary;
   const workUpNextBg = ex.workTimerUpNextCardBg;
   const amberBand = ex.amberBand;
 
@@ -105,21 +101,21 @@ export function ExploreV2CompleteCard({
     const pRest = b * (1 - w);
     const whenUpBg = interpolateColor(w, [0, 1], [amberBand, workUpNextBg]);
     return {
-      backgroundColor: interpolateColor(b, [0, 1], [upNextPalette.main, whenUpBg]),
-      borderColor: interpolateColor(pRest, [0, 1], [accentSecondarySoft, accentPrimary]),
+      backgroundColor: interpolateColor(b, [0, 1], [upNextBaseBg, whenUpBg]),
+      borderColor: interpolateColor(pRest, [0, 1], [themeColors.canvasLight, accentPrimary]),
     };
-  }, [amberBand, workUpNextBg, upNextPalette.main, accentSecondarySoft, accentPrimary]);
+  }, [upNextBaseBg, amberBand, workUpNextBg, themeColors.canvasLight, accentPrimary]);
   const scrollContentAnimatedStyle = useAnimatedStyle(() => {
     const b = restThemeProgress.value;
     const w = exploreV2WorkBlueProgress.value;
     const whenUpBg = interpolateColor(w, [0, 1], [amberBand, workUpNextBg]);
     return {
-      backgroundColor: interpolateColor(b, [0, 1], [upNextPalette.main, whenUpBg]),
+      backgroundColor: interpolateColor(b, [0, 1], [upNextBaseBg, whenUpBg]),
     };
-  }, [amberBand, workUpNextBg, upNextPalette.main]);
+  }, [upNextBaseBg, amberBand, workUpNextBg]);
   const rowTitleInkStyle = useAnimatedStyle(() => ({
-    color: interpolateColor(exploreV2WorkBlueProgress.value, [0, 1], [CURRENT_CARD_SURFACE, pageBgChrome]),
-  }), [pageBgChrome]);
+    color: interpolateColor(exploreV2WorkBlueProgress.value, [0, 1], [containerPrimary, pageBgChrome]),
+  }), [containerPrimary, pageBgChrome]);
   const rows = completedGroupIndexes.flatMap(gi => {
     const g = exerciseGroups[gi];
     if (!g) return [];
@@ -131,7 +127,11 @@ export function ExploreV2CompleteCard({
         {rows.map(({ gi, g, ex }, index) => (
           <TouchableOpacity
             key={`${g.id}-${ex.id}`}
-            style={[styles.row, index < rows.length - 1 && styles.rowWithDivider]}
+            style={[
+              styles.row,
+              index < rows.length - 1 && styles.rowWithDivider,
+              index < rows.length - 1 && { borderBottomColor: themeColors.border },
+            ]}
             onPress={() => {
               const exIdx = g.exercises.findIndex(e => e.id === ex.id);
               onOpenExercise(gi, exIdx);
@@ -181,7 +181,7 @@ export function ExploreV2CompleteCard({
           </TouchableOpacity>
         ))}
         {rows.length === 0 && (
-          <Text style={[styles.empty, { color: palette.muted }]}>Nothing completed yet.</Text>
+          <Text style={[styles.empty, { color: textMeta }]}>Nothing completed yet.</Text>
         )}
     </>
   );
@@ -218,13 +218,13 @@ export function ExploreV2CompleteCard({
         <Animated.Text style={[styles.headerLabel, headerChromeAnimatedStyle]}>Completed</Animated.Text>
         <View style={styles.countOrPlusSlot}>
           <Animated.View style={[styles.chevronLayer, chevronIdleOpacityStyle]} pointerEvents="none">
-            <IconChevronDown size={18} color={COLORS.containerPrimary} />
+            <IconChevronDown size={18} color={themeColors.containerPrimary} />
           </Animated.View>
           <Animated.View style={[styles.chevronLayer, chevronTimerOpacityStyle]} pointerEvents="none">
-            <IconChevronDown size={18} color={COLORS.containerPrimary} />
+            <IconChevronDown size={18} color={themeColors.containerPrimary} />
           </Animated.View>
           <Animated.View style={[styles.chevronLayer, chevronWorkOpacityStyle]} pointerEvents="none">
-            <IconChevronDown size={18} color={COLORS.containerPrimary} />
+            <IconChevronDown size={18} color={themeColors.containerPrimary} />
           </Animated.View>
         </View>
       </Pressable>
@@ -249,7 +249,7 @@ const styles = StyleSheet.create({
     flexDirection: 'column',
     paddingTop: EXPLORE_V2.cardHeader.topInset,
     borderWidth: 2,
-    borderColor: COLORS.accentSecondarySoft,
+    borderColor: 'transparent',
     borderTopLeftRadius: EXPLORE_V2.cardTopRadius,
     borderTopRightRadius: EXPLORE_V2.cardTopRadius,
     borderBottomLeftRadius: EXPLORE_V2.cardRadius,
@@ -321,7 +321,7 @@ const styles = StyleSheet.create({
   },
   rowWithDivider: {
     borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
+    borderBottomColor: 'transparent',
     paddingBottom: 20,
     marginBottom: 20,
   },

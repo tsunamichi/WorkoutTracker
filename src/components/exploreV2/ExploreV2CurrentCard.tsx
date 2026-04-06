@@ -32,8 +32,6 @@ import {
 } from './ExploreV2CurrentOverflowSheet';
 import { UnderlinedActionButton } from '../common/UnderlinedActionButton';
 
-const CANVAS_INK = COLORS.canvasLight;
-
 type Props = {
   group: ExploreV2Group;
   primaryRevealed: PrimaryRevealedCard;
@@ -440,10 +438,12 @@ export function ExploreV2CurrentCard({
 }: Props) {
   const theme = useAppTheme();
   const { explore: ex, colors: themeColors } = theme;
+  const isV2Theme = theme.id === 'v2';
   const accentPrimary = themeColors.accentPrimary;
   const accentPrimaryDimmed = themeColors.accentPrimaryDimmed;
   const accentSecondarySoft = themeColors.accentSecondarySoft;
   const accentSecondaryDisabled = themeColors.accentSecondaryDisabled;
+  const containerTertiary = themeColors.containerTertiary;
   const skipRestCtaBg = ex.skipRestCtaBg;
   const ctaPillLabelInk = ex.ctaPillText;
   const isPrimary = primaryRevealed === 'current';
@@ -536,6 +536,13 @@ export function ExploreV2CurrentCard({
   const heroValueColor = useDisabledHeroPalette ? accentSecondaryDisabled : accentPrimary;
   const heroUnitColor = useDisabledHeroPalette ? accentSecondaryDisabled : accentPrimary;
   const settingsDisabledTone = heroTimerActive ? accentSecondaryDisabled : accentSecondarySoft;
+  const currentHeaderInk = isV2Theme ? containerTertiary : accentSecondarySoft;
+  const settingsInk = isV2Theme ? containerTertiary : settingsDisabledTone;
+  const perSideInk = isV2Theme
+    ? containerTertiary
+    : (useDisabledHeroPalette ? accentSecondaryDisabled : accentSecondarySoft);
+  const inactivePaginationInk = isV2Theme ? containerTertiary : accentSecondarySoft;
+  const inactivePaginationInkDisabled = isV2Theme ? containerTertiary : accentSecondaryDisabled;
   const logPressable =
     heroTimerActive || (showPrimaryCta && logEnabledForSlot);
 
@@ -546,9 +553,9 @@ export function ExploreV2CurrentCard({
     const w = exploreV2WorkBlueProgress.value;
     const pRest = b * (1 - w);
     return {
-      borderColor: interpolateColor(pRest, [0, 1], [accentSecondarySoft, accentPrimary]),
+      borderColor: interpolateColor(pRest, [0, 1], [themeColors.canvasLight, accentPrimary]),
     };
-  }, [accentSecondarySoft, accentPrimary]);
+  }, [themeColors.canvasLight, accentPrimary]);
   const shellCornerAnimatedStyle = useAnimatedStyle(() => {
     const cp = celebrationProgress?.value ?? 0;
     return {
@@ -580,9 +587,9 @@ export function ExploreV2CurrentCard({
       return { color: themeColors.containerPrimary };
     }
     return {
-      color: interpolateColor(restThemeProgress.value, [0, 1], [ctaPillLabelInk, CANVAS_INK]),
+      color: interpolateColor(restThemeProgress.value, [0, 1], [ctaPillLabelInk, themeColors.canvasLight]),
     };
-  }, [exploreV2TimerPhase, isPrimary, themeColors.containerPrimary, ctaPillLabelInk]);
+  }, [exploreV2TimerPhase, isPrimary, themeColors.containerPrimary, themeColors.canvasLight, ctaPillLabelInk]);
   const heroColumnReserveStyle = useAnimatedStyle(() => ({
     marginBottom: 0,
   }));
@@ -652,7 +659,7 @@ export function ExploreV2CurrentCard({
               <Text
                 style={[
                   styles.eyebrow,
-                  { color: accentSecondarySoft },
+                  { color: currentHeaderInk },
                 ]}
               >
                 Current
@@ -664,13 +671,13 @@ export function ExploreV2CurrentCard({
                     if (settingsOverflow.visible) settingsOverflow.onClose();
                     else settingsOverflow.onOpenSheet();
                   }}
-                  textStyle={[styles.currentSettingsButtonText, { color: settingsDisabledTone }]}
-                  color={settingsDisabledTone}
-                  underlineColor={settingsDisabledTone}
+                  textStyle={[styles.currentSettingsButtonText, { color: settingsInk }]}
+                  color={settingsInk}
+                  underlineColor={settingsInk}
                 />
               ) : null}
             </View>
-            <Text style={[styles.exerciseName, { color: accentSecondarySoft }]} numberOfLines={2}>
+            <Text style={[styles.exerciseName, { color: currentHeaderInk }]} numberOfLines={2}>
               {displayExerciseName}
             </Text>
           </View>
@@ -720,7 +727,7 @@ export function ExploreV2CurrentCard({
                             metricsEditable={metricsEditable}
                             heroValueColor={heroValueColor}
                             unitLabelColor={heroUnitColor}
-                            perSideLabelColor={useDisabledHeroPalette ? accentSecondaryDisabled : accentSecondarySoft}
+                            perSideLabelColor={perSideInk}
                             pageWidth={carouselViewportWidth}
                             commitsRef={commitsRef}
                             progressionValuesByItemId={progressionValuesByItemId}
@@ -769,11 +776,15 @@ export function ExploreV2CurrentCard({
                                   styles.paginationDigit,
                                   isView && styles.paginationInView,
                                   heroTimerActive
-                                    ? { color: accentSecondaryDisabled }
+                                    ? {
+                                        color: isView
+                                          ? accentSecondaryDisabled
+                                          : inactivePaginationInkDisabled,
+                                      }
                                     : {
                                         color: isView
                                           ? accentPrimary
-                                          : accentSecondarySoft,
+                                          : inactivePaginationInk,
                                       },
                                 ]}
                               >
@@ -816,7 +827,7 @@ export function ExploreV2CurrentCard({
         </View>
         </Reanimated.View>
         <Reanimated.View pointerEvents="none" style={[styles.completionMessageOverlay, celebrationMessageStyle]}>
-          <Text style={styles.completionMessageText}>Great Job!</Text>
+          <Text style={[styles.completionMessageText, { color: themeColors.canvasLight }]}>Great Job!</Text>
         </Reanimated.View>
         {collapsedSecondary ? (
           <TouchableOpacity
@@ -842,7 +853,7 @@ const styles = StyleSheet.create({
     paddingRight: 24,
     paddingBottom: 32,
     borderWidth: 2,
-    borderColor: COLORS.accentSecondarySoft,
+    borderColor: 'transparent',
     borderTopLeftRadius: EXPLORE_V2.cardTopRadius,
     borderTopRightRadius: EXPLORE_V2.cardTopRadius,
     borderBottomLeftRadius: EXPLORE_V2.cardRadius,
@@ -891,7 +902,6 @@ const styles = StyleSheet.create({
   },
   currentSettingsButtonText: {
     ...TYPOGRAPHY.legal,
-    color: COLORS.accentSecondarySoft,
   },
   exerciseName: {
     ...TYPOGRAPHY.displayLarge,
@@ -1055,7 +1065,6 @@ const styles = StyleSheet.create({
   },
   completionMessageText: {
     ...TYPOGRAPHY.h1,
-    color: COLORS.canvasLight,
     fontWeight: '400',
   },
   celebrationActiveShell: {

@@ -104,6 +104,8 @@ export type ExploreV2ExecutionRootProps = {
   /** Template item id of the exercise being swapped (drives per-exercise log checks on the screen). */
   onSwapExercise: (templateExerciseId: string) => void;
   onRemoveExercise: (exercise: ExploreV2Group['exercises'][0]) => Promise<void>;
+  /** Open Progress screen focused on a specific exercise from current-card settings. */
+  onOpenProgressForExercise: (payload: { exerciseId?: string; exerciseName?: string }) => void;
   /** Measured height of explore v2 content root — same SharedValue as ExerciseExecutionScreen `exploreV2RootHeight`. */
   exploreLayoutRootHeight: SharedValue<number>;
   /** Current group has at least one logged set — cannot replace Current from Up Next. */
@@ -168,6 +170,7 @@ function ExploreV2ExecutionRootComponent(props: ExploreV2ExecutionRootProps) {
     updateProgressionGroup,
     onSwapExercise,
     onRemoveExercise,
+    onOpenProgressForExercise,
     exploreLayoutRootHeight,
     currentGroupHasLoggedSets,
     onOpenAddExercise,
@@ -546,9 +549,9 @@ function ExploreV2ExecutionRootComponent(props: ExploreV2ExecutionRootProps) {
     const w = exploreV2WorkBlueProgress.value;
     const whenUp = interpolateColor(w, [0, 1], [warmActivityRoot, backgroundTimerRoot]);
     return {
-      backgroundColor: interpolateColor(b, [0, 1], [EXPLORE_V2.colors.pageBg, whenUp]),
+      backgroundColor: interpolateColor(b, [0, 1], [themeColorsRoot.canvasLight, whenUp]),
     };
-  }, [warmActivityRoot, backgroundTimerRoot]);
+  }, [themeColorsRoot.canvasLight, warmActivityRoot, backgroundTimerRoot]);
 
   /** Stack outline — matches page (orange rest / lime work timer) */
   const walletBorderOverlayAnimatedStyle = useAnimatedStyle(() => {
@@ -556,9 +559,9 @@ function ExploreV2ExecutionRootComponent(props: ExploreV2ExecutionRootProps) {
     const w = exploreV2WorkBlueProgress.value;
     const pRest = b * (1 - w);
     return {
-      borderColor: interpolateColor(pRest, [0, 1], [themeColorsRoot.accentSecondarySoft, themeColorsRoot.accentPrimary]),
+      borderColor: interpolateColor(pRest, [0, 1], [themeColorsRoot.canvasLight, themeColorsRoot.accentPrimary]),
     };
-  }, [themeColorsRoot.accentSecondarySoft, themeColorsRoot.accentPrimary]);
+  }, [themeColorsRoot.canvasLight, themeColorsRoot.accentPrimary]);
 
   const onSelectUpNext = useCallback(
     (gi: number) => {
@@ -705,6 +708,13 @@ function ExploreV2ExecutionRootComponent(props: ExploreV2ExecutionRootProps) {
                   onDelete: async () => {
                     setOverflowOpen(false);
                     await onRemoveExercise(focusExercise);
+                  },
+                  onViewProgress: () => {
+                    setOverflowOpen(false);
+                    onOpenProgressForExercise({
+                      exerciseId: ((focusExercise as any).exerciseId as string | undefined) ?? focusExercise.id,
+                      exerciseName: (focusExercise as any).name ?? undefined,
+                    });
                   },
                   type,
                 }
@@ -1113,7 +1123,7 @@ const styles = StyleSheet.create({
   debugShellBorderOverlay: {
     ...StyleSheet.absoluteFillObject,
     borderWidth: 2,
-    borderColor: EXPLORE_V2.colors.pageBg,
+    borderColor: 'transparent',
     zIndex: 1200,
   },
 });

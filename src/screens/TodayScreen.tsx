@@ -19,7 +19,7 @@ import { IconCheckmark, IconAdd, IconCalendar, IconPlay, IconStopwatch, IconArro
 import { ScheduleWorkoutDeckV3, type ScheduleDeckV3Item } from '../components/schedule/ScheduleWorkoutDeckV3';
 import { CycleControlSheet } from '../components/CycleControlSheet';
 import { ShareCycleDrawer } from '../components/ShareCycleDrawer';
-import { UnderlinedActionButton } from '../components/common/UnderlinedActionButton';
+import { TertiaryButton } from '../components/common/UnderlinedActionButton';
 import dayjs from 'dayjs';
 import isoWeek from 'dayjs/plugin/isoWeek';
 import { useTranslation } from '../i18n/useTranslation';
@@ -215,6 +215,9 @@ export function TodayScreen({ onDateChange, onOpenAddWorkout, onOpenBonusDrawer 
   const [selectedDeckWorkout, setSelectedDeckWorkout] = useState<ScheduledWorkout | undefined>(undefined);
   const timerModeProgress = useSharedValue(0);
   const timerHeaderProgress = useSharedValue(0);
+  const scheduleChromeExitProgress = useSharedValue(0);
+  const launchToExecutionLockRef = useRef(false);
+  const launchToExecutionTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // TEMP: Seed dev data on mount (remove after use)
   const [seeded, setSeeded] = useState(false);
@@ -708,6 +711,14 @@ export function TodayScreen({ onDateChange, onOpenAddWorkout, onOpenBonusDrawer 
   const schedulePaneAnimatedStyle = useAnimatedStyle(() => ({
     transform: [{ translateY: -screenHeight * timerModeProgress.value }],
   }), [screenHeight]);
+  const scheduleHeaderExitAnimatedStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: -48 * scheduleChromeExitProgress.value }],
+    opacity: 1 - scheduleChromeExitProgress.value,
+  }));
+  const scheduleFooterExitAnimatedStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: 64 * scheduleChromeExitProgress.value }],
+    opacity: 1 - scheduleChromeExitProgress.value,
+  }));
   const timerPaneAnimatedStyle = useAnimatedStyle(() => ({
     transform: [{ translateY: screenHeight * (1 - timerModeProgress.value) }],
   }), [screenHeight]);
@@ -777,6 +788,24 @@ export function TodayScreen({ onDateChange, onOpenAddWorkout, onOpenBonusDrawer 
     timerHeaderProgress.value = withTiming(0, { duration: 420, easing: Easing.out(Easing.cubic) });
   }, [isTimerMode, timerHeaderProgress]);
 
+  useEffect(() => {
+    return () => {
+      if (launchToExecutionTimeoutRef.current) clearTimeout(launchToExecutionTimeoutRef.current);
+    };
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (launchToExecutionTimeoutRef.current) {
+        clearTimeout(launchToExecutionTimeoutRef.current);
+        launchToExecutionTimeoutRef.current = null;
+      }
+      launchToExecutionLockRef.current = false;
+      scheduleChromeExitProgress.value = 0;
+      return undefined;
+    }, [scheduleChromeExitProgress]),
+  );
+
   const navigateToWorkoutExecution = useCallback(
     (
       sw: ScheduledWorkout,
@@ -785,19 +814,28 @@ export function TodayScreen({ onDateChange, onOpenAddWorkout, onOpenBonusDrawer 
       const mainCompletion = getMainCompletion(sw.id);
       const isCompleted = sw.isLocked || mainCompletion.percentage === 100;
       if (isInPastCycle && !isCompleted) return;
-      (navigation as any).navigate('ExerciseExecution', {
-        workoutKey: sw.id,
-        workoutTemplateId: sw.templateId,
-        type: 'main',
-        ...(origin
-          ? {
-              transitionSource: 'scheduleDeck',
-              transitionOrigin: origin,
-            }
-          : {}),
+      if (launchToExecutionLockRef.current) return;
+      launchToExecutionLockRef.current = true;
+      scheduleChromeExitProgress.value = withTiming(1, {
+        duration: 180,
+        easing: Easing.out(Easing.cubic),
       });
+      if (launchToExecutionTimeoutRef.current) clearTimeout(launchToExecutionTimeoutRef.current);
+      launchToExecutionTimeoutRef.current = setTimeout(() => {
+        (navigation as any).navigate('ExerciseExecution', {
+          workoutKey: sw.id,
+          workoutTemplateId: sw.templateId,
+          type: 'main',
+          ...(origin
+            ? {
+                transitionSource: 'scheduleDeck',
+                transitionOrigin: origin,
+              }
+            : {}),
+        });
+      }, 110);
     },
-    [getMainCompletion, isInPastCycle, navigation],
+    [getMainCompletion, isInPastCycle, navigation, scheduleChromeExitProgress],
   );
 
   useEffect(() => {
@@ -848,7 +886,10 @@ export function TodayScreen({ onDateChange, onOpenAddWorkout, onOpenBonusDrawer 
   const handleOpenCycleCalendar = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     if (cyclePlanForHeader) {
-      (navigation as any).navigate('CyclePlanDetail', { planId: cyclePlanForHeader.id });
+      (navigation as any).navigate('CycleProgress', {
+        planId: cyclePlanForHeader.id,
+        asOfDate: selectedDate,
+      });
       return;
     }
     onOpenAddWorkout?.(selectedDate);
@@ -884,17 +925,28 @@ export function TodayScreen({ onDateChange, onOpenAddWorkout, onOpenBonusDrawer 
     if (!sw) return undefined;
     const ordered = [...(sw.exercisesSnapshot ?? [])].sort((a, b) => a.order - b.order);
     const exerciseCount = ordered.length;
+    const categories = ordered
+      .map(snap => exercises.find(e => e.id === snap.exerciseId)?.category?.trim())
+      .filter((v): v is string => !!v);
+    const uniqueCategories = [...new Set(categories)];
+    const subtitle =
+      uniqueCategories.length === 0
+        ? undefined
+        : uniqueCategories.length === 1
+          ? uniqueCategories[0]
+          : `${uniqueCategories[0]} & ${uniqueCategories[1]}`;
     return {
       id: `completed-${sw.id}`,
       title: sw.titleSnapshot,
-      subtitle: 'Completed',
+      subtitle,
       exerciseCount,
       variant: 'completed',
       cardBackgroundColor: COLORS.accentPrimaryBackground,
       cardTextColor: completedCardTextColor,
+      footerLabel: 'Completed',
       onPress: origin => navigateToWorkoutExecution(sw, origin),
     };
-  }, [completedWorkoutsForSelectedDay, completedCardTextColor, navigateToWorkoutExecution]);
+  }, [completedWorkoutsForSelectedDay, completedCardTextColor, exercises, navigateToWorkoutExecution]);
   const carouselDeckItems: ScheduleDeckV3Item[] = useMemo(() => {
     if (!completedTodayDeckItem) return deckItems;
     return [completedTodayDeckItem, ...deckItems];
@@ -970,19 +1022,21 @@ export function TodayScreen({ onDateChange, onOpenAddWorkout, onOpenBonusDrawer 
       <View style={[styles.gradient, { backgroundColor: themeColors.canvasLight }]}>
         <SafeAreaView style={styles.scheduleScreenRoot} edges={[]}>
           <Animated.View style={[styles.schedulePane, schedulePaneAnimatedStyle]}>
-          <View style={[styles.scheduleHeaderStack, { paddingTop: insets.top + 24 }]}>
-            <View style={styles.scheduleHeaderTopRow}>
-              <View style={styles.scheduleHeaderTopSpacer} />
-              <UnderlinedActionButton
-                label="Profile"
-                onPress={() => (navigation as any).navigate('Profile')}
-                style={styles.profileLinkButton}
-                textStyle={styles.profileLinkText}
-              />
+          <Animated.View style={scheduleHeaderExitAnimatedStyle}>
+            <View style={[styles.scheduleHeaderStack, { paddingTop: insets.top + 24 }]}>
+              <View style={styles.scheduleHeaderTopRow}>
+                <View style={styles.scheduleHeaderTopSpacer} />
+                <TertiaryButton
+                  label="Profile"
+                  onPress={() => (navigation as any).navigate('Profile')}
+                  style={styles.profileLinkButton}
+                  textStyle={styles.profileLinkText}
+                />
+              </View>
+              <Text style={styles.scheduleHeaderTitle}>Workout of the day</Text>
+              <Text style={styles.scheduleHeaderDateLabel}>{headerDateLabel}</Text>
             </View>
-            <Text style={styles.scheduleHeaderTitle}>Workout of the day</Text>
-            <Text style={styles.scheduleHeaderDateLabel}>{headerDateLabel}</Text>
-          </View>
+          </Animated.View>
 
               <ScrollView
                 style={styles.contentScroll}
@@ -1042,6 +1096,7 @@ export function TodayScreen({ onDateChange, onOpenAddWorkout, onOpenBonusDrawer 
                     mode={deckMode}
                     inProgressItem={inProgressDeckItem}
                     initialIndex={carouselInitialIndex}
+                    chromeExitProgress={scheduleChromeExitProgress}
                   />
                 </View>
               ) : selectedDay?.scheduledWorkout ? (
@@ -1051,6 +1106,7 @@ export function TodayScreen({ onDateChange, onOpenAddWorkout, onOpenBonusDrawer 
                     mode={deckMode}
                     inProgressItem={inProgressDeckItem}
                     initialIndex={carouselInitialIndex}
+                    chromeExitProgress={scheduleChromeExitProgress}
                   />
                 </View>
               ) : (
@@ -1088,12 +1144,23 @@ export function TodayScreen({ onDateChange, onOpenAddWorkout, onOpenBonusDrawer 
 
               <View style={styles.cardActionsContainer}>
                 {cyclePlanForHeader ? (
-                  <UnderlinedActionButton
-                    label="View cycle progress"
-                    onPress={handleOpenCycleCalendar}
-                    style={styles.cycleProgressAction}
-                    textStyle={styles.profileLinkText}
-                  />
+                  <>
+                    <TertiaryButton
+                      label="Cycle details"
+                      onPress={handleOpenCycleCalendar}
+                      style={styles.cycleProgressAction}
+                      textStyle={styles.profileLinkText}
+                    />
+                    <TertiaryButton
+                      label="Personal progress"
+                      onPress={() => {
+                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                        (navigation as any).navigate('Progress');
+                      }}
+                      style={styles.progressAction}
+                      textStyle={styles.profileLinkText}
+                    />
+                  </>
                 ) : null}
                 {!isPausedDay &&
                 !selectedDay?.scheduledWorkout &&
@@ -1113,34 +1180,36 @@ export function TodayScreen({ onDateChange, onOpenAddWorkout, onOpenBonusDrawer 
               </View>
               </View>
               </ScrollView>
-          <View
-            pointerEvents={isTimerMode ? 'none' : 'auto'}
-            style={[styles.footerActionsWrap, { paddingBottom: insets.bottom }]}
-          >
-            <View style={styles.footerEntrySection}>
-              <Text style={styles.footerSectionTitle}>Extras</Text>
-              <View style={styles.footerEntryLinksRow}>
-                <TouchableOpacity style={styles.footerEntryLinkButton} activeOpacity={0.85} onPress={() => void handleWarmupPress()}>
-                  <Text style={styles.footerEntryLinkText}>Warm up</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.footerEntryLinkButton} activeOpacity={0.85} onPress={() => void handleCorePress()}>
-                  <Text style={styles.footerEntryLinkText}>Core</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.footerEntryLinkButton} activeOpacity={0.85} onPress={() => {
-                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                  setIsTimerMode(true);
-                }}>
-                  <Text style={styles.footerEntryLinkText}>Timer</Text>
-                </TouchableOpacity>
+          <Animated.View style={scheduleFooterExitAnimatedStyle} pointerEvents={isTimerMode ? 'none' : 'auto'}>
+            <View
+              pointerEvents={isTimerMode ? 'none' : 'auto'}
+              style={[styles.footerActionsWrap, { paddingBottom: insets.bottom }]}
+            >
+              <View style={styles.footerEntrySection}>
+                <Text style={styles.footerSectionTitle}>Extras</Text>
+                <View style={styles.footerEntryLinksRow}>
+                  <TouchableOpacity style={styles.footerEntryLinkButton} activeOpacity={0.85} onPress={() => void handleWarmupPress()}>
+                    <Text style={styles.footerEntryLinkText}>Warm up</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.footerEntryLinkButton} activeOpacity={0.85} onPress={() => void handleCorePress()}>
+                    <Text style={styles.footerEntryLinkText}>Core</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.footerEntryLinkButton} activeOpacity={0.85} onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    setIsTimerMode(true);
+                  }}>
+                    <Text style={styles.footerEntryLinkText}>Timer</Text>
+                  </TouchableOpacity>
+                </View>
               </View>
             </View>
-          </View>
+          </Animated.View>
           </Animated.View>
 
           <Animated.View pointerEvents={isTimerMode ? 'auto' : 'none'} style={[styles.timerModePane, timerPaneAnimatedStyle]}>
             <Animated.View style={[styles.timerModeHeader, { paddingTop: insets.top + 8 }, timerHeaderAnimatedStyle]}>
               <View style={styles.timerSwitchButton}>
-                <UnderlinedActionButton label="Schedule" onPress={() => {
+                <TertiaryButton label="Schedule" onPress={() => {
                   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                   setIsTimerMode(false);
                 }} />
@@ -1818,12 +1887,17 @@ const styles = StyleSheet.create({
   cycleProgressAction: {
     alignSelf: 'flex-start',
     marginTop: 24,
+    marginBottom: 0,
+  },
+  progressAction: {
+    alignSelf: 'flex-start',
+    marginTop: 12,
     marginBottom: SPACING.lg,
   },
   footerActionsWrap: {
     paddingHorizontal: SPACING.xxl,
     paddingTop: SPACING.md,
-    backgroundColor: COLORS.canvasLight,
+    backgroundColor: 'transparent',
   },
   footerEntrySection: {
     width: '100%',

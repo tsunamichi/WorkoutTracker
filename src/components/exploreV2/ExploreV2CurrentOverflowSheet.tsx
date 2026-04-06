@@ -28,6 +28,7 @@ import { useAppTheme } from '../../theme/useAppTheme';
 import { formatWeightForLoad } from '../../utils/weight';
 import type { ExploreV2Exercise } from './exploreV2Types';
 import { useTranslation } from '../../i18n/useTranslation';
+import { TertiaryButton } from '../common/UnderlinedActionButton';
 
 const DRAWER_TOP_DIVIDER_H = 1;
 /** Settings header row (Settings + chevron) */
@@ -100,6 +101,7 @@ export type ExploreV2CurrentSettingsOverflowProps = {
   onProgressionGroupSelect: (groupId: string | null) => void | Promise<void>;
   onSwap: () => void;
   onDelete: () => void;
+  onViewProgress: () => void;
   type: 'warmup' | 'main' | 'core';
   /** When rest timer starts, drawer collapses with animation then onClose runs (parent must not flip visible first). */
   inlineRestActive: boolean;
@@ -132,6 +134,7 @@ export function ExploreV2CurrentOverflowPanel({
   onProgressionGroupSelect,
   onSwap,
   onDelete,
+  onViewProgress,
   type,
   inlineRestActive,
   restThemeProgress,
@@ -326,6 +329,14 @@ export function ExploreV2CurrentOverflowPanel({
                   <Text style={[styles.historyDateMuted, { color: themeColors.accentSecondary }]}>
                     {t('noHistoryRecordedYet')}
                   </Text>
+                  <TertiaryButton
+                    label="View progress"
+                    onPress={onViewProgress}
+                    style={styles.viewProgressBtn}
+                    textStyle={styles.viewProgressText}
+                    color={themeColors.accentSecondary}
+                    underlineColor={themeColors.accentSecondary}
+                  />
                 </View>
               ) : (
                 <View style={styles.historyBlock}>
@@ -336,16 +347,26 @@ export function ExploreV2CurrentOverflowPanel({
                         {dayjs(latestPriorWorkout.date).format('MMMM D')}
                         {getOrdinalSuffix(dayjs(latestPriorWorkout.date).date())}
                       </Text>
+                      <TertiaryButton
+                        label="View progress"
+                        onPress={onViewProgress}
+                        style={styles.viewProgressBtn}
+                        textStyle={styles.viewProgressText}
+                        color={themeColors.accentSecondary}
+                        underlineColor={themeColors.accentSecondary}
+                      />
                     </View>
                     <View style={styles.historySetsColumn}>
                       {latestPriorWorkout.sets.map((set, setIndex) => (
                         <View key={setIndex} style={styles.historySetRow}>
                           <View style={styles.historyValueColumn}>
-                            <Text style={styles.historySetText}>{formatWeightForLoad(set.weight, useKg)}</Text>
+                            <Text style={[styles.historySetText, { color: themeColors.text }]}>
+                              {formatWeightForLoad(set.weight, useKg)}
+                            </Text>
                             <Text style={[styles.historySetUnit, { color: themeColors.accentSecondary }]}>{weightUnit}</Text>
                           </View>
                           <View style={styles.historyValueColumn}>
-                            <Text style={styles.historySetText}>{set.reps}</Text>
+                            <Text style={[styles.historySetText, { color: themeColors.text }]}>{set.reps}</Text>
                             <Text style={[styles.historySetUnit, { color: themeColors.accentSecondary }]}>
                               {timeBased ? 'secs' : 'reps'}
                             </Text>
@@ -378,7 +399,7 @@ export function ExploreV2CurrentOverflowPanel({
                 Track each set by duration instead of reps
               </Text>
         <View style={styles.row}>
-                <Text style={[styles.labelMeta, { color: timeBased ? COLORS.text : accentSecondary20 }]}>
+                <Text style={[styles.labelMeta, { color: timeBased ? themeColors.text : accentSecondary20 }]}>
                   Alternate sides
                 </Text>
                 <Toggle
@@ -415,7 +436,7 @@ export function ExploreV2CurrentOverflowPanel({
                         }
                   activeOpacity={1}
                 >
-                  <View style={styles.pillIconPlaceholder} />
+                  <View style={[styles.pillIconPlaceholder, { backgroundColor: themeColors.containerPrimaryDark }]} />
                   <Text style={[styles.pillText, isSelected && { color: themeColors.accentPrimary }]} numberOfLines={1}>
                           {progressionPillLabel(g.name)}
                   </Text>
@@ -442,7 +463,7 @@ export function ExploreV2CurrentOverflowPanel({
             onPress={onSwap}
             activeOpacity={0.75}
           >
-            <Text style={styles.actionText}>Swap exercise</Text>
+            <Text style={[styles.actionText, { color: themeColors.text }]}>Swap exercise</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.actionCell, { backgroundColor: explore.skipRestCtaBg }]}
@@ -624,7 +645,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   labelDisabled: {
-    color: COLORS.textMeta,
+    color: EXPLORE_V2.colors.textMeta,
   },
   helperText: {
     ...TYPOGRAPHY.meta,
@@ -664,7 +685,6 @@ const styles = StyleSheet.create({
     width: 20,
     height: 20,
     borderRadius: 6,
-    backgroundColor: COLORS.containerPrimaryDark,
     marginBottom: 8,
   },
   pillText: {
@@ -691,7 +711,6 @@ const styles = StyleSheet.create({
   actionText: {
     ...TYPOGRAPHY.meta,
     fontWeight: '500',
-    color: COLORS.text,
   },
   historyBlock: {
     alignSelf: 'stretch',
@@ -711,6 +730,14 @@ const styles = StyleSheet.create({
   historyDateMuted: {
     ...TYPOGRAPHY.meta,
     marginTop: 2,
+  },
+  viewProgressBtn: {
+    alignSelf: 'flex-start',
+    marginTop: 8,
+  },
+  viewProgressText: {
+    ...TYPOGRAPHY.meta,
+    fontWeight: '500',
   },
   historyDataRow: {
     flexDirection: 'row',
@@ -735,10 +762,9 @@ const styles = StyleSheet.create({
   },
   historySetText: {
     ...TYPOGRAPHY.meta,
-    color: COLORS.text,
   },
   historySetUnit: {
     ...TYPOGRAPHY.meta,
-    color: COLORS.textMeta,
+    color: EXPLORE_V2.colors.textMeta,
   },
 });
