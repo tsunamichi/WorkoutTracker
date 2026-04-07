@@ -1,43 +1,150 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert, Linking } from 'react-native';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  ScrollView,
+  Alert,
+  LayoutAnimation,
+  PanResponder,
+  Platform,
+  UIManager,
+} from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import * as Haptics from 'expo-haptics';
 import { useStore } from '../store';
 import type { AppColorThemeId } from '../types';
 import { useAppTheme } from '../theme/useAppTheme';
-import { SPACING, TYPOGRAPHY, BORDER_RADIUS } from '../constants';
-import { TimerValueSheet } from '../components/timer/TimerValueSheet';
-import { IconArrowLeft, IconTriangle, IconCheckmark } from '../components/icons';
-import { Toggle } from '../components/Toggle';
+import { SPACING, TYPOGRAPHY } from '../constants';
+import { IconTriangle } from '../components/icons';
 import { useTranslation } from '../i18n/useTranslation';
 import { signInWithApple, getCurrentUser, signOut, isAppleSignInAvailable, AuthUser } from '../services/authService';
 import { uploadBackup, downloadBackup, getCloudBackupInfo } from '../services/cloudSync';
 import { isSupabaseConfigured } from '../services/supabase';
-
-// Optional local notifications
-let Notifications: any = null;
-try {
-  Notifications = require('expo-notifications');
-} catch (e) {
-  console.log('⚠️ expo-notifications not installed, notifications toggle disabled');
-}
+import { hexToRgba } from '../constants';
+import { BackTextButton } from '../components/common/BackTextButton';
+import * as Haptics from 'expo-haptics';
+import { buildAppTheme } from '../theme/appTheme';
 
 interface ProfileScreenProps {
   navigation: any;
+}
+
+const REST_TIME_MIN = 15;
+const REST_TIME_MAX = 300;
+const REST_TIME_STEP = 5;
+const REST_SLIDER_HEIGHT = 32;
+const REST_SLIDER_THUMB_WIDTH = 3;
+const REST_SLIDER_THUMB_HEIGHT = 16;
+const REST_SLIDER_RADIUS = 10;
+const REST_SLIDER_THUMB_INSET = 12;
+
+function RestTimeSlider({
+  value,
+  min,
+  max,
+  step,
+  onChange,
+  onChangeEnd,
+  onInteractingChange,
+  backgroundColor,
+  fillColor,
+  thumbColor,
+}: {
+  value: number;
+  min: number;
+  max: number;
+  step: number;
+  onChange: (next: number) => void;
+  onChangeEnd?: (next: number) => void;
+  onInteractingChange?: (isInteracting: boolean) => void;
+  backgroundColor: string;
+  fillColor: string;
+  thumbColor: string;
+}) {
+  const [trackWidth, setTrackWidth] = useState(0);
+  const latestValueRef = useRef(value);
+
+  useEffect(() => {
+    latestValueRef.current = value;
+  }, [value]);
+
+  const updateFromPosition = useCallback((positionX: number) => {
+    if (trackWidth <= 0) return;
+    const clampedX = Math.max(0, Math.min(trackWidth, positionX));
+    const ratio = clampedX / trackWidth;
+    const raw = min + ratio * (max - min);
+    const stepped = Math.round(raw / step) * step;
+    const next = Math.max(min, Math.min(max, stepped));
+    latestValueRef.current = next;
+    onChange(next);
+    return next;
+  }, [max, min, onChange, step, trackWidth]);
+
+  const panResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onStartShouldSetPanResponder: () => true,
+        onMoveShouldSetPanResponder: () => true,
+        onStartShouldSetPanResponderCapture: () => true,
+        onMoveShouldSetPanResponderCapture: () => true,
+        onPanResponderGrant: evt => {
+          onInteractingChange?.(true);
+          updateFromPosition(evt.nativeEvent.locationX);
+        },
+        onPanResponderMove: evt => {
+          updateFromPosition(evt.nativeEvent.locationX);
+        },
+        onPanResponderRelease: () => {
+          onInteractingChange?.(false);
+          onChangeEnd?.(latestValueRef.current);
+        },
+        onPanResponderTerminate: () => {
+          onInteractingChange?.(false);
+          onChangeEnd?.(latestValueRef.current);
+        },
+      }),
+    [onChangeEnd, onInteractingChange, updateFromPosition],
+  );
+
+  const ratio = Math.max(0, Math.min(1, (value - min) / (max - min)));
+  const fillWidth = trackWidth > 0 ? ratio * trackWidth : 0;
+  const thumbLeft =
+    trackWidth > 0
+      ? Math.max(
+          0,
+          Math.min(
+            trackWidth - REST_SLIDER_THUMB_WIDTH,
+            fillWidth - REST_SLIDER_THUMB_WIDTH - REST_SLIDER_THUMB_INSET,
+          ),
+        )
+      : 0;
+
+  return (
+    <View
+      style={[styles.restSliderTrack, { backgroundColor }]}
+      onLayout={event => {
+        setTrackWidth(event.nativeEvent.layout.width);
+      }}
+      {...panResponder.panHandlers}
+    >
+      <View style={[styles.restSliderFill, { width: fillWidth, backgroundColor: fillColor }]} />
+      <View style={[styles.restSliderThumb, { left: thumbLeft, backgroundColor: thumbColor }]} />
+    </View>
+  );
 }
 
 export function ProfileScreen({ navigation }: ProfileScreenProps) {
   const insets = useSafeAreaInsets();
   const { settings, updateSettings, initialize } = useStore();
   const { colors: themeColors } = useAppTheme();
-  const [showRestTimePicker, setShowRestTimePicker] = useState(false);
-  const [notificationsSystemEnabled, setNotificationsSystemEnabled] = useState<boolean | null>(null);
+  const [restTimeExpanded, setRestTimeExpanded] = useState(false);
+  const [isRestSliderInteracting, setIsRestSliderInteracting] = useState(false);
+  const [restTimeDraftSeconds, setRestTimeDraftSeconds] = useState(settings.restTimerDefaultSeconds);
   const [authUser, setAuthUser] = useState<AuthUser | null>(null);
-  const [appleSignInAvailable, setAppleSignInAvailable] = useState(false);
   const [cloudSyncInfo, setCloudSyncInfo] = useState<{ exists: boolean; syncedAt?: string } | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
   const { t, language } = useTranslation();
-  const notificationsEnabled = settings.notificationsEnabled !== false;
 
   const handleBack = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -45,23 +152,9 @@ export function ProfileScreen({ navigation }: ProfileScreenProps) {
   };
 
   useEffect(() => {
-    if (!Notifications) return;
-    (async () => {
-      try {
-        const { status } = await Notifications.getPermissionsAsync();
-        setNotificationsSystemEnabled(status === 'granted');
-      } catch (e) {
-        setNotificationsSystemEnabled(null);
-      }
-    })();
-  }, []);
-
-
-  useEffect(() => {
     // Check Apple Sign-In availability and current auth state
     (async () => {
-      const available = await isAppleSignInAvailable();
-      setAppleSignInAvailable(available);
+      await isAppleSignInAvailable();
       if (isSupabaseConfigured()) {
         const user = await getCurrentUser();
         setAuthUser(user);
@@ -72,38 +165,6 @@ export function ProfileScreen({ navigation }: ProfileScreenProps) {
       }
     })();
   }, []);
-
-  const handleToggleNotifications = async (value: boolean) => {
-    if (value && Notifications) {
-      const { status: existingStatus } = await Notifications.getPermissionsAsync();
-      let finalStatus = existingStatus;
-      if (existingStatus !== 'granted') {
-        const { status } = await Notifications.requestPermissionsAsync();
-        finalStatus = status;
-      }
-      if (finalStatus === 'granted') {
-        setNotificationsSystemEnabled(true);
-        updateSettings({ notificationsEnabled: true });
-      } else {
-        setNotificationsSystemEnabled(false);
-        Alert.alert(
-          t('notificationPermissionDeniedTitle'),
-          t('notificationPermissionDeniedBody'),
-          [
-            { text: t('cancel'), style: 'cancel' },
-            { text: t('openSettings'), onPress: () => Linking.openSettings() }
-          ]
-        );
-      }
-    } else {
-      updateSettings({ notificationsEnabled: value });
-    }
-  };
-
-  const handleUpdateRestTime = (seconds: number) => {
-    updateSettings({ restTimerDefaultSeconds: seconds });
-    setShowRestTimePicker(false);
-  };
 
   const handleToggleUnit = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -116,27 +177,43 @@ export function ProfileScreen({ navigation }: ProfileScreenProps) {
     updateSettings({ language: newLanguage });
   };
 
-  const languageEmoji = language === 'es' ? '🇪🇸' : '🇬🇧';
-  const restTimeFormatted = `${Math.floor(settings.restTimerDefaultSeconds / 60)}:${(settings.restTimerDefaultSeconds % 60).toString().padStart(2, '0')}`;
+  const formatRestTime = useCallback(
+    (seconds: number) => `${Math.floor(seconds / 60)}:${(seconds % 60).toString().padStart(2, '0')}`,
+    [],
+  );
+  const restTimeDisplaySeconds = restTimeExpanded ? restTimeDraftSeconds : settings.restTimerDefaultSeconds;
+  const restTimeFormatted = formatRestTime(restTimeDisplaySeconds);
   const unitLabel = settings.useKg ? 'kg' : 'lb';
   const activeColorTheme: AppColorThemeId = settings.colorTheme ?? 'v1';
+  const themeSwatchOptions = [
+    {
+      id: 'v1' as const,
+      bg: buildAppTheme('v1').colors.containerSecondary,
+      corner: buildAppTheme('v1').colors.containerPrimary,
+    },
+    {
+      id: 'v2' as const,
+      bg: buildAppTheme('v2').colors.containerSecondary,
+      corner: buildAppTheme('v2').colors.containerPrimary,
+    },
+  ];
 
   const handleColorTheme = (id: AppColorThemeId) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     void updateSettings({ colorTheme: id });
   };
 
+  useEffect(() => {
+    if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+      UIManager.setLayoutAnimationEnabledExperimental(true);
+    }
+  }, []);
+
   return (
     <View style={[styles.container, { backgroundColor: themeColors.canvasLight }]}>
       {/* Header */}
       <View style={[styles.header, { paddingTop: insets.top }]}>
-        {/* Top Bar with Back button */}
-        <View style={styles.topBar}>
-          <TouchableOpacity onPress={handleBack} style={styles.backButton}>
-            <IconArrowLeft size={24} color={themeColors.text} />
-          </TouchableOpacity>
-          <View style={styles.backButton} />
-        </View>
+        <BackTextButton label="Home" onPress={handleBack} />
         
         {/* Page Title */}
         <View style={styles.pageTitleContainer}>
@@ -147,127 +224,132 @@ export function ProfileScreen({ navigation }: ProfileScreenProps) {
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 24 }]}
+        scrollEnabled={!isRestSliderInteracting}
         showsVerticalScrollIndicator={false}
       >
-        {/* Global Settings title */}
-        <Text style={[styles.sectionTitle, { color: themeColors.textPrimary }]}>Global Settings</Text>
-
-        {/* Group 1: Quick Settings - 3 Column Layout */}
-        <View style={styles.threeColumnRow}>
-          {/* Unit Card */}
-          <TouchableOpacity 
-            style={[styles.columnCard, { backgroundColor: themeColors.canvasContainer }]}
-            onPress={handleToggleUnit}
-            activeOpacity={0.7}
-          >
-            <Text style={[styles.columnCardValue, { color: themeColors.textPrimary }]}>{unitLabel}</Text>
-            <Text style={[styles.columnCardLabel, { color: themeColors.textPrimary }]}>{t('unit')}</Text>
-          </TouchableOpacity>
-
-          {/* Language Card */}
-          <TouchableOpacity 
-            style={[styles.columnCard, { backgroundColor: themeColors.canvasContainer }]}
-            onPress={handleToggleLanguage}
-            activeOpacity={0.7}
-          >
-            <Text style={styles.columnCardEmoji}>{languageEmoji}</Text>
-            <Text style={[styles.columnCardLabel, { color: themeColors.textPrimary }]}>{t('language')}</Text>
-          </TouchableOpacity>
-
-          {/* Rest Time Card */}
-          <TouchableOpacity 
-            style={[styles.columnCard, { backgroundColor: themeColors.canvasContainer }]}
-            onPress={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              setShowRestTimePicker(true);
-            }}
-            activeOpacity={0.7}
-          >
-            <Text style={[styles.columnCardValue, { color: themeColors.textPrimary }]}>{restTimeFormatted}</Text>
-            <Text style={[styles.columnCardLabel, { color: themeColors.textPrimary }]}>{t('restTime')}</Text>
-          </TouchableOpacity>
-        </View>
-
-        <Text style={[styles.sectionTitle, { color: themeColors.textPrimary }]}>{t('colorTheme')}</Text>
-        <View style={[styles.settingCard, { backgroundColor: themeColors.canvasContainer }]}>
-          <Text style={[styles.settingDescription, styles.themeHint, { color: themeColors.textPrimary }]}>{t('colorThemeFootnote')}</Text>
-          {(
-            [
-              { id: 'v1' as const, label: t('colorThemeV1') },
-              { id: 'v2' as const, label: t('colorThemeV2') },
-            ] as const
-          ).map((opt, i) => (
-            <React.Fragment key={opt.id}>
-              {i > 0 ? <View style={[styles.themeOptionDivider, { backgroundColor: themeColors.borderDimmed }]} /> : null}
+        {/* Top section: Language/Unit, Theme, Rest Time */}
+        <View style={styles.sectionGroupTop}>
+          <View style={styles.twoColumnRow}>
+            <View style={[styles.splitModule, { borderTopColor: hexToRgba(themeColors.containerPrimary, 0.35) }]}>
+              {/* Language */}
               <TouchableOpacity
-                style={styles.settingRow}
+                style={styles.flatColumn}
+                onPress={handleToggleLanguage}
                 activeOpacity={0.7}
-                onPress={() => handleColorTheme(opt.id)}
               >
-                <View style={styles.settingInfo}>
-                  <Text style={[styles.settingLabel, { color: themeColors.textPrimary }]}>{opt.label}</Text>
-                </View>
-                {activeColorTheme === opt.id ? (
-                  <IconCheckmark size={22} color={themeColors.accentPrimary} />
-                ) : (
-                  <View style={{ width: 22 }} />
-                )}
+                <Text style={[styles.flatLabel, { color: themeColors.containerPrimary }]}>Language</Text>
+                <Text style={[styles.flatValue, { color: themeColors.textPrimary }]}>{language.toUpperCase()}</Text>
               </TouchableOpacity>
-            </React.Fragment>
-          ))}
-        </View>
-
-        {/* Progression Rules */}
-        <TouchableOpacity
-          style={[styles.settingCard, { backgroundColor: themeColors.canvasContainer }]}
-          activeOpacity={0.7}
-          onPress={() => {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-            navigation.navigate('Progression');
-          }}
-        >
-          <View style={styles.settingRow}>
-            <View style={[styles.settingInfo, { flexDirection: 'row', alignItems: 'center', gap: 12 }]}>
-              <Text style={[styles.settingLabel, { color: themeColors.textPrimary }]}>Progression rules</Text>
             </View>
-            <View style={{ transform: [{ rotate: '90deg' }] }}>
-              <IconTriangle size={12} color={themeColors.text} />
+
+            <View style={[styles.splitModule, { borderTopColor: hexToRgba(themeColors.containerPrimary, 0.35) }]}>
+              {/* Unit */}
+              <TouchableOpacity
+                style={styles.flatColumn}
+                onPress={handleToggleUnit}
+                activeOpacity={0.7}
+              >
+                <Text style={[styles.flatLabel, { color: themeColors.containerPrimary }]}>{t('unit')}</Text>
+                <Text style={[styles.flatValue, styles.unitValue, { color: themeColors.textPrimary }]}>{unitLabel}s</Text>
+              </TouchableOpacity>
             </View>
           </View>
-        </TouchableOpacity>
 
-        {/* Group 2: Toggle Settings */}
-        <View style={[styles.settingCard, { backgroundColor: themeColors.canvasContainer }]}>
-          {/* Timer Notifications */}
-          <View style={styles.settingRow}>
-            <View style={styles.settingInfo}>
-              <Text style={[styles.settingLabel, { color: themeColors.textPrimary }]}>{t('timerNotifications')}</Text>
-              <Text style={[styles.settingDescription, { color: themeColors.textPrimary }]}>
-                {notificationsSystemEnabled === false
-                  ? t('notificationSystemDisabled')
-                  : t('timerNotificationsDescription')}
-              </Text>
+          {/* Theme */}
+          <View style={[styles.sectionBlock, { borderTopColor: hexToRgba(themeColors.containerPrimary, 0.35) }]}>
+            <View style={styles.settingRow}>
+              <Text style={[styles.flatLabel, { color: themeColors.containerPrimary }]}>{t('theme')}</Text>
+              <View style={styles.themeSwatches}>
+                {themeSwatchOptions.map(opt => (
+                  <TouchableOpacity
+                    key={opt.id}
+                    style={[
+                      styles.themeSwatchButton,
+                      { borderColor: activeColorTheme === opt.id ? themeColors.containerPrimary : 'transparent' },
+                    ]}
+                    activeOpacity={0.8}
+                    onPress={() => handleColorTheme(opt.id)}
+                  >
+                    <View style={[styles.themeSwatchFill, { backgroundColor: opt.bg }]}>
+                      <View style={[styles.themeSwatchCorner, { backgroundColor: opt.corner }]} />
+                    </View>
+                  </TouchableOpacity>
+                ))}
+              </View>
             </View>
-            <Toggle
-              label=""
-              value={notificationsEnabled && notificationsSystemEnabled !== false}
-              onValueChange={handleToggleNotifications}
-              disabled={notificationsSystemEnabled === false}
-            />
+          </View>
+
+          {/* Rest time */}
+          <View style={[styles.sectionBlock, { borderTopColor: hexToRgba(themeColors.containerPrimary, 0.35) }]}>
+            <TouchableOpacity 
+              style={styles.settingRow}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+                if (!restTimeExpanded) {
+                  setRestTimeDraftSeconds(settings.restTimerDefaultSeconds);
+                }
+                setRestTimeExpanded(prev => !prev);
+              }}
+              activeOpacity={0.7}
+            >
+              <Text style={[styles.flatLabel, { color: themeColors.containerPrimary }]}>{t('restTime')}</Text>
+              <Text style={[styles.flatValue, { color: themeColors.textPrimary }]}>{restTimeFormatted}</Text>
+            </TouchableOpacity>
+            {restTimeExpanded ? (
+              <View style={styles.restSliderWrap}>
+                <RestTimeSlider
+                  value={restTimeDraftSeconds}
+                  min={REST_TIME_MIN}
+                  max={REST_TIME_MAX}
+                  step={REST_TIME_STEP}
+                  onChange={next => {
+                    setRestTimeDraftSeconds(next);
+                  }}
+                  onChangeEnd={next => updateSettings({ restTimerDefaultSeconds: next })}
+                  onInteractingChange={setIsRestSliderInteracting}
+                  backgroundColor={themeColors.containerSecondary}
+                  fillColor={themeColors.containerPrimary}
+                  thumbColor={themeColors.containerSecondary}
+                />
+              </View>
+            ) : null}
           </View>
         </View>
 
-        {/* Account & Cloud Sync Section */}
+        {/* Middle section: Auto-progression */}
+        <View style={styles.sectionGroupMiddle}>
+          <View style={[styles.sectionBlock, { borderTopColor: hexToRgba(themeColors.containerPrimary, 0.35) }]}>
+            <TouchableOpacity 
+              style={styles.settingRow}
+              activeOpacity={0.7}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                navigation.navigate('Progression');
+              }}
+            >
+              <View style={styles.settingInfo}>
+                <Text style={[styles.flatLabel, { color: themeColors.containerPrimary }]}>Auto-progression</Text>
+              </View>
+              <View style={{ transform: [{ rotate: '90deg' }] }}>
+                <IconTriangle size={12} color={themeColors.text} />
+              </View>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* Bottom section: Apple cloud */}
         {isSupabaseConfigured() && (
-          <View style={[styles.settingCard, { backgroundColor: themeColors.canvasContainer }]}>
+          <View style={[styles.sectionGroupBottom, styles.sectionBlock, { borderTopColor: hexToRgba(themeColors.containerPrimary, 0.35) }]}>
             {authUser ? (
               <>
                 {/* Signed in state */}
                 <View style={styles.settingRow}>
                   <View style={styles.settingInfo}>
-                    <Text style={[styles.settingLabel, { color: themeColors.textPrimary }]}>Signed in with Apple</Text>
+                    <Text style={[styles.flatLabel, { color: themeColors.containerPrimary }]}>Apple Account</Text>
                     <Text style={[styles.settingDescription, { color: themeColors.textPrimary }]}>
-                      {authUser.email || 'Private email relay'}
+                      Signed
+                      {authUser.email ? `\n${authUser.email}` : ''}
                       {cloudSyncInfo?.syncedAt
                         ? `\nLast sync: ${new Date(cloudSyncInfo.syncedAt).toLocaleString()}`
                         : ''}
@@ -297,7 +379,7 @@ export function ProfileScreen({ navigation }: ProfileScreenProps) {
                   activeOpacity={0.7}
                 >
                   <View style={styles.settingInfo}>
-                    <Text style={[styles.settingLabel, { color: themeColors.textPrimary }]}>
+                    <Text style={[styles.flatLabel, { color: themeColors.containerPrimary }]}>
                       {isSyncing ? '⏳ Syncing...' : '☁️ Sync Now'}
                     </Text>
                     <Text style={[styles.settingDescription, { color: themeColors.textPrimary }]}>Upload your data to the cloud</Text>
@@ -342,7 +424,7 @@ export function ProfileScreen({ navigation }: ProfileScreenProps) {
                   activeOpacity={0.7}
                 >
                   <View style={styles.settingInfo}>
-                    <Text style={[styles.settingLabel, { color: themeColors.textPrimary }]}>📥 Restore from Cloud</Text>
+                    <Text style={[styles.flatLabel, { color: themeColors.containerPrimary }]}>📥 Restore from Cloud</Text>
                     <Text style={[styles.settingDescription, { color: themeColors.textPrimary }]}>Download backup after reinstall</Text>
                   </View>
                 </TouchableOpacity>
@@ -374,7 +456,7 @@ export function ProfileScreen({ navigation }: ProfileScreenProps) {
                   activeOpacity={0.7}
                 >
                   <View style={styles.settingInfo}>
-                    <Text style={[styles.settingLabel, { color: themeColors.textPrimary }]}>Sign Out</Text>
+                    <Text style={[styles.flatLabel, { color: themeColors.containerPrimary }]}>Sign Out</Text>
                   </View>
                 </TouchableOpacity>
               </>
@@ -437,10 +519,7 @@ export function ProfileScreen({ navigation }: ProfileScreenProps) {
                   activeOpacity={0.7}
                 >
                   <View style={styles.settingInfo}>
-                    <Text style={[styles.settingLabel, { color: themeColors.textPrimary }]}> Sign in with Apple</Text>
-                    <Text style={[styles.settingDescription, { color: themeColors.textPrimary }]}>
-                      Back up your data to the cloud. Survives app deletion and device changes.
-                    </Text>
+                    <Text style={[styles.flatLabel, { color: themeColors.containerPrimary }]}>Apple Account</Text>
                   </View>
                   <IconTriangle size={16} color={themeColors.text} />
                 </TouchableOpacity>
@@ -451,19 +530,6 @@ export function ProfileScreen({ navigation }: ProfileScreenProps) {
 
       </ScrollView>
 
-      {/* Rest Time Picker */}
-      <TimerValueSheet
-        visible={showRestTimePicker}
-        onClose={() => setShowRestTimePicker(false)}
-        title={t('defaultRestTime')}
-        label={t('restTime').toUpperCase()}
-        value={settings.restTimerDefaultSeconds}
-        min={15}
-        max={300}
-        step={5}
-        onSave={handleUpdateRestTime}
-        formatValue={(val) => `${Math.floor(val / 60)}:${(val % 60).toString().padStart(2, '0')}`}
-      />
     </View>
   );
 }
@@ -475,27 +541,13 @@ const styles = StyleSheet.create({
   header: {
     paddingBottom: SPACING.md,
   },
-  topBar: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    minHeight: 48,
-    paddingHorizontal: SPACING.xxl,
-  },
-  backButton: {
-    width: 48,
-    height: 48,
-    justifyContent: 'center',
-    alignItems: 'flex-start',
-    marginLeft: -12,
-  },
   pageTitleContainer: {
     paddingHorizontal: SPACING.xxl,
-    paddingTop: SPACING.md,
+    paddingTop: 0,
     marginBottom: SPACING.xxxl + SPACING.sm,
   },
   pageTitle: {
-    ...TYPOGRAPHY.h2,
+    ...TYPOGRAPHY.displayLarge,
   },
   scrollView: {
     flex: 1,
@@ -503,43 +555,74 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingHorizontal: SPACING.xxl,
   },
+  sectionBlock: {
+    borderTopWidth: 1,
+    paddingTop: SPACING.md,
+  },
+  sectionGroupTop: {
+    gap: 32,
+  },
+  sectionGroupMiddle: {
+    marginTop: 64,
+  },
+  sectionGroupBottom: {
+    marginTop: 64,
+  },
   sectionTitle: {
     ...TYPOGRAPHY.legal,
     textTransform: 'uppercase',
     marginBottom: SPACING.sm,
   },
-  // Group 1: Three Column Layout
-  threeColumnRow: {
+  twoColumnRow: {
     flexDirection: 'row',
-    gap: SPACING.md,
-    marginBottom: SPACING.lg,
+    gap: SPACING.xxl,
   },
-  columnCard: {
+  splitModule: {
+    flexGrow: 1,
+    flexShrink: 1,
+    flexBasis: 0,
+    borderTopWidth: 1,
+    paddingTop: SPACING.md,
+  },
+  flatColumn: {
     flex: 1,
-    borderRadius: BORDER_RADIUS.md,
-    paddingVertical: SPACING.lg,
-    paddingHorizontal: SPACING.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-    minHeight: 88,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
   },
-  columnCardValue: {
-    ...TYPOGRAPHY.h2,
-    marginBottom: SPACING.xs,
+  flatValue: {
+    ...TYPOGRAPHY.h1,
+    textTransform: 'uppercase',
+    textAlign: 'right',
   },
-  columnCardEmoji: {
-    fontSize: 32,
-    marginBottom: SPACING.xs,
-  },
-  columnCardLabel: {
-    ...TYPOGRAPHY.meta,
+  unitValue: {
     textTransform: 'lowercase',
   },
-  // Shared Setting Card
-  settingCard: {
-    borderRadius: BORDER_RADIUS.md,
-    padding: SPACING.lg,
-    marginBottom: SPACING.lg,
+  flatLabel: {
+    ...TYPOGRAPHY.legal,
+    textTransform: 'uppercase',
+    paddingTop: 2,
+  },
+  themeSwatches: {
+    flexDirection: 'row',
+    gap: 12,
+    alignItems: 'center',
+  },
+  themeSwatchButton: {
+    width: 48,
+    height: 48,
+    borderWidth: 1,
+    padding: 2,
+  },
+  themeSwatchFill: {
+    flex: 1,
+  },
+  themeSwatchCorner: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    width: '55%',
+    height: '55%',
   },
   settingCardRow: {
     flexDirection: 'row',
@@ -548,9 +631,31 @@ const styles = StyleSheet.create({
   },
   settingRow: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     justifyContent: 'space-between',
-    minHeight: 56,
+  },
+  restSliderWrap: {
+    marginTop: SPACING.lg,
+  },
+  restSliderTrack: {
+    height: REST_SLIDER_HEIGHT,
+    borderRadius: REST_SLIDER_RADIUS,
+    overflow: 'hidden',
+    justifyContent: 'center',
+  },
+  restSliderFill: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    bottom: 0,
+    borderRadius: REST_SLIDER_RADIUS,
+  },
+  restSliderThumb: {
+    position: 'absolute',
+    width: REST_SLIDER_THUMB_WIDTH,
+    height: REST_SLIDER_THUMB_HEIGHT,
+    borderRadius: 2,
+    top: (REST_SLIDER_HEIGHT - REST_SLIDER_THUMB_HEIGHT) / 2,
   },
   settingDivider: {
     height: 1,

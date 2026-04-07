@@ -1038,7 +1038,7 @@ export function TodayScreen({ onDateChange, onOpenAddWorkout, onOpenBonusDrawer 
               <View style={styles.scheduleHeaderTopRow}>
                 <View style={styles.scheduleHeaderTopSpacer} />
                 <TertiaryButton
-                  label="Profile"
+                  label="Settings"
                   onPress={() => (navigation as any).navigate('Profile')}
                   style={styles.profileLinkButton}
                   textStyle={styles.profileLinkText}

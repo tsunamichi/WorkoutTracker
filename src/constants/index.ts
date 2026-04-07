@@ -250,7 +250,7 @@ export const TYPOGRAPHY = {
   h1: {
     fontSize: 32,
     lineHeight: 36,
-    fontWeight: '300' as const,
+    fontWeight: '500' as const,
   },
   h2: {
     fontSize: 24,
