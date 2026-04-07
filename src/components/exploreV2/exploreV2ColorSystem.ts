@@ -68,7 +68,7 @@ export const EXPLORE_V2_CARD_MAINS: Record<CardRole, string> = {
   /** Muted mauve / back archive layer */
   complete: '#E5E5E5',
   /** Soft lavender queue layer — matches core `containerSecondary` */
-  upNext: COLORS.containerSecondary,
+  upNext: '#B0E8E5',
   /** Primary current workspace */
   current: '#1F1F1F',
 };

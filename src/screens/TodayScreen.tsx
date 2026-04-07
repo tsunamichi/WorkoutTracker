@@ -15,11 +15,11 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { useStore } from '../store';
 import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS, CARDS } from '../constants';
-import { IconCheckmark, IconAdd, IconSettings, IconCalendar, IconPlay, IconStopwatch, IconChevronDown, IconArrowDiagonal } from '../components/icons';
-import { DiagonalLinePattern } from '../components/common/DiagonalLinePattern';
-import { ScheduleWorkoutCardStack } from '../components/schedule/ScheduleWorkoutCardStack';
+import { IconCheckmark, IconAdd, IconCalendar, IconPlay, IconStopwatch, IconArrowDiagonal } from '../components/icons';
+import { ScheduleWorkoutDeckV3, type ScheduleDeckV3Item } from '../components/schedule/ScheduleWorkoutDeckV3';
 import { CycleControlSheet } from '../components/CycleControlSheet';
 import { ShareCycleDrawer } from '../components/ShareCycleDrawer';
+import { TertiaryButton } from '../components/common/UnderlinedActionButton';
 import dayjs from 'dayjs';
 import isoWeek from 'dayjs/plugin/isoWeek';
 import { useTranslation } from '../i18n/useTranslation';
@@ -134,6 +134,23 @@ type WeekStripDay = {
   completionPercentage: number;
 };
 
+function formatDateWithOrdinal(dateStr: string): string {
+  const d = dayjs(dateStr);
+  const day = d.date();
+  const mod100 = day % 100;
+  const suffix =
+    mod100 >= 11 && mod100 <= 13
+      ? 'th'
+      : day % 10 === 1
+        ? 'st'
+        : day % 10 === 2
+          ? 'nd'
+          : day % 10 === 3
+            ? 'rd'
+            : 'th';
+  return `${d.format('MMMM')} ${day}${suffix}`;
+}
+
 /** Reserve vertical space above home indicator for pinned Extras bar */
 const EXTRAS_PIN_BAR_HEIGHT = 56;
 
@@ -179,7 +196,14 @@ export function TodayScreen({ onDateChange, onOpenAddWorkout, onOpenBonusDrawer 
 
   const today = dayjs();
   const { t } = useTranslation();
-  const { colors: themeColors } = useAppTheme();
+  const appTheme = useAppTheme();
+  const { colors: themeColors, explore: exploreTheme } = appTheme;
+  const isV2Theme = appTheme.id === 'v2';
+  const savedTimersPageBackground = isV2Theme ? themeColors.canvasLight : COLORS.canvasLight;
+  const savedTimersCardBackground = isV2Theme ? themeColors.canvasContainer : COLORS.containerTertiary;
+  const savedTimersInk = isV2Theme ? themeColors.containerPrimary : COLORS.containerPrimary;
+  const savedTimersMetaInk = isV2Theme ? themeColors.containerPrimary : COLORS.textMeta;
+  const completedCardTextColor = exploreTheme.amberBand;
 
   // One-time repair for paused cycle schedule (safe to remove after fix is applied)
   React.useEffect(() => {
@@ -197,6 +221,9 @@ export function TodayScreen({ onDateChange, onOpenAddWorkout, onOpenBonusDrawer 
   const [selectedDeckWorkout, setSelectedDeckWorkout] = useState<ScheduledWorkout | undefined>(undefined);
   const timerModeProgress = useSharedValue(0);
   const timerHeaderProgress = useSharedValue(0);
+  const scheduleChromeExitProgress = useSharedValue(0);
+  const launchToExecutionLockRef = useRef(false);
+  const launchToExecutionTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // TEMP: Seed dev data on mount (remove after use)
   const [seeded, setSeeded] = useState(false);
@@ -477,23 +504,32 @@ export function TodayScreen({ onDateChange, onOpenAddWorkout, onOpenBonusDrawer 
   
   // Get selected day's workout (weekDays always covers the selected date's week)
   const selectedDay = weekDays.find(d => d.date === selectedDate);
+  const hasWorkoutLogs = useCallback((sw: ScheduledWorkout) => {
+    const main = sw.mainCompletion?.completedItems?.length ?? 0;
+    const warmup = sw.warmupCompletion?.completedItems?.length ?? 0;
+    const accessory = sw.accessoryCompletion?.completedItems?.length ?? 0;
+    return main > 0 || warmup > 0 || accessory > 0;
+  }, []);
+  const isWorkoutActuallyInProgress = useCallback(
+    (sw: ScheduledWorkout) => sw.status === 'in_progress' && hasWorkoutLogs(sw),
+    [hasWorkoutLogs],
+  );
+  const workoutDisplayDate = useCallback((sw: ScheduledWorkout) => {
+    if (sw.status === 'completed' && sw.completedAt) {
+      return dayjs(sw.completedAt).format('YYYY-MM-DD');
+    }
+    if (isWorkoutActuallyInProgress(sw) && sw.startedAt) {
+      return dayjs(sw.startedAt).format('YYYY-MM-DD');
+    }
+    return sw.date;
+  }, [isWorkoutActuallyInProgress]);
 
   /**
    * Swipe deck for the selected date:
-   * - If this calendar day has an in-progress workout (`sw.date === selectedDate`), the deck is **only**
-   *   that workout (so returning from execution still shows it; store may pull `date` to today on first set).
-   * - Otherwise: planned, not-finished workouts from this day forward (remaining queue for other days).
+   * - Build a finite sequence from selected day forward so the stack reflects "workouts left".
+   * - If selected day has an in-progress workout, keep it first but still include upcoming planned items.
    */
   const remainingWorkoutsQueue = React.useMemo(() => {
-    const workoutDisplayDate = (sw: ScheduledWorkout) => {
-      if (sw.status === 'completed' && sw.completedAt) {
-        return dayjs(sw.completedAt).format('YYYY-MM-DD');
-      }
-      if (sw.status === 'in_progress' && sw.startedAt) {
-        return dayjs(sw.startedAt).format('YYYY-MM-DD');
-      }
-      return sw.date;
-    };
     const isNotFinished = (sw: ScheduledWorkout) => {
       const mc = getMainCompletion(sw.id);
       return !(
@@ -503,26 +539,81 @@ export function TodayScreen({ onDateChange, onOpenAddWorkout, onOpenBonusDrawer 
       );
     };
 
+    const cyclePlanForDeck = selectedDateCyclePlan ?? activeCyclePlan;
+    if (cyclePlanForDeck) {
+      const allOpenInPlan = scheduledWorkouts
+        .filter(
+          sw =>
+            sw.source === 'cycle' &&
+            (sw.programId === cyclePlanForDeck.id || sw.cyclePlanId === cyclePlanForDeck.id),
+        )
+        .filter(isNotFinished)
+        .sort((a, b) => a.date.localeCompare(b.date) || a.id.localeCompare(b.id));
+
+      const selectedDayPriority = allOpenInPlan.filter(sw => workoutDisplayDate(sw) === selectedDate);
+      const selectedIds = new Set(selectedDayPriority.map(sw => sw.id));
+      const remaining = allOpenInPlan.filter(sw => !selectedIds.has(sw.id));
+      const queue = [...selectedDayPriority, ...remaining];
+      if (__DEV__) {
+        console.log('[ScheduleDeck] cycle-backed queue', {
+          planId: cyclePlanForDeck.id,
+          selectedDate,
+          size: queue.length,
+          ids: queue.map(sw => sw.id),
+        });
+      }
+      return queue;
+    }
+
     const onSelectedDate = scheduledWorkouts.filter(sw => workoutDisplayDate(sw) === selectedDate);
-    const finishedOnSelectedDay = onSelectedDate.filter(sw => !isNotFinished(sw));
-    if (finishedOnSelectedDay.length > 0) {
-      return [...finishedOnSelectedDay].sort((a, b) => a.id.localeCompare(b.id));
-    }
     const inProgressOnSelectedDay = onSelectedDate.filter(
-      sw => sw.status === 'in_progress' && isNotFinished(sw),
+      sw => isWorkoutActuallyInProgress(sw) && isNotFinished(sw),
     );
+
+    const upcomingPlanned = scheduledWorkouts
+      .filter(sw => !dayjs(sw.date).isBefore(selectedDate, 'day'))
+      .filter(sw => sw.status === 'planned' && isNotFinished(sw))
+      .sort((a, b) => a.date.localeCompare(b.date) || a.id.localeCompare(b.id));
+
     if (inProgressOnSelectedDay.length > 0) {
-      return [...inProgressOnSelectedDay].sort((a, b) => a.id.localeCompare(b.id));
+      const inProgressSorted = [...inProgressOnSelectedDay].sort((a, b) => a.id.localeCompare(b.id));
+      const inProgressIds = new Set(inProgressSorted.map(sw => sw.id));
+      return [...inProgressSorted, ...upcomingPlanned.filter(sw => !inProgressIds.has(sw.id))];
     }
 
-    const isPlannedDeckTile = (sw: ScheduledWorkout) =>
-      sw.status === 'planned' && isNotFinished(sw);
-
+    if (__DEV__) {
+      console.log('[ScheduleDeck] fallback queue', {
+        selectedDate,
+        size: upcomingPlanned.length,
+        ids: upcomingPlanned.map(sw => sw.id),
+      });
+    }
+    return upcomingPlanned;
+  }, [
+    scheduledWorkouts,
+    selectedDate,
+    getMainCompletion,
+    refreshTrigger,
+    selectedDateCyclePlan,
+    activeCyclePlan,
+    workoutDisplayDate,
+  ]);
+  const completedWorkoutsForSelectedDay = useMemo(() => {
+    const selectedIsToday = selectedDate === today.format('YYYY-MM-DD');
+    if (!selectedIsToday) return [] as ScheduledWorkout[];
+    const isFinished = (sw: ScheduledWorkout) => {
+      const mc = getMainCompletion(sw.id);
+      return sw.isLocked || sw.status === 'completed' || mc.percentage === 100;
+    };
     return scheduledWorkouts
-      .filter(sw => !dayjs(sw.date).isBefore(selectedDate, 'day'))
-      .filter(isPlannedDeckTile)
-      .sort((a, b) => a.date.localeCompare(b.date) || a.id.localeCompare(b.id));
-  }, [scheduledWorkouts, selectedDate, getMainCompletion, refreshTrigger]);
+      .filter(sw => workoutDisplayDate(sw) === selectedDate)
+      .filter(isFinished)
+      .sort((a, b) => {
+        const aTs = dayjs(a.completedAt ?? a.startedAt ?? `${a.date}T00:00:00.000Z`).valueOf();
+        const bTs = dayjs(b.completedAt ?? b.startedAt ?? `${b.date}T00:00:00.000Z`).valueOf();
+        return bTs - aTs;
+      });
+  }, [selectedDate, today, scheduledWorkouts, getMainCompletion, workoutDisplayDate]);
   
   const handleAddOrCreateWorkout = (currentDate: string) => {
     onOpenAddWorkout?.(currentDate);
@@ -626,6 +717,14 @@ export function TodayScreen({ onDateChange, onOpenAddWorkout, onOpenBonusDrawer 
   const schedulePaneAnimatedStyle = useAnimatedStyle(() => ({
     transform: [{ translateY: -screenHeight * timerModeProgress.value }],
   }), [screenHeight]);
+  const scheduleHeaderExitAnimatedStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: -48 * scheduleChromeExitProgress.value }],
+    opacity: 1 - scheduleChromeExitProgress.value,
+  }));
+  const scheduleFooterExitAnimatedStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: 64 * scheduleChromeExitProgress.value }],
+    opacity: 1 - scheduleChromeExitProgress.value,
+  }));
   const timerPaneAnimatedStyle = useAnimatedStyle(() => ({
     transform: [{ translateY: screenHeight * (1 - timerModeProgress.value) }],
   }), [screenHeight]);
@@ -654,7 +753,27 @@ export function TodayScreen({ onDateChange, onOpenAddWorkout, onOpenBonusDrawer 
   
   const isInPastCycle = selectedDateCyclePlan ? !selectedDateCyclePlan.active : false;
   const timerTemplates = useMemo(() => hiitTimers.filter(timer => timer.isTemplate), [hiitTimers]);
-
+  const headerDateLabel = formatDateWithOrdinal(selectedDate);
+  /** Cycle row is now the lightweight entry point into full cycle/calendar management context. */
+  const cyclePlanForHeader = selectedDateCyclePlan ?? activeCyclePlan;
+  const cycleCompletionForHeader = useMemo(() => {
+    if (!cyclePlanForHeader) {
+      return { completed: 0, total: 0 };
+    }
+    const cycleWorkouts = scheduledWorkouts.filter(
+      sw =>
+        sw.source === 'cycle' &&
+        (sw.programId === cyclePlanForHeader.id || sw.cyclePlanId === cyclePlanForHeader.id),
+    );
+    const completed = cycleWorkouts.filter(sw => {
+      const mainCompletion = getMainCompletion(sw.id);
+      return sw.isLocked || sw.status === 'completed' || mainCompletion.percentage === 100;
+    }).length;
+    return { completed, total: cycleWorkouts.length };
+  }, [cyclePlanForHeader, scheduledWorkouts, getMainCompletion]);
+  const cycleCompletionLabel = useMemo(() => {
+    return `${cycleCompletionForHeader.completed} of ${cycleCompletionForHeader.total} completed`;
+  }, [cycleCompletionForHeader.completed, cycleCompletionForHeader.total]);
   const calculateTimerTotalTime = useCallback((timer: { work: number; workRest: number; sets: number; rounds: number; roundRest: number }) => {
     const totalWorkTime = timer.work * timer.sets * timer.rounds;
     const totalWorkRestTime = timer.workRest * Math.max(0, timer.sets - 1) * timer.rounds;
@@ -680,22 +799,58 @@ export function TodayScreen({ onDateChange, onOpenAddWorkout, onOpenBonusDrawer 
     timerHeaderProgress.value = withTiming(0, { duration: 420, easing: Easing.out(Easing.cubic) });
   }, [isTimerMode, timerHeaderProgress]);
 
+  useEffect(() => {
+    return () => {
+      if (launchToExecutionTimeoutRef.current) clearTimeout(launchToExecutionTimeoutRef.current);
+    };
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (launchToExecutionTimeoutRef.current) {
+        clearTimeout(launchToExecutionTimeoutRef.current);
+        launchToExecutionTimeoutRef.current = null;
+      }
+      launchToExecutionLockRef.current = false;
+      scheduleChromeExitProgress.value = 0;
+      return undefined;
+    }, [scheduleChromeExitProgress]),
+  );
+
   const navigateToWorkoutExecution = useCallback(
-    (sw: ScheduledWorkout) => {
+    (
+      sw: ScheduledWorkout,
+      origin?: { x: number; y: number; width: number; height: number; borderRadius: number },
+    ) => {
       const mainCompletion = getMainCompletion(sw.id);
       const isCompleted = sw.isLocked || mainCompletion.percentage === 100;
       if (isInPastCycle && !isCompleted) return;
-      (navigation as any).navigate('ExerciseExecution', {
-        workoutKey: sw.id,
-        workoutTemplateId: sw.templateId,
-        type: 'main',
+      if (launchToExecutionLockRef.current) return;
+      launchToExecutionLockRef.current = true;
+      scheduleChromeExitProgress.value = withTiming(1, {
+        duration: 180,
+        easing: Easing.out(Easing.cubic),
       });
+      if (launchToExecutionTimeoutRef.current) clearTimeout(launchToExecutionTimeoutRef.current);
+      launchToExecutionTimeoutRef.current = setTimeout(() => {
+        (navigation as any).navigate('ExerciseExecution', {
+          workoutKey: sw.id,
+          workoutTemplateId: sw.templateId,
+          type: 'main',
+          ...(origin
+            ? {
+                transitionSource: 'scheduleDeck',
+                transitionOrigin: origin,
+              }
+            : {}),
+        });
+      }, 110);
     },
-    [getMainCompletion, isInPastCycle, navigation],
+    [getMainCompletion, isInPastCycle, navigation, scheduleChromeExitProgress],
   );
 
   useEffect(() => {
-    setSelectedDeckWorkout(undefined);
+    setSelectedDeckWorkout(remainingWorkoutsQueue[0]);
   }, [selectedDate, remainingWorkoutsQueue]);
 
   const warmupTargetWorkout = selectedDeckWorkout ?? remainingWorkoutsQueue[0] ?? selectedDay?.scheduledWorkout;
@@ -739,6 +894,90 @@ export function TodayScreen({ onDateChange, onOpenAddWorkout, onOpenBonusDrawer 
   }, [selectedDeckWorkout, remainingWorkoutsQueue, selectedDay?.scheduledWorkout, ensureScheduledWorkoutCore, navigation]);
   
   const isScheduleFutureDay = dayjs(selectedDate).isAfter(today, 'day');
+  const handleOpenCycleCalendar = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    if (cyclePlanForHeader) {
+      (navigation as any).navigate('CycleProgress', {
+        planId: cyclePlanForHeader.id,
+        asOfDate: selectedDate,
+      });
+      return;
+    }
+    onOpenAddWorkout?.(selectedDate);
+  }, [cyclePlanForHeader, navigation, onOpenAddWorkout, selectedDate]);
+
+  const deckItems: ScheduleDeckV3Item[] = useMemo(
+    () =>
+      remainingWorkoutsQueue.map(sw => {
+        const ordered = [...(sw.exercisesSnapshot ?? [])].sort((a, b) => a.order - b.order);
+        const exerciseCount = ordered.length;
+        const categories = ordered
+          .map(snap => exercises.find(e => e.id === snap.exerciseId)?.category?.trim())
+          .filter((v): v is string => !!v);
+        const uniqueCategories = [...new Set(categories)];
+        const subtitle =
+          uniqueCategories.length === 0
+            ? undefined
+            : uniqueCategories.length === 1
+              ? uniqueCategories[0]
+              : `${uniqueCategories[0]} & ${uniqueCategories[1]}`;
+        return {
+          id: sw.id,
+          title: sw.titleSnapshot,
+          subtitle,
+          exerciseCount,
+          onPress: origin => navigateToWorkoutExecution(sw, origin),
+        };
+      }),
+    [remainingWorkoutsQueue, exercises, navigateToWorkoutExecution],
+  );
+  const completedTodayDeckItem: ScheduleDeckV3Item | undefined = useMemo(() => {
+    const sw = completedWorkoutsForSelectedDay[0];
+    if (!sw) return undefined;
+    const ordered = [...(sw.exercisesSnapshot ?? [])].sort((a, b) => a.order - b.order);
+    const exerciseCount = ordered.length;
+    const categories = ordered
+      .map(snap => exercises.find(e => e.id === snap.exerciseId)?.category?.trim())
+      .filter((v): v is string => !!v);
+    const uniqueCategories = [...new Set(categories)];
+    const subtitle =
+      uniqueCategories.length === 0
+        ? undefined
+        : uniqueCategories.length === 1
+          ? uniqueCategories[0]
+          : `${uniqueCategories[0]} & ${uniqueCategories[1]}`;
+    return {
+      id: `completed-${sw.id}`,
+      title: sw.titleSnapshot,
+      subtitle,
+      exerciseCount,
+      variant: 'completed',
+      cardBackgroundColor: COLORS.accentPrimaryBackground,
+      cardTextColor: completedCardTextColor,
+      footerLabel: 'Completed',
+      onPress: origin => navigateToWorkoutExecution(sw, origin),
+    };
+  }, [completedWorkoutsForSelectedDay, completedCardTextColor, exercises, navigateToWorkoutExecution]);
+  const carouselDeckItems: ScheduleDeckV3Item[] = useMemo(() => {
+    if (!completedTodayDeckItem) return deckItems;
+    return [completedTodayDeckItem, ...deckItems];
+  }, [completedTodayDeckItem, deckItems]);
+  const carouselInitialIndex = useMemo(() => {
+    if (!completedTodayDeckItem) return 0;
+    return carouselDeckItems.length > 1 ? 1 : 0;
+  }, [completedTodayDeckItem, carouselDeckItems.length]);
+  const inProgressDeckItem = useMemo(() => {
+    const sw = remainingWorkoutsQueue.find(isWorkoutActuallyInProgress);
+    if (!sw) return undefined;
+    const ordered = [...(sw.exercisesSnapshot ?? [])].sort((a, b) => a.order - b.order);
+    return {
+      id: sw.id,
+      title: sw.titleSnapshot,
+      exerciseCount: ordered.length,
+      onPress: origin => navigateToWorkoutExecution(sw, origin),
+    } as ScheduleDeckV3Item;
+  }, [remainingWorkoutsQueue, navigateToWorkoutExecution, isWorkoutActuallyInProgress]);
+  const deckMode: 'queue' | 'inProgress' = inProgressDeckItem ? 'inProgress' : 'queue';
 
   const renderWeekStripCells = (days: WeekStripDay[], keyPrefix: string) =>
     days.map(d => (
@@ -794,91 +1033,21 @@ export function TodayScreen({ onDateChange, onOpenAddWorkout, onOpenBonusDrawer 
       <View style={[styles.gradient, { backgroundColor: themeColors.canvasLight }]}>
         <SafeAreaView style={styles.scheduleScreenRoot} edges={[]}>
           <Animated.View style={[styles.schedulePane, schedulePaneAnimatedStyle]}>
-          <View style={[styles.scheduleHeaderStack, { paddingTop: insets.top }]}>
-            <View style={styles.topBar}>
-              <TouchableOpacity
-                style={styles.scheduleHeaderLeft}
-                activeOpacity={0.7}
-                accessibilityRole="button"
-                accessibilityLabel={
-                  cycleChipState === 'none'
-                    ? `${scheduleLabel}, ${t('startACycle')}`
-                    : `${scheduleLabel}, ${cycleChipName}, ${cycleChipStatus}`
-                }
-                onPress={() => {
-                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                  if (cycleChipState === 'none') {
-                    onOpenAddWorkout?.(selectedDate);
-                  } else {
-                    setShowCycleSheet(true);
-                  }
-                }}
-              >
-                <Text style={styles.headerTitle}>{scheduleLabel}</Text>
-                <Text style={styles.scheduleCycleMetaLine} numberOfLines={1}>
-                  {cycleChipState === 'none'
-                    ? t('startACycle')
-                    : `${cycleChipName} · ${cycleChipStatus}`}
-                </Text>
-              </TouchableOpacity>
-              <View style={styles.headerRight}>
-                {selectedDate !== today.format('YYYY-MM-DD') && (
-                  <TouchableOpacity
-                    style={styles.settingsButton}
-                    onPress={goToTodayStrip}
-                    activeOpacity={1}
-                  >
-                    <IconCalendar size={24} color={COLORS.inkCharcoal} />
-                  </TouchableOpacity>
-                )}
-                <TouchableOpacity
-                  style={styles.settingsButton}
+          <Animated.View style={scheduleHeaderExitAnimatedStyle}>
+            <View style={[styles.scheduleHeaderStack, { paddingTop: insets.top + 24 }]}>
+              <View style={styles.scheduleHeaderTopRow}>
+                <View style={styles.scheduleHeaderTopSpacer} />
+                <TertiaryButton
+                  label="Profile"
                   onPress={() => (navigation as any).navigate('Profile')}
-                  activeOpacity={1}
-                >
-                  <IconSettings size={24} color={COLORS.inkCharcoal} />
-                </TouchableOpacity>
+                  style={styles.profileLinkButton}
+                  textStyle={styles.profileLinkText}
+                />
               </View>
+              <Text style={styles.scheduleHeaderTitle}>Workout of the day</Text>
+              <Text style={styles.scheduleHeaderDateLabel}>{headerDateLabel}</Text>
             </View>
-
-            <View style={styles.weekStripRow}>
-              <GestureDetector gesture={weekPanGesture}>
-                <View
-                  style={styles.weekStripClip}
-                  onLayout={e => {
-                    const w = e.nativeEvent.layout.width;
-                    if (w > 0) setStripViewportWidth(w);
-                  }}
-                >
-                  {stripViewportWidth > 0 ? (
-                    <Animated.View
-                      style={[
-                        styles.weekStripSlideRowInner,
-                        { width: stripViewportWidth * 3 },
-                        weekStripTrackAnimatedStyle,
-                      ]}
-                    >
-                      <View style={[styles.weekStripPanel, { width: stripViewportWidth }]}>
-                        {renderWeekStripCells(prevWeekStripDays, 'p')}
-                      </View>
-                      <View style={[styles.weekStripPanel, { width: stripViewportWidth }]}>
-                        {renderWeekStripCells(currWeekStripDays, 'c')}
-                      </View>
-                      <View style={[styles.weekStripPanel, { width: stripViewportWidth }]}>
-                        {renderWeekStripCells(nextWeekStripDays, 'n')}
-                      </View>
-                    </Animated.View>
-                  ) : (
-                    <View style={styles.weekStripSlideRowInner}>
-                      <View style={[styles.weekStripPanel, { flex: 1 }]}>
-                        {renderWeekStripCells(currWeekStripDays, 'c')}
-                      </View>
-                    </View>
-                  )}
-                </View>
-              </GestureDetector>
-            </View>
-          </View>
+          </Animated.View>
 
               <ScrollView
                 style={styles.contentScroll}
@@ -932,23 +1101,25 @@ export function TodayScreen({ onDateChange, onOpenAddWorkout, onOpenBonusDrawer 
                   </TouchableOpacity>
                 </View>
               ) : remainingWorkoutsQueue.length > 0 ? (
-                <ScheduleWorkoutCardStack
-                  queue={remainingWorkoutsQueue}
-                  exercises={exercises}
-                  getMainCompletion={getMainCompletion}
-                  isInPastCycle={isInPastCycle}
-                  onOpenWorkout={navigateToWorkoutExecution}
-                  onActiveWorkoutChange={setSelectedDeckWorkout}
-                />
+                <View style={styles.deckFullBleedWrap}>
+                  <ScheduleWorkoutDeckV3
+                    items={carouselDeckItems}
+                    mode={deckMode}
+                    inProgressItem={inProgressDeckItem}
+                    initialIndex={carouselInitialIndex}
+                    chromeExitProgress={scheduleChromeExitProgress}
+                  />
+                </View>
               ) : selectedDay?.scheduledWorkout ? (
-                <ScheduleWorkoutCardStack
-                  queue={[selectedDay.scheduledWorkout]}
-                  exercises={exercises}
-                  getMainCompletion={getMainCompletion}
-                  isInPastCycle={isInPastCycle}
-                  onOpenWorkout={navigateToWorkoutExecution}
-                  onActiveWorkoutChange={setSelectedDeckWorkout}
-                />
+                <View style={styles.deckFullBleedWrap}>
+                  <ScheduleWorkoutDeckV3
+                    items={carouselDeckItems}
+                    mode={deckMode}
+                    inProgressItem={inProgressDeckItem}
+                    initialIndex={carouselInitialIndex}
+                    chromeExitProgress={scheduleChromeExitProgress}
+                  />
+                </View>
               ) : (
                 /* Per Product Spec: Empty Day State */
                 <View style={styles.restDayContainer}>
@@ -983,6 +1154,25 @@ export function TodayScreen({ onDateChange, onOpenAddWorkout, onOpenBonusDrawer 
               )}
 
               <View style={styles.cardActionsContainer}>
+                {cyclePlanForHeader ? (
+                  <>
+                    <TertiaryButton
+                      label={cycleCompletionLabel}
+                      onPress={handleOpenCycleCalendar}
+                      style={styles.cycleProgressAction}
+                      textStyle={styles.profileLinkText}
+                    />
+                    <TertiaryButton
+                      label="Personal progress"
+                      onPress={() => {
+                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                        (navigation as any).navigate('Progress');
+                      }}
+                      style={styles.progressAction}
+                      textStyle={styles.profileLinkText}
+                    />
+                  </>
+                ) : null}
                 {!isPausedDay &&
                 !selectedDay?.scheduledWorkout &&
                 !dayjs(selectedDate).isBefore(today, 'day') &&
@@ -1001,66 +1191,57 @@ export function TodayScreen({ onDateChange, onOpenAddWorkout, onOpenBonusDrawer 
               </View>
               </View>
               </ScrollView>
-          <View
-            pointerEvents={isTimerMode ? 'none' : 'auto'}
-            style={[styles.footerActionsWrap, { paddingBottom: insets.bottom }]}
-          >
-            <View style={styles.footerEntryRow}>
-              <TouchableOpacity style={styles.footerEntryCard} activeOpacity={0.85} onPress={() => void handleWarmupPress()}>
-                <View style={styles.footerEntryTopRow}>
-                  <Text style={styles.footerEntryMeta}>{warmupProfile === 'legs' ? 'Lower Body' : 'Upper Body'}</Text>
-                  <View style={styles.footerEntryChevron}>
-                    <IconArrowDiagonal size={8} color={COLORS.textMeta} />
-                  </View>
-                </View>
-                <Text style={styles.footerEntryTitle}>Warm up</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.footerEntryCard} activeOpacity={0.85} onPress={() => void handleCorePress()}>
-                <View style={styles.footerEntryTopRow}>
-                  <Text style={styles.footerEntryMeta}>Balance</Text>
-                  <View style={styles.footerEntryChevron}>
-                    <IconArrowDiagonal size={8} color={COLORS.textMeta} />
-                  </View>
-                </View>
-                <Text style={styles.footerEntryTitle}>Core</Text>
-              </TouchableOpacity>
-            </View>
-            <TouchableOpacity
-              style={styles.timerSwitchButton}
-              activeOpacity={0.85}
-              onPress={() => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                setIsTimerMode(true);
-              }}
+          <Animated.View style={scheduleFooterExitAnimatedStyle} pointerEvents={isTimerMode ? 'none' : 'auto'}>
+            <View
+              pointerEvents={isTimerMode ? 'none' : 'auto'}
+              style={[styles.footerActionsWrap, { paddingBottom: insets.bottom }]}
             >
-              <View style={{ transform: [{ rotate: '180deg' }] }}>
-                <IconChevronDown size={20} color={COLORS.inkCharcoal} />
+              <View style={styles.footerEntrySection}>
+                <Text style={styles.footerSectionTitle}>Extras</Text>
+                <View style={styles.footerEntryLinksRow}>
+                  <TouchableOpacity style={styles.footerEntryLinkButton} activeOpacity={0.85} onPress={() => void handleWarmupPress()}>
+                    <Text style={styles.footerEntryLinkText}>Warm up</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.footerEntryLinkButton} activeOpacity={0.85} onPress={() => void handleCorePress()}>
+                    <Text style={styles.footerEntryLinkText}>Core</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.footerEntryLinkButton} activeOpacity={0.85} onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    setIsTimerMode(true);
+                  }}>
+                    <Text style={styles.footerEntryLinkText}>Timer</Text>
+                  </TouchableOpacity>
+                </View>
               </View>
-              <Text style={styles.timerSwitchText}>Timer</Text>
-            </TouchableOpacity>
-          </View>
+            </View>
+          </Animated.View>
           </Animated.View>
 
-          <Animated.View pointerEvents={isTimerMode ? 'auto' : 'none'} style={[styles.timerModePane, timerPaneAnimatedStyle]}>
+          <Animated.View
+            pointerEvents={isTimerMode ? 'auto' : 'none'}
+            style={[styles.timerModePane, { backgroundColor: savedTimersPageBackground }, timerPaneAnimatedStyle]}
+          >
             <Animated.View style={[styles.timerModeHeader, { paddingTop: insets.top + 8 }, timerHeaderAnimatedStyle]}>
-              <TouchableOpacity
-                style={styles.timerSwitchButton}
-                activeOpacity={0.85}
-                onPress={() => {
+              <View style={styles.timerSwitchButton}>
+                <TertiaryButton label="Schedule" onPress={() => {
                   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                   setIsTimerMode(false);
-                }}
-              >
-                <Text style={styles.timerSwitchText}>Schedule</Text>
-                <IconChevronDown size={20} color={COLORS.inkCharcoal} />
-              </TouchableOpacity>
+                }} />
+              </View>
             </Animated.View>
             <ScrollView
               style={styles.timerModeScroll}
               contentContainerStyle={[styles.timerModeScrollContent, { paddingBottom: insets.bottom + 24 }]}
               showsVerticalScrollIndicator={false}
             >
-              <Text style={styles.timerModeTitle}>{t('savedTimers')}</Text>
+              <Text style={[styles.timerModeTitle, { color: savedTimersInk }]}>{t('savedTimers')}</Text>
+              <TouchableOpacity
+                style={styles.addTimerInlineAction}
+                onPress={() => (navigation as any).navigate('HIITTimerForm', { mode: 'create' })}
+                activeOpacity={0.75}
+              >
+                <Text style={[styles.addTimerCardText, { color: savedTimersInk }]}>+ create timer</Text>
+              </TouchableOpacity>
               <View style={styles.timerGrid}>
                 {timerTemplates.map(timer => (
                   <TouchableOpacity
@@ -1070,24 +1251,18 @@ export function TodayScreen({ onDateChange, onOpenAddWorkout, onOpenBonusDrawer 
                     onLongPress={() => (navigation as any).navigate('HIITTimerForm', { mode: 'edit', timerId: timer.id })}
                     activeOpacity={0.85}
                   >
-                    <View style={CARDS.cardDeepDimmed.outer}>
-                      <View style={[CARDS.cardDeepDimmed.inner, styles.timerGridCardInner]}>
-                        <Text style={styles.timerGridName} numberOfLines={2}>{timer.name}</Text>
-                        <Text style={styles.timerGridMeta}>{calculateTimerTotalTime(timer)}</Text>
+                    <View style={[styles.footerEntryCard, styles.timerGridCardShell, { backgroundColor: savedTimersCardBackground }]}>
+                      <View style={styles.footerEntryTopRow}>
+                        <Text style={[styles.footerEntryMeta, { color: savedTimersMetaInk }]}>{calculateTimerTotalTime(timer)}</Text>
+                        <View style={styles.footerEntryChevron}>
+                          <IconArrowDiagonal size={8} color={savedTimersMetaInk} />
+                        </View>
                       </View>
+                      <Text style={[styles.footerEntryTitle, { color: savedTimersInk }]} numberOfLines={2}>{timer.name}</Text>
                     </View>
                   </TouchableOpacity>
                 ))}
               </View>
-              <TouchableOpacity
-                style={styles.addTimerCardButton}
-                onPress={() => (navigation as any).navigate('HIITTimerForm', { mode: 'create' })}
-                activeOpacity={0.75}
-              >
-                <DiagonalLinePattern width="100%" height={56} borderRadius={16} />
-                <IconAdd size={24} color={COLORS.inkCharcoal} />
-                <Text style={styles.addTimerCardText}>Add timer</Text>
-              </TouchableOpacity>
             </ScrollView>
           </Animated.View>
 
@@ -1196,6 +1371,9 @@ const styles = StyleSheet.create({
     width: '100%',
     minHeight: 328,
   },
+  deckFullBleedWrap: {
+    marginHorizontal: -SPACING.xxl,
+  },
   absoluteCard: {
     position: 'absolute',
     width: '100%',
@@ -1245,7 +1423,46 @@ const styles = StyleSheet.create({
   
   scheduleHeaderStack: {
     backgroundColor: 'transparent',
-    paddingBottom: SPACING.sm,
+    paddingHorizontal: SPACING.xxl,
+    paddingBottom: SPACING.lg,
+  },
+  scheduleHeaderTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: SPACING.md,
+  },
+  scheduleHeaderTopSpacer: {
+    width: 56,
+  },
+  profileLinkButton: {
+    alignSelf: 'flex-end',
+  },
+  profileLinkText: {
+    ...TYPOGRAPHY.meta,
+    color: COLORS.inkCharcoal,
+  },
+  scheduleHeaderTitle: {
+    ...TYPOGRAPHY.displayLarge,
+    color: COLORS.textPrimary,
+  },
+  scheduleHeaderDateLabel: {
+    ...TYPOGRAPHY.displayLarge,
+    color: COLORS.textMeta,
+  },
+  scheduleHeaderCycleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+  },
+  scheduleHeaderCycleLabel: {
+    ...TYPOGRAPHY.body,
+    color: COLORS.textMeta,
+  },
+  scheduleHeaderCycleChevron: {
+    ...TYPOGRAPHY.body,
+    color: COLORS.textMeta,
+    marginLeft: 6,
   },
   weekStripRow: {
     paddingHorizontal: SPACING.md,
@@ -1381,6 +1598,9 @@ const styles = StyleSheet.create({
     height: 40,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  headerTextAction: {
+    alignSelf: 'center',
   },
 
   /** Title + cycle line; tap opens cycle control (or start cycle when none). */
@@ -1676,12 +1896,44 @@ const styles = StyleSheet.create({
   
   cardActionsContainer: {
     alignItems: 'center',
-    marginTop: SPACING.lg,
+    marginTop: 0,
+  },
+  cycleProgressAction: {
+    alignSelf: 'flex-start',
+    marginTop: 24,
+    marginBottom: 0,
+  },
+  progressAction: {
+    alignSelf: 'flex-start',
+    marginTop: 12,
+    marginBottom: SPACING.lg,
   },
   footerActionsWrap: {
     paddingHorizontal: SPACING.xxl,
     paddingTop: SPACING.md,
-    backgroundColor: COLORS.canvasLight,
+    backgroundColor: 'transparent',
+  },
+  footerEntrySection: {
+    width: '100%',
+  },
+  footerSectionTitle: {
+    ...TYPOGRAPHY.meta,
+    color: COLORS.textMeta,
+  },
+  footerEntryLinksRow: {
+    marginTop: 4,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  footerEntryLinkButton: {
+    paddingVertical: 4,
+    alignSelf: 'flex-start',
+  },
+  footerEntryLinkText: {
+    ...TYPOGRAPHY.h1,
+    color: COLORS.textMeta,
+    fontWeight: '500',
   },
   footerEntryRow: {
     flexDirection: 'row',
@@ -1726,12 +1978,6 @@ const styles = StyleSheet.create({
     paddingVertical: SPACING.sm,
     gap: 2,
   },
-  timerSwitchText: {
-    ...TYPOGRAPHY.meta,
-    fontWeight: '400',
-    color: COLORS.inkCharcoal,
-    textDecorationLine: 'underline',
-  },
   timerModePane: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: COLORS.canvasLight,
@@ -1760,18 +2006,16 @@ const styles = StyleSheet.create({
   timerGridCard: {
     width: '48%',
   },
-  timerGridCardInner: {
-    paddingVertical: SPACING.lg,
-    paddingHorizontal: SPACING.md,
+  timerGridCardShell: {
+    minHeight: 112,
   },
-  timerGridName: {
-    ...TYPOGRAPHY.bodyBold,
-    color: COLORS.text,
+  addTimerInlineAction: {
+    paddingVertical: 8,
+    marginBottom: SPACING.md,
   },
-  timerGridMeta: {
-    ...TYPOGRAPHY.meta,
-    color: COLORS.textMeta,
-    marginTop: 4,
+  addTimerCardText: {
+    ...TYPOGRAPHY.h1,
+    color: COLORS.containerPrimary,
   },
   
   // Intervals / Bonus Section

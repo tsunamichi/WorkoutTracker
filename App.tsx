@@ -1,12 +1,20 @@
 import React, { useEffect, useState } from 'react';
 import { StatusBar } from 'expo-status-bar';
-import { ActivityIndicator, View, StyleSheet, Text, TouchableOpacity } from 'react-native';
+import { ActivityIndicator, View, StyleSheet, Text, TextInput, TouchableOpacity } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { RootNavigator } from './src/navigation/RootNavigator';
 import { useStore } from './src/store';
 import { COLORS } from './src/constants';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+
+// Keep typography deterministic across devices by disabling OS-level font scaling app-wide.
+Text.defaultProps = Text.defaultProps || {};
+Text.defaultProps.allowFontScaling = false;
+Text.defaultProps.maxFontSizeMultiplier = 1;
+TextInput.defaultProps = TextInput.defaultProps || {};
+TextInput.defaultProps.allowFontScaling = false;
+TextInput.defaultProps.maxFontSizeMultiplier = 1;
 
 class RootErrorBoundary extends React.Component<
   { onFatal: (error: Error) => void; children: React.ReactNode },

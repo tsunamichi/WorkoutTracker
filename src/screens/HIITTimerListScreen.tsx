@@ -19,6 +19,7 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/AppNavigator';
 import { useTranslation } from '../i18n/useTranslation';
 import dayjs from 'dayjs';
+import { useAppTheme } from '../theme/useAppTheme';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'HIITTimerList'>;
 
@@ -34,6 +35,14 @@ export default function HIITTimerListScreen({ navigation, route }: Props) {
   const insets = useSafeAreaInsets();
   const { hiitTimers, deleteHIITTimer, addBonusLog } = useStore();
   const { t } = useTranslation();
+  const theme = useAppTheme();
+  const { colors: themeColors } = theme;
+  const isV2Theme = theme.id === 'v2';
+  const pageBackground = isV2Theme ? themeColors.canvasLight : COLORS.backgroundCanvas;
+  const timerCardBackground = isV2Theme ? themeColors.canvasContainer : CARDS.cardDeepDimmed.inner.backgroundColor;
+  const timerInk = isV2Theme ? themeColors.containerPrimary : COLORS.text;
+  const timerMetaInk = isV2Theme ? themeColors.containerPrimary : COLORS.textMeta;
+  const timerActionInk = isV2Theme ? themeColors.containerPrimary : COLORS.accentPrimary;
   const bonusMode = route.params?.bonusMode === true;
   
   const templates = hiitTimers.filter(t => t.isTemplate);
@@ -109,19 +118,19 @@ export default function HIITTimerListScreen({ navigation, route }: Props) {
   };
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: pageBackground }]}>
       <View style={styles.innerContainer}>
         {/* Header */}
         <View style={[styles.header, { paddingTop: insets.top }]}>
           <View style={styles.topBar}>
             <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-              <IconArrowLeft size={24} color={LIGHT_COLORS.text} />
+              <IconArrowLeft size={24} color={timerInk} />
             </TouchableOpacity>
             <View style={{ width: 48 }} />
           </View>
           
           <View style={styles.pageTitleContainer}>
-            <Text style={styles.pageTitle}>{t('savedTimers')}</Text>
+            <Text style={[styles.pageTitle, { color: timerInk }]}>{t('savedTimers')}</Text>
           </View>
         </View>
 
@@ -156,17 +165,17 @@ export default function HIITTimerListScreen({ navigation, route }: Props) {
               activeOpacity={1}
                 style={styles.timerCard}
             >
-                <View style={CARDS.cardDeepDimmed.outer}>
-                <View style={[CARDS.cardDeepDimmed.inner, styles.timerCardInner]}>
-                  <Text style={styles.timerName}>{timer.name}</Text>
-                    <Text style={styles.totalTime}>{calculateTotalTime(timer)}</Text>
+                <View style={[CARDS.cardDeepDimmed.outer, { backgroundColor: timerCardBackground }]}>
+                <View style={[CARDS.cardDeepDimmed.inner, styles.timerCardInner, { backgroundColor: timerCardBackground }]}>
+                  <Text style={[styles.timerName, { color: timerInk }]}>{timer.name}</Text>
+                    <Text style={[styles.totalTime, { color: timerMetaInk }]}>{calculateTotalTime(timer)}</Text>
                     <TouchableOpacity
                       onPress={() => handleSelectTemplate(timer)}
                       style={styles.startButton}
                       activeOpacity={1}
                     >
-                      <Text style={styles.startButtonText}>{t('start')}</Text>
-                      <IconPlay size={10} color={COLORS.accentPrimary} />
+                      <Text style={[styles.startButtonText, { color: timerActionInk }]}>{t('start')}</Text>
+                      <IconPlay size={10} color={timerActionInk} />
                     </TouchableOpacity>
                 </View>
               </View>
@@ -179,8 +188,8 @@ export default function HIITTimerListScreen({ navigation, route }: Props) {
             activeOpacity={0.7}
           >
             <DiagonalLinePattern width="100%" height={56} borderRadius={16} />
-            <IconAdd size={24} color={COLORS.text} />
-            <Text style={styles.addTimerCardText}>Add timer</Text>
+            <IconAdd size={24} color={timerInk} />
+            <Text style={[styles.addTimerCardText, { color: timerInk }]}>Add timer</Text>
           </TouchableOpacity>
         </ScrollView>
       </View>

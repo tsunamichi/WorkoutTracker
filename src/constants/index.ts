@@ -92,6 +92,8 @@ export function hexToRgba(hex: string, alpha: number): string {
 
 // Base accent color — spec accent-primary
 const ACCENT_PRIMARY = '#FFA424';
+const ACCENT_PRIMARY_SOFT = hexToRgba(ACCENT_PRIMARY, 0.6);
+const ACCENT_PRIMARY_BACKGROUND = hexToRgba(ACCENT_PRIMARY, 0.16);
 const SIGNAL_NEGATIVE = '#FF453A';
 const BASE_GREEN = '#00351D';
 const SIGNAL_POSITIVE = BASE_GREEN;
@@ -102,8 +104,12 @@ const BORDER_DIMMED = 'rgba(255, 255, 255, 0.06)';
 
 /** Core token — shared by container-secondary and text-on-primary (spec). */
 const CONTAINER_SECONDARY = '#D9D9D9';
-/** Spec accent-secondary-soft (single source for soft teal + textMetaTimer). */
-const ACCENT_SECONDARY_SOFT = '#014C47';
+/** Spec accent-secondary (teal). */
+const ACCENT_SECONDARY = '#58A186';
+/** Spec accent-secondary-soft. */
+const ACCENT_SECONDARY_SOFT = '#CFF0EE';
+/** Spec accent-secondary-disabled (accent-secondary-soft at 20% opacity). */
+const ACCENT_SECONDARY_DISABLED = hexToRgba(ACCENT_SECONDARY_SOFT, 0.2);
 
 export const COLORS = {
   // Core colors — dark palette
@@ -128,6 +134,8 @@ export const COLORS = {
   container: '#2C2C2E',          // Elevated secondary container
   cardBackground: '#1C1C1E',     // Card background
   activeCard: '#1C1C1E',         // Active/selected card state
+  /** Settings/profile card containers on light surfaces */
+  canvasContainer: '#1C1C1E',
   /** Active cycle strip and pill background (backgroundCanvas at 30% opacity) */
   cycleStripBackground: 'rgba(13, 13, 13, 0.3)',
 
@@ -139,34 +147,38 @@ export const COLORS = {
   secondary: '#007AFF',          // Blue
   secondarySoft: '#1C2A3A',      // Soft blue background
   accentPrimary: ACCENT_PRIMARY,
+  accentPrimarySoft: ACCENT_PRIMARY_SOFT,
+  accentPrimaryBackground: ACCENT_PRIMARY_BACKGROUND,
   accentPrimaryLight: adjustLightness(ACCENT_PRIMARY, 15),
   accentPrimaryDark: '#8C5509',
   todayIndicator: BASE_INFO,  // Current day label & selected box
   accentPrimaryDimmed: '#372E1A',       // Subtle lime tint bg for selected states
   /** Spec accent-secondary (teal) */
-  accentSecondary: '#58A186',
+  accentSecondary: ACCENT_SECONDARY,
   /** Spec accent-secondary-soft — schedule pie incomplete, muted teal surfaces */
   accentSecondarySoft: ACCENT_SECONDARY_SOFT,
+  /** Spec accent-secondary-disabled — disabled content on light surfaces */
+  accentSecondaryDisabled: ACCENT_SECONDARY_DISABLED,
   /** Work timer (time-based) — page tint */
   backgroundTimer: '#C1FF24',
   /** Work timer — Completed card surface */
   containerTertiaryTimer: '#B1EF15',
   /** Work timer — Up Next card surface */
   containerSecondaryTimer: '#9BD508',
-  /** accent-secondary-soft @ 60% — work-timer header chrome (Complete / Up Next) */
-  textMetaTimer: hexToRgba(ACCENT_SECONDARY_SOFT, 0.6),
+  /** accent-secondary @ 60% — work-timer header chrome (Complete / Up Next) */
+  textMetaTimer: hexToRgba(ACCENT_SECONDARY, 0.6),
 
   // Text — white on dark
   text: '#FFFFFF',                  // Default text color
-  textPrimary: '#FFFFFF',           // Primary text
+  textPrimary: '#1F1F1F',           // Primary text
   textSecondary: '#AEAEB2',        // Secondary text
   /** Spec text-meta (light canvas) */
-  textMeta: '#828282',
+  textMeta: hexToRgba('#1F1F1F', 0.6),
   textMetaSoft: '#48484A',         // Soft metadata/dividers
   textDisabled: '#48484A',         // Disabled text
   
   // Borders & dividers — very subtle on dark
-  border: '#38383A',               // Subtle borders
+  border: 'rgba(88, 88, 88, 0.2)', // #585858 @ 20%
   disabledBorder: '#38383A',       // Disabled button border
   borderDimmed: BORDER_DIMMED,     // Dimmed dividers
   divider: BORDER_DIMMED,          // Dividers
@@ -242,7 +254,7 @@ export const TYPOGRAPHY = {
   },
   h2: {
     fontSize: 24,
-    fontWeight: '400' as const,
+    fontWeight: '500' as const,
   },
   h3: {
     fontSize: 20,
@@ -255,7 +267,7 @@ export const TYPOGRAPHY = {
   displayLarge: {
     fontSize: 32,
     lineHeight: 36,
-    fontWeight: '600' as const,
+    fontWeight: '500' as const,
     letterSpacing: -0.4,
   },
 
@@ -310,6 +322,12 @@ export const TYPOGRAPHY = {
     lineHeight: 60,
     fontWeight: '400' as const,
     letterSpacing: -0.6,
+  },
+  /** Extra-large editable value display (Explore current card). */
+  valueDisplay: {
+    fontSize: 96,
+    lineHeight: 96,
+    fontWeight: '400' as const,
   },
   
   // Timer display

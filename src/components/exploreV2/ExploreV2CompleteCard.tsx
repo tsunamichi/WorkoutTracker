@@ -3,7 +3,6 @@ import { View, Text, StyleSheet, TouchableOpacity, Pressable } from 'react-nativ
 import { Platform } from 'react-native';
 import Animated, { useAnimatedStyle, interpolateColor, type SharedValue } from 'react-native-reanimated';
 import { EXPLORE_V2 } from './exploreV2Tokens';
-import { EXPLORE_V2_PALETTES } from './exploreV2ColorSystem';
 import { TYPOGRAPHY } from '../../constants';
 import { useAppTheme } from '../../theme/useAppTheme';
 import { IconChevronDown } from '../icons';
@@ -25,19 +24,17 @@ type Props = {
   timerThemeActive: boolean;
   restThemeProgress: SharedValue<number>;
   exploreV2WorkBlueProgress: SharedValue<number>;
+  menuThemeActive: boolean;
+  menuToneProgress: SharedValue<number>;
+  contentOnly?: boolean;
 };
 
-const palette = EXPLORE_V2_PALETTES.complete;
-/** Match Current card surface — used for row title + numerals on Completed list */
-const CURRENT_CARD_SURFACE = EXPLORE_V2_PALETTES.current.main;
 const IDLE_HEADER_INK = '#464646';
 const IDLE_UNIT_INK = '#787878';
 /** Vertical gap between set rows (logs) in the Completed list */
 const COMPLETE_SET_LOG_GAP = 2;
-/** Space below each exercise row — token + 12px */
-const COMPLETE_EXERCISE_ROW_MARGIN = EXPLORE_V2.exerciseListRowGap + 12;
 /** Fixed width for load / reps numerals in the Completed list */
-const COMPLETE_VALUE_WIDTH = 32;
+const COMPLETE_VALUE_WIDTH = 28;
 
 export function ExploreV2CompleteCard({
   completedGroupIndexes,
@@ -53,18 +50,24 @@ export function ExploreV2CompleteCard({
   timerThemeActive: _timerThemeActive,
   restThemeProgress,
   exploreV2WorkBlueProgress,
+  menuThemeActive,
+  menuToneProgress,
+  contentOnly = false,
 }: Props) {
   const { explore: ex, colors: themeColors } = useAppTheme();
-  const pageBgChrome = EXPLORE_V2.colors.pageBg;
+  const pageBgChrome = themeColors.canvasLight;
   const restCompletedUnitInk = ex.restTimerCompletedUnitInk;
   const textMetaTimer = themeColors.textMetaTimer;
   const textMeta = themeColors.textMeta;
   const accentPrimaryDark = themeColors.accentPrimaryDark;
+  const accentPrimary = themeColors.accentPrimary;
+  const accentSecondarySoft = themeColors.accentSecondarySoft;
   const containerPrimary = themeColors.containerPrimary;
-  const workCompleteBg = ex.workTimerCompleteCardBg;
-  const amberComplete = ex.amberBandComplete;
-  const warmActivity = ex.warmActivity;
-  const backgroundTimer = themeColors.backgroundTimer;
+  const upNextBaseBg = themeColors.containerSecondary;
+  const workUpNextBg = ex.workTimerUpNextCardBg;
+  const amberBand = ex.amberBand;
+  const menuMutedBg = '#CFC9CC';
+  const menuMutedInk = themeColors.textMeta;
 
   const headerChromeAnimatedStyle = useAnimatedStyle(() => {
     const b = restThemeProgress.value;
@@ -72,10 +75,11 @@ export function ExploreV2CompleteCard({
     const pRest = b * (1 - w);
     const pWork = b * w;
     const restCol = interpolateColor(pRest, [0, 1], [containerPrimary, accentPrimaryDark]);
+    const baseColor = interpolateColor(pWork, [0, 1], [restCol, textMetaTimer]);
     return {
-      color: interpolateColor(pWork, [0, 1], [restCol, textMetaTimer]),
+      color: interpolateColor(menuToneProgress.value, [0, 1], [baseColor, menuMutedInk]),
     };
-  }, [containerPrimary, accentPrimaryDark, textMetaTimer]);
+  }, [containerPrimary, accentPrimaryDark, textMetaTimer, menuMutedInk, menuToneProgress]);
   const completedUnitAnimatedStyle = useAnimatedStyle(() => {
     const w = exploreV2WorkBlueProgress.value;
     const unitRest = interpolateColor(
@@ -83,10 +87,11 @@ export function ExploreV2CompleteCard({
       [0, 1],
       [IDLE_UNIT_INK, restCompletedUnitInk],
     );
+    const baseColor = interpolateColor(w, [0, 1], [unitRest, pageBgChrome]);
     return {
-      color: interpolateColor(w, [0, 1], [unitRest, pageBgChrome]),
+      color: interpolateColor(menuToneProgress.value, [0, 1], [baseColor, menuMutedInk]),
     };
-  }, [restCompletedUnitInk, pageBgChrome]);
+  }, [restCompletedUnitInk, pageBgChrome, menuMutedInk, menuToneProgress]);
   const chevronIdleOpacityStyle = useAnimatedStyle(() => ({
     opacity: 1 - restThemeProgress.value * (1 - exploreV2WorkBlueProgress.value),
   }));
@@ -101,69 +106,50 @@ export function ExploreV2CompleteCard({
   const shellAnimatedStyle = useAnimatedStyle(() => {
     const b = restThemeProgress.value;
     const w = exploreV2WorkBlueProgress.value;
-    const whenUpBg = interpolateColor(w, [0, 1], [amberComplete, workCompleteBg]);
-    const whenUpBorder = interpolateColor(w, [0, 1], [warmActivity, backgroundTimer]);
+    const pRest = b * (1 - w);
+    const whenUpBg = interpolateColor(w, [0, 1], [amberBand, workUpNextBg]);
+    const baseBg = interpolateColor(b, [0, 1], [upNextBaseBg, whenUpBg]);
+    const baseBorder = interpolateColor(pRest, [0, 1], [themeColors.canvasLight, accentPrimary]);
     return {
-      backgroundColor: interpolateColor(b, [0, 1], [palette.main, whenUpBg]),
-      borderColor: interpolateColor(b, [0, 1], [pageBgChrome, whenUpBorder]),
+      backgroundColor: interpolateColor(menuToneProgress.value, [0, 1], [baseBg, menuMutedBg]),
+      borderColor: baseBorder,
     };
-  }, [amberComplete, workCompleteBg, warmActivity, backgroundTimer, pageBgChrome]);
+  }, [upNextBaseBg, amberBand, workUpNextBg, themeColors.canvasLight, accentPrimary, menuMutedBg, menuToneProgress]);
   const scrollContentAnimatedStyle = useAnimatedStyle(() => {
     const b = restThemeProgress.value;
     const w = exploreV2WorkBlueProgress.value;
-    const whenUpBg = interpolateColor(w, [0, 1], [amberComplete, workCompleteBg]);
+    const whenUpBg = interpolateColor(w, [0, 1], [amberBand, workUpNextBg]);
+    const baseBg = interpolateColor(b, [0, 1], [upNextBaseBg, whenUpBg]);
     return {
-      backgroundColor: interpolateColor(b, [0, 1], [palette.main, whenUpBg]),
+      backgroundColor: interpolateColor(menuToneProgress.value, [0, 1], [baseBg, menuMutedBg]),
     };
-  }, [amberComplete, workCompleteBg]);
+  }, [upNextBaseBg, amberBand, workUpNextBg, menuMutedBg, menuToneProgress]);
   const rowTitleInkStyle = useAnimatedStyle(() => ({
-    color: interpolateColor(exploreV2WorkBlueProgress.value, [0, 1], [CURRENT_CARD_SURFACE, pageBgChrome]),
-  }), [pageBgChrome]);
+    color: interpolateColor(
+      menuToneProgress.value,
+      [0, 1],
+      [
+        interpolateColor(exploreV2WorkBlueProgress.value, [0, 1], [containerPrimary, pageBgChrome]),
+        menuMutedInk,
+      ],
+    ),
+  }), [containerPrimary, pageBgChrome, menuMutedInk, exploreV2WorkBlueProgress, menuToneProgress]);
   const rows = completedGroupIndexes.flatMap(gi => {
     const g = exerciseGroups[gi];
     if (!g) return [];
     return g.exercises.map(ex => ({ gi, g, ex }));
   });
 
-  return (
-    <Animated.View
-      style={[
-        styles.shell,
-        shellAnimatedStyle,
-        {
-          borderBottomLeftRadius: bottomCornerRadius,
-          borderBottomRightRadius: bottomCornerRadius,
-        },
-      ]}
-    >
-      {!isExpanded ? (
-        <Pressable style={styles.peekTapOverlay} onPress={onHeaderPress} />
-      ) : null}
-      <Pressable style={styles.headerRow} onPress={onHeaderPress}>
-        <Animated.Text style={[styles.headerLabel, headerChromeAnimatedStyle]}>Completed</Animated.Text>
-        <View style={styles.countOrPlusSlot}>
-          <Animated.View style={[styles.chevronLayer, chevronIdleOpacityStyle]} pointerEvents="none">
-            <IconChevronDown size={18} color={textMeta} />
-          </Animated.View>
-          <Animated.View style={[styles.chevronLayer, chevronTimerOpacityStyle]} pointerEvents="none">
-            <IconChevronDown size={18} color={accentPrimaryDark} />
-          </Animated.View>
-          <Animated.View style={[styles.chevronLayer, chevronWorkOpacityStyle]} pointerEvents="none">
-            <IconChevronDown size={18} color={textMetaTimer} />
-          </Animated.View>
-        </View>
-      </Pressable>
-      <Animated.ScrollView
-        style={styles.scroll}
-        contentContainerStyle={[styles.scrollInner, scrollContentAnimatedStyle]}
-        nestedScrollEnabled
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
-      >
+  const rowsContent = (
+    <>
         {rows.map(({ gi, g, ex }, index) => (
           <TouchableOpacity
             key={`${g.id}-${ex.id}`}
-            style={[styles.row, index < rows.length - 1 && styles.rowGapAfter]}
+            style={[
+              styles.row,
+              index < rows.length - 1 && styles.rowWithDivider,
+              index < rows.length - 1 && { borderBottomColor: themeColors.border },
+            ]}
             onPress={() => {
               const exIdx = g.exercises.findIndex(e => e.id === ex.id);
               onOpenExercise(gi, exIdx);
@@ -213,8 +199,61 @@ export function ExploreV2CompleteCard({
           </TouchableOpacity>
         ))}
         {rows.length === 0 && (
-          <Text style={[styles.empty, { color: palette.muted }]}>Nothing completed yet.</Text>
+          <Text style={[styles.empty, { color: menuThemeActive ? menuMutedInk : textMeta }]}>Nothing completed yet.</Text>
         )}
+    </>
+  );
+
+  if (contentOnly) {
+    return (
+      <Animated.ScrollView
+        style={styles.scroll}
+        contentContainerStyle={[styles.scrollInner, styles.scrollInnerContentOnly]}
+        nestedScrollEnabled
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
+        {rowsContent}
+      </Animated.ScrollView>
+    );
+  }
+
+  return (
+    <Animated.View
+      style={[
+        styles.shell,
+        shellAnimatedStyle,
+        {
+          borderBottomLeftRadius: bottomCornerRadius,
+          borderBottomRightRadius: bottomCornerRadius,
+        },
+      ]}
+    >
+      {!isExpanded ? (
+        <Pressable style={styles.peekTapOverlay} onPress={onHeaderPress} />
+      ) : null}
+      <Pressable style={styles.headerRow} onPress={onHeaderPress}>
+        <Animated.Text style={[styles.headerLabel, headerChromeAnimatedStyle]}>Completed</Animated.Text>
+        <View style={styles.countOrPlusSlot}>
+          <Animated.View style={[styles.chevronLayer, chevronIdleOpacityStyle]} pointerEvents="none">
+            <IconChevronDown size={18} color={menuThemeActive ? menuMutedInk : themeColors.containerPrimary} />
+          </Animated.View>
+          <Animated.View style={[styles.chevronLayer, chevronTimerOpacityStyle]} pointerEvents="none">
+            <IconChevronDown size={18} color={menuThemeActive ? menuMutedInk : themeColors.containerPrimary} />
+          </Animated.View>
+          <Animated.View style={[styles.chevronLayer, chevronWorkOpacityStyle]} pointerEvents="none">
+            <IconChevronDown size={18} color={menuThemeActive ? menuMutedInk : themeColors.containerPrimary} />
+          </Animated.View>
+        </View>
+      </Pressable>
+      <Animated.ScrollView
+        style={styles.scroll}
+        contentContainerStyle={[styles.scrollInner, scrollContentAnimatedStyle]}
+        nestedScrollEnabled
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
+        {rowsContent}
       </Animated.ScrollView>
     </Animated.View>
   );
@@ -226,9 +265,9 @@ const styles = StyleSheet.create({
   shell: {
     flex: 1,
     flexDirection: 'column',
-    paddingTop: 10,
+    paddingTop: EXPLORE_V2.cardHeader.topInset,
     borderWidth: 2,
-    borderColor: EXPLORE_V2.colors.pageBg,
+    borderColor: 'transparent',
     borderTopLeftRadius: EXPLORE_V2.cardTopRadius,
     borderTopRightRadius: EXPLORE_V2.cardTopRadius,
     borderBottomLeftRadius: EXPLORE_V2.cardRadius,
@@ -242,15 +281,14 @@ const styles = StyleSheet.create({
     ...(Platform.OS === 'ios' ? { borderCurve: 'continuous' as const } : {}),
   },
   headerRow: {
-    height: 32,
+    height: EXPLORE_V2.cardHeader.rowHeight,
     width: '100%',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingTop: 2,
+    paddingVertical: EXPLORE_V2.cardHeader.rowVerticalPadding,
     paddingLeft: 24,
     paddingRight: 12,
-    paddingBottom: 0,
     overflow: 'hidden',
   },
   peekTapOverlay: {
@@ -292,15 +330,21 @@ const styles = StyleSheet.create({
     paddingTop: EXPLORE_V2.headerToContentGap,
     paddingBottom: pad.bottom,
   },
+  scrollInnerContentOnly: {
+    paddingTop: 12,
+  },
   row: {
     flexDirection: 'row',
     paddingVertical: 0,
   },
-  rowGapAfter: {
-    marginBottom: COMPLETE_EXERCISE_ROW_MARGIN,
+  rowWithDivider: {
+    borderBottomWidth: 1,
+    borderBottomColor: 'transparent',
+    paddingBottom: 20,
+    marginBottom: 20,
   },
   nameCol: { flex: 1, paddingRight: 10 },
-  name: { ...TYPOGRAPHY.body, lineHeight: 22 },
+  name: { ...TYPOGRAPHY.meta, lineHeight: 20 },
   valCol: { alignItems: 'flex-end' },
   valRow: { flexDirection: 'row', gap: 20, justifyContent: 'flex-end' },
   valRowGapAfter: {
@@ -314,8 +358,8 @@ const styles = StyleSheet.create({
     textAlign: 'right',
     width: '100%',
   },
-  val: { ...TYPOGRAPHY.body },
-  valUnit: { ...TYPOGRAPHY.body },
+  val: { ...TYPOGRAPHY.meta },
+  valUnit: { ...TYPOGRAPHY.meta },
   chevronLayer: {
     ...StyleSheet.absoluteFillObject,
     alignItems: 'center',

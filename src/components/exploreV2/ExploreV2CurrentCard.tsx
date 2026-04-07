@@ -30,8 +30,7 @@ import {
   EXPLORE_V2_CURRENT_SETTINGS_HERO_GAP,
   type ExploreV2CurrentSettingsOverflowProps,
 } from './ExploreV2CurrentOverflowSheet';
-
-const CANVAS_INK = COLORS.canvasLight;
+import { UnderlinedActionButton } from '../common/UnderlinedActionButton';
 
 type Props = {
   group: ExploreV2Group;
@@ -58,6 +57,10 @@ type Props = {
   /** Rest timer band active — dims hero numerals */
   timerThemeActive: boolean;
   restThemeProgress: SharedValue<number>;
+  /** Wallet is sliding for top menu; use muted menu colorway. */
+  menuThemeActive: boolean;
+  /** Menu tone progress (0 idle -> 1 toned) for color interpolation. */
+  menuToneProgress: SharedValue<number>;
   /** In-card settings overlay (slides up over hero + footer) */
   settingsOverflow?: ExploreV2CurrentSettingsOverflowProps;
   progressionValuesByItemId: Record<
@@ -110,10 +113,8 @@ type SetHeroPageProps = {
   getBarbellMode: Props['getBarbellMode'];
   metricsEditable: boolean;
   heroValueColor: string;
-  heroUnitInk: string;
   perSideLabelColor: string;
-  perSideValueColor: string;
-  perSideUnitColor: string;
+  unitLabelColor: string;
   pageWidth: number;
   commitsRef: React.MutableRefObject<Record<string, () => { weight: number; reps: number } | void>>;
   progressionValuesByItemId: Props['progressionValuesByItemId'];
@@ -131,10 +132,8 @@ function CurrentSetHeroPage({
   getBarbellMode,
   metricsEditable,
   heroValueColor,
-  heroUnitInk,
   perSideLabelColor,
-  perSideValueColor,
-  perSideUnitColor,
+  unitLabelColor,
   pageWidth,
   commitsRef,
   progressionValuesByItemId,
@@ -332,25 +331,22 @@ function CurrentSetHeroPage({
 
   const _barbellMode = getBarbellMode(heroEx.id);
   const weightPerSideLbs = heroW > 45 ? (heroW - 45) / 2 : null;
-  const showPerSideRow = weightPerSideLbs != null && weightPerSideLbs > 0;
+  const perSideText =
+    weightPerSideLbs != null && weightPerSideLbs > 0
+      ? `${formatWeightForLoad(weightPerSideLbs, useKg)}/side`
+      : null;
   const prog = progressionValuesByItemId[heroEx.id];
 
   return (
     <View style={[styles.carouselPage, pageWidth > 0 ? { width: pageWidth } : { flex: 1 }]}>
       <View style={styles.valuesBlock}>
-        {showPerSideRow && weightPerSideLbs != null ? (
-          <View style={styles.perSideRow}>
-            <Text style={[styles.perSideSingleLine, { color: perSideValueColor }]}>
-              {`${formatWeightForLoad(weightPerSideLbs, useKg)} ${weightUnit} weight per side`}
-            </Text>
-          </View>
-        ) : null}
-
         <View style={styles.valueRow}>
           <TextInput
             ref={weightInputRef}
             key={`${setId}-weight`}
             style={[styles.valueInput, { color: heroValueColor }]}
+            allowFontScaling={false}
+            maxFontSizeMultiplier={1}
             defaultValue={weightDefault}
             onChangeText={t => {
               weightDraftRef.current = t;
@@ -365,12 +361,17 @@ function CurrentSetHeroPage({
             underlineColorAndroid="transparent"
           />
           <View style={styles.unitWithDelta}>
-            {prog && prog.weightDelta > 0 ? (
-              <Text style={[styles.heroDeltaLabel, { color: heroValueColor }]} numberOfLines={1}>
-                ↑
-              </Text>
+            <View style={styles.unitLabelRow}>
+              <Text style={[styles.valueMetric, { color: unitLabelColor }]}>{weightUnit}</Text>
+              {prog && prog.weightDelta > 0 ? (
+                <Text style={[styles.heroDeltaLabel, { color: heroValueColor }]} numberOfLines={1}>
+                  ↑
+                </Text>
+              ) : null}
+            </View>
+            {perSideText ? (
+              <Text style={[styles.perSideSingleLine, { color: perSideLabelColor }]}>{perSideText}</Text>
             ) : null}
-            <Text style={[styles.valueMetric, { color: heroUnitInk }]}>{weightUnit}</Text>
           </View>
         </View>
         <View style={styles.valueRow}>
@@ -378,6 +379,8 @@ function CurrentSetHeroPage({
             ref={repsInputRef}
             key={`${setId}-reps`}
             style={[styles.valueInput, { color: heroValueColor }]}
+            allowFontScaling={false}
+            maxFontSizeMultiplier={1}
             defaultValue={repsDefault}
             onChangeText={t => {
               repsDraftRef.current = t;
@@ -392,14 +395,16 @@ function CurrentSetHeroPage({
             underlineColorAndroid="transparent"
           />
           <View style={styles.unitWithDelta}>
-            {prog && prog.repsDelta > 0 ? (
-              <Text style={[styles.heroDeltaLabel, { color: heroValueColor }]} numberOfLines={1}>
-                ↑
+            <View style={styles.unitLabelRow}>
+              <Text style={[styles.valueMetric, { color: unitLabelColor }]}>
+                {heroEx.isTimeBased ? 'sec' : 'reps'}
               </Text>
-            ) : null}
-            <Text style={[styles.valueMetric, { color: heroUnitInk }]}>
-              {heroEx.isTimeBased ? 'sec' : 'reps'}
-            </Text>
+              {prog && prog.repsDelta > 0 ? (
+                <Text style={[styles.heroDeltaLabel, { color: heroValueColor }]} numberOfLines={1}>
+                  ↑
+                </Text>
+              ) : null}
+            </View>
           </View>
         </View>
       </View>
@@ -430,6 +435,8 @@ export function ExploreV2CurrentCard({
   coveredBottomRadius,
   timerThemeActive,
   restThemeProgress,
+  menuThemeActive,
+  menuToneProgress,
   settingsOverflow,
   progressionValuesByItemId,
   celebrationProgress,
@@ -437,14 +444,15 @@ export function ExploreV2CurrentCard({
 }: Props) {
   const theme = useAppTheme();
   const { explore: ex, colors: themeColors } = theme;
+  const isV2Theme = theme.id === 'v2';
   const accentPrimary = themeColors.accentPrimary;
   const accentPrimaryDimmed = themeColors.accentPrimaryDimmed;
   const accentSecondarySoft = themeColors.accentSecondarySoft;
-  const currentCardUnitInk = useMemo(() => hexToRgba(themeColors.accentSecondary, 0.2), [themeColors.accentSecondary]);
-  const warmActivity = ex.warmActivity;
+  const accentSecondaryDisabled = themeColors.accentSecondaryDisabled;
+  const containerTertiary = themeColors.containerTertiary;
+  const menuMutedBg = '#CFC9CC';
+  const menuMutedInk = themeColors.textMeta;
   const skipRestCtaBg = ex.skipRestCtaBg;
-  const heroInk = ex.heroValueInk;
-  const ctaPillLabelInk = ex.ctaPillText;
   const isPrimary = primaryRevealed === 'current';
   const [drawerSlotHeight, setDrawerSlotHeight] = useState(0);
   const bottomCornerRadius = isPrimary ? frontBottomRadius : coveredBottomRadius;
@@ -460,6 +468,7 @@ export function ExploreV2CurrentCard({
 
   const [carouselIndex, setCarouselIndex] = useState(0);
   const [pageWidth, setPageWidth] = useState(0);
+  const carouselViewportWidth = Math.max(0, pageWidth);
   const scrollRef = useRef<ScrollView>(null);
   const commitsRef = useRef<Record<string, () => { weight: number; reps: number } | void>>({});
   const prevIncompleteKeyRef = useRef<string | null>(null);
@@ -491,14 +500,14 @@ export function ExploreV2CurrentCard({
   }, [activeHeroEx, activeSlot, getSetDisplayValues, localValues, activeSetId]);
 
   useEffect(() => {
-    if (pageWidth <= 0 || orderedSlots.length === 0) return;
+    if (carouselViewportWidth <= 0 || orderedSlots.length === 0) return;
     const key = nextIncomplete ? slotKey(nextIncomplete) : 'all-done';
     const idx = nextIncompleteIndex >= 0 ? nextIncompleteIndex : 0;
 
     if (prevIncompleteKeyRef.current === null) {
       prevIncompleteKeyRef.current = key;
       setCarouselIndex(idx);
-      scrollRef.current?.scrollTo({ x: idx * pageWidth, animated: false });
+      scrollRef.current?.scrollTo({ x: idx * carouselViewportWidth, animated: false });
       return;
     }
 
@@ -506,10 +515,10 @@ export function ExploreV2CurrentCard({
       prevIncompleteKeyRef.current = key;
       if (nextIncompleteIndex >= 0) {
         setCarouselIndex(nextIncompleteIndex);
-        scrollRef.current?.scrollTo({ x: nextIncompleteIndex * pageWidth, animated: true });
+        scrollRef.current?.scrollTo({ x: nextIncompleteIndex * carouselViewportWidth, animated: true });
       }
     }
-  }, [pageWidth, nextIncomplete, nextIncompleteIndex, orderedSlots.length]);
+  }, [carouselViewportWidth, nextIncomplete, nextIncompleteIndex, orderedSlots.length]);
 
   const heroTimerActive = exploreV2TimerPhase !== 'none';
   const ctaLabel =
@@ -526,24 +535,61 @@ export function ExploreV2CurrentCard({
             : 'Log next set';
   const collapsedSecondary = !isPrimary && showCollapsedWhenSecondary;
   const metricsEditable = isPrimary && !heroTimerActive;
-  const heroValueColor = heroTimerActive ? accentSecondarySoft : accentPrimary;
 
   const logEnabledForSlot =
     nextIncompleteIndex < 0 || carouselIndex === nextIncompleteIndex;
+  const inactiveSetPreview = !heroTimerActive && !logEnabledForSlot;
+  const useDisabledHeroPalette = heroTimerActive || inactiveSetPreview;
+  const v2DisabledInk = hexToRgba(containerTertiary, 0.2);
+  const heroValueColor = menuThemeActive
+    ? menuMutedInk
+    : (isV2Theme && useDisabledHeroPalette
+      ? v2DisabledInk
+      : (useDisabledHeroPalette ? accentSecondaryDisabled : accentPrimary));
+  const heroUnitColor = menuThemeActive
+    ? menuMutedInk
+    : (isV2Theme && useDisabledHeroPalette
+      ? v2DisabledInk
+      : (useDisabledHeroPalette ? accentSecondaryDisabled : accentPrimary));
+  const settingsDisabledTone = heroTimerActive ? accentSecondaryDisabled : accentSecondarySoft;
+  const currentHeaderInk = menuThemeActive ? menuMutedInk : (isV2Theme ? containerTertiary : accentSecondarySoft);
+  const settingsInk = menuThemeActive
+    ? menuMutedInk
+    : (isV2Theme
+      ? (heroTimerActive ? v2DisabledInk : containerTertiary)
+      : settingsDisabledTone);
+  const perSideInk = isV2Theme
+    ? (useDisabledHeroPalette ? v2DisabledInk : containerTertiary)
+    : (useDisabledHeroPalette ? accentSecondaryDisabled : accentSecondarySoft);
+  const perSideLabelColor = menuThemeActive
+    ? menuMutedInk
+    : (useDisabledHeroPalette ? heroUnitColor : perSideInk);
+  const inactivePaginationInk = menuThemeActive
+    ? menuMutedInk
+    : (isV2Theme
+      ? (useDisabledHeroPalette ? v2DisabledInk : containerTertiary)
+      : accentSecondarySoft);
+  const inactivePaginationInkDisabled = menuThemeActive
+    ? menuMutedInk
+    : (isV2Theme
+      ? (useDisabledHeroPalette ? v2DisabledInk : containerTertiary)
+      : accentSecondaryDisabled);
   const logPressable =
     heroTimerActive || (showPrimaryCta && logEnabledForSlot);
 
   const settingsDrawerOpen = Boolean(settingsOverflow?.visible && isPrimary);
   const surfaceColor = settingsDrawerOpen ? skipRestCtaBg : ex.surfaceCurrentCard;
-  const backgroundTimer = themeColors.backgroundTimer;
   const shellAnimatedStyle = useAnimatedStyle(() => {
-    const p = restThemeProgress.value;
+    const b = restThemeProgress.value;
     const w = exploreV2WorkBlueProgress.value;
-    const activeBorder = interpolateColor(w, [0, 1], [warmActivity, backgroundTimer]);
+    const pRest = b * (1 - w);
+    const baseBorder = interpolateColor(pRest, [0, 1], [themeColors.canvasLight, accentPrimary]);
+    const menuP = menuToneProgress.value;
     return {
-      borderColor: interpolateColor(p, [0, 1], [EXPLORE_V2.colors.pageBg, activeBorder]),
+      borderColor: baseBorder,
+      backgroundColor: interpolateColor(menuP, [0, 1], [surfaceColor, menuMutedBg]),
     };
-  }, [warmActivity, backgroundTimer]);
+  }, [themeColors.canvasLight, accentPrimary, menuToneProgress, surfaceColor, menuMutedBg]);
   const shellCornerAnimatedStyle = useAnimatedStyle(() => {
     const cp = celebrationProgress?.value ?? 0;
     return {
@@ -554,56 +600,46 @@ export function ExploreV2CurrentCard({
     };
   }, [celebrationProgress, bottomCornerRadius]);
   const ctaBgStyle = useAnimatedStyle(() => {
-    if (exploreV2TimerPhase === 'rest' || exploreV2TimerPhase === 'work' || exploreV2TimerPhase === 'switchSides') {
-      return { backgroundColor: accentPrimary };
-    }
+    const isCtaDisabled = !logPressable || inactiveSetPreview;
+    const baseBg =
+      isCtaDisabled
+        ? (isV2Theme ? v2DisabledInk : accentSecondaryDisabled)
+        : exploreV2TimerPhase === 'rest' || exploreV2TimerPhase === 'work' || exploreV2TimerPhase === 'switchSides'
+        ? accentPrimary
+        : interpolateColor(restThemeProgress.value, [0, 1], [accentPrimary, accentPrimaryDimmed]);
     return {
-      backgroundColor: interpolateColor(restThemeProgress.value, [0, 1], [accentPrimary, accentPrimaryDimmed]),
+      backgroundColor: interpolateColor(menuToneProgress.value, [0, 1], [baseBg, menuMutedBg]),
     };
-  }, [exploreV2TimerPhase, accentPrimary, accentPrimaryDimmed]);
+  }, [exploreV2TimerPhase, inactiveSetPreview, logPressable, isV2Theme, v2DisabledInk, accentPrimary, accentPrimaryDimmed, accentSecondaryDisabled, menuMutedBg, menuToneProgress, restThemeProgress]);
   const ctaLabelStyle = useAnimatedStyle(() => {
-    if (exploreV2TimerPhase === 'work' && isPrimary) {
-      return { color: themeColors.containerPrimary };
-    }
-    if (exploreV2TimerPhase === 'rest' && isPrimary) {
-      return { color: themeColors.containerPrimary };
-    }
-    if (exploreV2TimerPhase === 'switchSides' && isPrimary) {
-      return { color: themeColors.containerPrimary };
-    }
+    const baseColor = themeColors.containerPrimary;
     return {
-      color: interpolateColor(restThemeProgress.value, [0, 1], [ctaPillLabelInk, CANVAS_INK]),
+      color: interpolateColor(menuToneProgress.value, [0, 1], [baseColor, menuMutedInk]),
     };
-  }, [exploreV2TimerPhase, isPrimary, themeColors.containerPrimary, ctaPillLabelInk]);
-  const heroColumnReserveStyle = useAnimatedStyle(() => {
-    const reserve =
-      settingsOverflow && isPrimary
-        ? EXPLORE_V2_CURRENT_SETTINGS_HERO_GAP + EXPLORE_V2_CURRENT_SETTINGS_COLLAPSED_STACK_H
-        : 0;
-    return {
-      marginBottom: interpolate(restThemeProgress.value, [0, 1], [reserve, 0]),
-    };
-  }, [settingsOverflow, isPrimary]);
+  }, [themeColors.containerPrimary, menuMutedInk, menuToneProgress]);
+  const heroColumnReserveStyle = useAnimatedStyle(() => ({
+    marginBottom: 0,
+  }));
 
   const onCarouselScrollEnd = useCallback(
     (e: NativeSyntheticEvent<NativeScrollEvent>) => {
-      if (pageWidth <= 0) return;
+      if (carouselViewportWidth <= 0) return;
       const x = e.nativeEvent.contentOffset.x;
-      const i = Math.round(x / pageWidth);
+      const i = Math.round(x / carouselViewportWidth);
       const clamped = Math.max(0, Math.min(i, orderedSlots.length - 1));
       setCarouselIndex(clamped);
     },
-    [pageWidth, orderedSlots.length],
+    [carouselViewportWidth, orderedSlots.length],
   );
 
   const scrollToSetIndex = useCallback(
     (i: number) => {
-      if (pageWidth <= 0) return;
+      if (carouselViewportWidth <= 0) return;
       const clamped = Math.max(0, Math.min(i, orderedSlots.length - 1));
       setCarouselIndex(clamped);
-      scrollRef.current?.scrollTo({ x: clamped * pageWidth, animated: true });
+      scrollRef.current?.scrollTo({ x: clamped * carouselViewportWidth, animated: true });
     },
-    [pageWidth, orderedSlots.length],
+    [carouselViewportWidth, orderedSlots.length],
   );
 
   const onLogPress = useCallback(() => {
@@ -635,7 +671,6 @@ export function ExploreV2CurrentCard({
           shellAnimatedStyle,
           shellCornerAnimatedStyle,
           {
-            backgroundColor: surfaceColor,
             borderBottomLeftRadius: bottomCornerRadius,
             borderBottomRightRadius: bottomCornerRadius,
           },
@@ -650,13 +685,25 @@ export function ExploreV2CurrentCard({
               <Text
                 style={[
                   styles.eyebrow,
-                  { color: heroTimerActive ? accentSecondarySoft : themeColors.accentSecondary },
+                  { color: currentHeaderInk },
                 ]}
               >
                 Current
               </Text>
+              {settingsOverflow && isPrimary ? (
+                <UnderlinedActionButton
+                  label="Settings"
+                  onPress={() => {
+                    if (settingsOverflow.visible) settingsOverflow.onClose();
+                    else settingsOverflow.onOpenSheet();
+                  }}
+                  textStyle={[styles.currentSettingsButtonText, { color: settingsInk }]}
+                  color={settingsInk}
+                  underlineColor={settingsInk}
+                />
+              ) : null}
             </View>
-            <Text style={[styles.exerciseName, { color: themeColors.containerSecondary }]} numberOfLines={2}>
+            <Text style={[styles.exerciseName, { color: currentHeaderInk }]} numberOfLines={2}>
               {displayExerciseName}
             </Text>
           </View>
@@ -681,7 +728,7 @@ export function ExploreV2CurrentCard({
                       if (w > 0 && w !== pageWidth) setPageWidth(w);
                     }}
                   >
-                    {orderedSlots.length > 0 && pageWidth > 0 ? (
+                    {orderedSlots.length > 0 && carouselViewportWidth > 0 ? (
                       <ScrollView
                         ref={scrollRef}
                         horizontal
@@ -705,11 +752,9 @@ export function ExploreV2CurrentCard({
                             getBarbellMode={getBarbellMode}
                             metricsEditable={metricsEditable}
                             heroValueColor={heroValueColor}
-                            heroUnitInk={currentCardUnitInk}
-                            perSideLabelColor={heroTimerActive ? accentSecondarySoft : themeColors.accentSecondary}
-                            perSideValueColor={heroTimerActive ? accentSecondarySoft : themeColors.accentSecondary}
-                            perSideUnitColor={heroTimerActive ? accentSecondarySoft : themeColors.accentSecondary}
-                            pageWidth={pageWidth}
+                            unitLabelColor={heroUnitColor}
+                            perSideLabelColor={perSideLabelColor}
+                            pageWidth={carouselViewportWidth}
                             commitsRef={commitsRef}
                             progressionValuesByItemId={progressionValuesByItemId}
                           />
@@ -720,7 +765,11 @@ export function ExploreV2CurrentCard({
 
                   <View style={styles.footerRow}>
                     <AnimatedTouchableOpacity
-                      style={[styles.ctaPill, ctaBgStyle, !logPressable && styles.ctaPillDisabled]}
+                      style={[
+                        styles.ctaPill,
+                        ctaBgStyle,
+                        !logPressable && !inactiveSetPreview && styles.ctaPillDisabled,
+                      ]}
                       onPress={onLogPress}
                       disabled={!logPressable}
                       activeOpacity={0.88}
@@ -753,11 +802,15 @@ export function ExploreV2CurrentCard({
                                   styles.paginationDigit,
                                   isView && styles.paginationInView,
                                   heroTimerActive
-                                    ? { color: accentSecondarySoft }
+                                    ? {
+                                        color: isView
+                                          ? accentSecondaryDisabled
+                                          : inactivePaginationInkDisabled,
+                                      }
                                     : {
                                         color: isView
                                           ? accentPrimary
-                                          : themeColors.accentSecondary,
+                                          : inactivePaginationInk,
                                       },
                                 ]}
                               >
@@ -781,7 +834,7 @@ export function ExploreV2CurrentCard({
                 />
               ) : null}
 
-              {settingsOverflow && isPrimary ? (
+              {settingsOverflow?.visible && isPrimary ? (
                 <View
                   style={styles.drawerSlot}
                   pointerEvents="box-none"
@@ -800,7 +853,7 @@ export function ExploreV2CurrentCard({
         </View>
         </Reanimated.View>
         <Reanimated.View pointerEvents="none" style={[styles.completionMessageOverlay, celebrationMessageStyle]}>
-          <Text style={styles.completionMessageText}>Great Job!</Text>
+          <Text style={[styles.completionMessageText, { color: themeColors.canvasLight }]}>Great Job!</Text>
         </Reanimated.View>
         {collapsedSecondary ? (
           <TouchableOpacity
@@ -821,12 +874,12 @@ const styles = StyleSheet.create({
   shell: {
     flex: 1,
     flexDirection: 'column',
-    paddingTop: 10,
+    paddingTop: EXPLORE_V2.cardHeader.topInset,
     paddingLeft: pad.horizontal,
     paddingRight: 24,
-    paddingBottom: 24,
+    paddingBottom: 32,
     borderWidth: 2,
-    borderColor: EXPLORE_V2.colors.pageBg,
+    borderColor: 'transparent',
     borderTopLeftRadius: EXPLORE_V2.cardTopRadius,
     borderTopRightRadius: EXPLORE_V2.cardTopRadius,
     borderBottomLeftRadius: EXPLORE_V2.cardRadius,
@@ -860,11 +913,11 @@ const styles = StyleSheet.create({
     zIndex: 1,
   },
   headerBar: {
-    height: 32,
+    height: EXPLORE_V2.cardHeader.rowHeight,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'flex-start',
-    paddingTop: 2,
+    justifyContent: 'space-between',
+    paddingVertical: EXPLORE_V2.cardHeader.rowVerticalPadding,
     width: '100%',
   },
   eyebrow: {
@@ -873,10 +926,14 @@ const styles = StyleSheet.create({
     letterSpacing: 0,
     textTransform: 'uppercase',
   },
+  currentSettingsButtonText: {
+    ...TYPOGRAPHY.legal,
+  },
   exerciseName: {
-    ...TYPOGRAPHY.displayLarge,
+    ...TYPOGRAPHY.h2,
     fontWeight: '400',
     flexShrink: 1,
+    marginTop: 12,
   },
   heroCtaContainer: {
     width: '100%',
@@ -898,8 +955,10 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   carouselViewport: {
-    width: '100%',
+    alignSelf: 'stretch',
     minHeight: 200,
+    marginLeft: -pad.horizontal,
+    marginRight: -24,
   },
   carouselPage: {
     flexShrink: 0,
@@ -916,6 +975,9 @@ const styles = StyleSheet.create({
   },
   valuesBlock: {
     width: '100%',
+    paddingTop: 8,
+    paddingLeft: pad.horizontal,
+    paddingRight: 24,
   },
   perSideRow: {
     marginBottom: 0,
@@ -923,39 +985,56 @@ const styles = StyleSheet.create({
   perSideSingleLine: {
     ...TYPOGRAPHY.meta,
     fontWeight: '400',
+    marginTop: 2,
   },
   valueRow: {
     flexDirection: 'row',
-    alignItems: 'baseline',
+    alignItems: 'flex-start',
     flexWrap: 'nowrap',
+    justifyContent: 'flex-start',
+    width: '100%',
     gap: 8,
     marginBottom: 0,
+    overflow: 'visible',
   },
   /** Wraps unit only so ↑ is positioned over this label, not in the gap between weight/reps rows */
   unitWithDelta: {
-    position: 'relative',
+    paddingTop: 8,
+    flexShrink: 0,
+  },
+  unitLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: 6,
   },
   heroDeltaLabel: {
-    position: 'absolute',
-    top: 36,
-    right: -12,
-    fontSize: 16,
-    lineHeight: 16,
-    fontWeight: '600',
+    fontSize: 22,
+    lineHeight: 22,
+    fontWeight: '500',
+    width: 22,
+    height: 22,
+    textAlign: 'center',
+    marginLeft: -4,
+    transform: [{ translateY: -1 }],
   },
   valueMetric: {
-    fontSize: 80,
+    ...TYPOGRAPHY.h2,
     fontWeight: '400',
-    letterSpacing: -0.5,
-    fontVariant: ['tabular-nums'],
   },
   valueInput: {
-    fontSize: 80,
+    fontSize: 96,
+    lineHeight: 104,
+    height: 116,
     fontWeight: '400',
     letterSpacing: -0.5,
     fontVariant: ['tabular-nums'],
-    minWidth: 48,
-    padding: 0,
+    minWidth: 0,
+    flexShrink: 1,
+    includeFontPadding: false,
+    textAlignVertical: 'center',
+    paddingTop: 0,
+    paddingBottom: 0,
+    paddingHorizontal: 0,
     margin: 0,
     borderWidth: 0,
     backgroundColor: 'transparent',
@@ -965,7 +1044,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     width: '100%',
-    marginTop: 40,
+    marginTop: 24,
     gap: 12,
   },
   paginationWrap: {
@@ -1017,7 +1096,6 @@ const styles = StyleSheet.create({
   },
   completionMessageText: {
     ...TYPOGRAPHY.h1,
-    color: COLORS.canvasLight,
     fontWeight: '400',
   },
   celebrationActiveShell: {

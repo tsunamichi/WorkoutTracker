@@ -39,7 +39,7 @@ import * as Haptics from 'expo-haptics';
 import { useStore } from '../store';
 import { useAppTheme } from '../theme/useAppTheme';
 import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS, CARDS } from '../constants';
-import { IconArrowLeft, IconCheck, IconCheckmark, IconAddLine, IconMinusLine, IconTrash, IconEdit, IconMenu, IconHistory, IconRestart, IconSkip, IconSwap, IconArrowRight, IconAdd, IconPause, IconPlay, IconAddTime, IconChevronDown, IconClose } from '../components/icons';
+import { IconArrowLeft, IconCheck, IconCheckmark, IconAddLine, IconMinusLine, IconTrash, IconEdit, IconMenu, IconHistory, IconRestart, IconSkip, IconSwap, IconArrowRight, IconAdd, IconPause, IconPlay, IconAddTime, IconChevronDown } from '../components/icons';
 import { BottomDrawer } from '../components/common/BottomDrawer';
 import { NextLabel } from '../components/common/NextLabel';
 import { SetTimerSheet } from '../components/timer/SetTimerSheet';
@@ -47,6 +47,7 @@ import { ExecutionTopDrawer } from '../components/common/ExecutionTopDrawer';
 import { Toggle } from '../components/Toggle';
 import { ShapeConfetti } from '../components/common/ShapeConfetti';
 import { DeviceEdgeTimer } from '../components/common/DeviceEdgeTimer';
+import { UnderlinedActionButton } from '../components/common/UnderlinedActionButton';
 import { ExploreV2ExecutionRoot } from '../components/exploreV2/ExploreV2ExecutionRoot';
 import { ExploreV2TimerArea } from '../components/exploreV2/ExploreV2TimerArea';
 import { EXPLORE_V2 } from '../components/exploreV2/exploreV2Tokens';
@@ -74,6 +75,8 @@ const CARD_COLLAPSED_HEIGHT = 48;
 const CARD_EXPANDED_MAX_HEIGHT = 520;
 // Overlapped shell/content timing: coordinated transform, not sequential
 const SHELL_EXPAND_MS = 230;
+const EXECUTION_MENU_TOP_MARGIN = 64;
+const EXECUTION_MENU_CONTENT_GAP = 0;
 const METRICS_ENTER_DELAY_MS = 10;
 const ACTION_ENTER_DELAY_MS = 40;
 const CONTENT_ENTER_MS = 160;
@@ -162,6 +165,8 @@ type RouteParams = {
     workoutKey: string;
     workoutTemplateId: string;
     type: ExecutionType;
+    transitionSource?: 'scheduleDeck';
+    transitionOrigin?: { x: number; y: number; width: number; height: number; borderRadius: number };
   };
 };
 
@@ -186,7 +191,21 @@ export function ExerciseExecutionScreen() {
     workoutTemplateId: string;
     type: 'warmup' | 'main' | 'core';
     bonusLogId?: string;
+    transitionSource?: 'scheduleDeck';
+    transitionOrigin?: { x: number; y: number; width: number; height: number; borderRadius: number };
   };
+  const transitionSource = (route.params as any)?.transitionSource;
+  const transitionOrigin = (route.params as any)?.transitionOrigin;
+  const isScheduleOriginTransition = transitionSource === 'scheduleDeck' && !!transitionOrigin;
+  const [scheduleTransitionTargetFrame, setScheduleTransitionTargetFrame] = useState<{
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  } | null>(null);
+  const scheduleTransitionProgress = useSharedValue(isScheduleOriginTransition ? 0 : 1);
+  const scheduleTransitionContentProgress = useSharedValue(isScheduleOriginTransition ? 0 : 1);
+  const isClosingFromHeaderRef = useRef(false);
   
   console.log('🚀 ExerciseExecutionScreen initialized:', {
     workoutKey,
@@ -238,7 +257,98 @@ export function ExerciseExecutionScreen() {
   } = useStore();
 
   const appTheme = useAppTheme();
-  
+
+  useEffect(() => {
+    if (!isScheduleOriginTransition) return;
+    scheduleTransitionProgress.value = withTiming(1, {
+      duration: 360,
+      easing: ReanimatedEasing.bezier(0.22, 0.8, 0.22, 1),
+    });
+    scheduleTransitionContentProgress.value = withDelay(
+      100,
+      withTiming(1, { duration: 240, easing: ReanimatedEasing.out(ReanimatedEasing.cubic) }),
+    );
+  }, [isScheduleOriginTransition, scheduleTransitionContentProgress, scheduleTransitionProgress]);
+
+  const runCloseToScheduleCard = useCallback(() => {
+    if (!isScheduleOriginTransition || isClosingFromHeaderRef.current) {
+      navigation.goBack();
+      return;
+    }
+    isClosingFromHeaderRef.current = true;
+    scheduleTransitionContentProgress.value = withTiming(0, { duration: 130 });
+    scheduleTransitionProgress.value = withTiming(
+      0,
+      { duration: 260, easing: ReanimatedEasing.inOut(ReanimatedEasing.cubic) },
+      done => {
+        if (done) runOnJS(navigation.goBack)();
+      },
+    );
+  }, [isScheduleOriginTransition, navigation, scheduleTransitionContentProgress, scheduleTransitionProgress]);
+
+  const scheduleCardExpandAnimatedStyle = useAnimatedStyle(() => {
+    if (!isScheduleOriginTransition || !transitionOrigin) return {};
+    const originCenterX = transitionOrigin.x + transitionOrigin.width / 2;
+    const originCenterY = transitionOrigin.y + transitionOrigin.height / 2;
+    const targetX = scheduleTransitionTargetFrame?.x ?? 0;
+    const targetY = scheduleTransitionTargetFrame?.y ?? 0;
+    const targetWidth = scheduleTransitionTargetFrame?.width ?? screenWidth;
+    const targetHeight = scheduleTransitionTargetFrame?.height ?? screenHeight;
+    const targetCenterX = targetX + targetWidth / 2;
+    const targetCenterY = targetY + targetHeight / 2;
+    return {
+      borderRadius: interpolate(
+        scheduleTransitionProgress.value,
+        [0, 1],
+        [transitionOrigin.borderRadius, 0],
+        'clamp',
+      ),
+      overflow: 'hidden' as const,
+      transform: [
+        {
+          translateX: interpolate(
+            scheduleTransitionProgress.value,
+            [0, 1],
+            [originCenterX - targetCenterX, 0],
+            'clamp',
+          ),
+        },
+        {
+          translateY: interpolate(
+            scheduleTransitionProgress.value,
+            [0, 1],
+            [originCenterY - targetCenterY, 0],
+            'clamp',
+          ),
+        },
+        {
+          scaleX: interpolate(
+            scheduleTransitionProgress.value,
+            [0, 1],
+            [transitionOrigin.width / targetWidth, 1],
+            'clamp',
+          ),
+        },
+        {
+          scaleY: interpolate(
+            scheduleTransitionProgress.value,
+            [0, 1],
+            [transitionOrigin.height / targetHeight, 1],
+            'clamp',
+          ),
+        },
+      ],
+    };
+  }, [isScheduleOriginTransition, scheduleTransitionTargetFrame, screenHeight, screenWidth, transitionOrigin]);
+
+  const scheduleCardContentRevealStyle = useAnimatedStyle(() => ({
+    opacity: scheduleTransitionContentProgress.value,
+    transform: [{ translateY: interpolate(scheduleTransitionContentProgress.value, [0, 1], [12, 0], 'clamp') }],
+  }));
+  const scheduleHeaderRevealStyle = useAnimatedStyle(() => ({
+    opacity: scheduleTransitionContentProgress.value,
+    transform: [{ translateY: interpolate(scheduleTransitionContentProgress.value, [0, 1], [20, 0], 'clamp') }],
+  }));
   const getDetailedWorkoutProgress = () => useStore.getState().detailedWorkoutProgress;
   
   const [refreshKey, setRefreshKey] = useState(0);
@@ -629,7 +739,11 @@ export function ExerciseExecutionScreen() {
   const buttonLabelOpacity = useRef(new Animated.Value(1)).current;
   const counterShrinkAnim = useRef(new Animated.Value(1)).current;
   const [showMenu, setShowMenu] = useState(false);
+  const [menuThemeActive, setMenuThemeActive] = useState(false);
+  const [headerMeasuredHeight, setHeaderMeasuredHeight] = useState(0);
   const [localRestOverride, setLocalRestOverride] = useState<number | null>(null);
+  const menuSlideProgress = useSharedValue(0);
+  const menuToneProgress = useSharedValue(0);
   const [showExerciseHistory, setShowExerciseHistory] = useState(false);
   const [showSwapModal, setShowSwapModal] = useState(false);
   const [swapSearchQuery, setSwapSearchQuery] = useState('');
@@ -670,8 +784,25 @@ export function ExerciseExecutionScreen() {
   const exploreV2RestHeroBg = '#FFA424';
   const exploreV2TimerPageRestTint =
     appTheme.id === 'v2' ? appTheme.colors.accentPrimary : exploreV2RestHeroBg;
+  const schedulePageBg = appTheme.colors.canvasLight;
+  const exploreV2BasePageBg = schedulePageBg;
   /** Work / exercise timer phase — always themed `backgroundTimer` (v2: blue; other themes: default lime). */
   const exploreV2TimerPageWorkTint = appTheme.colors.backgroundTimer;
+  const menuOnCompleteEnabled = type === 'main' && !allCurrentGroupsComplete;
+  const menuHasSecondaryDestructive = type !== 'main';
+  const menuActionCount =
+    (menuOnCompleteEnabled ? 1 : 0) +
+    1 +
+    (menuHasSecondaryDestructive ? 1 : 0);
+  const menuExpandedHeight = 132 + menuActionCount * 52;
+  const menuSlideContentStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(menuToneProgress.value, [0, 1], [1, 0.7]),
+    transform: [
+      {
+        translateY: interpolate(menuSlideProgress.value, [0, 1], [0, menuExpandedHeight + EXECUTION_MENU_CONTENT_GAP]),
+      },
+    ],
+  }));
 
   useEffect(() => {
     if (executionMode !== 'explore-v2') return;
@@ -695,6 +826,22 @@ export function ExerciseExecutionScreen() {
       easing: REST_EASE,
     });
   }, [executionMode, inlineExploreWorkActive]);
+
+  useEffect(() => {
+    menuSlideProgress.value = withTiming(showMenu ? 1 : 0, {
+      duration: showMenu ? 420 : 240,
+      easing: showMenu
+        ? ReanimatedEasing.out(ReanimatedEasing.cubic)
+        : ReanimatedEasing.out(ReanimatedEasing.cubic),
+    });
+    menuToneProgress.value = withTiming(showMenu ? 1 : 0, {
+      duration: showMenu ? 420 : 240,
+      easing: showMenu
+        ? ReanimatedEasing.out(ReanimatedEasing.cubic)
+        : ReanimatedEasing.out(ReanimatedEasing.cubic),
+    });
+    setMenuThemeActive(showMenu);
+  }, [showMenu, menuSlideProgress, menuToneProgress]);
 
   /** Idle: timer 0%, stack 100%. Rest: timer `REST_TIMER_FRAC`, stack `REST_STACK_FRAC` of content height */
   const exploreV2TimerBandAnimatedStyle = useAnimatedStyle(() => {
@@ -721,18 +868,18 @@ export function ExerciseExecutionScreen() {
     const w = exploreV2WorkBlueProgress.value;
     const activeTint = interpolateColor(w, [0, 1], [exploreV2TimerPageRestTint, exploreV2TimerPageWorkTint]);
     return {
-      backgroundColor: interpolateColor(p, [0, 1], [EXPLORE_V2.colors.pageBg, activeTint]),
+      backgroundColor: interpolateColor(p, [0, 1], [exploreV2BasePageBg, activeTint]),
     };
-  }, [exploreV2TimerPageRestTint, exploreV2TimerPageWorkTint]);
+  }, [exploreV2BasePageBg, exploreV2TimerPageRestTint, exploreV2TimerPageWorkTint]);
 
   const exploreV2ContentWrapBgAnimatedStyle = useAnimatedStyle(() => {
     const p = exploreV2TimerBandProgress.value;
     const w = exploreV2WorkBlueProgress.value;
     const activeTint = interpolateColor(w, [0, 1], [exploreV2TimerPageRestTint, exploreV2TimerPageWorkTint]);
     return {
-      backgroundColor: interpolateColor(p, [0, 1], [EXPLORE_V2.colors.pageBg, activeTint]),
+      backgroundColor: interpolateColor(p, [0, 1], [exploreV2BasePageBg, activeTint]),
     };
-  }, [exploreV2TimerPageRestTint, exploreV2TimerPageWorkTint]);
+  }, [exploreV2BasePageBg, exploreV2TimerPageRestTint, exploreV2TimerPageWorkTint]);
   const exploreV2HeaderInk = '#1F1F1F';
   const historyOpacity = useRef(new Animated.Value(0)).current;
   
@@ -1484,6 +1631,13 @@ export function ExerciseExecutionScreen() {
   const isExplorePreStart = executionMode === 'explore' && completedSets.size === 0;
   const isExploreWorkoutComplete = executionMode === 'explore' && allCurrentGroupsComplete;
   const isExploreV2WorkoutComplete = executionMode === 'explore-v2' && allCurrentGroupsComplete;
+  const exploreV2CompletedOnDateLabel = useMemo(() => {
+    if (executionMode !== 'explore-v2' || type !== 'main' || !isExploreV2WorkoutComplete) return undefined;
+    const completedAt = scheduledWorkout?.completedAt ?? scheduledWorkout?.date;
+    if (!completedAt) return dayjs().format('MMM D, YYYY');
+    const parsed = dayjs(completedAt);
+    return parsed.isValid() ? parsed.format('MMM D, YYYY') : dayjs().format('MMM D, YYYY');
+  }, [executionMode, type, isExploreV2WorkoutComplete, scheduledWorkout?.completedAt, scheduledWorkout?.date]);
   useEffect(() => {
     if (!isExploreV2WorkoutComplete) setShowCompletionCelebration(false);
   }, [isExploreV2WorkoutComplete]);
@@ -3044,7 +3198,11 @@ export function ExerciseExecutionScreen() {
   
   return (
     <AnimatedReanimated.View
-      style={[styles.container, { paddingTop: insets.top }, exploreV2PageBgAnimatedStyle]}
+      style={[
+        styles.container,
+        { paddingTop: insets.top },
+        exploreV2PageBgAnimatedStyle,
+      ]}
     >
       <ShapeConfetti active={showConfetti} />
       {executionMode !== 'explore-v2' && (
@@ -3055,25 +3213,37 @@ export function ExerciseExecutionScreen() {
           strokeWidth={4}
         />
       )}
-      <View style={styles.header}>
+      <AnimatedReanimated.View
+        style={[styles.header, scheduleHeaderRevealStyle]}
+        onLayout={event => {
+          const nextHeight = Math.round(event.nativeEvent.layout.height);
+          if (nextHeight > 0 && nextHeight !== headerMeasuredHeight) {
+            setHeaderMeasuredHeight(nextHeight);
+          }
+        }}
+      >
         <View style={styles.topBar}>
           <TouchableOpacity
             testID="back-button"
-            style={[styles.backButton, showMenu && styles.headerDimmed]}
+            style={[styles.topBarLeft, showMenu && styles.headerDimmed]}
             onPress={() => {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              navigation.goBack();
+              runCloseToScheduleCard();
             }}
             activeOpacity={1}
             disabled={showMenu}
           >
-            <IconArrowLeft size={24} color={executionMode === 'explore-v2' ? exploreV2HeaderInk : '#FFFFFF'} />
-          </TouchableOpacity>
-          <View style={[styles.topBarCenter, showMenu && styles.headerDimmed]} pointerEvents={showMenu ? 'none' : 'auto'}>
+            <View style={styles.backMetaButton}>
+              <IconArrowLeft size={18} color={executionMode === 'explore-v2' ? COLORS.textMeta : 'rgba(255,255,255,0.72)'} />
+              <Text style={[styles.backMetaText, executionMode === 'explore-v2' && styles.backMetaTextExploreV2]}>Schedule</Text>
+            </View>
             <Text
               testID="header-title"
               numberOfLines={1}
-              style={[styles.headerTitle, executionMode === 'explore-v2' && styles.headerTitleExploreV2]}
+              style={[
+                styles.headerTitle,
+                executionMode === 'explore-v2' && styles.headerTitleExploreV2Left,
+              ]}
             >
               {getTitle()}
             </Text>
@@ -3090,40 +3260,48 @@ export function ExerciseExecutionScreen() {
                 </TouchableOpacity>
               </View>
             )}
-          </View>
+          </TouchableOpacity>
           {!isInPastCycle ? (
-            <TouchableOpacity
-              testID="menu-button"
-              style={styles.menuButton}
+            <UnderlinedActionButton
+              label={showMenu ? 'Close' : 'Options'}
               onPress={() => (showMenu ? setShowMenu(false) : setShowMenu(true))}
               activeOpacity={1}
-            >
-              {showMenu ? (
-                <IconClose size={24} color={executionMode === 'explore-v2' ? exploreV2HeaderInk : '#FFFFFF'} />
-              ) : (
-                <IconMenu size={24} color={executionMode === 'explore-v2' ? exploreV2HeaderInk : '#FFFFFF'} />
-              )}
-            </TouchableOpacity>
+              style={styles.menuTextAction}
+              color={executionMode === 'explore-v2' ? exploreV2HeaderInk : '#FFFFFF'}
+            />
           ) : (
             <View style={styles.menuSpacer} />
           )}
         </View>
-      </View>
+      </AnimatedReanimated.View>
       
       {/* Top execution drawer */}
-      <ExecutionTopDrawer
-        visible={showMenu}
-        onClose={() => setShowMenu(false)}
-        restTimeSeconds={localRestOverride ?? settings.restTimerDefaultSeconds}
-        onRestTimeChange={setLocalRestOverride}
-        onComplete={type === 'main' && !allCurrentGroupsComplete ? handleCompleteAll : undefined}
-        onReset={handleReset}
-        onSecondaryDestructive={type === 'main' ? undefined : handleRemoveSection}
-        secondaryDestructiveLabel={type === 'warmup' ? t('removeWarmup') : t('remove')}
-      />
+      <View style={[styles.executionTopDrawerOverlay, { top: headerMeasuredHeight + EXECUTION_MENU_TOP_MARGIN }]}>
+        <ExecutionTopDrawer
+          visible={showMenu}
+          onClose={() => setShowMenu(false)}
+          restTimeSeconds={localRestOverride ?? settings.restTimerDefaultSeconds}
+          onRestTimeChange={setLocalRestOverride}
+          onComplete={menuOnCompleteEnabled ? handleCompleteAll : undefined}
+          onReset={handleReset}
+          onSecondaryDestructive={menuHasSecondaryDestructive ? handleRemoveSection : undefined}
+          secondaryDestructiveLabel={type === 'warmup' ? t('removeWarmup') : t('remove')}
+        />
+      </View>
 
       <AnimatedReanimated.View
-        style={[styles.contentWrap, exploreV2ContentWrapBgAnimatedStyle, showMenu && styles.contentDimmed]}
+        onLayout={event => {
+          const { x, y, width, height } = event.nativeEvent.layout;
+          setScheduleTransitionTargetFrame({ x, y, width, height });
+        }}
+        style={[
+          styles.contentWrap,
+          isScheduleOriginTransition && { backgroundColor: schedulePageBg },
+          isScheduleOriginTransition && scheduleCardExpandAnimatedStyle,
+          exploreV2ContentWrapBgAnimatedStyle,
+          scheduleCardContentRevealStyle,
+          menuSlideContentStyle,
+        ]}
         pointerEvents={showMenu ? 'none' : 'auto'}
       >
         {executionMode === 'explore-v2' ? (
@@ -3179,6 +3357,9 @@ export function ExerciseExecutionScreen() {
                 updateProgressionGroup={updateProgressionGroup}
                 onSwapExercise={handleSwap}
                 onRemoveExercise={handleRemoveExerciseFromExplore}
+                onOpenProgressForExercise={({ exerciseId, exerciseName }) => {
+                  (navigation as any).navigate('Progress', { exerciseId, exerciseName });
+                }}
                 exploreLayoutRootHeight={exploreV2AvailableRootHeight}
                 currentGroupHasLoggedSets={exploreV2CurrentGroupHasLoggedSets}
                 onOpenAddExercise={handleOpenAddExerciseDrawer}
@@ -3188,10 +3369,13 @@ export function ExerciseExecutionScreen() {
                   exploreV2TimerPhase === 'rest' || exploreV2TimerPhase === 'switchSides'
                 }
                 restThemeProgress={exploreV2TimerBandProgress}
+                menuThemeActive={menuThemeActive}
+                menuToneProgress={menuToneProgress}
                 getExerciseHistoryForDrawer={getExerciseHistoryForDrawer}
                 exerciseHistoryRefreshKey={refreshKey}
                 progressionValuesByItemId={progressionValuesByItemId}
                 celebrateCompletion={showCompletionCelebration}
+                completedOnDateLabel={exploreV2CompletedOnDateLabel}
                 />
               </AnimatedReanimated.View>
             </AnimatedReanimated.View>
@@ -5213,19 +5397,31 @@ const styles = StyleSheet.create({
   topBar: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    minHeight: 48,
+    alignItems: 'flex-start',
+    minHeight: 70,
     paddingHorizontal: SPACING.xxl,
     paddingBottom: SPACING.sm,
   },
-  backButton: {
-    width: 48,
-    height: 48,
-    justifyContent: 'center',
-    alignItems: 'flex-start',
-    marginLeft: -4,
+  topBarLeft: {
+    flex: 1,
+    minWidth: 0,
+    paddingRight: SPACING.md,
   },
-  menuButton: {
+  backMetaButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    gap: 4,
+    marginLeft: -2,
+  },
+  backMetaText: {
+    ...TYPOGRAPHY.legal,
+    color: 'rgba(255,255,255,0.72)',
+  },
+  backMetaTextExploreV2: {
+    color: COLORS.textMeta,
+  },
+  menuTextAction: {
     width: 48,
     height: 48,
     justifyContent: 'center',
@@ -5236,12 +5432,11 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
   },
-  topBarCenter: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: SPACING.sm,
-    minWidth: 0,
+  executionTopDrawerOverlay: {
+    position: 'absolute',
+    left: SPACING.xxl,
+    right: SPACING.xxl,
+    zIndex: 60,
   },
   headerDimmed: {
     opacity: 0.3,
@@ -5253,14 +5448,12 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     width: '100%',
   },
-  headerTitleExploreV2: {
-    fontSize: TYPOGRAPHY.body.fontSize,
-    color: '#1F1F1F',
-    fontWeight: '600',
-    letterSpacing: -0.35,
-    lineHeight: 28,
-    opacity: 0.94,
-    textAlign: 'center',
+  headerTitleExploreV2Left: {
+    ...TYPOGRAPHY.h3,
+    fontWeight: '500' as const,
+    color: COLORS.inkCharcoal,
+    textAlign: 'left',
+    width: 'auto',
   },
   floatingModeToggle: {
     position: 'absolute',

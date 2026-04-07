@@ -17,6 +17,7 @@ import { WorkoutsScreen } from '../screens/WorkoutsScreen';
 import { ProfileScreen } from '../screens/ProfileScreen';
 import { BodyWeightHistoryScreen } from '../screens/BodyWeightHistoryScreen';
 import { ProgressHomeScreen } from '../screens/ProgressHomeScreen';
+import { ProgressScreen } from '../screens/ProgressScreen';
 import { LiftHistoryScreen } from '../screens/LiftHistoryScreen';
 import { EditKeyLiftsScreen } from '../screens/EditKeyLiftsScreen';
 import { PhotoViewerScreen } from '../screens/PhotoViewerScreen';
@@ -25,6 +26,7 @@ import { BonusDetailScreen } from '../screens/BonusDetailScreen';
 import { CoreProgramScreen } from '../screens/CoreProgramScreen';
 import { CycleDetailScreen } from '../screens/CycleDetailScreen';
 import { CyclePlanDetailScreen } from '../screens/CyclePlanDetailScreen';
+import { CycleProgressScreen } from '../screens/CycleProgressScreen';
 import { CycleConflictsScreen } from '../screens/CycleConflictsScreen';
 // import { WorkoutExecutionScreen } from '../screens/WorkoutExecutionScreen'; // Removed - navigating directly to ExerciseExecution
 import WorkoutEditScreen from '../screens/WorkoutEditScreen';
@@ -43,6 +45,8 @@ import { WorkoutCreationOptionsScreen } from '../screens/WorkoutCreationOptionsS
 import { ProgressionScreen } from '../screens/ProgressionScreen';
 import { ProgressionDefaultsScreen } from '../screens/ProgressionDefaultsScreen';
 import { ProgressionGroupDetailScreen } from '../screens/ProgressionGroupDetailScreen';
+import { ScheduleWorkoutDeckV2PreviewScreen } from '../screens/ScheduleWorkoutDeckV2PreviewScreen';
+import { DeckMotionLabScreen } from '../screens/DeckMotionLabScreen';
 import { IconCalendar, IconHistory, IconAdd, IconStopwatch, IconPlay, IconCore, IconWarmup } from '../components/icons';
 import { COLORS, TYPOGRAPHY, SPACING } from '../constants';
 import { useStore } from '../store';
@@ -72,10 +76,19 @@ export type RootStackParamList = {
   WarmupExecution: { workoutKey: string; workoutTemplateId: string };
   AccessoriesEditor: { templateId: string; workoutKey?: string };
   AccessoriesExecution: { workoutKey: string; workoutTemplateId: string };
-  ExerciseExecution: { workoutKey: string; workoutTemplateId: string; type: 'warmup' | 'main' | 'core'; bonusLogId?: string };
+  ExerciseExecution: {
+    workoutKey: string;
+    workoutTemplateId: string;
+    type: 'warmup' | 'main' | 'core';
+    bonusLogId?: string;
+    transitionSource?: 'scheduleDeck';
+    transitionOrigin?: { x: number; y: number; width: number; height: number; borderRadius: number };
+  };
   DesignSystem: undefined;
   CycleDetail: { cycleId: string };
   CyclePlanDetail: { planId: string };
+  CycleProgress: { planId?: string; asOfDate?: string } | undefined;
+  Progress: { exerciseId?: string; exerciseName?: string } | undefined;
   CycleConflicts: { plan: any; conflicts: any[]; planId?: string; fromPauseShift?: boolean; resumeDate?: string };
   WorkoutExecution: { workoutId?: string; cycleId?: string; templateId?: string; workoutTemplateId?: string; date: string; isLocked?: boolean };
   WorkoutEdit: { cycleId: string; workoutTemplateId: string; date: string };
@@ -100,6 +113,8 @@ export type RootStackParamList = {
   Progression: undefined;
   ProgressionDefaults: undefined;
   ProgressionGroupDetail: { groupId: string };
+  ScheduleWorkoutDeckPreview: undefined;
+  DeckMotionLab: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -788,10 +803,21 @@ export default function AppNavigator() {
         <Stack.Screen name="WarmupExecution" component={WarmupExecutionRedirectScreen} />
         <Stack.Screen name="AccessoriesEditor" component={AccessoriesEditorScreen} />
         <Stack.Screen name="AccessoriesExecution" component={AccessoriesExecutionScreen} />
-        <Stack.Screen name="ExerciseExecution" component={ExerciseExecutionScreen} />
+        <Stack.Screen
+          name="ExerciseExecution"
+          component={ExerciseExecutionScreen}
+          options={({ route }: any) => ({
+            animation:
+              route?.params?.transitionSource === 'scheduleDeck' && !!route?.params?.transitionOrigin
+                ? 'none'
+                : 'default',
+          })}
+        />
         <Stack.Screen name="DesignSystem" component={DesignSystemScreen} />
         <Stack.Screen name="CycleDetail" component={CycleDetailScreen} />
         <Stack.Screen name="CyclePlanDetail" component={CyclePlanDetailScreen} />
+        <Stack.Screen name="CycleProgress" component={CycleProgressScreen} />
+        <Stack.Screen name="Progress" component={ProgressScreen} />
         <Stack.Screen name="CycleConflicts" component={CycleConflictsScreen} />
         {/* <Stack.Screen name="WorkoutExecution" component={WorkoutExecutionScreen} /> */}
         {/* Removed - navigating directly to ExerciseExecution with type='main' */}
@@ -817,6 +843,8 @@ export default function AppNavigator() {
         <Stack.Screen name="Progression" component={ProgressionScreen} />
         <Stack.Screen name="ProgressionDefaults" component={ProgressionDefaultsScreen} />
         <Stack.Screen name="ProgressionGroupDetail" component={ProgressionGroupDetailScreen} />
+        <Stack.Screen name="ScheduleWorkoutDeckPreview" component={ScheduleWorkoutDeckV2PreviewScreen} />
+        <Stack.Screen name="DeckMotionLab" component={DeckMotionLabScreen} />
       </Stack.Navigator>
     </View>
   );
