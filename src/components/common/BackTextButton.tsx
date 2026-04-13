@@ -1,5 +1,5 @@
 import React from 'react';
-import { StyleSheet, Text, TouchableOpacity, ViewStyle, TextStyle } from 'react-native';
+import { StyleSheet, Text, TouchableOpacity, View, ViewStyle, TextStyle } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { COLORS, SPACING, TYPOGRAPHY } from '../../constants';
 
@@ -8,13 +8,15 @@ type Props = {
   onPress: () => void;
   style?: ViewStyle;
   textStyle?: TextStyle;
+  /** When true, `‹` is not rotated (points left). Default false = rotated 90° to read as “up”. */
+  chevronPointsLeft?: boolean;
 };
 
 /**
- * Matches the lightweight back affordance used on Cycle Progress.
- * Example: "‹ Home"
+ * Lightweight back affordance (stack headers, etc.).
+ * By default the chevron is rotated 90° clockwise so it reads as “up” beside the label.
  */
-export function BackTextButton({ label, onPress, style, textStyle }: Props) {
+export function BackTextButton({ label, onPress, style, textStyle, chevronPointsLeft = false }: Props) {
   return (
     <TouchableOpacity
       activeOpacity={0.8}
@@ -24,7 +26,12 @@ export function BackTextButton({ label, onPress, style, textStyle }: Props) {
         onPress();
       }}
     >
-      <Text style={[styles.text, textStyle]}>{`‹ ${label}`}</Text>
+      <View style={styles.row}>
+        <View style={styles.chevronBox}>
+          <Text style={[styles.text, textStyle, !chevronPointsLeft && styles.chevron]}>‹</Text>
+        </View>
+        <Text style={[styles.text, textStyle, styles.label]}>{label}</Text>
+      </View>
     </TouchableOpacity>
   );
 }
@@ -35,6 +42,23 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.xxl,
     paddingTop: SPACING.sm,
     paddingBottom: SPACING.md,
+  },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  chevronBox: {
+    width: 14,
+    height: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 6,
+  },
+  chevron: {
+    transform: [{ rotate: '90deg' }],
+  },
+  label: {
+    flexShrink: 1,
   },
   text: {
     ...TYPOGRAPHY.meta,

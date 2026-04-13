@@ -16,7 +16,10 @@ import Reanimated, {
   useAnimatedStyle,
   interpolate,
   interpolateColor,
+  withTiming,
+  Easing,
   type SharedValue,
+  useSharedValue,
 } from 'react-native-reanimated';
 import { EXPLORE_V2 } from './exploreV2Tokens';
 import { COLORS, TYPOGRAPHY, hexToRgba } from '../../constants';
@@ -63,6 +66,8 @@ type Props = {
   menuToneProgress: SharedValue<number>;
   /** In-card settings overlay (slides up over hero + footer) */
   settingsOverflow?: ExploreV2CurrentSettingsOverflowProps;
+  /** Settings is opened as full-surface mode (card expanded to wallet height). */
+  settingsSurfaceOpen?: boolean;
   progressionValuesByItemId: Record<
     string,
     { weight: number; reps: number; weightDelta: number; repsDelta: number }
@@ -438,6 +443,7 @@ export function ExploreV2CurrentCard({
   menuThemeActive,
   menuToneProgress,
   settingsOverflow,
+  settingsSurfaceOpen = false,
   progressionValuesByItemId,
   celebrationProgress,
   celebrationActive = false,
@@ -578,7 +584,39 @@ export function ExploreV2CurrentCard({
     heroTimerActive || (showPrimaryCta && logEnabledForSlot);
 
   const settingsDrawerOpen = Boolean(settingsOverflow?.visible && isPrimary);
-  const surfaceColor = settingsDrawerOpen ? skipRestCtaBg : ex.surfaceCurrentCard;
+  const settingsSurfaceActive = settingsDrawerOpen && settingsSurfaceOpen;
+  const handleSettingsPress = useCallback(() => {
+    if (!settingsOverflow) return;
+    if (settingsSurfaceOpen || settingsOverflow.visible) {
+      settingsOverflow.onClose();
+      return;
+    }
+    settingsOverflow.onOpenSheet();
+  }, [settingsOverflow, settingsSurfaceOpen]);
+  const settingsSurfaceProgress = useSharedValue(settingsSurfaceActive ? 1 : 0);
+  useEffect(() => {
+    settingsSurfaceProgress.value = withTiming(settingsSurfaceActive ? 1 : 0, {
+      duration: 300,
+      easing: Easing.out(Easing.cubic),
+    });
+  }, [settingsSurfaceActive, settingsSurfaceProgress]);
+  const heroSurfaceAnimatedStyle = useAnimatedStyle(() => ({
+    opacity: 1 - settingsSurfaceProgress.value,
+    transform: [{ translateY: interpolate(settingsSurfaceProgress.value, [0, 1], [0, -8], 'clamp') }],
+  }));
+  const settingsSurfaceAnimatedStyle = useAnimatedStyle(() => ({
+    opacity: settingsSurfaceProgress.value,
+    transform: [{ translateY: interpolate(settingsSurfaceProgress.value, [0, 1], [8, 0], 'clamp') }],
+  }));
+  const currentLabelAnimatedStyle = useAnimatedStyle(() => ({
+    opacity: 1 - settingsSurfaceProgress.value,
+    transform: [{ translateY: interpolate(settingsSurfaceProgress.value, [0, 1], [0, -10], 'clamp') }],
+  }));
+  const exerciseNameAnimatedStyle = useAnimatedStyle(() => ({
+    marginTop: interpolate(settingsSurfaceProgress.value, [0, 1], [12, 0], 'clamp'),
+    transform: [{ translateY: interpolate(settingsSurfaceProgress.value, [0, 1], [0, -18], 'clamp') }],
+  }));
+  const surfaceColor = ex.surfaceCurrentCard;
   const shellAnimatedStyle = useAnimatedStyle(() => {
     const b = restThemeProgress.value;
     const w = exploreV2WorkBlueProgress.value;
@@ -682,32 +720,34 @@ export function ExploreV2CurrentCard({
         <View style={styles.topBlock}>
           <View style={styles.topBlockContent}>
             <View style={styles.headerBar}>
-              <Text
+              <Reanimated.Text
                 style={[
                   styles.eyebrow,
                   { color: currentHeaderInk },
+                  currentLabelAnimatedStyle,
                 ]}
               >
                 Current
-              </Text>
+              </Reanimated.Text>
               {settingsOverflow && isPrimary ? (
                 <UnderlinedActionButton
-                  label="Settings"
-                  onPress={() => {
-                    if (settingsOverflow.visible) settingsOverflow.onClose();
-                    else settingsOverflow.onOpenSheet();
-                  }}
+                  label={settingsDrawerOpen ? 'Done' : 'Settings'}
+                  onPress={handleSettingsPress}
+                  style={styles.settingsActionBtn}
                   textStyle={[styles.currentSettingsButtonText, { color: settingsInk }]}
                   color={settingsInk}
                   underlineColor={settingsInk}
                 />
               ) : null}
             </View>
-            <Text style={[styles.exerciseName, { color: currentHeaderInk }]} numberOfLines={2}>
+            <Reanimated.Text
+              style={[styles.exerciseName, { color: currentHeaderInk }, exerciseNameAnimatedStyle]}
+              numberOfLines={2}
+            >
               {displayExerciseName}
-            </Text>
+            </Reanimated.Text>
           </View>
-          {settingsOverflow?.visible && isPrimary ? (
+          {settingsOverflow?.visible && isPrimary && !settingsSurfaceOpen ? (
             <Pressable
               style={[StyleSheet.absoluteFillObject, styles.settingsBackdrop]}
               onPress={() => settingsOverflow.onClose()}
@@ -718,7 +758,134 @@ export function ExploreV2CurrentCard({
         </View>
 
         <View style={styles.heroCtaContainer}>
-          <>
+          {settingsSurfaceOpen ? (
+            <View style={styles.surfaceSwapContainer}>
+              <Reanimated.View
+                style={[styles.surfaceSwapLayer, heroSurfaceAnimatedStyle]}
+                pointerEvents={settingsSurfaceActive ? 'none' : 'auto'}
+              >
+                <Reanimated.View style={[styles.heroColumn, heroColumnReserveStyle]}>
+                  <View style={styles.heroUpper}>
+                    <View
+                      style={styles.carouselViewport}
+                      onLayout={e => {
+                        const w = e.nativeEvent.layout.width;
+                        if (w > 0 && w !== pageWidth) setPageWidth(w);
+                      }}
+                    >
+                      {orderedSlots.length > 0 && carouselViewportWidth > 0 ? (
+                        <ScrollView
+                          ref={scrollRef}
+                          horizontal
+                          pagingEnabled
+                          showsHorizontalScrollIndicator={false}
+                          keyboardShouldPersistTaps="handled"
+                          onMomentumScrollEnd={onCarouselScrollEnd}
+                          scrollEventThrottle={16}
+                        >
+                          {orderedSlots.map(slot => (
+                            <CurrentSetHeroPage
+                              key={slotKey(slot)}
+                              slot={slot}
+                              group={group}
+                              completedSets={completedSets}
+                              getSetDisplayValues={getSetDisplayValues}
+                              localValues={localValues}
+                              setLocalValues={setLocalValues}
+                              useKg={useKg}
+                              weightUnit={weightUnit}
+                              getBarbellMode={getBarbellMode}
+                              metricsEditable={metricsEditable}
+                              heroValueColor={heroValueColor}
+                              unitLabelColor={heroUnitColor}
+                              perSideLabelColor={perSideLabelColor}
+                              pageWidth={carouselViewportWidth}
+                              commitsRef={commitsRef}
+                              progressionValuesByItemId={progressionValuesByItemId}
+                            />
+                          ))}
+                        </ScrollView>
+                      ) : null}
+                    </View>
+
+                    <View style={styles.footerRow}>
+                      <AnimatedTouchableOpacity
+                        style={[
+                          styles.ctaPill,
+                          ctaBgStyle,
+                          !logPressable && !inactiveSetPreview && styles.ctaPillDisabled,
+                        ]}
+                        onPress={onLogPress}
+                        disabled={!logPressable}
+                        activeOpacity={0.88}
+                      >
+                        <Reanimated.Text style={[styles.ctaPillText, ctaLabelStyle]}>{ctaLabel}</Reanimated.Text>
+                      </AnimatedTouchableOpacity>
+
+                      <View style={styles.paginationWrap}>
+                        {orderedSlots.map((slot, i) => {
+                          const ex = group.exercises[slot.exerciseIndex];
+                          const isView = i === carouselIndex;
+                          return (
+                            <TouchableOpacity
+                              key={slotKey(slot)}
+                              onPress={() => scrollToSetIndex(i)}
+                              hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
+                              accessibilityRole="button"
+                              accessibilityLabel={`Set ${i + 1}`}
+                              accessibilityState={{ selected: isView }}
+                            >
+                              <View style={styles.paginationItem}>
+                                <Text
+                                  style={[
+                                    styles.paginationDigit,
+                                    isView && styles.paginationInView,
+                                    heroTimerActive
+                                      ? {
+                                          color: isView
+                                            ? accentSecondaryDisabled
+                                            : inactivePaginationInkDisabled,
+                                        }
+                                      : {
+                                          color: isView
+                                            ? accentPrimary
+                                            : inactivePaginationInk,
+                                        },
+                                  ]}
+                                >
+                                  {i + 1}
+                                </Text>
+                              </View>
+                            </TouchableOpacity>
+                          );
+                        })}
+                      </View>
+                    </View>
+                  </View>
+                </Reanimated.View>
+              </Reanimated.View>
+
+              <Reanimated.View
+                style={[styles.surfaceSwapLayer, settingsSurfaceAnimatedStyle]}
+                pointerEvents={settingsSurfaceActive ? 'auto' : 'none'}
+              >
+                <View
+                  style={styles.fullSettingsSlot}
+                  onLayout={e => setDrawerSlotHeight(e.nativeEvent.layout.height)}
+                >
+                  {drawerSlotHeight > 0 && settingsOverflow ? (
+                    <ExploreV2CurrentOverflowPanel
+                      containerHeight={drawerSlotHeight}
+                      interactive={isPrimary}
+                      hideHeader
+                      {...settingsOverflow}
+                    />
+                  ) : null}
+                </View>
+              </Reanimated.View>
+            </View>
+          ) : (
+            <>
               <Reanimated.View style={[styles.heroColumn, heroColumnReserveStyle]}>
                 <View style={styles.heroUpper}>
                   <View
@@ -844,12 +1011,14 @@ export function ExploreV2CurrentCard({
                     <ExploreV2CurrentOverflowPanel
                       containerHeight={drawerSlotHeight}
                       interactive={isPrimary}
+                      hideHeader={false}
                       {...settingsOverflow}
                     />
                   ) : null}
                 </View>
               ) : null}
-          </>
+            </>
+          )}
         </View>
         </Reanimated.View>
         <Reanimated.View pointerEvents="none" style={[styles.completionMessageOverlay, celebrationMessageStyle]}>
@@ -929,6 +1098,11 @@ const styles = StyleSheet.create({
   currentSettingsButtonText: {
     ...TYPOGRAPHY.legal,
   },
+  settingsActionBtn: {
+    zIndex: 20,
+    paddingHorizontal: 6,
+    paddingVertical: 4,
+  },
   exerciseName: {
     ...TYPOGRAPHY.h2,
     fontWeight: '400',
@@ -972,6 +1146,22 @@ const styles = StyleSheet.create({
     zIndex: 2,
     alignSelf: 'stretch',
     overflow: 'hidden',
+  },
+  fullSettingsSlot: {
+    flex: 1,
+    alignSelf: 'stretch',
+    marginLeft: -pad.horizontal,
+    marginRight: -24,
+    minHeight: 0,
+    overflow: 'hidden',
+  },
+  surfaceSwapContainer: {
+    flex: 1,
+    position: 'relative',
+    minHeight: 0,
+  },
+  surfaceSwapLayer: {
+    ...StyleSheet.absoluteFillObject,
   },
   valuesBlock: {
     width: '100%',

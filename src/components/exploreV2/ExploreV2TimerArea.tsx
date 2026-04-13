@@ -176,10 +176,21 @@ export function ExploreV2TimerArea({
     };
   });
 
-  /** Hairline chrome for rest; width → 0 on work blue so no soft box around the hero */
+  /**
+   * Rest: hairline + accent stroke. Work: same hairline footprint with transparent stroke so
+   * work↔rest does not change layout (HIIT overlay + explore wallet card otherwise “jump” 1px).
+   */
   const innerBorderStyle = useAnimatedStyle(() => {
     const p = layoutProgress.value;
     const w = exploreV2WorkBlueProgress?.value ?? 0;
+    if (isOverlay) {
+      const foot = p < 0.999 ? interpolate(p, [0, 1], [0, TIMER_SHELL_HAIRLINE]) : TIMER_SHELL_HAIRLINE;
+      const strokeAlpha = interpolate(w, [0, 1], [1, 0]);
+      return {
+        borderWidth: foot,
+        borderColor: interpolateColor(strokeAlpha, [0, 1], ['transparent', EXPLORE_V2_CHROME.timerActiveBorder]),
+      };
+    }
     const widthWhenUp = interpolate(w, [0, 1], [TIMER_SHELL_HAIRLINE, 0]);
     return {
       borderWidth: interpolate(p, [0, 1], [0, widthWhenUp]),

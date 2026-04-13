@@ -2,6 +2,8 @@
 
 ## Development
 
+**Node.js:** Use **Node 20 LTS** (or any **18.18+**). Expo’s CLI depends on web APIs such as `ReadableStream`, which are not available on Node 16. If you use [Volta](https://volta.sh/), the repo pins Node in `package.json` so `npm run start:fresh` picks it up automatically after `cd` into the project. With **nvm** or **fnm**, run `nvm use` / `fnm use` (see `.nvmrc`). Otherwise install Node 20 from [nodejs.org](https://nodejs.org/) or Homebrew (`brew install node@20`) and ensure that `node` is first on your `PATH`.
+
 ### See the latest code (no stale cache)
 
 If the app isn’t updating or you don’t see recent changes, run **one command** and keep the terminal open:

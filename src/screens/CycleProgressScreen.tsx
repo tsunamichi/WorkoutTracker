@@ -6,6 +6,7 @@ import * as Haptics from 'expo-haptics';
 import dayjs from 'dayjs';
 import { COLORS, SPACING, TYPOGRAPHY } from '../constants';
 import { useStore } from '../store';
+import { useAppTheme } from '../theme/useAppTheme';
 import { formatWeightForLoad } from '../utils/weight';
 import { TertiaryButton } from '../components/common/UnderlinedActionButton';
 import { CycleControlSheet } from '../components/CycleControlSheet';
@@ -194,13 +195,26 @@ function buildViewModel(params: {
   };
 }
 
-function CycleProgressDots({ completedCount, totalCount }: { completedCount: number; totalCount: number }) {
+function CycleProgressDots({
+  colors,
+  completedCount,
+  totalCount,
+}: {
+  colors: typeof COLORS;
+  completedCount: number;
+  totalCount: number;
+}) {
   return (
     <View style={styles.dotsRow}>
       {Array.from({ length: Math.max(0, totalCount) }).map((_, i) => (
         <View
           key={`dot-${i}`}
-          style={[styles.dot, i < completedCount ? styles.dotCompleted : styles.dotRemaining]}
+          style={[
+            styles.dot,
+            i < completedCount
+              ? { backgroundColor: colors.containerPrimary }
+              : { backgroundColor: colors.border },
+          ]}
         />
       ))}
     </View>
@@ -211,54 +225,59 @@ function CycleProgressHeader({
   cycleTitle,
   completedCount,
   totalCount,
+  colors,
 }: {
   cycleTitle: string;
   completedCount: number;
   totalCount: number;
+  colors: typeof COLORS;
 }) {
   return (
     <View style={styles.headerBlock}>
-      <Text style={styles.contextTitle}>{cycleTitle}</Text>
-      <Text style={styles.heroTitle}>{`${completedCount} of ${totalCount} completed`}</Text>
-      <CycleProgressDots completedCount={completedCount} totalCount={totalCount} />
+      <Text style={[styles.contextTitle, { color: colors.textMeta }]}>{cycleTitle}</Text>
+      <Text style={[styles.heroTitle, { color: colors.containerPrimary }]}>
+        {`${completedCount} of ${totalCount} completed`}
+      </Text>
+      <CycleProgressDots colors={colors} completedCount={completedCount} totalCount={totalCount} />
     </View>
   );
 }
 
-function CycleTimelineRow({ item }: { item: CycleTimelineItem }) {
+function CycleTimelineRow({ item, colors }: { item: CycleTimelineItem; colors: typeof COLORS }) {
+  const labelColor =
+    item.type === 'completed' ? colors.containerPrimary : colors.textMeta;
   return (
     <View style={styles.timelineRow}>
-      <Text style={styles.timelineDate}>{item.dateLabel}</Text>
-      <Text
-        style={[
-          styles.timelineLabel,
-          item.type === 'completed' && styles.timelineLabelCompleted,
-          item.type === 'rest' && styles.timelineLabelMuted,
-          item.type === 'available' && styles.timelineLabelMuted,
-        ]}
-      >
-        {item.label}
-      </Text>
+      <Text style={[styles.timelineDate, { color: colors.textMeta }]}>{item.dateLabel}</Text>
+      <Text style={[styles.timelineLabel, { color: labelColor }]}>{item.label}</Text>
     </View>
   );
 }
 
-function CycleTimeline({ weekLabel, timeline }: { weekLabel: string; timeline: CycleTimelineItem[] }) {
+function CycleTimeline({
+  weekLabel,
+  timeline,
+  colors,
+}: {
+  weekLabel: string;
+  timeline: CycleTimelineItem[];
+  colors: typeof COLORS;
+}) {
   return (
     <View style={styles.timelineSection}>
-      <Text style={styles.weekLabel}>{weekLabel}</Text>
+      <Text style={[styles.weekLabel, { color: colors.textMeta }]}>{weekLabel}</Text>
       {timeline.map(item => (
-        <CycleTimelineRow key={item.id} item={item} />
+        <CycleTimelineRow key={item.id} item={item} colors={colors} />
       ))}
     </View>
   );
 }
 
-function RemainingWorkoutList({ items }: { items: string[] }) {
+function RemainingWorkoutList({ items, colors }: { items: string[]; colors: typeof COLORS }) {
   return (
     <View style={styles.remainingSection}>
       {items.map((name, index) => (
-        <Text key={`${name}-${index}`} style={styles.remainingItem}>
+        <Text key={`${name}-${index}`} style={[styles.remainingItem, { color: colors.containerPrimary }]}>
           {name}
         </Text>
       ))}
@@ -285,6 +304,7 @@ export function CycleProgressScreen() {
     detailedWorkoutProgress,
     settings,
   } = useStore();
+  const { colors: themeColors } = useAppTheme();
   const [showCycleSheet, setShowCycleSheet] = useState(false);
   const [showShareCycleSheet, setShowShareCycleSheet] = useState(false);
   const [shareCyclePlan, setShareCyclePlan] = useState<any | undefined>(undefined);
@@ -400,7 +420,7 @@ export function CycleProgressScreen() {
   );
 
   return (
-    <View style={[styles.gradient, { backgroundColor: COLORS.canvasLight, paddingTop: insets.top }]}>
+    <View style={[styles.gradient, { backgroundColor: themeColors.canvasLight, paddingTop: insets.top }]}>
       <SafeAreaView style={styles.container} edges={[]}>
         <TouchableOpacity
           onPress={() => {
@@ -410,7 +430,7 @@ export function CycleProgressScreen() {
           activeOpacity={0.8}
           style={styles.backButton}
         >
-          <Text style={styles.backText}>‹ Schedule</Text>
+          <Text style={[styles.backText, { color: themeColors.textMeta }]}>‹ Home</Text>
         </TouchableOpacity>
         {plan ? (
           <View style={styles.optionsButtonWrap}>
@@ -430,12 +450,13 @@ export function CycleProgressScreen() {
           showsVerticalScrollIndicator={false}
         >
           <CycleProgressHeader
+            colors={themeColors}
             cycleTitle={viewModel.cycleTitle}
             completedCount={viewModel.completedCount}
             totalCount={viewModel.totalCount}
           />
-          <CycleTimeline weekLabel={viewModel.weekLabel} timeline={viewModel.timeline} />
-          <RemainingWorkoutList items={viewModel.remaining} />
+          <CycleTimeline colors={themeColors} weekLabel={viewModel.weekLabel} timeline={viewModel.timeline} />
+          <RemainingWorkoutList colors={themeColors} items={viewModel.remaining} />
         </ScrollView>
       </SafeAreaView>
 
@@ -511,7 +532,6 @@ const styles = StyleSheet.create({
   },
   backText: {
     ...TYPOGRAPHY.meta,
-    color: COLORS.textMeta,
   },
   optionsButtonWrap: {
     position: 'absolute',
@@ -530,11 +550,9 @@ const styles = StyleSheet.create({
   },
   contextTitle: {
     ...TYPOGRAPHY.displayLarge,
-    color: COLORS.textMeta,
   },
   heroTitle: {
     ...TYPOGRAPHY.displayLarge,
-    color: COLORS.containerPrimary,
     marginTop: SPACING.xs,
   },
   dotsRow: {
@@ -548,18 +566,11 @@ const styles = StyleSheet.create({
     height: 10,
     borderRadius: 5,
   },
-  dotCompleted: {
-    backgroundColor: COLORS.containerPrimary,
-  },
-  dotRemaining: {
-    backgroundColor: COLORS.border,
-  },
   timelineSection: {
     marginTop: SPACING.sm,
   },
   weekLabel: {
     ...TYPOGRAPHY.legal,
-    color: COLORS.textMeta,
     textTransform: 'uppercase',
     marginBottom: SPACING.lg,
   },
@@ -568,18 +579,10 @@ const styles = StyleSheet.create({
   },
   timelineDate: {
     ...TYPOGRAPHY.h3,
-    color: COLORS.textMeta,
   },
   timelineLabel: {
     ...TYPOGRAPHY.h2,
     marginTop: 2,
-    color: COLORS.containerPrimary,
-  },
-  timelineLabelCompleted: {
-    color: COLORS.containerPrimary,
-  },
-  timelineLabelMuted: {
-    color: COLORS.textMeta,
   },
   remainingSection: {
     marginTop: SPACING.xxxl + SPACING.xl,
@@ -587,6 +590,5 @@ const styles = StyleSheet.create({
   },
   remainingItem: {
     ...TYPOGRAPHY.h2,
-    color: COLORS.containerPrimary,
   },
 });

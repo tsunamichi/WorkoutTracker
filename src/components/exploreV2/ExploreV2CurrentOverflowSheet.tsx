@@ -28,7 +28,7 @@ import { useAppTheme } from '../../theme/useAppTheme';
 import { formatWeightForLoad } from '../../utils/weight';
 import type { ExploreV2Exercise } from './exploreV2Types';
 import { useTranslation } from '../../i18n/useTranslation';
-import { TertiaryButton } from '../common/UnderlinedActionButton';
+import Svg, { Line, Rect } from 'react-native-svg';
 
 const DRAWER_TOP_DIVIDER_H = 1;
 /** Settings header row (Settings + chevron) */
@@ -76,6 +76,119 @@ function getOrdinalSuffix(day: number): string {
   }
 }
 
+function formatLatestLogInline(
+  sets: Array<{ setNumber: number; weight: number; reps: number }>,
+  useKg: boolean,
+  weightUnit: string,
+) {
+  return sets
+    .map(set => `${set.reps} x ${formatWeightForLoad(set.weight, useKg)}${weightUnit}`)
+    .join(', ');
+}
+
+function HistoryMiniChart({
+  values,
+  color,
+  variant = 'compact',
+  interactive = false,
+  heldIndex = null,
+  onHoldIndexChange,
+  onHoldEnd,
+  onInteractionStart,
+  onInteractionEnd,
+}: {
+  values: number[];
+  color: string;
+  variant?: 'compact' | 'hero';
+  interactive?: boolean;
+  heldIndex?: number | null;
+  onHoldIndexChange?: (index: number) => void;
+  onHoldEnd?: () => void;
+  onInteractionStart?: () => void;
+  onInteractionEnd?: () => void;
+}) {
+  if (values.length === 0) return null;
+  const isHero = variant === 'hero';
+  const W = isHero ? 640 : 320;
+  const H = 92;
+  const padX = 2;
+  const padTop = isHero ? 10 : 8;
+  const gap = 1;
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const range = Math.max(1, max - min);
+  const [chartWidth, setChartWidth] = useState(0);
+  const resolvedW = chartWidth > 0 ? chartWidth : W;
+  const drawableW = resolvedW - padX * 2;
+  const colW = Math.max(1, (drawableW - gap * (values.length - 1)) / values.length);
+  const columnStride = colW + gap;
+  const handleTouch = (locationX: number) => {
+    if (!interactive || !onHoldIndexChange || values.length === 0) return;
+    const x = Math.max(padX, Math.min(resolvedW - padX, locationX));
+    const rawIndex = Math.floor((x - padX) / columnStride);
+    const index = Math.max(0, Math.min(values.length - 1, rawIndex));
+    onHoldIndexChange(index);
+  };
+
+  return (
+    <View
+      style={styles.historyChartWrap}
+      onLayout={e => {
+        const w = Math.floor(e.nativeEvent.layout.width);
+        if (w > 0 && w !== chartWidth) setChartWidth(w);
+      }}
+      onStartShouldSetResponder={() => interactive && values.length > 0}
+      onMoveShouldSetResponder={() => interactive && values.length > 0}
+      onResponderTerminationRequest={() => false}
+      onResponderGrant={e => {
+        onInteractionStart?.();
+        handleTouch(e.nativeEvent.locationX);
+      }}
+      onResponderMove={e => {
+        handleTouch(e.nativeEvent.locationX);
+      }}
+      onResponderRelease={() => {
+        onInteractionEnd?.();
+        onHoldEnd?.();
+      }}
+      onResponderTerminate={() => {
+        onInteractionEnd?.();
+        onHoldEnd?.();
+      }}
+    >
+      <Svg width={resolvedW} height={H}>
+        {values.map((v, i) => {
+          const left = padX + i * columnStride;
+          const top = padTop + (1 - (v - min) / range) * (H - padTop);
+          const isHeldMode = heldIndex != null;
+          const columnOpacity = isHeldMode && i !== heldIndex ? 0.6 : 1;
+          return (
+            <React.Fragment key={`hbar-${i}`}>
+              <Rect
+                x={left}
+                y={top}
+                width={colW}
+                height={Math.max(0, H - top)}
+                fill={color}
+                opacity={(isHero ? 0.16 : 0.14) * columnOpacity}
+              />
+              <Line
+                x1={left}
+                y1={top}
+                x2={left + colW}
+                y2={top}
+                stroke={color}
+                strokeWidth={isHero ? 2 : 1.5}
+                opacity={columnOpacity}
+              />
+            </React.Fragment>
+          );
+        })}
+      </Svg>
+    </View>
+  );
+}
+
 export type ExerciseDrawerHistoryEntry = {
   date: string;
   sets: Array<{ setNumber: number; weight: number; reps: number }>;
@@ -112,6 +225,7 @@ export type ExploreV2CurrentSettingsOverflowProps = {
 type PanelProps = ExploreV2CurrentSettingsOverflowProps & {
   containerHeight: number;
   interactive?: boolean;
+  hideHeader?: boolean;
 };
 
 export function ExploreV2CurrentOverflowPanel({
@@ -139,6 +253,7 @@ export function ExploreV2CurrentOverflowPanel({
   inlineRestActive,
   restThemeProgress,
   interactive = true,
+  hideHeader = false,
 }: PanelProps) {
   const { t } = useTranslation();
   const { colors: themeColors, explore } = useAppTheme();
@@ -165,12 +280,65 @@ export function ExploreV2CurrentOverflowPanel({
     transform: [{ translateY: swapProgress.interpolate({ inputRange: [0, 1], outputRange: [-8, 0] }) }],
   };
 
+  const historyForDisplay = useMemo(() => {
+    const usableHistory = history.filter(
+      h =>
+        Array.isArray(h.sets) &&
+        h.sets.some(
+          s =>
+            Number.isFinite(Number(s.weight)) &&
+            Number(s.weight) > 0 &&
+            Number.isFinite(Number(s.reps)),
+        ),
+    );
+    if (usableHistory.length > 0) return usableHistory;
+    const base = dayjs().startOf('day');
+    return [
+      {
+        date: base.subtract(10, 'day').toISOString(),
+        sets: [
+          { setNumber: 1, weight: 155, reps: 8 },
+          { setNumber: 2, weight: 165, reps: 6 },
+          { setNumber: 3, weight: 170, reps: 5 },
+        ],
+      },
+      {
+        date: base.subtract(6, 'day').toISOString(),
+        sets: [
+          { setNumber: 1, weight: 160, reps: 8 },
+          { setNumber: 2, weight: 170, reps: 6 },
+          { setNumber: 3, weight: 175, reps: 5 },
+        ],
+      },
+      {
+        date: base.subtract(2, 'day').toISOString(),
+        sets: [
+          { setNumber: 1, weight: 165, reps: 8 },
+          { setNumber: 2, weight: 175, reps: 6 },
+          { setNumber: 3, weight: 180, reps: 4 },
+        ],
+      },
+    ];
+  }, [history, _exercise.name]);
+
   /** Exclude today so the drawer shows the last completed workout from a prior day (sorted oldest → newest). */
   const latestPriorWorkout = useMemo(() => {
     const todayYmd = dayjs().format('YYYY-MM-DD');
-    const prior = history.filter(h => dayjs(h.date).format('YYYY-MM-DD') !== todayYmd);
+    const prior = historyForDisplay.filter(h => dayjs(h.date).format('YYYY-MM-DD') !== todayYmd);
     return prior.length > 0 ? prior[prior.length - 1] : null;
-  }, [history]);
+  }, [historyForDisplay]);
+  const latestWorkoutForDisplay = useMemo(() => {
+    if (latestPriorWorkout) return latestPriorWorkout;
+    return historyForDisplay.length > 0 ? historyForDisplay[historyForDisplay.length - 1] : null;
+  }, [latestPriorWorkout, historyForDisplay]);
+  const historyTrendValues = useMemo(() => {
+    const points = historyForDisplay.flatMap(entry =>
+      entry.sets.map(set => Number(set.weight) || 0).filter(v => v > 0),
+    );
+    return points.slice(-7);
+  }, [historyForDisplay]);
+  const [heldHistoryIndex, setHeldHistoryIndex] = useState<number | null>(null);
+  const [isHistoryChartInteracting, setIsHistoryChartInteracting] = useState(false);
 
   const expandedTarget = useMemo(() => {
     if (!visible || containerHeight <= 0) return COLLAPSED_SHELL_H;
@@ -258,6 +426,327 @@ export function ExploreV2CurrentOverflowPanel({
     else onOpenSheet();
   };
 
+  const embeddedBody = (
+    <>
+      <View style={[styles.drawerTopDivider, { backgroundColor: accentSecondary20 }]} />
+      <View style={[styles.panelSoftBase, styles.panelSoftFill, { backgroundColor: explore.surfaceCurrentCard }]}>
+        <View style={styles.drawerBodyFill}>
+          <ScrollView
+            style={styles.scrollFill}
+            contentContainerStyle={styles.scrollContent}
+            keyboardShouldPersistTaps="always"
+            showsVerticalScrollIndicator={false}
+            bounces
+            scrollEnabled
+            onContentSizeChange={(_w, h) => setScrollContentHeight(h)}
+          >
+            <View style={styles.pad}>
+              {!latestPriorWorkout ? (
+                <View style={styles.historyLeadRow}>
+                  <Text style={styles.historyLeadLabel}>Last log</Text>
+                  <Text style={[styles.historyDateMuted, { color: themeColors.accentSecondary }]}>
+                    {t('noHistoryRecordedYet')}
+                  </Text>
+                </View>
+              ) : (
+                <View style={styles.historyBlock}>
+                  <View style={styles.historyDataRow}>
+                    <View style={styles.historyLeftColumn}>
+                      <Text style={styles.historyLeadLabel}>Last log</Text>
+                      <Text style={[styles.historyDateMuted, { color: themeColors.accentSecondary }]}>
+                        {dayjs(latestPriorWorkout.date).format('MMMM D')}
+                        {getOrdinalSuffix(dayjs(latestPriorWorkout.date).date())}
+                      </Text>
+                    </View>
+                    <View style={styles.historySetsColumn}>
+                      {latestPriorWorkout.sets.map((set, setIndex) => (
+                        <View key={setIndex} style={styles.historySetRow}>
+                          <View style={styles.historyValueColumn}>
+                            <Text style={[styles.historySetText, { color: themeColors.text }]}>
+                              {formatWeightForLoad(set.weight, useKg)}
+                            </Text>
+                            <Text style={[styles.historySetUnit, { color: themeColors.accentSecondary }]}>{weightUnit}</Text>
+                          </View>
+                          <View style={styles.historyValueColumn}>
+                            <Text style={[styles.historySetText, { color: themeColors.text }]}>{set.reps}</Text>
+                            <Text style={[styles.historySetUnit, { color: themeColors.accentSecondary }]}>
+                              {timeBased ? 'secs' : 'reps'}
+                            </Text>
+                          </View>
+                        </View>
+                      ))}
+                    </View>
+                  </View>
+                  <HistoryMiniChart
+                    values={latestPriorWorkout.sets.map(set => Number(set.weight) || 0)}
+                    color={themeColors.text}
+                  />
+                </View>
+              )}
+
+              <View style={[styles.sectionDivider, styles.useTimerDivider, { backgroundColor: accentSecondary20 }]} />
+              <View style={styles.row}>
+                <Text style={styles.labelMeta}>Use timer</Text>
+                <Toggle
+                  label=""
+                  hideLabel
+                  value={timeBased}
+                  trackOffColor={themeColors.containerPrimaryDark}
+                  thumbOnColor={explore.skipRestCtaBg}
+                  thumbOffColor={themeColors.containerSecondary}
+                  onValueChange={() => {
+                    const next = !timeBased;
+                    onTimeBasedChange(next);
+                    if (!next && perSide) onPerSideChange(false);
+                  }}
+                />
+              </View>
+              <Text style={[styles.helperText, { color: themeColors.accentSecondary }]}>
+                Track each set by duration instead of reps
+              </Text>
+              <View style={styles.row}>
+                <Text style={[styles.labelMeta, { color: timeBased ? themeColors.text : accentSecondary20 }]}>
+                  Alternate sides
+                </Text>
+                <Toggle
+                  label=""
+                  hideLabel
+                  value={perSide}
+                  disabled={!timeBased}
+                  trackOffColor={timeBased ? themeColors.containerPrimaryDark : accentSecondary20}
+                  thumbOnColor={explore.skipRestCtaBg}
+                  thumbOffColor={themeColors.containerSecondary}
+                  onValueChange={() => onPerSideChange(!perSide)}
+                />
+              </View>
+              <Text style={[styles.helperText, { color: timeBased ? themeColors.accentSecondary : accentSecondary20 }]}>
+                Runs the timer once per side for each set
+              </Text>
+
+              {type === 'main' && (
+                <>
+                  <View style={styles.progressionCardsRow}>
+                    {progressionGroups.map(g => {
+                      const isSelected = currentProgressionGroupId === g.id;
+                      return (
+                        <TouchableOpacity
+                          key={g.id}
+                          style={[
+                            styles.pill,
+                            { borderColor: accentSecondary20 },
+                            isSelected && { backgroundColor: accentSecondary20 },
+                          ]}
+                          onPress={() => onProgressionGroupSelect(isSelected ? null : g.id)}
+                          activeOpacity={1}
+                        >
+                          <View style={[styles.pillIconPlaceholder, { backgroundColor: themeColors.containerPrimaryDark }]} />
+                          <Text style={[styles.pillText, isSelected && { color: themeColors.accentPrimary }]} numberOfLines={1}>
+                            {progressionPillLabel(g.name)}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                  <View
+                    style={[
+                      styles.sectionDivider,
+                      styles.progressionCardsDivider,
+                      { backgroundColor: accentSecondary20 },
+                    ]}
+                  />
+                </>
+              )}
+            </View>
+
+            <View style={styles.actionsWrap}>
+              <View style={styles.actions}>
+                <TouchableOpacity
+                  style={[styles.actionCell, { backgroundColor: explore.skipRestCtaBg }]}
+                  onPress={onSwap}
+                  activeOpacity={0.75}
+                >
+                  <Text style={[styles.actionText, { color: themeColors.text }]}>Swap exercise</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.actionCell, { backgroundColor: explore.skipRestCtaBg }]}
+                  onPress={() => {
+                    Alert.alert(t('deleteExerciseTitle'), t('deleteExerciseMessage'), [
+                      { text: t('cancel'), style: 'cancel' },
+                      { text: t('remove'), style: 'destructive', onPress: onDelete },
+                    ]);
+                  }}
+                  activeOpacity={0.75}
+                >
+                  <Text style={[styles.actionText, { color: COLORS.signalNegative }]}>Remove exercise</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </ScrollView>
+        </View>
+      </View>
+    </>
+  );
+
+  if (hideHeader) {
+    const settingsValueInk = themeColors.containerSecondary;
+    const selectedProgressionGroup = progressionGroups.find(g => g.id === currentProgressionGroupId) ?? null;
+    const progressionGroupName = selectedProgressionGroup
+      ? progressionPillLabel(selectedProgressionGroup.name)
+      : 'None';
+    const progressionRepLine =
+      selectedProgressionGroup &&
+      typeof (selectedProgressionGroup as any).repRangeMin === 'number' &&
+      typeof (selectedProgressionGroup as any).repRangeMax === 'number'
+        ? `${(selectedProgressionGroup as any).repRangeMin}—${(selectedProgressionGroup as any).repRangeMax} reps`
+        : null;
+    const progressionIncLine =
+      selectedProgressionGroup && typeof (selectedProgressionGroup as any).weightIncrement === 'number'
+        ? `↑ ${(selectedProgressionGroup as any).weightIncrement} ${weightUnit}`
+        : null;
+    const latestInline = latestWorkoutForDisplay
+      ? formatLatestLogInline(latestWorkoutForDisplay.sets, useKg, weightUnit)
+      : null;
+    const latestDisplayWeight = latestWorkoutForDisplay
+      ? latestWorkoutForDisplay.sets.reduce((max, set) => Math.max(max, Number(set.weight) || 0), 0)
+      : 0;
+    const liveHistoryIndex =
+      heldHistoryIndex == null
+        ? Math.max(0, historyTrendValues.length - 1)
+        : Math.max(0, Math.min(historyTrendValues.length - 1, heldHistoryIndex));
+    const liveHistoryWeight =
+      historyTrendValues.length > 0
+        ? historyTrendValues[liveHistoryIndex]
+        : latestDisplayWeight;
+
+    return (
+      <View style={[styles.embeddedPanel, { height: containerHeight }]} pointerEvents={interactive ? 'auto' : 'none'}>
+        <ScrollView
+          style={styles.embeddedScroll}
+          contentContainerStyle={styles.embeddedContent}
+          showsVerticalScrollIndicator={false}
+          bounces
+          keyboardShouldPersistTaps="always"
+          scrollEnabled={!isHistoryChartInteracting}
+        >
+          <View style={[styles.embeddedSection, { borderTopColor: accentSecondary20 }]}>
+            <View style={styles.embeddedRow}>
+              <Text style={styles.embeddedLabel}>History</Text>
+              <View style={styles.embeddedRightColumn}>
+                <Text style={[styles.embeddedHistoryTitle, { color: themeColors.accentSecondary }]}>
+                  Latest log
+                </Text>
+                <Text style={[styles.embeddedHistoryValue, { color: settingsValueInk }]}>
+                  {latestInline || 'No history recorded yet'}
+                </Text>
+              </View>
+            </View>
+            {latestDisplayWeight > 0 ? (
+              <View style={styles.embeddedHistoryHeroRow}>
+                <Text style={[styles.embeddedHistoryHeroValue, { color: settingsValueInk }]}>
+                  {formatWeightForLoad(liveHistoryWeight, useKg)}
+                </Text>
+                <Text style={[styles.embeddedHistoryHeroUnit, { color: settingsValueInk }]}>{weightUnit}</Text>
+              </View>
+            ) : null}
+            {historyTrendValues.length > 0 ? (
+              <HistoryMiniChart
+                values={historyTrendValues}
+                color={settingsValueInk}
+                variant="hero"
+                interactive
+                heldIndex={heldHistoryIndex}
+                onHoldIndexChange={setHeldHistoryIndex}
+                onHoldEnd={() => setHeldHistoryIndex(null)}
+                onInteractionStart={() => setIsHistoryChartInteracting(true)}
+                onInteractionEnd={() => setIsHistoryChartInteracting(false)}
+              />
+            ) : null}
+          </View>
+
+          <View style={styles.embeddedTwoColumnRow}>
+            <View style={[styles.embeddedSplitModule, { borderTopColor: accentSecondary20 }]}>
+              <Pressable
+                style={styles.embeddedSplitRow}
+                onPress={() => {
+                  const next = !timeBased;
+                  onTimeBasedChange(next);
+                  if (!next && perSide) onPerSideChange(false);
+                }}
+              >
+                <Text style={styles.embeddedLabel}>Time-based{'\n'}exercise</Text>
+                <Text style={[styles.embeddedHeroValue, { color: settingsValueInk }]}>
+                  {timeBased ? 'on' : 'off'}
+                </Text>
+              </Pressable>
+            </View>
+
+            <View style={[styles.embeddedSplitModule, { borderTopColor: accentSecondary20 }]}>
+              <Pressable
+                style={styles.embeddedSplitRow}
+                onPress={() => {
+                  if (!timeBased) return;
+                  onPerSideChange(!perSide);
+                }}
+              >
+                <Text style={styles.embeddedLabel}>Two-sides{'\n'}exercise</Text>
+                <Text
+                  style={[
+                    styles.embeddedHeroValue,
+                    { color: timeBased ? settingsValueInk : accentSecondary20 },
+                  ]}
+                >
+                  {perSide ? 'on' : 'off'}
+                </Text>
+              </Pressable>
+            </View>
+          </View>
+
+          <View style={[styles.embeddedSection, { borderTopColor: accentSecondary20 }]}>
+            <View style={styles.embeddedRow}>
+              <Text style={styles.embeddedLabel}>Auto progression</Text>
+              <View style={styles.embeddedRightColumn}>
+                <Text style={[styles.embeddedHeroValue, { color: settingsValueInk }]}>{progressionGroupName}</Text>
+                {progressionRepLine ? (
+                  <Text style={[styles.embeddedProgressMeta, { color: settingsValueInk }]}>
+                    {progressionRepLine}
+                  </Text>
+                ) : null}
+                {progressionIncLine ? (
+                  <Text style={[styles.embeddedProgressMeta, { color: settingsValueInk }]}>
+                    {progressionIncLine}
+                  </Text>
+                ) : null}
+              </View>
+            </View>
+          </View>
+        </ScrollView>
+        <View style={[styles.embeddedActionsBar, { borderTopColor: accentSecondary20 }]}>
+          <View style={styles.actions}>
+            <TouchableOpacity
+              style={[styles.actionCell, { backgroundColor: explore.skipRestCtaBg }]}
+              onPress={onSwap}
+              activeOpacity={0.75}
+            >
+              <Text style={[styles.actionText, { color: themeColors.text }]}>Swap exercise</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.actionCell, { backgroundColor: explore.skipRestCtaBg }]}
+              onPress={() => {
+                Alert.alert(t('deleteExerciseTitle'), t('deleteExerciseMessage'), [
+                  { text: t('cancel'), style: 'cancel' },
+                  { text: t('remove'), style: 'destructive', onPress: onDelete },
+                ]);
+              }}
+              activeOpacity={0.75}
+            >
+              <Text style={[styles.actionText, { color: COLORS.signalNegative }]}>Remove exercise</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    );
+  }
+
   return (
     <Reanimated.View
       pointerEvents={interactive ? 'auto' : 'none'}
@@ -329,14 +818,6 @@ export function ExploreV2CurrentOverflowPanel({
                   <Text style={[styles.historyDateMuted, { color: themeColors.accentSecondary }]}>
                     {t('noHistoryRecordedYet')}
                   </Text>
-                  <TertiaryButton
-                    label="View progress"
-                    onPress={onViewProgress}
-                    style={styles.viewProgressBtn}
-                    textStyle={styles.viewProgressText}
-                    color={themeColors.accentSecondary}
-                    underlineColor={themeColors.accentSecondary}
-                  />
                 </View>
               ) : (
                 <View style={styles.historyBlock}>
@@ -347,14 +828,6 @@ export function ExploreV2CurrentOverflowPanel({
                         {dayjs(latestPriorWorkout.date).format('MMMM D')}
                         {getOrdinalSuffix(dayjs(latestPriorWorkout.date).date())}
                       </Text>
-                      <TertiaryButton
-                        label="View progress"
-                        onPress={onViewProgress}
-                        style={styles.viewProgressBtn}
-                        textStyle={styles.viewProgressText}
-                        color={themeColors.accentSecondary}
-                        underlineColor={themeColors.accentSecondary}
-                      />
                     </View>
                     <View style={styles.historySetsColumn}>
                       {latestPriorWorkout.sets.map((set, setIndex) => (
@@ -375,6 +848,10 @@ export function ExploreV2CurrentOverflowPanel({
                       ))}
                     </View>
                   </View>
+                  <HistoryMiniChart
+                    values={latestPriorWorkout.sets.map(set => Number(set.weight) || 0)}
+                    color={themeColors.text}
+                  />
         </View>
               )}
 
@@ -487,6 +964,97 @@ export function ExploreV2CurrentOverflowPanel({
 }
 
 const styles = StyleSheet.create({
+  embeddedPanel: {
+    flex: 1,
+    minHeight: 0,
+  },
+  embeddedScroll: {
+    flex: 1,
+    minHeight: 0,
+  },
+  embeddedContent: {
+    paddingHorizontal: CONTENT_PAD_H,
+    paddingBottom: 24,
+    paddingTop: 8,
+  },
+  embeddedActionsBar: {
+    borderTopWidth: 1,
+    paddingHorizontal: CONTENT_PAD_H,
+    paddingTop: 16,
+    paddingBottom: 16,
+  },
+  embeddedSection: {
+    borderTopWidth: 1,
+    paddingTop: 16,
+    marginBottom: 56,
+  },
+  embeddedTwoColumnRow: {
+    flexDirection: 'row',
+    gap: 24,
+    marginBottom: 32,
+  },
+  embeddedSplitModule: {
+    flex: 1,
+    borderTopWidth: 1,
+    paddingTop: 16,
+  },
+  embeddedSplitRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    gap: 12,
+  },
+  embeddedRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    gap: 16,
+  },
+  embeddedLabel: {
+    ...TYPOGRAPHY.legal,
+    textTransform: 'uppercase',
+    color: EXPLORE_V2.colors.textPrimary,
+    paddingTop: 2,
+    flexShrink: 0,
+  },
+  embeddedRightColumn: {
+    alignItems: 'flex-end',
+    flexShrink: 1,
+  },
+  embeddedHistoryTitle: {
+    ...TYPOGRAPHY.legal,
+    textTransform: 'uppercase',
+  },
+  embeddedHistoryValue: {
+    ...TYPOGRAPHY.legal,
+    marginTop: 2,
+    textAlign: 'right',
+  },
+  embeddedHistoryHeroRow: {
+    marginTop: 22,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 6,
+  },
+  embeddedHistoryHeroValue: {
+    ...TYPOGRAPHY.metricDisplay,
+    lineHeight: TYPOGRAPHY.metricDisplay.lineHeight,
+    includeFontPadding: false,
+  },
+  embeddedHistoryHeroUnit: {
+    ...TYPOGRAPHY.h1,
+    lineHeight: TYPOGRAPHY.h1.fontSize,
+    marginTop: 18,
+  },
+  embeddedHeroValue: {
+    ...TYPOGRAPHY.h1,
+    textAlign: 'right',
+  },
+  embeddedProgressMeta: {
+    ...TYPOGRAPHY.legal,
+    textAlign: 'right',
+    marginTop: 2,
+  },
   /** Root: no top radius / clip — divider is full width; shadow wraps whole drawer. */
   panelOuter: {
     position: 'absolute',
@@ -731,13 +1299,9 @@ const styles = StyleSheet.create({
     ...TYPOGRAPHY.meta,
     marginTop: 2,
   },
-  viewProgressBtn: {
-    alignSelf: 'flex-start',
-    marginTop: 8,
-  },
-  viewProgressText: {
-    ...TYPOGRAPHY.meta,
-    fontWeight: '500',
+  historyChartWrap: {
+    marginTop: 12,
+    alignSelf: 'stretch',
   },
   historyDataRow: {
     flexDirection: 'row',

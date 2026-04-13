@@ -16,15 +16,15 @@ import { useStore } from '../store';
 import type { AppColorThemeId } from '../types';
 import { useAppTheme } from '../theme/useAppTheme';
 import { SPACING, TYPOGRAPHY } from '../constants';
-import { IconTriangle } from '../components/icons';
 import { useTranslation } from '../i18n/useTranslation';
 import { signInWithApple, getCurrentUser, signOut, isAppleSignInAvailable, AuthUser } from '../services/authService';
 import { uploadBackup, downloadBackup, getCloudBackupInfo } from '../services/cloudSync';
 import { isSupabaseConfigured } from '../services/supabase';
 import { hexToRgba } from '../constants';
-import { BackTextButton } from '../components/common/BackTextButton';
+import { StackPageHeader } from '../components/common/StackPageHeader';
 import * as Haptics from 'expo-haptics';
 import { buildAppTheme } from '../theme/appTheme';
+import Svg, { Polygon } from 'react-native-svg';
 
 interface ProfileScreenProps {
   navigation: any;
@@ -136,11 +136,12 @@ function RestTimeSlider({
 
 export function ProfileScreen({ navigation }: ProfileScreenProps) {
   const insets = useSafeAreaInsets();
-  const { settings, updateSettings, initialize } = useStore();
+  const { settings, updateSettings, initialize, progressionGroups } = useStore();
   const { colors: themeColors } = useAppTheme();
   const [restTimeExpanded, setRestTimeExpanded] = useState(false);
   const [isRestSliderInteracting, setIsRestSliderInteracting] = useState(false);
   const [restTimeDraftSeconds, setRestTimeDraftSeconds] = useState(settings.restTimerDefaultSeconds);
+  const [appleOptionsExpanded, setAppleOptionsExpanded] = useState(false);
   const [authUser, setAuthUser] = useState<AuthUser | null>(null);
   const [cloudSyncInfo, setCloudSyncInfo] = useState<{ exists: boolean; syncedAt?: string } | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
@@ -184,17 +185,43 @@ export function ProfileScreen({ navigation }: ProfileScreenProps) {
   const restTimeDisplaySeconds = restTimeExpanded ? restTimeDraftSeconds : settings.restTimerDefaultSeconds;
   const restTimeFormatted = formatRestTime(restTimeDisplaySeconds);
   const unitLabel = settings.useKg ? 'kg' : 'lb';
+  const progressionPreviewItems = useMemo(() => {
+    const fromStore = [...(progressionGroups ?? [])]
+      .sort((a, b) => a.orderIndex - b.orderIndex)
+      .slice(0, 3)
+      .map(group => {
+        const lower = group.name.toLowerCase();
+        let label = group.name;
+        if (lower.includes('upper')) label = 'Upper';
+        else if (lower.includes('lower')) label = 'Lower';
+        else if (lower.includes('access')) label = 'Accessory';
+        return {
+          id: group.id,
+          label,
+          repRange: `${group.repRangeMin}—${group.repRangeMax} reps`,
+          increment: `↑ ${group.weightIncrement} ${unitLabel}s`,
+        };
+      });
+
+    if (fromStore.length > 0) return fromStore;
+
+    return [
+      { id: 'fallback-upper', label: 'Upper', repRange: '5—8 reps', increment: `↑ 2.5 ${unitLabel}s` },
+      { id: 'fallback-lower', label: 'Lower', repRange: '5—8 reps', increment: `↑ 5 ${unitLabel}s` },
+      { id: 'fallback-accessory', label: 'Accessory', repRange: '10—20 reps', increment: `↑ 2.5 ${unitLabel}s` },
+    ];
+  }, [progressionGroups, unitLabel]);
   const activeColorTheme: AppColorThemeId = settings.colorTheme ?? 'v1';
   const themeSwatchOptions = [
     {
       id: 'v1' as const,
-      bg: buildAppTheme('v1').colors.containerSecondary,
-      corner: buildAppTheme('v1').colors.containerPrimary,
+      primary: buildAppTheme('v1').colors.containerPrimary,
+      secondary: buildAppTheme('v1').colors.containerSecondary,
     },
     {
       id: 'v2' as const,
-      bg: buildAppTheme('v2').colors.containerSecondary,
-      corner: buildAppTheme('v2').colors.containerPrimary,
+      primary: buildAppTheme('v2').colors.containerPrimary,
+      secondary: buildAppTheme('v2').colors.containerSecondary,
     },
   ];
 
@@ -209,17 +236,22 @@ export function ProfileScreen({ navigation }: ProfileScreenProps) {
     }
   }, []);
 
+  useEffect(() => {
+    if (!authUser) {
+      setAppleOptionsExpanded(false);
+    }
+  }, [authUser]);
+
   return (
     <View style={[styles.container, { backgroundColor: themeColors.canvasLight }]}>
-      {/* Header */}
-      <View style={[styles.header, { paddingTop: insets.top }]}>
-        <BackTextButton label="Home" onPress={handleBack} />
-        
-        {/* Page Title */}
-        <View style={styles.pageTitleContainer}>
-          <Text style={[styles.pageTitle, { color: themeColors.textPrimary }]}>{t('settings')}</Text>
-        </View>
-      </View>
+      <StackPageHeader
+        paddingTop={insets.top}
+        backLabel="Home"
+        onBackPress={handleBack}
+        title={t('settings')}
+        titleColor={themeColors.textPrimary}
+        backChevronPointsLeft
+      />
 
       <ScrollView
         style={styles.scrollView}
@@ -270,8 +302,11 @@ export function ProfileScreen({ navigation }: ProfileScreenProps) {
                     activeOpacity={0.8}
                     onPress={() => handleColorTheme(opt.id)}
                   >
-                    <View style={[styles.themeSwatchFill, { backgroundColor: opt.bg }]}>
-                      <View style={[styles.themeSwatchCorner, { backgroundColor: opt.corner }]} />
+                    <View style={styles.themeSwatchFill}>
+                      <Svg width="100%" height="100%" viewBox="0 0 44 44" preserveAspectRatio="none">
+                        <Polygon points="0,0 44,0 0,44" fill={opt.primary} />
+                        <Polygon points="44,0 44,44 0,44" fill={opt.secondary} />
+                      </Svg>
                     </View>
                   </TouchableOpacity>
                 ))}
@@ -321,7 +356,7 @@ export function ProfileScreen({ navigation }: ProfileScreenProps) {
         <View style={styles.sectionGroupMiddle}>
           <View style={[styles.sectionBlock, { borderTopColor: hexToRgba(themeColors.containerPrimary, 0.35) }]}>
             <TouchableOpacity 
-              style={styles.settingRow}
+              style={[styles.settingRow, styles.autoProgressionRow]}
               activeOpacity={0.7}
               onPress={() => {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -331,8 +366,20 @@ export function ProfileScreen({ navigation }: ProfileScreenProps) {
               <View style={styles.settingInfo}>
                 <Text style={[styles.flatLabel, { color: themeColors.containerPrimary }]}>Auto-progression</Text>
               </View>
-              <View style={{ transform: [{ rotate: '90deg' }] }}>
-                <IconTriangle size={12} color={themeColors.text} />
+              <View style={styles.progressionPreviewWrap}>
+                {progressionPreviewItems.map(item => (
+                  <View key={item.id} style={styles.progressionPreviewItem}>
+                    <Text style={[styles.progressionPreviewName, { color: themeColors.containerPrimary }]}>
+                      {item.label}
+                    </Text>
+                    <Text style={[styles.progressionPreviewMeta, { color: themeColors.containerPrimary }]}>
+                      {item.repRange}
+                    </Text>
+                    <Text style={[styles.progressionPreviewMeta, { color: themeColors.containerPrimary }]}>
+                      {item.increment}
+                    </Text>
+                  </View>
+                ))}
               </View>
             </TouchableOpacity>
           </View>
@@ -343,122 +390,133 @@ export function ProfileScreen({ navigation }: ProfileScreenProps) {
           <View style={[styles.sectionGroupBottom, styles.sectionBlock, { borderTopColor: hexToRgba(themeColors.containerPrimary, 0.35) }]}>
             {authUser ? (
               <>
-                {/* Signed in state */}
-                <View style={styles.settingRow}>
+                <TouchableOpacity
+                  style={styles.settingRow}
+                  onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+                    setAppleOptionsExpanded(prev => !prev);
+                  }}
+                  activeOpacity={0.7}
+                >
                   <View style={styles.settingInfo}>
                     <Text style={[styles.flatLabel, { color: themeColors.containerPrimary }]}>Apple Account</Text>
-                    <Text style={[styles.settingDescription, { color: themeColors.textPrimary }]}>
-                      Signed
-                      {authUser.email ? `\n${authUser.email}` : ''}
-                      {cloudSyncInfo?.syncedAt
-                        ? `\nLast sync: ${new Date(cloudSyncInfo.syncedAt).toLocaleString()}`
-                        : ''}
-                    </Text>
                   </View>
-                </View>
-
-                <View style={[styles.settingDivider, { backgroundColor: themeColors.borderDimmed }]} />
-
-                {/* Sync Now */}
-                <TouchableOpacity
-                  style={styles.settingRow}
-                  onPress={async () => {
-                    if (isSyncing) return;
-                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                    setIsSyncing(true);
-                    const result = await uploadBackup();
-                    setIsSyncing(false);
-                    if (result.success) {
-                      const info = await getCloudBackupInfo();
-                      setCloudSyncInfo(info);
-                      Alert.alert('Sync Complete', 'Your data has been backed up to the cloud.', [{ text: 'OK' }]);
-                    } else {
-                      Alert.alert('Sync Failed', result.error || 'Unknown error.', [{ text: 'OK' }]);
-                    }
-                  }}
-                  activeOpacity={0.7}
-                >
-                  <View style={styles.settingInfo}>
-                    <Text style={[styles.flatLabel, { color: themeColors.containerPrimary }]}>
-                      {isSyncing ? '⏳ Syncing...' : '☁️ Sync Now'}
-                    </Text>
-                    <Text style={[styles.settingDescription, { color: themeColors.textPrimary }]}>Upload your data to the cloud</Text>
+                  <View style={styles.appleSummaryWrap}>
+                    <Text style={[styles.appleSummaryStatus, { color: themeColors.containerPrimary }]}>Signed</Text>
+                    {authUser.email ? (
+                      <Text style={[styles.appleSummaryEmail, { color: themeColors.containerPrimary }]} numberOfLines={1}>
+                        {authUser.email}
+                      </Text>
+                    ) : null}
                   </View>
                 </TouchableOpacity>
+                {appleOptionsExpanded ? (
+                  <>
+                    <View style={[styles.settingDivider, { backgroundColor: themeColors.borderDimmed }]} />
 
-                <View style={[styles.settingDivider, { backgroundColor: themeColors.borderDimmed }]} />
+                    {/* Sync Now */}
+                    <TouchableOpacity
+                      style={styles.settingRow}
+                      onPress={async () => {
+                        if (isSyncing) return;
+                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                        setIsSyncing(true);
+                        const result = await uploadBackup();
+                        setIsSyncing(false);
+                        if (result.success) {
+                          const info = await getCloudBackupInfo();
+                          setCloudSyncInfo(info);
+                          Alert.alert('Sync Complete', 'Your data has been backed up to the cloud.', [{ text: 'OK' }]);
+                        } else {
+                          Alert.alert('Sync Failed', result.error || 'Unknown error.', [{ text: 'OK' }]);
+                        }
+                      }}
+                      activeOpacity={0.7}
+                    >
+                      <View style={styles.settingInfo}>
+                        <Text style={[styles.flatLabel, { color: themeColors.containerPrimary }]}>
+                          {isSyncing ? '⏳ Syncing...' : '☁️ Sync Now'}
+                        </Text>
+                        <Text style={[styles.settingDescription, { color: themeColors.textPrimary }]}>Upload your data to the cloud</Text>
+                      </View>
+                    </TouchableOpacity>
 
-                {/* Restore from Cloud */}
-                <TouchableOpacity
-                  style={styles.settingRow}
-                  onPress={() => {
-                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                    Alert.alert(
-                      'Restore from Cloud',
-                      'This will download your cloud backup and replace current local data. Use this after reinstalling the app.',
-                      [
-                        { text: 'Cancel', style: 'cancel' },
-                        {
-                          text: 'Restore',
-                          style: 'destructive',
-                          onPress: async () => {
-                            setIsSyncing(true);
-                            const result = await downloadBackup();
-                            if (result.success) {
-                              await initialize();
-                              setIsSyncing(false);
-                              Alert.alert(
-                                'Restore Complete',
-                                `Restored ${result.restoredKeys} data entries from the cloud!`,
-                                [{ text: 'OK' }]
-                              );
-                            } else {
-                              setIsSyncing(false);
-                              Alert.alert('Restore Failed', result.error || 'Unknown error.', [{ text: 'OK' }]);
-                            }
-                          },
-                        },
-                      ]
-                    );
-                  }}
-                  activeOpacity={0.7}
-                >
-                  <View style={styles.settingInfo}>
-                    <Text style={[styles.flatLabel, { color: themeColors.containerPrimary }]}>📥 Restore from Cloud</Text>
-                    <Text style={[styles.settingDescription, { color: themeColors.textPrimary }]}>Download backup after reinstall</Text>
-                  </View>
-                </TouchableOpacity>
+                    <View style={[styles.settingDivider, { backgroundColor: themeColors.borderDimmed }]} />
 
-                <View style={[styles.settingDivider, { backgroundColor: themeColors.borderDimmed }]} />
+                    {/* Restore from Cloud */}
+                    <TouchableOpacity
+                      style={styles.settingRow}
+                      onPress={() => {
+                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                        Alert.alert(
+                          'Restore from Cloud',
+                          'This will download your cloud backup and replace current local data. Use this after reinstalling the app.',
+                          [
+                            { text: 'Cancel', style: 'cancel' },
+                            {
+                              text: 'Restore',
+                              style: 'destructive',
+                              onPress: async () => {
+                                setIsSyncing(true);
+                                const result = await downloadBackup();
+                                if (result.success) {
+                                  await initialize();
+                                  setIsSyncing(false);
+                                  Alert.alert(
+                                    'Restore Complete',
+                                    `Restored ${result.restoredKeys} data entries from the cloud!`,
+                                    [{ text: 'OK' }]
+                                  );
+                                } else {
+                                  setIsSyncing(false);
+                                  Alert.alert('Restore Failed', result.error || 'Unknown error.', [{ text: 'OK' }]);
+                                }
+                              },
+                            },
+                          ]
+                        );
+                      }}
+                      activeOpacity={0.7}
+                    >
+                      <View style={styles.settingInfo}>
+                        <Text style={[styles.flatLabel, { color: themeColors.containerPrimary }]}>📥 Restore from Cloud</Text>
+                        <Text style={[styles.settingDescription, { color: themeColors.textPrimary }]}>Download backup after reinstall</Text>
+                      </View>
+                    </TouchableOpacity>
 
-                {/* Sign Out */}
-                <TouchableOpacity
-                  style={styles.settingRow}
-                  onPress={() => {
-                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                    Alert.alert(
-                      'Sign Out',
-                      'Your local data will remain. You can sign back in anytime to sync again.',
-                      [
-                        { text: 'Cancel', style: 'cancel' },
-                        {
-                          text: 'Sign Out',
-                          style: 'destructive',
-                          onPress: async () => {
-                            await signOut();
-                            setAuthUser(null);
-                            setCloudSyncInfo(null);
-                          },
-                        },
-                      ]
-                    );
-                  }}
-                  activeOpacity={0.7}
-                >
-                  <View style={styles.settingInfo}>
-                    <Text style={[styles.flatLabel, { color: themeColors.containerPrimary }]}>Sign Out</Text>
-                  </View>
-                </TouchableOpacity>
+                    <View style={[styles.settingDivider, { backgroundColor: themeColors.borderDimmed }]} />
+
+                    {/* Sign Out */}
+                    <TouchableOpacity
+                      style={styles.settingRow}
+                      onPress={() => {
+                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                        Alert.alert(
+                          'Sign Out',
+                          'Your local data will remain. You can sign back in anytime to sync again.',
+                          [
+                            { text: 'Cancel', style: 'cancel' },
+                            {
+                              text: 'Sign Out',
+                              style: 'destructive',
+                              onPress: async () => {
+                                await signOut();
+                                setAuthUser(null);
+                                setCloudSyncInfo(null);
+                              },
+                            },
+                          ]
+                        );
+                      }}
+                      activeOpacity={0.7}
+                    >
+                      <View style={styles.settingInfo}>
+                        <Text style={[styles.flatLabel, { color: themeColors.containerPrimary }]}>Sign Out</Text>
+                      </View>
+                    </TouchableOpacity>
+                  </>
+                ) : null}
               </>
             ) : (
               <>
@@ -521,7 +579,9 @@ export function ProfileScreen({ navigation }: ProfileScreenProps) {
                   <View style={styles.settingInfo}>
                     <Text style={[styles.flatLabel, { color: themeColors.containerPrimary }]}>Apple Account</Text>
                   </View>
-                  <IconTriangle size={16} color={themeColors.text} />
+                  <Text style={[styles.flatValue, styles.signedOutValue, { color: themeColors.containerPrimary }]}>
+                    Not signed in
+                  </Text>
                 </TouchableOpacity>
               </>
             )}
@@ -537,17 +597,6 @@ export function ProfileScreen({ navigation }: ProfileScreenProps) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-  },
-  header: {
-    paddingBottom: SPACING.md,
-  },
-  pageTitleContainer: {
-    paddingHorizontal: SPACING.xxl,
-    paddingTop: 0,
-    marginBottom: SPACING.xxxl + SPACING.sm,
-  },
-  pageTitle: {
-    ...TYPOGRAPHY.displayLarge,
   },
   scrollView: {
     flex: 1,
@@ -617,13 +666,6 @@ const styles = StyleSheet.create({
   themeSwatchFill: {
     flex: 1,
   },
-  themeSwatchCorner: {
-    position: 'absolute',
-    left: 0,
-    top: 0,
-    width: '55%',
-    height: '55%',
-  },
   settingCardRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -633,6 +675,26 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-start',
     justifyContent: 'space-between',
+  },
+  autoProgressionRow: {
+    minHeight: 0,
+  },
+  progressionPreviewWrap: {
+    alignItems: 'flex-end',
+    flexShrink: 1,
+    gap: SPACING.lg,
+  },
+  progressionPreviewItem: {
+    alignItems: 'flex-end',
+  },
+  progressionPreviewName: {
+    ...TYPOGRAPHY.h1,
+    textAlign: 'right',
+  },
+  progressionPreviewMeta: {
+    ...TYPOGRAPHY.legal,
+    textAlign: 'right',
+    marginTop: 2,
   },
   restSliderWrap: {
     marginTop: SPACING.lg,
@@ -664,6 +726,22 @@ const styles = StyleSheet.create({
   settingInfo: {
     flex: 1,
     marginRight: SPACING.md,
+  },
+  appleSummaryWrap: {
+    alignItems: 'flex-end',
+    flexShrink: 1,
+  },
+  appleSummaryStatus: {
+    ...TYPOGRAPHY.h1,
+    lineHeight: 40,
+  },
+  appleSummaryEmail: {
+    ...TYPOGRAPHY.h3,
+    marginTop: 4,
+  },
+  signedOutValue: {
+    textTransform: 'lowercase',
+    flexShrink: 1,
   },
   settingLabel: {
     ...TYPOGRAPHY.bodyBold,

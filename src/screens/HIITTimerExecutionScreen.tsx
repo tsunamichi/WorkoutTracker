@@ -27,7 +27,6 @@ import Reanimated, {
   Easing as ReanimatedEasing,
   cancelAnimation,
   interpolate,
-  runOnJS,
   useAnimatedStyle,
   useSharedValue,
   withRepeat,
@@ -53,8 +52,6 @@ const LIGHT_COLORS = {
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
 const CONTAINER_WIDTH = SCREEN_WIDTH - (SPACING.xxl * 2);
-const SURFACE_TRANSITION = EXPLORE_V2.motion.surfaceTransition;
-
 
 export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
   const insets = useSafeAreaInsets();
@@ -93,10 +90,10 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
   const [menuVisible, setMenuVisible] = useState(false);
   const [placeholderHeight, setPlaceholderHeight] = useState(330);
   const [placeholderWidth, setPlaceholderWidth] = useState(330);
-  const [renderedRestPhase, setRenderedRestPhase] = useState(false);
+  const isRestPhase = currentPhase === 'workRest' || currentPhase === 'roundRest';
   const timerPageBackground = isV2Theme
-    ? (renderedRestPhase ? themeColors.accentPrimary : themeColors.containerTertiary)
-    : (renderedRestPhase ? COLORS.accentPrimary : COLORS.backgroundTimer);
+    ? (isRestPhase ? themeColors.accentPrimary : themeColors.containerTertiary)
+    : (isRestPhase ? COLORS.accentPrimary : COLORS.backgroundTimer);
   const timerCardBackground = isV2Theme ? themeColors.containerPrimary : explore.surfaceCurrentCard;
   const timerInk = isV2Theme ? themeColors.containerTertiary : LIGHT_COLORS.text;
   const timerMetaInk = isV2Theme ? themeColors.containerTertiary : COLORS.accentSecondary;
@@ -104,12 +101,10 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
   const timerHeaderInk = isV2Theme ? themeColors.containerPrimary : '#1F1F1F';
   const miniProgressBg = isV2Theme ? themeColors.containerPrimaryDark : COLORS.containerPrimaryDark;
   const miniProgressFill = isV2Theme ? themeColors.containerTertiary : COLORS.canvasLight;
-  const isRestPhase = currentPhase === 'workRest' || currentPhase === 'roundRest';
   const heroLayoutProgress = useSharedValue(1);
   const heroWorkBlueProgress = useSharedValue(0);
   const restTransitionProgress = useSharedValue(isRestPhase ? 1 : 0);
   const diamondPulseProgress = useSharedValue(0);
-  const surfaceSwapProgress = useSharedValue(1);
   const heroProgress = useRef(new Animated.Value(1)).current;
   const ambientTranslateX = useRef(new Animated.Value(0)).current;
   
@@ -151,25 +146,6 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
     heroWorkBlueProgress.value = withTiming(isRestPhase ? 0 : 1, { duration: 220 });
     heroLayoutProgress.value = withTiming(currentPhase === 'complete' ? 0 : 1, { duration: 220 });
   }, [currentPhase, isRestPhase, heroLayoutProgress, heroWorkBlueProgress]);
-
-  useEffect(() => {
-    if (isRestPhase === renderedRestPhase) return;
-    surfaceSwapProgress.value = withTiming(
-      0,
-      {
-        duration: SURFACE_TRANSITION.durationMs / 2,
-        easing: ReanimatedEasing.bezier(...SURFACE_TRANSITION.ease),
-      },
-      finished => {
-        if (!finished) return;
-        runOnJS(setRenderedRestPhase)(isRestPhase);
-        surfaceSwapProgress.value = withTiming(1, {
-          duration: SURFACE_TRANSITION.durationMs / 2,
-          easing: ReanimatedEasing.bezier(...SURFACE_TRANSITION.ease),
-        });
-      },
-    );
-  }, [isRestPhase, renderedRestPhase, surfaceSwapProgress]);
 
   useEffect(() => {
     restTransitionProgress.value = withTiming(isRestPhase ? 1 : 0, {
@@ -250,14 +226,6 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
     return {
       opacity: t,
       transform: [{ rotate: '45deg' }, { scale: baseScale * pulseScale }],
-    };
-  });
-
-  const surfaceTransitionStyle = useAnimatedStyle(() => {
-    const p = surfaceSwapProgress.value;
-    return {
-      opacity: interpolate(p, [0, 1], [SURFACE_TRANSITION.minOpacity, 1]),
-      transform: [{ translateY: interpolate(p, [0, 1], [SURFACE_TRANSITION.translateYPx, 0]) }],
     };
   });
 
@@ -1375,7 +1343,7 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
   return (
     <View style={[styles.container, { backgroundColor: timerPageBackground }]}>
       <ShapeConfetti active={showConfetti} />
-      <Reanimated.View style={[styles.surfaceTransitionWrap, surfaceTransitionStyle]}>
+      <View style={styles.surfaceTransitionWrap}>
         <ExecutionScreenShell
           title="Timer"
           pageBackground={timerPageBackground}
@@ -1498,7 +1466,7 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
           )}
           </View>
         </ExecutionScreenShell>
-      </Reanimated.View>
+      </View>
 
       <ActionSheet
         visible={menuVisible}

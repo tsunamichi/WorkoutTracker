@@ -25,6 +25,26 @@ type ExerciseSeries = {
 };
 
 const MAX_PROGRESS_LOGS = 16;
+const DEBUG_FALLBACK_SERIES: ExerciseSeries[] = [
+  {
+    id: 'debug-bench-press',
+    name: 'Bench Press',
+    metrics: {
+      weight: [145, 155, 160, 165, 165, 170, 175],
+      reps: [8, 8, 6, 6, 6, 5, 4],
+      time: [],
+    },
+    weightDates: [
+      '2026-03-02',
+      '2026-03-06',
+      '2026-03-10',
+      '2026-03-14',
+      '2026-03-18',
+      '2026-03-22',
+      '2026-03-28',
+    ],
+  },
+];
 
 function getRealExerciseSeries(params: {
   scheduledWorkouts: any[];
@@ -335,11 +355,12 @@ export function ProgressScreen() {
   const sourceSeries = useMemo(() => {
     const byId = new Map(realSeries.map(item => [item.id, item]));
     if (mainGroupExerciseIds.length > 0) {
-      return mainGroupExerciseIds
+      const scoped = mainGroupExerciseIds
         .map(exerciseId => byId.get(exerciseId))
         .filter((item): item is ExerciseSeries => !!item);
+      return scoped.length > 0 ? scoped : DEBUG_FALLBACK_SERIES;
     }
-    return realSeries;
+    return realSeries.length > 0 ? realSeries : DEBUG_FALLBACK_SERIES;
   }, [mainGroupExerciseIds, realSeries]);
 
   const pinned = sourceSeries;

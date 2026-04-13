@@ -210,12 +210,27 @@ function ExploreV2ExecutionRootComponent(props: ExploreV2ExecutionRootProps) {
 
   const [primaryRevealed, setPrimaryRevealed] = useState<PrimaryRevealedCard>('up_next');
   const [overflowOpen, setOverflowOpen] = useState(false);
+  const overflowOpenSV = useSharedValue(false);
+  const settingsExpandProgress = useSharedValue(0);
 
   useEffect(() => {
     if (primaryRevealed !== 'current') {
       setOverflowOpen(false);
     }
   }, [primaryRevealed]);
+
+  useEffect(() => {
+    if (overflowOpen && hasCurrent) {
+      setPrimaryRevealed('current');
+    }
+  }, [overflowOpen, hasCurrent]);
+
+  useEffect(() => {
+    settingsExpandProgress.value = withTiming(overflowOpen ? 1 : 0, {
+      duration: 320,
+      easing: Easing.out(Easing.cubic),
+    });
+  }, [overflowOpen, settingsExpandProgress]);
 
   const [stackShellHeight, setStackShellHeight] = useState(0);
   /** After last set logged: keep Current mounted until slide-down exit finishes */
@@ -315,6 +330,7 @@ function ExploreV2ExecutionRootComponent(props: ExploreV2ExecutionRootProps) {
     primaryRevealedSV.value = primaryRevealed;
     hasCompletePresentSV.value = hasCompletePresent;
     currentGroupHasLoggedSetsSV.value = currentGroupHasLoggedSets;
+    overflowOpenSV.value = overflowOpen;
     exitCompleteSV.value = exitCompleteRef.current ? 1 : 0;
     walletSlideApplyToken.value = walletSlideApplyToken.value + 1;
   }, [
@@ -323,6 +339,7 @@ function ExploreV2ExecutionRootComponent(props: ExploreV2ExecutionRootProps) {
     primaryRevealed,
     hasCompletePresent,
     currentGroupHasLoggedSets,
+    overflowOpen,
     exitTick,
     screenHeight,
   ]);
@@ -500,7 +517,9 @@ function ExploreV2ExecutionRootComponent(props: ExploreV2ExecutionRootProps) {
 
   const aCurrent = useAnimatedStyle(() => {
     const sw = structuralWalletH.value;
-    const live = Math.max(PEEK, sw - (hasCompletePresentSV.value ? 2 * PEEK : PEEK));
+    const normal = Math.max(PEEK, sw - (hasCompletePresentSV.value ? 2 * PEEK : PEEK));
+    const expandP = settingsExpandProgress.value;
+    const live = interpolate(expandP, [0, 1], [normal, sw], 'clamp');
     const height = hasCurrentSV.value ? live : currentExitLayerHeightSV.value;
     const centerLift = Math.max(0, (sw - height) / 2);
     return {
@@ -511,10 +530,7 @@ function ExploreV2ExecutionRootComponent(props: ExploreV2ExecutionRootProps) {
       height,
       transform: [
         {
-          translateY:
-            currentSlideY.value +
-            currentBlockNudgeY.value +
-            centerLift * completionCelebrateProgress.value,
+          translateY: currentSlideY.value * (1 - expandP) + currentBlockNudgeY.value + centerLift * completionCelebrateProgress.value,
         },
       ],
     };
@@ -537,6 +553,7 @@ function ExploreV2ExecutionRootComponent(props: ExploreV2ExecutionRootProps) {
 
   const aUpNext = useAnimatedStyle(() => {
     return {
+      opacity: 1 - settingsExpandProgress.value,
       transform: [
         {
           translateY:
@@ -545,6 +562,9 @@ function ExploreV2ExecutionRootComponent(props: ExploreV2ExecutionRootProps) {
       ],
     };
   });
+  const settingsHiddenBackLayerStyle = useAnimatedStyle(() => ({
+    opacity: 1 - settingsExpandProgress.value,
+  }));
   const celebrationRecedeStyle = useAnimatedStyle(() => ({
     opacity: interpolate(completionCelebrateProgress.value, [0, 1], [1, 0.5]),
     transform: [{ translateY: interpolate(completionCelebrateProgress.value, [0, 1], [0, 96]) }],
@@ -668,6 +688,7 @@ function ExploreV2ExecutionRootComponent(props: ExploreV2ExecutionRootProps) {
           restThemeProgress={restThemeProgress}
           menuThemeActive={menuThemeActive}
           menuToneProgress={menuToneProgress}
+          settingsSurfaceOpen={overflowOpen}
           settingsOverflow={
             focusExercise
               ? {
@@ -920,6 +941,7 @@ function ExploreV2ExecutionRootComponent(props: ExploreV2ExecutionRootProps) {
                 styles.layerBottom,
                 aCompleteLayerHeight,
                 celebrationRecedeStyle,
+                settingsHiddenBackLayerStyle,
                 {
                   bottom: STACK_BOTTOM_GAP,
                   zIndex: zComplete,

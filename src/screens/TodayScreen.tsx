@@ -3,10 +3,10 @@ import { View, Text, StyleSheet, TouchableOpacity, Modal, ScrollView, Alert, Sha
 import Animated, {
   cancelAnimation,
   Easing,
+  FadeInDown,
   runOnJS,
   useAnimatedStyle,
   useSharedValue,
-  withDelay,
   withTiming,
 } from 'react-native-reanimated';
 import { Gesture, GestureDetector, TouchableOpacity as GHTouchableOpacity } from 'react-native-gesture-handler';
@@ -20,6 +20,7 @@ import { ScheduleWorkoutDeckV3, type ScheduleDeckV3Item } from '../components/sc
 import { CycleControlSheet } from '../components/CycleControlSheet';
 import { ShareCycleDrawer } from '../components/ShareCycleDrawer';
 import { TertiaryButton } from '../components/common/UnderlinedActionButton';
+import { StackPageHeader } from '../components/common/StackPageHeader';
 import dayjs from 'dayjs';
 import isoWeek from 'dayjs/plugin/isoWeek';
 import { useTranslation } from '../i18n/useTranslation';
@@ -30,6 +31,12 @@ import type { ScheduledWorkout } from '../types/training';
 import type { ExerciseProgress } from '../types';
 
 dayjs.extend(isoWeek);
+
+/** Staggered entering delays for extras panel (timer / warm up / core), top → bottom. */
+const EXTRAS_ENTER_ADD_DELAY_MS = 140;
+const EXTRAS_ENTER_CARD_BASE_MS = 300;
+const EXTRAS_ENTER_CARD_STAGGER_MS = 48;
+const EXTRAS_ENTER_DURATION_MS = 280;
 
 // TEMP SEED: set to true to re-seed, then set back to false
 const SEED_ENABLED = false;
@@ -192,6 +199,7 @@ export function TodayScreen({ onDateChange, onOpenAddWorkout, onOpenBonusDrawer 
     exercises,
     detailedWorkoutProgress,
     hiitTimers,
+    workoutTemplates,
   } = useStore();
 
   const today = dayjs();
@@ -217,13 +225,24 @@ export function TodayScreen({ onDateChange, onOpenAddWorkout, onOpenBonusDrawer 
   const [showShareCycleSheet, setShowShareCycleSheet] = useState(false);
   const [shareCyclePlan, setShareCyclePlan] = useState<CyclePlan | undefined>(undefined);
   const [extrasExpanded, setExtrasExpanded] = useState(false);
-  const [isTimerMode, setIsTimerMode] = useState(false);
+  type ExtrasPanelMode = 'timer' | 'warmup' | 'core' | null;
+  const [extrasPanelMode, setExtrasPanelMode] = useState<ExtrasPanelMode>(null);
+  const isExtrasPanelOpen = extrasPanelMode !== null;
+  /** Bumps when the extras sheet opens or switches mode so entering animations replay. */
+  const [extrasEnterSeq, setExtrasEnterSeq] = useState(0);
   const [selectedDeckWorkout, setSelectedDeckWorkout] = useState<ScheduledWorkout | undefined>(undefined);
   const timerModeProgress = useSharedValue(0);
   const timerHeaderProgress = useSharedValue(0);
   const scheduleChromeExitProgress = useSharedValue(0);
   const launchToExecutionLockRef = useRef(false);
   const launchToExecutionTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const openExtrasPanel = useCallback((mode: 'timer' | 'warmup' | 'core') => {
+    cancelAnimation(timerHeaderProgress);
+    timerHeaderProgress.value = 1;
+    setExtrasEnterSeq(s => s + 1);
+    setExtrasPanelMode(mode);
+  }, [timerHeaderProgress]);
 
   // TEMP: Seed dev data on mount (remove after use)
   const [seeded, setSeeded] = useState(false);
@@ -398,8 +417,6 @@ export function TodayScreen({ onDateChange, onOpenAddWorkout, onOpenBonusDrawer 
   // Get start of week based on selected date (Monday)
   const weekStart = dayjs(selectedDate).startOf('isoWeek');
   
-  const scheduleLabel = t('schedule');
-
   /** Monday (YYYY-MM-DD) of the week currently shown in the strip (tap does not change this; swipe does). */
   const [visibleWeekMonday, setVisibleWeekMonday] = useState(() =>
     today.startOf('isoWeek').format('YYYY-MM-DD'),
@@ -753,6 +770,77 @@ export function TodayScreen({ onDateChange, onOpenAddWorkout, onOpenBonusDrawer 
   
   const isInPastCycle = selectedDateCyclePlan ? !selectedDateCyclePlan.active : false;
   const timerTemplates = useMemo(() => hiitTimers.filter(timer => timer.isTemplate), [hiitTimers]);
+
+  const sortedWorkoutTemplates = useMemo(() => {
+    return [...workoutTemplates].sort((a, b) => {
+      if (a.lastUsedAt && b.lastUsedAt) {
+        return dayjs(b.lastUsedAt).valueOf() - dayjs(a.lastUsedAt).valueOf();
+      }
+      if (a.lastUsedAt && !b.lastUsedAt) return -1;
+      if (!a.lastUsedAt && b.lastUsedAt) return 1;
+      return dayjs(b.createdAt).valueOf() - dayjs(a.createdAt).valueOf();
+    });
+  }, [workoutTemplates]);
+
+  const resolveScheduledWorkoutForTemplate = useCallback(
+    (templateId: string): ScheduledWorkout | undefined => {
+      const onSelected = getScheduledWorkout(selectedDate);
+      if (onSelected && onSelected.templateId === templateId && !onSelected.isLocked) {
+        return onSelected;
+      }
+      const matches = scheduledWorkouts
+        .filter(sw => sw.templateId === templateId && !sw.isLocked)
+        .sort((a, b) => a.date.localeCompare(b.date) || a.id.localeCompare(b.id));
+      const futureOrSame = matches.find(sw => !dayjs(sw.date).isBefore(selectedDate, 'day'));
+      return futureOrSame ?? matches[0];
+    },
+    [getScheduledWorkout, selectedDate, scheduledWorkouts],
+  );
+
+  const handleSelectSavedWorkoutForWarmup = useCallback(
+    async (templateId: string) => {
+      const sw = resolveScheduledWorkoutForTemplate(templateId);
+      if (!sw) {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+        Alert.alert(t('savedWorkouts'), t('noScheduledSessionForWorkout'));
+        return;
+      }
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      await ensureScheduledWorkoutWarmup(sw.id);
+      setExtrasPanelMode(null);
+      (navigation as any).navigate('WarmupExecution', {
+        workoutKey: sw.id,
+        workoutTemplateId: sw.templateId,
+      });
+    },
+    [
+      resolveScheduledWorkoutForTemplate,
+      ensureScheduledWorkoutWarmup,
+      navigation,
+      t,
+    ],
+  );
+
+  const handleSelectSavedWorkoutForCore = useCallback(
+    async (templateId: string) => {
+      const sw = resolveScheduledWorkoutForTemplate(templateId);
+      if (!sw) {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+        Alert.alert(t('savedWorkouts'), t('noScheduledSessionForWorkout'));
+        return;
+      }
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      await ensureScheduledWorkoutCore(sw.id);
+      setExtrasPanelMode(null);
+      (navigation as any).navigate('ExerciseExecution', {
+        workoutKey: sw.id,
+        workoutTemplateId: sw.templateId,
+        type: 'core',
+      });
+    },
+    [resolveScheduledWorkoutForTemplate, ensureScheduledWorkoutCore, navigation, t],
+  );
+
   const headerDateLabel = formatDateWithOrdinal(selectedDate);
   /** Cycle row is now the lightweight entry point into full cycle/calendar management context. */
   const cyclePlanForHeader = selectedDateCyclePlan ?? activeCyclePlan;
@@ -785,19 +873,18 @@ export function TodayScreen({ onDateChange, onOpenAddWorkout, onOpenBonusDrawer 
   }, []);
 
   useEffect(() => {
-    timerModeProgress.value = withTiming(isTimerMode ? 1 : 0, { duration: 420, easing: Easing.out(Easing.cubic) });
-  }, [isTimerMode, timerModeProgress]);
+    timerModeProgress.value = withTiming(isExtrasPanelOpen ? 1 : 0, { duration: 420, easing: Easing.out(Easing.cubic) });
+  }, [isExtrasPanelOpen, timerModeProgress]);
 
   useEffect(() => {
-    if (isTimerMode) {
-      timerHeaderProgress.value = withDelay(
-        500,
-        withTiming(1, { duration: 420, easing: Easing.out(Easing.cubic) }),
-      );
+    if (isExtrasPanelOpen) {
+      cancelAnimation(timerHeaderProgress);
+      timerHeaderProgress.value = 1;
       return;
     }
-    timerHeaderProgress.value = withTiming(0, { duration: 420, easing: Easing.out(Easing.cubic) });
-  }, [isTimerMode, timerHeaderProgress]);
+    cancelAnimation(timerHeaderProgress);
+    timerHeaderProgress.value = withTiming(0, { duration: 220, easing: Easing.out(Easing.cubic) });
+  }, [isExtrasPanelOpen, timerHeaderProgress]);
 
   useEffect(() => {
     return () => {
@@ -853,46 +940,6 @@ export function TodayScreen({ onDateChange, onOpenAddWorkout, onOpenBonusDrawer 
     setSelectedDeckWorkout(remainingWorkoutsQueue[0]);
   }, [selectedDate, remainingWorkoutsQueue]);
 
-  const warmupTargetWorkout = selectedDeckWorkout ?? remainingWorkoutsQueue[0] ?? selectedDay?.scheduledWorkout;
-  const warmupProfile: 'upper' | 'legs' = useMemo(() => {
-    const target = warmupTargetWorkout;
-    if (!target) return 'upper';
-    const title = (target.titleSnapshot || '').toLowerCase();
-    if (/\b(lower|legs?|hinge|glute|hamstring|quad|calf)\b/.test(title)) return 'legs';
-    if (/\b(upper|push|pull|chest|back|shoulder|arm)\b/.test(title)) return 'upper';
-    let lowerSignals = 0;
-    let upperSignals = 0;
-    for (const item of target.exercisesSnapshot || []) {
-      const ex = exercises.find(e => e.id === item.exerciseId);
-      const bucket = `${ex?.category ?? ''}`.toLowerCase();
-      if (/(legs?|glute|hamstring|quad|calf|lower)/.test(bucket)) lowerSignals += 1;
-      else if (/(chest|back|shoulder|arm|upper)/.test(bucket)) upperSignals += 1;
-    }
-    return lowerSignals >= upperSignals && lowerSignals > 0 ? 'legs' : 'upper';
-  }, [warmupTargetWorkout, exercises]);
-  const warmupCardTitle = warmupProfile === 'legs' ? 'Lower warm up' : 'Upper warm up';
-
-  const handleWarmupPress = useCallback(async () => {
-    const target = selectedDeckWorkout ?? remainingWorkoutsQueue[0] ?? selectedDay?.scheduledWorkout;
-    if (!target) return;
-    await ensureScheduledWorkoutWarmup(target.id);
-    (navigation as any).navigate('WarmupExecution', {
-      workoutKey: target.id,
-      workoutTemplateId: target.templateId,
-    });
-  }, [selectedDeckWorkout, remainingWorkoutsQueue, selectedDay?.scheduledWorkout, ensureScheduledWorkoutWarmup, navigation]);
-
-  const handleCorePress = useCallback(async () => {
-    const target = selectedDeckWorkout ?? remainingWorkoutsQueue[0] ?? selectedDay?.scheduledWorkout;
-    if (!target) return;
-    await ensureScheduledWorkoutCore(target.id);
-    (navigation as any).navigate('ExerciseExecution', {
-      workoutKey: target.id,
-      workoutTemplateId: target.templateId,
-      type: 'core',
-    });
-  }, [selectedDeckWorkout, remainingWorkoutsQueue, selectedDay?.scheduledWorkout, ensureScheduledWorkoutCore, navigation]);
-  
   const isScheduleFutureDay = dayjs(selectedDate).isAfter(today, 'day');
   const handleOpenCycleCalendar = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -1155,23 +1202,12 @@ export function TodayScreen({ onDateChange, onOpenAddWorkout, onOpenBonusDrawer 
 
               <View style={styles.cardActionsContainer}>
                 {cyclePlanForHeader ? (
-                  <>
-                    <TertiaryButton
-                      label={cycleCompletionLabel}
-                      onPress={handleOpenCycleCalendar}
-                      style={styles.cycleProgressAction}
-                      textStyle={styles.profileLinkText}
-                    />
-                    <TertiaryButton
-                      label="Personal progress"
-                      onPress={() => {
-                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                        (navigation as any).navigate('Progress');
-                      }}
-                      style={styles.progressAction}
-                      textStyle={styles.profileLinkText}
-                    />
-                  </>
+                  <TertiaryButton
+                    label={cycleCompletionLabel}
+                    onPress={handleOpenCycleCalendar}
+                    style={styles.cycleProgressAction}
+                    textStyle={styles.profileLinkText}
+                  />
                 ) : null}
                 {!isPausedDay &&
                 !selectedDay?.scheduledWorkout &&
@@ -1191,24 +1227,42 @@ export function TodayScreen({ onDateChange, onOpenAddWorkout, onOpenBonusDrawer 
               </View>
               </View>
               </ScrollView>
-          <Animated.View style={scheduleFooterExitAnimatedStyle} pointerEvents={isTimerMode ? 'none' : 'auto'}>
+          <Animated.View style={scheduleFooterExitAnimatedStyle} pointerEvents={isExtrasPanelOpen ? 'none' : 'auto'}>
             <View
-              pointerEvents={isTimerMode ? 'none' : 'auto'}
+              pointerEvents={isExtrasPanelOpen ? 'none' : 'auto'}
               style={[styles.footerActionsWrap, { paddingBottom: insets.bottom }]}
             >
               <View style={styles.footerEntrySection}>
                 <Text style={styles.footerSectionTitle}>Extras</Text>
                 <View style={styles.footerEntryLinksRow}>
-                  <TouchableOpacity style={styles.footerEntryLinkButton} activeOpacity={0.85} onPress={() => void handleWarmupPress()}>
+                  <TouchableOpacity
+                    style={styles.footerEntryLinkButton}
+                    activeOpacity={0.85}
+                    onPress={() => {
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                      openExtrasPanel('warmup');
+                    }}
+                  >
                     <Text style={styles.footerEntryLinkText}>Warm up</Text>
                   </TouchableOpacity>
-                  <TouchableOpacity style={styles.footerEntryLinkButton} activeOpacity={0.85} onPress={() => void handleCorePress()}>
+                  <TouchableOpacity
+                    style={styles.footerEntryLinkButton}
+                    activeOpacity={0.85}
+                    onPress={() => {
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                      openExtrasPanel('core');
+                    }}
+                  >
                     <Text style={styles.footerEntryLinkText}>Core</Text>
                   </TouchableOpacity>
-                  <TouchableOpacity style={styles.footerEntryLinkButton} activeOpacity={0.85} onPress={() => {
-                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                    setIsTimerMode(true);
-                  }}>
+                  <TouchableOpacity
+                    style={styles.footerEntryLinkButton}
+                    activeOpacity={0.85}
+                    onPress={() => {
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                      openExtrasPanel('timer');
+                    }}
+                  >
                     <Text style={styles.footerEntryLinkText}>Timer</Text>
                   </TouchableOpacity>
                 </View>
@@ -1218,51 +1272,125 @@ export function TodayScreen({ onDateChange, onOpenAddWorkout, onOpenBonusDrawer 
           </Animated.View>
 
           <Animated.View
-            pointerEvents={isTimerMode ? 'auto' : 'none'}
+            pointerEvents={isExtrasPanelOpen ? 'auto' : 'none'}
             style={[styles.timerModePane, { backgroundColor: savedTimersPageBackground }, timerPaneAnimatedStyle]}
           >
-            <Animated.View style={[styles.timerModeHeader, { paddingTop: insets.top + 8 }, timerHeaderAnimatedStyle]}>
-              <View style={styles.timerSwitchButton}>
-                <TertiaryButton label="Schedule" onPress={() => {
-                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                  setIsTimerMode(false);
-                }} />
-              </View>
+            <Animated.View style={[styles.timerModeHeader, timerHeaderAnimatedStyle]}>
+              {extrasPanelMode !== null && (
+                <View key={`extras-header-${extrasEnterSeq}-${extrasPanelMode}`}>
+                  <StackPageHeader
+                    paddingTop={insets.top}
+                    backLabel="Home"
+                    onBackPress={() => setExtrasPanelMode(null)}
+                    title={
+                      extrasPanelMode === 'timer'
+                        ? t('timer')
+                        : extrasPanelMode === 'warmup'
+                          ? t('extrasSheetTitleWarmUp')
+                          : extrasPanelMode === 'core'
+                            ? t('core')
+                            : ''
+                    }
+                    titleColor={themeColors.textPrimary}
+                  />
+                </View>
+              )}
             </Animated.View>
             <ScrollView
+              key={`extras-scroll-${extrasEnterSeq}-${extrasPanelMode ?? 'closed'}`}
               style={styles.timerModeScroll}
               contentContainerStyle={[styles.timerModeScrollContent, { paddingBottom: insets.bottom + 24 }]}
               showsVerticalScrollIndicator={false}
             >
-              <Text style={[styles.timerModeTitle, { color: savedTimersInk }]}>{t('savedTimers')}</Text>
-              <TouchableOpacity
-                style={styles.addTimerInlineAction}
-                onPress={() => (navigation as any).navigate('HIITTimerForm', { mode: 'create' })}
-                activeOpacity={0.75}
-              >
-                <Text style={[styles.addTimerCardText, { color: savedTimersInk }]}>+ create timer</Text>
-              </TouchableOpacity>
-              <View style={styles.timerGrid}>
-                {timerTemplates.map(timer => (
+              {(extrasPanelMode === 'timer' || extrasPanelMode === 'warmup' || extrasPanelMode === 'core') && (
+                <Animated.View
+                  key={`extras-add-${extrasEnterSeq}-${extrasPanelMode}`}
+                  entering={FadeInDown.duration(EXTRAS_ENTER_DURATION_MS).delay(EXTRAS_ENTER_ADD_DELAY_MS)}
+                >
                   <TouchableOpacity
-                    key={timer.id}
-                    style={styles.timerGridCard}
-                    onPress={() => (navigation as any).navigate('HIITTimerExecution', { timerId: timer.id })}
-                    onLongPress={() => (navigation as any).navigate('HIITTimerForm', { mode: 'edit', timerId: timer.id })}
-                    activeOpacity={0.85}
+                    style={styles.addTimerInlineAction}
+                    onPress={() => {
+                      if (extrasPanelMode === 'timer') {
+                        (navigation as any).navigate('HIITTimerForm', { mode: 'create' });
+                      } else {
+                        (navigation as any).navigate('WorkoutBuilder');
+                      }
+                    }}
+                    activeOpacity={0.75}
                   >
-                    <View style={[styles.footerEntryCard, styles.timerGridCardShell, { backgroundColor: savedTimersCardBackground }]}>
-                      <View style={styles.footerEntryTopRow}>
-                        <Text style={[styles.footerEntryMeta, { color: savedTimersMetaInk }]}>{calculateTimerTotalTime(timer)}</Text>
-                        <View style={styles.footerEntryChevron}>
-                          <IconArrowDiagonal size={8} color={savedTimersMetaInk} />
-                        </View>
-                      </View>
-                      <Text style={[styles.footerEntryTitle, { color: savedTimersInk }]} numberOfLines={2}>{timer.name}</Text>
-                    </View>
+                    <Text style={[styles.addTimerCardText, { color: themeColors.textMeta }]}>{t('extrasAddShort')}</Text>
                   </TouchableOpacity>
-                ))}
-              </View>
+                </Animated.View>
+              )}
+              {extrasPanelMode === 'timer' ? (
+                <View style={styles.timerGrid}>
+                  {timerTemplates.map((timer, cardIndex) => (
+                    <Animated.View
+                      key={`${timer.id}-${extrasEnterSeq}`}
+                      style={styles.timerGridCard}
+                      entering={FadeInDown.duration(EXTRAS_ENTER_DURATION_MS).delay(
+                        EXTRAS_ENTER_CARD_BASE_MS + cardIndex * EXTRAS_ENTER_CARD_STAGGER_MS,
+                      )}
+                    >
+                      <TouchableOpacity
+                        style={styles.timerGridCardFill}
+                        onPress={() => (navigation as any).navigate('HIITTimerExecution', { timerId: timer.id })}
+                        onLongPress={() => (navigation as any).navigate('HIITTimerForm', { mode: 'edit', timerId: timer.id })}
+                        activeOpacity={0.85}
+                      >
+                        <View style={[styles.footerEntryCard, styles.timerGridCardShell, { backgroundColor: savedTimersCardBackground }]}>
+                          <View style={styles.footerEntryTopRow}>
+                            <Text style={[styles.footerEntryMeta, { color: savedTimersMetaInk }]}>{calculateTimerTotalTime(timer)}</Text>
+                            <View style={styles.footerEntryChevron}>
+                              <IconArrowDiagonal size={8} color={savedTimersMetaInk} />
+                            </View>
+                          </View>
+                          <Text style={[styles.footerEntryTitle, { color: savedTimersInk }]} numberOfLines={2}>{timer.name}</Text>
+                        </View>
+                      </TouchableOpacity>
+                    </Animated.View>
+                  ))}
+                </View>
+              ) : extrasPanelMode === 'warmup' || extrasPanelMode === 'core' ? (
+                <View style={styles.timerGrid}>
+                  {sortedWorkoutTemplates.map((template, cardIndex) => {
+                    const sw = resolveScheduledWorkoutForTemplate(template.id);
+                    const meta =
+                      sw && sw.date !== selectedDate
+                        ? `${template.items.length} ${t('exercises')} · ${dayjs(sw.date).format('MMM D')}`
+                        : `${template.items.length} ${t('exercises')}`;
+                    return (
+                      <Animated.View
+                        key={`${template.id}-${extrasEnterSeq}`}
+                        style={styles.timerGridCard}
+                        entering={FadeInDown.duration(EXTRAS_ENTER_DURATION_MS).delay(
+                          EXTRAS_ENTER_CARD_BASE_MS + cardIndex * EXTRAS_ENTER_CARD_STAGGER_MS,
+                        )}
+                      >
+                        <TouchableOpacity
+                          style={styles.timerGridCardFill}
+                          onPress={() =>
+                            void (extrasPanelMode === 'warmup'
+                              ? handleSelectSavedWorkoutForWarmup(template.id)
+                              : handleSelectSavedWorkoutForCore(template.id))
+                          }
+                          activeOpacity={0.85}
+                        >
+                          <View style={[styles.footerEntryCard, styles.timerGridCardShell, { backgroundColor: savedTimersCardBackground }]}>
+                            <View style={styles.footerEntryTopRow}>
+                              <Text style={[styles.footerEntryMeta, { color: savedTimersMetaInk }]}>{meta}</Text>
+                              <View style={styles.footerEntryChevron}>
+                                <IconArrowDiagonal size={8} color={savedTimersMetaInk} />
+                              </View>
+                            </View>
+                            <Text style={[styles.footerEntryTitle, { color: savedTimersInk }]} numberOfLines={2}>{template.name}</Text>
+                          </View>
+                        </TouchableOpacity>
+                      </Animated.View>
+                    );
+                  })}
+                </View>
+              ) : null}
             </ScrollView>
           </Animated.View>
 
@@ -1901,11 +2029,6 @@ const styles = StyleSheet.create({
   cycleProgressAction: {
     alignSelf: 'flex-start',
     marginTop: 24,
-    marginBottom: 0,
-  },
-  progressAction: {
-    alignSelf: 'flex-start',
-    marginTop: 12,
     marginBottom: SPACING.lg,
   },
   footerActionsWrap: {
@@ -1971,32 +2094,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  timerSwitchButton: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 24,
-    paddingVertical: SPACING.sm,
-    gap: 2,
-  },
   timerModePane: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: COLORS.canvasLight,
   },
   timerModeHeader: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingBottom: SPACING.sm,
+    alignSelf: 'stretch',
   },
   timerModeScroll: {
     flex: 1,
   },
   timerModeScrollContent: {
     paddingHorizontal: SPACING.xxl,
-  },
-  timerModeTitle: {
-    ...TYPOGRAPHY.h2,
-    color: COLORS.inkCharcoal,
-    marginBottom: SPACING.md,
   },
   timerGrid: {
     flexDirection: 'row',
@@ -2006,16 +2115,18 @@ const styles = StyleSheet.create({
   timerGridCard: {
     width: '48%',
   },
+  timerGridCardFill: {
+    width: '100%',
+  },
   timerGridCardShell: {
     minHeight: 112,
   },
   addTimerInlineAction: {
     paddingVertical: 8,
-    marginBottom: SPACING.md,
+    marginBottom: 40,
   },
   addTimerCardText: {
     ...TYPOGRAPHY.h1,
-    color: COLORS.containerPrimary,
   },
   
   // Intervals / Bonus Section

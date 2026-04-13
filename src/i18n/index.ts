@@ -217,6 +217,10 @@ type TranslationKey =
   | 'save'
   | 'createTimer'
   | 'savedTimers'
+  | 'savedWorkouts'
+  | 'noScheduledSessionForWorkout'
+  | 'extrasAddShort'
+  | 'extrasSheetTitleWarmUp'
   | 'setLabel'
   | 'roundLabel'
   | 'go'
@@ -823,6 +827,11 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     save: 'Save',
     createTimer: 'Create Timer',
     savedTimers: 'Saved timers',
+    savedWorkouts: 'Saved workouts',
+    noScheduledSessionForWorkout:
+      'Add this workout to your calendar, or pick a day when it appears on your schedule, to start.',
+    extrasAddShort: '+ add',
+    extrasSheetTitleWarmUp: 'Warm up',
     setLabel: 'Set',
     roundLabel: 'Round',
     go: 'Go!',
@@ -1445,6 +1454,11 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     save: 'Guardar',
     createTimer: 'Crear temporizador',
     savedTimers: 'Temporizadores guardados',
+    savedWorkouts: 'Entrenamientos guardados',
+    noScheduledSessionForWorkout:
+      'Agrega este entrenamiento al calendario o elige un dia en que figure en tu plan para empezar.',
+    extrasAddShort: '+ agregar',
+    extrasSheetTitleWarmUp: 'Calentamiento',
     setLabel: 'Serie',
     roundLabel: 'Ronda',
     go: 'Ya!',
