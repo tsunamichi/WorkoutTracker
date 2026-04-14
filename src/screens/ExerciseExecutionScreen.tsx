@@ -51,6 +51,13 @@ import { UnderlinedActionButton } from '../components/common/UnderlinedActionBut
 import { ExploreV2ExecutionRoot } from '../components/exploreV2/ExploreV2ExecutionRoot';
 import { ExploreV2TimerArea } from '../components/exploreV2/ExploreV2TimerArea';
 import { EXPLORE_V2 } from '../components/exploreV2/exploreV2Tokens';
+import {
+  executionCtaLabelStyle,
+  executionCtaTouchableFill,
+  EXECUTION_CTA_HEIGHT,
+  EXECUTION_CTA_PADDING_H,
+  EXECUTION_CTA_ROW_GAP,
+} from '../components/execution/executionCtaTokens';
 import { useTranslation } from '../i18n/useTranslation';
 import { formatWeightForLoad, toDisplayWeight, fromDisplayWeight } from '../utils/weight';
 import { applyForwardPropagationForExerciseRounds } from '../utils/exerciseLocalValues';
@@ -5713,8 +5720,8 @@ const styles = StyleSheet.create({
   exploreExpandedActionsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: SPACING.md,
+    justifyContent: 'flex-start',
+    gap: EXECUTION_CTA_ROW_GAP,
   },
   exploreEditButton: {
     width: 30,
@@ -5726,16 +5733,18 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   explorePrimaryButton: {
-    flex: 1,
-    minHeight: 40,
+    minHeight: EXECUTION_CTA_HEIGHT,
+    height: EXECUTION_CTA_HEIGHT,
     borderRadius: BORDER_RADIUS.md,
     backgroundColor: COLORS.accentPrimary,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: SPACING.md,
+    paddingHorizontal: EXECUTION_CTA_PADDING_H,
+    alignSelf: 'flex-start',
+    flexShrink: 0,
   },
   explorePrimaryButtonText: {
-    ...TYPOGRAPHY.metaBold,
+    ...executionCtaLabelStyle,
     color: COLORS.backgroundCanvas,
   },
   exploreDetailSheetContent: {
@@ -5891,15 +5900,19 @@ const styles = StyleSheet.create({
   },
   exploreSetEditorSaveBtn: {
     marginTop: SPACING.sm,
+    alignSelf: 'center',
+    flexShrink: 0,
     backgroundColor: COLORS.accentPrimary,
     borderRadius: BORDER_RADIUS.md,
-    paddingVertical: 14,
+    height: EXECUTION_CTA_HEIGHT,
+    minHeight: EXECUTION_CTA_HEIGHT,
+    paddingHorizontal: EXECUTION_CTA_PADDING_H,
     alignItems: 'center',
+    justifyContent: 'center',
   },
   exploreSetEditorSaveText: {
-    ...TYPOGRAPHY.meta,
+    ...executionCtaLabelStyle,
     color: COLORS.backgroundCanvas,
-    fontWeight: '700',
   },
   exploreSetEditorKeyboardAccessory: {
     backgroundColor: COLORS.backgroundCanvas,
@@ -5909,15 +5922,19 @@ const styles = StyleSheet.create({
     borderTopColor: COLORS.border,
   },
   exploreSetEditorKeyboardDone: {
+    alignSelf: 'center',
+    flexShrink: 0,
     backgroundColor: COLORS.accentPrimary,
     borderRadius: BORDER_RADIUS.md,
-    paddingVertical: 12,
+    height: EXECUTION_CTA_HEIGHT,
+    minHeight: EXECUTION_CTA_HEIGHT,
+    paddingHorizontal: EXECUTION_CTA_PADDING_H,
     alignItems: 'center',
+    justifyContent: 'center',
   },
   exploreSetEditorKeyboardDoneText: {
-    ...TYPOGRAPHY.body,
+    ...executionCtaLabelStyle,
     color: '#FFFFFF',
-    fontWeight: '600',
   },
   exploreDetailEmptyText: {
     ...TYPOGRAPHY.meta,
@@ -5972,32 +5989,33 @@ const styles = StyleSheet.create({
   },
   exploreActionsRow: {
     flexDirection: 'row',
-    alignItems: 'stretch',
-    gap: SPACING.sm,
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: EXECUTION_CTA_ROW_GAP,
     paddingTop: SPACING.xxl,
   },
   exploreActionCell: {
-    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: SPACING.sm,
-    minHeight: 44,
-    paddingVertical: SPACING.sm,
-    paddingHorizontal: SPACING.xs,
+    minHeight: EXECUTION_CTA_HEIGHT,
+    height: EXECUTION_CTA_HEIGHT,
+    paddingHorizontal: EXECUTION_CTA_PADDING_H,
     backgroundColor: CARDS.cardDeep.inner.backgroundColor,
     borderRadius: 10,
-    minWidth: 0,
+    flexShrink: 0,
+    alignSelf: 'flex-start',
   },
   exploreActionCellLabel: {
     flexShrink: 1,
   },
   exploreActionText: {
-    ...TYPOGRAPHY.meta,
+    ...executionCtaLabelStyle,
     color: COLORS.textMeta,
   },
   exploreActionTextDanger: {
-    ...TYPOGRAPHY.meta,
+    ...executionCtaLabelStyle,
     color: COLORS.signalNegative,
   },
   itemRow: {
@@ -6206,7 +6224,7 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     backgroundColor: COLORS.accentPrimaryDimmed,
     overflow: 'hidden',
-    height: 52,
+    height: EXECUTION_CTA_HEIGHT,
   },
   externalActionCardDisabled: {
     backgroundColor: CARDS.cardDeep.inner.backgroundColor,
@@ -6215,14 +6233,11 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     justifyContent: 'center',
     alignItems: 'flex-start',
-    paddingHorizontal: 12,
+    paddingHorizontal: EXECUTION_CTA_PADDING_H,
     zIndex: 2,
   },
   externalActionTouchable: {
-    width: '100%',
-    height: '100%',
-    justifyContent: 'center',
-    paddingHorizontal: 12,
+    ...executionCtaTouchableFill,
   },
   externalInlineRestControls: {
     ...StyleSheet.absoluteFillObject,
@@ -6239,8 +6254,7 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
   },
   cardStartButtonText: {
-    ...TYPOGRAPHY.meta,
-    fontWeight: '500',
+    ...executionCtaLabelStyle,
     color: COLORS.accentPrimary,
   },
   cardStartButtonTextDisabled: {
@@ -6306,14 +6320,15 @@ const styles = StyleSheet.create({
   },
   startButtonInner: {
     backgroundColor: COLORS.accentPrimary,
-    height: 48,
-    paddingHorizontal: 24,
+    height: EXECUTION_CTA_HEIGHT,
+    minHeight: EXECUTION_CTA_HEIGHT,
+    paddingHorizontal: EXECUTION_CTA_PADDING_H,
     borderRadius: BORDER_RADIUS.lg,
     alignItems: 'center',
     justifyContent: 'center',
   },
   startButtonText: {
-    ...TYPOGRAPHY.metaBold,
+    ...executionCtaLabelStyle,
     color: COLORS.backgroundCanvas,
   },
   adjustmentDrawerContent: {
@@ -6360,17 +6375,22 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderTopWidth: 1,
     borderTopColor: COLORS.border,
-  },
-  drawerKeyboardSaveButton: {
-    backgroundColor: COLORS.accentPrimaryDimmed,
-    borderRadius: 16,
-    paddingVertical: 12,
     alignItems: 'center',
   },
+  drawerKeyboardSaveButton: {
+    alignSelf: 'center',
+    flexShrink: 0,
+    backgroundColor: COLORS.accentPrimaryDimmed,
+    borderRadius: 16,
+    height: EXECUTION_CTA_HEIGHT,
+    minHeight: EXECUTION_CTA_HEIGHT,
+    paddingHorizontal: EXECUTION_CTA_PADDING_H,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   drawerKeyboardSaveText: {
-    ...TYPOGRAPHY.body,
+    ...executionCtaLabelStyle,
     color: COLORS.accentPrimary,
-    fontWeight: '600',
   },
   drawerTitleRow: {
     flexDirection: 'row',
@@ -6588,7 +6608,7 @@ const styles = StyleSheet.create({
   drawerActionButtons: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 16,
+    gap: EXECUTION_CTA_ROW_GAP,
   },
   drawerIconButton: {
     // No padding to ensure perfect vertical alignment with title

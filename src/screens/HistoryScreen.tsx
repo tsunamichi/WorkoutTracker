@@ -4,13 +4,14 @@ import { StatusBar } from 'expo-status-bar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import dayjs from 'dayjs';
-import { SPACING } from '../constants';
+import { COLORS, SPACING, TYPOGRAPHY } from '../constants';
 import { useAppTheme } from '../theme/useAppTheme';
 import { BackTextButton } from '../components/common/BackTextButton';
 import { FourWeekActivityChart } from '../components/history/FourWeekActivityChart';
 import { HistoryWorkoutDetailPanel } from '../components/history/HistoryWorkoutDetailPanel';
 import { HISTORY_VISUAL } from '../components/history/historyVisualTokens';
-import { buildMockWorkoutHistoryByDate } from '../data/mockWorkoutHistory';
+import { useStore } from '../store';
+import { buildWorkoutHistoryByDateFromSchedule } from '../utils/buildWorkoutHistoryByDateFromSchedule';
 import { pickDefaultHistorySelection } from '../utils/historyDefaultSelection';
 import {
   buildSundayFirstFourWeekGrid,
@@ -21,10 +22,25 @@ export function HistoryScreen() {
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
   const { colors: themeColors } = useAppTheme();
+  const scheduledWorkouts = useStore(s => s.scheduledWorkouts);
+  const getMainCompletion = useStore(s => s.getMainCompletion);
+  const detailedWorkoutProgress = useStore(s => s.detailedWorkoutProgress);
+  const exercises = useStore(s => s.exercises);
+  const settings = useStore(s => s.settings);
 
   const reference = useMemo(() => dayjs().startOf('day'), []);
   const rows = useMemo(() => buildSundayFirstFourWeekGrid(reference), [reference]);
-  const byDate = useMemo(() => buildMockWorkoutHistoryByDate(reference), [reference]);
+  const byDate = useMemo(
+    () =>
+      buildWorkoutHistoryByDateFromSchedule(
+        scheduledWorkouts,
+        getMainCompletion,
+        detailedWorkoutProgress,
+        exercises,
+        settings?.useKg ?? false,
+      ),
+    [scheduledWorkouts, getMainCompletion, detailedWorkoutProgress, exercises, settings?.useKg],
+  );
   const completedIsoSet = useMemo(() => new Set(byDate.keys()), [byDate]);
 
   const [selectedIso, setSelectedIso] = useState(() =>
@@ -64,6 +80,7 @@ export function HistoryScreen() {
           todayIso={todayIso}
           onSelectIso={onSelectIso}
           completedWorkoutColor={themeColors.containerPrimary}
+          emptyDayFill={themeColors.containerSecondary}
         />
 
         <View style={{ height: SPACING.xxxl + SPACING.md }} />
@@ -91,19 +108,13 @@ const styles = StyleSheet.create({
   titleBlock: {
     marginTop: SPACING.sm,
   },
+  /** Match Today schedule header (`scheduleHeaderTitle` / `scheduleHeaderDateLabel`). */
   titlePrimary: {
-    fontSize: 32,
-    lineHeight: 36,
-    fontWeight: '600',
-    color: HISTORY_VISUAL.titleInk,
-    letterSpacing: -0.6,
+    ...TYPOGRAPHY.displayLarge,
+    color: COLORS.textPrimary,
   },
   titleSecondary: {
-    marginTop: SPACING.xs,
-    fontSize: 32,
-    lineHeight: 36,
-    fontWeight: '600',
-    color: HISTORY_VISUAL.forest,
-    letterSpacing: -0.6,
+    ...TYPOGRAPHY.displayLarge,
+    color: COLORS.textMeta,
   },
 });

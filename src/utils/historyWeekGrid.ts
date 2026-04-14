@@ -55,8 +55,8 @@ export function ordinalDay(n: number): string {
   return `${n}th`;
 }
 
-/** e.g. "Sunday 19th" */
+/** e.g. "April 2nd" */
 export function formatHistorySelectedHeading(isoDate: string): string {
   const d = dayjs(isoDate);
-  return `${d.format('dddd')} ${ordinalDay(d.date())}`;
+  return `${d.format('MMMM')} ${ordinalDay(d.date())}`;
 }

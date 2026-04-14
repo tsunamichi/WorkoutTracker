@@ -68,7 +68,7 @@ export type RootStackParamList = {
   BodyWeightHistory: undefined;
   History: { planId?: string } | undefined;
   PlanHistoryDetail: { programId: string; programName: string };
-  WorkoutBuilder: undefined;
+  WorkoutBuilder: { selectedDate?: string; shouldScheduleAfterCreate?: boolean } | undefined;
   Workouts: undefined;
   WorkoutTemplateDetail: { templateId: string };
   WarmupEditor: { templateId: string; workoutKey?: string };
@@ -213,11 +213,10 @@ function TabNavigator() {
   
   // NEW: Handler for creating blank workout - now opens day/week selector
   const handleCreateBlank = () => {
-    console.log('🎯 handleCreateBlank called');
-    console.log('   - addWorkoutDate:', addWorkoutDate);
     setAddWorkoutSheetVisible(false);
-    (navigation as any).navigate('CreateCycleFlow', { 
+    (navigation as any).navigate('WorkoutBuilder', {
       selectedDate: addWorkoutDate,
+      shouldScheduleAfterCreate: true,
     });
   };
   

@@ -22,6 +22,7 @@ import Reanimated, {
   useSharedValue,
 } from 'react-native-reanimated';
 import { EXPLORE_V2 } from './exploreV2Tokens';
+import { EXECUTION_CTA_HEIGHT, EXECUTION_CTA_PADDING_H, executionCtaLabelStyle } from '../execution/executionCtaTokens';
 import { COLORS, TYPOGRAPHY, hexToRgba } from '../../constants';
 import { useAppTheme } from '../../theme/useAppTheme';
 import { formatWeightForLoad, fromDisplayWeight } from '../../utils/weight';
@@ -1261,18 +1262,20 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   ctaPill: {
-    paddingVertical: 17,
-    paddingHorizontal: 32,
+    height: EXECUTION_CTA_HEIGHT,
+    minHeight: EXECUTION_CTA_HEIGHT,
+    paddingHorizontal: EXECUTION_CTA_PADDING_H,
     borderRadius: 14,
     flexShrink: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
     ...(Platform.OS === 'ios' ? { borderCurve: 'continuous' as const } : {}),
   },
   ctaPillDisabled: {
     opacity: 0.45,
   },
   ctaPillText: {
-    ...TYPOGRAPHY.legal,
-    fontWeight: '500',
+    ...executionCtaLabelStyle,
     letterSpacing: 0.2,
   },
   completionMessageOverlay: {

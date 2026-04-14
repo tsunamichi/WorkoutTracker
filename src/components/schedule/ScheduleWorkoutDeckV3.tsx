@@ -30,7 +30,7 @@ export type ScheduleDeckV3Item = {
   title: string;
   subtitle?: string;
   exerciseCount: number;
-  variant?: 'default' | 'completed';
+  variant?: 'default' | 'completed' | 'create';
   cardBackgroundColor?: string;
   cardTextColor?: string;
   footerLabel?: string;
@@ -42,6 +42,9 @@ type Props = {
   mode: 'queue' | 'inProgress';
   inProgressItem?: ScheduleDeckV3Item;
   initialIndex?: number;
+  /** When `token` changes, scrolls the queue to `index` (e.g. after creating a workout). */
+  imperativeScrollTo?: { index: number; token: number } | null;
+  onImperativeScrollDone?: () => void;
   chromeExitProgress?: Animated.SharedValue<number>;
 };
 type TouchNode = React.ElementRef<typeof TouchableOpacity>;
@@ -59,22 +62,52 @@ function DeckCard({
   const cardBackgroundColor = item.cardBackgroundColor ?? themeColors.containerSecondary;
   const cardTextColor = item.cardTextColor ?? themeColors.containerPrimary;
   const cardBorderColor = themeColors.canvasLight;
+  // At fontSize 300, intrinsic layout can wrap multi-digit labels if the box is card-width.
+  // Fixed width from digit count + textAlign right keeps the same right anchor as shrink-wrap.
+  // "+" uses the same declared size as digits but its glyph is shorter/narrower; bump size for "+" only.
+  const isPlusIndex = positionLabel === '+';
+  const indexLabelBoxWidth = useMemo(() => {
+    if (isPlusIndex) return 320;
+    const len = Math.max(1, positionLabel.length);
+    return Math.min(960, Math.max(200, len * 240));
+  }, [positionLabel]);
   return (
     <View style={[styles.cardOuter, { backgroundColor: cardBackgroundColor, borderColor: cardBorderColor }]}>
       <View style={styles.cardInner}>
-        <Animated.Text style={[styles.cardPositionLabel, { color: cardTextColor }, numberAnimatedStyle]} numberOfLines={1}>
-          {positionLabel}
-        </Animated.Text>
+        <View style={[styles.cardPositionLabelWrap, { width: indexLabelBoxWidth }]}>
+          <Animated.Text
+            style={[
+              styles.cardPositionLabelText,
+              isPlusIndex && styles.cardPositionLabelPlus,
+              { color: cardTextColor },
+              numberAnimatedStyle,
+            ]}
+            numberOfLines={1}
+            ellipsizeMode="clip"
+          >
+            {positionLabel}
+          </Animated.Text>
+        </View>
         <Text style={[styles.cardTitle, { color: cardTextColor }]} numberOfLines={1}>
           {item.title}
         </Text>
-        <Text style={[styles.cardMeta, { color: cardTextColor }]}>
-          {item.exerciseCount} {item.exerciseCount === 1 ? 'exercise' : 'exercises'}
-        </Text>
-        {item.subtitle ? <Text style={[styles.cardSubmeta, { color: cardTextColor }]}>{item.subtitle}</Text> : null}
+        {item.variant === 'create' ? (
+          item.subtitle ? (
+            <Text style={[styles.cardSubmeta, { color: cardTextColor, opacity: 0.85 }]}>{item.subtitle}</Text>
+          ) : null
+        ) : (
+          <>
+            <Text style={[styles.cardMeta, { color: cardTextColor }]}>
+              {item.exerciseCount} {item.exerciseCount === 1 ? 'exercise' : 'exercises'}
+            </Text>
+            {item.subtitle ? <Text style={[styles.cardSubmeta, { color: cardTextColor }]}>{item.subtitle}</Text> : null}
+          </>
+        )}
         <View style={styles.cardSpacer} />
         <View style={styles.cardFooter}>
-          {item.footerLabel ? (
+          {item.variant === 'create' ? (
+            <IconArrowDiagonal size={16} color={cardTextColor} />
+          ) : item.footerLabel ? (
             <Text style={[styles.cardFooterLabel, { color: cardTextColor }]}>{item.footerLabel}</Text>
           ) : (
             <IconArrowDiagonal size={16} color={cardTextColor} />
@@ -166,6 +199,8 @@ export function ScheduleWorkoutDeckV3({
   mode,
   inProgressItem,
   initialIndex = 0,
+  imperativeScrollTo,
+  onImperativeScrollDone,
   chromeExitProgress,
 }: Props) {
   const { width } = useWindowDimensions();
@@ -204,6 +239,22 @@ export function ScheduleWorkoutDeckV3({
       scrollX.value = targetX;
     });
   }, [mode, queueItems.length, clampedInitialIndex, snapInterval, scrollX]);
+
+  const lastImperativeTokenRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (mode !== 'queue' || queueItems.length === 0) return;
+    if (!imperativeScrollTo) return;
+    if (lastImperativeTokenRef.current === imperativeScrollTo.token) return;
+    lastImperativeTokenRef.current = imperativeScrollTo.token;
+    const idx = Math.max(0, Math.min(imperativeScrollTo.index, queueItems.length - 1));
+    setCurrentIndex(idx);
+    const targetX = idx * snapInterval;
+    requestAnimationFrame(() => {
+      listRef.current?.scrollToOffset({ offset: targetX, animated: true });
+      scrollX.value = targetX;
+      onImperativeScrollDone?.();
+    });
+  }, [imperativeScrollTo, mode, queueItems.length, snapInterval, scrollX, onImperativeScrollDone]);
 
   useEffect(() => {
     return () => {
@@ -272,7 +323,10 @@ export function ScheduleWorkoutDeckV3({
           activeOpacity={0.95}
           ref={inProgressRef}
         >
-          <DeckCard item={inProgressCard} positionLabel="1" />
+          <DeckCard
+            item={inProgressCard}
+            positionLabel={inProgressCard.variant === 'create' ? '+' : '1'}
+          />
         </TouchableOpacity>
       </View>
     );
@@ -297,7 +351,7 @@ export function ScheduleWorkoutDeckV3({
             snapInterval={snapInterval}
             onPress={onCardPress}
             isLast={index === queueItems.length - 1}
-            positionLabel={String(index + 1)}
+            positionLabel={item.variant === 'create' ? '+' : String(index + 1)}
             activeIndex={currentIndex}
             chromeExitProgress={chromeExitProgress}
           />
@@ -356,15 +410,24 @@ const styles = StyleSheet.create({
     borderCurve: CARDS.cardDeep.inner.borderCurve,
     backgroundColor: 'transparent',
   },
-  cardPositionLabel: {
+  // Wrapper shrink-wraps so the index is not forced to parent width (which + numberOfLines caused "1…").
+  cardPositionLabelWrap: {
     position: 'absolute',
     right: -34,
     bottom: -94,
+  },
+  cardPositionLabelText: {
     fontSize: 300,
     lineHeight: 300,
     fontWeight: '500',
-    color: COLORS.containerPrimary,
     includeFontPadding: false,
+    textAlign: 'right',
+    width: '100%',
+  },
+  /** "+" at 300pt reads smaller than digits; scale up so cap height matches digit numerals. */
+  cardPositionLabelPlus: {
+    fontSize: 352,
+    lineHeight: 352,
   },
   cardTitle: {
     ...TYPOGRAPHY.displayLarge,

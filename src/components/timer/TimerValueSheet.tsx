@@ -9,6 +9,11 @@ import {
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { COLORS, SPACING, TYPOGRAPHY } from '../../constants';
+import {
+  executionCtaLabelStyle,
+  EXECUTION_CTA_HEIGHT,
+  EXECUTION_CTA_PADDING_H,
+} from '../execution/executionCtaTokens';
 import { BottomDrawer } from '../common/BottomDrawer';
 import { useTranslation } from '../../i18n/useTranslation';
 
@@ -252,15 +257,19 @@ const styles = StyleSheet.create({
     backgroundColor: '#000000',
   },
   saveButton: {
+    alignSelf: 'center',
+    flexShrink: 0,
     backgroundColor: COLORS.accentPrimary,
-    paddingVertical: SPACING.lg,
+    height: EXECUTION_CTA_HEIGHT,
+    minHeight: EXECUTION_CTA_HEIGHT,
+    paddingHorizontal: EXECUTION_CTA_PADDING_H,
     borderRadius: 12,
     alignItems: 'center',
+    justifyContent: 'center',
     marginTop: 56,
   },
   saveButtonText: {
-    fontSize: 17,
-    fontWeight: '600',
+    ...executionCtaLabelStyle,
     color: COLORS.canvas,
   },
 });

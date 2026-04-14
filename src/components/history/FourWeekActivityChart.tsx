@@ -1,30 +1,39 @@
-import React, { useEffect, useMemo, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, StyleSheet, Pressable, Animated, Easing } from 'react-native';
+import Svg, { Path } from 'react-native-svg';
 import dayjs from 'dayjs';
 import type { HistoryGridRow } from '../../utils/historyWeekGrid';
-import {
-  HISTORY_CHART,
-  HISTORY_CHART_RING_OFFSET,
-  HISTORY_CHART_RING_OUTER,
-} from './historyChartLayout';
+import { HISTORY_CHART } from './historyChartLayout';
 import { HISTORY_VISUAL } from './historyVisualTokens';
 
 const WEEKDAY_LABELS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'] as const;
 
 const SLOT = HISTORY_CHART.slotSize;
-const FACE_UNSELECTED = HISTORY_CHART.unselectedFaceDiameter;
-const FACE_SELECTED = HISTORY_CHART.selectedFaceDiameter;
-const RING_OUTER = HISTORY_CHART_RING_OUTER;
-const RING_OFFSET = HISTORY_CHART_RING_OFFSET;
+const FACE = HISTORY_CHART.slotSize;
 
-/** Delay between each dot’s pulse start (snake along the path). */
-const SNAKE_STAGGER_MS = 26;
-/** Subtle pulse — keeps motion readable without feeling bouncy. */
-const SNAKE_PEAK_SCALE = 1.07;
-const SNAKE_GROW_MS = 280;
-const SNAKE_SHRINK_MS = 320;
-const SNAKE_EASE_OUT = Easing.bezier(0.33, 0, 0.2, 1);
-const SNAKE_EASE_IN = Easing.bezier(0.4, 0, 0.2, 1);
+/** Bottom slice of the concentric inner circle (see `selectionInnerDiameter`). */
+function buildHistorySelectionCapPath(): string {
+  const face = HISTORY_CHART.slotSize;
+  const innerR = HISTORY_CHART.selectionInnerDiameter / 2;
+  const cx = face / 2;
+  const cy = face / 2;
+  const chordY = cy + innerR - HISTORY_CHART.selectionCapHeight;
+  const dy = chordY - cy;
+  const dx = Math.sqrt(innerR * innerR - dy * dy);
+  const xl = cx - dx;
+  const xr = cx + dx;
+  const n = (v: number) => Number(v.toFixed(4));
+  /** Flat chord on top, single bottom arc of the inner circle (two arcs meeting at the pole looked like a lens). */
+  return `M ${n(xl)} ${n(chordY)} L ${n(xr)} ${n(chordY)} A ${innerR} ${innerR} 0 0 1 ${n(xl)} ${n(chordY)} Z`;
+}
+
+const HISTORY_SELECTION_CAP_PATH = buildHistorySelectionCapPath();
+
+const SELECTION_SLIDE_PX = 10;
+const SELECTION_IN_MS = 280;
+const SELECTION_OUT_MS = 220;
+const SELECTION_EASE_OUT = Easing.bezier(0.33, 0, 0.2, 1);
+const SELECTION_EASE_IN = Easing.bezier(0.4, 0, 0.2, 1);
 
 export type FourWeekActivityChartProps = {
   rows: HistoryGridRow[];
@@ -35,12 +44,14 @@ export type FourWeekActivityChartProps = {
   onSelectIso: (iso: string) => void;
   /** Theme token — days with completed workout logs. */
   completedWorkoutColor: string;
+  /** Theme token — days with no workout log (face fill). */
+  emptyDayFill: string;
 };
 
-type DotState = 'completed' | 'empty';
+type DotState = 'completed' | 'empty' | 'future';
 
 function cellState(iso: string, completed: ReadonlySet<string>, todayIso: string): DotState {
-  if (iso > todayIso) return 'empty';
+  if (iso > todayIso) return 'future';
   return completed.has(iso) ? 'completed' : 'empty';
 }
 
@@ -49,29 +60,119 @@ function ChartDayDot({
   isSelected,
   dotState,
   sundayNumber,
+  dayOfMonth,
   accessibilityLabel,
   onPress,
   completedWorkoutColor,
-  pulseScale,
+  emptyDayFill,
 }: {
   isSunday: boolean;
   isSelected: boolean;
   dotState: DotState;
   sundayNumber: number | null;
+  dayOfMonth: number;
   accessibilityLabel: string;
   onPress: () => void;
   completedWorkoutColor: string;
-  pulseScale: Animated.Value;
+  emptyDayFill: string;
 }) {
   const innerFill =
-    dotState === 'completed' ? completedWorkoutColor : HISTORY_VISUAL.noLogDayFill;
+    dotState === 'completed'
+      ? completedWorkoutColor
+      : dotState === 'future'
+        ? HISTORY_VISUAL.futureDayDotFill
+        : emptyDayFill;
+  /** Inverse of face — selection cap + numeral. */
+  const selectionInk = dotState === 'completed' ? emptyDayFill : completedWorkoutColor;
 
-  const sundayTextColor = dotState === 'completed' ? '#FFFFFF' : completedWorkoutColor;
+  const sundayTextColor =
+    dotState === 'completed'
+      ? HISTORY_VISUAL.historySundayAnchorOnPrimaryFill
+      : dotState === 'future'
+        ? HISTORY_VISUAL.textGray
+        : HISTORY_VISUAL.historySundayAnchorLime;
 
-  const selectedRingColor =
-    dotState === 'completed' ? HISTORY_VISUAL.noLogDayFill : completedWorkoutColor;
+  const [showSelectionChrome, setShowSelectionChrome] = useState(isSelected);
+  const capSlideY = useRef(new Animated.Value(isSelected ? 0 : SELECTION_SLIDE_PX)).current;
+  const numberOpacity = useRef(new Animated.Value(isSelected ? 1 : 0)).current;
+  const didApplyInitial = useRef(false);
+  const prevIsSelected = useRef(isSelected);
+  const selectionAnimRef = useRef<Animated.CompositeAnimation | null>(null);
 
-  const faceSize = isSelected ? FACE_SELECTED : FACE_UNSELECTED;
+  useEffect(() => {
+    selectionAnimRef.current?.stop();
+
+    if (!didApplyInitial.current) {
+      didApplyInitial.current = true;
+      if (isSelected) {
+        setShowSelectionChrome(true);
+        capSlideY.setValue(0);
+        numberOpacity.setValue(1);
+      } else {
+        setShowSelectionChrome(false);
+        capSlideY.setValue(SELECTION_SLIDE_PX);
+        numberOpacity.setValue(0);
+      }
+      prevIsSelected.current = isSelected;
+    } else {
+      const wasSelected = prevIsSelected.current;
+      prevIsSelected.current = isSelected;
+
+      if (isSelected) {
+        setShowSelectionChrome(true);
+        capSlideY.setValue(SELECTION_SLIDE_PX);
+        numberOpacity.setValue(0);
+        const anim = Animated.parallel([
+          Animated.timing(numberOpacity, {
+            toValue: 1,
+            duration: SELECTION_IN_MS,
+            easing: SELECTION_EASE_OUT,
+            useNativeDriver: true,
+          }),
+          Animated.timing(capSlideY, {
+            toValue: 0,
+            duration: SELECTION_IN_MS,
+            easing: SELECTION_EASE_OUT,
+            useNativeDriver: true,
+          }),
+        ]);
+        selectionAnimRef.current = anim;
+        anim.start(() => {
+          if (selectionAnimRef.current === anim) {
+            selectionAnimRef.current = null;
+          }
+        });
+      } else if (wasSelected) {
+        const anim = Animated.parallel([
+          Animated.timing(numberOpacity, {
+            toValue: 0,
+            duration: SELECTION_OUT_MS,
+            easing: SELECTION_EASE_IN,
+            useNativeDriver: true,
+          }),
+          Animated.timing(capSlideY, {
+            toValue: SELECTION_SLIDE_PX,
+            duration: SELECTION_OUT_MS,
+            easing: SELECTION_EASE_IN,
+            useNativeDriver: true,
+          }),
+        ]);
+        selectionAnimRef.current = anim;
+        anim.start(({ finished }) => {
+          if (selectionAnimRef.current === anim) {
+            selectionAnimRef.current = null;
+          }
+          if (finished) {
+            setShowSelectionChrome(false);
+          }
+        });
+      }
+    }
+
+    return () => {
+      selectionAnimRef.current?.stop();
+    };
+  }, [isSelected]);
 
   return (
     <Pressable
@@ -82,57 +183,44 @@ function ChartDayDot({
       accessibilityState={{ selected: isSelected }}
       accessibilityLabel={accessibilityLabel}
     >
-      <Animated.View style={[styles.slot, { transform: [{ scale: pulseScale }] }]}>
-        {isSelected ? (
-          <>
-            <View
-              style={[
-                styles.ringBackdrop,
-                {
-                  width: RING_OUTER,
-                  height: RING_OUTER,
-                  borderRadius: RING_OUTER / 2,
-                  left: RING_OFFSET,
-                  top: RING_OFFSET,
-                  backgroundColor: selectedRingColor,
-                },
-              ]}
-            />
-            <View
-              style={[
-                styles.face,
-                styles.faceAboveRing,
-                {
-                  width: faceSize,
-                  height: faceSize,
-                  borderRadius: faceSize / 2,
-                  backgroundColor: innerFill,
-                },
-              ]}
-            >
-              {isSunday && sundayNumber != null ? (
-                <Text style={[styles.sundayNumber, { color: sundayTextColor }]}>{sundayNumber}</Text>
-              ) : null}
-            </View>
-          </>
-        ) : (
-          <View
-            style={[
-              styles.face,
-              {
-                width: faceSize,
-                height: faceSize,
-                borderRadius: faceSize / 2,
-                backgroundColor: innerFill,
-              },
-            ]}
-          >
-            {isSunday && sundayNumber != null ? (
-              <Text style={[styles.sundayNumber, { color: sundayTextColor }]}>{sundayNumber}</Text>
-            ) : null}
-          </View>
-        )}
-      </Animated.View>
+      <View style={styles.slot}>
+        <View
+          style={[
+            styles.face,
+            {
+              width: FACE,
+              height: FACE,
+              borderRadius: FACE / 2,
+              backgroundColor: innerFill,
+              overflow: 'hidden',
+            },
+          ]}
+        >
+          {showSelectionChrome ? (
+            <>
+              <Animated.View
+                pointerEvents="none"
+                style={[
+                  styles.selectionCapWrap,
+                  { transform: [{ translateY: capSlideY }] },
+                ]}
+              >
+                <Svg width={FACE} height={FACE} style={styles.selectionCapSvg}>
+                  <Path d={HISTORY_SELECTION_CAP_PATH} fill={selectionInk} />
+                </Svg>
+              </Animated.View>
+              <Animated.View
+                pointerEvents="none"
+                style={[styles.selectedDayNumberWrap, { opacity: numberOpacity }]}
+              >
+                <Text style={[styles.selectedDayNumber, { color: selectionInk }]}>{dayOfMonth}</Text>
+              </Animated.View>
+            </>
+          ) : isSunday && sundayNumber != null ? (
+            <Text style={[styles.sundayNumber, { color: sundayTextColor }]}>{sundayNumber}</Text>
+          ) : null}
+        </View>
+      </View>
     </Pressable>
   );
 }
@@ -144,83 +232,8 @@ export function FourWeekActivityChart({
   todayIso,
   onSelectIso,
   completedWorkoutColor,
+  emptyDayFill,
 }: FourWeekActivityChartProps) {
-  const flatCells = useMemo(() => rows.flat(), [rows]);
-  const cellCount = flatCells.length;
-
-  const pulseScales = useMemo(
-    () => Array.from({ length: Math.max(1, cellCount) }, () => new Animated.Value(1)),
-    [cellCount],
-  );
-
-  const prevSelectedIsoRef = useRef<string | null>(null);
-  const snakeAnimRef = useRef<Animated.CompositeAnimation | null>(null);
-
-  useEffect(() => {
-    const prevIso = prevSelectedIsoRef.current;
-    prevSelectedIsoRef.current = selectedIso;
-
-    if (prevIso === null) {
-      return;
-    }
-    if (prevIso === selectedIso || cellCount === 0) {
-      return;
-    }
-
-    const i0 = flatCells.findIndex(c => c.isoDate === prevIso);
-    const i1 = flatCells.findIndex(c => c.isoDate === selectedIso);
-    if (i0 < 0 || i1 < 0) {
-      return;
-    }
-
-    snakeAnimRef.current?.stop();
-    pulseScales.forEach(s => s.setValue(1));
-
-    const path: number[] = [];
-    const step = i1 >= i0 ? 1 : -1;
-    for (let i = i0; step > 0 ? i <= i1 : i >= i1; i += step) {
-      path.push(i);
-    }
-
-    /**
-     * Full path including the new selection. `Animated.stagger` starts each dot’s
-     * pulse in order, so the tapped day stays at scale 1 until the wave reaches it
-     * (last in the chain).
-     */
-    if (path.length === 0) {
-      return;
-    }
-
-    const pulses = path.map(idx =>
-      Animated.sequence([
-        Animated.timing(pulseScales[idx], {
-          toValue: SNAKE_PEAK_SCALE,
-          duration: SNAKE_GROW_MS,
-          useNativeDriver: true,
-          easing: SNAKE_EASE_OUT,
-        }),
-        Animated.timing(pulseScales[idx], {
-          toValue: 1,
-          duration: SNAKE_SHRINK_MS,
-          useNativeDriver: true,
-          easing: SNAKE_EASE_IN,
-        }),
-      ]),
-    );
-
-    const snake = Animated.stagger(SNAKE_STAGGER_MS, pulses);
-    snakeAnimRef.current = snake;
-    snake.start(() => {
-      if (snakeAnimRef.current === snake) {
-        snakeAnimRef.current = null;
-      }
-    });
-
-    return () => {
-      snake.stop();
-    };
-  }, [selectedIso, flatCells, cellCount, pulseScales]);
-
   return (
     <View style={styles.wrap}>
       <View style={styles.headerRow}>
@@ -235,12 +248,11 @@ export function FourWeekActivityChart({
 
       {rows.map((row, ri) => (
         <View key={ri} style={[styles.row, ri < rows.length - 1 && { marginBottom: HISTORY_CHART.rowGap }]}>
-          {row.map((cell, ci) => {
+          {row.map(cell => {
             const dotState = cellState(cell.isoDate, completedIsoSet, todayIso);
             const isSelected = cell.isoDate === selectedIso;
             const sundayNumber = cell.isSunday ? cell.instant.date() : null;
             const a11yLabel = dayjs(cell.isoDate).format('dddd, MMMM D');
-            const flatIndex = ri * row.length + ci;
             return (
               <View key={cell.isoDate} style={styles.cell}>
                 <ChartDayDot
@@ -248,10 +260,11 @@ export function FourWeekActivityChart({
                   isSelected={isSelected}
                   dotState={dotState}
                   sundayNumber={sundayNumber}
+                  dayOfMonth={cell.instant.date()}
                   accessibilityLabel={a11yLabel}
                   onPress={() => onSelectIso(cell.isoDate)}
                   completedWorkoutColor={completedWorkoutColor}
-                  pulseScale={pulseScales[flatIndex] ?? pulseScales[0]}
+                  emptyDayFill={emptyDayFill}
                 />
               </View>
             );
@@ -304,15 +317,34 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     overflow: 'visible',
   },
-  ringBackdrop: {
-    position: 'absolute',
-  },
   face: {
     alignItems: 'center',
     justifyContent: 'center',
   },
-  faceAboveRing: {
+  selectionCapWrap: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 0,
+  },
+  selectionCapSvg: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+  },
+  /** Keeps the numeral centered in the full face so the bottom cap does not shift it. */
+  selectedDayNumberWrap: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
     zIndex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  selectedDayNumber: {
+    textAlign: 'center',
+    fontSize: HISTORY_CHART.sundayNumberSize,
+    fontWeight: '600',
   },
   sundayNumber: {
     fontSize: HISTORY_CHART.sundayNumberSize,

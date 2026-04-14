@@ -3,7 +3,6 @@ import {
   View,
   Text,
   StyleSheet,
-  TouchableOpacity,
   Alert,
   Animated,
   Easing,
@@ -35,6 +34,8 @@ import Reanimated, {
 import { ExploreV2TimerArea } from '../components/exploreV2/ExploreV2TimerArea';
 import { EXPLORE_V2 } from '../components/exploreV2/exploreV2Tokens';
 import { ExecutionScreenShell } from '../components/execution/ExecutionScreenShell';
+import { ExecutionControlButton } from '../components/execution/ExecutionControlButton';
+import { EXECUTION_CTA_ROW_GAP } from '../components/execution/executionCtaTokens';
 import { useAppTheme } from '../theme/useAppTheme';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'HIITTimerExecution'>;
@@ -1455,12 +1456,18 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
                 <View style={styles.mainTimerCircle} />
               </View>
               <View style={styles.controlsRow}>
-                <TouchableOpacity style={styles.primaryActionBtn} onPress={handlePlayPause} activeOpacity={0.8}>
-                  <Text style={styles.primaryActionLabel}>{isRunning ? 'Pause' : 'Play'}</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.skipActionBtn} onPress={handleSkip} activeOpacity={0.8}>
-                  <Text style={styles.skipActionLabel}>Skip</Text>
-                </TouchableOpacity>
+                <ExecutionControlButton
+                  label={isRunning ? 'Pause' : 'Play'}
+                  onPress={handlePlayPause}
+                  style={styles.primaryActionBtn}
+                  textStyle={styles.primaryActionLabel}
+                />
+                <ExecutionControlButton
+                  label="Skip"
+                  onPress={handleSkip}
+                  style={styles.skipActionBtn}
+                  textStyle={styles.skipActionLabel}
+                />
               </View>
             </>
           )}
@@ -1639,30 +1646,22 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'flex-start',
     width: '100%',
-    columnGap: 32,
+    gap: EXECUTION_CTA_ROW_GAP,
   },
   primaryActionBtn: {
-    paddingVertical: 17,
-    paddingHorizontal: 32,
     borderRadius: 14,
     backgroundColor: COLORS.accentPrimary,
+    flexShrink: 0,
   },
   primaryActionLabel: {
-    ...TYPOGRAPHY.legal,
-    fontWeight: '500',
     color: COLORS.backgroundCanvas,
-    letterSpacing: 0.2,
   },
   skipActionBtn: {
-    minHeight: 40,
     justifyContent: 'center',
-    paddingHorizontal: 12,
+    flexShrink: 0,
   },
   skipActionLabel: {
-    ...TYPOGRAPHY.legal,
     color: COLORS.accentPrimary,
-    fontWeight: '500',
-    letterSpacing: 0.2,
   },
   completeMessageContainer: {
     flex: 1,

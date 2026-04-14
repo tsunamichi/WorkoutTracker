@@ -1,97 +1,234 @@
-import React, { useState, useMemo } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput, Alert, FlatList } from 'react-native';
+import React, { useState, useRef, useCallback } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  TextInput,
+  Alert,
+  ScrollView,
+  KeyboardAvoidingView,
+  Platform,
+} from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
+import * as Clipboard from 'expo-clipboard';
 import * as Haptics from 'expo-haptics';
-import dayjs from 'dayjs';
 import { useStore } from '../store';
-import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS, CARDS } from '../constants';
-import { IconArrowLeft, IconAdd, IconClose, IconSearch, IconCheck } from '../components/icons';
-import { WarmupItemEditor } from '../components/WarmupItemEditor';
+import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS } from '../constants';
+import { IconClose } from '../components/icons';
 import { useTranslation } from '../i18n/useTranslation';
-import type { Exercise, ExerciseCategory } from '../types';
-import type { WorkoutTemplate, WarmupItem } from '../types/training';
+import type { Exercise } from '../types';
+import type { WorkoutTemplate } from '../types/training';
+import { useAppTheme } from '../theme/useAppTheme';
+import { EXECUTION_CTA_ROW_GAP } from '../components/execution/executionCtaTokens';
 
-// Dark theme colors
-const LIGHT_COLORS = {
-  backgroundCanvas: '#0D0D0D',
-  secondary: '#FFFFFF',
-  textMeta: '#8E8E93',
-  border: '#38383A',
-  accentPrimary: COLORS.accentPrimary,
-  buttonBg: '#2C2C2E',
-};
+/** Bold exercise list on light builder canvas (matches product mock). */
+const LIST_EXERCISE_INK = '#1B4332';
 
-const MUSCLE_GROUPS: ExerciseCategory[] = [
-  'Chest',
-  'Back',
-  'Legs',
-  'Shoulders',
-  'Arms',
-  'Core',
-  'Full Body',
-  'Cardio',
-];
+type DraftLine = { id: string; name: string };
+
+function normalizePasteLine(s: string) {
+  return s.replace(/\t/g, ' ').trim();
+}
+
+function stripLeadingBullet(s: string) {
+  return s.replace(/^[•\u2022\-*]\s*/, '').replace(/^\d+\.\s*/, '').trim();
+}
+
+/** Keep exercise name only; strip trailing sets/reps/weight from pasted plan lines. */
+function stripExerciseMetadata(namePart: string): string {
+  const s = namePart.replace(/[—–]/g, '-').replace(/×/g, 'x').trim();
+  const mSplit = s.match(/^(.*?)(?:\s+-\s+|\s+)(\d+\s*x\s*\d+.*)$/i);
+  if (mSplit) return mSplit[1].trim().replace(/[-–—]\s*$/, '').trim();
+  const idx = s.search(/\b\d+\s*x\s*\d+/i);
+  if (idx > 0) return s.slice(0, idx).trim().replace(/[-–—]\s*$/, '').trim();
+  const atIdx = s.indexOf('@');
+  if (atIdx > 0) return s.slice(0, atIdx).trim();
+  return s.trim();
+}
+
+function lineLooksLikeExercise(line: string): boolean {
+  const trimmed = line.trim();
+  const t = stripLeadingBullet(line);
+  if (!t) return false;
+  if (/^warm\s*up/i.test(t)) return false;
+  if (/^(?:WEEK\s+\d+\s+)?DAY\s+\d+/i.test(trimmed)) return false;
+  if (/^day\s+\d+\s*[—\-:]/i.test(trimmed)) return false;
+  if (trimmed.startsWith('-') || trimmed.startsWith('•') || trimmed.startsWith('*')) return true;
+  if (/^\d+\.\s/.test(trimmed)) return true;
+  if (/\b\d+\s*x\s*\d+/i.test(t)) return true;
+  if (/@\s*[\d.]/i.test(t)) return true;
+  return false;
+}
+
+/** Parse clipboard text into an optional workout title and exercise names (builder-friendly). */
+function parseBuilderPaste(text: string): { workoutName?: string; exercises: string[] } {
+  const lines = text.split(/\r?\n/).map(normalizePasteLine).filter(l => l.length > 0);
+  const exercises: string[] = [];
+  let workoutName: string | undefined;
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const dayMatch = line.match(/^(?:WEEK\s+\d+\s+)?DAY\s+\d+\s*[—\-:]\s*(.+)$/i);
+    if (dayMatch) {
+      workoutName = dayMatch[1].trim();
+      continue;
+    }
+    if (/^warm\s*up/i.test(line)) continue;
+
+    if (lineLooksLikeExercise(line)) {
+      exercises.push(stripExerciseMetadata(stripLeadingBullet(line)));
+      continue;
+    }
+
+    const secondIsExercise = lines.length > 1 && lineLooksLikeExercise(lines[1]);
+    if (i === 0 && !workoutName && lines.length > 1 && secondIsExercise) {
+      workoutName = line;
+      continue;
+    }
+
+    const stripped = stripExerciseMetadata(stripLeadingBullet(line));
+    if (stripped.length > 0) exercises.push(stripped);
+  }
+
+  const seen = new Set<string>();
+  const deduped: string[] = [];
+  for (const e of exercises) {
+    const key = e.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    deduped.push(e);
+  }
+  return { workoutName, exercises: deduped };
+}
 
 export function WorkoutBuilderScreen() {
   const navigation = useNavigation();
   const route = useRoute();
   const params = (route.params as { selectedDate?: string; shouldScheduleAfterCreate?: boolean } | undefined);
   const insets = useSafeAreaInsets();
-  const { exercises, addWorkoutTemplate, scheduleWorkout, getScheduledWorkout } = useStore();
+  const { addWorkoutTemplate, scheduleWorkout, addExercise } = useStore();
   const { t } = useTranslation();
+  const { colors: themeColors, explore } = useAppTheme();
 
   const [workoutName, setWorkoutName] = useState('');
-  const [selectedExercises, setSelectedExercises] = useState<string[]>([]);
-  const [warmupItems, setWarmupItems] = useState<WarmupItem[]>([]);
-  const [showExercisePicker, setShowExercisePicker] = useState(true);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [selectedMuscle, setSelectedMuscle] = useState<ExerciseCategory | 'All'>('All');
+  const [lines, setLines] = useState<DraftLine[]>([]);
+  const [exerciseInput, setExerciseInput] = useState('');
+  const [showExerciseField, setShowExerciseField] = useState(false);
+  const exerciseInputRef = useRef<TextInput>(null);
+
+  const hasDraft =
+    workoutName.trim().length > 0 || lines.length > 0 || exerciseInput.trim().length > 0 || showExerciseField;
 
   const handleBack = () => {
-    if (selectedExercises.length > 0) {
-      Alert.alert(
-        t('discardWorkout'),
-        t('discardWorkoutMessage'),
-        [
-          { text: t('cancel'), style: 'cancel' },
-          {
-            text: t('discard'),
-            style: 'destructive',
-            onPress: () => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-              navigation.goBack();
-            },
+    if (hasDraft) {
+      Alert.alert(t('discardWorkout'), t('discardWorkoutMessage'), [
+        { text: t('cancel'), style: 'cancel' },
+        {
+          text: t('discard'),
+          style: 'destructive',
+          onPress: () => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+            navigation.goBack();
           },
-        ]
-      );
+        },
+      ]);
     } else {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       navigation.goBack();
     }
   };
 
-  const handleToggleExercise = (exerciseId: string) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setSelectedExercises(prev =>
-      prev.includes(exerciseId)
-        ? prev.filter(id => id !== exerciseId)
-        : [...prev, exerciseId]
-    );
+  const resetCreationForm = () => {
+    setWorkoutName('');
+    setLines([]);
+    setExerciseInput('');
+    setShowExerciseField(false);
+    useStore.getState().setScheduleDeckFocusAfterCreate(null);
   };
 
-  const handleRemoveExercise = (exerciseId: string) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setSelectedExercises(prev => prev.filter(id => id !== exerciseId));
+  const promptPostSave = () => {
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    Alert.alert(t('workoutCreatedTitle'), t('workoutCreatedBody'), [
+      {
+        text: t('createAnotherWorkout'),
+        style: 'default',
+        onPress: () => resetCreationForm(),
+      },
+      {
+        text: t('done'),
+        style: 'default',
+        onPress: () => navigation.goBack(),
+      },
+    ]);
   };
 
-  const handleContinue = () => {
-    if (selectedExercises.length === 0) {
-      Alert.alert(t('noExercisesSelected'), t('pleaseAddExercises'));
+  const focusAddExercise = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setShowExerciseField(true);
+    requestAnimationFrame(() => exerciseInputRef.current?.focus());
+  }, []);
+
+  const handlePasteFromClipboard = useCallback(async () => {
+    const content = await Clipboard.getStringAsync();
+    if (!content?.trim()) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+      Alert.alert(t('alertErrorTitle'), t('clipboardEmpty'));
+      return;
+    }
+    const { workoutName: parsedName, exercises: parsedExercises } = parseBuilderPaste(content);
+    if (parsedExercises.length === 0) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+      Alert.alert(t('alertErrorTitle'), t('pasteNoExercisesFound'));
       return;
     }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    setShowExercisePicker(false);
+    if (parsedName && !workoutName.trim()) {
+      setWorkoutName(parsedName);
+    }
+    setLines(prev => {
+      const existing = new Set(prev.map(l => l.name.trim().toLowerCase()));
+      const toAdd = parsedExercises.filter(e => !existing.has(e.trim().toLowerCase()));
+      const base = prev.length;
+      return [
+        ...prev,
+        ...toAdd.map((name, j) => ({
+          id: `line-paste-${Date.now()}-${base + j}`,
+          name: name.trim(),
+        })),
+      ];
+    });
+    setShowExerciseField(true);
+  }, [t, workoutName]);
+
+  const commitExerciseLine = useCallback(() => {
+    const name = exerciseInput.trim();
+    if (!name) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setLines(prev => [...prev, { id: `line-${Date.now()}-${prev.length}`, name }]);
+    setExerciseInput('');
+    requestAnimationFrame(() => exerciseInputRef.current?.focus());
+  }, [exerciseInput]);
+
+  const removeLine = (id: string) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setLines(prev => prev.filter(l => l.id !== id));
+  };
+
+  const resolveExerciseIdForName = async (name: string, index: number): Promise<string> => {
+    const trimmed = name.trim();
+    const lib = useStore.getState().exercises.find(ex => ex.name.toLowerCase() === trimmed.toLowerCase());
+    if (lib) return lib.id;
+    const id = `ex-user-${Date.now()}-${index}`;
+    const newEx: Exercise = {
+      id,
+      name: trimmed,
+      category: 'Other',
+      isCustom: true,
+    };
+    await addExercise(newEx);
+    return id;
   };
 
   const handleSaveWorkout = async () => {
@@ -99,590 +236,263 @@ export function WorkoutBuilderScreen() {
       Alert.alert(t('enterWorkoutName'), t('pleaseEnterWorkoutName'));
       return;
     }
-
-    if (selectedExercises.length === 0) {
+    if (lines.length === 0) {
       Alert.alert(t('noExercisesSelected'), t('pleaseAddExercises'));
       return;
     }
 
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
-    // Create workout template
     const templateId = `wt-${Date.now()}`;
     const now = new Date().toISOString();
-    
+
+    const items = [];
+    for (let i = 0; i < lines.length; i++) {
+      const exerciseId = await resolveExerciseIdForName(lines[i].name, i);
+      items.push({
+        id: `tex-${templateId}-${i}`,
+        exerciseId,
+        order: i,
+        sets: 1,
+        reps: '',
+      });
+    }
+
     const template: WorkoutTemplate = {
       id: templateId,
       name: workoutName.trim(),
       createdAt: now,
       updatedAt: now,
       kind: 'workout',
-      warmupItems: warmupItems,
-      items: selectedExercises.map((exerciseId, index) => ({
-        exerciseId,
-        order: index,
-        sets: 3, // Default values
-        reps: 10,
-      })),
+      warmupItems: [],
+      accessoryItems: [],
+      items,
       lastUsedAt: null,
       usageCount: 0,
     };
 
     await addWorkoutTemplate(template);
-    
-    console.log('📝 Workout saved. Params:', params);
-    console.log('  - shouldScheduleAfterCreate:', params?.shouldScheduleAfterCreate);
-    console.log('  - selectedDate:', params?.selectedDate);
-    
-    // If should schedule after create, check if day is empty
+
     if (params?.shouldScheduleAfterCreate && params?.selectedDate) {
-      const dateStr = dayjs(params.selectedDate).format('MMM D');
-      const existingWorkout = getScheduledWorkout(params.selectedDate);
-      
-      console.log('  - existingWorkout:', existingWorkout);
-      
-      if (!existingWorkout) {
-        // Day is empty - ask if they want to use it today
-        Alert.alert(
-          t('workoutSaved'),
-          t('useWorkoutToday').replace('{date}', dateStr),
-          [
-            {
-              text: t('notNow'),
-              style: 'cancel',
-              onPress: () => {
-                navigation.goBack();
-              },
-            },
-            {
-              text: t('useIt'),
-              onPress: async () => {
-                const result = await scheduleWorkout(params.selectedDate, templateId, 'manual');
-                if (result.success) {
-                  Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-                }
-                navigation.goBack();
-              },
-            },
-          ]
-        );
-      } else {
-        // Day has a workout - explain it was saved to library but not scheduled
-        Alert.alert(
-          t('workoutSaved'),
-          t('workoutSavedNotScheduled').replace('{date}', dateStr),
-          [
-            {
-              text: t('ok'),
-              onPress: () => {
-                navigation.goBack();
-              },
-            },
-          ]
-        );
+      await scheduleWorkout(params.selectedDate, templateId, 'manual');
+      const matches = useStore
+        .getState()
+        .scheduledWorkouts.filter(s => s.date === params.selectedDate && s.templateId === templateId);
+      const sw = matches.sort((a, b) => a.id.localeCompare(b.id)).at(-1);
+      if (sw) {
+        useStore.getState().setScheduleDeckFocusAfterCreate({
+          scheduledWorkoutId: sw.id,
+          isoDate: params.selectedDate,
+          templateId,
+        });
       }
-    } else {
-      // Default behavior: just show success and go back (creating template only)
-      Alert.alert(
-        t('workoutSaved'),
-        t('workoutSavedToLibrary'),
-        [
-          {
-            text: t('ok'),
-            onPress: () => {
-              navigation.goBack();
-            },
-          },
-        ]
-      );
-    }
-  };
-
-  const handleClearSearch = () => {
-    setSearchQuery('');
-  };
-
-  const handleMuscleFilter = (muscle: ExerciseCategory | 'All') => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setSelectedMuscle(muscle);
-  };
-
-  // Filter and search exercises
-  const filteredExercises = useMemo(() => {
-    let result = exercises;
-
-    if (selectedMuscle !== 'All') {
-      result = result.filter(ex => ex.category === selectedMuscle);
     }
 
-    if (searchQuery.trim()) {
-      const query = searchQuery.toLowerCase();
-      result = result.filter(ex => ex.name.toLowerCase().includes(query));
-    }
+    promptPostSave();
+  };
 
-    return result.sort((a, b) => a.name.localeCompare(b.name));
-  }, [exercises, selectedMuscle, searchQuery]);
+  const canvas = themeColors.canvasLight;
+  const ink = themeColors.containerPrimary;
+  const meta = themeColors.textMeta;
+  /** Same token as Explore / HIIT work-timer card surfaces (`containerTertiaryTimer`). */
+  const pasteTimerCardBackground = explore.workTimerCompleteCardBg;
 
-  const selectedExerciseObjects = useMemo(() => {
-    return selectedExercises
-      .map(id => exercises.find(ex => ex.id === id))
-      .filter(Boolean) as Exercise[];
-  }, [selectedExercises, exercises]);
-
-  if (showExercisePicker) {
-    return (
-      <SafeAreaView style={styles.container} edges={['top']}>
-        {/* Header */}
-        <View style={[styles.header, { paddingTop: insets.top }]}>
-          <TouchableOpacity onPress={handleBack} style={styles.backButton}>
-            <IconArrowLeft size={24} color={LIGHT_COLORS.secondary} />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>{t('selectExercises')}</Text>
-          <View style={styles.backButton} />
-        </View>
-
-        {/* Search Bar */}
-        <View style={styles.searchContainer}>
-          <View style={styles.searchBar}>
-            <IconSearch size={20} color={LIGHT_COLORS.textMeta} />
-            <TextInput
-              style={styles.searchInput}
-              placeholder={t('searchExercisesPlaceholder')}
-              placeholderTextColor={LIGHT_COLORS.textMeta}
-              value={searchQuery}
-              onChangeText={setSearchQuery}
-              autoCapitalize="none"
-              autoCorrect={false}
-            />
-            {searchQuery.length > 0 && (
-              <TouchableOpacity onPress={handleClearSearch}>
-                <IconClose size={20} color={LIGHT_COLORS.textMeta} />
-              </TouchableOpacity>
-            )}
-          </View>
-        </View>
-
-        {/* Muscle Group Filters */}
-        <View style={styles.filtersContainer}>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.filtersContent}
-          >
-            <TouchableOpacity
-              style={[
-                styles.filterChip,
-                selectedMuscle === 'All' && styles.filterChipActive,
-              ]}
-              onPress={() => handleMuscleFilter('All')}
-            >
-              <Text
-                style={[
-                  styles.filterChipText,
-                  selectedMuscle === 'All' && styles.filterChipTextActive,
-                ]}
-              >
-                {t('all')}
-              </Text>
-            </TouchableOpacity>
-
-            {MUSCLE_GROUPS.map((muscle) => (
-              <TouchableOpacity
-                key={muscle}
-                style={[
-                  styles.filterChip,
-                  selectedMuscle === muscle && styles.filterChipActive,
-                ]}
-                onPress={() => handleMuscleFilter(muscle)}
-              >
-                <Text
-                  style={[
-                    styles.filterChipText,
-                    selectedMuscle === muscle && styles.filterChipTextActive,
-                  ]}
-                >
-                  {muscle}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-        </View>
-
-        {/* Exercise List */}
-        <FlatList
-          data={filteredExercises}
-          keyExtractor={(item) => item.id}
-          contentContainerStyle={styles.listContent}
-          renderItem={({ item }) => {
-            const isSelected = selectedExercises.includes(item.id);
-
-            return (
-              <TouchableOpacity
-                style={[styles.exerciseCard, isSelected && styles.exerciseCardSelected]}
-                onPress={() => handleToggleExercise(item.id)}
-              >
-                <View style={styles.exerciseCardInner}>
-                  <View style={styles.exerciseInfo}>
-                    <Text style={styles.exerciseName}>{item.name}</Text>
-                    <View style={styles.exerciseMeta}>
-                      <Text style={styles.exerciseMetaText}>{item.category}</Text>
-                      {item.equipment && (
-                        <>
-                          <Text style={styles.exerciseMetaSeparator}>•</Text>
-                          <Text style={styles.exerciseMetaText}>{item.equipment}</Text>
-                        </>
-                      )}
-                    </View>
-                  </View>
-
-                  <View style={[styles.checkbox, isSelected && styles.checkboxActive]}>
-                    {isSelected && <IconCheck size={16} color={COLORS.backgroundCanvas} />}
-                  </View>
-                </View>
-              </TouchableOpacity>
-            );
-          }}
-        />
-
-        {/* Bottom CTA */}
-        {selectedExercises.length > 0 && (
-          <View style={[styles.bottomCTA, { paddingBottom: insets.bottom || 16 }]}>
-            <TouchableOpacity style={styles.ctaButton} onPress={handleContinue}>
-              <Text style={styles.ctaButtonText}>
-                {t('continue')} ({selectedExercises.length})
-              </Text>
-            </TouchableOpacity>
-          </View>
-        )}
-      </SafeAreaView>
-    );
-  }
-
-  // Configure screen
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      {/* Header */}
-      <View style={[styles.header, { paddingTop: insets.top }]}>
-        <TouchableOpacity onPress={() => setShowExercisePicker(true)} style={styles.backButton}>
-          <IconArrowLeft size={24} color={LIGHT_COLORS.secondary} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>{t('configureWorkout')}</Text>
-        <View style={styles.backButton} />
-      </View>
-
-      <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
+    <SafeAreaView style={[styles.safe, { backgroundColor: canvas }]} edges={['top']}>
+      <KeyboardAvoidingView
+        style={styles.flex}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        keyboardVerticalOffset={insets.top}
       >
-        {/* Workout Name Input */}
-        <View style={styles.section}>
-          <Text style={styles.label}>{t('workoutName')}</Text>
+        <ScrollView
+          style={styles.flex}
+          contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 100 }]}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+          <TouchableOpacity onPress={handleBack} style={styles.backRow} hitSlop={12}>
+            <Text style={[styles.backText, { color: meta }]}>{`< ${t('back')}`}</Text>
+          </TouchableOpacity>
+
           <TextInput
-            style={styles.input}
-            placeholder={t('workoutNamePlaceholder')}
-            placeholderTextColor={LIGHT_COLORS.textMeta}
+            style={[styles.titleInput, { color: COLORS.textPrimary }]}
+            placeholder={t('workoutName')}
+            placeholderTextColor={COLORS.textMeta}
             value={workoutName}
             onChangeText={setWorkoutName}
-            autoFocus
+            autoCapitalize="sentences"
+            returnKeyType="next"
+            onSubmitEditing={focusAddExercise}
+            accessibilityLabel={t('workoutName')}
           />
-        </View>
 
-        {/* Warm-up Section */}
-        <View style={styles.section}>
-          <WarmupItemEditor 
-            warmupItems={warmupItems}
-            onUpdate={setWarmupItems}
-          />
-        </View>
+          <TouchableOpacity onPress={focusAddExercise} style={styles.addLink} activeOpacity={0.7}>
+            <Text style={[styles.addLinkText, { color: ink }]}>{t('addExerciseCta')}</Text>
+          </TouchableOpacity>
 
-        {/* Selected Exercises */}
-        <View style={styles.section}>
-          <Text style={styles.label}>
-            {t('exercises')} ({selectedExerciseObjects.length})
-          </Text>
+          {showExerciseField ? (
+            <TextInput
+              ref={exerciseInputRef}
+              style={[styles.exerciseField, { color: ink, borderColor: meta }]}
+              placeholder={t('exerciseName')}
+              placeholderTextColor={meta}
+              value={exerciseInput}
+              onChangeText={setExerciseInput}
+              onSubmitEditing={commitExerciseLine}
+              returnKeyType="done"
+              blurOnSubmit={false}
+              autoCapitalize="words"
+              accessibilityLabel={t('exerciseName')}
+            />
+          ) : null}
 
-          {selectedExerciseObjects.map((exercise) => (
-            <View key={exercise.id} style={styles.selectedExerciseCard}>
-              <View style={styles.selectedExerciseCardInner}>
-                <View style={styles.exerciseInfo}>
-                  <Text style={styles.exerciseName}>{exercise.name}</Text>
-                  <Text style={styles.exerciseMetaText}>{exercise.category}</Text>
-                </View>
-
-                <TouchableOpacity onPress={() => handleRemoveExercise(exercise.id)}>
-                  <IconClose size={20} color={LIGHT_COLORS.textMeta} />
+          <View style={styles.listBlock}>
+            {lines.map(line => (
+              <View key={line.id} style={styles.exerciseRow}>
+                <Text style={[styles.exerciseRowText, { color: LIST_EXERCISE_INK }]}>
+                  {line.name}
+                </Text>
+                <TouchableOpacity onPress={() => removeLine(line.id)} hitSlop={12} accessibilityRole="button">
+                  <IconClose size={20} color={meta} />
                 </TouchableOpacity>
               </View>
-            </View>
-          ))}
+            ))}
+          </View>
+        </ScrollView>
 
-          <TouchableOpacity
-            style={styles.addMoreButton}
-            onPress={() => setShowExercisePicker(true)}
-          >
-            <IconAdd size={20} color={LIGHT_COLORS.accentPrimary} />
-            <Text style={styles.addMoreButtonText}>{t('addMoreExercises')}</Text>
-          </TouchableOpacity>
+        <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 16), backgroundColor: canvas }]}>
+          <View style={styles.footerActionsRow}>
+            <TouchableOpacity
+              style={[styles.createButton, { backgroundColor: themeColors.containerPrimary }]}
+              onPress={handleSaveWorkout}
+              activeOpacity={0.9}
+            >
+              <Text style={[styles.createButtonText, { color: themeColors.containerSecondary }]}>
+                {t('createWorkout')}
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.pasteButton, { backgroundColor: pasteTimerCardBackground }]}
+              onPress={handlePasteFromClipboard}
+              activeOpacity={0.85}
+              accessibilityRole="button"
+              accessibilityLabel={t('pasteWorkout')}
+            >
+              <Text style={[styles.pasteButtonText, { color: themeColors.containerPrimary }]}>
+                {t('pasteWorkout')}
+              </Text>
+            </TouchableOpacity>
+          </View>
         </View>
-
-        <View style={{ height: 100 }} />
-      </ScrollView>
-
-      {/* Save Button */}
-      <View style={[styles.bottomCTA, { paddingBottom: insets.bottom || 16 }]}>
-        <TouchableOpacity style={styles.ctaButton} onPress={handleSaveWorkout}>
-          <Text style={styles.ctaButtonText}>{t('saveWorkout')}</Text>
-        </TouchableOpacity>
-      </View>
-      
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: LIGHT_COLORS.backgroundCanvas,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: SPACING.xxl,
-    paddingBottom: SPACING.lg,
-  },
-  backButton: {
-    width: 40,
-    height: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  headerTitle: {
-    ...TYPOGRAPHY.h3,
-    color: LIGHT_COLORS.secondary,
-  },
-  searchContainer: {
-    paddingHorizontal: SPACING.xxl,
-    marginBottom: SPACING.lg,
-  },
-  searchBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: LIGHT_COLORS.buttonBg,
-    borderRadius: BORDER_RADIUS.md,
-    paddingHorizontal: SPACING.lg,
-    height: 48,
-    gap: SPACING.sm,
-  },
-  searchInput: {
-    flex: 1,
-    ...TYPOGRAPHY.body,
-    color: LIGHT_COLORS.secondary,
-  },
-  filtersContainer: {
-    marginBottom: SPACING.lg,
-  },
-  filtersContent: {
-    paddingHorizontal: SPACING.xxl,
-    gap: SPACING.sm,
-  },
-  filterChip: {
-    paddingHorizontal: SPACING.lg,
-    paddingVertical: SPACING.sm,
-    borderRadius: BORDER_RADIUS.full,
-    backgroundColor: LIGHT_COLORS.buttonBg,
-  },
-  filterChipActive: {
-    backgroundColor: LIGHT_COLORS.accentPrimary,
-  },
-  filterChipText: {
-    ...TYPOGRAPHY.metaBold,
-    color: LIGHT_COLORS.secondary,
-  },
-  filterChipTextActive: {
-    color: COLORS.backgroundCanvas,
-  },
-  listContent: {
-    paddingHorizontal: SPACING.xxl,
-    paddingBottom: 120,
-  },
-  exerciseCard: {
-    marginBottom: SPACING.md,
-    backgroundColor: CARDS.cardDeepDimmed.outer.backgroundColor,
-    borderRadius: CARDS.cardDeepDimmed.outer.borderRadius,
-    borderCurve: CARDS.cardDeepDimmed.outer.borderCurve,
-    borderWidth: CARDS.cardDeepDimmed.outer.borderWidth,
-    borderColor: CARDS.cardDeepDimmed.outer.borderColor,
-    overflow: CARDS.cardDeepDimmed.outer.overflow,
-  },
-  exerciseCardSelected: {
-    borderColor: LIGHT_COLORS.accentPrimary,
-    borderWidth: 2,
-  },
-  exerciseCardInner: {
-    ...CARDS.cardDeepDimmed.inner,
-    padding: SPACING.lg,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  exerciseInfo: {
+  safe: {
     flex: 1,
   },
-  exerciseName: {
-    ...TYPOGRAPHY.h3,
-    color: LIGHT_COLORS.secondary,
-    marginBottom: SPACING.xs,
-  },
-  exerciseMeta: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  exerciseMetaText: {
-    ...TYPOGRAPHY.meta,
-    color: LIGHT_COLORS.textMeta,
-  },
-  exerciseMetaSeparator: {
-    ...TYPOGRAPHY.meta,
-    color: LIGHT_COLORS.textMeta,
-    marginHorizontal: SPACING.sm,
-  },
-  checkbox: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    borderWidth: 2,
-    borderColor: LIGHT_COLORS.border,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  checkboxActive: {
-    backgroundColor: LIGHT_COLORS.accentPrimary,
-    borderColor: LIGHT_COLORS.accentPrimary,
-  },
-  bottomCTA: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    paddingHorizontal: SPACING.xxl,
-    paddingTop: SPACING.lg,
-    backgroundColor: LIGHT_COLORS.backgroundCanvas,
-  },
-  ctaButton: {
-    height: 56,
-    backgroundColor: LIGHT_COLORS.secondary,
-    borderRadius: BORDER_RADIUS.lg,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  ctaButtonText: {
-    ...TYPOGRAPHY.h3,
-    color: COLORS.backgroundCanvas,
-  },
-  scrollView: {
+  flex: {
     flex: 1,
   },
   scrollContent: {
     paddingHorizontal: SPACING.xxl,
-    paddingBottom: 120,
+    paddingTop: SPACING.sm,
   },
-  section: {
-    marginBottom: SPACING.xxxl,
+  backRow: {
+    alignSelf: 'flex-start',
+    paddingVertical: SPACING.sm,
+    marginBottom: SPACING.md,
   },
-  label: {
-    ...TYPOGRAPHY.h2,
-    color: LIGHT_COLORS.secondary,
+  backText: {
+    ...TYPOGRAPHY.body,
+    fontWeight: '500',
+  },
+  /**
+   * Match Today schedule title size/spacing (`displayLarge`).
+   * `TextInput` draws large system text heavier than `Text` at weight 500; use regular so it reads like the home header.
+   */
+  titleInput: {
+    fontSize: TYPOGRAPHY.displayLarge.fontSize,
+    lineHeight: TYPOGRAPHY.displayLarge.lineHeight,
+    letterSpacing: TYPOGRAPHY.displayLarge.letterSpacing,
+    fontWeight: '400',
+    paddingVertical: SPACING.sm,
+    paddingHorizontal: 0,
+    marginBottom: SPACING.lg,
+    minHeight: 48,
+    ...Platform.select({
+      android: { includeFontPadding: false },
+      default: {},
+    }),
+  },
+  addLink: {
+    alignSelf: 'flex-start',
     marginBottom: SPACING.lg,
   },
-  input: {
-    height: 56,
-    backgroundColor: LIGHT_COLORS.buttonBg,
+  addLinkText: {
+    ...TYPOGRAPHY.body,
+    fontWeight: '500',
+  },
+  exerciseField: {
+    ...TYPOGRAPHY.body,
+    borderWidth: StyleSheet.hairlineWidth,
     borderRadius: BORDER_RADIUS.md,
     paddingHorizontal: SPACING.lg,
-    ...TYPOGRAPHY.body,
-    color: LIGHT_COLORS.secondary,
+    paddingVertical: SPACING.md,
+    marginBottom: SPACING.xxl,
   },
-  selectedExerciseCard: {
-    marginBottom: SPACING.md,
-    backgroundColor: CARDS.cardDeepDimmed.outer.backgroundColor,
-    borderRadius: CARDS.cardDeepDimmed.outer.borderRadius,
-    borderCurve: CARDS.cardDeepDimmed.outer.borderCurve,
-    borderWidth: CARDS.cardDeepDimmed.outer.borderWidth,
-    borderColor: CARDS.cardDeepDimmed.outer.borderColor,
-    overflow: CARDS.cardDeepDimmed.outer.overflow,
+  listBlock: {
+    gap: SPACING.xl,
   },
-  selectedExerciseCardInner: {
-    ...CARDS.cardDeepDimmed.inner,
-    padding: SPACING.lg,
+  exerciseRow: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     justifyContent: 'space-between',
+    gap: SPACING.lg,
   },
-  addMoreButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: SPACING.sm,
-    height: 48,
-    backgroundColor: LIGHT_COLORS.buttonBg,
-    borderRadius: BORDER_RADIUS.md,
-  },
-  addMoreButtonText: {
-    ...TYPOGRAPHY.metaBold,
-    color: LIGHT_COLORS.accentPrimary,
-  },
-  modalOverlay: {
+  exerciseRowText: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
+    ...TYPOGRAPHY.h2,
+    fontWeight: '700',
+  },
+  footer: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
     paddingHorizontal: SPACING.xxl,
+    paddingTop: SPACING.md,
   },
-  modalContent: {
-    width: '100%',
-    backgroundColor: COLORS.backgroundCanvas,
-    borderRadius: BORDER_RADIUS.lg,
-    padding: SPACING.xxl,
-  },
-  modalHeader: {
+  footerActionsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: SPACING.md,
+    justifyContent: 'flex-start',
+    gap: EXECUTION_CTA_ROW_GAP,
   },
-  modalTitle: {
-    ...TYPOGRAPHY.h2,
-    color: LIGHT_COLORS.secondary,
-  },
-  modalSubtitle: {
-    ...TYPOGRAPHY.body,
-    color: LIGHT_COLORS.textMeta,
-    marginBottom: SPACING.xl,
-  },
-  modalButton: {
+  createButton: {
     height: 56,
-    backgroundColor: LIGHT_COLORS.secondary,
-    borderRadius: BORDER_RADIUS.lg,
+    paddingHorizontal: SPACING.xxl,
+    /** Match Explore v2 Current card log CTA (`ctaPill`). */
+    borderRadius: 14,
+    ...(Platform.OS === 'ios' ? { borderCurve: 'continuous' as const } : {}),
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: SPACING.md,
+    flexShrink: 0,
   },
-  modalButtonSecondary: {
-    backgroundColor: LIGHT_COLORS.buttonBg,
+  createButtonText: {
+    ...TYPOGRAPHY.body,
   },
-  modalButtonText: {
-    ...TYPOGRAPHY.h3,
-    color: COLORS.backgroundCanvas,
+  pasteButton: {
+    height: 56,
+    paddingHorizontal: SPACING.xxl,
+    borderRadius: 14,
+    ...(Platform.OS === 'ios' ? { borderCurve: 'continuous' as const } : {}),
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  modalButtonTextSecondary: {
-    color: LIGHT_COLORS.secondary,
-  },
-  modalButtonTextLink: {
-    ...TYPOGRAPHY.metaBold,
-    color: LIGHT_COLORS.accentPrimary,
-    textAlign: 'center',
-    marginTop: SPACING.md,
+  pasteButtonText: {
+    ...TYPOGRAPHY.body,
   },
 });

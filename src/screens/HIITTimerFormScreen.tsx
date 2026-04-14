@@ -12,6 +12,11 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useStore } from '../store';
 import { COLORS, SPACING, CARDS, TYPOGRAPHY, GRADIENTS } from '../constants';
+import {
+  executionCtaLabelStyle,
+  EXECUTION_CTA_HEIGHT,
+  EXECUTION_CTA_PADDING_H,
+} from '../components/execution/executionCtaTokens';
 import { IconArrowLeft, IconEdit } from '../components/icons';
 import { TimerValueSheet } from '../components/timer/TimerValueSheet';
 import type { HIITTimer } from '../types';
@@ -550,17 +555,21 @@ const styles = StyleSheet.create({
     paddingBottom: 40, // 40px spacing below button
     paddingTop: SPACING.md,
     backgroundColor: 'transparent',
+    alignItems: 'center',
   },
   startButton: {
     backgroundColor: COLORS.accentPrimaryDimmed,
-    paddingVertical: SPACING.lg,
+    height: EXECUTION_CTA_HEIGHT,
+    minHeight: EXECUTION_CTA_HEIGHT,
+    paddingHorizontal: EXECUTION_CTA_PADDING_H,
     borderRadius: 12,
     alignItems: 'center',
+    justifyContent: 'center',
+    alignSelf: 'center',
+    flexShrink: 0,
   },
   startButtonText: {
-    ...TYPOGRAPHY.meta,
-    fontWeight: 'bold',
-    fontWeight: '600',
+    ...executionCtaLabelStyle,
     color: COLORS.accentPrimary,
   },
 });

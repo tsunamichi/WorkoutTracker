@@ -1239,14 +1239,14 @@ const styles = StyleSheet.create({
     // backgroundColor: 'rgba(255,0,0,0.1)',
   },
   timerControlButtonTapTarget: {
-    width: 80,
-    height: 80,
+    flex: 1,
+    height: 56,
+    minHeight: 56,
     alignItems: 'center',
     justifyContent: 'center',
-    // borderWidth: 1,
-    // borderColor: 'red',
   },
   timerControlButtonContainer: {
+    width: '100%',
     borderRadius: 14,
     borderCurve: 'continuous',
     overflow: 'hidden',
@@ -1254,8 +1254,10 @@ const styles = StyleSheet.create({
   timerControlButtonContainerPrimary: {
   },
   timerControlButton: {
-    width: 64,
-    height: 64,
+    width: '100%',
+    minHeight: 56,
+    height: 56,
+    paddingHorizontal: 24,
     backgroundColor: '#212121',
     alignItems: 'center',
     justifyContent: 'center',
@@ -1266,8 +1268,9 @@ const styles = StyleSheet.create({
   },
   timerControlButtonText: {
     ...TYPOGRAPHY.body,
+    fontWeight: '400',
     color: '#FFFFFF',
-    fontSize: 18,
+    textAlign: 'center',
   },
 });
 

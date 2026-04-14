@@ -5,6 +5,11 @@ import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import * as Haptics from 'expo-haptics';
 import { useStore } from '../store';
 import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS, CARDS } from '../constants';
+import {
+  executionCtaLabelStyle,
+  EXECUTION_CTA_HEIGHT,
+  EXECUTION_CTA_PADDING_H,
+} from '../components/execution/executionCtaTokens';
 import { IconArrowLeft, IconCheck, IconCheckmark, IconAddLine, IconMinusLine, IconTrash, IconEdit } from '../components/icons';
 import { BottomDrawer } from '../components/common/BottomDrawer';
 import { SetTimerSheet } from '../components/timer/SetTimerSheet';
@@ -1191,7 +1196,9 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   markAsDoneButtonInner: {
-    paddingVertical: 16,
+    minHeight: EXECUTION_CTA_HEIGHT,
+    height: EXECUTION_CTA_HEIGHT,
+    paddingHorizontal: EXECUTION_CTA_PADDING_H,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1199,9 +1206,8 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.accentPrimary,
   },
   markAsDoneButtonText: {
-    ...TYPOGRAPHY.bodyBold,
+    ...executionCtaLabelStyle,
     color: COLORS.backgroundCanvas,
-    fontSize: 18,
   },
   inlineStartButton: {
     marginLeft: 4,
@@ -1215,16 +1221,15 @@ const styles = StyleSheet.create({
     borderTopRightRadius: BORDER_RADIUS.sm,
     borderBottomLeftRadius: 0,
     borderBottomRightRadius: 0,
-    paddingHorizontal: 16,
-    paddingVertical: 16,
+    paddingHorizontal: EXECUTION_CTA_PADDING_H,
+    minHeight: EXECUTION_CTA_HEIGHT,
     alignItems: 'center',
     justifyContent: 'center',
     flex: 1,
   },
   inlineStartButtonText: {
-    ...TYPOGRAPHY.bodyBold,
+    ...executionCtaLabelStyle,
     color: COLORS.backgroundCanvas,
-    fontSize: 16,
   },
   inlineSetIndicator: {
     backgroundColor: COLORS.text,
@@ -1300,17 +1305,22 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderTopWidth: 1,
     borderTopColor: COLORS.border,
-  },
-  keyboardDoneButton: {
-    backgroundColor: COLORS.accentPrimary,
-    borderRadius: BORDER_RADIUS.md,
-    paddingVertical: 12,
     alignItems: 'center',
   },
+  keyboardDoneButton: {
+    alignSelf: 'center',
+    flexShrink: 0,
+    backgroundColor: COLORS.accentPrimary,
+    borderRadius: BORDER_RADIUS.md,
+    height: EXECUTION_CTA_HEIGHT,
+    minHeight: EXECUTION_CTA_HEIGHT,
+    paddingHorizontal: EXECUTION_CTA_PADDING_H,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   keyboardDoneText: {
-    ...TYPOGRAPHY.body,
+    ...executionCtaLabelStyle,
     color: '#FFFFFF',
-    fontWeight: '600',
   },
   drawerAdjustValue: {
     flexDirection: 'row',

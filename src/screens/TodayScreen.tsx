@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useCallback, useMemo, useRef } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Modal, ScrollView, Alert, Share, Dimensions } from 'react-native';
 import Animated, {
   cancelAnimation,
@@ -181,7 +181,7 @@ export function TodayScreen({ onDateChange, onOpenAddWorkout, onOpenBonusDrawer 
     settings,
     // Schedule-First Architecture
     scheduledWorkouts,
-    getScheduledWorkout,
+    getScheduledWorkoutsForDate,
     getWarmupCompletion,
     getMainCompletion,
     cyclePlans,
@@ -201,6 +201,8 @@ export function TodayScreen({ onDateChange, onOpenAddWorkout, onOpenBonusDrawer 
     hiitTimers,
     workoutTemplates,
   } = useStore();
+  const scheduleDeckFocusAfterCreate = useStore(s => s.scheduleDeckFocusAfterCreate);
+  const setScheduleDeckFocusAfterCreate = useStore(s => s.setScheduleDeckFocusAfterCreate);
 
   const today = dayjs();
   const { t } = useTranslation();
@@ -236,6 +238,9 @@ export function TodayScreen({ onDateChange, onOpenAddWorkout, onOpenBonusDrawer 
   const scheduleChromeExitProgress = useSharedValue(0);
   const launchToExecutionLockRef = useRef(false);
   const launchToExecutionTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** Keeps the newly created workout card last in the deck (before the create tile). */
+  const [deckTailSwId, setDeckTailSwId] = useState<string | null>(null);
+  const [imperativeDeckScroll, setImperativeDeckScroll] = useState<{ index: number; token: number } | null>(null);
 
   const openExtrasPanel = useCallback((mode: 'timer' | 'warmup' | 'core') => {
     cancelAnimation(timerHeaderProgress);
@@ -430,14 +435,19 @@ export function TodayScreen({ onDateChange, onOpenAddWorkout, onOpenBonusDrawer 
         const date = monday.add(i, 'day');
         const dateStr = date.format('YYYY-MM-DD');
         const isTodayDate = date.isSame(today, 'day');
-        const scheduledWorkout = getScheduledWorkout(dateStr);
+        const daySessions = getScheduledWorkoutsForDate(dateStr);
+        const scheduledWorkout = daySessions[0];
         let completionPercentage = 0;
-        if (scheduledWorkout) {
-          completionPercentage = getMainCompletion(scheduledWorkout.id).percentage;
+        for (const sw of daySessions) {
+          completionPercentage = Math.max(completionPercentage, getMainCompletion(sw.id).percentage);
         }
-        const isLocked = scheduledWorkout?.isLocked || false;
+        const isLocked = daySessions.some(sw => sw.isLocked);
         const isCompleted =
-          completionPercentage === 100 || isLocked || scheduledWorkout?.status === 'completed';
+          daySessions.length > 0 &&
+          daySessions.every(sw => {
+            const p = getMainCompletion(sw.id).percentage;
+            return p === 100 || sw.isLocked || sw.status === 'completed';
+          });
         out.push({
           dateStr,
           dayNumber: date.date(),
@@ -452,7 +462,7 @@ export function TodayScreen({ onDateChange, onOpenAddWorkout, onOpenBonusDrawer 
       }
       return out;
     },
-    [today, getScheduledWorkout, getMainCompletion, refreshTrigger],
+    [today, getScheduledWorkoutsForDate, getMainCompletion, refreshTrigger],
   );
 
   const prevWeekMondayStr = useMemo(
@@ -484,20 +494,21 @@ export function TodayScreen({ onDateChange, onOpenAddWorkout, onOpenBonusDrawer 
     const dateStr = date.format('YYYY-MM-DD');
     const isToday = date.isSame(today, 'day');
     
-    // SCHEDULE-FIRST: Only check scheduledWorkouts (single source of truth)
-    const scheduledWorkout = getScheduledWorkout(dateStr);
-    
-    // Calculate completion percentage using mainCompletion (only strength workout, not warmup/core)
+    const daySessions = getScheduledWorkoutsForDate(dateStr);
+    const scheduledWorkout = daySessions[0];
+
     let completionPercentage = 0;
-    
-    if (scheduledWorkout) {
-      const mainCompletion = getMainCompletion(scheduledWorkout.id);
-      completionPercentage = mainCompletion.percentage;
+    for (const sw of daySessions) {
+      completionPercentage = Math.max(completionPercentage, getMainCompletion(sw.id).percentage);
     }
-    
-    // Completed: all sets done (100%) OR workout was marked complete (isLocked / status)
-    const isLocked = scheduledWorkout?.isLocked || false;
-    const isCompleted = completionPercentage === 100 || isLocked || scheduledWorkout?.status === 'completed';
+
+    const isLocked = daySessions.some(sw => sw.isLocked);
+    const isCompleted =
+      daySessions.length > 0 &&
+      daySessions.every(sw => {
+        const p = getMainCompletion(sw.id).percentage;
+        return p === 100 || sw.isLocked || sw.status === 'completed';
+      });
     
     return {
       dayLetter: ISO_DAY_TWO_LETTER[date.isoWeekday() - 1],
@@ -514,7 +525,7 @@ export function TodayScreen({ onDateChange, onOpenAddWorkout, onOpenBonusDrawer 
   }, [
     weekStart, 
     scheduledWorkouts, 
-    getScheduledWorkout, 
+    getScheduledWorkoutsForDate,
     getMainCompletion,
     refreshTrigger
   ]);
@@ -571,15 +582,26 @@ export function TodayScreen({ onDateChange, onOpenAddWorkout, onOpenBonusDrawer 
       const selectedIds = new Set(selectedDayPriority.map(sw => sw.id));
       const remaining = allOpenInPlan.filter(sw => !selectedIds.has(sw.id));
       const queue = [...selectedDayPriority, ...remaining];
+
+      // Manual schedules (e.g. blank workout from home) are source 'manual' and were omitted above.
+      const queuedIds = new Set(queue.map(sw => sw.id));
+      const manualPlanned = scheduledWorkouts
+        .filter(sw => sw.source === 'manual')
+        .filter(sw => sw.status === 'planned' && isNotFinished(sw))
+        .filter(sw => !dayjs(sw.date).isBefore(selectedDate, 'day'))
+        .filter(sw => !queuedIds.has(sw.id))
+        .sort((a, b) => a.date.localeCompare(b.date) || a.id.localeCompare(b.id));
+
+      const merged = [...queue, ...manualPlanned];
       if (__DEV__) {
         console.log('[ScheduleDeck] cycle-backed queue', {
           planId: cyclePlanForDeck.id,
           selectedDate,
-          size: queue.length,
-          ids: queue.map(sw => sw.id),
+          size: merged.length,
+          ids: merged.map(sw => sw.id),
         });
       }
-      return queue;
+      return merged;
     }
 
     const onSelectedDate = scheduledWorkouts.filter(sw => workoutDisplayDate(sw) === selectedDate);
@@ -615,6 +637,30 @@ export function TodayScreen({ onDateChange, onOpenAddWorkout, onOpenBonusDrawer 
     activeCyclePlan,
     workoutDisplayDate,
   ]);
+
+  const remainingWorkoutsQueueForDeck = useMemo(() => {
+    const raw = [...remainingWorkoutsQueue];
+    if (deckTailSwId) {
+      const i = raw.findIndex(sw => sw.id === deckTailSwId);
+      if (i !== -1 && i !== raw.length - 1) {
+        const [item] = raw.splice(i, 1);
+        raw.push(item);
+      }
+    }
+    return raw;
+  }, [remainingWorkoutsQueue, deckTailSwId]);
+
+  const prevSelectedDateForDeckRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (
+      prevSelectedDateForDeckRef.current !== null &&
+      prevSelectedDateForDeckRef.current !== selectedDate
+    ) {
+      setDeckTailSwId(null);
+    }
+    prevSelectedDateForDeckRef.current = selectedDate;
+  }, [selectedDate]);
+
   const completedWorkoutsForSelectedDay = useMemo(() => {
     const selectedIsToday = selectedDate === today.format('YYYY-MM-DD');
     if (!selectedIsToday) return [] as ScheduledWorkout[];
@@ -784,8 +830,10 @@ export function TodayScreen({ onDateChange, onOpenAddWorkout, onOpenBonusDrawer 
 
   const resolveScheduledWorkoutForTemplate = useCallback(
     (templateId: string): ScheduledWorkout | undefined => {
-      const onSelected = getScheduledWorkout(selectedDate);
-      if (onSelected && onSelected.templateId === templateId && !onSelected.isLocked) {
+      const onSelected = getScheduledWorkoutsForDate(selectedDate).find(
+        sw => sw.templateId === templateId && !sw.isLocked,
+      );
+      if (onSelected) {
         return onSelected;
       }
       const matches = scheduledWorkouts
@@ -794,7 +842,7 @@ export function TodayScreen({ onDateChange, onOpenAddWorkout, onOpenBonusDrawer 
       const futureOrSame = matches.find(sw => !dayjs(sw.date).isBefore(selectedDate, 'day'));
       return futureOrSame ?? matches[0];
     },
-    [getScheduledWorkout, selectedDate, scheduledWorkouts],
+    [getScheduledWorkoutsForDate, selectedDate, scheduledWorkouts],
   );
 
   const handleSelectSavedWorkoutForWarmup = useCallback(
@@ -935,7 +983,7 @@ export function TodayScreen({ onDateChange, onOpenAddWorkout, onOpenBonusDrawer 
 
   const deckItems: ScheduleDeckV3Item[] = useMemo(
     () =>
-      remainingWorkoutsQueue.map(sw => {
+      remainingWorkoutsQueueForDeck.map(sw => {
         const ordered = [...(sw.exercisesSnapshot ?? [])].sort((a, b) => a.order - b.order);
         const exerciseCount = ordered.length;
         const categories = ordered
@@ -956,7 +1004,7 @@ export function TodayScreen({ onDateChange, onOpenAddWorkout, onOpenBonusDrawer 
           onPress: origin => navigateToWorkoutExecution(sw, origin),
         };
       }),
-    [remainingWorkoutsQueue, exercises, navigateToWorkoutExecution],
+    [remainingWorkoutsQueueForDeck, exercises, navigateToWorkoutExecution],
   );
   const completedTodayDeckItem: ScheduleDeckV3Item | undefined = useMemo(() => {
     const sw = completedWorkoutsForSelectedDay[0];
@@ -985,26 +1033,71 @@ export function TodayScreen({ onDateChange, onOpenAddWorkout, onOpenBonusDrawer 
       onPress: origin => navigateToWorkoutExecution(sw, origin),
     };
   }, [completedWorkoutsForSelectedDay, completedCardTextColor, exercises, navigateToWorkoutExecution]);
+
+  const createWorkoutDeckItem = useMemo(
+    (): ScheduleDeckV3Item => ({
+      id: '__create_workout__',
+      variant: 'create',
+      title: t('createWorkout'),
+      subtitle: t('buildNewWorkoutHint'),
+      exerciseCount: 0,
+      cardBackgroundColor: savedTimersCardBackground,
+      cardTextColor: savedTimersInk,
+      onPress: () => {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        (navigation as any).navigate('WorkoutBuilder', {
+          selectedDate,
+          shouldScheduleAfterCreate: true,
+        });
+      },
+    }),
+    [navigation, t, savedTimersCardBackground, savedTimersInk, selectedDate],
+  );
+
   const carouselDeckItems: ScheduleDeckV3Item[] = useMemo(() => {
-    if (!completedTodayDeckItem) return deckItems;
-    return [completedTodayDeckItem, ...deckItems];
-  }, [completedTodayDeckItem, deckItems]);
+    const base = !completedTodayDeckItem ? deckItems : [completedTodayDeckItem, ...deckItems];
+    const todayStr = dayjs().format('YYYY-MM-DD');
+    const showCreateOnlyDeck =
+      base.length === 0 && selectedDate >= todayStr && !isPausedDay;
+    if (base.length === 0) {
+      return showCreateOnlyDeck ? [createWorkoutDeckItem] : [];
+    }
+    return [...base, createWorkoutDeckItem];
+  }, [completedTodayDeckItem, deckItems, createWorkoutDeckItem, selectedDate, isPausedDay]);
+
   const carouselInitialIndex = useMemo(() => {
     if (!completedTodayDeckItem) return 0;
-    return carouselDeckItems.length > 1 ? 1 : 0;
-  }, [completedTodayDeckItem, carouselDeckItems.length]);
-  const inProgressDeckItem = useMemo(() => {
-    const sw = remainingWorkoutsQueue.find(isWorkoutActuallyInProgress);
-    if (!sw) return undefined;
-    const ordered = [...(sw.exercisesSnapshot ?? [])].sort((a, b) => a.order - b.order);
-    return {
-      id: sw.id,
-      title: sw.titleSnapshot,
-      exerciseCount: ordered.length,
-      onPress: origin => navigateToWorkoutExecution(sw, origin),
-    } as ScheduleDeckV3Item;
-  }, [remainingWorkoutsQueue, navigateToWorkoutExecution, isWorkoutActuallyInProgress]);
-  const deckMode: 'queue' | 'inProgress' = inProgressDeckItem ? 'inProgress' : 'queue';
+    if (deckItems.length === 0) return 0;
+    return 1;
+  }, [completedTodayDeckItem, deckItems.length]);
+
+  useLayoutEffect(() => {
+    const focus = scheduleDeckFocusAfterCreate;
+    if (!focus || focus.isoDate !== selectedDate) return;
+
+    const raw = [...remainingWorkoutsQueue];
+    const pos = raw.findIndex(sw => sw.id === focus.scheduledWorkoutId);
+    if (pos === -1) {
+      setScheduleDeckFocusAfterCreate(null);
+      return;
+    }
+
+    setDeckTailSwId(focus.scheduledWorkoutId);
+    const reorderedLen = raw.length;
+    const carouselIndex = (completedTodayDeckItem ? 1 : 0) + (reorderedLen - 1);
+    setImperativeDeckScroll({ index: carouselIndex, token: Date.now() });
+    setScheduleDeckFocusAfterCreate(null);
+  }, [
+    scheduleDeckFocusAfterCreate,
+    selectedDate,
+    remainingWorkoutsQueue,
+    completedTodayDeckItem,
+    setScheduleDeckFocusAfterCreate,
+  ]);
+
+  const handleImperativeDeckScrollDone = useCallback(() => {
+    setImperativeDeckScroll(null);
+  }, []);
 
   const renderWeekStripCells = (days: WeekStripDay[], keyPrefix: string) =>
     days.map(d => (
@@ -1127,23 +1220,14 @@ export function TodayScreen({ onDateChange, onOpenAddWorkout, onOpenBonusDrawer 
                     </View>
                   </TouchableOpacity>
                 </View>
-              ) : remainingWorkoutsQueue.length > 0 ? (
+              ) : carouselDeckItems.length > 0 ? (
                 <View style={styles.deckFullBleedWrap}>
                   <ScheduleWorkoutDeckV3
                     items={carouselDeckItems}
-                    mode={deckMode}
-                    inProgressItem={inProgressDeckItem}
+                    mode="queue"
                     initialIndex={carouselInitialIndex}
-                    chromeExitProgress={scheduleChromeExitProgress}
-                  />
-                </View>
-              ) : selectedDay?.scheduledWorkout ? (
-                <View style={styles.deckFullBleedWrap}>
-                  <ScheduleWorkoutDeckV3
-                    items={carouselDeckItems}
-                    mode={deckMode}
-                    inProgressItem={inProgressDeckItem}
-                    initialIndex={carouselInitialIndex}
+                    imperativeScrollTo={imperativeDeckScroll}
+                    onImperativeScrollDone={handleImperativeDeckScrollDone}
                     chromeExitProgress={scheduleChromeExitProgress}
                   />
                 </View>
@@ -1293,7 +1377,10 @@ export function TodayScreen({ onDateChange, onOpenAddWorkout, onOpenBonusDrawer 
                       if (extrasPanelMode === 'timer') {
                         (navigation as any).navigate('HIITTimerForm', { mode: 'create' });
                       } else {
-                        (navigation as any).navigate('WorkoutBuilder');
+                        (navigation as any).navigate('WorkoutBuilder', {
+                          selectedDate,
+                          shouldScheduleAfterCreate: true,
+                        });
                       }
                     }}
                     activeOpacity={0.75}
@@ -1369,6 +1456,44 @@ export function TodayScreen({ onDateChange, onOpenAddWorkout, onOpenBonusDrawer 
                       </Animated.View>
                     );
                   })}
+                  <Animated.View
+                    key={`create-workout-template-${extrasEnterSeq}-${extrasPanelMode}`}
+                    style={styles.timerGridCard}
+                    entering={FadeInDown.duration(EXTRAS_ENTER_DURATION_MS).delay(
+                      EXTRAS_ENTER_CARD_BASE_MS +
+                        sortedWorkoutTemplates.length * EXTRAS_ENTER_CARD_STAGGER_MS,
+                    )}
+                  >
+                    <TouchableOpacity
+                      style={styles.timerGridCardFill}
+                      onPress={() => {
+                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                        setExtrasPanelMode(null);
+                        (navigation as any).navigate('WorkoutBuilder', {
+                          selectedDate,
+                          shouldScheduleAfterCreate: true,
+                        });
+                      }}
+                      activeOpacity={0.85}
+                    >
+                      <View
+                        style={[
+                          styles.footerEntryCard,
+                          styles.timerGridCardShell,
+                          {
+                            backgroundColor: themeColors.canvasLight,
+                            borderWidth: StyleSheet.hairlineWidth,
+                            borderColor: themeColors.textMeta,
+                          },
+                        ]}
+                      >
+                        <Text style={[styles.footerEntryMeta, { color: themeColors.textMeta }]}>{t('buildNewWorkoutHint')}</Text>
+                        <Text style={[styles.footerEntryTitle, { color: themeColors.textMeta }]} numberOfLines={2}>
+                          {t('createWorkout')}
+                        </Text>
+                      </View>
+                    </TouchableOpacity>
+                  </Animated.View>
                 </View>
               ) : null}
             </ScrollView>

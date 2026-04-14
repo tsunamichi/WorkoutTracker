@@ -141,6 +141,12 @@ interface WorkoutStore {
   deleteCoreProgram: (programId: string) => Promise<void>;
   pendingCorePresetForProgram: { id: string; name: string; items: CoreSetTemplate['items'] } | null;
   setPendingCorePresetForProgram: (preset: { id: string; name: string; items: CoreSetTemplate['items'] } | null) => void;
+
+  /** After creating a workout from the builder, home carousel scrolls to this card (not persisted). */
+  scheduleDeckFocusAfterCreate: { scheduledWorkoutId: string; isoDate: string; templateId: string } | null;
+  setScheduleDeckFocusAfterCreate: (
+    payload: { scheduledWorkoutId: string; isoDate: string; templateId: string } | null,
+  ) => void;
   
   // NEW: Training Architecture (Templates, Plans, Scheduled Workouts)
   workoutTemplates: WorkoutTemplate[];
@@ -183,6 +189,8 @@ interface WorkoutStore {
   completeWorkout: (workoutId: string) => Promise<void>;
   uncompleteWorkout: (workoutId: string) => Promise<void>;
   getScheduledWorkout: (date: string) => ScheduledWorkout | undefined;
+  /** All sessions on a calendar day (manual + cycle), stable order by id. */
+  getScheduledWorkoutsForDate: (date: string) => ScheduledWorkout[];
   getScheduledWorkoutsForDateRange: (startDate: string, endDate: string) => ScheduledWorkout[];
   moveScheduledWorkout: (workoutId: string, toDate: string) => Promise<{ success: boolean; error?: string }>;
   duplicateScheduledWorkout: (workoutId: string, toDate: string) => Promise<{ success: boolean; error?: string }>;
@@ -381,6 +389,7 @@ export const useStore = create<WorkoutStore>((set, get) => ({
   corePrograms: [],
   coreLogs: [],
   pendingCorePresetForProgram: null,
+  scheduleDeckFocusAfterCreate: null,
   settings: DEFAULT_SETTINGS,
   isLoading: true,
   workoutProgress: {},
@@ -3577,48 +3586,21 @@ export const useStore = create<WorkoutStore>((set, get) => ({
   
   // Scheduled Workouts
   scheduleWorkout: async (date, templateId, source, cyclePlanId, resolution) => {
-    const existing = get().scheduledWorkouts.find(sw => sw.date === date);
-    
-    // Check for conflict
-    if (existing && !resolution) {
-      return { success: false, conflict: existing };
-    }
-    
-    // Handle conflict resolution
-    if (existing && resolution === 'cancel') {
-      return { success: false };
-    }
-    
-    // Check if existing is locked (completed)
-    if (existing && existing.isLocked) {
-      console.warn('⚠️ Cannot replace locked (completed) workout');
-      return { success: false, conflict: existing };
-    }
-    
-    // Get the template to create snapshots
     const template = get().getWorkoutTemplate(templateId);
     if (!template) {
       console.error('❌ Template not found:', templateId);
       return { success: false };
     }
-    
-    // Resolution is 'replace' or no conflict
-    let scheduledWorkouts = get().scheduledWorkouts.filter(sw => sw.date !== date);
-    
-    // Create snapshots from template
+
     const now = new Date().toISOString();
     const newWorkout: ScheduledWorkout = {
       id: `sw-${Date.now()}`,
       date,
       templateId,
-      
-      // Snapshots (deep copy to avoid mutation)
       titleSnapshot: template.name,
       warmupSnapshot: (template.warmupItems || []).map(item => ({ ...item })),
       exercisesSnapshot: (template.items || []).map(item => ({ ...item })),
       accessorySnapshot: (template.accessoryItems || []).map(item => ({ ...item })),
-      
-      // Initialize completion states
       warmupCompletion: { completedItems: [] },
       mainCompletion: { completedItems: [] },
       workoutCompletion: { completedExercises: {}, completedSets: {} },
@@ -3626,21 +3608,49 @@ export const useStore = create<WorkoutStore>((set, get) => ({
       status: 'planned',
       startedAt: null,
       completedAt: null,
-      
-      // Program metadata
       source,
       programId: cyclePlanId || null,
-      programName: null, // TODO: get from cycle plan
+      programName: null,
       weekIndex: null,
       dayIndex: null,
-      
-      // Integrity flags
       isLocked: false,
-      
-      // Legacy
       cyclePlanId,
     };
-    
+
+    // Independent manual workouts: stack on the same day (do not replace / conflict on "slot taken").
+    if (source === 'manual' && resolution == null) {
+      const scheduledWorkouts = [...get().scheduledWorkouts, newWorkout];
+      set({ scheduledWorkouts });
+      await storage.saveScheduledWorkouts(scheduledWorkouts);
+
+      const templates = get().workoutTemplates.map(t => {
+        if (t.id === templateId) {
+          return { ...t, lastUsedAt: now, usageCount: (t.usageCount || 0) + 1 };
+        }
+        return t;
+      });
+      set({ workoutTemplates: templates });
+      await storage.saveWorkoutTemplates(templates);
+      return { success: true };
+    }
+
+    const existing = get().scheduledWorkouts.find(sw => sw.date === date);
+
+    if (existing && !resolution) {
+      return { success: false, conflict: existing };
+    }
+
+    if (existing && resolution === 'cancel') {
+      return { success: false };
+    }
+
+    if (existing && existing.isLocked) {
+      console.warn('⚠️ Cannot replace locked (completed) workout');
+      return { success: false, conflict: existing };
+    }
+
+    let scheduledWorkouts = get().scheduledWorkouts.filter(sw => sw.date !== date);
+
     scheduledWorkouts = [...scheduledWorkouts, newWorkout];
     set({ scheduledWorkouts });
     await storage.saveScheduledWorkouts(scheduledWorkouts);
@@ -3813,10 +3823,17 @@ export const useStore = create<WorkoutStore>((set, get) => ({
     await storage.saveScheduledWorkouts(scheduledWorkouts);
   },
   
-  getScheduledWorkout: (date) => {
-    return get().scheduledWorkouts.find(sw => sw.date === date);
+  getScheduledWorkoutsForDate: date => {
+    return get()
+      .scheduledWorkouts.filter(sw => sw.date === date)
+      .sort((a, b) => a.id.localeCompare(b.id));
   },
-  
+
+  getScheduledWorkout: date => {
+    const list = get().getScheduledWorkoutsForDate(date);
+    return list[0];
+  },
+
   getScheduledWorkoutsForDateRange: (startDate, endDate) => {
     return get().scheduledWorkouts.filter(sw => 
       sw.date >= startDate && sw.date <= endDate
@@ -4506,6 +4523,10 @@ export const useStore = create<WorkoutStore>((set, get) => ({
 
   setPendingCorePresetForProgram: (preset) => {
     set({ pendingCorePresetForProgram: preset });
+  },
+
+  setScheduleDeckFocusAfterCreate: payload => {
+    set({ scheduleDeckFocusAfterCreate: payload });
   },
 }));
 

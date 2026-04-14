@@ -1,6 +1,4 @@
-/**
- * Future-facing workout history log shape (local mock for now).
- */
+/** Workout history detail row — built from completed scheduled workouts + detailed progress. */
 export type WorkoutHistorySet = {
   weight: string;
   reps: string;

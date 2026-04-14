@@ -16,7 +16,13 @@ import { Audio } from 'expo-av';
 import * as Haptics from 'expo-haptics';
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import { useStore } from '../../store';
-import { TYPOGRAPHY, COLORS } from '../../constants';
+import { TYPOGRAPHY, COLORS, SPACING } from '../../constants';
+import {
+  executionCtaLabelStyle,
+  EXECUTION_CTA_HEIGHT,
+  EXECUTION_CTA_PADDING_H,
+  EXECUTION_CTA_ROW_GAP,
+} from '../execution/executionCtaTokens';
 import { IconPause, IconPlay } from '../icons';
 import { useTranslation } from '../../i18n/useTranslation';
 import { COUNTDOWN_SOUND, COMPLETE_SOUND } from '../../utils/sounds';
@@ -1102,33 +1108,36 @@ const styles = StyleSheet.create({
   controlsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    justifyContent: 'flex-start',
+    gap: EXECUTION_CTA_ROW_GAP,
   },
   pauseBtn: {
-    minWidth: 120,
-    height: 48,
+    flexShrink: 0,
+    height: EXECUTION_CTA_HEIGHT,
+    minHeight: EXECUTION_CTA_HEIGHT,
+    paddingHorizontal: EXECUTION_CTA_PADDING_H,
     borderRadius: 14,
     backgroundColor: '#FFB835',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    columnGap: 8,
+    columnGap: SPACING.sm,
   },
   pauseBtnText: {
-    ...TYPOGRAPHY.body,
+    ...executionCtaLabelStyle,
     color: COLORS.backgroundCanvas,
-    fontWeight: '600',
   },
   skipBtn: {
-    paddingHorizontal: 14,
-    height: 48,
+    flexShrink: 0,
+    paddingHorizontal: EXECUTION_CTA_PADDING_H,
+    height: EXECUTION_CTA_HEIGHT,
+    minHeight: EXECUTION_CTA_HEIGHT,
     alignItems: 'center',
     justifyContent: 'center',
   },
   skipBtnText: {
-    ...TYPOGRAPHY.h3,
+    ...executionCtaLabelStyle,
     color: '#FFB835',
-    fontWeight: '500',
   },
 });
 

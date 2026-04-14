@@ -35,6 +35,10 @@ type TranslationKey =
   | 'enterWorkoutName'
   | 'pleaseEnterWorkoutName'
   | 'workoutSaved'
+  | 'workoutCreatedTitle'
+  | 'workoutCreatedBody'
+  | 'createAnotherWorkout'
+  | 'buildNewWorkoutHint'
   | 'workoutSavedMessage'
   | 'workoutSavedToLibrary'
   | 'scheduleWorkoutNow'
@@ -244,6 +248,9 @@ type TranslationKey =
   | 'noDraftFound'
   | 'noExercisesYet'
   | 'addExerciseCta'
+  | 'pasteWorkout'
+  | 'clipboardEmpty'
+  | 'pasteNoExercisesFound'
   | 'cycleLengthTitle'
   | 'weeklySchedule'
   | 'trainingDaysLabel'
@@ -700,6 +707,10 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     enterWorkoutName: 'Enter workout name',
     pleaseEnterWorkoutName: 'Please enter a name for your workout',
     workoutSaved: 'Workout Saved',
+    workoutCreatedTitle: 'Workout created',
+    workoutCreatedBody: 'Add another workout, or tap Done when you are finished.',
+    createAnotherWorkout: 'Create another',
+    buildNewWorkoutHint: 'Build a new workout',
     workoutSavedMessage: 'Your workout has been saved successfully',
     workoutSavedToLibrary: 'Your workout has been saved to your library. Go to Schedule to add it to your week.',
     scheduleWorkoutNow: 'Schedule this workout for {date}?',
@@ -734,7 +745,6 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     swap: 'Swap',
     useWorkoutFromCycle: 'Use workout from cycle',
     selectWorkout: 'Select Workout',
-    createWorkout: 'Create Workout',
     addWorkout: 'Add Workout',
     noWorkoutPlanned: 'No workout planned',
     noWorkoutPerformedThisDay: 'No workout performed this day',
@@ -855,6 +865,10 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     noDraftFound: 'No draft found',
     noExercisesYet: 'No exercises yet. Add some below!',
     addExerciseCta: '+ Add exercise',
+    pasteWorkout: 'Paste',
+    clipboardEmpty: 'The clipboard is empty.',
+    pasteNoExercisesFound:
+      'No exercises found. Try one exercise per line, a title on the first line followed by a list, or DAY 1 — Name with bullet exercises.',
     cycleLengthTitle: 'Cycle Length',
     weeklySchedule: 'Weekly Schedule',
     trainingDaysLabel: 'Training days:',
@@ -1124,7 +1138,7 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     workoutPlan: 'Workout Plan',
     workoutPlanDescription: 'Apply multiple workouts from a plan',
     createWorkoutFor: 'Create workout for',
-    blankWorkout: 'New Plan',
+    blankWorkout: 'New workout',
     startFromScratch: 'Start from scratch',
     singleDayWorkout: 'Single day workout',
     multiDayCycle: 'Multi-Day Cycle',
@@ -1327,6 +1341,10 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     enterWorkoutName: 'Ingresa el nombre del entrenamiento',
     pleaseEnterWorkoutName: 'Por favor ingresa un nombre para tu entrenamiento',
     workoutSaved: 'Entrenamiento Guardado',
+    workoutCreatedTitle: 'Entrenamiento creado',
+    workoutCreatedBody: 'Agrega otro entrenamiento o pulsa Listo cuando termines.',
+    createAnotherWorkout: 'Crear otro',
+    buildNewWorkoutHint: 'Armar un entrenamiento nuevo',
     workoutSavedMessage: 'Tu entrenamiento ha sido guardado exitosamente',
     workoutSavedToLibrary: 'Tu entrenamiento se ha guardado en tu biblioteca. Ve a Programación para agregarlo a tu semana.',
     scheduleWorkoutNow: '¿Programar este entrenamiento para {date}?',
@@ -1482,6 +1500,10 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     noDraftFound: 'No hay borrador',
     noExercisesYet: 'No hay ejercicios. Agrega abajo.',
     addExerciseCta: '+ Agregar ejercicio',
+    pasteWorkout: 'Pegar',
+    clipboardEmpty: 'El portapapeles está vacío.',
+    pasteNoExercisesFound:
+      'No se encontraron ejercicios. Prueba una línea por ejercicio, un título en la primera línea y lista debajo, o DÍA 1 — Nombre con viñetas.',
     cycleLengthTitle: 'Duracion del ciclo',
     weeklySchedule: 'Horario semanal',
     trainingDaysLabel: 'Dias de entrenamiento:',
@@ -1752,7 +1774,7 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     workoutPlan: 'Plan de Entrenamiento',
     workoutPlanDescription: 'Aplicar múltiples entrenamientos de un plan',
     createWorkoutFor: 'Crear entrenamiento para',
-    blankWorkout: 'Nuevo Plan',
+    blankWorkout: 'Nuevo entrenamiento',
     startFromScratch: 'Empezar desde cero',
     singleDayWorkout: 'Entrenamiento de un día',
     multiDayCycle: 'Ciclo Multi-Día',
