@@ -43,14 +43,14 @@ import { IconArrowLeft, IconCheck, IconCheckmark, IconAddLine, IconMinusLine, Ic
 import { BottomDrawer } from '../components/common/BottomDrawer';
 import { NextLabel } from '../components/common/NextLabel';
 import { SetTimerSheet } from '../components/timer/SetTimerSheet';
-import { ExecutionTopDrawer } from '../components/common/ExecutionTopDrawer';
+import { ExecutionTopDrawer, getExecutionTopDrawerExpandedHeight } from '../components/common/ExecutionTopDrawer';
 import { Toggle } from '../components/Toggle';
 import { ShapeConfetti } from '../components/common/ShapeConfetti';
 import { DeviceEdgeTimer } from '../components/common/DeviceEdgeTimer';
 import { UnderlinedActionButton } from '../components/common/UnderlinedActionButton';
 import { ExploreV2ExecutionRoot } from '../components/exploreV2/ExploreV2ExecutionRoot';
 import { ExploreV2TimerArea } from '../components/exploreV2/ExploreV2TimerArea';
-import { EXPLORE_V2 } from '../components/exploreV2/exploreV2Tokens';
+import { EXPLORE_V2, exploreV2UpNextQueueExerciseNameStyle } from '../components/exploreV2/exploreV2Tokens';
 import {
   executionCtaLabelStyle,
   executionCtaTouchableFill,
@@ -261,6 +261,8 @@ export function ExerciseExecutionScreen() {
     corePrograms,
     getActiveCoreProgram,
     getCoreSessionsByGroup,
+    unscheduleWorkout,
+    clearWorkoutProgress,
   } = useStore();
 
   const appTheme = useAppTheme();
@@ -625,6 +627,15 @@ export function ExerciseExecutionScreen() {
     return rounds;
   }, [exerciseGroups, completedSets]);
 
+  /** All groups in the current section have every round logged (drives Options menu + CTAs). */
+  const allCurrentGroupsComplete = useMemo(() => {
+    if (exerciseGroups.length === 0) return false;
+    return exerciseGroups.every(group => {
+      const rounds = currentRounds[group.id] || 0;
+      return rounds >= group.totalRounds;
+    });
+  }, [exerciseGroups, currentRounds]);
+
   const [showAddExerciseDrawer, setShowAddExerciseDrawer] = useState(false);
   const exploreV2TimerBandProgress = useSharedValue(0);
   /** 1 while explore-v2 work timer surface is active — tints page + card rim blue vs rest orange */
@@ -797,11 +808,18 @@ export function ExerciseExecutionScreen() {
   const exploreV2TimerPageWorkTint = appTheme.colors.backgroundTimer;
   const menuOnCompleteEnabled = type === 'main' && !allCurrentGroupsComplete;
   const menuHasSecondaryDestructive = type !== 'main';
+  const menuShowDeleteWorkout = Boolean(
+    workoutKey?.startsWith('sw-') &&
+      scheduledWorkout &&
+      !scheduledWorkout.isLocked &&
+      !isInPastCycle
+  );
   const menuActionCount =
     (menuOnCompleteEnabled ? 1 : 0) +
     1 +
-    (menuHasSecondaryDestructive ? 1 : 0);
-  const menuExpandedHeight = 132 + menuActionCount * 52;
+    (menuHasSecondaryDestructive ? 1 : 0) +
+    (menuShowDeleteWorkout ? 1 : 0);
+  const menuExpandedHeight = getExecutionTopDrawerExpandedHeight(menuActionCount);
   const menuSlideContentStyle = useAnimatedStyle(() => ({
     opacity: interpolate(menuToneProgress.value, [0, 1], [1, 0.7]),
     transform: [
@@ -1545,15 +1563,6 @@ export function ExerciseExecutionScreen() {
     return warmupDone && mainDone && accessoryDone;
   };
 
-  // Check if all exercise groups in the current section are complete
-  const allCurrentGroupsComplete = useMemo(() => {
-    if (exerciseGroups.length === 0) return false;
-    return exerciseGroups.every(group => {
-      const rounds = currentRounds[group.id] || 0;
-      return rounds >= group.totalRounds;
-    });
-  }, [exerciseGroups, currentRounds]);
-
   const exploreCurrentGroupIndex = useMemo(() => {
     if (expandedGroupIndex < 0) return null;
     const group = exerciseGroups[expandedGroupIndex];
@@ -1788,6 +1797,73 @@ export function ExerciseExecutionScreen() {
 
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
   };
+
+  const EXPLORE_V2_MAX_GROUP_SETS = 30;
+
+  const handleAdjustExploreV2GroupSets = useCallback(
+    async (delta: 1 | -1) => {
+      if (type !== 'main' || !template || !workoutKey) return;
+      if (exploreCurrentGroupIndex === null) return;
+      if (exploreV2TimerPhase !== 'none') return;
+
+      const g = exerciseGroups[exploreCurrentGroupIndex];
+      if (!g?.exercises?.length) return;
+
+      const oldTotal = g.totalRounds;
+      const targetRounds = oldTotal + delta;
+      if (targetRounds < 1 || targetRounds > EXPLORE_V2_MAX_GROUP_SETS) return;
+
+      const st = useStore.getState();
+      const sw = st.scheduledWorkouts.find((w: { id: string }) => w.id === workoutKey);
+      const currentItems =
+        (sw?.exercisesSnapshot ??
+          st.workoutTemplates.find((t: { id: string }) => t.id === workoutTemplateId)?.items) ??
+        template.items;
+
+      const templateIds = new Set(g.exercises.map(e => e.id));
+      const updatedItems = currentItems.map(item => {
+        if (!templateIds.has(item.id)) return item;
+        return { ...item, sets: targetRounds };
+      });
+
+      if (delta < 0) {
+        const removeRound = oldTotal - 1;
+        await Promise.all(
+          g.exercises.map(ex => updateMainCompletion(workoutKey, `${ex.id}-set-${removeRound}`, false)),
+        );
+        setLocalValues(prev => {
+          const next = { ...prev };
+          for (const ex of g.exercises) {
+            delete next[`${ex.id}-set-${removeRound}`];
+          }
+          return next;
+        });
+      }
+
+      await updateWorkoutTemplate(workoutTemplateId, { items: updatedItems });
+      if (scheduledWorkout) {
+        await updateScheduledWorkoutSnapshots(workoutKey, { exercisesSnapshot: updatedItems });
+      }
+      requestAnimationFrame(() => {
+        setRefreshKey(prev => prev + 1);
+      });
+      Haptics.selectionAsync();
+    },
+    [
+      type,
+      template,
+      workoutKey,
+      exploreCurrentGroupIndex,
+      exploreV2TimerPhase,
+      exerciseGroups,
+      workoutTemplateId,
+      scheduledWorkout,
+      updateWorkoutTemplate,
+      updateScheduledWorkoutSnapshots,
+      updateMainCompletion,
+      setLocalValues,
+    ],
+  );
 
   // Display values: in-session edits first (weight, reps, and time-as-reps), then persisted data, then template.
   const progressionValuesRef = useRef(progressionValuesByItemId);
@@ -2466,6 +2542,35 @@ export function ExerciseExecutionScreen() {
     }, 300);
   }, [navigation, t, type, updateWorkoutTemplate, workoutTemplateId]);
 
+  const handleDeleteScheduledWorkout = useCallback(() => {
+    setTimeout(() => {
+      Alert.alert(t('deleteScheduledWorkout'), t('deleteScheduledWorkoutMessage'), [
+        { text: t('cancel'), style: 'cancel' },
+        {
+          text: t('delete'),
+          style: 'destructive',
+          onPress: async () => {
+            await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+            if (currentSessionId) {
+              await deleteSession(currentSessionId);
+              setCurrentSessionId(null);
+            }
+            await clearWorkoutProgress(workoutKey);
+            await unscheduleWorkout(workoutKey);
+            navigation.goBack();
+          },
+        },
+      ]);
+    }, 300);
+  }, [
+    t,
+    currentSessionId,
+    deleteSession,
+    clearWorkoutProgress,
+    unscheduleWorkout,
+    workoutKey,
+    navigation,
+  ]);
 
   const handleCompleteAll = () => {
     setShowMenu(false);
@@ -3293,6 +3398,8 @@ export function ExerciseExecutionScreen() {
           onReset={handleReset}
           onSecondaryDestructive={menuHasSecondaryDestructive ? handleRemoveSection : undefined}
           secondaryDestructiveLabel={type === 'warmup' ? t('removeWarmup') : t('remove')}
+          onDeleteWorkout={menuShowDeleteWorkout ? handleDeleteScheduledWorkout : undefined}
+          deleteWorkoutLabel={t('deleteScheduledWorkout')}
         />
       </View>
 
@@ -3383,6 +3490,9 @@ export function ExerciseExecutionScreen() {
                 progressionValuesByItemId={progressionValuesByItemId}
                 celebrateCompletion={showCompletionCelebration}
                 completedOnDateLabel={exploreV2CompletedOnDateLabel}
+                onAdjustCurrentGroupSets={
+                  type === 'main' ? handleAdjustExploreV2GroupSets : undefined
+                }
                 />
               </AnimatedReanimated.View>
             </AnimatedReanimated.View>
@@ -5384,7 +5494,7 @@ const addExerciseStyles = StyleSheet.create({
     paddingVertical: SPACING.lg,
   },
   exerciseName: {
-    ...TYPOGRAPHY.body,
+    ...exploreV2UpNextQueueExerciseNameStyle,
     color: COLORS.text,
   },
   separator: {
@@ -5443,7 +5553,9 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: SPACING.xxl,
     right: SPACING.xxl,
-    zIndex: 60,
+    /** Above Explore v2 wallet border overlay (`WALLET_BORDER_OVERLAY_Z` = 2000) so menu rows stay visible */
+    zIndex: 5000,
+    elevation: 50,
   },
   headerDimmed: {
     opacity: 0.3,

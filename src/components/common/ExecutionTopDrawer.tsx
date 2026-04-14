@@ -21,12 +21,26 @@ type Props = {
   onReset: () => void;
   onSecondaryDestructive?: () => void;
   secondaryDestructiveLabel?: string;
+  /** Remove scheduled workout from calendar (when `workoutKey` is `sw-…`). */
+  onDeleteWorkout?: () => void;
+  deleteWorkoutLabel?: string;
   restTimeSeconds: number;
   onRestTimeChange: (seconds: number) => void;
   minRestSeconds?: number;
   maxRestSeconds?: number;
   stepSeconds?: number;
 };
+
+/**
+ * Expanded drawer height for animations / content push — must match layout here
+ * (`TYPOGRAPHY.timer` is 80px tall; each `textAction` is 16 + line + 16 vertical padding).
+ * Keep in sync with `menuExpandedHeight` on `ExerciseExecutionScreen`.
+ */
+export function getExecutionTopDrawerExpandedHeight(actionCount: number): number {
+  const TIMER_BLOCK_HEIGHT = 164;
+  const ACTION_ROW_HEIGHT = 72;
+  return TIMER_BLOCK_HEIGHT + actionCount * ACTION_ROW_HEIGHT;
+}
 
 export function ExecutionTopDrawer({
   visible,
@@ -35,6 +49,8 @@ export function ExecutionTopDrawer({
   onReset,
   onSecondaryDestructive,
   secondaryDestructiveLabel,
+  onDeleteWorkout,
+  deleteWorkoutLabel,
   restTimeSeconds,
   onRestTimeChange,
   minRestSeconds = 15,
@@ -50,7 +66,8 @@ export function ExecutionTopDrawer({
   const dragStartValueRef = useRef(restTimeSeconds);
   const localRestRef = useRef(restTimeSeconds);
   const lastHapticValueRef = useRef(restTimeSeconds);
-  const actionCount = (onComplete ? 1 : 0) + 1 + (onSecondaryDestructive ? 1 : 0);
+  const actionCount =
+    (onComplete ? 1 : 0) + 1 + (onSecondaryDestructive ? 1 : 0) + (onDeleteWorkout ? 1 : 0);
 
   useEffect(() => {
     localRestRef.current = localRestSeconds;
@@ -64,8 +81,7 @@ export function ExecutionTopDrawer({
   }, [visible, restTimeSeconds]);
 
   useEffect(() => {
-    // No card chrome/padding: keep menu compact and content-driven.
-    const expandedHeight = 132 + actionCount * 52;
+    const expandedHeight = getExecutionTopDrawerExpandedHeight(actionCount);
     const target = visible ? expandedHeight : 0;
     animatedHeight.value = withTiming(target, {
       duration: visible ? 420 : 240,
@@ -185,6 +201,20 @@ export function ExecutionTopDrawer({
               activeOpacity={0.7}
             >
               <Text style={[styles.resetText, { color: themeColors.signalNegative }]}>{secondaryDestructiveLabel ?? 'Remove'}</Text>
+            </TouchableOpacity>
+          ) : null}
+          {onDeleteWorkout ? (
+            <TouchableOpacity
+              style={styles.textAction}
+              onPress={() => {
+                onDeleteWorkout();
+                onClose();
+              }}
+              activeOpacity={0.7}
+            >
+              <Text style={[styles.resetText, { color: themeColors.signalNegative }]}>
+                {deleteWorkoutLabel ?? 'Delete workout'}
+              </Text>
             </TouchableOpacity>
           ) : null}
         </View>

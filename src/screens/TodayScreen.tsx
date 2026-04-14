@@ -1223,6 +1223,7 @@ export function TodayScreen({ onDateChange, onOpenAddWorkout, onOpenBonusDrawer 
               ) : carouselDeckItems.length > 0 ? (
                 <View style={styles.deckFullBleedWrap}>
                   <ScheduleWorkoutDeckV3
+                    key={selectedDate}
                     items={carouselDeckItems}
                     mode="queue"
                     initialIndex={carouselInitialIndex}

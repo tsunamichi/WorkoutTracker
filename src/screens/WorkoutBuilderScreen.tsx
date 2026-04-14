@@ -16,12 +16,14 @@ import * as Clipboard from 'expo-clipboard';
 import * as Haptics from 'expo-haptics';
 import { useStore } from '../store';
 import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS } from '../constants';
-import { IconClose } from '../components/icons';
+import { exploreV2UpNextQueueExerciseNameStyle } from '../components/exploreV2/exploreV2Tokens';
+import { IconTrash } from '../components/icons';
 import { useTranslation } from '../i18n/useTranslation';
 import type { Exercise } from '../types';
 import type { WorkoutTemplate } from '../types/training';
 import { useAppTheme } from '../theme/useAppTheme';
 import { EXECUTION_CTA_ROW_GAP } from '../components/execution/executionCtaTokens';
+import { BackTextButton } from '../components/common/BackTextButton';
 
 /** Bold exercise list on light builder canvas (matches product mock). */
 const LIST_EXERCISE_INK = '#1B4332';
@@ -115,11 +117,10 @@ export function WorkoutBuilderScreen() {
   const [workoutName, setWorkoutName] = useState('');
   const [lines, setLines] = useState<DraftLine[]>([]);
   const [exerciseInput, setExerciseInput] = useState('');
-  const [showExerciseField, setShowExerciseField] = useState(false);
   const exerciseInputRef = useRef<TextInput>(null);
 
   const hasDraft =
-    workoutName.trim().length > 0 || lines.length > 0 || exerciseInput.trim().length > 0 || showExerciseField;
+    workoutName.trim().length > 0 || lines.length > 0 || exerciseInput.trim().length > 0;
 
   const handleBack = () => {
     if (hasDraft) {
@@ -144,7 +145,6 @@ export function WorkoutBuilderScreen() {
     setWorkoutName('');
     setLines([]);
     setExerciseInput('');
-    setShowExerciseField(false);
     useStore.getState().setScheduleDeckFocusAfterCreate(null);
   };
 
@@ -166,7 +166,6 @@ export function WorkoutBuilderScreen() {
 
   const focusAddExercise = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setShowExerciseField(true);
     requestAnimationFrame(() => exerciseInputRef.current?.focus());
   }, []);
 
@@ -199,7 +198,7 @@ export function WorkoutBuilderScreen() {
         })),
       ];
     });
-    setShowExerciseField(true);
+    requestAnimationFrame(() => exerciseInputRef.current?.focus());
   }, [t, workoutName]);
 
   const commitExerciseLine = useCallback(() => {
@@ -292,7 +291,6 @@ export function WorkoutBuilderScreen() {
   };
 
   const canvas = themeColors.canvasLight;
-  const ink = themeColors.containerPrimary;
   const meta = themeColors.textMeta;
   /** Same token as Explore / HIIT work-timer card surfaces (`containerTertiaryTimer`). */
   const pasteTimerCardBackground = explore.workTimerCompleteCardBg;
@@ -310,9 +308,13 @@ export function WorkoutBuilderScreen() {
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          <TouchableOpacity onPress={handleBack} style={styles.backRow} hitSlop={12}>
-            <Text style={[styles.backText, { color: meta }]}>{`< ${t('back')}`}</Text>
-          </TouchableOpacity>
+          <BackTextButton
+            label="Home"
+            onPress={handleBack}
+            chevronPointsLeft
+            style={{ paddingHorizontal: 0, marginBottom: SPACING.md }}
+            textStyle={{ color: meta }}
+          />
 
           <TextInput
             style={[styles.titleInput, { color: COLORS.textPrimary }]}
@@ -326,34 +328,33 @@ export function WorkoutBuilderScreen() {
             accessibilityLabel={t('workoutName')}
           />
 
-          <TouchableOpacity onPress={focusAddExercise} style={styles.addLink} activeOpacity={0.7}>
-            <Text style={[styles.addLinkText, { color: ink }]}>{t('addExerciseCta')}</Text>
-          </TouchableOpacity>
-
-          {showExerciseField ? (
-            <TextInput
-              ref={exerciseInputRef}
-              style={[styles.exerciseField, { color: ink, borderColor: meta }]}
-              placeholder={t('exerciseName')}
-              placeholderTextColor={meta}
-              value={exerciseInput}
-              onChangeText={setExerciseInput}
-              onSubmitEditing={commitExerciseLine}
-              returnKeyType="done"
-              blurOnSubmit={false}
-              autoCapitalize="words"
-              accessibilityLabel={t('exerciseName')}
-            />
-          ) : null}
+          <TextInput
+            ref={exerciseInputRef}
+            style={[styles.titleInput, { color: COLORS.textPrimary }]}
+            placeholder={t('addExerciseCta')}
+            placeholderTextColor={meta}
+            value={exerciseInput}
+            onChangeText={setExerciseInput}
+            onSubmitEditing={commitExerciseLine}
+            returnKeyType="done"
+            blurOnSubmit={false}
+            autoCapitalize="words"
+            accessibilityLabel={t('addExerciseCta')}
+          />
 
           <View style={styles.listBlock}>
             {lines.map(line => (
               <View key={line.id} style={styles.exerciseRow}>
-                <Text style={[styles.exerciseRowText, { color: LIST_EXERCISE_INK }]}>
+                <Text style={styles.exerciseRowText}>
                   {line.name}
                 </Text>
-                <TouchableOpacity onPress={() => removeLine(line.id)} hitSlop={12} accessibilityRole="button">
-                  <IconClose size={20} color={meta} />
+                <TouchableOpacity
+                  onPress={() => removeLine(line.id)}
+                  hitSlop={12}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${t('remove')}: ${line.name}`}
+                >
+                  <IconTrash size={20} color={COLORS.signalNegative} />
                 </TouchableOpacity>
               </View>
             ))}
@@ -400,15 +401,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.xxl,
     paddingTop: SPACING.sm,
   },
-  backRow: {
-    alignSelf: 'flex-start',
-    paddingVertical: SPACING.sm,
-    marginBottom: SPACING.md,
-  },
-  backText: {
-    ...TYPOGRAPHY.body,
-    fontWeight: '500',
-  },
   /**
    * Match Today schedule title size/spacing (`displayLarge`).
    * `TextInput` draws large system text heavier than `Text` at weight 500; use regular so it reads like the home header.
@@ -427,22 +419,6 @@ const styles = StyleSheet.create({
       default: {},
     }),
   },
-  addLink: {
-    alignSelf: 'flex-start',
-    marginBottom: SPACING.lg,
-  },
-  addLinkText: {
-    ...TYPOGRAPHY.body,
-    fontWeight: '500',
-  },
-  exerciseField: {
-    ...TYPOGRAPHY.body,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: BORDER_RADIUS.md,
-    paddingHorizontal: SPACING.lg,
-    paddingVertical: SPACING.md,
-    marginBottom: SPACING.xxl,
-  },
   listBlock: {
     gap: SPACING.xl,
   },
@@ -454,8 +430,8 @@ const styles = StyleSheet.create({
   },
   exerciseRowText: {
     flex: 1,
-    ...TYPOGRAPHY.h2,
-    fontWeight: '700',
+    ...exploreV2UpNextQueueExerciseNameStyle,
+    color: LIST_EXERCISE_INK,
   },
   footer: {
     position: 'absolute',

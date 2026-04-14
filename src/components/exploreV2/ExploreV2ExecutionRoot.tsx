@@ -137,6 +137,8 @@ export type ExploreV2ExecutionRootProps = {
   /** Final-set celebration animation (Great Job) */
   celebrateCompletion?: boolean;
   completedOnDateLabel?: string;
+  /** Main section only: add/remove rounds for the current Explore group (template + snapshot). */
+  onAdjustCurrentGroupSets?: (delta: 1 | -1) => void | Promise<void>;
 };
 
 function ExploreV2ExecutionRootComponent(props: ExploreV2ExecutionRootProps) {
@@ -189,6 +191,7 @@ function ExploreV2ExecutionRootComponent(props: ExploreV2ExecutionRootProps) {
     progressionValuesByItemId,
     celebrateCompletion = false,
     completedOnDateLabel,
+    onAdjustCurrentGroupSets,
   } = props;
   const { explore: exRoot, colors: themeColorsRoot } = useAppTheme();
   const warmActivityRoot = exRoot.warmActivity;
@@ -751,6 +754,7 @@ function ExploreV2ExecutionRootComponent(props: ExploreV2ExecutionRootProps) {
           }
           celebrationProgress={completionCelebrateProgress}
           celebrationActive={celebrateCompletion}
+          onAdjustGroupSets={onAdjustCurrentGroupSets}
         />
       </Animated.View>
     ) : null;

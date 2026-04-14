@@ -35,6 +35,7 @@ import {
   type ExploreV2CurrentSettingsOverflowProps,
 } from './ExploreV2CurrentOverflowSheet';
 import { UnderlinedActionButton } from '../common/UnderlinedActionButton';
+import { useTranslation } from '../../i18n/useTranslation';
 
 type Props = {
   group: ExploreV2Group;
@@ -75,6 +76,8 @@ type Props = {
   >;
   celebrationProgress?: SharedValue<number>;
   celebrationActive?: boolean;
+  /** When set (main workouts), add/remove rounds for this group — UI gated to last carousel slot + editable metrics. */
+  onAdjustGroupSets?: (delta: 1 | -1) => void | Promise<void>;
 };
 
 type SetSlot = { round: number; exerciseIndex: number };
@@ -448,7 +451,9 @@ export function ExploreV2CurrentCard({
   progressionValuesByItemId,
   celebrationProgress,
   celebrationActive = false,
+  onAdjustGroupSets,
 }: Props) {
+  const { t } = useTranslation();
   const theme = useAppTheme();
   const { explore: ex, colors: themeColors } = theme;
   const isV2Theme = theme.id === 'v2';
@@ -681,6 +686,77 @@ export function ExploreV2CurrentCard({
     [carouselViewportWidth, orderedSlots.length],
   );
 
+  const EXPLORE_V2_MAX_GROUP_SETS = 30;
+  const showSetAdjustRow =
+    Boolean(onAdjustGroupSets) &&
+    metricsEditable &&
+    orderedSlots.length > 0 &&
+    carouselIndex === orderedSlots.length - 1;
+  const canRemoveSet = group.totalRounds > 1;
+  const canAddSet = group.totalRounds < EXPLORE_V2_MAX_GROUP_SETS;
+
+  const renderPaginationColumn = () => (
+    <View style={styles.paginationColumn}>
+      {showSetAdjustRow ? (
+        <View style={styles.setAdjustRowAbs} pointerEvents="box-none">
+          <UnderlinedActionButton
+            label={t('exploreV2RemoveSet')}
+            onPress={() => {
+              if (canRemoveSet) void onAdjustGroupSets?.(-1);
+            }}
+            color={settingsInk}
+            underlineColor={settingsInk}
+            style={[styles.setAdjustButton, !canRemoveSet && styles.setAdjustButtonDimmed]}
+          />
+          <UnderlinedActionButton
+            label={t('exploreV2AddSet')}
+            onPress={() => {
+              if (canAddSet) void onAdjustGroupSets?.(1);
+            }}
+            color={settingsInk}
+            underlineColor={settingsInk}
+            style={[styles.setAdjustButton, !canAddSet && styles.setAdjustButtonDimmed]}
+          />
+        </View>
+      ) : null}
+      <View style={styles.paginationWrap}>
+        {orderedSlots.map((slot, i) => {
+          const isView = i === carouselIndex;
+          return (
+            <TouchableOpacity
+              key={slotKey(slot)}
+              onPress={() => scrollToSetIndex(i)}
+              hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
+              accessibilityRole="button"
+              accessibilityLabel={`Set ${i + 1}`}
+              accessibilityState={{ selected: isView }}
+            >
+              <View style={styles.paginationItem}>
+                <Text
+                  style={[
+                    styles.paginationDigit,
+                    isView && styles.paginationInView,
+                    heroTimerActive
+                      ? {
+                          color: isView
+                            ? accentSecondaryDisabled
+                            : inactivePaginationInkDisabled,
+                        }
+                      : {
+                          color: isView ? accentPrimary : inactivePaginationInk,
+                        },
+                  ]}
+                >
+                  {i + 1}
+                </Text>
+              </View>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+    </View>
+  );
+
   const onLogPress = useCallback(() => {
     if (heroTimerActive) {
       onSkipRest();
@@ -823,44 +899,7 @@ export function ExploreV2CurrentCard({
                         <Reanimated.Text style={[styles.ctaPillText, ctaLabelStyle]}>{ctaLabel}</Reanimated.Text>
                       </AnimatedTouchableOpacity>
 
-                      <View style={styles.paginationWrap}>
-                        {orderedSlots.map((slot, i) => {
-                          const ex = group.exercises[slot.exerciseIndex];
-                          const isView = i === carouselIndex;
-                          return (
-                            <TouchableOpacity
-                              key={slotKey(slot)}
-                              onPress={() => scrollToSetIndex(i)}
-                              hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
-                              accessibilityRole="button"
-                              accessibilityLabel={`Set ${i + 1}`}
-                              accessibilityState={{ selected: isView }}
-                            >
-                              <View style={styles.paginationItem}>
-                                <Text
-                                  style={[
-                                    styles.paginationDigit,
-                                    isView && styles.paginationInView,
-                                    heroTimerActive
-                                      ? {
-                                          color: isView
-                                            ? accentSecondaryDisabled
-                                            : inactivePaginationInkDisabled,
-                                        }
-                                      : {
-                                          color: isView
-                                            ? accentPrimary
-                                            : inactivePaginationInk,
-                                        },
-                                  ]}
-                                >
-                                  {i + 1}
-                                </Text>
-                              </View>
-                            </TouchableOpacity>
-                          );
-                        })}
-                      </View>
+                      {renderPaginationColumn()}
                     </View>
                   </View>
                 </Reanimated.View>
@@ -945,50 +984,7 @@ export function ExploreV2CurrentCard({
                       <Reanimated.Text style={[styles.ctaPillText, ctaLabelStyle]}>{ctaLabel}</Reanimated.Text>
                     </AnimatedTouchableOpacity>
 
-                    <View style={styles.paginationWrap}>
-                      {orderedSlots.map((slot, i) => {
-                        const ex = group.exercises[slot.exerciseIndex];
-                        const sid = `${ex.id}-set-${slot.round}`;
-                        const done = completedSets.has(sid);
-                        const isView = i === carouselIndex;
-                        const isNext =
-                          nextIncomplete != null &&
-                          slot.round === nextIncomplete.round &&
-                          slot.exerciseIndex === nextIncomplete.exerciseIndex;
-                        return (
-                          <TouchableOpacity
-                            key={slotKey(slot)}
-                            onPress={() => scrollToSetIndex(i)}
-                            hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
-                            accessibilityRole="button"
-                            accessibilityLabel={`Set ${i + 1}`}
-                            accessibilityState={{ selected: isView }}
-                          >
-                            <View style={styles.paginationItem}>
-                              <Text
-                                style={[
-                                  styles.paginationDigit,
-                                  isView && styles.paginationInView,
-                                  heroTimerActive
-                                    ? {
-                                        color: isView
-                                          ? accentSecondaryDisabled
-                                          : inactivePaginationInkDisabled,
-                                      }
-                                    : {
-                                        color: isView
-                                          ? accentPrimary
-                                          : inactivePaginationInk,
-                                      },
-                                ]}
-                              >
-                                {i + 1}
-                              </Text>
-                            </View>
-                          </TouchableOpacity>
-                        );
-                      })}
-                    </View>
+                    {renderPaginationColumn()}
                   </View>
                 </View>
               </Reanimated.View>
@@ -1238,14 +1234,35 @@ const styles = StyleSheet.create({
     marginTop: 24,
     gap: 12,
   },
+  paginationColumn: {
+    position: 'relative',
+    flex: 1,
+    maxWidth: '52%',
+    alignItems: 'flex-end',
+    justifyContent: 'center',
+  },
+  setAdjustRowAbs: {
+    position: 'absolute',
+    right: 0,
+    bottom: 34,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 20,
+    zIndex: 4,
+  },
+  setAdjustButton: {
+    paddingVertical: 2,
+    paddingHorizontal: 0,
+  },
+  setAdjustButtonDimmed: {
+    opacity: 0.35,
+  },
   paginationWrap: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'flex-end',
     alignItems: 'flex-end',
-    flex: 1,
     gap: 10,
-    maxWidth: '52%',
   },
   paginationItem: {
     position: 'relative',

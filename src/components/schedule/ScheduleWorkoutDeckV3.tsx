@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   FlatList,
   NativeScrollEvent,
@@ -222,13 +222,53 @@ export function ScheduleWorkoutDeckV3({
   const scrollX = useSharedValue(0);
   const inProgressRef = useRef<TouchNode | null>(null);
   const listRef = useRef<FlatList<ScheduleDeckV3Item> | null>(null);
+  /** Tracks deck order between updates so a single removal can move focus to the previous card (not the next). */
+  const prevQueueItemIdsRef = useRef<string[] | null>(null);
 
-  useEffect(() => {
-    setCurrentIndex(prev => {
-      if (queueItems.length === 0) return 0;
-      return Math.min(prev, queueItems.length - 1);
-    });
-  }, [queueItems.length]);
+  useLayoutEffect(() => {
+    const newIds = queueItems.map(i => i.id);
+    const oldIds = prevQueueItemIdsRef.current;
+
+    if (mode !== 'queue' || queueItems.length === 0) {
+      prevQueueItemIdsRef.current = newIds;
+      return;
+    }
+
+    if (oldIds !== null && oldIds.length > 0) {
+      if (newIds.length === oldIds.length - 1) {
+        const newSet = new Set(newIds);
+        const removed = oldIds.filter(id => !newSet.has(id));
+        if (removed.length === 1) {
+          const removedIndex = oldIds.indexOf(removed[0]);
+          setCurrentIndex(prev => {
+            const nextIdx = Math.max(
+              0,
+              Math.min(prev - (removedIndex <= prev ? 1 : 0), newIds.length - 1),
+            );
+            const tx = nextIdx * snapInterval;
+            listRef.current?.scrollToOffset({ offset: tx, animated: false });
+            scrollX.value = tx;
+            return nextIdx;
+          });
+          prevQueueItemIdsRef.current = newIds;
+          return;
+        }
+      }
+      if (newIds.length !== oldIds.length) {
+        setCurrentIndex(prev => {
+          const ni = Math.min(prev, Math.max(0, newIds.length - 1));
+          const tx = ni * snapInterval;
+          listRef.current?.scrollToOffset({ offset: tx, animated: false });
+          scrollX.value = tx;
+          return ni;
+        });
+        prevQueueItemIdsRef.current = newIds;
+        return;
+      }
+    }
+
+    prevQueueItemIdsRef.current = newIds;
+  }, [queueItems, mode, snapInterval, scrollX]);
 
   useEffect(() => {
     if (mode !== 'queue' || queueItems.length === 0) return;
@@ -238,7 +278,7 @@ export function ScheduleWorkoutDeckV3({
       listRef.current?.scrollToOffset({ offset: targetX, animated: false });
       scrollX.value = targetX;
     });
-  }, [mode, queueItems.length, clampedInitialIndex, snapInterval, scrollX]);
+  }, [mode, clampedInitialIndex, snapInterval, scrollX]);
 
   const lastImperativeTokenRef = useRef<number | null>(null);
   useEffect(() => {

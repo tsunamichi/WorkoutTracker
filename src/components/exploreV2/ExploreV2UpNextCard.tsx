@@ -7,7 +7,7 @@ import Reanimated, {
   useSharedValue,
   type SharedValue,
 } from 'react-native-reanimated';
-import { EXPLORE_V2 } from './exploreV2Tokens';
+import { EXPLORE_V2, exploreV2UpNextQueueExerciseNameStyle } from './exploreV2Tokens';
 import { TYPOGRAPHY } from '../../constants';
 import { useAppTheme } from '../../theme/useAppTheme';
 import { IconChevronDown, IconTrash } from '../icons';
@@ -530,10 +530,7 @@ const styles = StyleSheet.create({
     position: 'relative',
   },
   name: {
-    ...TYPOGRAPHY.h2,
-    fontWeight: '400',
-    flexShrink: 1,
-    minWidth: 0,
+    ...exploreV2UpNextQueueExerciseNameStyle,
   },
   /** Inline rounds count, rendered as regular text (not superscript). */
   roundsInline: {

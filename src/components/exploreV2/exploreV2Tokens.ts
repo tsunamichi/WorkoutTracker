@@ -3,6 +3,8 @@
  * Prefer importing EXPLORE_V2_PALETTES / EXPLORE_V2_CHROME from exploreV2ColorSystem for color work.
  */
 
+import type { TextStyle } from 'react-native';
+import { TYPOGRAPHY } from '../../constants';
 import { EXPLORE_V2_CHROME } from './exploreV2ColorSystem';
 
 export { EXPLORE_V2_CARD_MAINS, EXPLORE_V2_CHROME, EXPLORE_V2_PALETTES, getCardPalette, mixHex } from './exploreV2ColorSystem';
@@ -185,3 +187,11 @@ export const EXPLORE_V2 = {
     timerHero: 30,
   },
 } as const;
+
+/** Exercise names in Up Next queue rows (`ExploreV2UpNextCard`); reuse when listing exercises in create/add flows. */
+export const exploreV2UpNextQueueExerciseNameStyle: TextStyle = {
+  ...TYPOGRAPHY.h2,
+  fontWeight: '400',
+  flexShrink: 1,
+  minWidth: 0,
+};

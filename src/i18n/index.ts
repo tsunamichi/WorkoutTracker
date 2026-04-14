@@ -472,6 +472,8 @@ type TranslationKey =
   | 'trainerFinalMessage'
   | 'resetProgressTitle'
   | 'resetProgressMessage'
+  | 'deleteScheduledWorkout'
+  | 'deleteScheduledWorkoutMessage'
   | 'profile'
   | 'settings'
   | 'colorTheme'
@@ -493,6 +495,8 @@ type TranslationKey =
   | 'exploreV2TimerLabelSwitchSides'
   | 'exploreV2TimerLabelLeftSide'
   | 'exploreV2TimerLabelRightSide'
+  | 'exploreV2AddSet'
+  | 'exploreV2RemoveSet'
   | 'betweenSets'
   | 'monthlyProgressCheck'
   | 'monthlyProgressReminder'
@@ -864,7 +868,7 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     clear: 'Clear',
     noDraftFound: 'No draft found',
     noExercisesYet: 'No exercises yet. Add some below!',
-    addExerciseCta: '+ Add exercise',
+    addExerciseCta: '+ add exercise',
     pasteWorkout: 'Paste',
     clipboardEmpty: 'The clipboard is empty.',
     pasteNoExercisesFound:
@@ -1094,6 +1098,9 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     trainerFinalMessage: "Great! Based on your goals and experience, I'll help you create a personalized training cycle. Let's build something amazing together!",
     resetProgressTitle: 'Reset Progress',
     resetProgressMessage: 'Clear all progress for this workout? This cannot be undone.',
+    deleteScheduledWorkout: 'Delete workout',
+    deleteScheduledWorkoutMessage:
+      'Remove this workout from your schedule and clear its progress on this device? This cannot be undone.',
     profile: 'Profile',
     settings: 'Settings',
     colorTheme: 'Color theme',
@@ -1116,6 +1123,8 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     exploreV2TimerLabelSwitchSides: 'Switch sides',
     exploreV2TimerLabelLeftSide: 'Left side',
     exploreV2TimerLabelRightSide: 'Right side',
+    exploreV2AddSet: 'Add set',
+    exploreV2RemoveSet: 'Remove set',
     betweenSets: 'between sets',
     monthlyProgressCheck: 'Monthly progress check',
     monthlyProgressReminder: 'Reminder on day {day} of each month',
@@ -1499,7 +1508,7 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     clear: 'Borrar',
     noDraftFound: 'No hay borrador',
     noExercisesYet: 'No hay ejercicios. Agrega abajo.',
-    addExerciseCta: '+ Agregar ejercicio',
+    addExerciseCta: '+ agregar ejercicio',
     pasteWorkout: 'Pegar',
     clipboardEmpty: 'El portapapeles está vacío.',
     pasteNoExercisesFound:
@@ -1730,6 +1739,9 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     trainerFinalMessage: 'Genial! Con tus objetivos y experiencia, te ayudare a crear un ciclo personalizado. Construyamos algo genial!',
     resetProgressTitle: 'Reiniciar progreso',
     resetProgressMessage: 'Borrar todo el progreso? No se puede deshacer.',
+    deleteScheduledWorkout: 'Eliminar entrenamiento',
+    deleteScheduledWorkoutMessage:
+      'Quitar este entrenamiento del calendario y borrar su progreso en este dispositivo? No se puede deshacer.',
     profile: 'Perfil',
     settings: 'Configuracion',
     colorTheme: 'Tema de color',
@@ -1752,6 +1764,8 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     exploreV2TimerLabelSwitchSides: 'Cambia de lado',
     exploreV2TimerLabelLeftSide: 'Lado izquierdo',
     exploreV2TimerLabelRightSide: 'Lado derecho',
+    exploreV2AddSet: 'Añadir serie',
+    exploreV2RemoveSet: 'Quitar serie',
     betweenSets: 'entre series',
     monthlyProgressCheck: 'Revision mensual',
     monthlyProgressReminder: 'Recordatorio el dia {day} de cada mes',
