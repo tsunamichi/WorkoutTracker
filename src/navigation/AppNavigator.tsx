@@ -26,7 +26,6 @@ import { BonusDetailScreen } from '../screens/BonusDetailScreen';
 import { CoreProgramScreen } from '../screens/CoreProgramScreen';
 import { CycleDetailScreen } from '../screens/CycleDetailScreen';
 import { CyclePlanDetailScreen } from '../screens/CyclePlanDetailScreen';
-import { CycleProgressScreen } from '../screens/CycleProgressScreen';
 import { CycleConflictsScreen } from '../screens/CycleConflictsScreen';
 // import { WorkoutExecutionScreen } from '../screens/WorkoutExecutionScreen'; // Removed - navigating directly to ExerciseExecution
 import WorkoutEditScreen from '../screens/WorkoutEditScreen';
@@ -67,7 +66,7 @@ export type RootStackParamList = {
   Tabs: { initialTab?: 'Schedule' | 'Progress' } | undefined;
   Profile: { mode?: 'settings' } | undefined;
   BodyWeightHistory: undefined;
-  History: undefined;
+  History: { planId?: string } | undefined;
   PlanHistoryDetail: { programId: string; programName: string };
   WorkoutBuilder: undefined;
   Workouts: undefined;
@@ -87,7 +86,6 @@ export type RootStackParamList = {
   DesignSystem: undefined;
   CycleDetail: { cycleId: string };
   CyclePlanDetail: { planId: string };
-  CycleProgress: { planId?: string; asOfDate?: string } | undefined;
   Progress: { exerciseId?: string; exerciseName?: string } | undefined;
   CycleConflicts: { plan: any; conflicts: any[]; planId?: string; fromPauseShift?: boolean; resumeDate?: string };
   WorkoutExecution: { workoutId?: string; cycleId?: string; templateId?: string; workoutTemplateId?: string; date: string; isLocked?: boolean };
@@ -816,7 +814,6 @@ export default function AppNavigator() {
         <Stack.Screen name="DesignSystem" component={DesignSystemScreen} />
         <Stack.Screen name="CycleDetail" component={CycleDetailScreen} />
         <Stack.Screen name="CyclePlanDetail" component={CyclePlanDetailScreen} />
-        <Stack.Screen name="CycleProgress" component={CycleProgressScreen} />
         <Stack.Screen name="Progress" component={ProgressScreen} />
         <Stack.Screen name="CycleConflicts" component={CycleConflictsScreen} />
         {/* <Stack.Screen name="WorkoutExecution" component={WorkoutExecutionScreen} /> */}

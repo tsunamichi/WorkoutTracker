@@ -844,24 +844,7 @@ export function TodayScreen({ onDateChange, onOpenAddWorkout, onOpenBonusDrawer 
   const headerDateLabel = formatDateWithOrdinal(selectedDate);
   /** Cycle row is now the lightweight entry point into full cycle/calendar management context. */
   const cyclePlanForHeader = selectedDateCyclePlan ?? activeCyclePlan;
-  const cycleCompletionForHeader = useMemo(() => {
-    if (!cyclePlanForHeader) {
-      return { completed: 0, total: 0 };
-    }
-    const cycleWorkouts = scheduledWorkouts.filter(
-      sw =>
-        sw.source === 'cycle' &&
-        (sw.programId === cyclePlanForHeader.id || sw.cyclePlanId === cyclePlanForHeader.id),
-    );
-    const completed = cycleWorkouts.filter(sw => {
-      const mainCompletion = getMainCompletion(sw.id);
-      return sw.isLocked || sw.status === 'completed' || mainCompletion.percentage === 100;
-    }).length;
-    return { completed, total: cycleWorkouts.length };
-  }, [cyclePlanForHeader, scheduledWorkouts, getMainCompletion]);
-  const cycleCompletionLabel = useMemo(() => {
-    return `${cycleCompletionForHeader.completed} of ${cycleCompletionForHeader.total} completed`;
-  }, [cycleCompletionForHeader.completed, cycleCompletionForHeader.total]);
+  const cycleHomeHistoryLabel = 'Workout history';
   const calculateTimerTotalTime = useCallback((timer: { work: number; workRest: number; sets: number; rounds: number; roundRest: number }) => {
     const totalWorkTime = timer.work * timer.sets * timer.rounds;
     const totalWorkRestTime = timer.workRest * Math.max(0, timer.sets - 1) * timer.rounds;
@@ -941,13 +924,10 @@ export function TodayScreen({ onDateChange, onOpenAddWorkout, onOpenBonusDrawer 
   }, [selectedDate, remainingWorkoutsQueue]);
 
   const isScheduleFutureDay = dayjs(selectedDate).isAfter(today, 'day');
-  const handleOpenCycleCalendar = useCallback(() => {
+  const handleOpenWorkoutHistory = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     if (cyclePlanForHeader) {
-      (navigation as any).navigate('CycleProgress', {
-        planId: cyclePlanForHeader.id,
-        asOfDate: selectedDate,
-      });
+      (navigation as any).push('History', { planId: cyclePlanForHeader.id });
       return;
     }
     onOpenAddWorkout?.(selectedDate);
@@ -1203,8 +1183,8 @@ export function TodayScreen({ onDateChange, onOpenAddWorkout, onOpenBonusDrawer 
               <View style={styles.cardActionsContainer}>
                 {cyclePlanForHeader ? (
                   <TertiaryButton
-                    label={cycleCompletionLabel}
-                    onPress={handleOpenCycleCalendar}
+                    label={cycleHomeHistoryLabel}
+                    onPress={handleOpenWorkoutHistory}
                     style={styles.cycleProgressAction}
                     textStyle={styles.profileLinkText}
                   />
