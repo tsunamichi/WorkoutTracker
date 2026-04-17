@@ -167,6 +167,8 @@ export const COLORS = {
   containerSecondaryTimer: '#9BD508',
   /** accent-secondary @ 60% — work-timer header chrome (Complete / Up Next) */
   textMetaTimer: hexToRgba(ACCENT_SECONDARY, 0.6),
+  /** Workout completion stacked numerals — middle trail echo */
+  celebrationTrailMid: '#9960FB',
 
   // Text — white on dark
   text: '#FFFFFF',                  // Default text color

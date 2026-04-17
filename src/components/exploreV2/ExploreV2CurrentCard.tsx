@@ -5,7 +5,8 @@ import {
   StyleSheet,
   TouchableOpacity,
   Pressable,
-  KeyboardAvoidingView,
+  Keyboard,
+  InputAccessoryView,
   Platform,
   TextInput,
   ScrollView,
@@ -23,7 +24,7 @@ import Reanimated, {
 } from 'react-native-reanimated';
 import { EXPLORE_V2 } from './exploreV2Tokens';
 import { EXECUTION_CTA_HEIGHT, EXECUTION_CTA_PADDING_H, executionCtaLabelStyle } from '../execution/executionCtaTokens';
-import { COLORS, TYPOGRAPHY, hexToRgba } from '../../constants';
+import { BORDER_RADIUS, COLORS, TYPOGRAPHY, hexToRgba } from '../../constants';
 import { useAppTheme } from '../../theme/useAppTheme';
 import { formatWeightForLoad, fromDisplayWeight } from '../../utils/weight';
 import { applyForwardPropagationForExerciseRounds } from '../../utils/exerciseLocalValues';
@@ -36,6 +37,9 @@ import {
 } from './ExploreV2CurrentOverflowSheet';
 import { UnderlinedActionButton } from '../common/UnderlinedActionButton';
 import { useTranslation } from '../../i18n/useTranslation';
+
+/** iOS: toolbar above the keyboard (numeric pads have no Done key). */
+const EXPLORE_V2_HERO_METRICS_ACCESSORY_ID = 'exploreV2HeroMetricsAccessory';
 
 type Props = {
   group: ExploreV2Group;
@@ -368,6 +372,12 @@ function CurrentSetHeroPage({
             placeholder="0"
             placeholderTextColor={heroValueColor}
             underlineColorAndroid="transparent"
+            inputAccessoryViewID={
+              Platform.OS === 'ios' ? EXPLORE_V2_HERO_METRICS_ACCESSORY_ID : undefined
+            }
+            returnKeyType="next"
+            blurOnSubmit={false}
+            onSubmitEditing={() => repsInputRef.current?.focus()}
           />
           <View style={styles.unitWithDelta}>
             <View style={styles.unitLabelRow}>
@@ -402,6 +412,12 @@ function CurrentSetHeroPage({
             placeholder="0"
             placeholderTextColor={heroValueColor}
             underlineColorAndroid="transparent"
+            inputAccessoryViewID={
+              Platform.OS === 'ios' ? EXPLORE_V2_HERO_METRICS_ACCESSORY_ID : undefined
+            }
+            returnKeyType="done"
+            blurOnSubmit
+            onSubmitEditing={Keyboard.dismiss}
           />
           <View style={styles.unitWithDelta}>
             <View style={styles.unitLabelRow}>
@@ -454,6 +470,23 @@ export function ExploreV2CurrentCard({
   onAdjustGroupSets,
 }: Props) {
   const { t } = useTranslation();
+  const [keyboardBottomInset, setKeyboardBottomInset] = useState(0);
+  useEffect(() => {
+    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+    const onShow = (e: { endCoordinates: { height: number } }) =>
+      setKeyboardBottomInset(e.endCoordinates.height);
+    const onHide = () => setKeyboardBottomInset(0);
+    const subShow = Keyboard.addListener(showEvent, onShow);
+    const subHide = Keyboard.addListener(hideEvent, onHide);
+    return () => {
+      subShow.remove();
+      subHide.remove();
+    };
+  }, []);
+  const shellKeyboardPaddingBottom = 32 + keyboardBottomInset;
+  /** Hide log CTA + set chips while editing — only hero values stay above the keyboard. */
+  const hideHeroFooterForKeyboard = keyboardBottomInset > 0;
   const theme = useAppTheme();
   const { explore: ex, colors: themeColors } = theme;
   const isV2Theme = theme.id === 'v2';
@@ -775,11 +808,7 @@ export function ExploreV2CurrentCard({
   }), [celebrationProgress]);
 
   return (
-    <KeyboardAvoidingView
-      style={styles.kav}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      keyboardVerticalOffset={0}
-    >
+    <View style={styles.kav}>
       <Reanimated.View
         style={[
           styles.shell,
@@ -788,6 +817,7 @@ export function ExploreV2CurrentCard({
           {
             borderBottomLeftRadius: bottomCornerRadius,
             borderBottomRightRadius: bottomCornerRadius,
+            paddingBottom: shellKeyboardPaddingBottom,
           },
           collapsedSecondary && styles.collapsedSecondarySurface,
           celebrationActive && styles.celebrationActiveShell,
@@ -885,22 +915,24 @@ export function ExploreV2CurrentCard({
                       ) : null}
                     </View>
 
-                    <View style={styles.footerRow}>
-                      <AnimatedTouchableOpacity
-                        style={[
-                          styles.ctaPill,
-                          ctaBgStyle,
-                          !logPressable && !inactiveSetPreview && styles.ctaPillDisabled,
-                        ]}
-                        onPress={onLogPress}
-                        disabled={!logPressable}
-                        activeOpacity={0.88}
-                      >
-                        <Reanimated.Text style={[styles.ctaPillText, ctaLabelStyle]}>{ctaLabel}</Reanimated.Text>
-                      </AnimatedTouchableOpacity>
+                    {!hideHeroFooterForKeyboard ? (
+                      <View style={styles.footerRow}>
+                        <AnimatedTouchableOpacity
+                          style={[
+                            styles.ctaPill,
+                            ctaBgStyle,
+                            !logPressable && !inactiveSetPreview && styles.ctaPillDisabled,
+                          ]}
+                          onPress={onLogPress}
+                          disabled={!logPressable}
+                          activeOpacity={0.88}
+                        >
+                          <Reanimated.Text style={[styles.ctaPillText, ctaLabelStyle]}>{ctaLabel}</Reanimated.Text>
+                        </AnimatedTouchableOpacity>
 
-                      {renderPaginationColumn()}
-                    </View>
+                        {renderPaginationColumn()}
+                      </View>
+                    ) : null}
                   </View>
                 </Reanimated.View>
               </Reanimated.View>
@@ -970,22 +1002,24 @@ export function ExploreV2CurrentCard({
                     ) : null}
                   </View>
 
-                  <View style={styles.footerRow}>
-                    <AnimatedTouchableOpacity
-                      style={[
-                        styles.ctaPill,
-                        ctaBgStyle,
-                        !logPressable && !inactiveSetPreview && styles.ctaPillDisabled,
-                      ]}
-                      onPress={onLogPress}
-                      disabled={!logPressable}
-                      activeOpacity={0.88}
-                    >
-                      <Reanimated.Text style={[styles.ctaPillText, ctaLabelStyle]}>{ctaLabel}</Reanimated.Text>
-                    </AnimatedTouchableOpacity>
+                  {!hideHeroFooterForKeyboard ? (
+                    <View style={styles.footerRow}>
+                      <AnimatedTouchableOpacity
+                        style={[
+                          styles.ctaPill,
+                          ctaBgStyle,
+                          !logPressable && !inactiveSetPreview && styles.ctaPillDisabled,
+                        ]}
+                        onPress={onLogPress}
+                        disabled={!logPressable}
+                        activeOpacity={0.88}
+                      >
+                        <Reanimated.Text style={[styles.ctaPillText, ctaLabelStyle]}>{ctaLabel}</Reanimated.Text>
+                      </AnimatedTouchableOpacity>
 
-                    {renderPaginationColumn()}
-                  </View>
+                      {renderPaginationColumn()}
+                    </View>
+                  ) : null}
                 </View>
               </Reanimated.View>
 
@@ -1029,7 +1063,22 @@ export function ExploreV2CurrentCard({
           />
         ) : null}
       </Reanimated.View>
-    </KeyboardAvoidingView>
+      {Platform.OS === 'ios' ? (
+        <InputAccessoryView nativeID={EXPLORE_V2_HERO_METRICS_ACCESSORY_ID}>
+          <View style={styles.heroMetricsKeyboardAccessory}>
+            <TouchableOpacity
+              style={styles.heroMetricsKeyboardDone}
+              onPress={() => Keyboard.dismiss()}
+              activeOpacity={0.85}
+              accessibilityRole="button"
+              accessibilityLabel={t('done')}
+            >
+              <Text style={styles.heroMetricsKeyboardDoneText}>{t('done')}</Text>
+            </TouchableOpacity>
+          </View>
+        </InputAccessoryView>
+      ) : null}
+    </View>
   );
 }
 
@@ -1037,6 +1086,27 @@ const pad = EXPLORE_V2.cardPadding;
 
 const styles = StyleSheet.create({
   kav: { flex: 1, minHeight: 0 },
+  heroMetricsKeyboardAccessory: {
+    backgroundColor: COLORS.backgroundCanvas,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border,
+    alignItems: 'flex-end',
+  },
+  heroMetricsKeyboardDone: {
+    backgroundColor: COLORS.accentPrimary,
+    borderRadius: BORDER_RADIUS.md,
+    height: EXECUTION_CTA_HEIGHT,
+    minHeight: EXECUTION_CTA_HEIGHT,
+    paddingHorizontal: EXECUTION_CTA_PADDING_H,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  heroMetricsKeyboardDoneText: {
+    ...executionCtaLabelStyle,
+    color: '#FFFFFF',
+  },
   shell: {
     flex: 1,
     flexDirection: 'column',

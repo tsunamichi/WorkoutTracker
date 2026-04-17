@@ -385,6 +385,36 @@ export function ProfileScreen({ navigation }: ProfileScreenProps) {
           </View>
         </View>
 
+        {/* Dev: completion celebration is not wired to workout flow yet — open prototype from Settings */}
+        {__DEV__ ? (
+          <View
+            style={[
+              styles.sectionGroupMiddle,
+              styles.sectionBlock,
+              { borderTopColor: hexToRgba(themeColors.containerPrimary, 0.35), marginTop: SPACING.lg },
+            ]}
+          >
+            <TouchableOpacity
+              style={styles.settingRow}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                navigation.navigate('WorkoutCompletionCelebrationPrototype');
+              }}
+              activeOpacity={0.7}
+            >
+              <View style={styles.settingInfo}>
+                <Text style={[styles.flatLabel, { color: themeColors.containerPrimary }]}>
+                  Preview: workout completion
+                </Text>
+                <Text style={[styles.flatValue, { color: themeColors.textMeta, marginTop: 4, fontSize: 12 }]}>
+                  Full-screen celebration (prototype)
+                </Text>
+              </View>
+              <Text style={{ color: themeColors.textMeta, fontSize: 18 }}>→</Text>
+            </TouchableOpacity>
+          </View>
+        ) : null}
+
         {/* Bottom section: Apple cloud */}
         {isSupabaseConfigured() && (
           <View style={[styles.sectionGroupBottom, styles.sectionBlock, { borderTopColor: hexToRgba(themeColors.containerPrimary, 0.35) }]}>

@@ -72,6 +72,15 @@ export function DesignSystemScreen({ navigation }: DesignSystemScreenProps) {
           <View style={{ width: 24 }} />
         </View>
 
+        <TouchableOpacity
+          style={styles.protoBanner}
+          onPress={() => (navigation as any).navigate('WorkoutCompletionCelebrationPrototype')}
+          accessibilityRole="button"
+          accessibilityLabel="Open workout completion celebration prototype"
+        >
+          <Text style={styles.protoBannerText}>Workout completion celebration (prototype)</Text>
+        </TouchableOpacity>
+
         <ScrollView style={styles.scrollView} bounces={false}>
           {/* Colors Section */}
           <View style={styles.section}>
@@ -436,6 +445,19 @@ const styles = StyleSheet.create({
   headerTitle: {
     ...TYPOGRAPHY.h3,
     color: LIGHT_COLORS.secondary,
+  },
+  protoBanner: {
+    marginHorizontal: SPACING.xl,
+    marginBottom: SPACING.md,
+    paddingVertical: SPACING.sm,
+    paddingHorizontal: SPACING.md,
+    borderRadius: 10,
+    backgroundColor: 'rgba(0,0,0,0.06)',
+  },
+  protoBannerText: {
+    ...TYPOGRAPHY.meta,
+    fontWeight: '600',
+    color: LIGHT_COLORS.accentPrimary,
   },
   scrollView: {
     flex: 1,

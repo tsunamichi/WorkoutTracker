@@ -9,6 +9,7 @@ import {
   Platform,
   UIManager,
   Alert,
+  Share,
   Animated,
   Easing,
   Modal,
@@ -34,6 +35,8 @@ import AnimatedReanimated, {
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, RouteProp, useFocusEffect } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import type { RootStackParamList } from '../navigation/AppNavigator';
 import Svg, { Circle, Path } from 'react-native-svg';
 import * as Haptics from 'expo-haptics';
 import { useStore } from '../store';
@@ -61,6 +64,8 @@ import {
 import { useTranslation } from '../i18n/useTranslation';
 import { formatWeightForLoad, toDisplayWeight, fromDisplayWeight } from '../utils/weight';
 import { applyForwardPropagationForExerciseRounds } from '../utils/exerciseLocalValues';
+import { buildWorkoutCompletionCelebrationData } from '../utils/buildWorkoutCompletionCelebrationData';
+import { buildWorkoutShareText } from '../utils/buildWorkoutShareText';
 import type { WarmupItem_DEPRECATED as WarmupItem, AccessoryItem_DEPRECATED as AccessoryItem, WorkoutTemplateExercise } from '../types/training';
 import { isDeprecatedItem, getDisplayValuesFromItem } from '../utils/exerciseMigration';
 import { computeNextSuggestion } from '../utils/progressionSuggestions';
@@ -188,7 +193,7 @@ function templateExerciseHasLoggedSets(completedSets: Set<string>, templateExerc
 
 export function ExerciseExecutionScreen() {
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
-  const navigation = useNavigation();
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const route = useRoute<RouteProp<RouteParams, 'ExerciseExecution'>>();
   const insets = useSafeAreaInsets();
   const { t } = useTranslation();
@@ -431,6 +436,15 @@ export function ExerciseExecutionScreen() {
     () => (workoutKey?.startsWith('sw-') ? scheduledWorkouts.find(sw => sw.id === workoutKey) : null),
     [scheduledWorkouts, workoutKey]
   );
+
+  /** Main exercises for share sheet (snapshot when scheduled, else template). */
+  const mainItemsForShare = useMemo(() => {
+    if (!template) return [];
+    const snap = scheduledWorkout?.exercisesSnapshot;
+    if (snap && snap.length > 0) return snap;
+    return template.items ?? [];
+  }, [template, scheduledWorkout]);
+
   const assignedCorePresetId = useMemo(() => {
     if (type !== 'core' || !scheduledWorkout) return null;
     const snapshot = scheduledWorkout.accessorySnapshot || [];
@@ -814,7 +828,9 @@ export function ExerciseExecutionScreen() {
       !scheduledWorkout.isLocked &&
       !isInPastCycle
   );
+  const menuShowShareWorkout = mainItemsForShare.length > 0;
   const menuActionCount =
+    (menuShowShareWorkout ? 1 : 0) +
     (menuOnCompleteEnabled ? 1 : 0) +
     1 +
     (menuHasSecondaryDestructive ? 1 : 0) +
@@ -2387,7 +2403,18 @@ export function ExerciseExecutionScreen() {
             const completed = getAccessoryCompletion(workoutKey, workoutTemplateId).completedItems;
             await logCoreSession(activeCoreProgramId, assignedCorePresetId, 'completed', completed);
           }
-          
+
+          if (workoutKey.startsWith('sw-') && isEntireWorkoutComplete()) {
+            setShowCompletionCelebration(false);
+            const celebrationData = buildWorkoutCompletionCelebrationData(
+              useStore.getState(),
+              workoutKey,
+              useKg,
+            );
+            navigation.replace('WorkoutCompletionCelebration', { celebrationData });
+            return;
+          }
+
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
           const shouldCelebrateExploreV2 = executionMode === 'explore-v2' && type === 'main';
           if (shouldCelebrateExploreV2) {
@@ -2572,6 +2599,20 @@ export function ExerciseExecutionScreen() {
     navigation,
   ]);
 
+  const handleShareWorkout = useCallback(async () => {
+    if (!template || mainItemsForShare.length === 0) return;
+    const title = scheduledWorkout?.titleSnapshot ?? template.name;
+    const text = buildWorkoutShareText(title, mainItemsForShare, exercisesLibrary, weightUnit);
+    try {
+      await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      await Share.share({ message: text, title });
+    } catch (err) {
+      if ((err as Error).message?.includes('cancel') === false) {
+        Alert.alert(t('alertErrorTitle'), t('failedToExportData'));
+      }
+    }
+  }, [template, mainItemsForShare, scheduledWorkout, exercisesLibrary, weightUnit, t]);
+
   const handleCompleteAll = () => {
     setShowMenu(false);
     Alert.alert(
@@ -2653,7 +2694,18 @@ export function ExerciseExecutionScreen() {
               const completed = getAccessoryCompletion(workoutKey, workoutTemplateId).completedItems;
               await logCoreSession(activeCoreProgramId, assignedCorePresetId, 'completed', completed);
             }
-            
+
+            if (workoutKey.startsWith('sw-') && isEntireWorkoutComplete()) {
+              setShowCompletionCelebration(false);
+              const celebrationData = buildWorkoutCompletionCelebrationData(
+                useStore.getState(),
+                workoutKey,
+                useKg,
+              );
+              navigation.replace('WorkoutCompletionCelebration', { celebrationData });
+              return;
+            }
+
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
             const shouldCelebrateExploreV2 = executionMode === 'explore-v2' && type === 'main';
             if (shouldCelebrateExploreV2) {
@@ -3394,6 +3446,8 @@ export function ExerciseExecutionScreen() {
           onClose={() => setShowMenu(false)}
           restTimeSeconds={localRestOverride ?? settings.restTimerDefaultSeconds}
           onRestTimeChange={setLocalRestOverride}
+          onShareWorkout={menuShowShareWorkout ? handleShareWorkout : undefined}
+          shareWorkoutLabel={t('shareWorkout')}
           onComplete={menuOnCompleteEnabled ? handleCompleteAll : undefined}
           onReset={handleReset}
           onSecondaryDestructive={menuHasSecondaryDestructive ? handleRemoveSection : undefined}

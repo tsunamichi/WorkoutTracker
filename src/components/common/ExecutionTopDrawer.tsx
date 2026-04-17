@@ -17,6 +17,9 @@ import { useAppTheme } from '../../theme/useAppTheme';
 type Props = {
   visible: boolean;
   onClose: () => void;
+  /** Share main workout as text (e.g. Messages). Shown above Mark as complete when set. */
+  onShareWorkout?: () => void;
+  shareWorkoutLabel?: string;
   onComplete?: () => void;
   onReset: () => void;
   onSecondaryDestructive?: () => void;
@@ -45,6 +48,8 @@ export function getExecutionTopDrawerExpandedHeight(actionCount: number): number
 export function ExecutionTopDrawer({
   visible,
   onClose,
+  onShareWorkout,
+  shareWorkoutLabel = 'Share workout',
   onComplete,
   onReset,
   onSecondaryDestructive,
@@ -67,7 +72,11 @@ export function ExecutionTopDrawer({
   const localRestRef = useRef(restTimeSeconds);
   const lastHapticValueRef = useRef(restTimeSeconds);
   const actionCount =
-    (onComplete ? 1 : 0) + 1 + (onSecondaryDestructive ? 1 : 0) + (onDeleteWorkout ? 1 : 0);
+    (onShareWorkout ? 1 : 0) +
+    (onComplete ? 1 : 0) +
+    1 +
+    (onSecondaryDestructive ? 1 : 0) +
+    (onDeleteWorkout ? 1 : 0);
 
   useEffect(() => {
     localRestRef.current = localRestSeconds;
@@ -168,6 +177,21 @@ export function ExecutionTopDrawer({
             </View>
           </View>
 
+          {onShareWorkout ? (
+            <TouchableOpacity
+              style={styles.textAction}
+              onPress={() => {
+                onShareWorkout();
+                onClose();
+              }}
+              activeOpacity={0.7}
+            >
+              <Text style={[styles.completeText, { color: themeColors.containerPrimary }]}>
+                {shareWorkoutLabel}
+              </Text>
+            </TouchableOpacity>
+          ) : null}
+
           {onComplete ? (
             <TouchableOpacity
               style={styles.textAction}
@@ -189,7 +213,7 @@ export function ExecutionTopDrawer({
             }}
             activeOpacity={0.7}
           >
-            <Text style={[styles.resetText, { color: themeColors.signalNegative }]}>Reset workout</Text>
+            <Text style={[styles.completeText, { color: themeColors.containerPrimary }]}>Reset workout</Text>
           </TouchableOpacity>
           {onSecondaryDestructive ? (
             <TouchableOpacity

@@ -251,6 +251,9 @@ type TranslationKey =
   | 'pasteWorkout'
   | 'clipboardEmpty'
   | 'pasteNoExercisesFound'
+  | 'clearBuilderEntriesTitle'
+  | 'clearBuilderEntriesMessage'
+  | 'builderDefaultWorkoutName'
   | 'cycleLengthTitle'
   | 'weeklySchedule'
   | 'trainingDaysLabel'
@@ -602,6 +605,7 @@ type TranslationKey =
   | 'shareCycleSubtitle'
   | 'shareCycleSubtitleImported'
   | 'shareWorkoutsCount'
+  | 'shareWorkout'
   | 'copyWorkoutPlan';
 
 const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
@@ -872,7 +876,11 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     pasteWorkout: 'Paste',
     clipboardEmpty: 'The clipboard is empty.',
     pasteNoExercisesFound:
-      'No exercises found. Try one exercise per line, a title on the first line followed by a list, or DAY 1 — Name with bullet exercises.',
+      'No exercises found. Try one exercise per line, a title on the first line followed by a list, or DAY 1 — Name with bullet exercises. Separate multiple workouts with a blank line or multiple DAY headers.',
+    clearBuilderEntriesTitle: 'Clear builder?',
+    clearBuilderEntriesMessage:
+      'This removes every exercise and workout name you have entered or pasted in the builder.',
+    builderDefaultWorkoutName: 'Workout',
     cycleLengthTitle: 'Cycle Length',
     weeklySchedule: 'Weekly Schedule',
     trainingDaysLabel: 'Training days:',
@@ -1242,6 +1250,7 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     shareCycleSubtitle: 'Choose workouts to include. Shared text can be pasted into Import cycle.',
     shareCycleSubtitleImported: 'Share copies the exact workout you pasted. Export copies your progress and logs.',
     shareWorkoutsCount: 'Share {count} workouts',
+    shareWorkout: 'Share workout',
     copyWorkoutPlan: 'Copy workout plan',
   },
   es: {
@@ -1512,7 +1521,11 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     pasteWorkout: 'Pegar',
     clipboardEmpty: 'El portapapeles está vacío.',
     pasteNoExercisesFound:
-      'No se encontraron ejercicios. Prueba una línea por ejercicio, un título en la primera línea y lista debajo, o DÍA 1 — Nombre con viñetas.',
+      'No se encontraron ejercicios. Prueba una línea por ejercicio, un título en la primera línea y lista debajo, o DÍA 1 — Nombre con viñetas. Separa varios entrenamientos con una línea en blanco o varios encabezados de DÍA.',
+    clearBuilderEntriesTitle: '¿Vaciar el editor?',
+    clearBuilderEntriesMessage:
+      'Se quitarán todos los ejercicios y nombres de entrenamiento que hayas escrito o pegado.',
+    builderDefaultWorkoutName: 'Entrenamiento',
     cycleLengthTitle: 'Duracion del ciclo',
     weeklySchedule: 'Horario semanal',
     trainingDaysLabel: 'Dias de entrenamiento:',
@@ -1883,6 +1896,7 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     shareCycleSubtitle: 'Elige los entrenamientos a incluir. El texto se puede pegar en Importar ciclo.',
     shareCycleSubtitleImported: 'Compartir copia el entrenamiento que pegaste. Exportar copia tu progreso y registros.',
     shareWorkoutsCount: 'Compartir {count} entrenamientos',
+    shareWorkout: 'Compartir entrenamiento',
     copyWorkoutPlan: 'Copiar plan de entrenamiento',
   },
 };

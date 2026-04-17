@@ -46,6 +46,9 @@ import { ProgressionDefaultsScreen } from '../screens/ProgressionDefaultsScreen'
 import { ProgressionGroupDetailScreen } from '../screens/ProgressionGroupDetailScreen';
 import { ScheduleWorkoutDeckV2PreviewScreen } from '../screens/ScheduleWorkoutDeckV2PreviewScreen';
 import { DeckMotionLabScreen } from '../screens/DeckMotionLabScreen';
+import { WorkoutCompletionCelebrationPrototypeScreen } from '../screens/WorkoutCompletionCelebrationPrototypeScreen';
+import { WorkoutCompletionCelebrationRouteScreen } from '../screens/WorkoutCompletionCelebrationRouteScreen';
+import type { WorkoutCompletionCelebrationData } from '../components/celebration/WorkoutCompletionCelebrationScreen';
 import { IconCalendar, IconHistory, IconAdd, IconStopwatch, IconPlay, IconCore, IconWarmup } from '../components/icons';
 import { COLORS, TYPOGRAPHY, SPACING } from '../constants';
 import { useStore } from '../store';
@@ -113,6 +116,8 @@ export type RootStackParamList = {
   ProgressionGroupDetail: { groupId: string };
   ScheduleWorkoutDeckPreview: undefined;
   DeckMotionLab: undefined;
+  WorkoutCompletionCelebrationPrototype: undefined;
+  WorkoutCompletionCelebration: { celebrationData: WorkoutCompletionCelebrationData };
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -811,6 +816,16 @@ export default function AppNavigator() {
           })}
         />
         <Stack.Screen name="DesignSystem" component={DesignSystemScreen} />
+        <Stack.Screen
+          name="WorkoutCompletionCelebrationPrototype"
+          component={WorkoutCompletionCelebrationPrototypeScreen}
+          options={{ animation: 'fade', headerShown: false }}
+        />
+        <Stack.Screen
+          name="WorkoutCompletionCelebration"
+          component={WorkoutCompletionCelebrationRouteScreen}
+          options={{ animation: 'fade', headerShown: false }}
+        />
         <Stack.Screen name="CycleDetail" component={CycleDetailScreen} />
         <Stack.Screen name="CyclePlanDetail" component={CyclePlanDetailScreen} />
         <Stack.Screen name="Progress" component={ProgressScreen} />
