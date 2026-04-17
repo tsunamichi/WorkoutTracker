@@ -606,7 +606,28 @@ type TranslationKey =
   | 'shareCycleSubtitleImported'
   | 'shareWorkoutsCount'
   | 'shareWorkout'
-  | 'copyWorkoutPlan';
+  | 'copyWorkoutPlan'
+  | 'homeCreateWorkoutSectionTitle'
+  | 'miniCardCreateWorkout'
+  | 'miniCardCreateWorkoutSubtitle'
+  | 'miniCardPasteWorkout'
+  | 'miniCardPasteWorkoutSubtitle'
+  | 'miniCardUseRecentWorkout'
+  | 'miniCardUseRecentWorkoutSubtitle'
+  | 'nothingToPaste'
+  | 'couldntReadWorkout'
+  | 'untitledWorkout'
+  | 'useRecentWorkoutPickerTitle'
+  | 'useRecentWorkoutPickerSubtitle'
+  | 'noWorkoutHistoryYet'
+  | 'lastPerformedPrefix'
+  | 'exerciseCountLabel'
+  | 'renameRequiredTitle'
+  | 'renameRequiredBody'
+  | 'workoutExistsTitle'
+  | 'workoutExistsBody'
+  | 'updateExistingWorkout'
+  | 'chooseDifferentName';
 
 const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
   en: {
@@ -1252,6 +1273,29 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     shareWorkoutsCount: 'Share {count} workouts',
     shareWorkout: 'Share workout',
     copyWorkoutPlan: 'Copy workout plan',
+    homeCreateWorkoutSectionTitle: 'Add workout',
+    miniCardCreateWorkout: 'Create from scratch',
+    miniCardCreateWorkoutSubtitle: 'Create from scratch',
+    miniCardPasteWorkout: 'Paste workout',
+    miniCardPasteWorkoutSubtitle: 'Paste workout',
+    miniCardUseRecentWorkout: 'Use workout history',
+    miniCardUseRecentWorkoutSubtitle: 'Use workout history',
+    nothingToPaste: 'Nothing to paste',
+    couldntReadWorkout: 'Couldn’t read workout',
+    untitledWorkout: 'Untitled',
+    useRecentWorkoutPickerTitle: 'Use recent workout',
+    useRecentWorkoutPickerSubtitle:
+      'Choose a workout structure from your history. Past sessions stay unchanged.',
+    noWorkoutHistoryYet: 'No completed workouts in history yet.',
+    lastPerformedPrefix: 'Last performed',
+    exerciseCountLabel: '{count} exercises',
+    renameRequiredTitle: 'Rename required',
+    renameRequiredBody: 'That name is already used. Enter a different name before saving.',
+    workoutExistsTitle: 'Workout already exists',
+    workoutExistsBody:
+      'A saved workout with this name already exists. Update it or choose a different name.',
+    updateExistingWorkout: 'Update saved workout',
+    chooseDifferentName: 'Different name',
   },
   es: {
     today: 'Hoy',
@@ -1898,6 +1942,29 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     shareWorkoutsCount: 'Compartir {count} entrenamientos',
     shareWorkout: 'Compartir entrenamiento',
     copyWorkoutPlan: 'Copiar plan de entrenamiento',
+    homeCreateWorkoutSectionTitle: 'Añadir entrenamiento',
+    miniCardCreateWorkout: 'Crear desde cero',
+    miniCardCreateWorkoutSubtitle: 'Crear desde cero',
+    miniCardPasteWorkout: 'Pegar entrenamiento',
+    miniCardPasteWorkoutSubtitle: 'Pegar entrenamiento',
+    miniCardUseRecentWorkout: 'Usar historial de entrenamientos',
+    miniCardUseRecentWorkoutSubtitle: 'Usar historial de entrenamientos',
+    nothingToPaste: 'Nada que pegar',
+    couldntReadWorkout: 'No se pudo leer el entrenamiento',
+    untitledWorkout: 'Sin título',
+    useRecentWorkoutPickerTitle: 'Usar entrenamiento reciente',
+    useRecentWorkoutPickerSubtitle:
+      'Elige una estructura de tu historial. Las sesiones pasadas no cambian.',
+    noWorkoutHistoryYet: 'Aún no hay entrenamientos completados en el historial.',
+    lastPerformedPrefix: 'Última vez',
+    exerciseCountLabel: '{count} ejercicios',
+    renameRequiredTitle: 'Cambia el nombre',
+    renameRequiredBody: 'Ese nombre ya existe. Elige otro antes de guardar.',
+    workoutExistsTitle: 'El entrenamiento ya existe',
+    workoutExistsBody:
+      'Ya hay un entrenamiento guardado con ese nombre. Actualízalo o elige otro nombre.',
+    updateExistingWorkout: 'Actualizar entrenamiento guardado',
+    chooseDifferentName: 'Otro nombre',
   },
 };
 

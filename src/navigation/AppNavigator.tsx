@@ -71,7 +71,11 @@ export type RootStackParamList = {
   BodyWeightHistory: undefined;
   History: { planId?: string } | undefined;
   PlanHistoryDetail: { programId: string; programName: string };
-  WorkoutBuilder: { selectedDate?: string; shouldScheduleAfterCreate?: boolean } | undefined;
+  WorkoutBuilder: {
+    selectedDate?: string;
+    shouldScheduleAfterCreate?: boolean;
+    initialDraftPayload?: import('../types/workoutDraft').WorkoutBuilderInitialDraftPayload;
+  } | undefined;
   Workouts: undefined;
   WorkoutTemplateDetail: { templateId: string };
   WarmupEditor: { templateId: string; workoutKey?: string };

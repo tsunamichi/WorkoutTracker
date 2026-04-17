@@ -11,6 +11,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { Gesture, GestureDetector, TouchableOpacity as GHTouchableOpacity } from 'react-native-gesture-handler';
 import * as Haptics from 'expo-haptics';
+import * as Clipboard from 'expo-clipboard';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { useStore } from '../store';
@@ -19,6 +20,7 @@ import { IconCheckmark, IconAdd, IconCalendar, IconPlay, IconStopwatch, IconArro
 import { ScheduleWorkoutDeckV3, type ScheduleDeckV3Item } from '../components/schedule/ScheduleWorkoutDeckV3';
 import { CycleControlSheet } from '../components/CycleControlSheet';
 import { ShareCycleDrawer } from '../components/ShareCycleDrawer';
+import { RecentWorkoutPickerSheet } from '../components/home/RecentWorkoutPickerSheet';
 import { TertiaryButton } from '../components/common/UnderlinedActionButton';
 import { StackPageHeader } from '../components/common/StackPageHeader';
 import dayjs from 'dayjs';
@@ -27,6 +29,11 @@ import { useTranslation } from '../i18n/useTranslation';
 import { useAppTheme } from '../theme/useAppTheme';
 import { formatWeightForLoad } from '../utils/weight';
 import type { BonusType, CyclePlan } from '../types/training';
+import type { WorkoutDraft } from '../types/workoutDraft';
+import { newDraftId, parseBuilderPasteAll } from '../utils/workoutBuilderPaste';
+import { findActiveTemplateByName, suggestNonCollidingName } from '../utils/workoutNameCollision';
+import { buildRecentWorkoutPickerOptions, type RecentWorkoutPickerOption } from '../utils/recentWorkoutPickerOptions';
+import { hydrateWorkoutDraftFromSnapshot } from '../utils/hydrateWorkoutDraftFromSnapshot';
 import type { ScheduledWorkout } from '../types/training';
 import type { ExerciseProgress } from '../types';
 
@@ -241,6 +248,7 @@ export function TodayScreen({ onDateChange, onOpenAddWorkout, onOpenBonusDrawer 
   /** Keeps the newly created workout card last in the deck (before the create tile). */
   const [deckTailSwId, setDeckTailSwId] = useState<string | null>(null);
   const [imperativeDeckScroll, setImperativeDeckScroll] = useState<{ index: number; token: number } | null>(null);
+  const [recentWorkoutPickerVisible, setRecentWorkoutPickerVisible] = useState(false);
 
   const openExtrasPanel = useCallback((mode: 'timer' | 'warmup' | 'core') => {
     cancelAnimation(timerHeaderProgress);
@@ -1034,24 +1042,98 @@ export function TodayScreen({ onDateChange, onOpenAddWorkout, onOpenBonusDrawer 
     };
   }, [completedWorkoutsForSelectedDay, completedCardTextColor, exercises, navigateToWorkoutExecution]);
 
+  const recentWorkoutPickerOptions = useMemo(
+    () => buildRecentWorkoutPickerOptions(scheduledWorkouts),
+    [scheduledWorkouts],
+  );
+
+  const handleHomeCreateWorkout = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    (navigation as any).navigate('WorkoutBuilder', {
+      selectedDate,
+      shouldScheduleAfterCreate: true,
+    });
+  }, [navigation, selectedDate]);
+
+  const handleHomePasteWorkout = useCallback(async () => {
+    const text = await Clipboard.getStringAsync();
+    if (!text?.trim()) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+      Alert.alert(t('alertErrorTitle'), t('nothingToPaste'));
+      return;
+    }
+    const parsed = parseBuilderPasteAll(text);
+    if (parsed.length === 0 || parsed[0].exercises.length === 0) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+      Alert.alert(t('alertErrorTitle'), t('couldntReadWorkout'));
+      return;
+    }
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    const section = parsed[0];
+    const baseName = section.workoutName.trim() || t('untitledWorkout');
+    const draftLines = section.exercises.map(name => ({
+      id: newDraftId('line'),
+      name: name.trim(),
+    }));
+    let name = baseName;
+    let requiresRenameBeforeSave = false;
+    const hit = findActiveTemplateByName(workoutTemplates, baseName);
+    if (hit) {
+      requiresRenameBeforeSave = true;
+      name = suggestNonCollidingName(baseName, workoutTemplates);
+    }
+    const draft: WorkoutDraft = {
+      id: newDraftId('wd'),
+      name,
+      lines: draftLines,
+      requiresRenameBeforeSave,
+      suggestedDisplayName: name,
+    };
+    (navigation as any).navigate('WorkoutBuilder', {
+      initialDraftPayload: { drafts: [draft], activeIndex: 0 },
+    });
+  }, [navigation, t, workoutTemplates]);
+
+  const handleOpenRecentWorkoutPicker = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setRecentWorkoutPickerVisible(true);
+  }, []);
+
+  const handleSelectRecentWorkout = useCallback(
+    (opt: RecentWorkoutPickerOption) => {
+      let draft = hydrateWorkoutDraftFromSnapshot(opt.workoutName, opt.exercisesSnapshot, exercises);
+      const match = findActiveTemplateByName(workoutTemplates, draft.name);
+      if (match) {
+        draft = { ...draft, linkedTemplateId: match.id };
+      }
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      (navigation as any).navigate('WorkoutBuilder', {
+        initialDraftPayload: { drafts: [draft], activeIndex: 0 },
+      });
+    },
+    [navigation, exercises, workoutTemplates],
+  );
+
   const createWorkoutDeckItem = useMemo(
     (): ScheduleDeckV3Item => ({
       id: '__create_workout__',
-      variant: 'create',
-      title: t('createWorkout'),
-      subtitle: t('buildNewWorkoutHint'),
+      variant: 'createStack',
+      title: t('homeCreateWorkoutSectionTitle'),
       exerciseCount: 0,
       cardBackgroundColor: savedTimersCardBackground,
       cardTextColor: savedTimersInk,
-      onPress: () => {
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-        (navigation as any).navigate('WorkoutBuilder', {
-          selectedDate,
-          shouldScheduleAfterCreate: true,
-        });
-      },
+      onCreateBlank: handleHomeCreateWorkout,
+      onPasteWorkout: handleHomePasteWorkout,
+      onUseRecentWorkout: handleOpenRecentWorkoutPicker,
     }),
-    [navigation, t, savedTimersCardBackground, savedTimersInk, selectedDate],
+    [
+      t,
+      savedTimersCardBackground,
+      savedTimersInk,
+      handleHomeCreateWorkout,
+      handleHomePasteWorkout,
+      handleOpenRecentWorkoutPicker,
+    ],
   );
 
   const carouselDeckItems: ScheduleDeckV3Item[] = useMemo(() => {
@@ -1564,6 +1646,13 @@ export function TodayScreen({ onDateChange, onOpenAddWorkout, onOpenBonusDrawer 
           }}
           plan={shareCyclePlan}
           onExportData={handleExportData}
+        />
+
+        <RecentWorkoutPickerSheet
+          visible={recentWorkoutPickerVisible}
+          onClose={() => setRecentWorkoutPickerVisible(false)}
+          options={recentWorkoutPickerOptions}
+          onSelect={handleSelectRecentWorkout}
         />
       </View>
   );

@@ -18,6 +18,7 @@ import Animated, {
 import { CARDS, COLORS, SPACING, TYPOGRAPHY } from '../../constants';
 import { IconArrowDiagonal } from '../icons';
 import { useAppTheme } from '../../theme/useAppTheme';
+import { useTranslation } from '../../i18n/useTranslation';
 
 const FRONT_H = 330;
 const STACK_HEIGHT = FRONT_H;
@@ -30,11 +31,15 @@ export type ScheduleDeckV3Item = {
   title: string;
   subtitle?: string;
   exerciseCount: number;
-  variant?: 'default' | 'completed' | 'create';
+  variant?: 'default' | 'completed' | 'create' | 'createStack';
   cardBackgroundColor?: string;
   cardTextColor?: string;
   footerLabel?: string;
   onPress?: (origin?: { x: number; y: number; width: number; height: number; borderRadius: number }) => void;
+  /** `createStack` only — three independent actions inside one carousel slide */
+  onCreateBlank?: () => void;
+  onPasteWorkout?: () => void;
+  onUseRecentWorkout?: () => void;
 };
 
 type Props = {
@@ -49,6 +54,25 @@ type Props = {
 };
 type TouchNode = React.ElementRef<typeof TouchableOpacity>;
 
+/** First word uses `TYPOGRAPHY.h1`; remainder stays 24px (`h2` + 400). */
+function CreateStackOptionLabel({ text, color }: { text: string; color: string }) {
+  const trimmed = text.trim();
+  const spaceIdx = trimmed.indexOf(' ');
+  if (spaceIdx === -1) {
+    return (
+      <Text>
+        <Text style={[styles.createStackRowFirstWord, { color }]}>{trimmed}</Text>
+      </Text>
+    );
+  }
+  return (
+    <Text>
+      <Text style={[styles.createStackRowFirstWord, { color }]}>{trimmed.slice(0, spaceIdx)}</Text>
+      <Text style={[styles.createStackRowRest, { color }]}>{trimmed.slice(spaceIdx)}</Text>
+    </Text>
+  );
+}
+
 function DeckCard({
   item,
   positionLabel,
@@ -58,6 +82,7 @@ function DeckCard({
   positionLabel: string;
   numberAnimatedStyle?: any;
 }) {
+  const { t } = useTranslation();
   const { colors: themeColors } = useAppTheme();
   const cardBackgroundColor = item.cardBackgroundColor ?? themeColors.containerSecondary;
   const cardTextColor = item.cardTextColor ?? themeColors.containerPrimary;
@@ -70,7 +95,54 @@ function DeckCard({
     if (isPlusIndex) return 320;
     const len = Math.max(1, positionLabel.length);
     return Math.min(960, Math.max(200, len * 240));
-  }, [positionLabel]);
+  }, [positionLabel, isPlusIndex]);
+
+  if (item.variant === 'createStack') {
+    return (
+      <View style={styles.createStackRoot}>
+        <View style={styles.createStackInner}>
+          <Text style={[styles.createStackSectionTitle, { color: themeColors.textMeta }]}>{item.title}</Text>
+          <TouchableOpacity
+            style={styles.createStackRow}
+            onPress={() => item.onCreateBlank?.()}
+            activeOpacity={0.88}
+            accessibilityRole="button"
+            accessibilityLabel={t('miniCardCreateWorkout')}
+          >
+            <CreateStackOptionLabel
+              text={t('miniCardCreateWorkoutSubtitle')}
+              color={themeColors.containerPrimary}
+            />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.createStackRow}
+            onPress={() => item.onPasteWorkout?.()}
+            activeOpacity={0.88}
+            accessibilityRole="button"
+            accessibilityLabel={t('miniCardPasteWorkout')}
+          >
+            <CreateStackOptionLabel
+              text={t('miniCardPasteWorkoutSubtitle')}
+              color={themeColors.containerPrimary}
+            />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.createStackRow, styles.createStackRowLast]}
+            onPress={() => item.onUseRecentWorkout?.()}
+            activeOpacity={0.88}
+            accessibilityRole="button"
+            accessibilityLabel={t('miniCardUseRecentWorkout')}
+          >
+            <CreateStackOptionLabel
+              text={t('miniCardUseRecentWorkoutSubtitle')}
+              color={themeColors.containerPrimary}
+            />
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
+
   return (
     <View style={[styles.cardOuter, { backgroundColor: cardBackgroundColor, borderColor: cardBorderColor }]}>
       <View style={styles.cardInner}>
@@ -174,6 +246,28 @@ function AnimatedCarouselItem({
     };
   }, [index, snapInterval]);
 
+  const shell = (
+    <Animated.View style={[styles.cardAnimShell, animatedStyle]}>
+      <DeckCard item={item} positionLabel={positionLabel} numberAnimatedStyle={numberParallaxStyle} />
+    </Animated.View>
+  );
+
+  if (item.variant === 'createStack') {
+    return (
+      <View
+        style={[
+          styles.itemWrap,
+          {
+            width: itemWidth,
+            marginRight: isLast ? 0 : gap,
+          },
+        ]}
+      >
+        {shell}
+      </View>
+    );
+  }
+
   return (
     <TouchableOpacity
       activeOpacity={0.95}
@@ -187,9 +281,7 @@ function AnimatedCarouselItem({
       onPress={() => onPress(item, itemRef.current)}
       ref={itemRef}
     >
-      <Animated.View style={[styles.cardAnimShell, animatedStyle]}>
-        <DeckCard item={item} positionLabel={positionLabel} numberAnimatedStyle={numberParallaxStyle} />
-      </Animated.View>
+      {shell}
     </TouchableOpacity>
   );
 }
@@ -391,7 +483,9 @@ export function ScheduleWorkoutDeckV3({
             snapInterval={snapInterval}
             onPress={onCardPress}
             isLast={index === queueItems.length - 1}
-            positionLabel={item.variant === 'create' ? '+' : String(index + 1)}
+            positionLabel={
+              item.variant === 'create' ? '+' : item.variant === 'createStack' ? '' : String(index + 1)
+            }
             activeIndex={currentIndex}
             chromeExitProgress={chromeExitProgress}
           />
@@ -496,5 +590,39 @@ const styles = StyleSheet.create({
   cardFooterLabel: {
     ...TYPOGRAPHY.legal,
     fontWeight: '500',
+  },
+  createStackRoot: {
+    width: '100%',
+    height: '100%',
+    backgroundColor: 'transparent',
+  },
+  createStackInner: {
+    flex: 1,
+    paddingTop: SPACING.lg + SPACING.xl,
+    paddingBottom: 24,
+    paddingHorizontal: 24,
+    justifyContent: 'flex-start',
+  },
+  createStackSectionTitle: {
+    ...TYPOGRAPHY.meta,
+    fontWeight: '600',
+    letterSpacing: 0.6,
+    textTransform: 'uppercase',
+    marginBottom: SPACING.xxxl,
+  },
+  createStackRow: {
+    paddingVertical: SPACING.md,
+    marginBottom: SPACING.xs,
+  },
+  createStackRowLast: {
+    marginBottom: 0,
+  },
+  createStackRowFirstWord: {
+    ...TYPOGRAPHY.h1,
+  },
+  /** 24px — same as current-card exercise name (`ExploreV2CurrentCard` `exerciseName`). */
+  createStackRowRest: {
+    ...TYPOGRAPHY.h2,
+    fontWeight: '400',
   },
 });
