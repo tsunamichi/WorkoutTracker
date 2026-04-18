@@ -698,7 +698,12 @@ function ExploreV2ExecutionRootComponent(props: ExploreV2ExecutionRootProps) {
                   visible: overflowOpen,
                   onClose: () => setOverflowOpen(false),
                   onOpenSheet: () => {
-                    if (exploreV2TimerPhase === 'none') setOverflowOpen(true);
+                    if (
+                      exploreV2TimerPhase === 'none' ||
+                      exploreV2TimerPhase === 'rest'
+                    ) {
+                      setOverflowOpen(true);
+                    }
                   },
                   inlineRestActive: exploreV2TimerPhase !== 'none',
                   restThemeProgress,

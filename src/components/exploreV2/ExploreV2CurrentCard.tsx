@@ -566,6 +566,9 @@ export function ExploreV2CurrentCard({
   }, [carouselViewportWidth, nextIncomplete, nextIncompleteIndex, orderedSlots.length]);
 
   const heroTimerActive = exploreV2TimerPhase !== 'none';
+  /** Work / switch-side timers keep stricter chrome; rest timer still allows Current settings. */
+  const settingsTimerBlocksChrome =
+    exploreV2TimerPhase === 'work' || exploreV2TimerPhase === 'switchSides';
   const ctaLabel =
     exploreV2TimerPhase === 'rest'
       ? 'Skip rest time'
@@ -596,12 +599,12 @@ export function ExploreV2CurrentCard({
     : (isV2Theme && useDisabledHeroPalette
       ? v2DisabledInk
       : (useDisabledHeroPalette ? accentSecondaryDisabled : accentPrimary));
-  const settingsDisabledTone = heroTimerActive ? accentSecondaryDisabled : accentSecondarySoft;
+  const settingsDisabledTone = settingsTimerBlocksChrome ? accentSecondaryDisabled : accentSecondarySoft;
   const currentHeaderInk = menuThemeActive ? menuMutedInk : (isV2Theme ? containerTertiary : accentSecondarySoft);
   const settingsInk = menuThemeActive
     ? menuMutedInk
     : (isV2Theme
-      ? (heroTimerActive ? v2DisabledInk : containerTertiary)
+      ? (settingsTimerBlocksChrome ? v2DisabledInk : containerTertiary)
       : settingsDisabledTone);
   const perSideInk = isV2Theme
     ? (useDisabledHeroPalette ? v2DisabledInk : containerTertiary)

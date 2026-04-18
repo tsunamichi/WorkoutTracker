@@ -286,18 +286,22 @@ export function WorkoutBuilderScreen() {
       await updateWorkoutTemplate(templateId, { items, name: w.name.trim() });
     }
 
-    if (isNew && params?.shouldScheduleAfterCreate && params?.selectedDate) {
-      await scheduleWorkout(params.selectedDate, templateId, 'manual');
-      const matches = useStore
-        .getState()
-        .scheduledWorkouts.filter(s => s.date === params.selectedDate && s.templateId === templateId);
-      const sw = matches.sort((a, b) => a.id.localeCompare(b.id)).at(-1);
-      if (sw) {
-        useStore.getState().setScheduleDeckFocusAfterCreate({
-          scheduledWorkoutId: sw.id,
-          isoDate: params.selectedDate,
-          templateId,
-        });
+    // Schedule for Home / Today when requested — must run for new *and* updated templates
+    // (e.g. paste/history with linkedTemplateId, or "update existing" from name collision).
+    if (params?.shouldScheduleAfterCreate && params?.selectedDate) {
+      const result = await scheduleWorkout(params.selectedDate, templateId, 'manual');
+      if (result.success) {
+        const matches = useStore
+          .getState()
+          .scheduledWorkouts.filter(s => s.date === params.selectedDate && s.templateId === templateId);
+        const sw = matches.sort((a, b) => a.id.localeCompare(b.id)).at(-1);
+        if (sw) {
+          useStore.getState().setScheduleDeckFocusAfterCreate({
+            scheduledWorkoutId: sw.id,
+            isoDate: params.selectedDate,
+            templateId,
+          });
+        }
       }
     }
 

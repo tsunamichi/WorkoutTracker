@@ -364,7 +364,11 @@ export function ExploreV2CurrentOverflowPanel({
 
   /** Blocks height sync while rest-dismiss animation runs so wallet shrink doesn't snap panelHeight. */
   const dismissingForRestRef = useRef(false);
-  const prevInlineRestRef = useRef(false);
+  /**
+   * Must match initial `inlineRestActive` so mounting the panel while rest is **already** running
+   * is not mistaken for a rising edge (which would immediately dismiss the sheet).
+   */
+  const prevInlineRestRef = useRef(inlineRestActive);
 
   useEffect(() => {
     if (!visible) setScrollContentHeight(0);

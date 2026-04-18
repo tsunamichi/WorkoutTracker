@@ -1090,9 +1090,11 @@ export function TodayScreen({ onDateChange, onOpenAddWorkout, onOpenBonusDrawer 
       suggestedDisplayName: name,
     };
     (navigation as any).navigate('WorkoutBuilder', {
+      selectedDate,
+      shouldScheduleAfterCreate: true,
       initialDraftPayload: { drafts: [draft], activeIndex: 0 },
     });
-  }, [navigation, t, workoutTemplates]);
+  }, [navigation, t, workoutTemplates, selectedDate]);
 
   const handleOpenRecentWorkoutPicker = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -1108,10 +1110,12 @@ export function TodayScreen({ onDateChange, onOpenAddWorkout, onOpenBonusDrawer 
       }
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
       (navigation as any).navigate('WorkoutBuilder', {
+        selectedDate,
+        shouldScheduleAfterCreate: true,
         initialDraftPayload: { drafts: [draft], activeIndex: 0 },
       });
     },
-    [navigation, exercises, workoutTemplates],
+    [navigation, exercises, workoutTemplates, selectedDate],
   );
 
   const createWorkoutDeckItem = useMemo(
