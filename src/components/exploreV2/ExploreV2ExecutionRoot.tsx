@@ -139,6 +139,8 @@ export type ExploreV2ExecutionRootProps = {
   completedOnDateLabel?: string;
   /** Main section only: add/remove rounds for the current Explore group (template + snapshot). */
   onAdjustCurrentGroupSets?: (delta: 1 | -1) => void | Promise<void>;
+  /** Main section only: add/remove rounds while editing a completed group (same persistence as current). */
+  onAdjustCompletedGroupSets?: (groupIndex: number, delta: 1 | -1) => void | Promise<void>;
 };
 
 function ExploreV2ExecutionRootComponent(props: ExploreV2ExecutionRootProps) {
@@ -192,6 +194,7 @@ function ExploreV2ExecutionRootComponent(props: ExploreV2ExecutionRootProps) {
     celebrateCompletion = false,
     completedOnDateLabel,
     onAdjustCurrentGroupSets,
+    onAdjustCompletedGroupSets,
   } = props;
   const { explore: exRoot, colors: themeColorsRoot } = useAppTheme();
   const warmActivityRoot = exRoot.warmActivity;
@@ -212,9 +215,33 @@ function ExploreV2ExecutionRootComponent(props: ExploreV2ExecutionRootProps) {
   );
 
   const [primaryRevealed, setPrimaryRevealed] = useState<PrimaryRevealedCard>('up_next');
+  /** Completed tab: tap row → edit metrics inline (Current-style hero) without switching to Current card. */
+  const [completedExerciseEdit, setCompletedExerciseEdit] = useState<{
+    groupIndex: number;
+    exerciseIndex: number;
+  } | null>(null);
+  const onCloseCompletedExerciseEdit = useCallback(() => {
+    setCompletedExerciseEdit(null);
+  }, []);
+  useEffect(() => {
+    if (primaryRevealed !== 'complete') {
+      setCompletedExerciseEdit(null);
+    }
+  }, [primaryRevealed]);
   const [overflowOpen, setOverflowOpen] = useState(false);
   const overflowOpenSV = useSharedValue(false);
   const settingsExpandProgress = useSharedValue(0);
+
+  const [stackShellHeight, setStackShellHeight] = useState(0);
+  /** After last set logged: keep Current mounted until slide-down exit finishes */
+  const exitCompleteRef = useRef(true);
+  const lastCurrentGroupRef = useRef<ExploreV2Group | null>(null);
+  const exitAnimStartedRef = useRef(false);
+  const [exitTick, setExitTick] = useState(0);
+  const hasCompletePresent = completedExerciseIndexes.length > 0;
+  const currentGroupIndex = exploreCurrentGroupIndex;
+  const hasCurrent = currentGroupIndex !== null;
+  const currentGroup = currentGroupIndex !== null ? exerciseGroups[currentGroupIndex] : null;
 
   useEffect(() => {
     if (primaryRevealed !== 'current') {
@@ -234,17 +261,6 @@ function ExploreV2ExecutionRootComponent(props: ExploreV2ExecutionRootProps) {
       easing: Easing.out(Easing.cubic),
     });
   }, [overflowOpen, settingsExpandProgress]);
-
-  const [stackShellHeight, setStackShellHeight] = useState(0);
-  /** After last set logged: keep Current mounted until slide-down exit finishes */
-  const exitCompleteRef = useRef(true);
-  const lastCurrentGroupRef = useRef<ExploreV2Group | null>(null);
-  const exitAnimStartedRef = useRef(false);
-  const [exitTick, setExitTick] = useState(0);
-  const hasCompletePresent = completedExerciseIndexes.length > 0;
-  const currentGroupIndex = exploreCurrentGroupIndex;
-  const hasCurrent = currentGroupIndex !== null;
-  const currentGroup = currentGroupIndex !== null ? exerciseGroups[currentGroupIndex] : null;
 
   /** Mirrors for worklets — synced in useLayoutEffect before paint */
   const hasCurrentSV = useSharedValue(false);
@@ -617,8 +633,10 @@ function ExploreV2ExecutionRootComponent(props: ExploreV2ExecutionRootProps) {
     ],
   );
 
-  const onSelectCompletedExercise = useCallback(() => {
-    // Disabled for now; completed-row tap design is pending.
+  const onSelectCompletedExercise = useCallback((groupIndex: number, exerciseIndex: number) => {
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setCompletedExerciseEdit({ groupIndex, exerciseIndex });
+    setPrimaryRevealed('complete');
   }, []);
 
   const onLogNextSet = useCallback(async (payload?: { setId: string; values: { weight: number; reps: number } }) => {
@@ -791,6 +809,14 @@ function ExploreV2ExecutionRootComponent(props: ExploreV2ExecutionRootProps) {
               menuThemeActive={menuThemeActive}
               menuToneProgress={menuToneProgress}
               contentOnly
+              completedExerciseEdit={completedExerciseEdit}
+              onCloseCompletedExerciseEdit={onCloseCompletedExerciseEdit}
+              completedSets={completedSets}
+              localValues={localValues}
+              setLocalValues={setLocalValues}
+              getBarbellMode={getBarbellMode}
+              progressionValuesByItemId={progressionValuesByItemId}
+              onAdjustCompletedGroupSets={onAdjustCompletedGroupSets}
             />
           </View>
           {EXPLORE_V2_DEBUG_SHELL_BORDER ? (
@@ -900,6 +926,14 @@ function ExploreV2ExecutionRootComponent(props: ExploreV2ExecutionRootProps) {
               exploreV2WorkBlueProgress={exploreV2WorkBlueProgress}
               menuThemeActive={menuThemeActive}
               menuToneProgress={menuToneProgress}
+              completedExerciseEdit={completedExerciseEdit}
+              onCloseCompletedExerciseEdit={onCloseCompletedExerciseEdit}
+              completedSets={completedSets}
+              localValues={localValues}
+              setLocalValues={setLocalValues}
+              getBarbellMode={getBarbellMode}
+              progressionValuesByItemId={progressionValuesByItemId}
+              onAdjustCompletedGroupSets={onAdjustCompletedGroupSets}
             />
           </Animated.View>
           <Animated.View
@@ -976,6 +1010,14 @@ function ExploreV2ExecutionRootComponent(props: ExploreV2ExecutionRootProps) {
                 exploreV2WorkBlueProgress={exploreV2WorkBlueProgress}
                 menuThemeActive={menuThemeActive}
                 menuToneProgress={menuToneProgress}
+                completedExerciseEdit={completedExerciseEdit}
+                onCloseCompletedExerciseEdit={onCloseCompletedExerciseEdit}
+                completedSets={completedSets}
+                localValues={localValues}
+                setLocalValues={setLocalValues}
+                getBarbellMode={getBarbellMode}
+                progressionValuesByItemId={progressionValuesByItemId}
+                onAdjustCompletedGroupSets={onAdjustCompletedGroupSets}
               />
             </Animated.View>
           ) : null}

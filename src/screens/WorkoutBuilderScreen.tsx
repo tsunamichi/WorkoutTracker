@@ -113,22 +113,6 @@ export function WorkoutBuilderScreen() {
     useStore.getState().setScheduleDeckFocusAfterCreate(null);
   }, []);
 
-  const promptPostSave = () => {
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    Alert.alert(t('workoutCreatedTitle'), t('workoutCreatedBody'), [
-      {
-        text: t('createAnotherWorkout'),
-        style: 'default',
-        onPress: () => resetCreationForm(),
-      },
-      {
-        text: t('done'),
-        style: 'default',
-        onPress: () => navigation.goBack(),
-      },
-    ]);
-  };
-
   const focusAddExercise = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     requestAnimationFrame(() => exerciseInputRef.current?.focus());
@@ -305,7 +289,8 @@ export function WorkoutBuilderScreen() {
       }
     }
 
-    promptPostSave();
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    navigation.goBack();
   };
 
   const handleSaveWorkout = async () => {

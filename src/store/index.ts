@@ -186,6 +186,8 @@ interface WorkoutStore {
   // Scheduled Workouts
   scheduleWorkout: (date: string, templateId: string, source: 'manual' | 'cycle', cyclePlanId?: string, resolution?: ConflictResolution) => Promise<{ success: boolean; conflict?: ScheduledWorkout }>;
   unscheduleWorkout: (workoutId: string) => Promise<void>;
+  /** Persist planned → in_progress + startedAt when user opens main execution (survives app kill). */
+  markScheduledWorkoutStarted: (workoutId: string) => Promise<void>;
   completeWorkout: (workoutId: string) => Promise<void>;
   uncompleteWorkout: (workoutId: string) => Promise<void>;
   getScheduledWorkout: (date: string) => ScheduledWorkout | undefined;
@@ -3695,6 +3697,21 @@ export const useStore = create<WorkoutStore>((set, get) => ({
     }
     
     const scheduledWorkouts = get().scheduledWorkouts.filter(sw => sw.id !== workoutId);
+    set({ scheduledWorkouts });
+    await storage.saveScheduledWorkouts(scheduledWorkouts);
+  },
+
+  markScheduledWorkoutStarted: async workoutId => {
+    const now = new Date().toISOString();
+    const scheduledWorkouts = get().scheduledWorkouts.map(sw => {
+      if (sw.id !== workoutId) return sw;
+      if (sw.status === 'completed' || sw.isLocked) return sw;
+      return {
+        ...sw,
+        status: 'in_progress' as const,
+        startedAt: sw.startedAt ?? now,
+      };
+    });
     set({ scheduledWorkouts });
     await storage.saveScheduledWorkouts(scheduledWorkouts);
   },

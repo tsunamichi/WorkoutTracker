@@ -20,6 +20,7 @@ import {
   KeyboardAvoidingView,
   TouchableWithoutFeedback,
   useWindowDimensions,
+  AppState,
   type LayoutChangeEvent,
 } from 'react-native';
 import AnimatedReanimated, {
@@ -66,6 +67,7 @@ import { formatWeightForLoad, toDisplayWeight, fromDisplayWeight } from '../util
 import { applyForwardPropagationForExerciseRounds } from '../utils/exerciseLocalValues';
 import { buildWorkoutCompletionCelebrationData } from '../utils/buildWorkoutCompletionCelebrationData';
 import { buildWorkoutShareText } from '../utils/buildWorkoutShareText';
+import type { SetProgress } from '../types';
 import type { WarmupItem_DEPRECATED as WarmupItem, AccessoryItem_DEPRECATED as AccessoryItem, WorkoutTemplateExercise } from '../types/training';
 import { isDeprecatedItem, getDisplayValuesFromItem } from '../utils/exerciseMigration';
 import { computeNextSuggestion } from '../utils/progressionSuggestions';
@@ -268,6 +270,7 @@ export function ExerciseExecutionScreen() {
     getCoreSessionsByGroup,
     unscheduleWorkout,
     clearWorkoutProgress,
+    markScheduledWorkoutStarted,
   } = useStore();
 
   const appTheme = useAppTheme();
@@ -395,6 +398,14 @@ export function ExerciseExecutionScreen() {
       }
     }, [])
   );
+
+  const markScheduledStartedRef = useRef(false);
+  useEffect(() => {
+    if (type !== 'main' || !workoutKey?.startsWith('sw-')) return;
+    if (markScheduledStartedRef.current) return;
+    markScheduledStartedRef.current = true;
+    void markScheduledWorkoutStarted(workoutKey);
+  }, [type, workoutKey, markScheduledWorkoutStarted]);
   
   // Debug: Log template info
   console.log('🔍 ExerciseExecutionScreen template:', {
@@ -577,6 +588,9 @@ export function ExerciseExecutionScreen() {
     })));
     return result;
   }, [items]);
+
+  const exerciseGroupsRef = useRef(exerciseGroups);
+  exerciseGroupsRef.current = exerciseGroups;
 
   const progressionEnabled = settings.progressionSuggestionsEnabled !== false;
   const progressionValuesByItemId = useMemo(() => {
@@ -930,6 +944,8 @@ export function ExerciseExecutionScreen() {
   const activeExerciseIndexRef = useRef(activeExerciseIndex);
   /** Set when we open the exercise timer (time-based); cleared when timer onComplete runs. Used so we add the correct set even after handleComplete has updated other refs. */
   const pendingTimerSetRef = useRef<{ exerciseId: string; round: number } | null>(null);
+  /** Assigned after `saveSession` is defined; used by AppState + unmount flush */
+  const flushInProgressWorkoutRef = useRef<() => Promise<void>>(async () => {});
   
   // Keep refs in sync with state
   useEffect(() => {
@@ -1318,14 +1334,20 @@ export function ExerciseExecutionScreen() {
     return () => { showSub.remove(); hideSub.remove(); };
   }, []);
 
-  // Save session on unmount to ensure progress persists when user navigates away
+  // Persist progress on background and unmount (drafts + scheduled in-progress; session when any set is logged)
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', nextState => {
+      if (nextState === 'active') return;
+      console.log('💾 AppState →', nextState, '— flushing workout progress');
+      void flushInProgressWorkoutRef.current();
+    });
+    return () => sub.remove();
+  }, []);
+
   useEffect(() => {
     return () => {
-      const currentSets = completedSetsRef.current;
-      if (currentSets.size > 0) {
-        console.log('💾 Auto-saving session on unmount:', currentSets.size, 'completed sets');
-        saveSession(currentSets);
-      }
+      console.log('💾 Auto-saving session on unmount');
+      void flushInProgressWorkoutRef.current();
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -1817,12 +1839,15 @@ export function ExerciseExecutionScreen() {
   const EXPLORE_V2_MAX_GROUP_SETS = 30;
 
   const handleAdjustExploreV2GroupSets = useCallback(
-    async (delta: 1 | -1) => {
+    async (delta: 1 | -1, explicitGroupIndex?: number) => {
       if (type !== 'main' || !template || !workoutKey) return;
-      if (exploreCurrentGroupIndex === null) return;
       if (exploreV2TimerPhase !== 'none') return;
 
-      const g = exerciseGroups[exploreCurrentGroupIndex];
+      const groupIndex =
+        explicitGroupIndex !== undefined ? explicitGroupIndex : exploreCurrentGroupIndex;
+      if (groupIndex === null || groupIndex < 0) return;
+
+      const g = exerciseGroups[groupIndex];
       if (!g?.exercises?.length) return;
 
       const oldTotal = g.totalRounds;
@@ -1906,6 +1931,10 @@ export function ExerciseExecutionScreen() {
         if (matchingSet) {
           return { weight: matchingSet.weight, reps: matchingSet.reps };
         }
+        const draftSet = (exProgress as any).sets?.find((s: any) => s.setNumber === setIndex && !s.completed);
+        if (draftSet) {
+          return { weight: draftSet.weight, reps: draftSet.reps };
+        }
       }
     }
 
@@ -1934,6 +1963,44 @@ export function ExerciseExecutionScreen() {
     const tr = Number(templateReps);
     return { weight: templateWeight, reps: Number.isFinite(tr) ? tr : 0 };
   }, [workoutKey, workoutTemplateId, exerciseGroups]);
+
+  /** Persist in-progress edits (draft sets) and completed sets to detailedWorkoutProgress so kills/background don't lose state. */
+  const syncDetailedProgressFromExecutionRefs = useCallback(async () => {
+    if (!workoutKey || type !== 'main') return;
+    const progressData = getDetailedWorkoutProgress();
+    const wp = progressData[workoutKey];
+
+    for (const group of exerciseGroupsRef.current) {
+      for (const exercise of group.exercises) {
+        const templateItemId = exercise.id;
+        const sessionExerciseId = exercise.exerciseId || exercise.id;
+        const sets: SetProgress[] = [];
+        for (let round = 0; round < group.totalRounds; round++) {
+          const setId = `${exercise.id}-set-${round}`;
+          const completed = completedSetsRef.current.has(setId);
+          const lv = localValuesRef.current[setId];
+          if (!completed && !lv) continue;
+
+          let weight: number | undefined = lv?.weight;
+          let reps: number | undefined = lv?.reps;
+          const persisted = wp?.exercises?.[templateItemId]?.sets?.find(s => s.setNumber === round);
+          if (weight === undefined) weight = persisted?.weight;
+          if (reps === undefined) reps = persisted?.reps;
+          const tw = exercise.weight ?? 0;
+          const tr = Number(exercise.reps);
+          sets.push({
+            setNumber: round,
+            weight: weight ?? tw,
+            reps: reps ?? (Number.isFinite(tr) ? tr : 0),
+            completed,
+          });
+        }
+        if (sets.length > 0) {
+          await saveExerciseProgress(workoutKey, templateItemId, { exerciseId: sessionExerciseId, sets });
+        }
+      }
+    }
+  }, [workoutKey, type, saveExerciseProgress]);
 
   const saveSession = async (completedSetIds?: Set<string>) => {
     console.log('💾 Saving workout session for', type, 'section');
@@ -2010,34 +2077,18 @@ export function ExerciseExecutionScreen() {
         await addSession(session);
         console.log('✅ Session created successfully!');
       }
-
-      // Keep detailedWorkoutProgress in sync so history and display use updated values
-      if (workoutKey && type === 'main') {
-        const byTemplateId = new Map<string, { exerciseId: string; sets: Array<{ setNumber: number; weight: number; reps: number; completed: boolean }> }>();
-        allSets.forEach((set: any) => {
-          const templateEx = exerciseGroups.flatMap(g => g.exercises).find(ex =>
-            (ex.exerciseId || ex.id) === set.exerciseId || ex.id === set.exerciseId
-          );
-          const templateItemId = templateEx?.id ?? set.exerciseId;
-          if (!byTemplateId.has(templateItemId)) {
-            byTemplateId.set(templateItemId, { exerciseId: set.exerciseId, sets: [] });
-          }
-          const entry = byTemplateId.get(templateItemId)!;
-          entry.sets.push({
-            setNumber: set.setIndex,
-            weight: set.weight,
-            reps: set.reps,
-            completed: true,
-          });
-        });
-        for (const [templateItemId, { exerciseId, sets }] of byTemplateId) {
-          sets.sort((a, b) => a.setNumber - b.setNumber);
-          await saveExerciseProgress(workoutKey, templateItemId, { exerciseId, sets });
-        }
-      }
     } else {
       console.log('⚠️ No completed sets to save - session not created');
     }
+
+    // Full progress sync (completed + draft) so we never overwrite drafts with completed-only rows
+    if (workoutKey && type === 'main') {
+      await syncDetailedProgressFromExecutionRefs();
+    }
+  };
+
+  flushInProgressWorkoutRef.current = async () => {
+    await saveSession(completedSetsRef.current);
   };
   
   const handleComplete = async (loggedSetOverride?: { setId: string; values: { weight: number; reps: number } }) => {
@@ -3545,7 +3596,12 @@ export function ExerciseExecutionScreen() {
                 celebrateCompletion={showCompletionCelebration}
                 completedOnDateLabel={exploreV2CompletedOnDateLabel}
                 onAdjustCurrentGroupSets={
-                  type === 'main' ? handleAdjustExploreV2GroupSets : undefined
+                  type === 'main' ? d => handleAdjustExploreV2GroupSets(d) : undefined
+                }
+                onAdjustCompletedGroupSets={
+                  type === 'main'
+                    ? (groupIndex, d) => handleAdjustExploreV2GroupSets(d, groupIndex)
+                    : undefined
                 }
                 />
               </AnimatedReanimated.View>

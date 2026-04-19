@@ -12,6 +12,7 @@ import {
   ScrollView,
   type NativeSyntheticEvent,
   type NativeScrollEvent,
+  type TextStyle,
 } from 'react-native';
 import Reanimated, {
   useAnimatedStyle,
@@ -21,6 +22,7 @@ import Reanimated, {
   Easing,
   type SharedValue,
   useSharedValue,
+  type AnimatedStyle,
 } from 'react-native-reanimated';
 import { EXPLORE_V2 } from './exploreV2Tokens';
 import { EXECUTION_CTA_HEIGHT, EXECUTION_CTA_PADDING_H, executionCtaLabelStyle } from '../execution/executionCtaTokens';
@@ -36,10 +38,11 @@ import {
   type ExploreV2CurrentSettingsOverflowProps,
 } from './ExploreV2CurrentOverflowSheet';
 import { UnderlinedActionButton } from '../common/UnderlinedActionButton';
+import { IconAdd } from '../icons';
 import { useTranslation } from '../../i18n/useTranslation';
 
 /** iOS: toolbar above the keyboard (numeric pads have no Done key). */
-const EXPLORE_V2_HERO_METRICS_ACCESSORY_ID = 'exploreV2HeroMetricsAccessory';
+export const EXPLORE_V2_HERO_METRICS_ACCESSORY_ID = 'exploreV2HeroMetricsAccessory';
 
 type Props = {
   group: ExploreV2Group;
@@ -87,6 +90,7 @@ type Props = {
 type SetSlot = { round: number; exerciseIndex: number };
 
 const AnimatedTouchableOpacity = Reanimated.createAnimatedComponent(TouchableOpacity);
+const AnimatedTextInput = Reanimated.createAnimatedComponent(TextInput);
 
 function findNextIncompleteSet(group: ExploreV2Group, completedSets: Set<string>) {
   for (let r = 0; r < group.totalRounds; r++) {
@@ -131,9 +135,17 @@ type SetHeroPageProps = {
   pageWidth: number;
   commitsRef: React.MutableRefObject<Record<string, () => { weight: number; reps: number } | void>>;
   progressionValuesByItemId: Props['progressionValuesByItemId'];
+  /** Defaults to the shared Current hero accessory id; use a distinct id if another hero is mounted. */
+  heroMetricsAccessoryId?: string;
+  /** When set (e.g. Completed inline edit), matches row title + unit log animated colors on that card. */
+  heroValueAnimatedStyle?: AnimatedStyle<TextStyle>;
+  unitLabelAnimatedStyle?: AnimatedStyle<TextStyle>;
+  /** Placeholder color when using animated hero styles (numeric inputs have no separate animated placeholder). */
+  heroPlaceholderColor?: string;
 };
 
-function CurrentSetHeroPage({
+/** Exported for Completed-card inline editor (same hero inputs as Current). */
+export function CurrentSetHeroPage({
   slot,
   group,
   completedSets,
@@ -150,6 +162,10 @@ function CurrentSetHeroPage({
   pageWidth,
   commitsRef,
   progressionValuesByItemId,
+  heroMetricsAccessoryId = EXPLORE_V2_HERO_METRICS_ACCESSORY_ID,
+  heroValueAnimatedStyle,
+  unitLabelAnimatedStyle,
+  heroPlaceholderColor,
 }: SetHeroPageProps) {
   const heroEx = group.exercises[slot.exerciseIndex];
   const heroRound = slot.round;
@@ -350,14 +366,44 @@ function CurrentSetHeroPage({
       : null;
   const prog = progressionValuesByItemId[heroEx.id];
 
+  const placeholderTint = heroPlaceholderColor ?? heroValueColor;
+  const WeightField = heroValueAnimatedStyle ? AnimatedTextInput : TextInput;
+  const RepsField = heroValueAnimatedStyle ? AnimatedTextInput : TextInput;
+  const weightInputStyle = heroValueAnimatedStyle
+    ? ([styles.valueInput, heroValueAnimatedStyle] as object)
+    : [styles.valueInput, { color: heroValueColor }];
+  const repsInputStyle = heroValueAnimatedStyle
+    ? ([styles.valueInput, heroValueAnimatedStyle] as object)
+    : [styles.valueInput, { color: heroValueColor }];
+
+  const renderUnitLabel = (label: string) =>
+    unitLabelAnimatedStyle ? (
+      <Reanimated.Text style={[styles.valueMetric, unitLabelAnimatedStyle]}>{label}</Reanimated.Text>
+    ) : (
+      <Text style={[styles.valueMetric, { color: unitLabelColor }]}>{label}</Text>
+    );
+
+  const renderDelta = (show: boolean) =>
+    show ? (
+      heroValueAnimatedStyle ? (
+        <Reanimated.Text style={[styles.heroDeltaLabel, heroValueAnimatedStyle]} numberOfLines={1}>
+          ↑
+        </Reanimated.Text>
+      ) : (
+        <Text style={[styles.heroDeltaLabel, { color: heroValueColor }]} numberOfLines={1}>
+          ↑
+        </Text>
+      )
+    ) : null;
+
   return (
     <View style={[styles.carouselPage, pageWidth > 0 ? { width: pageWidth } : { flex: 1 }]}>
       <View style={styles.valuesBlock}>
         <View style={styles.valueRow}>
-          <TextInput
-            ref={weightInputRef}
+          <WeightField
+            ref={weightInputRef as React.Ref<TextInput>}
             key={`${setId}-weight`}
-            style={[styles.valueInput, { color: heroValueColor }]}
+            style={weightInputStyle}
             allowFontScaling={false}
             maxFontSizeMultiplier={1}
             defaultValue={weightDefault}
@@ -370,23 +416,17 @@ function CurrentSetHeroPage({
             selectTextOnFocus
             editable={metricsEditable}
             placeholder="0"
-            placeholderTextColor={heroValueColor}
+            placeholderTextColor={placeholderTint}
             underlineColorAndroid="transparent"
-            inputAccessoryViewID={
-              Platform.OS === 'ios' ? EXPLORE_V2_HERO_METRICS_ACCESSORY_ID : undefined
-            }
+            inputAccessoryViewID={Platform.OS === 'ios' ? heroMetricsAccessoryId : undefined}
             returnKeyType="next"
             blurOnSubmit={false}
             onSubmitEditing={() => repsInputRef.current?.focus()}
           />
           <View style={styles.unitWithDelta}>
             <View style={styles.unitLabelRow}>
-              <Text style={[styles.valueMetric, { color: unitLabelColor }]}>{weightUnit}</Text>
-              {prog && prog.weightDelta > 0 ? (
-                <Text style={[styles.heroDeltaLabel, { color: heroValueColor }]} numberOfLines={1}>
-                  ↑
-                </Text>
-              ) : null}
+              {renderUnitLabel(weightUnit)}
+              {renderDelta(Boolean(prog && prog.weightDelta > 0))}
             </View>
             {perSideText ? (
               <Text style={[styles.perSideSingleLine, { color: perSideLabelColor }]}>{perSideText}</Text>
@@ -394,10 +434,10 @@ function CurrentSetHeroPage({
           </View>
         </View>
         <View style={styles.valueRow}>
-          <TextInput
-            ref={repsInputRef}
+          <RepsField
+            ref={repsInputRef as React.Ref<TextInput>}
             key={`${setId}-reps`}
-            style={[styles.valueInput, { color: heroValueColor }]}
+            style={repsInputStyle}
             allowFontScaling={false}
             maxFontSizeMultiplier={1}
             defaultValue={repsDefault}
@@ -410,25 +450,17 @@ function CurrentSetHeroPage({
             selectTextOnFocus
             editable={metricsEditable}
             placeholder="0"
-            placeholderTextColor={heroValueColor}
+            placeholderTextColor={placeholderTint}
             underlineColorAndroid="transparent"
-            inputAccessoryViewID={
-              Platform.OS === 'ios' ? EXPLORE_V2_HERO_METRICS_ACCESSORY_ID : undefined
-            }
+            inputAccessoryViewID={Platform.OS === 'ios' ? heroMetricsAccessoryId : undefined}
             returnKeyType="done"
             blurOnSubmit
             onSubmitEditing={Keyboard.dismiss}
           />
           <View style={styles.unitWithDelta}>
             <View style={styles.unitLabelRow}>
-              <Text style={[styles.valueMetric, { color: unitLabelColor }]}>
-                {heroEx.isTimeBased ? 'sec' : 'reps'}
-              </Text>
-              {prog && prog.repsDelta > 0 ? (
-                <Text style={[styles.heroDeltaLabel, { color: heroValueColor }]} numberOfLines={1}>
-                  ↑
-                </Text>
-              ) : null}
+              {renderUnitLabel(heroEx.isTimeBased ? 'sec' : 'reps')}
+              {renderDelta(Boolean(prog && prog.repsDelta > 0))}
             </View>
           </View>
         </View>
@@ -622,6 +654,12 @@ export function ExploreV2CurrentCard({
     : (isV2Theme
       ? (useDisabledHeroPalette ? v2DisabledInk : containerTertiary)
       : accentSecondaryDisabled);
+  /** Plus icon: always idle unselected hue — not tied to `useDisabledHeroPalette` (previewing another set). */
+  const addSetPlusIconInk = menuThemeActive
+    ? menuMutedInk
+    : heroTimerActive
+      ? (isV2Theme ? containerTertiary : accentSecondaryDisabled)
+      : (isV2Theme ? containerTertiary : accentSecondarySoft);
   const logPressable =
     heroTimerActive || (showPrimaryCta && logEnabledForSlot);
 
@@ -723,17 +761,19 @@ export function ExploreV2CurrentCard({
   );
 
   const EXPLORE_V2_MAX_GROUP_SETS = 30;
-  const showSetAdjustRow =
+  const showRemoveSetRow =
     Boolean(onAdjustGroupSets) &&
     metricsEditable &&
     orderedSlots.length > 0 &&
     carouselIndex === orderedSlots.length - 1;
   const canRemoveSet = group.totalRounds > 1;
   const canAddSet = group.totalRounds < EXPLORE_V2_MAX_GROUP_SETS;
+  const showAddSetIcon = Boolean(onAdjustGroupSets) && orderedSlots.length > 0;
+  const addSetPressable = metricsEditable && canAddSet;
 
   const renderPaginationColumn = () => (
     <View style={styles.paginationColumn}>
-      {showSetAdjustRow ? (
+      {showRemoveSetRow ? (
         <View style={styles.setAdjustRowAbs} pointerEvents="box-none">
           <UnderlinedActionButton
             label={t('exploreV2RemoveSet')}
@@ -743,15 +783,6 @@ export function ExploreV2CurrentCard({
             color={settingsInk}
             underlineColor={settingsInk}
             style={[styles.setAdjustButton, !canRemoveSet && styles.setAdjustButtonDimmed]}
-          />
-          <UnderlinedActionButton
-            label={t('exploreV2AddSet')}
-            onPress={() => {
-              if (canAddSet) void onAdjustGroupSets?.(1);
-            }}
-            color={settingsInk}
-            underlineColor={settingsInk}
-            style={[styles.setAdjustButton, !canAddSet && styles.setAdjustButtonDimmed]}
           />
         </View>
       ) : null}
@@ -789,6 +820,21 @@ export function ExploreV2CurrentCard({
             </TouchableOpacity>
           );
         })}
+        {showAddSetIcon ? (
+          <TouchableOpacity
+            onPress={() => {
+              if (addSetPressable) void onAdjustGroupSets?.(1);
+            }}
+            disabled={!addSetPressable}
+            style={[styles.addSetIconButton, !addSetPressable && styles.addSetIconButtonDimmed]}
+            hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
+            accessibilityRole="button"
+            accessibilityLabel={t('exploreV2AddSet')}
+            accessibilityState={{ disabled: !addSetPressable }}
+          >
+            <IconAdd size={22} color={addSetPlusIconInk} />
+          </TouchableOpacity>
+        ) : null}
       </View>
     </View>
   );
@@ -1334,12 +1380,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'flex-end',
-    alignItems: 'flex-end',
+    alignItems: 'center',
     gap: 10,
   },
   paginationItem: {
     position: 'relative',
     alignItems: 'center',
+    justifyContent: 'center',
   },
   paginationDigit: {
     ...TYPOGRAPHY.legal,
@@ -1347,9 +1394,19 @@ const styles = StyleSheet.create({
     fontVariant: ['tabular-nums'],
     minWidth: 18,
     textAlign: 'center',
+    lineHeight: 22,
+    ...(Platform.OS === 'android' ? { includeFontPadding: false as const } : {}),
   },
   paginationInView: {
     fontWeight: '600',
+  },
+  addSetIconButton: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: 22,
+  },
+  addSetIconButtonDimmed: {
+    opacity: 0.35,
   },
   ctaPill: {
     height: EXECUTION_CTA_HEIGHT,

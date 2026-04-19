@@ -1,5 +1,5 @@
-import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Pressable } from 'react-native';
+import React, { useCallback, useEffect, useRef } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Pressable, Keyboard } from 'react-native';
 import { Platform } from 'react-native';
 import Animated, { useAnimatedStyle, interpolateColor, type SharedValue } from 'react-native-reanimated';
 import { EXPLORE_V2 } from './exploreV2Tokens';
@@ -8,6 +8,10 @@ import { useAppTheme } from '../../theme/useAppTheme';
 import { IconChevronDown } from '../icons';
 import { formatWeightForLoad } from '../../utils/weight';
 import type { ExploreV2Group } from './exploreV2Types';
+import {
+  ExploreV2CompletedExerciseEditor,
+  type ExploreV2CompletedExerciseEditorRef,
+} from './ExploreV2CompletedExerciseEditor';
 
 type Props = {
   completedGroupIndexes: number[];
@@ -27,6 +31,18 @@ type Props = {
   menuThemeActive: boolean;
   menuToneProgress: SharedValue<number>;
   contentOnly?: boolean;
+  completedExerciseEdit: { groupIndex: number; exerciseIndex: number } | null;
+  onCloseCompletedExerciseEdit: () => void;
+  completedSets: Set<string>;
+  localValues: Record<string, { weight: number; reps: number }>;
+  setLocalValues: React.Dispatch<React.SetStateAction<Record<string, { weight: number; reps: number }>>>;
+  getBarbellMode: (id: string) => boolean;
+  progressionValuesByItemId: Record<
+    string,
+    { weight: number; reps: number; weightDelta: number; repsDelta: number }
+  >;
+  /** Main only: add/remove rounds while editing inline (template + snapshot). */
+  onAdjustCompletedGroupSets?: (groupIndex: number, delta: 1 | -1) => void | Promise<void>;
 };
 
 const IDLE_HEADER_INK = '#464646';
@@ -53,15 +69,49 @@ export function ExploreV2CompleteCard({
   menuThemeActive,
   menuToneProgress,
   contentOnly = false,
+  completedExerciseEdit,
+  onCloseCompletedExerciseEdit,
+  completedSets,
+  localValues,
+  setLocalValues,
+  getBarbellMode,
+  progressionValuesByItemId,
+  onAdjustCompletedGroupSets,
 }: Props) {
   const { explore: ex, colors: themeColors } = useAppTheme();
+  const containerTertiary = themeColors.containerTertiary;
+  const completedEditRef = useRef<ExploreV2CompletedExerciseEditorRef>(null);
+
+  const editGroup =
+    completedExerciseEdit != null ? exerciseGroups[completedExerciseEdit.groupIndex] ?? null : null;
+  const editExercise =
+    completedExerciseEdit != null && editGroup
+      ? editGroup.exercises[completedExerciseEdit.exerciseIndex]
+      : null;
+  const editValid = Boolean(
+    completedExerciseEdit &&
+      editGroup &&
+      editExercise &&
+      completedGroupIndexes.includes(completedExerciseEdit.groupIndex),
+  );
+
+  const handleCloseCompletedEdit = useCallback(() => {
+    completedEditRef.current?.commitPendingDrafts();
+    Keyboard.dismiss();
+    onCloseCompletedExerciseEdit();
+  }, [onCloseCompletedExerciseEdit]);
+
+  useEffect(() => {
+    if (completedExerciseEdit && !editValid) {
+      onCloseCompletedExerciseEdit();
+    }
+  }, [completedExerciseEdit, editValid, onCloseCompletedExerciseEdit]);
   const pageBgChrome = themeColors.canvasLight;
   const restCompletedUnitInk = ex.restTimerCompletedUnitInk;
   const textMetaTimer = themeColors.textMetaTimer;
   const textMeta = themeColors.textMeta;
   const accentPrimaryDark = themeColors.accentPrimaryDark;
   const accentPrimary = themeColors.accentPrimary;
-  const accentSecondarySoft = themeColors.accentSecondarySoft;
   const containerPrimary = themeColors.containerPrimary;
   const upNextBaseBg = themeColors.containerSecondary;
   const workUpNextBg = ex.workTimerUpNextCardBg;
@@ -198,22 +248,71 @@ export function ExploreV2CompleteCard({
             </View>
           </TouchableOpacity>
         ))}
-        {rows.length === 0 && (
+        {rows.length === 0 && !editValid && (
           <Text style={[styles.empty, { color: menuThemeActive ? menuMutedInk : textMeta }]}>Nothing completed yet.</Text>
         )}
     </>
   );
 
+  const editPanel =
+    editValid && editGroup && completedExerciseEdit ? (
+      <ExploreV2CompletedExerciseEditor
+        ref={completedEditRef}
+        group={editGroup}
+        exerciseIndex={completedExerciseEdit.exerciseIndex}
+        completedSets={completedSets}
+        getSetDisplayValues={getSetDisplayValues}
+        localValues={localValues}
+        setLocalValues={setLocalValues}
+        useKg={useKg}
+        weightUnit={weightUnit}
+        getBarbellMode={getBarbellMode}
+        progressionValuesByItemId={progressionValuesByItemId}
+        showExerciseTitle={!contentOnly}
+        restThemeProgress={restThemeProgress}
+        exploreV2WorkBlueProgress={exploreV2WorkBlueProgress}
+        menuToneProgress={menuToneProgress}
+        onSave={handleCloseCompletedEdit}
+        menuThemeActive={menuThemeActive}
+        timerThemeActive={timerThemeActive}
+        onAdjustGroupSets={
+          onAdjustCompletedGroupSets && completedExerciseEdit
+            ? d => onAdjustCompletedGroupSets(completedExerciseEdit.groupIndex, d)
+            : undefined
+        }
+      />
+    ) : null;
+
+  const scrollInnerMain = editValid && editPanel ? editPanel : rowsContent;
+
   if (contentOnly) {
     return (
       <Animated.ScrollView
         style={styles.scroll}
-        contentContainerStyle={[styles.scrollInner, styles.scrollInnerContentOnly]}
+        contentContainerStyle={[
+          styles.scrollInner,
+          styles.scrollInnerContentOnly,
+          editValid && styles.scrollInnerFlexGrow,
+        ]}
         nestedScrollEnabled
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        {rowsContent}
+        {editValid ? (
+          <View style={styles.contentOnlyEditColumn}>
+            <View style={styles.contentOnlyEditBar}>
+              <Text
+                style={[styles.contentOnlyEditTitle, { color: menuThemeActive ? menuMutedInk : containerTertiary }]}
+                numberOfLines={1}
+              >
+                {editExercise?.exerciseName ?? ''}
+              </Text>
+            </View>
+            <View style={styles.contentOnlyEditFill}>{editPanel}</View>
+          </View>
+        ) : (
+          scrollInnerMain
+        )}
       </Animated.ScrollView>
     );
   }
@@ -232,9 +331,11 @@ export function ExploreV2CompleteCard({
       {!isExpanded ? (
         <Pressable style={styles.peekTapOverlay} onPress={onHeaderPress} />
       ) : null}
-      <Pressable style={styles.headerRow} onPress={onHeaderPress}>
-        <Animated.Text style={[styles.headerLabel, headerChromeAnimatedStyle]}>Completed</Animated.Text>
-        <View style={styles.countOrPlusSlot}>
+      <View style={styles.headerRow}>
+        <Pressable style={styles.headerTitlePress} onPress={onHeaderPress}>
+          <Animated.Text style={[styles.headerLabel, headerChromeAnimatedStyle]}>Completed</Animated.Text>
+        </Pressable>
+        <Pressable onPress={onHeaderPress} style={styles.countOrPlusSlot}>
           <Animated.View style={[styles.chevronLayer, chevronIdleOpacityStyle]} pointerEvents="none">
             <IconChevronDown size={18} color={menuThemeActive ? menuMutedInk : themeColors.containerPrimary} />
           </Animated.View>
@@ -244,16 +345,20 @@ export function ExploreV2CompleteCard({
           <Animated.View style={[styles.chevronLayer, chevronWorkOpacityStyle]} pointerEvents="none">
             <IconChevronDown size={18} color={menuThemeActive ? menuMutedInk : themeColors.containerPrimary} />
           </Animated.View>
-        </View>
-      </Pressable>
+        </Pressable>
+      </View>
       <Animated.ScrollView
         style={styles.scroll}
-        contentContainerStyle={[styles.scrollInner, scrollContentAnimatedStyle]}
+        contentContainerStyle={[
+          styles.scrollInner,
+          scrollContentAnimatedStyle,
+          editValid && styles.scrollInnerFlexGrow,
+        ]}
         nestedScrollEnabled
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        {rowsContent}
+        {scrollInnerMain}
       </Animated.ScrollView>
     </Animated.View>
   );
@@ -290,6 +395,21 @@ const styles = StyleSheet.create({
     paddingLeft: 24,
     paddingRight: 12,
     overflow: 'hidden',
+  },
+  headerTitlePress: {
+    flex: 1,
+    minWidth: 0,
+    justifyContent: 'center',
+  },
+  contentOnlyEditBar: {
+    marginBottom: 8,
+    width: '100%',
+  },
+  contentOnlyEditTitle: {
+    ...TYPOGRAPHY.h2,
+    fontWeight: '400',
+    flex: 1,
+    minWidth: 0,
   },
   peekTapOverlay: {
     ...StyleSheet.absoluteFillObject,
@@ -330,11 +450,26 @@ const styles = StyleSheet.create({
     paddingTop: EXPLORE_V2.headerToContentGap,
     paddingBottom: pad.bottom,
   },
+  /** Lets inline completed editor fill card height so metrics + Save pin to the bottom (matches Current card). */
+  scrollInnerFlexGrow: {
+    flexGrow: 1,
+  },
   scrollInnerContentOnly: {
     paddingTop: 12,
   },
+  contentOnlyEditColumn: {
+    flex: 1,
+    minHeight: 0,
+    width: '100%',
+  },
+  contentOnlyEditFill: {
+    flex: 1,
+    minHeight: 0,
+    width: '100%',
+  },
   row: {
     flexDirection: 'row',
+    alignItems: 'baseline',
     paddingVertical: 0,
   },
   rowWithDivider: {
@@ -344,8 +479,12 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   nameCol: { flex: 1, paddingRight: 10 },
-  name: { ...TYPOGRAPHY.meta, lineHeight: 20 },
-  valCol: { alignItems: 'flex-end' },
+  name: {
+    ...TYPOGRAPHY.meta,
+    lineHeight: 20,
+    ...(Platform.OS === 'android' ? { includeFontPadding: false as const } : {}),
+  },
+  valCol: { alignItems: 'flex-end', justifyContent: 'flex-start' },
   valRow: { flexDirection: 'row', gap: 20, justifyContent: 'flex-end' },
   valRowGapAfter: {
     marginBottom: COMPLETE_SET_LOG_GAP,
@@ -358,8 +497,17 @@ const styles = StyleSheet.create({
     textAlign: 'right',
     width: '100%',
   },
-  val: { ...TYPOGRAPHY.meta },
-  valUnit: { ...TYPOGRAPHY.meta },
+  val: {
+    ...TYPOGRAPHY.meta,
+    lineHeight: 20,
+    fontVariant: ['tabular-nums'],
+    ...(Platform.OS === 'android' ? { includeFontPadding: false as const } : {}),
+  },
+  valUnit: {
+    ...TYPOGRAPHY.meta,
+    lineHeight: 20,
+    ...(Platform.OS === 'android' ? { includeFontPadding: false as const } : {}),
+  },
   chevronLayer: {
     ...StyleSheet.absoluteFillObject,
     alignItems: 'center',
