@@ -25,12 +25,14 @@ import { IconTrash } from '../components/icons';
 import { useTranslation } from '../i18n/useTranslation';
 import type { Exercise } from '../types';
 import type { WorkoutTemplate } from '../types/training';
-import type { WorkoutDraft } from '../types/workoutDraft';
+import type { WorkoutDraft, WorkoutDraftLine } from '../types/workoutDraft';
 import { useAppTheme } from '../theme/useAppTheme';
 import { EXECUTION_CTA_ROW_GAP } from '../components/execution/executionCtaTokens';
 import { BackTextButton } from '../components/common/BackTextButton';
 import { newDraftId, parseBuilderPasteAll } from '../utils/workoutBuilderPaste';
 import { findActiveTemplateByName } from '../utils/workoutNameCollision';
+import { draftLineFromImportedName, buildCustomExerciseDefinition } from '../utils/exerciseIdentity';
+import { ExerciseSearchPickModal } from '../components/workoutBuilder/ExerciseSearchPickModal';
 
 /** Bold exercise list on light builder canvas (matches product mock). */
 const LIST_EXERCISE_INK = '#1B4332';
@@ -48,6 +50,7 @@ export function WorkoutBuilderScreen() {
   const insets = useSafeAreaInsets();
   const { width: windowWidth } = useWindowDimensions();
   const { addWorkoutTemplate, updateWorkoutTemplate, scheduleWorkout, addExercise, workoutTemplates } = useStore();
+  const exercises = useStore(s => s.exercises);
   const { t } = useTranslation();
   const { colors: themeColors, explore } = useAppTheme();
 
@@ -59,9 +62,11 @@ export function WorkoutBuilderScreen() {
   const [activeWorkoutIndex, setActiveWorkoutIndex] = useState(
     () => params?.initialDraftPayload?.activeIndex ?? 0,
   );
-  const [exerciseInput, setExerciseInput] = useState('');
-  const exerciseInputRef = useRef<TextInput>(null);
   const pagerRef = useRef<FlatList<WorkoutDraft>>(null);
+  const [libraryPickerOpen, setLibraryPickerOpen] = useState(false);
+  const [pickerInitialQuery, setPickerInitialQuery] = useState('');
+  /** When set, library/custom pick assigns this row; when null, appends a new line */
+  const [resolvingLineId, setResolvingLineId] = useState<string | null>(null);
 
   /** Full screen width so `pagingEnabled` aligns with each workout page. */
   const pageWidth = Math.max(0, windowWidth);
@@ -76,10 +81,8 @@ export function WorkoutBuilderScreen() {
   );
 
   const hasDraft = useMemo(
-    () =>
-      draftWorkouts.some(w => w.name.trim().length > 0 || w.lines.length > 0) ||
-      exerciseInput.trim().length > 0,
-    [draftWorkouts, exerciseInput],
+    () => draftWorkouts.some(w => w.name.trim().length > 0 || w.lines.length > 0),
+    [draftWorkouts],
   );
 
   const defaultWorkoutLabel = useCallback(
@@ -109,14 +112,55 @@ export function WorkoutBuilderScreen() {
   const resetCreationForm = useCallback(() => {
     setDraftWorkouts([{ id: newDraftId('wd'), name: '', lines: [] }]);
     setActiveWorkoutIndex(0);
-    setExerciseInput('');
+    setResolvingLineId(null);
     useStore.getState().setScheduleDeckFocusAfterCreate(null);
   }, []);
 
-  const focusAddExercise = useCallback(() => {
+  const openLibraryPickerForNewLine = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    requestAnimationFrame(() => exerciseInputRef.current?.focus());
+    setResolvingLineId(null);
+    setPickerInitialQuery('');
+    setLibraryPickerOpen(true);
   }, []);
+
+  const applyExerciseToTargetLine = useCallback(
+    (ex: Exercise, targetLineId: string | null) => {
+      setDraftWorkouts(prev =>
+        prev.map((w, wi) => {
+          if (wi !== activeWorkoutIndex) return w;
+          if (targetLineId) {
+            return {
+              ...w,
+              lines: w.lines.map(l =>
+                l.id === targetLineId
+                  ? {
+                      ...l,
+                      name: ex.name,
+                      exerciseId: ex.id,
+                      resolutionStatus: undefined,
+                      matchCandidateIds: undefined,
+                    }
+                  : l,
+              ),
+            };
+          }
+          return {
+            ...w,
+            lines: [
+              ...w.lines,
+              {
+                id: `line-${Date.now()}-${w.lines.length}`,
+                name: ex.name,
+                exerciseId: ex.id,
+              },
+            ],
+          };
+        }),
+      );
+      setResolvingLineId(null);
+    },
+    [activeWorkoutIndex],
+  );
 
   const setActiveWorkoutName = useCallback((name: string) => {
     setDraftWorkouts(prev =>
@@ -145,16 +189,14 @@ export function WorkoutBuilderScreen() {
         parsedWorkouts.map((pw, i) => ({
           id: `wd-${batch}-${i}`,
           name: pw.workoutName.trim() ? pw.workoutName.trim() : defaultWorkoutLabel(i),
-          lines: pw.exercises.map((name, j) => ({
-            id: `line-paste-${batch}-${i}-${j}`,
-            name: name.trim(),
-          })),
+          lines: pw.exercises.map((name, j) =>
+            draftLineFromImportedName(name, `line-paste-${batch}-${i}-${j}`, exercises),
+          ),
         })),
       );
       setActiveWorkoutIndex(0);
       requestAnimationFrame(() => {
         pagerRef.current?.scrollToOffset({ offset: 0, animated: false });
-        exerciseInputRef.current?.focus();
       });
       return;
     }
@@ -164,7 +206,9 @@ export function WorkoutBuilderScreen() {
       const idx = Math.min(activeWorkoutIndex, Math.max(0, prev.length - 1));
       return prev.map((w, i) => {
         if (i !== idx) return w;
-        const existing = new Set(w.lines.map(l => l.name.trim().toLowerCase()));
+        const existing = new Set(
+          w.lines.map(l => (l.exerciseId ?? l.name).trim().toLowerCase()),
+        );
         const toAdd = p.exercises.filter(e => !existing.has(e.trim().toLowerCase()));
         const base = w.lines.length;
         const mergedName =
@@ -174,16 +218,14 @@ export function WorkoutBuilderScreen() {
           name: mergedName,
           lines: [
             ...w.lines,
-            ...toAdd.map((name, j) => ({
-              id: `line-paste-${Date.now()}-${base + j}`,
-              name: name.trim(),
-            })),
+            ...toAdd.map((name, j) =>
+              draftLineFromImportedName(name, `line-paste-${Date.now()}-${base + j}`, exercises),
+            ),
           ],
         };
       });
     });
-    requestAnimationFrame(() => exerciseInputRef.current?.focus());
-  }, [t, activeWorkoutIndex, defaultWorkoutLabel]);
+  }, [t, activeWorkoutIndex, defaultWorkoutLabel, exercises]);
 
   const handleClearAllEntries = useCallback(() => {
     Alert.alert(t('clearBuilderEntriesTitle'), t('clearBuilderEntriesMessage'), [
@@ -199,23 +241,6 @@ export function WorkoutBuilderScreen() {
     ]);
   }, [t, resetCreationForm]);
 
-  const commitExerciseLine = useCallback(() => {
-    const name = exerciseInput.trim();
-    if (!name) return;
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setDraftWorkouts(prev =>
-      prev.map((w, i) => {
-        if (i !== activeWorkoutIndex) return w;
-        return {
-          ...w,
-          lines: [...w.lines, { id: `line-${Date.now()}-${w.lines.length}`, name }],
-        };
-      }),
-    );
-    setExerciseInput('');
-    requestAnimationFrame(() => exerciseInputRef.current?.focus());
-  }, [exerciseInput, activeWorkoutIndex]);
-
   const removeLine = (workoutId: string, lineId: string) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setDraftWorkouts(prev =>
@@ -223,29 +248,14 @@ export function WorkoutBuilderScreen() {
     );
   };
 
-  const resolveExerciseIdForName = async (name: string, index: number): Promise<string> => {
-    const trimmed = name.trim();
-    const lib = useStore.getState().exercises.find(ex => ex.name.toLowerCase() === trimmed.toLowerCase());
-    if (lib) return lib.id;
-    const id = `ex-user-${Date.now()}-${index}`;
-    const newEx: Exercise = {
-      id,
-      name: trimmed,
-      category: 'Other',
-      isCustom: true,
-    };
-    await addExercise(newEx);
-    return id;
-  };
-
   const persistWorkoutTemplate = async (w: WorkoutDraft, templateId: string, isNew: boolean) => {
     const now = new Date().toISOString();
     const items: WorkoutTemplate['items'] = [];
     for (let i = 0; i < w.lines.length; i++) {
-      const exerciseId = await resolveExerciseIdForName(w.lines[i].name, i);
+      const line = w.lines[i]!;
       items.push({
         id: `tex-${templateId}-${i}`,
-        exerciseId,
+        exerciseId: line.exerciseId!,
         order: i,
         sets: 1,
         reps: '',
@@ -305,6 +315,12 @@ export function WorkoutBuilderScreen() {
       return;
     }
 
+    const unresolved = w.lines.filter(l => !l.exerciseId || l.resolutionStatus === 'needs_pick');
+    if (unresolved.length > 0) {
+      Alert.alert(t('alertErrorTitle'), t('resolveExercisesBeforeSave'));
+      return;
+    }
+
     if (w.requiresRenameBeforeSave) {
       const collision = findActiveTemplateByName(workoutTemplates, w.name);
       if (collision) {
@@ -328,7 +344,7 @@ export function WorkoutBuilderScreen() {
           text: t('updateExistingWorkout'),
           onPress: () => void persistWorkoutTemplate(w, existing.id, false),
         },
-        { text: t('chooseDifferentName'), onPress: () => focusAddExercise() },
+        { text: t('chooseDifferentName'), onPress: () => openLibraryPickerForNewLine() },
       ]);
       return;
     }
@@ -354,6 +370,12 @@ export function WorkoutBuilderScreen() {
     pagerRef.current?.scrollToOffset({ offset: index * pageWidth, animated: true });
   }, [pageWidth]);
 
+  const openPickerForLine = useCallback((lineId: string, initial: string) => {
+    setResolvingLineId(lineId);
+    setPickerInitialQuery(initial);
+    setLibraryPickerOpen(true);
+  }, []);
+
   const renderExercisePage = useCallback(
     ({ item }: { item: WorkoutDraft }) => (
       <View style={[styles.page, { width: pageWidth }]}>
@@ -363,24 +385,45 @@ export function WorkoutBuilderScreen() {
           contentContainerStyle={[styles.pageScrollContent, { paddingBottom: insets.bottom + footerReserve }]}
         >
           <View style={styles.listBlock}>
-            {item.lines.map(line => (
-              <View key={line.id} style={styles.exerciseRow}>
-                <Text style={styles.exerciseRowText}>{line.name}</Text>
-                <TouchableOpacity
-                  onPress={() => removeLine(item.id, line.id)}
-                  hitSlop={12}
-                  accessibilityRole="button"
-                  accessibilityLabel={`${t('remove')}: ${line.name}`}
-                >
-                  <IconTrash size={20} color={COLORS.signalNegative} />
-                </TouchableOpacity>
-              </View>
-            ))}
+            {item.lines.map(line => {
+              const needsPick = !line.exerciseId;
+              return (
+                <View key={line.id} style={styles.exerciseRow}>
+                  <TouchableOpacity
+                    style={styles.exerciseRowLabelWrap}
+                    onPress={() => {
+                      if (needsPick) openPickerForLine(line.id, line.name);
+                    }}
+                    disabled={!needsPick}
+                    activeOpacity={needsPick ? 0.7 : 1}
+                  >
+                    <Text
+                      style={[
+                        styles.exerciseRowText,
+                        needsPick && { color: COLORS.signalNegative },
+                      ]}
+                      numberOfLines={3}
+                    >
+                      {line.name}
+                      {needsPick ? ` — ${t('chooseFromLibrary')}` : ''}
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={() => removeLine(item.id, line.id)}
+                    hitSlop={12}
+                    accessibilityRole="button"
+                    accessibilityLabel={`${t('remove')}: ${line.name}`}
+                  >
+                    <IconTrash size={20} color={COLORS.signalNegative} />
+                  </TouchableOpacity>
+                </View>
+              );
+            })}
           </View>
         </ScrollView>
       </View>
     ),
-    [pageWidth, insets.bottom, footerReserve, t],
+    [pageWidth, insets.bottom, footerReserve, t, openPickerForLine],
   );
 
   const canvas = themeColors.canvasLight;
@@ -446,23 +489,24 @@ export function WorkoutBuilderScreen() {
               onChangeText={setActiveWorkoutName}
               autoCapitalize="sentences"
               returnKeyType="next"
-              onSubmitEditing={focusAddExercise}
+              onSubmitEditing={openLibraryPickerForNewLine}
               accessibilityLabel={t('workoutName')}
             />
 
-            <TextInput
-              ref={exerciseInputRef}
-              style={[styles.titleInput, { color: COLORS.textPrimary }]}
-              placeholder={t('addExerciseCta')}
-              placeholderTextColor={meta}
-              value={exerciseInput}
-              onChangeText={setExerciseInput}
-              onSubmitEditing={commitExerciseLine}
-              returnKeyType="done"
-              blurOnSubmit={false}
-              autoCapitalize="words"
-              accessibilityLabel={t('addExerciseCta')}
-            />
+            <View style={styles.addExerciseActions}>
+              <TouchableOpacity
+                style={styles.addExerciseLinkTouch}
+                onPress={openLibraryPickerForNewLine}
+                hitSlop={8}
+                activeOpacity={0.75}
+                accessibilityRole="button"
+                accessibilityLabel={t('addExercise')}
+              >
+                <Text style={[styles.addExerciseLinkText, { color: meta, borderBottomColor: meta }]}>
+                  {t('addExerciseCta')}
+                </Text>
+              </TouchableOpacity>
+            </View>
           </View>
 
           <FlatList
@@ -509,6 +553,24 @@ export function WorkoutBuilderScreen() {
             </TouchableOpacity>
           </View>
         </View>
+
+        <ExerciseSearchPickModal
+          visible={libraryPickerOpen}
+          exercises={exercises}
+          initialQuery={pickerInitialQuery}
+          onClose={() => {
+            setLibraryPickerOpen(false);
+            setResolvingLineId(null);
+          }}
+          onSelectExercise={ex => {
+            applyExerciseToTargetLine(ex, resolvingLineId);
+          }}
+          onCreateCustom={async name => {
+            const def = buildCustomExerciseDefinition(name, Date.now());
+            await addExercise(def);
+            applyExerciseToTargetLine(def, resolvingLineId);
+          }}
+        />
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -575,11 +637,26 @@ const styles = StyleSheet.create({
   listBlock: {
     gap: SPACING.xl,
   },
+  addExerciseActions: {
+    marginBottom: SPACING.lg,
+  },
+  /** Matches Explore v2 Up Next “+ add” link (`ExploreV2UpNextCard` action row). */
+  addExerciseLinkTouch: {
+    paddingVertical: 2,
+    alignSelf: 'flex-start',
+  },
+  addExerciseLinkText: {
+    ...TYPOGRAPHY.h1,
+    borderBottomWidth: 1,
+  },
   exerciseRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     justifyContent: 'space-between',
     gap: SPACING.lg,
+  },
+  exerciseRowLabelWrap: {
+    flex: 1,
   },
   exerciseRowText: {
     flex: 1,

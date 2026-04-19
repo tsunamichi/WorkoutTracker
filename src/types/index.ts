@@ -80,15 +80,25 @@ export interface WorkoutTemplateExercise {
 
 export type ExerciseMeasurementType = 'reps' | 'time';
 
+/**
+ * Catalog exercise — stable `id` keys templates, sessions, and progress.
+ * Use `canonicalName` + `aliases` for search/import matching, not raw `name` alone.
+ * Alias: `ExerciseDefinition` (canonical exercise identity in the library).
+ */
 export interface Exercise {
   id: string;
   name: string;
+  canonicalName?: string;
+  aliases?: string[];
   category: ExerciseCategory;
   equipment?: string;
   isCustom: boolean;
   measurementType?: ExerciseMeasurementType; // 'reps' (default) or 'time' (for isometric/time-based exercises)
   notes?: string;
 }
+
+/** Canonical library exercise (same shape as {@link Exercise}). */
+export type ExerciseDefinition = Exercise;
 
 export interface ExercisePR {
   exerciseId: string;

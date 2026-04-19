@@ -9,10 +9,17 @@
  */
 export type WorkoutDraftLine = {
   id: string;
-  /** Display / matching label */
+  /** Display label (from catalog name when resolved) */
   name: string;
-  /** Library exercise id when resolved */
+  /** Library exercise id — required for save once resolved */
   exerciseId?: string;
+  /**
+   * Import/paste could not auto-resolve to one exercise — user must pick from library
+   * or create custom before save.
+   */
+  resolutionStatus?: 'needs_pick';
+  /** When ambiguous import — short list for quick pick */
+  matchCandidateIds?: string[];
 };
 
 export type WorkoutDraft = {

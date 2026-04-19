@@ -5,7 +5,7 @@ import { newDraftId } from './workoutBuilderPaste';
 
 /**
  * Build an editable draft from a frozen main snapshot.
- * Prefer catalog match by exerciseId; then normalized name; else keep a custom row label.
+ * Prefer catalog match by exerciseId; if the id is missing (deleted catalog row), require re-pick.
  */
 export function hydrateWorkoutDraftFromSnapshot(
   workoutTitle: string,
@@ -15,6 +15,7 @@ export function hydrateWorkoutDraftFromSnapshot(
   const lines: WorkoutDraftLine[] = snapshot.map((ex, i) => {
     let displayName: string | undefined;
     let exerciseId: string | undefined;
+    let resolutionStatus: WorkoutDraftLine['resolutionStatus'];
 
     const byId = exercises.find(e => e.id === ex.exerciseId);
     if (byId) {
@@ -23,12 +24,14 @@ export function hydrateWorkoutDraftFromSnapshot(
     } else {
       displayName = `Custom exercise ${i + 1}`;
       exerciseId = undefined;
+      resolutionStatus = 'needs_pick';
     }
 
     return {
       id: newDraftId('line'),
       name: displayName ?? `Exercise ${i + 1}`,
       exerciseId,
+      resolutionStatus,
     };
   });
 

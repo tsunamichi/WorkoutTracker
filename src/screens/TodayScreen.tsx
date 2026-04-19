@@ -34,6 +34,7 @@ import { newDraftId, parseBuilderPasteAll } from '../utils/workoutBuilderPaste';
 import { findActiveTemplateByName, suggestNonCollidingName } from '../utils/workoutNameCollision';
 import { buildRecentWorkoutPickerOptions, type RecentWorkoutPickerOption } from '../utils/recentWorkoutPickerOptions';
 import { hydrateWorkoutDraftFromSnapshot } from '../utils/hydrateWorkoutDraftFromSnapshot';
+import { draftLineFromImportedName } from '../utils/exerciseIdentity';
 import type { ScheduledWorkout } from '../types/training';
 import type { ExerciseProgress } from '../types';
 
@@ -1071,10 +1072,9 @@ export function TodayScreen({ onDateChange, onOpenAddWorkout, onOpenBonusDrawer 
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     const section = parsed[0];
     const baseName = section.workoutName.trim() || t('untitledWorkout');
-    const draftLines = section.exercises.map(name => ({
-      id: newDraftId('line'),
-      name: name.trim(),
-    }));
+    const draftLines = section.exercises.map(name =>
+      draftLineFromImportedName(name, newDraftId('line'), exercises),
+    );
     let name = baseName;
     let requiresRenameBeforeSave = false;
     const hit = findActiveTemplateByName(workoutTemplates, baseName);
@@ -1094,7 +1094,7 @@ export function TodayScreen({ onDateChange, onOpenAddWorkout, onOpenBonusDrawer 
       shouldScheduleAfterCreate: true,
       initialDraftPayload: { drafts: [draft], activeIndex: 0 },
     });
-  }, [navigation, t, workoutTemplates, selectedDate]);
+  }, [navigation, t, workoutTemplates, selectedDate, exercises]);
 
   const handleOpenRecentWorkoutPicker = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);

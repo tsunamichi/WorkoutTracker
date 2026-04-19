@@ -248,6 +248,14 @@ type TranslationKey =
   | 'noDraftFound'
   | 'noExercisesYet'
   | 'addExerciseCta'
+  | 'addExerciseFromLibrary'
+  | 'exerciseSearchPlaceholder'
+  | 'createCustomExercise'
+  | 'createExerciseNamedTemplate'
+  | 'builderExerciseSearchEmptyHint'
+  | 'customExerciseHint'
+  | 'customExerciseNamePlaceholder'
+  | 'resolveExercisesBeforeSave'
   | 'pasteWorkout'
   | 'clipboardEmpty'
   | 'pasteNoExercisesFound'
@@ -894,6 +902,15 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     noDraftFound: 'No draft found',
     noExercisesYet: 'No exercises yet. Add some below!',
     addExerciseCta: '+ add exercise',
+    addExerciseFromLibrary: 'Add from library',
+    exerciseSearchPlaceholder: 'Search exercises',
+    createCustomExercise: 'Create custom exercise',
+    createExerciseNamedTemplate: 'Create "{name}"',
+    builderExerciseSearchEmptyHint:
+      'Type below to search the library. Pick a match, or create a custom exercise if it is not listed.',
+    customExerciseHint: 'Custom exercises get a stable identity so history stays together.',
+    customExerciseNamePlaceholder: 'Exercise name',
+    resolveExercisesBeforeSave: 'Assign every exercise from the library or create a custom one before saving.',
     pasteWorkout: 'Paste',
     clipboardEmpty: 'The clipboard is empty.',
     pasteNoExercisesFound:
@@ -1562,6 +1579,15 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     noDraftFound: 'No hay borrador',
     noExercisesYet: 'No hay ejercicios. Agrega abajo.',
     addExerciseCta: '+ agregar ejercicio',
+    addExerciseFromLibrary: 'Añadir desde biblioteca',
+    exerciseSearchPlaceholder: 'Buscar ejercicios',
+    createCustomExercise: 'Crear ejercicio personalizado',
+    createExerciseNamedTemplate: 'Crear «{name}»',
+    builderExerciseSearchEmptyHint:
+      'Escribe abajo para buscar en la biblioteca. Elige un resultado o crea un ejercicio personalizado si no aparece.',
+    customExerciseHint: 'Los ejercicios personalizados tienen una identidad estable para el historial.',
+    customExerciseNamePlaceholder: 'Nombre del ejercicio',
+    resolveExercisesBeforeSave: 'Asigna cada ejercicio desde la biblioteca o crea uno personalizado antes de guardar.',
     pasteWorkout: 'Pegar',
     clipboardEmpty: 'El portapapeles está vacío.',
     pasteNoExercisesFound:

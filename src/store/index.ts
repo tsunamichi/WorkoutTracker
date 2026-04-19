@@ -12,6 +12,7 @@ import { cloudBackupService } from '../services/cloudBackup';
 import { migrateOldStorageKeys } from '../utils/dataMigration';
 import { cloudSyncService } from '../services/cloudSync';
 import { createNewExerciseItem } from '../utils/exerciseMigration';
+import { migrateLoadedExerciseCatalog, normalizeExerciseLabel } from '../utils/exerciseIdentity';
 
 dayjs.extend(isoWeek);
 
@@ -522,11 +523,21 @@ export const useStore = create<WorkoutStore>((set, get) => ({
         finalExercises = SEED_EXERCISES.map((ex, idx) => ({
           id: `seed-${idx}`,
           name: ex.name,
+          canonicalName: normalizeExerciseLabel(ex.name),
+          aliases: [] as string[],
           category: ex.category as any,
           equipment: ex.equipment,
           isCustom: false,
         }));
         await storage.saveExercises(finalExercises);
+      }
+
+      {
+        const mig = migrateLoadedExerciseCatalog(finalExercises);
+        if (mig.changed) {
+          finalExercises = mig.next;
+          await storage.saveExercises(finalExercises);
+        }
       }
 
       // Seed workout sessions for demo/testing if none exist - will be assigned to finalSessions later
@@ -1571,7 +1582,12 @@ export const useStore = create<WorkoutStore>((set, get) => ({
   },
   
   addExercise: async (exercise) => {
-    const exercises = [...get().exercises, exercise];
+    const enriched: Exercise = {
+      ...exercise,
+      canonicalName: exercise.canonicalName ?? normalizeExerciseLabel(exercise.name),
+      aliases: exercise.aliases ?? [],
+    };
+    const exercises = [...get().exercises, enriched];
     set({ exercises });
     await storage.saveExercises(exercises);
   },
