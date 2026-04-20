@@ -1,9 +1,10 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, FlatList } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import dayjs from 'dayjs';
 import { BottomDrawer } from '../common/BottomDrawer';
-import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS } from '../../constants';
+import { COLORS, SPACING, TYPOGRAPHY } from '../../constants';
 import { useTranslation } from '../../i18n/useTranslation';
+import { useAppTheme } from '../../theme/useAppTheme';
 import type { RecentWorkoutPickerOption } from '../../utils/recentWorkoutPickerOptions';
 
 type Props = {
@@ -15,42 +16,47 @@ type Props = {
 
 export function RecentWorkoutPickerSheet({ visible, onClose, options, onSelect }: Props) {
   const { t } = useTranslation();
+  const appTheme = useAppTheme();
+  const { colors: themeColors } = appTheme;
+  const isV2Theme = appTheme.id === 'v2';
+  /** Same as timer grid cards on TodayScreen (`savedTimersCardBackground` / `savedTimersInk` / `savedTimersMetaInk`). */
+  const timerCardBackground = isV2Theme ? themeColors.canvasContainer : COLORS.containerTertiary;
+  const timerTitleInk = themeColors.containerPrimary;
 
   return (
-    <BottomDrawer visible={visible} onClose={onClose} maxHeight="72%" showHandle>
+    <BottomDrawer
+      visible={visible}
+      onClose={onClose}
+      maxHeight="90%"
+      showHandle
+      backgroundColor={themeColors.canvasLight}
+      keyboardShouldPersistTaps="handled"
+    >
       <View style={styles.container}>
         <Text style={styles.title}>{t('useRecentWorkoutPickerTitle')}</Text>
-        <Text style={styles.subtitle}>{t('useRecentWorkoutPickerSubtitle')}</Text>
         {options.length === 0 ? (
           <Text style={styles.empty}>{t('noWorkoutHistoryYet')}</Text>
         ) : (
-          <FlatList
-            data={options}
-            keyExtractor={o => o.sourceScheduledWorkoutId}
-            style={styles.list}
-            contentContainerStyle={styles.listContent}
-            keyboardShouldPersistTaps="handled"
-            renderItem={({ item }) => (
+          <View style={styles.list}>
+            {options.map(item => (
               <TouchableOpacity
-                style={styles.row}
+                key={item.sourceScheduledWorkoutId}
+                style={[styles.row, { backgroundColor: timerCardBackground }]}
                 onPress={() => {
                   onSelect(item);
                   onClose();
                 }}
                 activeOpacity={0.85}
               >
-                <Text style={styles.rowTitle} numberOfLines={2}>
+                <Text style={[styles.rowTitle, { color: timerTitleInk }]} numberOfLines={2}>
                   {item.workoutName}
                 </Text>
-                <Text style={styles.rowMeta}>
+                <Text style={[styles.rowMeta, { color: themeColors.textMeta }]}>
                   {t('lastPerformedPrefix')} {dayjs(item.lastPerformedAt).format('MMM D, YYYY')}
                 </Text>
-                <Text style={styles.rowMeta}>
-                  {t('exerciseCountLabel').replace('{count}', String(item.exerciseCount))}
-                </Text>
               </TouchableOpacity>
-            )}
-          />
+            ))}
+          </View>
         )}
       </View>
     </BottomDrawer>
@@ -59,21 +65,13 @@ export function RecentWorkoutPickerSheet({ visible, onClose, options, onSelect }
 
 const styles = StyleSheet.create({
   container: {
-    paddingHorizontal: SPACING.lg,
+    paddingHorizontal: 24,
     paddingBottom: SPACING.xl,
-    flex: 1,
-    minHeight: 200,
   },
   title: {
-    ...TYPOGRAPHY.h2,
-    fontWeight: '600',
-    color: COLORS.text,
-    marginBottom: SPACING.xs,
-  },
-  subtitle: {
-    ...TYPOGRAPHY.meta,
+    ...TYPOGRAPHY.h3,
     color: COLORS.textMeta,
-    marginBottom: SPACING.md,
+    paddingBottom: 40,
   },
   empty: {
     ...TYPOGRAPHY.body,
@@ -81,27 +79,21 @@ const styles = StyleSheet.create({
     marginTop: SPACING.lg,
   },
   list: {
-    flexGrow: 1,
+    gap: SPACING.md,
+    paddingBottom: SPACING.sm,
   },
-  listContent: {
-    paddingBottom: SPACING.xl,
-    gap: SPACING.sm,
-  },
+  /** Shell aligned with `footerEntryCard` on timer grid (TodayScreen). */
   row: {
-    borderRadius: BORDER_RADIUS.md,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    padding: SPACING.md,
-    backgroundColor: COLORS.backgroundCanvas,
+    borderRadius: 10,
+    padding: 16,
   },
   rowTitle: {
-    ...TYPOGRAPHY.body,
-    fontWeight: '600',
-    color: COLORS.text,
+    ...TYPOGRAPHY.h3,
+    fontWeight: '500',
   },
   rowMeta: {
-    ...TYPOGRAPHY.meta,
-    color: COLORS.textMeta,
+    ...TYPOGRAPHY.legal,
+    fontWeight: '500',
     marginTop: 4,
   },
 });

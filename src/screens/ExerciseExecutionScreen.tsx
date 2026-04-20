@@ -28,10 +28,10 @@ import AnimatedReanimated, {
   useDerivedValue,
   useAnimatedStyle,
   withTiming,
-  withDelay,
   interpolate,
   interpolateColor,
   runOnJS,
+  Extrapolation,
   Easing as ReanimatedEasing,
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -72,6 +72,11 @@ import type { WarmupItem_DEPRECATED as WarmupItem, AccessoryItem_DEPRECATED as A
 import { isDeprecatedItem, getDisplayValuesFromItem } from '../utils/exerciseMigration';
 import { computeNextSuggestion } from '../utils/progressionSuggestions';
 import dayjs from 'dayjs';
+import {
+  SCHEDULE_DECK_EXECUTION_INCOMING_SCALE_START,
+  SCHEDULE_DECK_T,
+  useScheduleDeckTransition,
+} from '../context/ScheduleDeckTransitionContext';
 
 // Enable LayoutAnimation on Android
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -209,17 +214,16 @@ export function ExerciseExecutionScreen() {
     transitionOrigin?: { x: number; y: number; width: number; height: number; borderRadius: number };
   };
   const transitionSource = (route.params as any)?.transitionSource;
-  const transitionOrigin = (route.params as any)?.transitionOrigin;
-  const isScheduleOriginTransition = transitionSource === 'scheduleDeck' && !!transitionOrigin;
-  const [scheduleTransitionTargetFrame, setScheduleTransitionTargetFrame] = useState<{
-    x: number;
-    y: number;
-    width: number;
-    height: number;
-  } | null>(null);
-  const scheduleTransitionProgress = useSharedValue(isScheduleOriginTransition ? 0 : 1);
-  const scheduleTransitionContentProgress = useSharedValue(isScheduleOriginTransition ? 0 : 1);
+  const isScheduleOriginTransition = transitionSource === 'scheduleDeck';
   const isClosingFromHeaderRef = useRef(false);
+  const {
+    progress: scheduleDeckProgressSV,
+    reset: resetScheduleDeckTransition,
+    startReverseTransition: startScheduleDeckReverseTransition,
+  } = useScheduleDeckTransition();
+  const scheduleDeckTransitionActiveSV = useSharedValue(isScheduleOriginTransition ? 1 : 0);
+  /** Lets the next `goBack` / `beforeRemove` pop through after the reverse handoff animation. */
+  const allowScheduleDeckPopRef = useRef(false);
   
   console.log('🚀 ExerciseExecutionScreen initialized:', {
     workoutKey,
@@ -276,96 +280,75 @@ export function ExerciseExecutionScreen() {
   const appTheme = useAppTheme();
 
   useEffect(() => {
-    if (!isScheduleOriginTransition) return;
-    scheduleTransitionProgress.value = withTiming(1, {
-      duration: 360,
-      easing: ReanimatedEasing.bezier(0.22, 0.8, 0.22, 1),
-    });
-    scheduleTransitionContentProgress.value = withDelay(
-      100,
-      withTiming(1, { duration: 240, easing: ReanimatedEasing.out(ReanimatedEasing.cubic) }),
+    scheduleDeckTransitionActiveSV.value = isScheduleOriginTransition ? 1 : 0;
+  }, [isScheduleOriginTransition, scheduleDeckTransitionActiveSV]);
+
+  /**
+   * Incoming: opacity + scale — scale runs 1/1.25 → 1 (inverse of home’s 1 → 1.25). Same timeline as opacity.
+   * Layout uses pre-measure fallbacks aligned with real onLayout so Up Next doesn’t jump when this runs.
+   */
+  const scheduleDeckIncomingShellStyle = useAnimatedStyle(() => {
+    if (scheduleDeckTransitionActiveSV.value === 0) {
+      return {};
+    }
+    const p = scheduleDeckProgressSV.value;
+    const opacity = interpolate(p, [SCHEDULE_DECK_T.inStart, SCHEDULE_DECK_T.inOpacityEnd], [0, 1], Extrapolation.CLAMP);
+    const scale = interpolate(
+      p,
+      [SCHEDULE_DECK_T.inStart, SCHEDULE_DECK_T.inEnd],
+      [SCHEDULE_DECK_EXECUTION_INCOMING_SCALE_START, 1],
+      Extrapolation.CLAMP,
     );
-  }, [isScheduleOriginTransition, scheduleTransitionContentProgress, scheduleTransitionProgress]);
+    return { opacity, transform: [{ scale }] };
+  });
 
   const runCloseToScheduleCard = useCallback(() => {
-    if (!isScheduleOriginTransition || isClosingFromHeaderRef.current) {
+    if (!isScheduleOriginTransition) {
+      navigation.goBack();
+      return;
+    }
+    if (isClosingFromHeaderRef.current) {
+      allowScheduleDeckPopRef.current = true;
       navigation.goBack();
       return;
     }
     isClosingFromHeaderRef.current = true;
-    scheduleTransitionContentProgress.value = withTiming(0, { duration: 130 });
-    scheduleTransitionProgress.value = withTiming(
-      0,
-      { duration: 260, easing: ReanimatedEasing.inOut(ReanimatedEasing.cubic) },
-      done => {
-        if (done) runOnJS(navigation.goBack)();
-      },
-    );
-  }, [isScheduleOriginTransition, navigation, scheduleTransitionContentProgress, scheduleTransitionProgress]);
+    startScheduleDeckReverseTransition(finished => {
+      if (!finished) {
+        isClosingFromHeaderRef.current = false;
+        return;
+      }
+      allowScheduleDeckPopRef.current = true;
+      navigation.goBack();
+      resetScheduleDeckTransition();
+    });
+  }, [
+    isScheduleOriginTransition,
+    navigation,
+    resetScheduleDeckTransition,
+    startScheduleDeckReverseTransition,
+  ]);
 
-  const scheduleCardExpandAnimatedStyle = useAnimatedStyle(() => {
-    if (!isScheduleOriginTransition || !transitionOrigin) return {};
-    const originCenterX = transitionOrigin.x + transitionOrigin.width / 2;
-    const originCenterY = transitionOrigin.y + transitionOrigin.height / 2;
-    const targetX = scheduleTransitionTargetFrame?.x ?? 0;
-    const targetY = scheduleTransitionTargetFrame?.y ?? 0;
-    const targetWidth = scheduleTransitionTargetFrame?.width ?? screenWidth;
-    const targetHeight = scheduleTransitionTargetFrame?.height ?? screenHeight;
-    const targetCenterX = targetX + targetWidth / 2;
-    const targetCenterY = targetY + targetHeight / 2;
-    return {
-      borderRadius: interpolate(
-        scheduleTransitionProgress.value,
-        [0, 1],
-        [transitionOrigin.borderRadius, 0],
-        'clamp',
-      ),
-      overflow: 'hidden' as const,
-      transform: [
-        {
-          translateX: interpolate(
-            scheduleTransitionProgress.value,
-            [0, 1],
-            [originCenterX - targetCenterX, 0],
-            'clamp',
-          ),
-        },
-        {
-          translateY: interpolate(
-            scheduleTransitionProgress.value,
-            [0, 1],
-            [originCenterY - targetCenterY, 0],
-            'clamp',
-          ),
-        },
-        {
-          scaleX: interpolate(
-            scheduleTransitionProgress.value,
-            [0, 1],
-            [transitionOrigin.width / targetWidth, 1],
-            'clamp',
-          ),
-        },
-        {
-          scaleY: interpolate(
-            scheduleTransitionProgress.value,
-            [0, 1],
-            [transitionOrigin.height / targetHeight, 1],
-            'clamp',
-          ),
-        },
-      ],
-    };
-  }, [isScheduleOriginTransition, scheduleTransitionTargetFrame, screenHeight, screenWidth, transitionOrigin]);
-
-  const scheduleCardContentRevealStyle = useAnimatedStyle(() => ({
-    opacity: scheduleTransitionContentProgress.value,
-    transform: [{ translateY: interpolate(scheduleTransitionContentProgress.value, [0, 1], [12, 0], 'clamp') }],
-  }));
-  const scheduleHeaderRevealStyle = useAnimatedStyle(() => ({
-    opacity: scheduleTransitionContentProgress.value,
-    transform: [{ translateY: interpolate(scheduleTransitionContentProgress.value, [0, 1], [20, 0], 'clamp') }],
-  }));
+  useEffect(() => {
+    if (!isScheduleOriginTransition) return undefined;
+    return navigation.addListener('beforeRemove', e => {
+      if (allowScheduleDeckPopRef.current) {
+        allowScheduleDeckPopRef.current = false;
+        return;
+      }
+      e.preventDefault();
+      isClosingFromHeaderRef.current = true;
+      startScheduleDeckReverseTransition(finished => {
+        if (!finished) {
+          isClosingFromHeaderRef.current = false;
+          return;
+        }
+        allowScheduleDeckPopRef.current = true;
+        navigation.dispatch(e.data.action);
+        resetScheduleDeckTransition();
+      });
+    });
+  }, [isScheduleOriginTransition, navigation, resetScheduleDeckTransition, startScheduleDeckReverseTransition]);
   const getDetailedWorkoutProgress = () => useStore.getState().detailedWorkoutProgress;
   
   const [refreshKey, setRefreshKey] = useState(0);
@@ -805,7 +788,8 @@ export function ExerciseExecutionScreen() {
   const exploreV2AvailableRootHeight = useDerivedValue(() => {
     const measured = exploreV2RootHeight.value;
     const reserved = exploreV2WarmupCtaReservedHeight.value;
-    const base = measured > 0 ? measured : screenHeight * 0.55;
+    const base =
+      measured > 0 ? measured : screenHeight * EXPLORE_V2.layout.preMeasureRootHeightFallbackFrac;
     return Math.max(0, base - reserved);
   }, [screenHeight]);
   const exploreV2BandsOffsetStyle = useAnimatedStyle(() => ({
@@ -1606,24 +1590,17 @@ export function ExerciseExecutionScreen() {
     const group = exerciseGroups[expandedGroupIndex];
     if (!group) return null;
     const completedRounds = currentRounds[group.id] || 0;
-    // Keep Current mounted during end-of-workout celebration so the "Great Job!" card can animate.
-    if (
-      completedRounds >= group.totalRounds &&
-      !(executionMode === 'explore-v2' && showCompletionCelebration)
-    ) {
+    // Explore v2: keep Current after the last set — wallet minimizes + Add set (same as rest + peek away).
+    if (executionMode === 'explore-v2') {
+      return expandedGroupIndex;
+    }
+    if (completedRounds >= group.totalRounds) {
       return null;
     }
     // Explore v1: "current" only exists after at least one set is logged
     if (executionMode === 'explore' && completedSets.size === 0) return null;
     return expandedGroupIndex;
-  }, [
-    executionMode,
-    showCompletionCelebration,
-    completedSets.size,
-    expandedGroupIndex,
-    exerciseGroups,
-    currentRounds,
-  ]);
+  }, [executionMode, completedSets.size, expandedGroupIndex, exerciseGroups, currentRounds]);
 
   const hasCurrentExercise = executionMode === 'explore' && exploreCurrentGroupIndex !== null;
   const hasExploreV2CurrentExercise = executionMode === 'explore-v2' && exploreCurrentGroupIndex !== null;
@@ -1841,7 +1818,8 @@ export function ExerciseExecutionScreen() {
   const handleAdjustExploreV2GroupSets = useCallback(
     async (delta: 1 | -1, explicitGroupIndex?: number) => {
       if (type !== 'main' || !template || !workoutKey) return;
-      if (exploreV2TimerPhase !== 'none') return;
+      if (exploreV2TimerPhase === 'work' || exploreV2TimerPhase === 'switchSides') return;
+      if (delta < 0 && exploreV2TimerPhase !== 'none') return;
 
       const groupIndex =
         explicitGroupIndex !== undefined ? explicitGroupIndex : exploreCurrentGroupIndex;
@@ -3415,8 +3393,9 @@ export function ExerciseExecutionScreen() {
     <AnimatedReanimated.View
       style={[
         styles.container,
-        { paddingTop: insets.top },
+        { paddingTop: insets.top, backgroundColor: schedulePageBg },
         exploreV2PageBgAnimatedStyle,
+        isScheduleOriginTransition && scheduleDeckIncomingShellStyle,
       ]}
     >
       <ShapeConfetti active={showConfetti} />
@@ -3429,7 +3408,7 @@ export function ExerciseExecutionScreen() {
         />
       )}
       <AnimatedReanimated.View
-        style={[styles.header, scheduleHeaderRevealStyle]}
+        style={styles.header}
         onLayout={event => {
           const nextHeight = Math.round(event.nativeEvent.layout.height);
           if (nextHeight > 0 && nextHeight !== headerMeasuredHeight) {
@@ -3509,16 +3488,10 @@ export function ExerciseExecutionScreen() {
       </View>
 
       <AnimatedReanimated.View
-        onLayout={event => {
-          const { x, y, width, height } = event.nativeEvent.layout;
-          setScheduleTransitionTargetFrame({ x, y, width, height });
-        }}
         style={[
           styles.contentWrap,
           isScheduleOriginTransition && { backgroundColor: schedulePageBg },
-          isScheduleOriginTransition && scheduleCardExpandAnimatedStyle,
           exploreV2ContentWrapBgAnimatedStyle,
-          scheduleCardContentRevealStyle,
           menuSlideContentStyle,
         ]}
         pointerEvents={showMenu ? 'none' : 'auto'}
@@ -5430,7 +5403,6 @@ export function ExerciseExecutionScreen() {
           onClose={() => setShowAddExerciseDrawer(false)}
         />
       </BottomDrawer>
-
     </AnimatedReanimated.View>
   );
 }

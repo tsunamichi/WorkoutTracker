@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, View, StyleSheet } from 'react-native';
-import { NavigationContainer } from '@react-navigation/native';
+import { DefaultTheme, NavigationContainer } from '@react-navigation/native';
 import AppNavigator from './AppNavigator';
 import { navigationRef } from './navigationService';
 import { LoginScreen } from '../screens/LoginScreen';
@@ -8,11 +8,24 @@ import { getCurrentUser } from '../services/authService';
 import { isSupabaseConfigured } from '../services/supabase';
 import { COLORS } from '../constants';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { ScheduleDeckTransitionProvider } from '../context/ScheduleDeckTransitionContext';
+import { useAppTheme } from '../theme/useAppTheme';
 
 const GUEST_MODE_KEY = '@app/guestMode';
 
 export function RootNavigator() {
   const [authState, setAuthState] = useState<'loading' | 'unauthenticated' | 'authenticated'>('loading');
+  const { colors: themeColors } = useAppTheme();
+  const navigationTheme = React.useMemo(
+    () => ({
+      ...DefaultTheme,
+      colors: {
+        ...DefaultTheme.colors,
+        background: themeColors.canvasLight,
+      },
+    }),
+    [themeColors.canvasLight],
+  );
 
   useEffect(() => {
     checkAuth();
@@ -64,9 +77,11 @@ export function RootNavigator() {
   }
 
   return (
-    <NavigationContainer ref={navigationRef}>
-      <AppNavigator />
-    </NavigationContainer>
+    <ScheduleDeckTransitionProvider>
+      <NavigationContainer ref={navigationRef} theme={navigationTheme}>
+        <AppNavigator />
+      </NavigationContainer>
+    </ScheduleDeckTransitionProvider>
   );
 }
 

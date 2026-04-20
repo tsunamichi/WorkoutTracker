@@ -789,12 +789,20 @@ const styles = StyleSheet.create({
 
 // Note: NavigationContainer moved to RootNavigator.tsx for onboarding flow integration
 export default function AppNavigator() {
+  const { colors: themeColors } = useAppTheme();
   return (
-    <View style={{ flex: 1 }}>
+    <View style={{ flex: 1, backgroundColor: themeColors.canvasLight }}>
       <Stack.Navigator
         screenOptions={{
           headerShown: false,
-          contentStyle: { backgroundColor: 'transparent' },
+          /** Matches Schedule tab / homepage canvas so transparent handoff frames never flash system white. */
+          contentStyle: { backgroundColor: themeColors.canvasLight },
+          /**
+           * When a push covers the Tabs screen, the underlying screen must keep updating so Reanimated
+           * can run the schedule-deck reverse handoff (opacity/scale) before the pop — otherwise the
+           * homepage appears only after focus returns.
+           */
+          freezeOnBlur: false,
         }}
       >
         <Stack.Screen name="Tabs" component={TabNavigator} />
@@ -812,12 +820,22 @@ export default function AppNavigator() {
         <Stack.Screen
           name="ExerciseExecution"
           component={ExerciseExecutionScreen}
-          options={({ route }: any) => ({
-            animation:
-              route?.params?.transitionSource === 'scheduleDeck' && !!route?.params?.transitionOrigin
-                ? 'none'
-                : 'default',
-          })}
+          options={({ route }: any) => {
+            const deck = route?.params?.transitionSource === 'scheduleDeck';
+            return {
+              animation: deck ? 'none' : 'default',
+              ...(deck
+                ? {
+                    /**
+                     * Keeps the previous (Tabs) route in the compositing path so the home layer’s
+                     * shared `progress` animation is visible through a translucent execution screen.
+                     */
+                    presentation: 'transparentModal' as const,
+                    contentStyle: { backgroundColor: 'transparent' },
+                  }
+                : {}),
+            };
+          }}
         />
         <Stack.Screen name="DesignSystem" component={DesignSystemScreen} />
         <Stack.Screen

@@ -3,7 +3,9 @@ import { View, Text, StyleSheet, TouchableOpacity, Modal, ScrollView, Alert, Sha
 import Animated, {
   cancelAnimation,
   Easing,
+  Extrapolation,
   FadeInDown,
+  interpolate,
   runOnJS,
   useAnimatedStyle,
   useSharedValue,
@@ -37,6 +39,7 @@ import { hydrateWorkoutDraftFromSnapshot } from '../utils/hydrateWorkoutDraftFro
 import { draftLineFromImportedName } from '../utils/exerciseIdentity';
 import type { ScheduledWorkout } from '../types/training';
 import type { ExerciseProgress } from '../types';
+import { SCHEDULE_DECK_T, useScheduleDeckTransition } from '../context/ScheduleDeckTransitionContext';
 
 dayjs.extend(isoWeek);
 
@@ -243,9 +246,9 @@ export function TodayScreen({ onDateChange, onOpenAddWorkout, onOpenBonusDrawer 
   const [selectedDeckWorkout, setSelectedDeckWorkout] = useState<ScheduledWorkout | undefined>(undefined);
   const timerModeProgress = useSharedValue(0);
   const timerHeaderProgress = useSharedValue(0);
-  const scheduleChromeExitProgress = useSharedValue(0);
   const launchToExecutionLockRef = useRef(false);
-  const launchToExecutionTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const { progress: scheduleDeckTransitionProgress, startTransition: startScheduleDeckTransition, reset: resetScheduleDeckTransition } =
+    useScheduleDeckTransition();
   /** Keeps the newly created workout card last in the deck (before the create tile). */
   const [deckTailSwId, setDeckTailSwId] = useState<string | null>(null);
   const [imperativeDeckScroll, setImperativeDeckScroll] = useState<{ index: number; token: number } | null>(null);
@@ -596,7 +599,8 @@ export function TodayScreen({ onDateChange, onOpenAddWorkout, onOpenBonusDrawer 
       const queuedIds = new Set(queue.map(sw => sw.id));
       const manualPlanned = scheduledWorkouts
         .filter(sw => sw.source === 'manual')
-        .filter(sw => sw.status === 'planned' && isNotFinished(sw))
+        // Include in_progress so sessions stay on the deck after opening execution (before any sets are logged).
+        .filter(sw => (sw.status === 'planned' || sw.status === 'in_progress') && isNotFinished(sw))
         .filter(sw => !dayjs(sw.date).isBefore(selectedDate, 'day'))
         .filter(sw => !queuedIds.has(sw.id))
         .sort((a, b) => a.date.localeCompare(b.date) || a.id.localeCompare(b.id));
@@ -614,8 +618,9 @@ export function TodayScreen({ onDateChange, onOpenAddWorkout, onOpenBonusDrawer 
     }
 
     const onSelectedDate = scheduledWorkouts.filter(sw => workoutDisplayDate(sw) === selectedDate);
+    // Any in-progress session on this day (not only after first logged set — opening execution marks in_progress immediately).
     const inProgressOnSelectedDay = onSelectedDate.filter(
-      sw => isWorkoutActuallyInProgress(sw) && isNotFinished(sw),
+      sw => sw.status === 'in_progress' && isNotFinished(sw),
     );
 
     const upcomingPlanned = scheduledWorkouts
@@ -789,14 +794,18 @@ export function TodayScreen({ onDateChange, onOpenAddWorkout, onOpenBonusDrawer 
   const schedulePaneAnimatedStyle = useAnimatedStyle(() => ({
     transform: [{ translateY: -screenHeight * timerModeProgress.value }],
   }), [screenHeight]);
-  const scheduleHeaderExitAnimatedStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: -48 * scheduleChromeExitProgress.value }],
-    opacity: 1 - scheduleChromeExitProgress.value,
-  }));
-  const scheduleFooterExitAnimatedStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: 64 * scheduleChromeExitProgress.value }],
-    opacity: 1 - scheduleChromeExitProgress.value,
-  }));
+  /** Coordinated Home → Execution: whole schedule layer recedes (shared timeline). */
+  const scheduleHomeOutgoingLayerStyle = useAnimatedStyle(() => {
+    const p = scheduleDeckTransitionProgress.value;
+    return {
+      opacity: interpolate(p, [0, SCHEDULE_DECK_T.homeOpacityEnd], [1, 0], Extrapolation.CLAMP),
+      transform: [
+        {
+          scale: interpolate(p, [0, SCHEDULE_DECK_T.homeScaleEnd], [1, 1.25], Extrapolation.CLAMP),
+        },
+      ],
+    };
+  });
   const timerPaneAnimatedStyle = useAnimatedStyle(() => ({
     transform: [{ translateY: screenHeight * (1 - timerModeProgress.value) }],
   }), [screenHeight]);
@@ -926,54 +935,32 @@ export function TodayScreen({ onDateChange, onOpenAddWorkout, onOpenBonusDrawer 
     timerHeaderProgress.value = withTiming(0, { duration: 220, easing: Easing.out(Easing.cubic) });
   }, [isExtrasPanelOpen, timerHeaderProgress]);
 
-  useEffect(() => {
-    return () => {
-      if (launchToExecutionTimeoutRef.current) clearTimeout(launchToExecutionTimeoutRef.current);
-    };
-  }, []);
-
   useFocusEffect(
     useCallback(() => {
-      if (launchToExecutionTimeoutRef.current) {
-        clearTimeout(launchToExecutionTimeoutRef.current);
-        launchToExecutionTimeoutRef.current = null;
-      }
       launchToExecutionLockRef.current = false;
-      scheduleChromeExitProgress.value = 0;
+      resetScheduleDeckTransition();
       return undefined;
-    }, [scheduleChromeExitProgress]),
+    }, [resetScheduleDeckTransition]),
   );
 
   const navigateToWorkoutExecution = useCallback(
-    (
-      sw: ScheduledWorkout,
-      origin?: { x: number; y: number; width: number; height: number; borderRadius: number },
-    ) => {
+    (sw: ScheduledWorkout) => {
       const mainCompletion = getMainCompletion(sw.id);
       const isCompleted = sw.isLocked || mainCompletion.percentage === 100;
       if (isInPastCycle && !isCompleted) return;
       if (launchToExecutionLockRef.current) return;
       launchToExecutionLockRef.current = true;
-      scheduleChromeExitProgress.value = withTiming(1, {
-        duration: 180,
-        easing: Easing.out(Easing.cubic),
+      (navigation as any).navigate('ExerciseExecution', {
+        workoutKey: sw.id,
+        workoutTemplateId: sw.templateId,
+        type: 'main',
+        transitionSource: 'scheduleDeck',
       });
-      if (launchToExecutionTimeoutRef.current) clearTimeout(launchToExecutionTimeoutRef.current);
-      launchToExecutionTimeoutRef.current = setTimeout(() => {
-        (navigation as any).navigate('ExerciseExecution', {
-          workoutKey: sw.id,
-          workoutTemplateId: sw.templateId,
-          type: 'main',
-          ...(origin
-            ? {
-                transitionSource: 'scheduleDeck',
-                transitionOrigin: origin,
-              }
-            : {}),
-        });
-      }, 110);
+      requestAnimationFrame(() => {
+        startScheduleDeckTransition();
+      });
     },
-    [getMainCompletion, isInPastCycle, navigation, scheduleChromeExitProgress],
+    [getMainCompletion, isInPastCycle, navigation, startScheduleDeckTransition],
   );
 
   useEffect(() => {
@@ -1010,7 +997,7 @@ export function TodayScreen({ onDateChange, onOpenAddWorkout, onOpenBonusDrawer 
           title: sw.titleSnapshot,
           subtitle,
           exerciseCount,
-          onPress: origin => navigateToWorkoutExecution(sw, origin),
+          onPress: () => navigateToWorkoutExecution(sw),
         };
       }),
     [remainingWorkoutsQueueForDeck, exercises, navigateToWorkoutExecution],
@@ -1039,7 +1026,7 @@ export function TodayScreen({ onDateChange, onOpenAddWorkout, onOpenBonusDrawer 
       cardBackgroundColor: COLORS.accentPrimaryBackground,
       cardTextColor: completedCardTextColor,
       footerLabel: 'Completed',
-      onPress: origin => navigateToWorkoutExecution(sw, origin),
+      onPress: () => navigateToWorkoutExecution(sw),
     };
   }, [completedWorkoutsForSelectedDay, completedCardTextColor, exercises, navigateToWorkoutExecution]);
 
@@ -1238,8 +1225,12 @@ export function TodayScreen({ onDateChange, onOpenAddWorkout, onOpenBonusDrawer 
   return (
       <View style={[styles.gradient, { backgroundColor: themeColors.canvasLight }]}>
         <SafeAreaView style={styles.scheduleScreenRoot} edges={[]}>
+          <Animated.View
+            needsOffscreenAlphaCompositing
+            style={[{ flex: 1 }, scheduleHomeOutgoingLayerStyle]}
+          >
           <Animated.View style={[styles.schedulePane, schedulePaneAnimatedStyle]}>
-          <Animated.View style={scheduleHeaderExitAnimatedStyle}>
+          <View>
             <View style={[styles.scheduleHeaderStack, { paddingTop: insets.top + 24 }]}>
               <View style={styles.scheduleHeaderTopRow}>
                 <View style={styles.scheduleHeaderTopSpacer} />
@@ -1253,7 +1244,7 @@ export function TodayScreen({ onDateChange, onOpenAddWorkout, onOpenBonusDrawer 
               <Text style={styles.scheduleHeaderTitle}>Workout of the day</Text>
               <Text style={styles.scheduleHeaderDateLabel}>{headerDateLabel}</Text>
             </View>
-          </Animated.View>
+          </View>
 
               <ScrollView
                 style={styles.contentScroll}
@@ -1315,7 +1306,6 @@ export function TodayScreen({ onDateChange, onOpenAddWorkout, onOpenBonusDrawer 
                     initialIndex={carouselInitialIndex}
                     imperativeScrollTo={imperativeDeckScroll}
                     onImperativeScrollDone={handleImperativeDeckScrollDone}
-                    chromeExitProgress={scheduleChromeExitProgress}
                   />
                 </View>
               ) : (
@@ -1378,7 +1368,7 @@ export function TodayScreen({ onDateChange, onOpenAddWorkout, onOpenBonusDrawer 
               </View>
               </View>
               </ScrollView>
-          <Animated.View style={scheduleFooterExitAnimatedStyle} pointerEvents={isExtrasPanelOpen ? 'none' : 'auto'}>
+          <View pointerEvents={isExtrasPanelOpen ? 'none' : 'auto'}>
             <View
               pointerEvents={isExtrasPanelOpen ? 'none' : 'auto'}
               style={[styles.footerActionsWrap, { paddingBottom: insets.bottom }]}
@@ -1419,7 +1409,7 @@ export function TodayScreen({ onDateChange, onOpenAddWorkout, onOpenBonusDrawer 
                 </View>
               </View>
             </View>
-          </Animated.View>
+          </View>
           </Animated.View>
 
           <Animated.View
@@ -1585,7 +1575,7 @@ export function TodayScreen({ onDateChange, onOpenAddWorkout, onOpenBonusDrawer 
               ) : null}
             </ScrollView>
           </Animated.View>
-
+          </Animated.View>
         </SafeAreaView>
 
         {/* Cycle Control Sheet */}

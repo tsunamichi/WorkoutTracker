@@ -37,6 +37,7 @@ import {
   EXPLORE_V2_CURRENT_SETTINGS_HERO_GAP,
   type ExploreV2CurrentSettingsOverflowProps,
 } from './ExploreV2CurrentOverflowSheet';
+import * as Haptics from 'expo-haptics';
 import { UnderlinedActionButton } from '../common/UnderlinedActionButton';
 import { IconAdd } from '../icons';
 import { useTranslation } from '../../i18n/useTranslation';
@@ -614,6 +615,7 @@ export function ExploreV2CurrentCard({
             ? 'Log first set'
             : 'Log next set';
   const collapsedSecondary = !isPrimary && showCollapsedWhenSecondary;
+  const allSetsLoggedInGroup = nextIncomplete === null && orderedSlots.length > 0;
   const metricsEditable = isPrimary && !heroTimerActive;
 
   const logEnabledForSlot =
@@ -654,12 +656,6 @@ export function ExploreV2CurrentCard({
     : (isV2Theme
       ? (useDisabledHeroPalette ? v2DisabledInk : containerTertiary)
       : accentSecondaryDisabled);
-  /** Plus icon: always idle unselected hue — not tied to `useDisabledHeroPalette` (previewing another set). */
-  const addSetPlusIconInk = menuThemeActive
-    ? menuMutedInk
-    : heroTimerActive
-      ? (isV2Theme ? containerTertiary : accentSecondaryDisabled)
-      : (isV2Theme ? containerTertiary : accentSecondarySoft);
   const logPressable =
     heroTimerActive || (showPrimaryCta && logEnabledForSlot);
 
@@ -761,15 +757,28 @@ export function ExploreV2CurrentCard({
   );
 
   const EXPLORE_V2_MAX_GROUP_SETS = 30;
+  const canAddSet = group.totalRounds < EXPLORE_V2_MAX_GROUP_SETS;
+  /** When every set in the group is logged, allow adding a round even during rest (minimized or expanded). Work / switch-side timers still block. */
+  const addSetPressableWhenAllSetsDone =
+    canAddSet &&
+    allSetsLoggedInGroup &&
+    exploreV2TimerPhase !== 'work' &&
+    exploreV2TimerPhase !== 'switchSides';
+  const addSetPressable = (metricsEditable && canAddSet) || addSetPressableWhenAllSetsDone;
+  const showCollapsedAddSetRow =
+    collapsedSecondary && Boolean(onAdjustGroupSets) && addSetPressableWhenAllSetsDone;
   const showRemoveSetRow =
     Boolean(onAdjustGroupSets) &&
     metricsEditable &&
     orderedSlots.length > 0 &&
     carouselIndex === orderedSlots.length - 1;
   const canRemoveSet = group.totalRounds > 1;
-  const canAddSet = group.totalRounds < EXPLORE_V2_MAX_GROUP_SETS;
   const showAddSetIcon = Boolean(onAdjustGroupSets) && orderedSlots.length > 0;
-  const addSetPressable = metricsEditable && canAddSet;
+  const addSetPlusIconInk = menuThemeActive
+    ? menuMutedInk
+    : !addSetPressable
+      ? (isV2Theme ? containerTertiary : accentSecondaryDisabled)
+      : (isV2Theme ? containerTertiary : accentSecondarySoft);
 
   const renderPaginationColumn = () => (
     <View style={styles.paginationColumn}>
@@ -1105,11 +1114,34 @@ export function ExploreV2CurrentCard({
           <Text style={[styles.completionMessageText, { color: themeColors.canvasLight }]}>Great Job!</Text>
         </Reanimated.View>
         {collapsedSecondary ? (
-          <TouchableOpacity
-            style={styles.collapsedTapOverlay}
-            onPress={onCollapsedPress}
-            activeOpacity={1}
-          />
+          <View style={styles.collapsedOverlayHost} pointerEvents="box-none">
+            {showCollapsedAddSetRow ? (
+              <>
+                {/* Absorb taps without expanding — expansion happens after Add set (new incomplete set). */}
+                <View style={styles.collapsedTapOverlay} pointerEvents="auto" />
+                {/* Peek only shows ~CURRENT_IN_PROGRESS_PEEK_VISIBLE_HEIGHT from the card top — keep control in header strip. */}
+                <View style={styles.collapsedAddSetHeaderSlot} pointerEvents="box-none">
+                  <UnderlinedActionButton
+                    label={t('exploreV2AddSet')}
+                    onPress={() => {
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                      void onAdjustGroupSets?.(1);
+                    }}
+                    color={currentHeaderInk}
+                    underlineColor={currentHeaderInk}
+                    style={styles.collapsedAddSetBtn}
+                    textStyle={styles.collapsedAddSetBtnText}
+                  />
+                </View>
+              </>
+            ) : (
+              <TouchableOpacity
+                style={styles.collapsedTapOverlay}
+                onPress={onCollapsedPress}
+                activeOpacity={1}
+              />
+            )}
+          </View>
         ) : null}
       </Reanimated.View>
       {Platform.OS === 'ios' ? (
@@ -1183,9 +1215,36 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 0 },
     elevation: 0,
   },
-  collapsedTapOverlay: {
+  collapsedOverlayHost: {
     ...StyleSheet.absoluteFillObject,
+    zIndex: 8,
+  },
+  collapsedTapOverlay: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 0,
+    bottom: 0,
     zIndex: 3,
+  },
+  /** Top-right in the minimized Current peek (same band as the “Current” eyebrow). */
+  collapsedAddSetHeaderSlot: {
+    position: 'absolute',
+    top: EXPLORE_V2.cardHeader.topInset,
+    right: 24,
+    zIndex: 20,
+    maxWidth: '58%',
+    alignItems: 'flex-end',
+    justifyContent: 'center',
+    minHeight: EXPLORE_V2.cardHeader.rowHeight,
+  },
+  collapsedAddSetBtn: {
+    paddingVertical: 4,
+    paddingLeft: 8,
+  },
+  collapsedAddSetBtnText: {
+    ...TYPOGRAPHY.legal,
+    fontSize: 12,
   },
   topBlock: {
     position: 'relative',

@@ -164,6 +164,11 @@ export const EXPLORE_V2 = {
     },
   },
   layout: {
+    /**
+     * Fraction of window height used before `exploreLayoutRootHeight` / `exploreV2RootHeight` onLayout.
+     * Replaces a too-small 0.55 fallback that caused Up Next / wallet bands to jump when real layout arrived.
+     */
+    preMeasureRootHeightFallbackFrac: 0.88,
     timerInactiveHeight: 0,
     /** Legacy fixed strip height — prefer `restTimerHeightFraction` × content height */
     timerVisibleHeight: 88,

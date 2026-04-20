@@ -286,7 +286,9 @@ function ExploreV2ExecutionRootComponent(props: ExploreV2ExecutionRootProps) {
       return Math.max(PEEK, measured);
     }
     const Hroot =
-      exploreLayoutRootHeight.value > 0 ? exploreLayoutRootHeight.value : screenHeight * 0.55;
+      exploreLayoutRootHeight.value > 0
+        ? exploreLayoutRootHeight.value
+        : screenHeight * EXPLORE_V2.layout.preMeasureRootHeightFallbackFrac;
     const desired = Math.max(
       PEEK,
       interpolate(restThemeProgress.value, [0, 1], [Hroot, Hroot * REST_STACK_FRAC]),
@@ -401,10 +403,12 @@ function ExploreV2ExecutionRootComponent(props: ExploreV2ExecutionRootProps) {
       return;
     }
     // Fresh workout (no logs yet): stay on Up Next until the user opens a group from the queue.
-    // `onSelectUpNext` sets primary to Current; resuming with progress auto-opens Current below.
-    if (completedSets.size > 0) {
-      setPrimaryRevealed('current');
+    if (completedSets.size === 0) {
+      return;
     }
+    // After any logged work (including the last set of the group), keep Current expanded so the
+    // normal hero + pagination (+ Add set) stay available; user can add a set without minimizing.
+    setPrimaryRevealed('current');
   }, [hasCurrent, isExitAnimating, completedSets.size]);
 
   useEffect(() => {
