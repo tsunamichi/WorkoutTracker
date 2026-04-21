@@ -395,21 +395,49 @@ function ExploreV2ExecutionRootComponent(props: ExploreV2ExecutionRootProps) {
   const currentIsCollapsedSecondary =
     shouldShowCurrentLayer && visibleCurrentHasLoggedSets && primaryRevealed !== 'current';
 
+  /** Tracks `completedSets.size` so we only auto-front Current when new set(s) are logged — not when the user reveals Up Next (which would otherwise re-run this effect and snap Current back). */
+  const prevLoggedSetCountRef = useRef<number | null>(null);
+
   useEffect(() => {
     if (!hasCurrent) {
       if (!isExitAnimating) {
-        setPrimaryRevealed('up_next');
+        // No Current (e.g. v2 pre-pick) but user may be on Completed inline edit — do not yank primary to Up Next
+        // on every `completedSets` tick (Add set on Completed would collapse the stack).
+        if (primaryRevealed !== 'complete' && completedExerciseEdit == null) {
+          setPrimaryRevealed('up_next');
+        }
       }
+      prevLoggedSetCountRef.current = null;
       return;
     }
     // Fresh workout (no logs yet): stay on Up Next until the user opens a group from the queue.
     if (completedSets.size === 0) {
+      prevLoggedSetCountRef.current = 0;
       return;
     }
-    // After any logged work (including the last set of the group), keep Current expanded so the
-    // normal hero + pagination (+ Add set) stay available; user can add a set without minimizing.
+    if (prevLoggedSetCountRef.current === null) {
+      prevLoggedSetCountRef.current = completedSets.size;
+      // Restored session: surface Current when progress already exists (one-time per `hasCurrent` cycle).
+      if (
+        completedSets.size > 0 &&
+        primaryRevealed !== 'complete' &&
+        completedExerciseEdit == null
+      ) {
+        setPrimaryRevealed('current');
+      }
+      return;
+    }
+    if (completedSets.size <= prevLoggedSetCountRef.current) {
+      prevLoggedSetCountRef.current = completedSets.size;
+      return;
+    }
+    // New logged set(s) — bring Current forward unless user is on Completed (tab or inline editor).
+    prevLoggedSetCountRef.current = completedSets.size;
+    if (primaryRevealed === 'complete' || completedExerciseEdit != null) {
+      return;
+    }
     setPrimaryRevealed('current');
-  }, [hasCurrent, isExitAnimating, completedSets.size]);
+  }, [hasCurrent, isExitAnimating, completedSets.size, primaryRevealed, completedExerciseEdit]);
 
   useEffect(() => {
     if (!EXPLORE_V2_DEBUG_LAYOUT || !__DEV__) return;

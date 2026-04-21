@@ -5,6 +5,7 @@ import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import * as Haptics from 'expo-haptics';
 import { useStore } from '../store';
 import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS, CARDS, BUTTONS } from '../constants';
+import { useAppTheme } from '../theme/useAppTheme';
 import { IconArrowLeft, IconAdd, IconTrash, IconPlay } from '../components/icons';
 import { useTranslation } from '../i18n/useTranslation';
 import { formatWeightForLoad } from '../utils/weight';
@@ -84,6 +85,7 @@ export function AccessoriesEditorScreen() {
   const { t } = useTranslation();
   
   const { getWorkoutTemplate, updateWorkoutTemplate, settings } = useStore();
+  const { colors: themeColors } = useAppTheme();
   const useKg = settings.useKg;
   const weightUnit = useKg ? 'kg' : 'lb';
   
@@ -355,7 +357,7 @@ export function AccessoriesEditorScreen() {
             <View style={styles.backButton} />
           </View>
           <View style={styles.pageTitleContainer}>
-            <Text style={styles.pageTitle}>{t('workoutNotFound')}</Text>
+            <Text style={[styles.pageTitle, { color: themeColors.containerPrimary }]}>{t('workoutNotFound')}</Text>
           </View>
         </View>
       </View>
@@ -374,7 +376,7 @@ export function AccessoriesEditorScreen() {
         </View>
         
         <View style={styles.pageTitleContainer}>
-          <Text style={styles.pageTitle}>Core</Text>
+          <Text style={[styles.pageTitle, { color: themeColors.containerPrimary }]}>Core</Text>
           <Text style={styles.pageSubtitle}>{template.name}</Text>
         </View>
       </View>
@@ -398,7 +400,7 @@ export function AccessoriesEditorScreen() {
                 <View style={CARDS.cardDeepDimmed.outer}>
                   <View style={[CARDS.cardDeepDimmed.inner, styles.templateCardInner]}>
                     <Text style={styles.templateName}>{template.name}</Text>
-                    <Text style={styles.templateCount}>
+                    <Text style={[styles.templateCount, { color: themeColors.textMeta }]}>
                       {template.items.length} {template.items.length === 1 ? 'exercise' : 'exercises'}
                     </Text>
                     <TouchableOpacity
@@ -407,7 +409,7 @@ export function AccessoriesEditorScreen() {
                       activeOpacity={1}
                     >
                       <Text style={styles.applyButtonText}>{t('useTemplate')}</Text>
-                      <IconPlay size={10} color={COLORS.accentPrimary} />
+                      <IconPlay size={10} color={themeColors.textMeta} />
                     </TouchableOpacity>
                   </View>
                 </View>
@@ -563,7 +565,6 @@ const styles = StyleSheet.create({
   },
   pageTitle: {
     ...TYPOGRAPHY.h2,
-    color: COLORS.text,
     marginBottom: SPACING.xs,
   },
   pageSubtitle: {
@@ -741,7 +742,6 @@ const styles = StyleSheet.create({
   },
   templateCount: {
     ...TYPOGRAPHY.body,
-    color: COLORS.textMeta,
   },
   applyButton: {
     flexDirection: 'row',

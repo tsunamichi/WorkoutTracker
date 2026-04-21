@@ -5,6 +5,7 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import dayjs from 'dayjs';
 import { useStore } from '../store';
 import { COLORS, SPACING, TYPOGRAPHY, CARDS, BORDER_RADIUS } from '../constants';
+import { useAppTheme } from '../theme/useAppTheme';
 import { IconArrowLeft, IconPlay, IconAdd, IconArrowRight } from '../components/icons';
 import { DiagonalLinePattern } from '../components/common/DiagonalLinePattern';
 import { BottomDrawer } from '../components/common/BottomDrawer';
@@ -77,6 +78,7 @@ function resolveBuiltinItems(template: BuiltinTemplate): ExerciseInstanceWithCyc
 export function BonusPresetPickerScreen({ navigation, route }: Props) {
   const insets = useSafeAreaInsets();
   const { t } = useTranslation();
+  const { colors: themeColors } = useAppTheme();
   const { bonusType, addToProgram } = route.params;
   const {
     warmupPresets,
@@ -209,7 +211,14 @@ export function BonusPresetPickerScreen({ navigation, route }: Props) {
           </View>
 
           <View style={styles.pageTitleContainer}>
-            <Text style={styles.pageTitle}>{title}</Text>
+            <Text
+              style={[
+                styles.pageTitle,
+                bonusType === 'core' && { color: themeColors.containerPrimary },
+              ]}
+            >
+              {title}
+            </Text>
           </View>
         </View>
 
@@ -339,7 +348,7 @@ export function BonusPresetPickerScreen({ navigation, route }: Props) {
       {bonusType === 'core' && (
         <BottomDrawer visible={addCoreDrawerVisible} onClose={() => setAddCoreDrawerVisible(false)} maxHeight="85%">
           <View style={styles.addCoreDrawerContent}>
-            <Text style={styles.addCoreDrawerTitle}>Add Core Workout</Text>
+            <Text style={[styles.addCoreDrawerTitle, { color: themeColors.containerPrimary }]}>Add Core Workout</Text>
             <ScrollView style={styles.addCoreDrawerScroll} contentContainerStyle={styles.addCoreDrawerScrollContent} showsVerticalScrollIndicator={false}>
               <View style={styles.grid}>
                 {presets.map(preset => (
@@ -355,7 +364,7 @@ export function BonusPresetPickerScreen({ navigation, route }: Props) {
                     <View style={CARDS.cardDeepDimmed.outer}>
                       <View style={[CARDS.cardDeepDimmed.inner, styles.cardInner]}>
                         <Text style={styles.cardName}>{preset.name}</Text>
-                        <Text style={styles.cardMeta}>
+                        <Text style={[styles.cardMeta, { color: themeColors.textMeta }]}>
                           {preset.itemCount} {preset.itemCount === 1 ? 'exercise' : 'exercises'}
                         </Text>
                         <TouchableOpacity
@@ -367,7 +376,7 @@ export function BonusPresetPickerScreen({ navigation, route }: Props) {
                           activeOpacity={1}
                         >
                           <Text style={styles.startButtonText}>{t('start')}</Text>
-                          <IconPlay size={10} color={COLORS.accentPrimary} />
+                          <IconPlay size={10} color={themeColors.textMeta} />
                         </TouchableOpacity>
                       </View>
                     </View>
@@ -526,7 +535,6 @@ const styles = StyleSheet.create({
   },
   addCoreDrawerTitle: {
     ...TYPOGRAPHY.h3,
-    color: COLORS.text,
     marginBottom: SPACING.lg,
   },
   addCoreDrawerScroll: {

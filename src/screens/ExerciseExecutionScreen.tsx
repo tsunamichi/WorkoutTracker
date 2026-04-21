@@ -198,6 +198,21 @@ function templateExerciseHasLoggedSets(completedSets: Set<string>, templateExerc
   return false;
 }
 
+/** Same leading-round logic as `currentRounds` (debug only). */
+function debugLeadingCompletedRoundsForGroup(
+  group: { totalRounds: number; exercises: { id: string }[] },
+  completedItemIds: readonly string[],
+): number {
+  const s = new Set(completedItemIds);
+  let completedRoundCount = 0;
+  for (let round = 0; round < group.totalRounds; round++) {
+    const allDone = group.exercises.every(ex => s.has(`${ex.id}-set-${round}`));
+    if (allDone) completedRoundCount = round + 1;
+    else break;
+  }
+  return completedRoundCount;
+}
+
 export function ExerciseExecutionScreen() {
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
@@ -719,6 +734,11 @@ export function ExerciseExecutionScreen() {
       setLocalValuesState(updater);
     }
   }, []);
+
+  /** Filled after `getSetDisplayValues` is defined — used by `handleAdjustExploreV2GroupSets` (declared above). */
+  const getSetDisplayValuesRef = useRef<
+    (exerciseId: string, setIndex: number, templateWeight: number, templateReps: number) => { weight: number; reps: number }
+  >((_, __, tw, tr) => ({ weight: tw, reps: Number.isFinite(tr) ? tr : 0 }));
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null); // Track session ID for updates
   const [showAdjustmentDrawer, setShowAdjustmentDrawer] = useState(false);
   const [expandedSetInDrawer, setExpandedSetInDrawer] = useState<number>(0); // Track which set is expanded in drawer
@@ -1659,6 +1679,33 @@ export function ExerciseExecutionScreen() {
     exploreV2CurrentGroupHasLoggedSets,
   ]);
 
+  /** Dev: trace why a group lands on Completed vs Up Next (leading rounds vs totalRounds). */
+  useEffect(() => {
+    if (!__DEV__ || executionMode !== 'explore-v2') return;
+    const roundsSummary = exerciseGroups.map((group, index) => ({
+      index,
+      id: group.id,
+      totalRounds: group.totalRounds,
+      completedRounds: currentRounds[group.id] || 0,
+      completedCard: (currentRounds[group.id] || 0) >= group.totalRounds,
+    }));
+    console.log('[ExploreV2Buckets]', {
+      completedExerciseIndexes,
+      upNextExercises,
+      expandedGroupIndex,
+      exploreCurrentGroupIndex,
+      roundsSummary,
+    });
+  }, [
+    executionMode,
+    completedExerciseIndexes,
+    upNextExercises,
+    expandedGroupIndex,
+    exploreCurrentGroupIndex,
+    exerciseGroups,
+    currentRounds,
+  ]);
+
   const isExplorePreStart = executionMode === 'explore' && completedSets.size === 0;
   const isExploreWorkoutComplete = executionMode === 'explore' && allCurrentGroupsComplete;
   const isExploreV2WorkoutComplete = executionMode === 'explore-v2' && allCurrentGroupsComplete;
@@ -1817,20 +1864,71 @@ export function ExerciseExecutionScreen() {
 
   const handleAdjustExploreV2GroupSets = useCallback(
     async (delta: 1 | -1, explicitGroupIndex?: number) => {
-      if (type !== 'main' || !template || !workoutKey) return;
-      if (exploreV2TimerPhase === 'work' || exploreV2TimerPhase === 'switchSides') return;
-      if (delta < 0 && exploreV2TimerPhase !== 'none') return;
+      const fromCompletedInlineEdit = explicitGroupIndex !== undefined;
+      if (__DEV__) {
+        const mainItems = type === 'main' && workoutKey ? getMainCompletion(workoutKey).completedItems : [];
+        console.log('[ExploreV2AdjustSets] ▶ start', {
+          delta,
+          explicitGroupIndex,
+          fromCompletedInlineEdit,
+          exploreV2TimerPhase,
+          exploreCurrentGroupIndex,
+          type,
+          hasTemplate: !!template,
+          workoutKey,
+          mainCompletionCount: mainItems.length,
+        });
+      }
+
+      if (type !== 'main' || !template || !workoutKey) {
+        if (__DEV__) console.log('[ExploreV2AdjustSets] ✕ exit: not main / no template / no workoutKey');
+        return;
+      }
+      /** Completed-card inline edit: adjust template rounds only — do not block on rest/work/switch timers. */
+      if (!fromCompletedInlineEdit) {
+        if (exploreV2TimerPhase === 'work' || exploreV2TimerPhase === 'switchSides') {
+          if (__DEV__) console.log('[ExploreV2AdjustSets] ✕ exit: timer blocks (work/switch)');
+          return;
+        }
+        if (delta < 0 && exploreV2TimerPhase !== 'none') {
+          if (__DEV__) console.log('[ExploreV2AdjustSets] ✕ exit: remove blocked while timer active');
+          return;
+        }
+      }
 
       const groupIndex =
         explicitGroupIndex !== undefined ? explicitGroupIndex : exploreCurrentGroupIndex;
-      if (groupIndex === null || groupIndex < 0) return;
+      if (groupIndex === null || groupIndex < 0) {
+        if (__DEV__) console.log('[ExploreV2AdjustSets] ✕ exit: invalid groupIndex', { groupIndex });
+        return;
+      }
 
       const g = exerciseGroups[groupIndex];
-      if (!g?.exercises?.length) return;
+      if (!g?.exercises?.length) {
+        if (__DEV__) console.log('[ExploreV2AdjustSets] ✕ exit: no group at index', { groupIndex });
+        return;
+      }
 
       const oldTotal = g.totalRounds;
       const targetRounds = oldTotal + delta;
-      if (targetRounds < 1 || targetRounds > EXPLORE_V2_MAX_GROUP_SETS) return;
+      if (targetRounds < 1 || targetRounds > EXPLORE_V2_MAX_GROUP_SETS) {
+        if (__DEV__) console.log('[ExploreV2AdjustSets] ✕ exit: targetRounds out of range', { oldTotal, targetRounds });
+        return;
+      }
+
+      if (__DEV__) {
+        const itemsBefore = getMainCompletion(workoutKey).completedItems;
+        const leadingBefore = debugLeadingCompletedRoundsForGroup(g, itemsBefore);
+        console.log('[ExploreV2AdjustSets] group snapshot (before)', {
+          groupIndex,
+          groupId: g.id,
+          oldTotal,
+          targetRounds,
+          exerciseIds: g.exercises.map(e => e.id),
+          leadingCompletedRounds: leadingBefore,
+          groupLooksCompleteByRounds: leadingBefore >= oldTotal,
+        });
+      }
 
       const st = useStore.getState();
       const sw = st.scheduledWorkouts.find((w: { id: string }) => w.id === workoutKey);
@@ -1845,28 +1943,116 @@ export function ExerciseExecutionScreen() {
         return { ...item, sets: targetRounds };
       });
 
+      /** Completed inline remove: shrink template *before* clearing last-round completion — otherwise one frame has fewer leading completes than `totalRounds` and the group drops out of `completedExerciseIndexes`, which closes inline edit (`ExploreV2CompleteCard` `editValid`). */
+      let templateAlreadyUpdated = false;
+
       if (delta < 0) {
         const removeRound = oldTotal - 1;
-        await Promise.all(
-          g.exercises.map(ex => updateMainCompletion(workoutKey, `${ex.id}-set-${removeRound}`, false)),
-        );
-        setLocalValues(prev => {
-          const next = { ...prev };
-          for (const ex of g.exercises) {
-            delete next[`${ex.id}-set-${removeRound}`];
+        if (__DEV__) {
+          console.log('[ExploreV2AdjustSets] remove round', { removeRound, setIds: g.exercises.map(ex => `${ex.id}-set-${removeRound}`), fromCompletedInlineEdit });
+        }
+        if (fromCompletedInlineEdit) {
+          await updateWorkoutTemplate(workoutTemplateId, { items: updatedItems });
+          if (scheduledWorkout) {
+            await updateScheduledWorkoutSnapshots(workoutKey, { exercisesSnapshot: updatedItems });
           }
-          return next;
+          templateAlreadyUpdated = true;
+          await Promise.all(
+            g.exercises.map(ex => updateMainCompletion(workoutKey, `${ex.id}-set-${removeRound}`, false)),
+          );
+          setLocalValues(prev => {
+            const next = { ...prev };
+            for (const ex of g.exercises) {
+              delete next[`${ex.id}-set-${removeRound}`];
+            }
+            return next;
+          });
+        } else {
+          await Promise.all(
+            g.exercises.map(ex => updateMainCompletion(workoutKey, `${ex.id}-set-${removeRound}`, false)),
+          );
+          setLocalValues(prev => {
+            const next = { ...prev };
+            for (const ex of g.exercises) {
+              delete next[`${ex.id}-set-${removeRound}`];
+            }
+            return next;
+          });
+        }
+      }
+
+      /**
+       * Completed inline add: mark the new round complete **before** bumping template `sets`.
+       * If we update the template first, one render sees `totalRounds` ↑ while `currentRounds` still counts
+       * only old rounds → `completedExerciseIndexes` empties and every group flashes into Up Next
+       * (`[ExploreV2Buckets] completedExerciseIndexes: []`).
+       */
+      if (delta > 0 && fromCompletedInlineEdit) {
+        const newRoundIndex = oldTotal;
+        const newSetIds = g.exercises.map(ex => `${ex.id}-set-${newRoundIndex}`);
+        if (__DEV__) {
+          console.log('[ExploreV2AdjustSets] completed-inline add: pre-mark new round (before template)', {
+            newRoundIndex,
+            newSetIds,
+          });
+        }
+        await Promise.all(
+          g.exercises.map(ex =>
+            updateMainCompletion(workoutKey, `${ex.id}-set-${newRoundIndex}`, true),
+          ),
+        );
+        /** Copy weight/reps from the previous round into the new slot (same as user expectation for “add set”). */
+        const prevRoundIndex = newRoundIndex - 1;
+        if (prevRoundIndex >= 0) {
+          const gds = getSetDisplayValuesRef.current;
+          setLocalValues(prev => {
+            const next = { ...prev };
+            for (const ex of g.exercises) {
+              const newKey = `${ex.id}-set-${newRoundIndex}`;
+              const tw = ex.weight ?? 0;
+              const tr = Number(ex.reps) ?? 0;
+              const prevVals = gds(ex.id, prevRoundIndex, tw, tr);
+              next[newKey] = { weight: prevVals.weight, reps: prevVals.reps };
+            }
+            return next;
+          });
+        }
+        if (__DEV__) {
+          const itemsAfter = getMainCompletion(workoutKey).completedItems;
+          const newIdsPresent = newSetIds.map(id => ({ id, present: itemsAfter.includes(id) }));
+          const gAfter = { ...g, totalRounds: targetRounds };
+          const leadingAfter = debugLeadingCompletedRoundsForGroup(gAfter, itemsAfter);
+          console.log('[ExploreV2AdjustSets] after pre-mark (expect leading === target after template)', {
+            mainCompletionItemCount: itemsAfter.length,
+            newIdsPresent,
+            leadingCompletedRoundsVsTarget: { leadingAfter, targetRounds, wouldShowAsCompleted: leadingAfter >= targetRounds },
+          });
+        }
+      }
+
+      if (!templateAlreadyUpdated) {
+        await updateWorkoutTemplate(workoutTemplateId, { items: updatedItems });
+        if (scheduledWorkout) {
+          await updateScheduledWorkoutSnapshots(workoutKey, { exercisesSnapshot: updatedItems });
+        }
+      }
+
+      if (__DEV__) {
+        console.log('[ExploreV2AdjustSets] template + snapshot updated', {
+          targetRounds,
+          skippedDuplicateTemplateWrite: templateAlreadyUpdated,
+          updatedItemSample: updatedItems.find(it => templateIds.has((it as { id: string }).id)),
         });
       }
 
-      await updateWorkoutTemplate(workoutTemplateId, { items: updatedItems });
-      if (scheduledWorkout) {
-        await updateScheduledWorkoutSnapshots(workoutKey, { exercisesSnapshot: updatedItems });
-      }
       requestAnimationFrame(() => {
         setRefreshKey(prev => prev + 1);
       });
       Haptics.selectionAsync();
+
+      if (__DEV__) {
+        console.log('[ExploreV2AdjustSets] ◀ done (refreshKey scheduled)');
+      }
     },
     [
       type,
@@ -1880,6 +2066,7 @@ export function ExerciseExecutionScreen() {
       updateWorkoutTemplate,
       updateScheduledWorkoutSnapshots,
       updateMainCompletion,
+      getMainCompletion,
       setLocalValues,
     ],
   );
@@ -1941,6 +2128,8 @@ export function ExerciseExecutionScreen() {
     const tr = Number(templateReps);
     return { weight: templateWeight, reps: Number.isFinite(tr) ? tr : 0 };
   }, [workoutKey, workoutTemplateId, exerciseGroups]);
+
+  getSetDisplayValuesRef.current = getSetDisplayValues;
 
   /** Persist in-progress edits (draft sets) and completed sets to detailedWorkoutProgress so kills/background don't lose state. */
   const syncDetailedProgressFromExecutionRefs = useCallback(async () => {

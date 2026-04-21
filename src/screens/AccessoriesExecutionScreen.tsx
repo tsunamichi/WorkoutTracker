@@ -5,6 +5,7 @@ import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import * as Haptics from 'expo-haptics';
 import { useStore } from '../store';
 import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS, CARDS } from '../constants';
+import { useAppTheme } from '../theme/useAppTheme';
 import {
   executionCtaLabelStyle,
   EXECUTION_CTA_HEIGHT,
@@ -38,6 +39,7 @@ export function AccessoriesExecutionScreen() {
   const { t } = useTranslation();
   
   const { workoutKey, workoutTemplateId } = route.params;
+  const { colors: themeColors } = useAppTheme();
   const { getWorkoutTemplate, updateAccessoryCompletion, getAccessoryCompletion, updateWorkoutTemplate, settings, accessoryCompletionByKey } = useStore();
   const template = getWorkoutTemplate(workoutTemplateId);
   // Migrate old items to new structure on load
@@ -453,7 +455,7 @@ export function AccessoriesExecutionScreen() {
         </View>
         
         <View style={styles.headerContent}>
-          <Text style={styles.headerTitle}>{t('core')}</Text>
+          <Text style={[styles.headerTitle, { color: themeColors.containerPrimary }]}>{t('core')}</Text>
         </View>
       </View>
       
@@ -626,8 +628,8 @@ export function AccessoriesExecutionScreen() {
                     <View style={styles.inlineStartButtonInner}>
                       <Text style={styles.inlineStartButtonText}>{t('start')}</Text>
                     </View>
-                    <View style={styles.inlineSetIndicator}>
-                      <Text style={styles.setCountText} numberOfLines={1}>
+                    <View style={[styles.inlineSetIndicator, { backgroundColor: COLORS.canvasContainer }]}>
+                      <Text style={[styles.setCountText, { color: themeColors.textMeta }]} numberOfLines={1}>
                         {currentRound + 1}/{group.totalRounds}
                       </Text>
                     </View>
@@ -817,7 +819,6 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     ...TYPOGRAPHY.h3,
-    color: '#FFFFFF',
   },
   content: {
     flex: 1,
@@ -863,7 +864,7 @@ const styles = StyleSheet.create({
     opacity: 0.5,
   },
   setCountIndicator: {
-    backgroundColor: COLORS.text,
+    backgroundColor: COLORS.canvasContainer,
     borderTopLeftRadius: 0,
     borderTopRightRadius: BORDER_RADIUS.sm,
     borderBottomLeftRadius: 0,
@@ -875,7 +876,6 @@ const styles = StyleSheet.create({
   },
   setCountText: {
     ...TYPOGRAPHY.meta,
-    color: COLORS.backgroundCanvas,
     textAlign: 'center',
   },
   roundDot: {
@@ -1229,7 +1229,6 @@ const styles = StyleSheet.create({
     color: COLORS.backgroundCanvas,
   },
   inlineSetIndicator: {
-    backgroundColor: COLORS.text,
     borderTopLeftRadius: 0,
     borderTopRightRadius: 0,
     borderBottomLeftRadius: 0,

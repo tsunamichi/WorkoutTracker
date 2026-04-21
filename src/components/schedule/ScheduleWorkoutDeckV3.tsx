@@ -165,14 +165,16 @@ function DeckCard({
         </Text>
         {item.variant === 'create' ? (
           item.subtitle ? (
-            <Text style={[styles.cardSubmeta, { color: cardTextColor, opacity: 0.85 }]}>{item.subtitle}</Text>
+            <Text style={[styles.cardSubmeta, { color: themeColors.textMeta }]}>{item.subtitle}</Text>
           ) : null
         ) : (
           <>
             <Text style={[styles.cardMeta, { color: cardTextColor }]}>
               {item.exerciseCount} {item.exerciseCount === 1 ? 'exercise' : 'exercises'}
             </Text>
-            {item.subtitle ? <Text style={[styles.cardSubmeta, { color: cardTextColor }]}>{item.subtitle}</Text> : null}
+            {item.subtitle ? (
+              <Text style={[styles.cardSubmeta, { color: themeColors.textMeta }]}>{item.subtitle}</Text>
+            ) : null}
           </>
         )}
         <View style={styles.cardSpacer} />

@@ -28,15 +28,11 @@ import { useAppTheme } from '../../theme/useAppTheme';
 import { useTranslation } from '../../i18n/useTranslation';
 import type { ExploreV2Group } from './exploreV2Types';
 import { CurrentSetHeroPage } from './ExploreV2CurrentCard';
-import { UnderlinedActionButton } from '../common/UnderlinedActionButton';
-import { IconAdd } from '../icons';
+import { TertiaryButton } from '../common/UnderlinedActionButton';
 
 const AnimatedTouchableOpacity = Reanimated.createAnimatedComponent(TouchableOpacity);
 
 const pad = EXPLORE_V2.cardPadding;
-
-/** Same as Completed list row units (`ExploreV2CompleteCard` / `completedUnitAnimatedStyle`). */
-const IDLE_UNIT_INK = '#787878';
 
 /** Distinct from Current card so two InputAccessoryViews never share a nativeID when both layers mount. */
 export const EXPLORE_V2_COMPLETED_HERO_METRICS_ACCESSORY_ID = 'exploreV2CompletedHeroMetricsAccessory';
@@ -112,30 +108,15 @@ export const ExploreV2CompletedExerciseEditor = forwardRef<ExploreV2CompletedExe
     const containerTertiary = themeColors.containerTertiary;
     const menuMutedInk = themeColors.textMeta;
     const pageBgChrome = themeColors.canvasLight;
-    const restCompletedUnitInk = ex.restTimerCompletedUnitInk;
     const textMetaPlaceholder = themeColors.textMeta;
     const upNextBaseBg = themeColors.containerSecondary;
     const amberBand = ex.amberBand;
     const workUpNextBg = ex.workTimerUpNextCardBg;
     const menuMutedBg = '#CFC9CC';
-    const isV2Theme = theme.id === 'v2';
-    const accentSecondarySoft = themeColors.accentSecondarySoft;
-    const accentSecondaryDisabled = themeColors.accentSecondaryDisabled;
     const EXPLORE_V2_MAX_GROUP_SETS = 30;
     const metricsEditable = !timerThemeActive;
-    const canRemoveSet = group.totalRounds > 1;
-    const canAddSet = group.totalRounds < EXPLORE_V2_MAX_GROUP_SETS;
-    /** Plus icon: idle unselected hue — not tied to preview/slide (matches Current card). */
-    const addSetPlusIconInk = menuThemeActive
-      ? menuMutedInk
-      : timerThemeActive
-        ? (isV2Theme ? containerTertiary : accentSecondaryDisabled)
-        : (isV2Theme ? containerTertiary : accentSecondarySoft);
-    const removeSetLinkInk = menuThemeActive
-      ? menuMutedInk
-      : isV2Theme
-        ? containerTertiary
-        : accentSecondarySoft;
+    /** Remove set (hero trailing) — container primary; menu-open uses muted ink like other wallet chrome. */
+    const removeSetInk = menuThemeActive ? menuMutedInk : containerPrimary;
 
     const [keyboardBottomInset, setKeyboardBottomInset] = useState(0);
     useEffect(() => {
@@ -167,6 +148,7 @@ export const ExploreV2CompletedExerciseEditor = forwardRef<ExploreV2CompletedExe
     const [pageWidth, setPageWidth] = useState(0);
     const carouselViewportWidth = Math.max(0, pageWidth);
     const scrollRef = useRef<ScrollView>(null);
+    const carouselAfterRemoveRef = useRef<number | null>(null);
     const commitsRef = useRef<Record<string, () => { weight: number; reps: number } | void>>({});
 
     const commitPendingDrafts = useCallback(() => {
@@ -201,13 +183,120 @@ export const ExploreV2CompletedExerciseEditor = forwardRef<ExploreV2CompletedExe
       [carouselViewportWidth, orderedSlots.length],
     );
 
+    const prevTotalRoundsRef = useRef<number | null>(null);
+    useEffect(() => {
+      const prev = prevTotalRoundsRef.current;
+      if (
+        prev !== null &&
+        group.totalRounds > prev &&
+        carouselViewportWidth > 0 &&
+        orderedSlots.length > 0
+      ) {
+        scrollToSetIndex(group.totalRounds - 1);
+      }
+      prevTotalRoundsRef.current = group.totalRounds;
+    }, [group.totalRounds, carouselViewportWidth, orderedSlots.length, scrollToSetIndex]);
+
+    useEffect(() => {
+      if (carouselViewportWidth <= 0 || orderedSlots.length === 0) return;
+      if (carouselAfterRemoveRef.current !== null) {
+        const target = carouselAfterRemoveRef.current;
+        carouselAfterRemoveRef.current = null;
+        const clamped = Math.max(0, Math.min(target, orderedSlots.length - 1));
+        setCarouselIndex(clamped);
+        scrollRef.current?.scrollTo({ x: clamped * carouselViewportWidth, animated: true });
+      }
+    }, [carouselViewportWidth, orderedSlots.length]);
+
+    const canAddSet = group.totalRounds < EXPLORE_V2_MAX_GROUP_SETS;
+    /** Completed-card entry edit: round count is template/session data — not gated on timers (unlike Current). */
+    const addSetPressable = canAddSet;
+    const addSetPlusIconInk =
+      menuThemeActive || !addSetPressable ? menuMutedInk : containerPrimary;
+
     const showRemoveSetRow =
       Boolean(onAdjustGroupSets) &&
-      metricsEditable &&
       orderedSlots.length > 0 &&
-      carouselIndex === orderedSlots.length - 1;
+      carouselIndex === orderedSlots.length - 1 &&
+      group.totalRounds > 1;
     const showAddSetIcon = Boolean(onAdjustGroupSets) && orderedSlots.length > 0;
-    const addSetPressable = metricsEditable && canAddSet;
+
+    const onRemoveSetPress = useCallback(() => {
+      carouselAfterRemoveRef.current = Math.max(0, carouselIndex - 1);
+      void onAdjustGroupSets?.(-1);
+    }, [carouselIndex, onAdjustGroupSets]);
+
+    const removeSetHeroTrailing =
+      showRemoveSetRow ? (
+        <TertiaryButton
+          label={t('exploreV2RemoveSet')}
+          onPress={onRemoveSetPress}
+          activeOpacity={0.85}
+          style={styles.addSetTertiaryButton}
+          textStyle={styles.addSetTertiaryLinkText}
+          color={removeSetInk}
+          underlineColor={removeSetInk}
+        />
+      ) : null;
+
+    const renderPaginationColumn = () => (
+      <View style={styles.paginationColumn}>
+        <View style={styles.paginationWrap}>
+          {orderedSlots.map((slot, i) => {
+            const isView = i === carouselIndex;
+            return (
+              <TouchableOpacity
+                key={slotKey(slot)}
+                onPress={() => scrollToSetIndex(i)}
+                hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
+                accessibilityRole="button"
+                accessibilityLabel={`Set ${i + 1}`}
+                accessibilityState={{ selected: isView }}
+              >
+                <View style={styles.paginationItem}>
+                  <Text
+                    style={[
+                      styles.paginationDigit,
+                      isView && styles.paginationInView,
+                      { color: isView ? containerPrimary : menuMutedInk },
+                    ]}
+                  >
+                    {i + 1}
+                  </Text>
+                </View>
+              </TouchableOpacity>
+            );
+          })}
+          {showAddSetIcon ? (
+            <TertiaryButton
+              label={t('add')}
+              onPress={() => {
+                if (__DEV__) {
+                  console.log('[ExploreV2CompletedEditor] Add set pressed', {
+                    addSetPressable,
+                    hasOnAdjustGroupSets: Boolean(onAdjustGroupSets),
+                    groupTotalRounds: group.totalRounds,
+                    exerciseIndex,
+                    carouselIndex,
+                  });
+                }
+                if (addSetPressable) void onAdjustGroupSets?.(1);
+              }}
+              activeOpacity={0.85}
+              style={[
+                styles.addSetTertiaryButton,
+                styles.paginationFooterAddButton,
+                styles.addSetTertiaryButtonPadStart,
+                !addSetPressable && styles.setAdjustButtonDimmed,
+              ]}
+              textStyle={styles.addSetTertiaryLinkText}
+              color={addSetPlusIconInk}
+              underlineColor={addSetPlusIconInk}
+            />
+          ) : null}
+        </View>
+      </View>
+    );
 
     /** Matches `rowTitleInkStyle` on `ExploreV2CompleteCard` (exercise name + logged numerals). */
     const rowTitleInkAnimatedStyle = useAnimatedStyle(
@@ -253,23 +342,6 @@ export const ExploreV2CompletedExerciseEditor = forwardRef<ExploreV2CompletedExe
       [upNextBaseBg, amberBand, workUpNextBg, menuMutedBg],
     );
 
-    /** Matches `completedUnitAnimatedStyle` on `ExploreV2CompleteCard` (lbs / reps labels in the log). */
-    const completedUnitInkAnimatedStyle = useAnimatedStyle(
-      () => {
-        const w = exploreV2WorkBlueProgress.value;
-        const unitRest = interpolateColor(
-          restThemeProgress.value,
-          [0, 1],
-          [IDLE_UNIT_INK, restCompletedUnitInk],
-        );
-        const baseColor = interpolateColor(w, [0, 1], [unitRest, pageBgChrome]);
-        return {
-          color: interpolateColor(menuToneProgress.value, [0, 1], [baseColor, menuMutedInk]),
-        };
-      },
-      [restCompletedUnitInk, pageBgChrome, menuMutedInk],
-    );
-
     /** Bottom inset for completed-card edit shell (`48 + keyboard` when metrics are focused). */
     const shellKeyboardPaddingBottom = 48 + keyboardBottomInset;
 
@@ -306,7 +378,7 @@ export const ExploreV2CompletedExerciseEditor = forwardRef<ExploreV2CompletedExe
                     onMomentumScrollEnd={onCarouselScrollEnd}
                     scrollEventThrottle={16}
                   >
-                    {orderedSlots.map(slot => (
+                    {orderedSlots.map((slot, slotIndex) => (
                       <CurrentSetHeroPage
                         key={slotKey(slot)}
                         slot={slot}
@@ -322,13 +394,17 @@ export const ExploreV2CompletedExerciseEditor = forwardRef<ExploreV2CompletedExe
                         heroValueColor={containerPrimary}
                         unitLabelColor={themeColors.textMeta}
                         heroValueAnimatedStyle={rowTitleInkAnimatedStyle}
-                        unitLabelAnimatedStyle={completedUnitInkAnimatedStyle}
                         heroPlaceholderColor={textMetaPlaceholder}
                         perSideLabelColor={containerTertiary}
                         pageWidth={carouselViewportWidth}
                         commitsRef={commitsRef}
                         progressionValuesByItemId={progressionValuesByItemId}
                         heroMetricsAccessoryId={EXPLORE_V2_COMPLETED_HERO_METRICS_ACCESSORY_ID}
+                        removeSetTrailing={
+                          showRemoveSetRow && slotIndex === orderedSlots.length - 1
+                            ? removeSetHeroTrailing
+                            : null
+                        }
                       />
                     ))}
                   </ScrollView>
@@ -349,74 +425,7 @@ export const ExploreV2CompletedExerciseEditor = forwardRef<ExploreV2CompletedExe
                 >
                   <Reanimated.Text style={[styles.ctaPillText, savePillLabelAnimatedStyle]}>{t('save')}</Reanimated.Text>
                 </AnimatedTouchableOpacity>
-                <View style={styles.paginationColumn}>
-                  {showRemoveSetRow ? (
-                    <View style={styles.setAdjustRowAbs} pointerEvents="box-none">
-                      <UnderlinedActionButton
-                        label={t('exploreV2RemoveSet')}
-                        onPress={() => {
-                          if (canRemoveSet) void onAdjustGroupSets?.(-1);
-                        }}
-                        color={removeSetLinkInk}
-                        underlineColor={removeSetLinkInk}
-                        style={[styles.setAdjustButton, !canRemoveSet && styles.setAdjustButtonDimmed]}
-                      />
-                    </View>
-                  ) : null}
-                  <View style={styles.paginationWrap}>
-                    {orderedSlots.map((slot, i) => {
-                      const isView = i === carouselIndex;
-                      const digitColor = menuThemeActive
-                        ? menuMutedInk
-                        : timerThemeActive
-                          ? isView
-                            ? accentSecondaryDisabled
-                            : isV2Theme
-                              ? containerTertiary
-                              : accentSecondaryDisabled
-                          : isView
-                            ? containerPrimary
-                            : textMetaPlaceholder;
-                      return (
-                        <TouchableOpacity
-                          key={slotKey(slot)}
-                          onPress={() => scrollToSetIndex(i)}
-                          hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
-                          accessibilityRole="button"
-                          accessibilityLabel={`Set ${i + 1}`}
-                          accessibilityState={{ selected: isView }}
-                        >
-                          <View style={styles.paginationItem}>
-                            <Text
-                              style={[
-                                styles.paginationDigit,
-                                isView && styles.paginationInView,
-                                { color: digitColor },
-                              ]}
-                            >
-                              {i + 1}
-                            </Text>
-                          </View>
-                        </TouchableOpacity>
-                      );
-                    })}
-                    {showAddSetIcon ? (
-                      <TouchableOpacity
-                        onPress={() => {
-                          if (addSetPressable) void onAdjustGroupSets?.(1);
-                        }}
-                        disabled={!addSetPressable}
-                        style={[styles.addSetIconButton, !addSetPressable && styles.addSetIconButtonDimmed]}
-                        hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
-                        accessibilityRole="button"
-                        accessibilityLabel={t('exploreV2AddSet')}
-                        accessibilityState={{ disabled: !addSetPressable }}
-                      >
-                        <IconAdd size={22} color={addSetPlusIconInk} />
-                      </TouchableOpacity>
-                    ) : null}
-                  </View>
-                </View>
+                {renderPaginationColumn()}
               </View>
             </View>
           </View>
@@ -508,19 +517,6 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
     justifyContent: 'center',
   },
-  setAdjustRowAbs: {
-    position: 'absolute',
-    right: 0,
-    bottom: 34,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 20,
-    zIndex: 4,
-  },
-  setAdjustButton: {
-    paddingVertical: 2,
-    paddingHorizontal: 0,
-  },
   setAdjustButtonDimmed: {
     opacity: 0.35,
   },
@@ -528,13 +524,33 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'flex-end',
-    alignItems: 'center',
+    alignItems: 'flex-end',
     gap: 10,
   },
   paginationItem: {
     position: 'relative',
     alignItems: 'center',
     justifyContent: 'center',
+    minHeight: 32,
+  },
+  /** Matches `ExploreV2CurrentCard` — Add lines up with set number chips. */
+  paginationFooterAddButton: {
+    minHeight: 32,
+    justifyContent: 'center',
+    transform: [{ translateY: 1 }],
+  },
+  /** Schedule-style tertiary + underline; ink from `addSetPlusIconInk` / `removeSetInk`. */
+  addSetTertiaryButton: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 2,
+  },
+  addSetTertiaryButtonPadStart: {
+    paddingLeft: 16,
+  },
+  addSetTertiaryLinkText: {
+    ...TYPOGRAPHY.meta,
+    fontWeight: '400',
   },
   paginationDigit: {
     ...TYPOGRAPHY.legal,
@@ -547,14 +563,6 @@ const styles = StyleSheet.create({
   },
   paginationInView: {
     fontWeight: '600',
-  },
-  addSetIconButton: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    height: 22,
-  },
-  addSetIconButtonDimmed: {
-    opacity: 0.35,
   },
   heroMetricsKeyboardAccessory: {
     backgroundColor: COLORS.backgroundCanvas,

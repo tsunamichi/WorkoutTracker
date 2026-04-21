@@ -224,7 +224,8 @@ export function TodayScreen({ onDateChange, onOpenAddWorkout, onOpenBonusDrawer 
   const savedTimersPageBackground = isV2Theme ? themeColors.canvasLight : COLORS.canvasLight;
   const savedTimersCardBackground = isV2Theme ? themeColors.canvasContainer : COLORS.containerTertiary;
   const savedTimersInk = isV2Theme ? themeColors.containerPrimary : COLORS.containerPrimary;
-  const savedTimersMetaInk = isV2Theme ? themeColors.containerPrimary : COLORS.textMeta;
+  /** Meta line + diagonal arrow on timer / warm-up / core cards — always `textMeta`, not `containerPrimary`. */
+  const savedTimersMetaInk = themeColors.textMeta;
   const completedCardTextColor = exploreTheme.amberBand;
 
   // One-time repair for paused cycle schedule (safe to remove after fix is applied)
@@ -1286,7 +1287,9 @@ export function TodayScreen({ onDateChange, onOpenAddWorkout, onOpenBonusDrawer 
                   label="Settings"
                   onPress={() => (navigation as any).navigate('Profile')}
                   style={styles.profileLinkButton}
-                  textStyle={styles.profileLinkText}
+                  color={themeColors.textMeta}
+                  underlineColor={themeColors.textMeta}
+                  textStyle={[styles.profileLinkText, { color: themeColors.textMeta }]}
                 />
               </View>
               <Text style={styles.scheduleHeaderTitle}>Workout of the day</Text>
@@ -1297,7 +1300,9 @@ export function TodayScreen({ onDateChange, onOpenAddWorkout, onOpenBonusDrawer 
                     label={cycleHomeHistoryLabel}
                     onPress={handleOpenWorkoutHistory}
                     style={styles.scheduleHeaderHistoryLink}
-                    textStyle={styles.profileLinkText}
+                    color={themeColors.textMeta}
+                    underlineColor={themeColors.textMeta}
+                    textStyle={[styles.profileLinkText, { color: themeColors.textMeta }]}
                   />
                 ) : null}
               </View>
@@ -1483,7 +1488,9 @@ export function TodayScreen({ onDateChange, onOpenAddWorkout, onOpenBonusDrawer 
                               ? t('core')
                               : ''
                       }
-                      titleColor={themeColors.textPrimary}
+                      titleColor={
+                        extrasPanelMode === 'core' ? themeColors.containerPrimary : themeColors.textPrimary
+                      }
                     />
                   </View>
                 )}

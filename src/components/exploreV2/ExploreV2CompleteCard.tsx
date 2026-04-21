@@ -46,7 +46,6 @@ type Props = {
 };
 
 const IDLE_HEADER_INK = '#464646';
-const IDLE_UNIT_INK = '#787878';
 /** Vertical gap between set rows (logs) in the Completed list */
 const COMPLETE_SET_LOG_GAP = 2;
 /** Fixed width for load / reps numerals in the Completed list */
@@ -63,7 +62,7 @@ export function ExploreV2CompleteCard({
   isExpanded,
   frontBottomRadius,
   coveredBottomRadius,
-  timerThemeActive: _timerThemeActive,
+  timerThemeActive,
   restThemeProgress,
   exploreV2WorkBlueProgress,
   menuThemeActive,
@@ -107,7 +106,6 @@ export function ExploreV2CompleteCard({
     }
   }, [completedExerciseEdit, editValid, onCloseCompletedExerciseEdit]);
   const pageBgChrome = themeColors.canvasLight;
-  const restCompletedUnitInk = ex.restTimerCompletedUnitInk;
   const textMetaTimer = themeColors.textMetaTimer;
   const textMeta = themeColors.textMeta;
   const accentPrimaryDark = themeColors.accentPrimaryDark;
@@ -130,18 +128,6 @@ export function ExploreV2CompleteCard({
       color: interpolateColor(menuToneProgress.value, [0, 1], [baseColor, menuMutedInk]),
     };
   }, [containerPrimary, accentPrimaryDark, textMetaTimer, menuMutedInk, menuToneProgress]);
-  const completedUnitAnimatedStyle = useAnimatedStyle(() => {
-    const w = exploreV2WorkBlueProgress.value;
-    const unitRest = interpolateColor(
-      restThemeProgress.value,
-      [0, 1],
-      [IDLE_UNIT_INK, restCompletedUnitInk],
-    );
-    const baseColor = interpolateColor(w, [0, 1], [unitRest, pageBgChrome]);
-    return {
-      color: interpolateColor(menuToneProgress.value, [0, 1], [baseColor, menuMutedInk]),
-    };
-  }, [restCompletedUnitInk, pageBgChrome, menuMutedInk, menuToneProgress]);
   const chevronIdleOpacityStyle = useAnimatedStyle(() => ({
     opacity: 1 - restThemeProgress.value * (1 - exploreV2WorkBlueProgress.value),
   }));
@@ -229,7 +215,7 @@ export function ExploreV2CompleteCard({
                             {formatWeightForLoad(vals.weight, useKg)}
                           </Animated.Text>
                         </View>
-                        <Animated.Text style={[styles.valUnit, completedUnitAnimatedStyle]}>{weightUnit}</Animated.Text>
+                        <Animated.Text style={[styles.valUnit, { color: textMeta }]}>{weightUnit}</Animated.Text>
                       </View>
                     )}
                     <View style={styles.valWithUnit}>
@@ -238,7 +224,7 @@ export function ExploreV2CompleteCard({
                           {vals.reps}
                         </Animated.Text>
                       </View>
-                      <Animated.Text style={[styles.valUnit, completedUnitAnimatedStyle]}>
+                      <Animated.Text style={[styles.valUnit, { color: textMeta }]}>
                         {ex.isTimeBased ? 's' : 'reps'}
                       </Animated.Text>
                     </View>
