@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback, useMemo } from 'react';
+import React, { useState, useRef, useCallback, useMemo, useEffect } from 'react';
 import {
   View,
   Text,
@@ -10,13 +10,23 @@ import {
   KeyboardAvoidingView,
   Platform,
   FlatList,
+  InteractionManager,
   useWindowDimensions,
   type NativeSyntheticEvent,
   type NativeScrollEvent,
 } from 'react-native';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useNavigation, useRoute } from '@react-navigation/native';
-import * as Clipboard from 'expo-clipboard';
+import { StatusBar } from 'expo-status-bar';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { StackActions, useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import Reanimated, {
+  Extrapolation,
+  interpolate,
+  runOnJS,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+} from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { useStore } from '../store';
 import { COLORS, SPACING, TYPOGRAPHY } from '../constants';
@@ -29,30 +39,223 @@ import type { WorkoutDraft, WorkoutDraftLine } from '../types/workoutDraft';
 import { useAppTheme } from '../theme/useAppTheme';
 import { EXECUTION_CTA_ROW_GAP } from '../components/execution/executionCtaTokens';
 import { BackTextButton } from '../components/common/BackTextButton';
-import { newDraftId, parseBuilderPasteAll } from '../utils/workoutBuilderPaste';
+import { TertiaryButton } from '../components/common/UnderlinedActionButton';
+import { newDraftId } from '../utils/workoutBuilderPaste';
 import { findActiveTemplateByName } from '../utils/workoutNameCollision';
-import { draftLineFromImportedName, buildCustomExerciseDefinition } from '../utils/exerciseIdentity';
+import { buildCustomExerciseDefinition } from '../utils/exerciseIdentity';
 import { ExerciseSearchPickModal } from '../components/workoutBuilder/ExerciseSearchPickModal';
+import type { RootStackParamList } from '../navigation/AppNavigator';
+import {
+  SCHEDULE_DECK_T,
+  SCHEDULE_DECK_EXECUTION_INCOMING_SCALE_START,
+  SCHEDULE_DECK_TRANSITION_MS,
+  SCHEDULE_DECK_WITH_TIMING_CONFIG,
+  useScheduleDeckTransition,
+} from '../context/ScheduleDeckTransitionContext';
 
 /** Bold exercise list on light builder canvas (matches product mock). */
 const LIST_EXERCISE_INK = '#1B4332';
+
+/** Match RecentWorkoutPickerScreen `title` (gap before cards / next section). */
+const TITLE_TO_CONTENT_GAP_PX = 48;
 
 type WorkoutBuilderRouteParams = {
   selectedDate?: string;
   shouldScheduleAfterCreate?: boolean;
   initialDraftPayload?: import('../types/workoutDraft').WorkoutBuilderInitialDraftPayload;
+  transitionSource?: 'scheduleDeck';
+  focusWorkoutNameOnOpen?: boolean;
+  skipDiscardConfirmOnBack?: boolean;
+  deckShellEntryFromRecentPicker?: boolean;
 };
 
+type WorkoutBuilderNavProp = NativeStackNavigationProp<RootStackParamList, 'WorkoutBuilder'>;
+type WorkoutBuilderRouteProp = RouteProp<RootStackParamList, 'WorkoutBuilder'>;
+
 export function WorkoutBuilderScreen() {
-  const navigation = useNavigation();
-  const route = useRoute();
+  const navigation = useNavigation<WorkoutBuilderNavProp>();
+  const route = useRoute<WorkoutBuilderRouteProp>();
   const params = route.params as WorkoutBuilderRouteParams | undefined;
   const insets = useSafeAreaInsets();
   const { width: windowWidth } = useWindowDimensions();
   const { addWorkoutTemplate, updateWorkoutTemplate, scheduleWorkout, addExercise, workoutTemplates } = useStore();
   const exercises = useStore(s => s.exercises);
   const { t } = useTranslation();
-  const { colors: themeColors, explore } = useAppTheme();
+  const { colors: themeColors } = useAppTheme();
+
+  const transitionSource = params?.transitionSource;
+  const isScheduleOriginTransition = transitionSource === 'scheduleDeck';
+  /** Builder was pushed on top of RecentWorkoutPicker; back pops to picker with local shell animation (no shared reverse). */
+  const deckShellEntryFromRecentPicker = params?.deckShellEntryFromRecentPicker === true;
+  const {
+    progress: scheduleDeckProgressSV,
+    reset: resetScheduleDeckTransition,
+    startReverseTransition: startScheduleDeckReverseTransition,
+    primeRecentPickerIncomingParallel,
+  } = useScheduleDeckTransition();
+  const scheduleDeckTransitionActiveSV = useSharedValue(isScheduleOriginTransition ? 1 : 0);
+  const allowScheduleDeckPopRef = useRef(false);
+  const isClosingFromHeaderRef = useRef(false);
+
+  useEffect(() => {
+    scheduleDeckTransitionActiveSV.value = isScheduleOriginTransition ? 1 : 0;
+  }, [isScheduleOriginTransition, scheduleDeckTransitionActiveSV]);
+
+  /** Local 0→1 for picker→builder only; shared `scheduleDeckProgressSV` stays at 1 so home never flashes. */
+  const recentPickerToBuilderEntrySV = useSharedValue(
+    params?.deckShellEntryFromRecentPicker && isScheduleOriginTransition ? 0 : 1,
+  );
+
+  useEffect(() => {
+    if (!params?.deckShellEntryFromRecentPicker || !isScheduleOriginTransition) return;
+    recentPickerToBuilderEntrySV.value = withTiming(1, SCHEDULE_DECK_WITH_TIMING_CONFIG);
+  }, [isScheduleOriginTransition, params?.deckShellEntryFromRecentPicker, recentPickerToBuilderEntrySV]);
+
+  const scheduleDeckIncomingShellStyle = useAnimatedStyle(() => {
+    if (scheduleDeckTransitionActiveSV.value === 0) {
+      return {};
+    }
+    const entryStillRunning = recentPickerToBuilderEntrySV.value < 0.995;
+    const p = entryStillRunning ? recentPickerToBuilderEntrySV.value : scheduleDeckProgressSV.value;
+    const opacity = interpolate(p, [SCHEDULE_DECK_T.inStart, SCHEDULE_DECK_T.inOpacityEnd], [0, 1], Extrapolation.CLAMP);
+    const scale = interpolate(
+      p,
+      [SCHEDULE_DECK_T.inStart, SCHEDULE_DECK_T.inEnd],
+      [SCHEDULE_DECK_EXECUTION_INCOMING_SCALE_START, 1],
+      Extrapolation.CLAMP,
+    );
+    return { opacity, transform: [{ scale }] };
+  });
+
+  const goBackAfterRecentPickerShellOut = useCallback(() => {
+    allowScheduleDeckPopRef.current = true;
+    isClosingFromHeaderRef.current = false;
+    navigation.goBack();
+  }, [navigation]);
+
+  /** Reverse the local entry SV (1→0), then pop — mirrors forward picker→builder without touching shared deck progress. */
+  const runCloseFromRecentPickerAnimated = useCallback(() => {
+    if (isClosingFromHeaderRef.current) {
+      allowScheduleDeckPopRef.current = true;
+      navigation.goBack();
+      return;
+    }
+    primeRecentPickerIncomingParallel();
+    isClosingFromHeaderRef.current = true;
+    recentPickerToBuilderEntrySV.value = withTiming(0, SCHEDULE_DECK_WITH_TIMING_CONFIG, finished => {
+      if (finished) {
+        runOnJS(goBackAfterRecentPickerShellOut)();
+      } else {
+        runOnJS(() => {
+          isClosingFromHeaderRef.current = false;
+        })();
+      }
+    });
+  }, [goBackAfterRecentPickerShellOut, navigation, primeRecentPickerIncomingParallel, recentPickerToBuilderEntrySV]);
+
+  const runCloseToSchedule = useCallback(() => {
+    if (!isScheduleOriginTransition) {
+      navigation.goBack();
+      return;
+    }
+    if (deckShellEntryFromRecentPicker) {
+      runCloseFromRecentPickerAnimated();
+      return;
+    }
+    if (isClosingFromHeaderRef.current) {
+      allowScheduleDeckPopRef.current = true;
+      navigation.goBack();
+      return;
+    }
+    isClosingFromHeaderRef.current = true;
+    startScheduleDeckReverseTransition(finished => {
+      if (!finished) {
+        isClosingFromHeaderRef.current = false;
+        return;
+      }
+      allowScheduleDeckPopRef.current = true;
+      navigation.goBack();
+      resetScheduleDeckTransition();
+    });
+  }, [
+    deckShellEntryFromRecentPicker,
+    isScheduleOriginTransition,
+    navigation,
+    resetScheduleDeckTransition,
+    runCloseFromRecentPickerAnimated,
+    startScheduleDeckReverseTransition,
+  ]);
+
+  useEffect(() => {
+    if (!isScheduleOriginTransition || !deckShellEntryFromRecentPicker) return undefined;
+    return navigation.addListener('beforeRemove', e => {
+      if (allowScheduleDeckPopRef.current) {
+        allowScheduleDeckPopRef.current = false;
+        return;
+      }
+      e.preventDefault();
+      if (isClosingFromHeaderRef.current) {
+        allowScheduleDeckPopRef.current = true;
+        navigation.dispatch(e.data.action);
+        return;
+      }
+      primeRecentPickerIncomingParallel();
+      isClosingFromHeaderRef.current = true;
+      recentPickerToBuilderEntrySV.value = withTiming(0, SCHEDULE_DECK_WITH_TIMING_CONFIG, finished => {
+        if (finished) {
+          runOnJS(() => {
+            allowScheduleDeckPopRef.current = true;
+            isClosingFromHeaderRef.current = false;
+            navigation.dispatch(e.data.action);
+          })();
+        } else {
+          runOnJS(() => {
+            isClosingFromHeaderRef.current = false;
+          })();
+        }
+      });
+    });
+  }, [deckShellEntryFromRecentPicker, isScheduleOriginTransition, navigation, primeRecentPickerIncomingParallel, recentPickerToBuilderEntrySV]);
+
+  useEffect(() => {
+    if (!isScheduleOriginTransition || deckShellEntryFromRecentPicker) return undefined;
+    return navigation.addListener('beforeRemove', e => {
+      if (allowScheduleDeckPopRef.current) {
+        allowScheduleDeckPopRef.current = false;
+        return;
+      }
+      e.preventDefault();
+      isClosingFromHeaderRef.current = true;
+      startScheduleDeckReverseTransition(finished => {
+        if (!finished) {
+          isClosingFromHeaderRef.current = false;
+          return;
+        }
+        allowScheduleDeckPopRef.current = true;
+        navigation.dispatch(e.data.action);
+        resetScheduleDeckTransition();
+      });
+    });
+  }, [deckShellEntryFromRecentPicker, isScheduleOriginTransition, navigation, resetScheduleDeckTransition, startScheduleDeckReverseTransition]);
+
+  const workoutNameInputRef = useRef<TextInput>(null);
+  useEffect(() => {
+    if (!params?.focusWorkoutNameOnOpen) return undefined;
+    let cancelled = false;
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
+    const task = InteractionManager.runAfterInteractions(() => {
+      if (cancelled) return;
+      const focusDelayMs = Math.max(0, Math.round(SCHEDULE_DECK_TRANSITION_MS * SCHEDULE_DECK_T.inOpacityEnd) - 48);
+      timeoutId = setTimeout(() => {
+        workoutNameInputRef.current?.focus();
+      }, focusDelayMs);
+    });
+    return () => {
+      cancelled = true;
+      task.cancel();
+      if (timeoutId !== undefined) clearTimeout(timeoutId);
+    };
+  }, [params?.focusWorkoutNameOnOpen]);
 
   const [draftWorkouts, setDraftWorkouts] = useState<WorkoutDraft[]>(() => {
     const initial = params?.initialDraftPayload?.drafts;
@@ -75,11 +278,6 @@ export function WorkoutBuilderScreen() {
   const activeDraft = draftWorkouts[activeWorkoutIndex] ?? draftWorkouts[0];
   const showMultiWorkoutChrome = draftWorkouts.length > 1;
 
-  const hasAnyExercise = useMemo(
-    () => draftWorkouts.some(w => w.lines.length > 0),
-    [draftWorkouts],
-  );
-
   const hasDraft = useMemo(
     () => draftWorkouts.some(w => w.name.trim().length > 0 || w.lines.length > 0),
     [draftWorkouts],
@@ -90,8 +288,10 @@ export function WorkoutBuilderScreen() {
     [t],
   );
 
+  const skipDiscardConfirmOnBack = params?.skipDiscardConfirmOnBack === true;
+
   const handleBack = () => {
-    if (hasDraft) {
+    if (hasDraft && !skipDiscardConfirmOnBack) {
       Alert.alert(t('discardWorkout'), t('discardWorkoutMessage'), [
         { text: t('cancel'), style: 'cancel' },
         {
@@ -99,13 +299,28 @@ export function WorkoutBuilderScreen() {
           style: 'destructive',
           onPress: () => {
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-            navigation.goBack();
+            if (deckShellEntryFromRecentPicker) {
+              runCloseFromRecentPickerAnimated();
+            } else if (isScheduleOriginTransition) {
+              isClosingFromHeaderRef.current = true;
+              startScheduleDeckReverseTransition(finished => {
+                if (!finished) {
+                  isClosingFromHeaderRef.current = false;
+                  return;
+                }
+                allowScheduleDeckPopRef.current = true;
+                navigation.goBack();
+                resetScheduleDeckTransition();
+              });
+            } else {
+              navigation.goBack();
+            }
           },
         },
       ]);
     } else {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-      navigation.goBack();
+      runCloseToSchedule();
     }
   };
 
@@ -168,79 +383,6 @@ export function WorkoutBuilderScreen() {
     );
   }, [activeWorkoutIndex]);
 
-  const handlePasteFromClipboard = useCallback(async () => {
-    const content = await Clipboard.getStringAsync();
-    if (!content?.trim()) {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-      Alert.alert(t('alertErrorTitle'), t('clipboardEmpty'));
-      return;
-    }
-    const parsedWorkouts = parseBuilderPasteAll(content);
-    if (parsedWorkouts.length === 0) {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-      Alert.alert(t('alertErrorTitle'), t('pasteNoExercisesFound'));
-      return;
-    }
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-
-    if (parsedWorkouts.length >= 2) {
-      const batch = Date.now();
-      setDraftWorkouts(
-        parsedWorkouts.map((pw, i) => ({
-          id: `wd-${batch}-${i}`,
-          name: pw.workoutName.trim() ? pw.workoutName.trim() : defaultWorkoutLabel(i),
-          lines: pw.exercises.map((name, j) =>
-            draftLineFromImportedName(name, `line-paste-${batch}-${i}-${j}`, exercises),
-          ),
-        })),
-      );
-      setActiveWorkoutIndex(0);
-      requestAnimationFrame(() => {
-        pagerRef.current?.scrollToOffset({ offset: 0, animated: false });
-      });
-      return;
-    }
-
-    const p = parsedWorkouts[0];
-    setDraftWorkouts(prev => {
-      const idx = Math.min(activeWorkoutIndex, Math.max(0, prev.length - 1));
-      return prev.map((w, i) => {
-        if (i !== idx) return w;
-        const existing = new Set(
-          w.lines.map(l => (l.exerciseId ?? l.name).trim().toLowerCase()),
-        );
-        const toAdd = p.exercises.filter(e => !existing.has(e.trim().toLowerCase()));
-        const base = w.lines.length;
-        const mergedName =
-          p.workoutName.trim() && !w.name.trim() ? p.workoutName.trim() : w.name;
-        return {
-          ...w,
-          name: mergedName,
-          lines: [
-            ...w.lines,
-            ...toAdd.map((name, j) =>
-              draftLineFromImportedName(name, `line-paste-${Date.now()}-${base + j}`, exercises),
-            ),
-          ],
-        };
-      });
-    });
-  }, [t, activeWorkoutIndex, defaultWorkoutLabel, exercises]);
-
-  const handleClearAllEntries = useCallback(() => {
-    Alert.alert(t('clearBuilderEntriesTitle'), t('clearBuilderEntriesMessage'), [
-      { text: t('cancel'), style: 'cancel' },
-      {
-        text: t('clear'),
-        style: 'destructive',
-        onPress: () => {
-          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-          resetCreationForm();
-        },
-      },
-    ]);
-  }, [t, resetCreationForm]);
-
   const removeLine = (workoutId: string, lineId: string) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setDraftWorkouts(prev =>
@@ -300,6 +442,29 @@ export function WorkoutBuilderScreen() {
     }
 
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    if (deckShellEntryFromRecentPicker) {
+      /**
+       * Same reverse handoff as blank create → Home (`runCloseToSchedule`): shared deck progress 1→0,
+       * then pop builder + picker. `scheduleDeckBypassPickerBeforeRemove` skips picker `beforeRemove` animation.
+       */
+      useStore.getState().setScheduleDeckBypassPickerBeforeRemove(true);
+      isClosingFromHeaderRef.current = true;
+      startScheduleDeckReverseTransition(finished => {
+        if (!finished) {
+          isClosingFromHeaderRef.current = false;
+          return;
+        }
+        allowScheduleDeckPopRef.current = true;
+        resetScheduleDeckTransition();
+        navigation.dispatch(StackActions.pop(2));
+        isClosingFromHeaderRef.current = false;
+      });
+      return;
+    }
+    allowScheduleDeckPopRef.current = true;
+    if (isScheduleOriginTransition) {
+      resetScheduleDeckTransition();
+    }
     navigation.goBack();
   };
 
@@ -428,26 +593,40 @@ export function WorkoutBuilderScreen() {
 
   const canvas = themeColors.canvasLight;
   const meta = themeColors.textMeta;
-  /** Same token as Explore / HIIT work-timer card surfaces (`containerTertiaryTimer`). */
-  const pasteTimerCardBackground = explore.workTimerCompleteCardBg;
 
   return (
-    <SafeAreaView style={[styles.safe, { backgroundColor: canvas }]} edges={['top']}>
+    <Reanimated.View
+      style={[
+        styles.safe,
+        {
+          backgroundColor: canvas,
+          /** Manual top inset: `SafeAreaView` + animated transform under transparent modal can under-apply top padding. */
+          paddingTop: insets.top,
+        },
+        isScheduleOriginTransition && scheduleDeckIncomingShellStyle,
+      ]}
+    >
+      <View style={styles.safe}>
+      <StatusBar style="dark" />
       <KeyboardAvoidingView
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         keyboardVerticalOffset={insets.top}
       >
         <View style={styles.column}>
-          <View style={[styles.headerBlock, { paddingHorizontal: SPACING.xxl, paddingTop: SPACING.sm }]}>
-            <BackTextButton
-              label="Home"
-              onPress={handleBack}
-              chevronPointsLeft
-              style={{ paddingHorizontal: 0, marginBottom: SPACING.md }}
-              textStyle={{ color: meta }}
-            />
+          {/**
+           * Match RecentWorkoutPickerScreen: back row uses the same BackTextButton padding as that page,
+           * then title/tabs sit in a padded block — avoids double `paddingTop` vs the picker.
+           */}
+          <BackTextButton
+            label={deckShellEntryFromRecentPicker ? t('useRecentWorkoutPickerTitle') : 'Home'}
+            onPress={handleBack}
+            chevronPointsLeft
+            style={{ paddingHorizontal: SPACING.xxl, marginBottom: SPACING.md }}
+            textStyle={{ color: meta }}
+          />
 
+          <View style={[styles.headerBlock, { paddingHorizontal: SPACING.xxl }]}>
             {showMultiWorkoutChrome ? (
               <ScrollView
                 horizontal
@@ -482,7 +661,8 @@ export function WorkoutBuilderScreen() {
             ) : null}
 
             <TextInput
-              style={[styles.titleInput, { color: COLORS.textPrimary }]}
+              ref={workoutNameInputRef}
+              style={styles.titleInput}
               placeholder={t('workoutName')}
               placeholderTextColor={COLORS.textMeta}
               value={activeDraft?.name ?? ''}
@@ -492,21 +672,6 @@ export function WorkoutBuilderScreen() {
               onSubmitEditing={openLibraryPickerForNewLine}
               accessibilityLabel={t('workoutName')}
             />
-
-            <View style={styles.addExerciseActions}>
-              <TouchableOpacity
-                style={styles.addExerciseLinkTouch}
-                onPress={openLibraryPickerForNewLine}
-                hitSlop={8}
-                activeOpacity={0.75}
-                accessibilityRole="button"
-                accessibilityLabel={t('addExercise')}
-              >
-                <Text style={[styles.addExerciseLinkText, { color: meta, borderBottomColor: meta }]}>
-                  {t('addExerciseCta')}
-                </Text>
-              </TouchableOpacity>
-            </View>
           </View>
 
           <FlatList
@@ -540,17 +705,16 @@ export function WorkoutBuilderScreen() {
                 {t('createWorkout')}
               </Text>
             </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.pasteButton, { backgroundColor: pasteTimerCardBackground }]}
-              onPress={hasAnyExercise ? handleClearAllEntries : handlePasteFromClipboard}
+            <TertiaryButton
+              label={t('addExercise')}
+              onPress={openLibraryPickerForNewLine}
               activeOpacity={0.85}
-              accessibilityRole="button"
-              accessibilityLabel={hasAnyExercise ? t('clear') : t('pasteWorkout')}
-            >
-              <Text style={[styles.pasteButtonText, { color: themeColors.containerPrimary }]}>
-                {hasAnyExercise ? t('clear') : t('pasteWorkout')}
-              </Text>
-            </TouchableOpacity>
+              style={styles.footerAddExerciseButton}
+              textStyle={styles.footerAddExerciseText}
+              color={themeColors.containerPrimary}
+              underlineColor={themeColors.containerPrimary}
+              accessibilityLabel={t('addExercise')}
+            />
           </View>
         </View>
 
@@ -572,7 +736,8 @@ export function WorkoutBuilderScreen() {
           }}
         />
       </KeyboardAvoidingView>
-    </SafeAreaView>
+      </View>
+    </Reanimated.View>
   );
 }
 
@@ -614,21 +779,19 @@ const styles = StyleSheet.create({
   },
   pageScrollContent: {
     paddingHorizontal: SPACING.xxl,
-    paddingTop: SPACING.xs,
+    /** 48px below title comes from `titleInput.marginBottom`. */
+    paddingTop: 0,
   },
   /**
-   * Match Today schedule title size/spacing (`displayLarge`).
-   * `TextInput` draws large system text heavier than `Text` at weight 500; use regular so it reads like the home header.
+   * Match RecentWorkoutPickerScreen page title: `TYPOGRAPHY.displayLarge`, primary ink, 48px below before next block.
    */
   titleInput: {
-    fontSize: TYPOGRAPHY.displayLarge.fontSize,
-    lineHeight: TYPOGRAPHY.displayLarge.lineHeight,
-    letterSpacing: TYPOGRAPHY.displayLarge.letterSpacing,
-    fontWeight: '400',
-    paddingVertical: SPACING.sm,
+    ...TYPOGRAPHY.displayLarge,
+    color: COLORS.textPrimary,
+    paddingVertical: 0,
     paddingHorizontal: 0,
-    marginBottom: SPACING.lg,
-    minHeight: 48,
+    marginBottom: TITLE_TO_CONTENT_GAP_PX,
+    minHeight: TYPOGRAPHY.displayLarge.lineHeight,
     ...Platform.select({
       android: { includeFontPadding: false },
       default: {},
@@ -636,18 +799,6 @@ const styles = StyleSheet.create({
   },
   listBlock: {
     gap: SPACING.xl,
-  },
-  addExerciseActions: {
-    marginBottom: SPACING.lg,
-  },
-  /** Matches Explore v2 Up Next “+ add” link (`ExploreV2UpNextCard` action row). */
-  addExerciseLinkTouch: {
-    paddingVertical: 2,
-    alignSelf: 'flex-start',
-  },
-  addExerciseLinkText: {
-    ...TYPOGRAPHY.h1,
-    borderBottomWidth: 1,
   },
   exerciseRow: {
     flexDirection: 'row',
@@ -674,7 +825,8 @@ const styles = StyleSheet.create({
   footerActionsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'flex-start',
+    justifyContent: 'space-between',
+    width: '100%',
     gap: EXECUTION_CTA_ROW_GAP,
   },
   createButton: {
@@ -685,20 +837,21 @@ const styles = StyleSheet.create({
     ...(Platform.OS === 'ios' ? { borderCurve: 'continuous' as const } : {}),
     alignItems: 'center',
     justifyContent: 'center',
+    alignSelf: 'flex-start',
     flexShrink: 0,
   },
   createButtonText: {
     ...TYPOGRAPHY.body,
   },
-  pasteButton: {
-    height: 56,
-    paddingHorizontal: SPACING.xxl,
-    borderRadius: 14,
-    ...(Platform.OS === 'ios' ? { borderCurve: 'continuous' as const } : {}),
+  /** Same as Current card pagination Add (`addSetTertiaryButton` + `addSetTertiaryLinkText`). */
+  footerAddExerciseButton: {
     alignItems: 'center',
     justifyContent: 'center',
+    paddingVertical: 2,
+    flexShrink: 0,
   },
-  pasteButtonText: {
-    ...TYPOGRAPHY.body,
+  footerAddExerciseText: {
+    ...TYPOGRAPHY.meta,
+    fontWeight: '400',
   },
 });

@@ -22,7 +22,6 @@ import { IconCheckmark, IconAdd, IconCalendar, IconPlay, IconStopwatch, IconArro
 import { ScheduleWorkoutDeckV3, type ScheduleDeckV3Item } from '../components/schedule/ScheduleWorkoutDeckV3';
 import { CycleControlSheet } from '../components/CycleControlSheet';
 import { ShareCycleDrawer } from '../components/ShareCycleDrawer';
-import { RecentWorkoutPickerSheet } from '../components/home/RecentWorkoutPickerSheet';
 import { TertiaryButton } from '../components/common/UnderlinedActionButton';
 import { StackPageHeader } from '../components/common/StackPageHeader';
 import dayjs from 'dayjs';
@@ -34,12 +33,14 @@ import type { BonusType, CyclePlan } from '../types/training';
 import type { WorkoutDraft } from '../types/workoutDraft';
 import { newDraftId, parseBuilderPasteAll } from '../utils/workoutBuilderPaste';
 import { findActiveTemplateByName, suggestNonCollidingName } from '../utils/workoutNameCollision';
-import { buildRecentWorkoutPickerOptions, type RecentWorkoutPickerOption } from '../utils/recentWorkoutPickerOptions';
-import { hydrateWorkoutDraftFromSnapshot } from '../utils/hydrateWorkoutDraftFromSnapshot';
 import { draftLineFromImportedName } from '../utils/exerciseIdentity';
 import type { ScheduledWorkout } from '../types/training';
 import type { ExerciseProgress } from '../types';
-import { SCHEDULE_DECK_T, useScheduleDeckTransition } from '../context/ScheduleDeckTransitionContext';
+import {
+  SCHEDULE_DECK_T,
+  SCHEDULE_DECK_WITH_TIMING_CONFIG,
+  useScheduleDeckTransition,
+} from '../context/ScheduleDeckTransitionContext';
 
 dayjs.extend(isoWeek);
 
@@ -246,20 +247,46 @@ export function TodayScreen({ onDateChange, onOpenAddWorkout, onOpenBonusDrawer 
   const [selectedDeckWorkout, setSelectedDeckWorkout] = useState<ScheduledWorkout | undefined>(undefined);
   const timerModeProgress = useSharedValue(0);
   const timerHeaderProgress = useSharedValue(0);
+  /** 0→1 when switching Warm up / Core / Timer while the extras sheet is open — same ease/duration as schedule deck. */
+  const extrasTabContentEnter = useSharedValue(1);
+  const extrasTabPrevRef = useRef<{ open: boolean; mode: 'timer' | 'warmup' | 'core' | null }>({
+    open: false,
+    mode: null,
+  });
   const launchToExecutionLockRef = useRef(false);
   const { progress: scheduleDeckTransitionProgress, startTransition: startScheduleDeckTransition, reset: resetScheduleDeckTransition } =
     useScheduleDeckTransition();
   /** Keeps the newly created workout card last in the deck (before the create tile). */
   const [deckTailSwId, setDeckTailSwId] = useState<string | null>(null);
   const [imperativeDeckScroll, setImperativeDeckScroll] = useState<{ index: number; token: number } | null>(null);
-  const [recentWorkoutPickerVisible, setRecentWorkoutPickerVisible] = useState(false);
-
   const openExtrasPanel = useCallback((mode: 'timer' | 'warmup' | 'core') => {
     cancelAnimation(timerHeaderProgress);
     timerHeaderProgress.value = 1;
     setExtrasEnterSeq(s => s + 1);
     setExtrasPanelMode(mode);
   }, [timerHeaderProgress]);
+
+  /** Keep `extrasPanelMode` until the slide-out finishes so content stays mounted over the animation. */
+  const extrasCloseAnimatingRef = useRef(false);
+  /** Stable for `runOnJS` — inline worklet closures can crash on native (Hermes/Reanimated). */
+  const onExtrasCloseAnimationEnd = useCallback((finished: boolean) => {
+    if (finished) {
+      setExtrasPanelMode(null);
+    }
+    extrasCloseAnimatingRef.current = false;
+  }, []);
+
+  const closeExtrasPanelAnimated = useCallback(() => {
+    if (extrasCloseAnimatingRef.current) return;
+    extrasCloseAnimatingRef.current = true;
+    cancelAnimation(timerModeProgress);
+    cancelAnimation(timerHeaderProgress);
+    timerHeaderProgress.value = withTiming(0, SCHEDULE_DECK_WITH_TIMING_CONFIG);
+    timerModeProgress.value = withTiming(0, SCHEDULE_DECK_WITH_TIMING_CONFIG, (finished: boolean) => {
+      'worklet';
+      runOnJS(onExtrasCloseAnimationEnd)(finished);
+    });
+  }, [timerModeProgress, timerHeaderProgress, onExtrasCloseAnimationEnd]);
 
   // TEMP: Seed dev data on mount (remove after use)
   const [seeded, setSeeded] = useState(false);
@@ -813,6 +840,13 @@ export function TodayScreen({ onDateChange, onOpenAddWorkout, onOpenBonusDrawer 
     transform: [{ translateY: 20 * (1 - timerHeaderProgress.value) }],
     opacity: timerHeaderProgress.value,
   }));
+  const extrasTabContentSlideStyle = useAnimatedStyle(() => {
+    const p = extrasTabContentEnter.value;
+    return {
+      opacity: p,
+      transform: [{ translateY: interpolate(p, [0, 1], [32, 0], Extrapolation.CLAMP) }],
+    };
+  });
 
   const handleResumeCycleOnDay = async (resumeDateStr: string) => {
     if (!activeCyclePlan) return;
@@ -922,18 +956,37 @@ export function TodayScreen({ onDateChange, onOpenAddWorkout, onOpenBonusDrawer 
   }, []);
 
   useEffect(() => {
-    timerModeProgress.value = withTiming(isExtrasPanelOpen ? 1 : 0, { duration: 420, easing: Easing.out(Easing.cubic) });
-  }, [isExtrasPanelOpen, timerModeProgress]);
-
-  useEffect(() => {
     if (isExtrasPanelOpen) {
+      timerModeProgress.value = withTiming(1, SCHEDULE_DECK_WITH_TIMING_CONFIG);
       cancelAnimation(timerHeaderProgress);
       timerHeaderProgress.value = 1;
       return;
     }
-    cancelAnimation(timerHeaderProgress);
-    timerHeaderProgress.value = withTiming(0, { duration: 220, easing: Easing.out(Easing.cubic) });
-  }, [isExtrasPanelOpen, timerHeaderProgress]);
+    // Closed without animated close (e.g. navigate to warmup) — snap to rest. Avoid `cancelAnimation`
+    // here after an animated close: completion + this effect in the same tick can race on native.
+    timerModeProgress.value = 0;
+    timerHeaderProgress.value = 0;
+  }, [isExtrasPanelOpen]);
+
+  useEffect(() => {
+    const wasOpen = extrasTabPrevRef.current.open;
+    const prevMode = extrasTabPrevRef.current.mode;
+    extrasTabPrevRef.current = { open: isExtrasPanelOpen, mode: extrasPanelMode };
+
+    if (!isExtrasPanelOpen || extrasPanelMode === null) {
+      cancelAnimation(extrasTabContentEnter);
+      extrasTabContentEnter.value = 1;
+      return;
+    }
+
+    if (wasOpen && prevMode !== null && prevMode !== extrasPanelMode) {
+      cancelAnimation(extrasTabContentEnter);
+      extrasTabContentEnter.value = 0;
+      extrasTabContentEnter.value = withTiming(1, SCHEDULE_DECK_WITH_TIMING_CONFIG);
+    } else {
+      extrasTabContentEnter.value = 1;
+    }
+  }, [isExtrasPanelOpen, extrasPanelMode]);
 
   useFocusEffect(
     useCallback(() => {
@@ -971,11 +1024,17 @@ export function TodayScreen({ onDateChange, onOpenAddWorkout, onOpenBonusDrawer 
   const handleOpenWorkoutHistory = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     if (cyclePlanForHeader) {
-      (navigation as any).push('History', { planId: cyclePlanForHeader.id });
+      (navigation as any).push('History', {
+        planId: cyclePlanForHeader.id,
+        transitionSource: 'scheduleDeck',
+      });
+      requestAnimationFrame(() => {
+        startScheduleDeckTransition();
+      });
       return;
     }
     onOpenAddWorkout?.(selectedDate);
-  }, [cyclePlanForHeader, navigation, onOpenAddWorkout, selectedDate]);
+  }, [cyclePlanForHeader, navigation, onOpenAddWorkout, selectedDate, startScheduleDeckTransition]);
 
   const deckItems: ScheduleDeckV3Item[] = useMemo(
     () =>
@@ -1030,18 +1089,18 @@ export function TodayScreen({ onDateChange, onOpenAddWorkout, onOpenBonusDrawer 
     };
   }, [completedWorkoutsForSelectedDay, completedCardTextColor, exercises, navigateToWorkoutExecution]);
 
-  const recentWorkoutPickerOptions = useMemo(
-    () => buildRecentWorkoutPickerOptions(scheduledWorkouts),
-    [scheduledWorkouts],
-  );
-
   const handleHomeCreateWorkout = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     (navigation as any).navigate('WorkoutBuilder', {
       selectedDate,
       shouldScheduleAfterCreate: true,
+      transitionSource: 'scheduleDeck',
+      focusWorkoutNameOnOpen: true,
     });
-  }, [navigation, selectedDate]);
+    requestAnimationFrame(() => {
+      startScheduleDeckTransition();
+    });
+  }, [navigation, selectedDate, startScheduleDeckTransition]);
 
   const handleHomePasteWorkout = useCallback(async () => {
     const text = await Clipboard.getStringAsync();
@@ -1085,25 +1144,14 @@ export function TodayScreen({ onDateChange, onOpenAddWorkout, onOpenBonusDrawer 
 
   const handleOpenRecentWorkoutPicker = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setRecentWorkoutPickerVisible(true);
-  }, []);
-
-  const handleSelectRecentWorkout = useCallback(
-    (opt: RecentWorkoutPickerOption) => {
-      let draft = hydrateWorkoutDraftFromSnapshot(opt.workoutName, opt.exercisesSnapshot, exercises);
-      const match = findActiveTemplateByName(workoutTemplates, draft.name);
-      if (match) {
-        draft = { ...draft, linkedTemplateId: match.id };
-      }
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-      (navigation as any).navigate('WorkoutBuilder', {
-        selectedDate,
-        shouldScheduleAfterCreate: true,
-        initialDraftPayload: { drafts: [draft], activeIndex: 0 },
-      });
-    },
-    [navigation, exercises, workoutTemplates, selectedDate],
-  );
+    (navigation as any).navigate('RecentWorkoutPicker', {
+      selectedDate,
+      transitionSource: 'scheduleDeck',
+    });
+    requestAnimationFrame(() => {
+      startScheduleDeckTransition();
+    });
+  }, [navigation, selectedDate, startScheduleDeckTransition]);
 
   const createWorkoutDeckItem = useMemo(
     (): ScheduleDeckV3Item => ({
@@ -1242,7 +1290,17 @@ export function TodayScreen({ onDateChange, onOpenAddWorkout, onOpenBonusDrawer 
                 />
               </View>
               <Text style={styles.scheduleHeaderTitle}>Workout of the day</Text>
-              <Text style={styles.scheduleHeaderDateLabel}>{headerDateLabel}</Text>
+              <View style={styles.scheduleHeaderDateRow}>
+                <Text style={styles.scheduleHeaderDateLabel}>{headerDateLabel}</Text>
+                {cyclePlanForHeader ? (
+                  <TertiaryButton
+                    label={cycleHomeHistoryLabel}
+                    onPress={handleOpenWorkoutHistory}
+                    style={styles.scheduleHeaderHistoryLink}
+                    textStyle={styles.profileLinkText}
+                  />
+                ) : null}
+              </View>
             </View>
           </View>
 
@@ -1342,14 +1400,6 @@ export function TodayScreen({ onDateChange, onOpenAddWorkout, onOpenBonusDrawer 
               )}
 
               <View style={styles.cardActionsContainer}>
-                {cyclePlanForHeader ? (
-                  <TertiaryButton
-                    label={cycleHomeHistoryLabel}
-                    onPress={handleOpenWorkoutHistory}
-                    style={styles.cycleProgressAction}
-                    textStyle={styles.profileLinkText}
-                  />
-                ) : null}
                 {!isPausedDay &&
                 !selectedDay?.scheduledWorkout &&
                 !dayjs(selectedDate).isBefore(today, 'day') &&
@@ -1416,33 +1466,34 @@ export function TodayScreen({ onDateChange, onOpenAddWorkout, onOpenBonusDrawer 
             pointerEvents={isExtrasPanelOpen ? 'auto' : 'none'}
             style={[styles.timerModePane, { backgroundColor: savedTimersPageBackground }, timerPaneAnimatedStyle]}
           >
-            <Animated.View style={[styles.timerModeHeader, timerHeaderAnimatedStyle]}>
-              {extrasPanelMode !== null && (
-                <View key={`extras-header-${extrasEnterSeq}-${extrasPanelMode}`}>
-                  <StackPageHeader
-                    paddingTop={insets.top}
-                    backLabel="Home"
-                    onBackPress={() => setExtrasPanelMode(null)}
-                    title={
-                      extrasPanelMode === 'timer'
-                        ? t('timer')
-                        : extrasPanelMode === 'warmup'
-                          ? t('extrasSheetTitleWarmUp')
-                          : extrasPanelMode === 'core'
-                            ? t('core')
-                            : ''
-                    }
-                    titleColor={themeColors.textPrimary}
-                  />
-                </View>
-              )}
-            </Animated.View>
-            <ScrollView
-              key={`extras-scroll-${extrasEnterSeq}-${extrasPanelMode ?? 'closed'}`}
-              style={styles.timerModeScroll}
-              contentContainerStyle={[styles.timerModeScrollContent, { paddingBottom: insets.bottom + 24 }]}
-              showsVerticalScrollIndicator={false}
-            >
+            <Animated.View style={[styles.extrasTabContentWrap, extrasTabContentSlideStyle]}>
+              <Animated.View style={[styles.timerModeHeader, timerHeaderAnimatedStyle]}>
+                {extrasPanelMode !== null && (
+                  <View key={`extras-header-${extrasEnterSeq}-${extrasPanelMode}`}>
+                    <StackPageHeader
+                      paddingTop={insets.top}
+                      backLabel="Home"
+                      onBackPress={closeExtrasPanelAnimated}
+                      title={
+                        extrasPanelMode === 'timer'
+                          ? t('timer')
+                          : extrasPanelMode === 'warmup'
+                            ? t('extrasSheetTitleWarmUp')
+                            : extrasPanelMode === 'core'
+                              ? t('core')
+                              : ''
+                      }
+                      titleColor={themeColors.textPrimary}
+                    />
+                  </View>
+                )}
+              </Animated.View>
+              <ScrollView
+                key={`extras-scroll-${extrasEnterSeq}-${extrasPanelMode ?? 'closed'}`}
+                style={styles.timerModeScroll}
+                contentContainerStyle={[styles.timerModeScrollContent, { paddingBottom: insets.bottom + 24 }]}
+                showsVerticalScrollIndicator={false}
+              >
               {(extrasPanelMode === 'timer' || extrasPanelMode === 'warmup' || extrasPanelMode === 'core') && (
                 <Animated.View
                   key={`extras-add-${extrasEnterSeq}-${extrasPanelMode}`}
@@ -1574,6 +1625,7 @@ export function TodayScreen({ onDateChange, onOpenAddWorkout, onOpenBonusDrawer 
                 </View>
               ) : null}
             </ScrollView>
+            </Animated.View>
           </Animated.View>
           </Animated.View>
         </SafeAreaView>
@@ -1642,12 +1694,6 @@ export function TodayScreen({ onDateChange, onOpenAddWorkout, onOpenBonusDrawer 
           onExportData={handleExportData}
         />
 
-        <RecentWorkoutPickerSheet
-          visible={recentWorkoutPickerVisible}
-          onClose={() => setRecentWorkoutPickerVisible(false)}
-          options={recentWorkoutPickerOptions}
-          onSelect={handleSelectRecentWorkout}
-        />
       </View>
   );
 }
@@ -1763,9 +1809,20 @@ const styles = StyleSheet.create({
     ...TYPOGRAPHY.displayLarge,
     color: COLORS.textPrimary,
   },
+  scheduleHeaderDateRow: {
+    flexDirection: 'column',
+    alignItems: 'flex-start',
+    alignSelf: 'flex-start',
+    maxWidth: '100%',
+  },
   scheduleHeaderDateLabel: {
     ...TYPOGRAPHY.displayLarge,
     color: COLORS.textMeta,
+  },
+  scheduleHeaderHistoryLink: {
+    alignSelf: 'flex-start',
+    paddingTop: 8,
+    paddingBottom: 2,
   },
   scheduleHeaderCycleRow: {
     flexDirection: 'row',
@@ -2215,11 +2272,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: 0,
   },
-  cycleProgressAction: {
-    alignSelf: 'flex-start',
-    marginTop: 24,
-    marginBottom: SPACING.lg,
-  },
   footerActionsWrap: {
     paddingHorizontal: SPACING.xxl,
     paddingTop: SPACING.md,
@@ -2286,6 +2338,9 @@ const styles = StyleSheet.create({
   timerModePane: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: COLORS.canvasLight,
+  },
+  extrasTabContentWrap: {
+    flex: 1,
   },
   timerModeHeader: {
     alignSelf: 'stretch',

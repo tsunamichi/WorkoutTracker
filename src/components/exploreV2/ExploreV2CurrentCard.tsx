@@ -38,8 +38,7 @@ import {
   type ExploreV2CurrentSettingsOverflowProps,
 } from './ExploreV2CurrentOverflowSheet';
 import * as Haptics from 'expo-haptics';
-import { UnderlinedActionButton } from '../common/UnderlinedActionButton';
-import { IconAdd } from '../icons';
+import { TertiaryButton, UnderlinedActionButton } from '../common/UnderlinedActionButton';
 import { useTranslation } from '../../i18n/useTranslation';
 
 /** iOS: toolbar above the keyboard (numeric pads have no Done key). */
@@ -143,6 +142,8 @@ type SetHeroPageProps = {
   unitLabelAnimatedStyle?: AnimatedStyle<TextStyle>;
   /** Placeholder color when using animated hero styles (numeric inputs have no separate animated placeholder). */
   heroPlaceholderColor?: string;
+  /** Shown on the reps/sec row (e.g. Remove set) — bottom-aligned with the hero numeral (not the TextInput view). */
+  removeSetTrailing?: React.ReactNode;
 };
 
 /** Exported for Completed-card inline editor (same hero inputs as Current). */
@@ -167,6 +168,7 @@ export function CurrentSetHeroPage({
   heroValueAnimatedStyle,
   unitLabelAnimatedStyle,
   heroPlaceholderColor,
+  removeSetTrailing,
 }: SetHeroPageProps) {
   const heroEx = group.exercises[slot.exerciseIndex];
   const heroRound = slot.round;
@@ -434,36 +436,41 @@ export function CurrentSetHeroPage({
             ) : null}
           </View>
         </View>
-        <View style={styles.valueRow}>
-          <RepsField
-            ref={repsInputRef as React.Ref<TextInput>}
-            key={`${setId}-reps`}
-            style={repsInputStyle}
-            allowFontScaling={false}
-            maxFontSizeMultiplier={1}
-            defaultValue={repsDefault}
-            onChangeText={t => {
-              repsDraftRef.current = t;
-              repsDirtyRef.current = true;
-            }}
-            onBlur={commitReps}
-            keyboardType={heroEx.isTimeBased ? 'decimal-pad' : 'number-pad'}
-            selectTextOnFocus
-            editable={metricsEditable}
-            placeholder="0"
-            placeholderTextColor={placeholderTint}
-            underlineColorAndroid="transparent"
-            inputAccessoryViewID={Platform.OS === 'ios' ? heroMetricsAccessoryId : undefined}
-            returnKeyType="done"
-            blurOnSubmit
-            onSubmitEditing={Keyboard.dismiss}
-          />
-          <View style={styles.unitWithDelta}>
-            <View style={styles.unitLabelRow}>
-              {renderUnitLabel(heroEx.isTimeBased ? 'sec' : 'reps')}
-              {renderDelta(Boolean(prog && prog.repsDelta > 0))}
+        <View
+          style={[styles.valueRow, removeSetTrailing ? styles.valueRowRepsWithRemove : null]}
+        >
+          <View style={styles.valueRowRepsMain}>
+            <RepsField
+              ref={repsInputRef as React.Ref<TextInput>}
+              key={`${setId}-reps`}
+              style={repsInputStyle}
+              allowFontScaling={false}
+              maxFontSizeMultiplier={1}
+              defaultValue={repsDefault}
+              onChangeText={t => {
+                repsDraftRef.current = t;
+                repsDirtyRef.current = true;
+              }}
+              onBlur={commitReps}
+              keyboardType={heroEx.isTimeBased ? 'decimal-pad' : 'number-pad'}
+              selectTextOnFocus
+              editable={metricsEditable}
+              placeholder="0"
+              placeholderTextColor={placeholderTint}
+              underlineColorAndroid="transparent"
+              inputAccessoryViewID={Platform.OS === 'ios' ? heroMetricsAccessoryId : undefined}
+              returnKeyType="done"
+              blurOnSubmit
+              onSubmitEditing={Keyboard.dismiss}
+            />
+            <View style={styles.unitWithDelta}>
+              <View style={styles.unitLabelRow}>
+                {renderUnitLabel(heroEx.isTimeBased ? 'sec' : 'reps')}
+                {renderDelta(Boolean(prog && prog.repsDelta > 0))}
+              </View>
             </View>
           </View>
+          {removeSetTrailing ? <View style={styles.heroRemoveEnd}>{removeSetTrailing}</View> : null}
         </View>
       </View>
     </View>
@@ -550,6 +557,8 @@ export function ExploreV2CurrentCard({
   const scrollRef = useRef<ScrollView>(null);
   const commitsRef = useRef<Record<string, () => { weight: number; reps: number } | void>>({});
   const prevIncompleteKeyRef = useRef<string | null>(null);
+  /** After removing the last set, scroll to this index (usually previous set). Consumed in carousel sync effect. */
+  const carouselAfterRemoveRef = useRef<number | null>(null);
 
   const groupHasStarted = useMemo(
     () => group.exercises.some(ex => completedSets.has(`${ex.id}-set-0`)),
@@ -579,6 +588,18 @@ export function ExploreV2CurrentCard({
 
   useEffect(() => {
     if (carouselViewportWidth <= 0 || orderedSlots.length === 0) return;
+
+    if (carouselAfterRemoveRef.current !== null) {
+      const target = carouselAfterRemoveRef.current;
+      carouselAfterRemoveRef.current = null;
+      const clamped = Math.max(0, Math.min(target, orderedSlots.length - 1));
+      setCarouselIndex(clamped);
+      scrollRef.current?.scrollTo({ x: clamped * carouselViewportWidth, animated: true });
+      const key = nextIncomplete ? slotKey(nextIncomplete) : 'all-done';
+      prevIncompleteKeyRef.current = key;
+      return;
+    }
+
     const key = nextIncomplete ? slotKey(nextIncomplete) : 'all-done';
     const idx = nextIncompleteIndex >= 0 ? nextIncompleteIndex : 0;
 
@@ -756,6 +777,11 @@ export function ExploreV2CurrentCard({
     [carouselViewportWidth, orderedSlots.length],
   );
 
+  const onRemoveSetPress = useCallback(() => {
+    carouselAfterRemoveRef.current = Math.max(0, carouselIndex - 1);
+    void onAdjustGroupSets?.(-1);
+  }, [carouselIndex, onAdjustGroupSets]);
+
   const EXPLORE_V2_MAX_GROUP_SETS = 30;
   const canAddSet = group.totalRounds < EXPLORE_V2_MAX_GROUP_SETS;
   /** When every set in the group is logged, allow adding a round even during rest (minimized or expanded). Work / switch-side timers still block. */
@@ -771,8 +797,8 @@ export function ExploreV2CurrentCard({
     Boolean(onAdjustGroupSets) &&
     metricsEditable &&
     orderedSlots.length > 0 &&
-    carouselIndex === orderedSlots.length - 1;
-  const canRemoveSet = group.totalRounds > 1;
+    carouselIndex === orderedSlots.length - 1 &&
+    group.totalRounds > 1;
   const showAddSetIcon = Boolean(onAdjustGroupSets) && orderedSlots.length > 0;
   const addSetPlusIconInk = menuThemeActive
     ? menuMutedInk
@@ -780,21 +806,21 @@ export function ExploreV2CurrentCard({
       ? (isV2Theme ? containerTertiary : accentSecondaryDisabled)
       : (isV2Theme ? containerTertiary : accentSecondarySoft);
 
+  const removeSetHeroTrailing =
+    showRemoveSetRow ? (
+      <TertiaryButton
+        label={t('exploreV2RemoveSet')}
+        onPress={onRemoveSetPress}
+        activeOpacity={0.85}
+        style={styles.addSetTertiaryButton}
+        textStyle={styles.addSetTertiaryLinkText}
+        color={settingsInk}
+        underlineColor={settingsInk}
+      />
+    ) : null;
+
   const renderPaginationColumn = () => (
     <View style={styles.paginationColumn}>
-      {showRemoveSetRow ? (
-        <View style={styles.setAdjustRowAbs} pointerEvents="box-none">
-          <UnderlinedActionButton
-            label={t('exploreV2RemoveSet')}
-            onPress={() => {
-              if (canRemoveSet) void onAdjustGroupSets?.(-1);
-            }}
-            color={settingsInk}
-            underlineColor={settingsInk}
-            style={[styles.setAdjustButton, !canRemoveSet && styles.setAdjustButtonDimmed]}
-          />
-        </View>
-      ) : null}
       <View style={styles.paginationWrap}>
         {orderedSlots.map((slot, i) => {
           const isView = i === carouselIndex;
@@ -830,19 +856,22 @@ export function ExploreV2CurrentCard({
           );
         })}
         {showAddSetIcon ? (
-          <TouchableOpacity
+          <TertiaryButton
+            label={t('add')}
             onPress={() => {
               if (addSetPressable) void onAdjustGroupSets?.(1);
             }}
-            disabled={!addSetPressable}
-            style={[styles.addSetIconButton, !addSetPressable && styles.addSetIconButtonDimmed]}
-            hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
-            accessibilityRole="button"
-            accessibilityLabel={t('exploreV2AddSet')}
-            accessibilityState={{ disabled: !addSetPressable }}
-          >
-            <IconAdd size={22} color={addSetPlusIconInk} />
-          </TouchableOpacity>
+            activeOpacity={0.85}
+            style={[
+              styles.addSetTertiaryButton,
+              styles.paginationFooterAddButton,
+              styles.addSetTertiaryButtonPadStart,
+              !addSetPressable && styles.setAdjustButtonDimmed,
+            ]}
+            textStyle={styles.addSetTertiaryLinkText}
+            color={addSetPlusIconInk}
+            underlineColor={addSetPlusIconInk}
+          />
         ) : null}
       </View>
     </View>
@@ -899,7 +928,7 @@ export function ExploreV2CurrentCard({
                   label={settingsDrawerOpen ? 'Done' : 'Settings'}
                   onPress={handleSettingsPress}
                   style={styles.settingsActionBtn}
-                  textStyle={[styles.currentSettingsButtonText, { color: settingsInk }]}
+                  textStyle={[styles.addSetTertiaryLinkText, { color: settingsInk }]}
                   color={settingsInk}
                   underlineColor={settingsInk}
                 />
@@ -948,7 +977,7 @@ export function ExploreV2CurrentCard({
                           onMomentumScrollEnd={onCarouselScrollEnd}
                           scrollEventThrottle={16}
                         >
-                          {orderedSlots.map(slot => (
+                          {orderedSlots.map((slot, slotIndex) => (
                             <CurrentSetHeroPage
                               key={slotKey(slot)}
                               slot={slot}
@@ -967,6 +996,11 @@ export function ExploreV2CurrentCard({
                               pageWidth={carouselViewportWidth}
                               commitsRef={commitsRef}
                               progressionValuesByItemId={progressionValuesByItemId}
+                              removeSetTrailing={
+                                showRemoveSetRow && slotIndex === orderedSlots.length - 1
+                                  ? removeSetHeroTrailing
+                                  : null
+                              }
                             />
                           ))}
                         </ScrollView>
@@ -1035,7 +1069,7 @@ export function ExploreV2CurrentCard({
                         onMomentumScrollEnd={onCarouselScrollEnd}
                         scrollEventThrottle={16}
                       >
-                        {orderedSlots.map(slot => (
+                        {orderedSlots.map((slot, slotIndex) => (
                           <CurrentSetHeroPage
                             key={slotKey(slot)}
                             slot={slot}
@@ -1054,6 +1088,11 @@ export function ExploreV2CurrentCard({
                             pageWidth={carouselViewportWidth}
                             commitsRef={commitsRef}
                             progressionValuesByItemId={progressionValuesByItemId}
+                            removeSetTrailing={
+                              showRemoveSetRow && slotIndex === orderedSlots.length - 1
+                                ? removeSetHeroTrailing
+                                : null
+                            }
                           />
                         ))}
                       </ScrollView>
@@ -1270,12 +1309,10 @@ const styles = StyleSheet.create({
     letterSpacing: 0,
     textTransform: 'uppercase',
   },
-  currentSettingsButtonText: {
-    ...TYPOGRAPHY.legal,
-  },
   settingsActionBtn: {
     zIndex: 20,
-    paddingHorizontal: 6,
+    paddingLeft: 6,
+    paddingRight: 0,
     paddingVertical: 4,
   },
   exerciseName: {
@@ -1362,9 +1399,31 @@ const styles = StyleSheet.create({
     marginBottom: 0,
     overflow: 'visible',
   },
+  /** Reps value + unit only — same geometry as top row so sec/reps stays top-aligned with the numeral. */
+  valueRowRepsMain: {
+    flex: 1,
+    minWidth: 0,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+  },
+  /**
+   * Reps row when Remove is shown: stretch columns to hero height; value+unit stay `flex-start`
+   * inside the left column (units top-aligned). Remove sits in a trailing column with
+   * `justifyContent: 'flex-end'` so Remove sits at the bottom of the hero row; hero digits use
+   * `valueInput` with height === lineHeight + top alignment so that bottom matches the numeral, not extra view space.
+   */
+  valueRowRepsWithRemove: {
+    alignItems: 'stretch',
+  },
+  heroRemoveEnd: {
+    justifyContent: 'flex-end',
+    flexShrink: 0,
+    transform: [{ translateY: -20 }],
+  },
   /** Wraps unit only so ↑ is positioned over this label, not in the gap between weight/reps rows */
   unitWithDelta: {
-    paddingTop: 8,
+    paddingTop: 2,
     flexShrink: 0,
   },
   unitLabelRow: {
@@ -1386,17 +1445,19 @@ const styles = StyleSheet.create({
     ...TYPOGRAPHY.h2,
     fontWeight: '400',
   },
+  /** Height matches `lineHeight` so the field isn’t taller than the line box — avoids vertically
+   * centering the glyph in extra space (which made Remove look aligned to the view, not the digit). */
   valueInput: {
     fontSize: 96,
     lineHeight: 104,
-    height: 116,
+    height: 104,
     fontWeight: '400',
     letterSpacing: -0.5,
     fontVariant: ['tabular-nums'],
     minWidth: 0,
     flexShrink: 1,
     includeFontPadding: false,
-    textAlignVertical: 'center',
+    textAlignVertical: 'top',
     paddingTop: 0,
     paddingBottom: 0,
     paddingHorizontal: 0,
@@ -1419,19 +1480,6 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
     justifyContent: 'center',
   },
-  setAdjustRowAbs: {
-    position: 'absolute',
-    right: 0,
-    bottom: 34,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 20,
-    zIndex: 4,
-  },
-  setAdjustButton: {
-    paddingVertical: 2,
-    paddingHorizontal: 0,
-  },
   setAdjustButtonDimmed: {
     opacity: 0.35,
   },
@@ -1439,13 +1487,20 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'flex-end',
-    alignItems: 'center',
+    alignItems: 'flex-end',
     gap: 10,
   },
   paginationItem: {
     position: 'relative',
     alignItems: 'center',
     justifyContent: 'center',
+    minHeight: 32,
+  },
+  /** Matches pagination chip row height so Add lines up with set numbers. */
+  paginationFooterAddButton: {
+    minHeight: 32,
+    justifyContent: 'center',
+    transform: [{ translateY: 1 }],
   },
   paginationDigit: {
     ...TYPOGRAPHY.legal,
@@ -1459,13 +1514,18 @@ const styles = StyleSheet.create({
   paginationInView: {
     fontWeight: '600',
   },
-  addSetIconButton: {
+  /** Schedule header `TertiaryButton` + `profileLinkText` (meta + underline); ink from `addSetPlusIconInk`. */
+  addSetTertiaryButton: {
     alignItems: 'center',
     justifyContent: 'center',
-    height: 22,
+    paddingVertical: 2,
   },
-  addSetIconButtonDimmed: {
-    opacity: 0.35,
+  addSetTertiaryButtonPadStart: {
+    paddingLeft: 16,
+  },
+  addSetTertiaryLinkText: {
+    ...TYPOGRAPHY.meta,
+    fontWeight: '400',
   },
   ctaPill: {
     height: EXECUTION_CTA_HEIGHT,
@@ -1481,7 +1541,8 @@ const styles = StyleSheet.create({
     opacity: 0.45,
   },
   ctaPillText: {
-    ...executionCtaLabelStyle,
+    ...TYPOGRAPHY.meta,
+    textAlign: 'center',
     letterSpacing: 0.2,
   },
   completionMessageOverlay: {

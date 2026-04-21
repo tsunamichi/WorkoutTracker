@@ -1,8 +1,11 @@
-import React, { useMemo, useState, useCallback } from 'react';
+import React, { useMemo, useState, useCallback, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, ScrollView } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import Reanimated, { Extrapolation, interpolate, useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
+import * as Haptics from 'expo-haptics';
 import dayjs from 'dayjs';
 import { COLORS, SPACING, TYPOGRAPHY } from '../constants';
 import { useAppTheme } from '../theme/useAppTheme';
@@ -17,9 +20,19 @@ import {
   buildSundayFirstFourWeekGrid,
   formatHistorySelectedHeading,
 } from '../utils/historyWeekGrid';
+import type { RootStackParamList } from '../navigation/AppNavigator';
+import {
+  SCHEDULE_DECK_T,
+  SCHEDULE_DECK_EXECUTION_INCOMING_SCALE_START,
+  useScheduleDeckTransition,
+} from '../context/ScheduleDeckTransitionContext';
+
+type HistoryNavProp = NativeStackNavigationProp<RootStackParamList, 'History'>;
+type HistoryRouteProp = RouteProp<RootStackParamList, 'History'>;
 
 export function HistoryScreen() {
-  const navigation = useNavigation();
+  const navigation = useNavigation<HistoryNavProp>();
+  const route = useRoute<HistoryRouteProp>();
   const insets = useSafeAreaInsets();
   const { colors: themeColors } = useAppTheme();
   const scheduledWorkouts = useStore(s => s.scheduledWorkouts);
@@ -27,6 +40,80 @@ export function HistoryScreen() {
   const detailedWorkoutProgress = useStore(s => s.detailedWorkoutProgress);
   const exercises = useStore(s => s.exercises);
   const settings = useStore(s => s.settings);
+
+  const transitionSource = route.params?.transitionSource;
+  const isScheduleOriginTransition = transitionSource === 'scheduleDeck';
+  const {
+    progress: scheduleDeckProgressSV,
+    reset: resetScheduleDeckTransition,
+    startReverseTransition: startScheduleDeckReverseTransition,
+  } = useScheduleDeckTransition();
+  const scheduleDeckTransitionActiveSV = useSharedValue(isScheduleOriginTransition ? 1 : 0);
+  const allowScheduleDeckPopRef = useRef(false);
+  const isClosingFromHeaderRef = useRef(false);
+
+  useEffect(() => {
+    scheduleDeckTransitionActiveSV.value = isScheduleOriginTransition ? 1 : 0;
+  }, [isScheduleOriginTransition, scheduleDeckTransitionActiveSV]);
+
+  /** Same incoming shell as ExerciseExecution (shared schedule-deck timeline). */
+  const scheduleDeckIncomingShellStyle = useAnimatedStyle(() => {
+    if (scheduleDeckTransitionActiveSV.value === 0) {
+      return {};
+    }
+    const p = scheduleDeckProgressSV.value;
+    const opacity = interpolate(p, [SCHEDULE_DECK_T.inStart, SCHEDULE_DECK_T.inOpacityEnd], [0, 1], Extrapolation.CLAMP);
+    const scale = interpolate(
+      p,
+      [SCHEDULE_DECK_T.inStart, SCHEDULE_DECK_T.inEnd],
+      [SCHEDULE_DECK_EXECUTION_INCOMING_SCALE_START, 1],
+      Extrapolation.CLAMP,
+    );
+    return { opacity, transform: [{ scale }] };
+  });
+
+  const runCloseToScheduleCard = useCallback(() => {
+    if (!isScheduleOriginTransition) {
+      navigation.goBack();
+      return;
+    }
+    if (isClosingFromHeaderRef.current) {
+      allowScheduleDeckPopRef.current = true;
+      navigation.goBack();
+      return;
+    }
+    isClosingFromHeaderRef.current = true;
+    startScheduleDeckReverseTransition(finished => {
+      if (!finished) {
+        isClosingFromHeaderRef.current = false;
+        return;
+      }
+      allowScheduleDeckPopRef.current = true;
+      navigation.goBack();
+      resetScheduleDeckTransition();
+    });
+  }, [isScheduleOriginTransition, navigation, resetScheduleDeckTransition, startScheduleDeckReverseTransition]);
+
+  useEffect(() => {
+    if (!isScheduleOriginTransition) return undefined;
+    return navigation.addListener('beforeRemove', e => {
+      if (allowScheduleDeckPopRef.current) {
+        allowScheduleDeckPopRef.current = false;
+        return;
+      }
+      e.preventDefault();
+      isClosingFromHeaderRef.current = true;
+      startScheduleDeckReverseTransition(finished => {
+        if (!finished) {
+          isClosingFromHeaderRef.current = false;
+          return;
+        }
+        allowScheduleDeckPopRef.current = true;
+        navigation.dispatch(e.data.action);
+        resetScheduleDeckTransition();
+      });
+    });
+  }, [isScheduleOriginTransition, navigation, resetScheduleDeckTransition, startScheduleDeckReverseTransition]);
 
   const reference = useMemo(() => dayjs().startOf('day'), []);
   const rows = useMemo(() => buildSundayFirstFourWeekGrid(reference), [reference]);
@@ -55,11 +142,22 @@ export function HistoryScreen() {
     setSelectedIso(iso);
   }, []);
 
+  const onPressBack = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    runCloseToScheduleCard();
+  }, [runCloseToScheduleCard]);
+
   return (
-    <View style={[styles.screen, { paddingTop: insets.top }]}>
+    <Reanimated.View
+      style={[
+        styles.screen,
+        { paddingTop: insets.top, backgroundColor: themeColors.canvasLight },
+        isScheduleOriginTransition && scheduleDeckIncomingShellStyle,
+      ]}
+    >
       <StatusBar style="dark" />
 
-      <BackTextButton label="Home" chevronPointsLeft onPress={() => navigation.goBack()} textStyle={styles.backText} />
+      <BackTextButton label="Home" chevronPointsLeft onPress={onPressBack} textStyle={styles.backText} />
 
       <ScrollView
         style={styles.scroll}
@@ -87,14 +185,13 @@ export function HistoryScreen() {
 
         <HistoryWorkoutDetailPanel entry={selectedEntry} selectedDateLabel={selectedHeading} />
       </ScrollView>
-    </View>
+    </Reanimated.View>
   );
 }
 
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: HISTORY_VISUAL.canvas,
   },
   backText: {
     color: HISTORY_VISUAL.textGray,

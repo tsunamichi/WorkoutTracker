@@ -125,8 +125,8 @@ export const COLORS = {
   containerPrimary: '#002E29',
   /** Spec container-primary-dark — dark teal container used under pie remainders */
   containerPrimaryDark: '#011D1B',
-  /** Spec container-tertiary — lighter gray surfaces (e.g. selected calendar pill) */
-  containerTertiary: '#E5E5E5',
+  /** Spec container-tertiary — lighter surfaces (e.g. selected calendar pill, Up Next add CTA) */
+  containerTertiary: '#CBE659',
   /** Text/icons on `container-primary` / dark hero card surfaces */
   textOnPrimary: CONTAINER_SECONDARY,
   backgroundContainer: '#1C1C1E', // Header/nav/card containers

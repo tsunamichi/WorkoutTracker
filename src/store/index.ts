@@ -148,6 +148,12 @@ interface WorkoutStore {
   setScheduleDeckFocusAfterCreate: (
     payload: { scheduledWorkoutId: string; isoDate: string; templateId: string } | null,
   ) => void;
+  /**
+   * When true, `RecentWorkoutPickerScreen` beforeRemove allows dismissal without the deck reverse
+   * animation (e.g. WorkoutBuilder save pops builder + picker back to home in one step).
+   */
+  scheduleDeckBypassPickerBeforeRemove: boolean;
+  setScheduleDeckBypassPickerBeforeRemove: (value: boolean) => void;
   
   // NEW: Training Architecture (Templates, Plans, Scheduled Workouts)
   workoutTemplates: WorkoutTemplate[];
@@ -393,6 +399,7 @@ export const useStore = create<WorkoutStore>((set, get) => ({
   coreLogs: [],
   pendingCorePresetForProgram: null,
   scheduleDeckFocusAfterCreate: null,
+  scheduleDeckBypassPickerBeforeRemove: false,
   settings: DEFAULT_SETTINGS,
   isLoading: true,
   workoutProgress: {},
@@ -4560,6 +4567,10 @@ export const useStore = create<WorkoutStore>((set, get) => ({
 
   setScheduleDeckFocusAfterCreate: payload => {
     set({ scheduleDeckFocusAfterCreate: payload });
+  },
+
+  setScheduleDeckBypassPickerBeforeRemove: value => {
+    set({ scheduleDeckBypassPickerBeforeRemove: value });
   },
 }));
 

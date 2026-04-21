@@ -9,8 +9,11 @@ import Reanimated, {
 } from 'react-native-reanimated';
 import { EXPLORE_V2, exploreV2UpNextQueueExerciseNameStyle } from './exploreV2Tokens';
 import { TYPOGRAPHY } from '../../constants';
+import { EXECUTION_CTA_HEIGHT } from '../execution/executionCtaTokens';
 import { useAppTheme } from '../../theme/useAppTheme';
+import { useTranslation } from '../../i18n/useTranslation';
 import { IconChevronDown, IconTrash } from '../icons';
+import { TertiaryButton } from '../common/UnderlinedActionButton';
 import type { ExploreV2Group } from './exploreV2Types';
 
 type Props = {
@@ -48,16 +51,29 @@ function groupTitle(g: ExploreV2Group) {
   return g.exercises.map(e => e.exerciseName).join(' + ');
 }
 
-const UP_NEXT_ROW_PADDING_V = 12;
+const UP_NEXT_ROW_PADDING_V = 4;
 const SWIPE_DELETE_ICON_COLOR = '#FF3B30';
 const ROW_BORDER_HAIRLINE = StyleSheet.hairlineWidth;
 /** Right inset for scroll/list (header uses HEADER_PADDING_RIGHT). */
-const LIST_PADDING_RIGHT = 24;
+const LIST_PADDING_RIGHT = 12;
+/** Second 12px on Remove/Add row — 24px total from card edge (list 12px + row 12px). */
+const UP_NEXT_FOOTER_ACTION_PADDING_RIGHT = LIST_PADDING_RIGHT * 2;
 const HEADER_PADDING_RIGHT = 12;
+/** Scroll padding so list content clears docked execution CTA pills + card bottom inset. */
+const UP_NEXT_ACTION_FOOTER_SCROLL_PADDING =
+  EXECUTION_CTA_HEIGHT + EXPLORE_V2.cardPadding.bottom + 16;
+
+/** Trash icon reveal: top row first, bottom row last. */
+const TRASH_STAGGER_DELAY_MS = 72;
+const TRASH_REVEAL_DURATION_MS = 240;
+const TRASH_HIDE_DURATION_MS = 160;
+const TRASH_SLIDE_X_START = 10;
 
 type UpNextQueueRowProps = {
   group: ExploreV2Group;
   groupIndex: number;
+  /** 0 = top of list — used to stagger trash reveal. */
+  staggerIndex: number;
   /** Group already has logged sets — row is disabled; taps do not fire. */
   groupHasProgress: boolean;
   isLast: boolean;
@@ -76,6 +92,7 @@ const HEADER_INK = '#464646';
 function UpNextQueueRow({
   group,
   groupIndex,
+  staggerIndex,
   groupHasProgress,
   isLast,
   restThemeProgress,
@@ -137,6 +154,48 @@ function UpNextQueueRow({
         : { top: nextTop, left: nextLeft });
   }, []);
 
+  const trashOpacity = useRef(new Animated.Value(0)).current;
+  const trashTranslateX = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (removeMode) {
+      trashOpacity.setValue(0);
+      trashTranslateX.setValue(TRASH_SLIDE_X_START);
+      const delay = staggerIndex * TRASH_STAGGER_DELAY_MS;
+      Animated.parallel([
+        Animated.timing(trashOpacity, {
+          toValue: 1,
+          duration: TRASH_REVEAL_DURATION_MS,
+          delay,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: true,
+        }),
+        Animated.timing(trashTranslateX, {
+          toValue: 0,
+          duration: TRASH_REVEAL_DURATION_MS,
+          delay,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: true,
+        }),
+      ]).start();
+    } else {
+      Animated.parallel([
+        Animated.timing(trashOpacity, {
+          toValue: 0,
+          duration: TRASH_HIDE_DURATION_MS,
+          easing: Easing.in(Easing.quad),
+          useNativeDriver: true,
+        }),
+        Animated.timing(trashTranslateX, {
+          toValue: TRASH_SLIDE_X_START * 0.5,
+          duration: TRASH_HIDE_DURATION_MS,
+          easing: Easing.in(Easing.quad),
+          useNativeDriver: true,
+        }),
+      ]).start();
+    }
+  }, [removeMode, staggerIndex]);
+
   return (
     <View style={isLast ? undefined : styles.rowSeamOverlap}>
       <Reanimated.View style={styles.rowSwipeFront}>
@@ -166,17 +225,31 @@ function UpNextQueueRow({
             </Reanimated.Text>
           </View>
         </TouchableOpacity>
-        {removeMode ? (
-          <TouchableOpacity
-            style={styles.inlineRemoveBtn}
-            onPress={() => void onRemoveGroupFromUpNext(groupIndex)}
-            activeOpacity={0.8}
-            accessibilityRole="button"
-            accessibilityLabel="Remove from queue"
+        {/* Fixed slot so row geometry matches with or without trash (no reflow / vertical jump). */}
+        <View style={styles.removeActionSlot} pointerEvents="box-none">
+          <Animated.View
+            style={[
+              styles.trashRevealWrap,
+              {
+                opacity: trashOpacity,
+                transform: [{ translateX: trashTranslateX }],
+              },
+            ]}
+            pointerEvents={removeMode ? 'auto' : 'none'}
           >
-            <IconTrash size={20} color={SWIPE_DELETE_ICON_COLOR} />
-          </TouchableOpacity>
-        ) : null}
+            <TouchableOpacity
+              style={styles.inlineRemoveBtn}
+              onPress={() => void onRemoveGroupFromUpNext(groupIndex)}
+              activeOpacity={0.8}
+              disabled={!removeMode}
+              accessibilityRole="button"
+              accessibilityLabel="Remove from queue"
+              accessibilityState={{ disabled: !removeMode }}
+            >
+              <IconTrash size={20} color={SWIPE_DELETE_ICON_COLOR} />
+            </TouchableOpacity>
+          </Animated.View>
+        </View>
       </Reanimated.View>
     </View>
   );
@@ -202,16 +275,15 @@ export function ExploreV2UpNextCard({
   menuThemeActive,
   menuToneProgress,
 }: Props) {
+  const { t } = useTranslation();
   const { explore: ex, colors: themeColors } = useAppTheme();
   const workUpNextBg = ex.workTimerUpNextCardBg;
   const amberBand = ex.amberBand;
   const accentPrimary = themeColors.accentPrimary;
-  const accentSecondarySoft = themeColors.accentSecondarySoft;
   const textMetaTimer = themeColors.textMetaTimer;
   const accentPrimaryDark = themeColors.accentPrimaryDark;
-  const textPrimary = themeColors.textPrimary;
-  const textMeta = themeColors.textMeta;
   const containerPrimary = themeColors.containerPrimary;
+  const containerSecondary = themeColors.containerSecondary;
   const upNextBaseBg = themeColors.containerSecondary;
   const menuMutedBg = '#CFC9CC';
   const menuMutedInk = themeColors.textMeta;
@@ -235,20 +307,8 @@ export function ExploreV2UpNextCard({
       color: interpolateColor(menuToneProgress.value, [0, 1], [baseColor, menuMutedInk]),
     };
   }, [containerPrimary, accentPrimaryDark, textMetaTimer, menuMutedInk, menuToneProgress]);
-  /** Keep action links on meta color for visual consistency. */
-  const addExerciseLinkAnimatedStyle = useAnimatedStyle(() => {
-    const b = restThemeProgress.value;
-    const w = exploreV2WorkBlueProgress.value;
-    const pRest = b * (1 - w);
-    const pWork = b * w;
-    const restCol = interpolateColor(pRest, [0, 1], [textMeta, accentPrimaryDark]);
-    const baseColor = interpolateColor(pWork, [0, 1], [restCol, textMetaTimer]);
-    const color = interpolateColor(menuToneProgress.value, [0, 1], [baseColor, menuMutedInk]);
-    return {
-      color,
-      borderBottomColor: color,
-    };
-  }, [textMeta, accentPrimaryDark, textMetaTimer, menuMutedInk, menuToneProgress]);
+  /** Add / Remove footer links — `containerPrimary` ink (menu open: muted). */
+  const tertiaryActionInk = menuThemeActive ? menuMutedInk : containerPrimary;
   const chevronIdleOpacityStyle = useAnimatedStyle(() => ({
     opacity: 1 - restThemeProgress.value * (1 - exploreV2WorkBlueProgress.value),
   }));
@@ -322,36 +382,13 @@ export function ExploreV2UpNextCard({
       <View style={styles.scrollOuter}>
         <Reanimated.ScrollView
           style={[styles.scroll, scrollBgAnimatedStyle]}
-          contentContainerStyle={styles.scrollContentGrow}
+          contentContainerStyle={styles.scrollContentWithFooterReserve}
           nestedScrollEnabled
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
           removeClippedSubviews={false}
         >
           <View style={styles.scrollPad}>
-          <View style={styles.actionRow}>
-            <TouchableOpacity
-              onPress={onOpenAddExercise}
-              hitSlop={8}
-              style={styles.actionBtn}
-              accessibilityLabel="Add exercise"
-              activeOpacity={0.75}
-              disabled={!allowAddExercise}
-            >
-              <Reanimated.Text style={[styles.actionText, addExerciseLinkAnimatedStyle, !allowAddExercise && styles.actionDisabled]}>
-                + add
-              </Reanimated.Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              onPress={() => setRemoveMode(v => !v)}
-              hitSlop={8}
-              style={styles.actionBtn}
-              accessibilityLabel="Toggle remove mode"
-              activeOpacity={0.75}
-            >
-              <Reanimated.Text style={[styles.removeText, addExerciseLinkAnimatedStyle]}>- remove</Reanimated.Text>
-            </TouchableOpacity>
-          </View>
           {showFullEmpty && (
             <View style={styles.emptyBlock}>
               <Text style={[styles.emptyTitle, { color: menuThemeActive ? menuMutedInk : themeColors.containerPrimary }]}>No exercises yet</Text>
@@ -382,6 +419,7 @@ export function ExploreV2UpNextCard({
               key={g.id}
               group={g}
               groupIndex={gi}
+              staggerIndex={index}
               groupHasProgress={started}
               isLast={isLast}
               restThemeProgress={restThemeProgress}
@@ -397,6 +435,39 @@ export function ExploreV2UpNextCard({
           })}
           </View>
         </Reanimated.ScrollView>
+        <View style={styles.actionRowDock} pointerEvents="box-none">
+          <View style={styles.actionRow}>
+            <TertiaryButton
+              label={removeMode ? t('cancel') : t('remove')}
+              onPress={() => setRemoveMode(v => !v)}
+              activeOpacity={0.85}
+              style={[styles.addSetTertiaryButton, styles.paginationFooterAddButton]}
+              textStyle={styles.addSetTertiaryLinkText}
+              color={tertiaryActionInk}
+              underlineColor={tertiaryActionInk}
+              accessibilityLabel={removeMode ? 'Cancel remove mode' : 'Remove from queue'}
+            />
+            {!removeMode ? (
+              <TertiaryButton
+                label={t('add')}
+                onPress={() => {
+                  if (allowAddExercise) onOpenAddExercise();
+                }}
+                activeOpacity={0.85}
+                style={[
+                  styles.addSetTertiaryButton,
+                  styles.paginationFooterAddButton,
+                  styles.addSetTertiaryButtonPadStart,
+                  !allowAddExercise && styles.setAdjustButtonDimmed,
+                ]}
+                textStyle={styles.addSetTertiaryLinkText}
+                color={tertiaryActionInk}
+                underlineColor={tertiaryActionInk}
+                accessibilityLabel="Add exercise"
+              />
+            ) : null}
+          </View>
+        </View>
       </View>
     </Reanimated.View>
   );
@@ -455,25 +526,34 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   actionRow: {
-    paddingRight: 24,
-    marginBottom: 32,
     flexDirection: 'row',
-    columnGap: 24,
-    justifyContent: 'flex-start',
+    justifyContent: 'flex-end',
     alignItems: 'center',
+    width: '100%',
+    minHeight: 32,
+    gap: 10,
+    paddingRight: UP_NEXT_FOOTER_ACTION_PADDING_RIGHT,
   },
-  actionBtn: {
+  /** Same as Current card add-set controls (`ExploreV2CurrentCard`). */
+  addSetTertiaryButton: {
+    alignItems: 'center',
+    justifyContent: 'center',
     paddingVertical: 2,
   },
-  actionText: {
-    ...TYPOGRAPHY.h1,
-    color: '#5A5A5A',
+  addSetTertiaryButtonPadStart: {
+    paddingLeft: 16,
   },
-  actionDisabled: {
-    opacity: 0.4,
+  paginationFooterAddButton: {
+    minHeight: 32,
+    justifyContent: 'center',
+    transform: [{ translateY: 1 }],
   },
-  removeText: {
-    ...TYPOGRAPHY.h1,
+  addSetTertiaryLinkText: {
+    ...TYPOGRAPHY.meta,
+    fontWeight: '400',
+  },
+  setAdjustButtonDimmed: {
+    opacity: 0.35,
   },
   headerLabel: {
     ...TYPOGRAPHY.legal,
@@ -490,20 +570,29 @@ const styles = StyleSheet.create({
   scrollOuter: {
     flex: 1,
     minHeight: 0,
-    paddingRight: LIST_PADDING_RIGHT,
+    position: 'relative',
   },
   scroll: {
     flex: 1,
     minHeight: 0,
   },
-  scrollContentGrow: {
+  scrollContentWithFooterReserve: {
     flexGrow: 1,
+    paddingBottom: UP_NEXT_ACTION_FOOTER_SCROLL_PADDING,
   },
   scrollPad: {
     paddingLeft: pad.horizontal,
-    paddingRight: 0,
+    paddingRight: LIST_PADDING_RIGHT,
     paddingTop: 32,
-    paddingBottom: pad.bottom,
+    paddingBottom: 0,
+  },
+  /** Footer strip; `actionRow` uses 24px right padding (12 list gutter + 12 on the row). */
+  actionRowDock: {
+    position: 'absolute',
+    left: pad.horizontal,
+    right: 0,
+    bottom: pad.bottom,
+    zIndex: 2,
   },
   rowSeamOverlap: {
     marginBottom: -ROW_BORDER_HAIRLINE,
@@ -517,6 +606,21 @@ const styles = StyleSheet.create({
   rowMain: {
     flex: 1,
     paddingRight: 0,
+  },
+  /** Always occupies 44×44 so list rows don’t shift when trash is shown. */
+  removeActionSlot: {
+    width: 44,
+    height: 44,
+    flexShrink: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  /** Wraps trash for staggered opacity + slide; same footprint as the hit target. */
+  trashRevealWrap: {
+    width: 44,
+    height: 44,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   inlineRemoveBtn: {
     width: 44,

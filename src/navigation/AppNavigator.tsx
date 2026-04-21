@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { TodayScreen } from '../screens/TodayScreen';
 import { HistoryScreen } from '../screens/HistoryScreen';
+import { RecentWorkoutPickerScreen } from '../screens/RecentWorkoutPickerScreen';
 import { PlanHistoryDetailScreen } from '../screens/PlanHistoryDetailScreen';
 import { WorkoutBuilderScreen } from '../screens/WorkoutBuilderScreen';
 import { WorkoutTemplateDetailScreen } from '../screens/WorkoutTemplateDetailScreen';
@@ -69,12 +70,24 @@ export type RootStackParamList = {
   Tabs: { initialTab?: 'Schedule' | 'Progress' } | undefined;
   Profile: { mode?: 'settings' } | undefined;
   BodyWeightHistory: undefined;
-  History: { planId?: string } | undefined;
+  History: { planId?: string; transitionSource?: 'scheduleDeck' } | undefined;
+  /** Picks a completed workout snapshot to start a new scheduled workout (replaces bottom drawer). */
+  RecentWorkoutPicker: { selectedDate: string; transitionSource?: 'scheduleDeck' } | undefined;
   PlanHistoryDetail: { programId: string; programName: string };
   WorkoutBuilder: {
     selectedDate?: string;
     shouldScheduleAfterCreate?: boolean;
     initialDraftPayload?: import('../types/workoutDraft').WorkoutBuilderInitialDraftPayload;
+    transitionSource?: 'scheduleDeck';
+    /** When opening from schedule “create from scratch”, focus workout name after the deck handoff. */
+    focusWorkoutNameOnOpen?: boolean;
+    /** Recent workout → builder: no discard alert on back (returns to RecentWorkoutPicker first). */
+    skipDiscardConfirmOnBack?: boolean;
+    /**
+     * When true, WorkoutBuilder runs a second-phase deck-style shell animation (local 0→1) while shared
+     * progress stays at 1 so the schedule home layer does not flash between picker and builder.
+     */
+    deckShellEntryFromRecentPicker?: boolean;
   } | undefined;
   Workouts: undefined;
   WorkoutTemplateDetail: { templateId: string };
@@ -808,9 +821,55 @@ export default function AppNavigator() {
         <Stack.Screen name="Tabs" component={TabNavigator} />
         <Stack.Screen name="Profile" component={ProfileScreen} />
         <Stack.Screen name="BodyWeightHistory" component={BodyWeightHistoryScreen} />
-        <Stack.Screen name="History" component={HistoryScreen} />
+        <Stack.Screen
+          name="History"
+          component={HistoryScreen}
+          options={({ route }: any) => {
+            const deck = route?.params?.transitionSource === 'scheduleDeck';
+            return {
+              animation: deck ? 'none' : 'default',
+              ...(deck
+                ? {
+                    presentation: 'transparentModal' as const,
+                    contentStyle: { backgroundColor: 'transparent' },
+                  }
+                : {}),
+            };
+          }}
+        />
+        <Stack.Screen
+          name="RecentWorkoutPicker"
+          component={RecentWorkoutPickerScreen}
+          options={({ route }: any) => {
+            const deck = route?.params?.transitionSource === 'scheduleDeck';
+            return {
+              animation: deck ? 'none' : 'default',
+              ...(deck
+                ? {
+                    presentation: 'transparentModal' as const,
+                    contentStyle: { backgroundColor: 'transparent' },
+                  }
+                : {}),
+            };
+          }}
+        />
         <Stack.Screen name="PlanHistoryDetail" component={PlanHistoryDetailScreen} />
-        <Stack.Screen name="WorkoutBuilder" component={WorkoutBuilderScreen} />
+        <Stack.Screen
+          name="WorkoutBuilder"
+          component={WorkoutBuilderScreen}
+          options={({ route }: any) => {
+            const deck = route?.params?.transitionSource === 'scheduleDeck';
+            return {
+              animation: deck ? 'none' : 'default',
+              ...(deck
+                ? {
+                    presentation: 'transparentModal' as const,
+                    contentStyle: { backgroundColor: 'transparent' },
+                  }
+                : {}),
+            };
+          }}
+        />
         <Stack.Screen name="Workouts" component={WorkoutsScreen} />
         <Stack.Screen name="WorkoutTemplateDetail" component={WorkoutTemplateDetailScreen} />
         <Stack.Screen name="WarmupEditor" component={WarmupEditorScreen} />

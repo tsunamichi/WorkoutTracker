@@ -1,4 +1,4 @@
-import React, { createContext, useCallback, useContext, useMemo } from 'react';
+import React, { createContext, useCallback, useContext, useMemo, useRef } from 'react';
 import Animated, {
   cancelAnimation,
   Easing,
@@ -50,12 +50,28 @@ type ScheduleDeckTransitionContextValue = {
   /** Exercise → Home: animates `progress` 1 → 0 (inverse of forward). Same duration as `startTransition`. */
   startReverseTransition: (onComplete?: (finished: boolean) => void) => void;
   reset: () => void;
+  /**
+   * RecentWorkoutPicker registers a no-arg handler that runs `pickerForwardOutSV` 0→1.
+   * WorkoutBuilder calls `primeRecentPickerIncomingParallel()` at the **start** of its outgoing
+   * animation so the picker fades in in sync (no empty frame after pop).
+   */
+  registerPrimeRecentPickerIncoming: (fn: (() => void) | null) => void;
+  primeRecentPickerIncomingParallel: () => void;
 };
 
 const ScheduleDeckTransitionContext = createContext<ScheduleDeckTransitionContextValue | null>(null);
 
 export function ScheduleDeckTransitionProvider({ children }: { children: React.ReactNode }) {
   const progress = useSharedValue(0);
+  const primeRecentPickerIncomingRef = useRef<(() => void) | null>(null);
+
+  const registerPrimeRecentPickerIncoming = useCallback((fn: (() => void) | null) => {
+    primeRecentPickerIncomingRef.current = fn;
+  }, []);
+
+  const primeRecentPickerIncomingParallel = useCallback(() => {
+    primeRecentPickerIncomingRef.current?.();
+  }, []);
 
   const startTransition = useCallback(() => {
     cancelAnimation(progress);
@@ -87,8 +103,10 @@ export function ScheduleDeckTransitionProvider({ children }: { children: React.R
       startTransition,
       startReverseTransition,
       reset,
+      registerPrimeRecentPickerIncoming,
+      primeRecentPickerIncomingParallel,
     }),
-    [progress, startTransition, startReverseTransition, reset],
+    [progress, startTransition, startReverseTransition, reset, registerPrimeRecentPickerIncoming, primeRecentPickerIncomingParallel],
   );
 
   return (
