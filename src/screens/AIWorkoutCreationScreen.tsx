@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, TextInput, TouchableOpacity, Alert, KeyboardAvo
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import * as Clipboard from 'expo-clipboard';
-import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS, CARDS } from '../constants';
+import { SPACING, TYPOGRAPHY, BORDER_RADIUS, CARDS } from '../constants';
 import { useStore } from '../store';
 import { IconClose, IconMenu, IconChevronDown } from '../components/icons';
 import { BottomDrawer } from '../components/common/BottomDrawer';
@@ -12,6 +12,8 @@ import dayjs from 'dayjs';
 import isoWeek from 'dayjs/plugin/isoWeek';
 import { useTranslation } from '../i18n/useTranslation';
 import { parseWarmupText, convertToWarmupItems } from '../utils/warmupParser';
+import { useAppTheme } from '../theme/useAppTheme';
+import { getAppThemeFromStore } from '../theme/getAppThemeFromStore';
 
 dayjs.extend(isoWeek);
 
@@ -201,6 +203,7 @@ type PlanCardState = 'empty' | 'imported' | 'edit_mode' | 'parse_error';
 const WEEKDAYS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
 
 export function AIWorkoutCreationScreen() {
+  const { colors: themeColors } = useAppTheme();
   const navigation = useNavigation();
   const route = useRoute<any>();
   const insets = useSafeAreaInsets();
@@ -645,10 +648,10 @@ export function AIWorkoutCreationScreen() {
         <View style={[styles.header, { paddingTop: insets.top }]}>
           <View style={styles.topBar}>
             <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-              <IconClose size={24} color={COLORS.text} />
+              <IconClose size={24} color={themeColors.text} />
             </TouchableOpacity>
             <TouchableOpacity style={styles.menuButton} activeOpacity={1}>
-              <IconMenu size={24} color={COLORS.text} />
+              <IconMenu size={24} color={themeColors.text} />
             </TouchableOpacity>
           </View>
           <View style={styles.pageTitleContainer}>
@@ -681,10 +684,10 @@ export function AIWorkoutCreationScreen() {
         <View style={[styles.header, { paddingTop: insets.top }]}>
           <View style={styles.topBar}>
             <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-              <IconClose size={24} color={COLORS.text} />
+              <IconClose size={24} color={themeColors.text} />
             </TouchableOpacity>
             <TouchableOpacity style={styles.menuButton} activeOpacity={1}>
-              <IconMenu size={24} color={COLORS.text} />
+              <IconMenu size={24} color={themeColors.text} />
             </TouchableOpacity>
           </View>
           <View style={styles.pageTitleContainer}>
@@ -700,7 +703,7 @@ export function AIWorkoutCreationScreen() {
               <View style={styles.startDateValueRow}>
                 <Text style={styles.startDateValue}>{dayjs(startDate).format('ddd, MMM D')}</Text>
                 <View style={[styles.chevronWrap, startDateExpanded && styles.chevronWrapRotated]}>
-                  <IconChevronDown size={20} color={COLORS.text} />
+                  <IconChevronDown size={20} color={themeColors.text} />
                 </View>
               </View>
             </TouchableOpacity>
@@ -809,7 +812,7 @@ export function AIWorkoutCreationScreen() {
                   <TextInput
                     style={styles.editTextArea}
                     placeholder={t('pasteAiWorkoutPlaceholder')}
-                    placeholderTextColor={COLORS.textMeta}
+                    placeholderTextColor={themeColors.textMeta}
                     value={workoutDetails}
                     onChangeText={setWorkoutDetails}
                     multiline
@@ -856,7 +859,7 @@ export function AIWorkoutCreationScreen() {
           >
             {isImporting ? (
               <View style={styles.ctaButtonContent}>
-                <ActivityIndicator size="small" color={COLORS.text} style={styles.ctaSpinner} />
+                <ActivityIndicator size="small" color={themeColors.text} style={styles.ctaSpinner} />
                 <Text style={[styles.ctaButtonText, styles.ctaButtonTextDisabled]}>Importing…</Text>
               </View>
             ) : (
@@ -880,10 +883,11 @@ export function AIWorkoutCreationScreen() {
   );
 }
 
+const themeColors = getAppThemeFromStore().colors;
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.backgroundCanvas,
+    backgroundColor: themeColors.backgroundCanvas,
   },
   header: {
     paddingBottom: SPACING.sm,
@@ -903,21 +907,21 @@ const styles = StyleSheet.create({
   },
   pageTitle: {
     ...TYPOGRAPHY.h2,
-    color: COLORS.text,
+    color: themeColors.text,
     marginBottom: 4,
   },
   screenTitle: {
     ...TYPOGRAPHY.h2,
-    color: COLORS.text,
+    color: themeColors.text,
     marginBottom: 4,
   },
   instructionsInline: {
     ...TYPOGRAPHY.bodyBold,
-    color: COLORS.accentPrimary,
+    color: themeColors.accentPrimary,
   },
   instructionsLink: {
     ...TYPOGRAPHY.bodyBold,
-    color: COLORS.accentPrimary,
+    color: themeColors.accentPrimary,
   },
   scroll: {
     flex: 1,
@@ -932,12 +936,12 @@ const styles = StyleSheet.create({
   sectionTitle: {
     ...TYPOGRAPHY.h3,
     fontSize: 20,
-    color: COLORS.text,
+    color: themeColors.text,
     marginBottom: 4,
   },
   sectionSupport: {
     ...TYPOGRAPHY.meta,
-    color: COLORS.textMeta,
+    color: themeColors.textMeta,
     marginBottom: SPACING.md,
   },
   startDateRow: {
@@ -946,12 +950,12 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     height: 48,
     paddingHorizontal: SPACING.lg,
-    backgroundColor: COLORS.activeCard,
+    backgroundColor: themeColors.activeCard,
     borderRadius: BORDER_RADIUS.md,
   },
   startDateLabel: {
     ...TYPOGRAPHY.bodyBold,
-    color: COLORS.text,
+    color: themeColors.text,
   },
   startDateValueRow: {
     flexDirection: 'row',
@@ -960,7 +964,7 @@ const styles = StyleSheet.create({
   },
   startDateValue: {
     ...TYPOGRAPHY.body,
-    color: COLORS.text,
+    color: themeColors.text,
   },
   chevronWrap: {
     transform: [{ rotate: '0deg' }],
@@ -971,7 +975,7 @@ const styles = StyleSheet.create({
   inlineCalendar: {
     marginTop: 0,
     padding: SPACING.lg,
-    backgroundColor: COLORS.activeCard,
+    backgroundColor: themeColors.activeCard,
     borderRadius: BORDER_RADIUS.md,
   },
   calendarMonthHeader: {
@@ -990,7 +994,7 @@ const styles = StyleSheet.create({
   },
   calendarNavArrowText: {
     fontSize: 22,
-    color: COLORS.textPrimary,
+    color: themeColors.textPrimary,
     fontWeight: '500',
   },
   calendarMonthLabel: {
@@ -1010,7 +1014,7 @@ const styles = StyleSheet.create({
   },
   calendarDayOfWeekText: {
     ...TYPOGRAPHY.note,
-    color: COLORS.textMeta,
+    color: themeColors.textMeta,
     textAlign: 'center',
   },
   calendarWeeksContainer: {
@@ -1027,13 +1031,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   importCard: {
-    backgroundColor: COLORS.activeCard,
+    backgroundColor: themeColors.activeCard,
     borderRadius: BORDER_RADIUS.md,
     padding: SPACING.lg,
   },
   importCardTitle: {
     ...TYPOGRAPHY.bodyBold,
-    color: COLORS.text,
+    color: themeColors.text,
     marginBottom: 4,
   },
   importCardTitleLinkBlock: {
@@ -1043,7 +1047,7 @@ const styles = StyleSheet.create({
     gap: SPACING.md,
   },
   primaryButton: {
-    backgroundColor: COLORS.accentPrimary,
+    backgroundColor: themeColors.accentPrimary,
     height: 52,
     borderRadius: BORDER_RADIUS.md,
     alignItems: 'center',
@@ -1051,60 +1055,60 @@ const styles = StyleSheet.create({
   },
   primaryButtonText: {
     ...TYPOGRAPHY.bodyBold,
-    color: COLORS.backgroundCanvas,
+    color: themeColors.backgroundCanvas,
   },
   actionButtonLabelPrimary: {
     ...TYPOGRAPHY.metaBold,
-    color: COLORS.backgroundCanvas,
+    color: themeColors.backgroundCanvas,
   },
   actionButtonLabelSecondary: {
     ...TYPOGRAPHY.metaBold,
-    color: COLORS.accentPrimary,
+    color: themeColors.accentPrimary,
   },
   secondaryButton: {
     height: 56,
     borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: COLORS.accentPrimaryDimmed,
+    backgroundColor: themeColors.accentPrimaryDimmed,
   },
   secondaryButtonFullWidth: {
     width: '100%',
   },
   secondaryButtonText: {
     ...TYPOGRAPHY.bodyBold,
-    color: COLORS.accentPrimary,
+    color: themeColors.accentPrimary,
   },
   tertiaryLink: {
     alignSelf: 'flex-start',
   },
   tertiaryLinkText: {
     ...TYPOGRAPHY.meta,
-    color: COLORS.accentPrimary,
+    color: themeColors.accentPrimary,
   },
   detectedBlock: {
     marginBottom: SPACING.md,
   },
   detectedLabel: {
     ...TYPOGRAPHY.meta,
-    color: COLORS.text,
+    color: themeColors.text,
     marginBottom: 4,
   },
   detectedDaysCount: {
     ...TYPOGRAPHY.h3,
-    color: COLORS.text,
+    color: themeColors.text,
   },
   previewList: {
     marginBottom: SPACING.md,
   },
   previewDayText: {
     ...TYPOGRAPHY.body,
-    color: COLORS.text,
+    color: themeColors.text,
     marginBottom: 2,
   },
   previewMoreDays: {
     ...TYPOGRAPHY.body,
-    color: COLORS.text,
+    color: themeColors.text,
     marginTop: 2,
   },
   importCardActions: {
@@ -1137,9 +1141,9 @@ const styles = StyleSheet.create({
     borderRadius: BORDER_RADIUS.sm,
     padding: SPACING.lg,
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: themeColors.border,
     ...TYPOGRAPHY.meta,
-    color: COLORS.text,
+    color: themeColors.text,
     textAlignVertical: 'top',
   },
   parseErrorRow: {
@@ -1150,7 +1154,7 @@ const styles = StyleSheet.create({
   },
   errorTitle: {
     ...TYPOGRAPHY.h3,
-    color: COLORS.text,
+    color: themeColors.text,
     flex: 1,
   },
   failureButton: {
@@ -1159,19 +1163,19 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: SPACING.lg,
-    backgroundColor: COLORS.signalNegativeDimmed,
+    backgroundColor: themeColors.signalNegativeDimmed,
   },
   failureButtonText: {
     ...TYPOGRAPHY.body,
-    color: COLORS.signalNegative,
+    color: themeColors.signalNegative,
   },
   ctaPinned: {
     paddingHorizontal: SPACING.xxl,
     paddingTop: SPACING.lg,
-    backgroundColor: COLORS.backgroundCanvas,
+    backgroundColor: themeColors.backgroundCanvas,
   },
   ctaButton: {
-    backgroundColor: COLORS.accentPrimary,
+    backgroundColor: themeColors.accentPrimary,
     height: 56,
     borderRadius: BORDER_RADIUS.md,
     alignItems: 'center',
@@ -1187,17 +1191,17 @@ const styles = StyleSheet.create({
     marginRight: SPACING.xs,
   },
   ctaButtonDisabled: {
-    backgroundColor: COLORS.backgroundCanvas,
+    backgroundColor: themeColors.backgroundCanvas,
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: themeColors.border,
   },
   ctaButtonText: {
     ...TYPOGRAPHY.bodyBold,
     fontSize: 16,
-    color: COLORS.backgroundCanvas,
+    color: themeColors.backgroundCanvas,
   },
   ctaButtonTextDisabled: {
-    color: COLORS.textMeta,
+    color: themeColors.textMeta,
   },
   legacySinglePlaceholder: {
     flex: 1,
@@ -1206,7 +1210,7 @@ const styles = StyleSheet.create({
   },
   legacySingleText: {
     ...TYPOGRAPHY.body,
-    color: COLORS.textMeta,
+    color: themeColors.textMeta,
   },
   sheetContent: {
     paddingHorizontal: SPACING.xxl,
@@ -1214,12 +1218,12 @@ const styles = StyleSheet.create({
   },
   sheetTitle: {
     ...TYPOGRAPHY.h2,
-    color: COLORS.text,
+    color: themeColors.text,
     marginBottom: 4,
   },
   sheetSubtitle: {
     ...TYPOGRAPHY.meta,
-    color: COLORS.textMeta,
+    color: themeColors.textMeta,
     marginBottom: SPACING.lg,
   },
   templateBox: {
@@ -1229,11 +1233,11 @@ const styles = StyleSheet.create({
   },
   templateText: {
     ...TYPOGRAPHY.body,
-    color: COLORS.text,
+    color: themeColors.text,
     lineHeight: 24,
   },
   copyButton: {
-    backgroundColor: COLORS.accentPrimary,
+    backgroundColor: themeColors.accentPrimary,
     height: 56,
     borderRadius: BORDER_RADIUS.md,
     alignItems: 'center',
@@ -1242,7 +1246,6 @@ const styles = StyleSheet.create({
   copyButtonText: {
     ...TYPOGRAPHY.meta,
     fontWeight: 'bold',
-    color: COLORS.backgroundCanvas,
+    color: themeColors.backgroundCanvas,
   },
 });
-

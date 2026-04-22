@@ -23,7 +23,7 @@ import Reanimated, {
 import { Toggle } from '../Toggle';
 import { EXPLORE_V2 } from './exploreV2Tokens';
 import dayjs from 'dayjs';
-import { COLORS, SPACING, TYPOGRAPHY, hexToRgba } from '../../constants';
+import { SPACING, TYPOGRAPHY, hexToRgba } from '../../constants';
 import { useAppTheme } from '../../theme/useAppTheme';
 import { formatWeightForLoad } from '../../utils/weight';
 import type { ExploreV2Exercise } from './exploreV2Types';
@@ -581,7 +581,7 @@ export function ExploreV2CurrentOverflowPanel({
                   }}
                   activeOpacity={0.75}
                 >
-                  <Text style={[styles.actionText, { color: COLORS.signalNegative }]}>Remove exercise</Text>
+                  <Text style={[styles.actionText, { color: themeColors.signalNegative }]}>Remove exercise</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -743,7 +743,7 @@ export function ExploreV2CurrentOverflowPanel({
               }}
               activeOpacity={0.75}
             >
-              <Text style={[styles.actionText, { color: COLORS.signalNegative }]}>Remove exercise</Text>
+              <Text style={[styles.actionText, { color: themeColors.signalNegative }]}>Remove exercise</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -956,7 +956,7 @@ export function ExploreV2CurrentOverflowPanel({
             }}
             activeOpacity={0.75}
           >
-                  <Text style={[styles.actionText, { color: COLORS.signalNegative }]}>Remove exercise</Text>
+                  <Text style={[styles.actionText, { color: themeColors.signalNegative }]}>Remove exercise</Text>
           </TouchableOpacity>
               </View>
             </View>

@@ -6,7 +6,8 @@ if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { COLORS } from '../../constants';
+import { useAppTheme } from '../../theme/useAppTheme';
+import { getAppThemeFromStore } from '../../theme/getAppThemeFromStore';
 
 const SCREEN_HEIGHT = Dimensions.get('window').height;
 
@@ -32,7 +33,7 @@ export function BottomDrawer({
   onClose,
   children,
   maxHeight = '90%',
-  backgroundColor = COLORS.backgroundCanvas,
+  backgroundColor = themeColors.backgroundCanvas,
   showHandle = true,
   contentStyle,
   scrollable = true,
@@ -387,6 +388,7 @@ export function BottomDrawer({
   );
 }
 
+const themeColors = getAppThemeFromStore().colors;
 const styles = StyleSheet.create({
   // Drawer & Overlay (matching AI screen)
   drawerOverlay: {
@@ -396,7 +398,7 @@ const styles = StyleSheet.create({
   },
   drawerBackdrop: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: COLORS.overlay,
+    backgroundColor: themeColors.overlay,
   },
   drawerContainer: {
     position: 'absolute',
@@ -414,7 +416,7 @@ const styles = StyleSheet.create({
     borderBottomLeftRadius: 24,
     borderBottomRightRadius: 24,
     borderWidth: 1,
-    borderColor: COLORS.activeCard,
+    borderColor: themeColors.activeCard,
     overflow: 'hidden', // Ensure content doesn't overflow rounded corners
   },
   handleContainer: {
@@ -425,8 +427,7 @@ const styles = StyleSheet.create({
   sheetHandle: {
     width: 40,
     height: 4,
-    backgroundColor: COLORS.textMeta,
+    backgroundColor: themeColors.textMeta,
     borderRadius: 2,
   },
 });
-

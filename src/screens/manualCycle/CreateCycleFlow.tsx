@@ -19,9 +19,11 @@ import { useStore } from '../../store';
 import { Weekday } from '../../types/manualCycle';
 import { formatWeekdayFull, generateId } from '../../utils/manualCycleUtils';
 import { IconAddLine, IconMinusLine, IconClose } from '../../components/icons';
-import { COLORS, SPACING, TYPOGRAPHY, CARDS, BORDER_RADIUS } from '../../constants';
+import { SPACING, TYPOGRAPHY, CARDS, BORDER_RADIUS } from '../../constants';
 import { useTranslation } from '../../i18n/useTranslation';
 import { DraggableWorkoutDayList, type DraggableWorkoutDay } from '../../components/manualCycle/DraggableWorkoutDayList';
+import { useAppTheme } from '../../theme/useAppTheme';
+import { getAppThemeFromStore } from '../../theme/getAppThemeFromStore';
 
 interface CreateCycleFlowProps {
   navigation: any;
@@ -285,7 +287,7 @@ export function CreateCycleFlow({ navigation, route }: CreateCycleFlowProps) {
             style={styles.backButton}
             activeOpacity={1}
           >
-            <IconClose size={24} color={COLORS.text} />
+            <IconClose size={24} color={themeColors.text} />
           </TouchableOpacity>
           <View style={styles.headerTitleRow}>
             <Text style={styles.headerTitle}>
@@ -294,7 +296,7 @@ export function CreateCycleFlow({ navigation, route }: CreateCycleFlowProps) {
             <View style={styles.progressIndicator}>
               <Text style={styles.progressText}>{currentStep}/2</Text>
               <Svg height="16" width="16" viewBox="0 0 16 16" style={styles.progressCircle}>
-                <Circle cx="8" cy="8" r="8" fill={COLORS.activeCard} />
+                <Circle cx="8" cy="8" r="8" fill={themeColors.activeCard} />
                 {progress > 0 ? (
                   <Path
                     d={`M 8 8 L 8 0 A 8 8 0 ${progress > 0.5 ? 1 : 0} 1 ${
@@ -302,7 +304,7 @@ export function CreateCycleFlow({ navigation, route }: CreateCycleFlowProps) {
                     } ${
                       8 - 8 * Math.cos(2 * Math.PI * progress)
                     } Z`}
-                    fill={COLORS.signalWarning}
+                    fill={themeColors.signalWarning}
                   />
                 ) : null}
               </Svg>
@@ -346,7 +348,7 @@ export function CreateCycleFlow({ navigation, route }: CreateCycleFlowProps) {
                     >
                       <View style={styles.adjustButton}>
                         <View style={styles.adjustButtonInner}>
-                          <IconMinusLine size={24} color={COLORS.accentPrimary} />
+                          <IconMinusLine size={24} color={themeColors.accentPrimary} />
                         </View>
                       </View>
                     </TouchableOpacity>
@@ -361,7 +363,7 @@ export function CreateCycleFlow({ navigation, route }: CreateCycleFlowProps) {
                     >
                       <View style={styles.adjustButton}>
                         <View style={styles.adjustButtonInner}>
-                          <IconAddLine size={24} color={COLORS.accentPrimary} />
+                          <IconAddLine size={24} color={themeColors.accentPrimary} />
                         </View>
                       </View>
                     </TouchableOpacity>
@@ -391,7 +393,7 @@ export function CreateCycleFlow({ navigation, route }: CreateCycleFlowProps) {
                     >
                       <View style={styles.adjustButton}>
                         <View style={styles.adjustButtonInner}>
-                          <IconMinusLine size={24} color={COLORS.accentPrimary} />
+                          <IconMinusLine size={24} color={themeColors.accentPrimary} />
                         </View>
                       </View>
                     </TouchableOpacity>
@@ -406,7 +408,7 @@ export function CreateCycleFlow({ navigation, route }: CreateCycleFlowProps) {
                     >
                       <View style={styles.adjustButton}>
                         <View style={styles.adjustButtonInner}>
-                          <IconAddLine size={24} color={COLORS.accentPrimary} />
+                          <IconAddLine size={24} color={themeColors.accentPrimary} />
                         </View>
                       </View>
                     </TouchableOpacity>
@@ -568,10 +570,11 @@ export function CreateCycleFlow({ navigation, route }: CreateCycleFlowProps) {
   );
 }
 
+const themeColors = getAppThemeFromStore().colors;
 const styles = StyleSheet.create({
   gradient: {
     flex: 1,
-    backgroundColor: COLORS.backgroundCanvas,
+    backgroundColor: themeColors.backgroundCanvas,
   },
   container: {
     flex: 1,
@@ -579,7 +582,7 @@ const styles = StyleSheet.create({
   header: {
     paddingHorizontal: SPACING.xxl,
     paddingBottom: SPACING.lg,
-    backgroundColor: COLORS.backgroundCanvas,
+    backgroundColor: themeColors.backgroundCanvas,
     zIndex: 10,
   },
   backButton: {
@@ -596,7 +599,7 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     ...TYPOGRAPHY.h3,
-    color: COLORS.text,
+    color: themeColors.text,
   },
   progressIndicator: {
     flexDirection: 'row',
@@ -606,7 +609,7 @@ const styles = StyleSheet.create({
   progressCircle: {},
   progressText: {
     ...TYPOGRAPHY.meta,
-    color: COLORS.textMeta,
+    color: themeColors.textMeta,
   },
   content: {
     flex: 1,
@@ -621,12 +624,12 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     ...TYPOGRAPHY.h3,
-    color: COLORS.text,
+    color: themeColors.text,
     marginBottom: 12,
   },
   sectionSubtitle: {
     ...TYPOGRAPHY.meta,
-    color: COLORS.textMeta,
+    color: themeColors.textMeta,
     marginBottom: 24,
   },
   stepper: {
@@ -650,11 +653,11 @@ const styles = StyleSheet.create({
   },
   stepperNumber: {
     ...TYPOGRAPHY.h1,
-    color: COLORS.text,
+    color: themeColors.text,
   },
   stepperLabel: {
     ...TYPOGRAPHY.h1,
-    color: COLORS.textMeta,
+    color: themeColors.textMeta,
   },
   adjustButtonTapTarget: {
     width: 48,
@@ -676,13 +679,13 @@ const styles = StyleSheet.create({
     borderCurve: 'continuous',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: COLORS.accentPrimaryDimmed,
+    backgroundColor: themeColors.accentPrimaryDimmed,
   },
   adjustButtonDisabled: {
     opacity: 0.3,
   },
   datePickerTrigger: {
-    backgroundColor: COLORS.activeCard,
+    backgroundColor: themeColors.activeCard,
     borderRadius: BORDER_RADIUS.md,
     borderCurve: 'continuous',
     paddingVertical: 16,
@@ -690,7 +693,7 @@ const styles = StyleSheet.create({
   },
   datePickerText: {
     ...TYPOGRAPHY.body,
-    color: COLORS.text,
+    color: themeColors.text,
     fontWeight: '600',
   },
   stickyFooter: {
@@ -700,7 +703,7 @@ const styles = StyleSheet.create({
     right: 0,
     paddingHorizontal: SPACING.xxl,
     paddingTop: SPACING.md,
-    backgroundColor: COLORS.backgroundCanvas,
+    backgroundColor: themeColors.backgroundCanvas,
     zIndex: 10,
   },
   footerButtonsRow: {
@@ -718,31 +721,31 @@ const styles = StyleSheet.create({
   backFooterButtonText: {
     ...TYPOGRAPHY.meta,
     fontWeight: 'bold',
-    color: COLORS.text,
+    color: themeColors.text,
   },
   backFooterButtonTextDisabled: {
-    color: COLORS.textMeta,
+    color: themeColors.textMeta,
   },
   continueButton: {
     flex: 1,
-    backgroundColor: COLORS.accentPrimary,
+    backgroundColor: themeColors.accentPrimary,
     paddingVertical: 16,
     borderRadius: BORDER_RADIUS.md,
     alignItems: 'center',
     justifyContent: 'center',
   },
   continueButtonDisabled: {
-    backgroundColor: COLORS.backgroundCanvas,
+    backgroundColor: themeColors.backgroundCanvas,
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: themeColors.border,
   },
   continueButtonText: {
     ...TYPOGRAPHY.meta,
     fontWeight: 'bold',
-    color: COLORS.backgroundCanvas,
+    color: themeColors.backgroundCanvas,
   },
   continueButtonTextDisabled: {
-    color: COLORS.textMeta,
+    color: themeColors.textMeta,
   },
   modalContainer: {
     flex: 1,
@@ -753,7 +756,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
   },
   pickerContainer: {
-    backgroundColor: COLORS.backgroundCanvas,
+    backgroundColor: themeColors.backgroundCanvas,
     borderTopLeftRadius: 16,
     borderTopRightRadius: 16,
     paddingBottom: 32,
@@ -764,11 +767,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
+    borderBottomColor: themeColors.border,
   },
   pickerHeaderButton: {
     ...TYPOGRAPHY.body,
-    color: COLORS.accentPrimary,
+    color: themeColors.accentPrimary,
   },
   pickerHeaderButtonDone: {
     fontWeight: '600',

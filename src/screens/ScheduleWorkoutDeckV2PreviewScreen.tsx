@@ -2,9 +2,12 @@ import React, { useMemo, useState } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ScheduleWorkoutDeckV3, type ScheduleDeckV3Item } from '../components/schedule/ScheduleWorkoutDeckV3';
-import { COLORS, SPACING, TYPOGRAPHY } from '../constants';
+import { SPACING, TYPOGRAPHY } from '../constants';
+import { useAppTheme } from '../theme/useAppTheme';
+import { getAppThemeFromStore } from '../theme/getAppThemeFromStore';
 
 export function ScheduleWorkoutDeckV2PreviewScreen() {
+  const { colors: themeColors } = useAppTheme();
   const [mode, setMode] = useState<'queue' | 'inProgress'>('queue');
   const mockCards: ScheduleDeckV3Item[] = useMemo(
     () => [
@@ -39,11 +42,12 @@ export function ScheduleWorkoutDeckV2PreviewScreen() {
   );
 }
 
+const themeColors = getAppThemeFromStore().colors;
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: COLORS.canvasLight },
+  root: { flex: 1, backgroundColor: themeColors.canvasLight },
   header: { paddingHorizontal: SPACING.xxl, paddingTop: SPACING.md, paddingBottom: SPACING.lg },
-  title: { ...TYPOGRAPHY.h2, color: COLORS.inkCharcoal },
+  title: { ...TYPOGRAPHY.h2, color: themeColors.inkCharcoal },
   modeButton: { marginTop: SPACING.sm, alignSelf: 'flex-start' },
-  modeText: { ...TYPOGRAPHY.body, color: COLORS.accentPrimary },
+  modeText: { ...TYPOGRAPHY.body, color: themeColors.accentPrimary },
   deckWrap: { paddingHorizontal: SPACING.xxl, paddingTop: SPACING.sm },
 });

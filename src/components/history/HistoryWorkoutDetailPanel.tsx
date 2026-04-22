@@ -1,13 +1,23 @@
 import React, { useEffect, useMemo } from 'react';
-import { View, Text, StyleSheet, Animated, Easing } from 'react-native';
+import { View, Text, StyleSheet, Animated, Easing, Platform } from 'react-native';
 import type { WorkoutHistoryEntry } from '../../types/workoutHistory';
-import { SPACING } from '../../constants';
-import { HISTORY_VISUAL } from './historyVisualTokens';
+import { SPACING, TYPOGRAPHY } from '../../constants';
+import { COMPLETED_EXERCISE_LIST_LAYOUT, EXPLORE_V2 } from '../exploreV2/exploreV2Tokens';
+import { useAppTheme } from '../../theme/useAppTheme';
+import { textMetaForHistoryWorkoutDetailExerciseDivider } from './historyTextMetaDerive';
+import { useStore } from '../../store';
+
+const L = COMPLETED_EXERCISE_LIST_LAYOUT;
 
 const ROW_STAGGER_MS = 42;
 const ROW_ANIM_MS = 240;
 const ROW_SLIDE_PX = 14;
 const ROW_EASING = Easing.out(Easing.cubic);
+
+function hasPositiveDisplayWeight(weightStr: string): boolean {
+  const n = parseFloat(String(weightStr).replace(/,/g, ''));
+  return !Number.isNaN(n) && n > 0;
+}
 
 export type HistoryWorkoutDetailPanelProps = {
   entry: WorkoutHistoryEntry | null;
@@ -18,6 +28,13 @@ export type HistoryWorkoutDetailPanelProps = {
 type RowAnim = { opacity: Animated.Value; translateY: Animated.Value };
 
 export function HistoryWorkoutDetailPanel({ entry, selectedDateLabel }: HistoryWorkoutDetailPanelProps) {
+  const { colors: themeColors } = useAppTheme();
+  const useKg = useStore(s => s.settings?.useKg ?? false);
+  const weightUnitLabel = useKg ? 'kg' : 'lbs';
+  const titleInk = themeColors.containerPrimary;
+  const unitInk = themeColors.textMeta;
+  const exerciseRowDividerColor = textMetaForHistoryWorkoutDetailExerciseDivider(themeColors.textMeta);
+
   const selectionKey = `${selectedDateLabel}|${entry?.id ?? 'none'}`;
 
   const exerciseRowAnims = useMemo((): RowAnim[] => {
@@ -63,12 +80,14 @@ export function HistoryWorkoutDetailPanel({ entry, selectedDateLabel }: HistoryW
 
   return (
     <View style={styles.block}>
-      <Text style={styles.workoutName}>{title}</Text>
-      <Text style={styles.dateLine}>{selectedDateLabel}</Text>
+      {/* e.g. screenshot: workout name "Push" — h2 + `containerPrimary` (same as exercise + values) */}
+      <Text style={[styles.workoutName, { color: titleInk }]}>{title}</Text>
+      {/* e.g. screenshot: selected log date "April 14th" under the workout name — `textMeta` */}
+      <Text style={[styles.dateLine, { color: unitInk }]}>{selectedDateLabel}</Text>
 
       {entry && entry.exercises.length > 0 ? (
         <>
-          <View style={{ height: SPACING.xl }} />
+          <View style={{ height: EXPLORE_V2.headerToContentGap }} />
           {entry.exercises.map((ex, index) => {
             const a = exerciseRowAnims[index];
             if (!a) {
@@ -82,25 +101,52 @@ export function HistoryWorkoutDetailPanel({ entry, selectedDateLabel }: HistoryW
                   transform: [{ translateY: a.translateY }],
                 }}
               >
-                <View style={styles.exerciseRow}>
-                  <Text style={styles.exerciseName} numberOfLines={2}>
-                    {ex.name}
-                  </Text>
-                  <View style={styles.setsCol}>
+                <View
+                  style={[
+                    styles.row,
+                    index < entry.exercises.length - 1 && styles.rowWithDivider,
+                    index < entry.exercises.length - 1 && { borderBottomColor: exerciseRowDividerColor },
+                  ]}
+                >
+                  <View style={styles.nameCol}>
+                    <Text style={[styles.exerciseName, { color: titleInk }]} numberOfLines={2}>
+                      {ex.name}
+                    </Text>
+                  </View>
+                  <View style={styles.valCol}>
                     {ex.sets.map((set, si) => (
-                      <View key={si} style={styles.setLine}>
-                        <Text style={styles.setLineInner}>
-                          <Text style={styles.setValue}>{set.weight}</Text>
-                          <Text style={styles.setUnit}> lbs</Text>
-                          <Text style={styles.setSep}> </Text>
-                          <Text style={styles.setValue}>{set.reps}</Text>
-                          <Text style={styles.setUnit}> reps</Text>
-                        </Text>
+                      <View
+                        key={si}
+                        style={[
+                          styles.valRow,
+                          si < ex.sets.length - 1 && styles.valRowGapAfter,
+                        ]}
+                      >
+                        {hasPositiveDisplayWeight(set.weight) ? (
+                          <View style={styles.valWithUnit}>
+                            <View style={styles.valueWeightSlot}>
+                              <Text
+                                style={[styles.val, styles.valueTextRight, { color: titleInk }]}
+                                numberOfLines={1}
+                              >
+                                {set.weight}
+                              </Text>
+                            </View>
+                            <Text style={[styles.valUnit, { color: unitInk }]}>{weightUnitLabel}</Text>
+                          </View>
+                        ) : null}
+                        <View style={styles.valWithUnit}>
+                          <View style={styles.valueRepsSlot}>
+                            <Text style={[styles.val, styles.valueTextRight, { color: titleInk }]}>
+                              {set.reps}
+                            </Text>
+                          </View>
+                          <Text style={[styles.valUnit, { color: unitInk }]}>reps</Text>
+                        </View>
                       </View>
                     ))}
                   </View>
                 </View>
-                {index < entry.exercises.length - 1 ? <View style={styles.divider} /> : null}
               </Animated.View>
             );
           })}
@@ -110,62 +156,75 @@ export function HistoryWorkoutDetailPanel({ entry, selectedDateLabel }: HistoryW
   );
 }
 
+const metaBase = {
+  ...TYPOGRAPHY.meta,
+  lineHeight: 20,
+  ...(Platform.OS === 'android' ? { includeFontPadding: false as const } : {}),
+};
+
 const styles = StyleSheet.create({
   block: {
     paddingTop: SPACING.lg,
   },
   workoutName: {
-    fontSize: 26,
-    lineHeight: 30,
-    fontWeight: '600',
-    color: HISTORY_VISUAL.forest,
-    letterSpacing: -0.3,
+    ...TYPOGRAPHY.h2,
   },
   dateLine: {
     marginTop: SPACING.xs,
     fontSize: 16,
     fontWeight: '400',
-    color: HISTORY_VISUAL.textGray,
   },
-  exerciseRow: {
+  row: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
-    paddingVertical: SPACING.lg,
-    gap: SPACING.lg,
+    alignItems: 'baseline',
+    paddingVertical: 0,
+  },
+  rowWithDivider: {
+    borderBottomWidth: 1,
+    borderBottomColor: 'transparent',
+    paddingBottom: L.rowDividerPadBottom,
+    marginBottom: L.rowDividerMarginBottom,
+  },
+  nameCol: {
+    flex: 1,
+    paddingRight: L.nameColPaddingRight,
   },
   exerciseName: {
-    flex: 1,
-    fontSize: 16,
-    fontWeight: '500',
-    color: HISTORY_VISUAL.titleInk,
-    paddingRight: SPACING.md,
+    ...metaBase,
   },
-  setsCol: {
+  valCol: {
     alignItems: 'flex-end',
+    justifyContent: 'flex-start',
   },
-  setLine: {
-    marginBottom: 4,
+  valRow: {
+    flexDirection: 'row',
+    gap: L.valRowGap,
+    justifyContent: 'flex-end',
   },
-  setLineInner: {
+  valRowGapAfter: {
+    marginBottom: L.setLogGap,
+  },
+  valWithUnit: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: L.valWithUnitGap,
+  },
+  valueWeightSlot: {
+    maxWidth: L.weightNumeralMaxWidth,
+    minWidth: 0,
+  },
+  valueRepsSlot: {
+    width: L.repsValueWidth,
+  },
+  valueTextRight: {
     textAlign: 'right',
+    width: '100%',
   },
-  setValue: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: HISTORY_VISUAL.textGray,
+  val: {
+    ...metaBase,
+    fontVariant: ['tabular-nums'],
   },
-  setUnit: {
-    fontSize: 13,
-    fontWeight: '400',
-    color: HISTORY_VISUAL.textGraySoft,
-  },
-  setSep: {
-    fontSize: 15,
-    color: HISTORY_VISUAL.textGray,
-  },
-  divider: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: HISTORY_VISUAL.divider,
+  valUnit: {
+    ...metaBase,
   },
 });

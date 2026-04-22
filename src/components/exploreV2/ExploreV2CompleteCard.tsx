@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Pressable, Keyboard } from 'react-native';
 import { Platform } from 'react-native';
 import Animated, { useAnimatedStyle, interpolateColor, type SharedValue } from 'react-native-reanimated';
-import { EXPLORE_V2 } from './exploreV2Tokens';
+import { EXPLORE_V2, COMPLETED_EXERCISE_LIST_LAYOUT } from './exploreV2Tokens';
 import { TYPOGRAPHY } from '../../constants';
 import { useAppTheme } from '../../theme/useAppTheme';
 import { IconChevronDown } from '../icons';
@@ -46,10 +46,11 @@ type Props = {
 };
 
 const IDLE_HEADER_INK = '#464646';
-/** Vertical gap between set rows (logs) in the Completed list */
-const COMPLETE_SET_LOG_GAP = 2;
-/** Fixed width for load / reps numerals in the Completed list */
-const COMPLETE_VALUE_WIDTH = 28;
+const {
+  setLogGap: COMPLETE_SET_LOG_GAP,
+  weightNumeralMaxWidth: COMPLETE_WEIGHT_NUMERAL_MAX_WIDTH,
+  repsValueWidth: COMPLETE_REPS_VALUE_WIDTH,
+} = COMPLETED_EXERCISE_LIST_LAYOUT;
 
 export function ExploreV2CompleteCard({
   completedGroupIndexes,
@@ -210,7 +211,7 @@ export function ExploreV2CompleteCard({
                   >
                     {vals.weight > 0 && (
                       <View style={styles.valWithUnit}>
-                        <View style={styles.valueFixedSlot}>
+                        <View style={styles.valueWeightSlot}>
                           <Animated.Text style={[styles.val, styles.valueTextRight, rowTitleInkStyle]}>
                             {formatWeightForLoad(vals.weight, useKg)}
                           </Animated.Text>
@@ -219,7 +220,7 @@ export function ExploreV2CompleteCard({
                       </View>
                     )}
                     <View style={styles.valWithUnit}>
-                      <View style={styles.valueFixedSlot}>
+                      <View style={styles.valueRepsSlot}>
                         <Animated.Text style={[styles.val, styles.valueTextRight, rowTitleInkStyle]}>
                           {vals.reps}
                         </Animated.Text>
@@ -393,7 +394,6 @@ const styles = StyleSheet.create({
   },
   contentOnlyEditTitle: {
     ...TYPOGRAPHY.h2,
-    fontWeight: '400',
     flex: 1,
     minWidth: 0,
   },
@@ -461,23 +461,35 @@ const styles = StyleSheet.create({
   rowWithDivider: {
     borderBottomWidth: 1,
     borderBottomColor: 'transparent',
-    paddingBottom: 20,
-    marginBottom: 20,
+    paddingBottom: COMPLETED_EXERCISE_LIST_LAYOUT.rowDividerPadBottom,
+    marginBottom: COMPLETED_EXERCISE_LIST_LAYOUT.rowDividerMarginBottom,
   },
-  nameCol: { flex: 1, paddingRight: 10 },
+  nameCol: { flex: 1, paddingRight: COMPLETED_EXERCISE_LIST_LAYOUT.nameColPaddingRight },
   name: {
     ...TYPOGRAPHY.meta,
     lineHeight: 20,
     ...(Platform.OS === 'android' ? { includeFontPadding: false as const } : {}),
   },
   valCol: { alignItems: 'flex-end', justifyContent: 'flex-start' },
-  valRow: { flexDirection: 'row', gap: 20, justifyContent: 'flex-end' },
+  valRow: {
+    flexDirection: 'row',
+    gap: COMPLETED_EXERCISE_LIST_LAYOUT.valRowGap,
+    justifyContent: 'flex-end',
+  },
   valRowGapAfter: {
     marginBottom: COMPLETE_SET_LOG_GAP,
   },
-  valWithUnit: { flexDirection: 'row', alignItems: 'baseline', gap: 2 },
-  valueFixedSlot: {
-    width: COMPLETE_VALUE_WIDTH,
+  valWithUnit: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: COMPLETED_EXERCISE_LIST_LAYOUT.valWithUnitGap,
+  },
+  valueWeightSlot: {
+    maxWidth: COMPLETE_WEIGHT_NUMERAL_MAX_WIDTH,
+    minWidth: 0,
+  },
+  valueRepsSlot: {
+    width: COMPLETE_REPS_VALUE_WIDTH,
   },
   valueTextRight: {
     textAlign: 'right',

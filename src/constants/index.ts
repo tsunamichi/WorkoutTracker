@@ -1,222 +1,10 @@
 // Design tokens and constants for the app
-
-// Utility functions for color manipulation
-function hexToHSL(hex: string): { h: number; s: number; l: number } {
-  // Remove # if present
-  hex = hex.replace('#', '');
-  
-  // Convert hex to RGB
-  const r = parseInt(hex.substring(0, 2), 16) / 255;
-  const g = parseInt(hex.substring(2, 4), 16) / 255;
-  const b = parseInt(hex.substring(4, 6), 16) / 255;
-  
-  const max = Math.max(r, g, b);
-  const min = Math.min(r, g, b);
-  const delta = max - min;
-  
-  let h = 0;
-  let s = 0;
-  const l = (max + min) / 2;
-  
-  if (delta !== 0) {
-    s = l > 0.5 ? delta / (2 - max - min) : delta / (max + min);
-    
-    switch (max) {
-      case r:
-        h = ((g - b) / delta + (g < b ? 6 : 0)) / 6;
-        break;
-      case g:
-        h = ((b - r) / delta + 2) / 6;
-        break;
-      case b:
-        h = ((r - g) / delta + 4) / 6;
-        break;
-    }
-  }
-  
-  return {
-    h: h * 360,
-    s: s * 100,
-    l: l * 100,
-  };
-}
-
-function hslToHex(h: number, s: number, l: number): string {
-  s = s / 100;
-  l = l / 100;
-  
-  const c = (1 - Math.abs(2 * l - 1)) * s;
-  const x = c * (1 - Math.abs(((h / 60) % 2) - 1));
-  const m = l - c / 2;
-  
-  let r = 0, g = 0, b = 0;
-  
-  if (h >= 0 && h < 60) {
-    r = c; g = x; b = 0;
-  } else if (h >= 60 && h < 120) {
-    r = x; g = c; b = 0;
-  } else if (h >= 120 && h < 180) {
-    r = 0; g = c; b = x;
-  } else if (h >= 180 && h < 240) {
-    r = 0; g = x; b = c;
-  } else if (h >= 240 && h < 300) {
-    r = x; g = 0; b = c;
-  } else {
-    r = c; g = 0; b = x;
-  }
-  
-  const toHex = (n: number) => {
-    const hex = Math.round((n + m) * 255).toString(16);
-    return hex.length === 1 ? '0' + hex : hex;
-  };
-  
-  return `#${toHex(r)}${toHex(g)}${toHex(b)}`.toUpperCase();
-}
-
-function adjustLightness(hex: string, amount: number): string {
-  const hsl = hexToHSL(hex);
-  hsl.l = Math.max(0, Math.min(100, hsl.l + amount));
-  return hslToHex(hsl.h, hsl.s, hsl.l);
-}
-
-/** Hex `#RRGGBB` / `#RGB` → `rgba(r,g,b,a)`. */
-export function hexToRgba(hex: string, alpha: number): string {
-  const raw = hex.replace('#', '').trim();
-  const full = raw.length === 3 ? raw.split('').map(c => c + c).join('') : raw;
-  const n = parseInt(full, 16);
-  const r = (n >> 16) & 255;
-  const g = (n >> 8) & 255;
-  const b = n & 255;
-  return `rgba(${r},${g},${b},${alpha})`;
-}
-
-// Base accent color — spec accent-primary
-const ACCENT_PRIMARY = '#FFA424';
-const ACCENT_PRIMARY_SOFT = hexToRgba(ACCENT_PRIMARY, 0.6);
-const ACCENT_PRIMARY_BACKGROUND = hexToRgba(ACCENT_PRIMARY, 0.16);
-const SIGNAL_NEGATIVE = '#FF453A';
-const BASE_GREEN = '#00351D';
-const SIGNAL_POSITIVE = BASE_GREEN;
-const BASE_FAILURE = '#FF005B';
-const BASE_INFO = '#062FFF';
-const SIGNAL_WARNING = '#FFD60A';
-const BORDER_DIMMED = 'rgba(255, 255, 255, 0.06)';
-
-/** Core token — shared by container-secondary and text-on-primary (spec). */
-const CONTAINER_SECONDARY = '#D9D9D9';
-/** Spec accent-secondary (teal). */
-const ACCENT_SECONDARY = '#58A186';
-/** Spec accent-secondary-soft. */
-const ACCENT_SECONDARY_SOFT = '#CFF0EE';
-/** Spec accent-secondary-disabled (accent-secondary-soft at 20% opacity). */
-const ACCENT_SECONDARY_DISABLED = hexToRgba(ACCENT_SECONDARY_SOFT, 0.2);
-
-export const COLORS = {
-  // Core colors — dark palette
-  background: '#121212',         // Default background
-  backgroundCanvas: '#0D0D0D',   // Page/canvas background
-  /** Light page canvas (schedule, explore-style) */
-  canvasLight: '#F5F4F4',
-  /** Primary ink on light canvas — text, icons, dark surfaces */
-  inkCharcoal: '#1F1F1F',
-  /** Mid gray surface (Up Next idle, section bands) */
-  containerSecondary: CONTAINER_SECONDARY,
-  /** Spec container-primary — primary dark surfaces (e.g. execution current card) */
-  containerPrimary: '#002E29',
-  /** Spec container-primary-dark — dark teal container used under pie remainders */
-  containerPrimaryDark: '#011D1B',
-  /** Spec container-tertiary — lighter surfaces (e.g. selected calendar pill, Up Next add CTA) */
-  containerTertiary: '#CBE659',
-  /** Text/icons on `container-primary` / dark hero card surfaces */
-  textOnPrimary: CONTAINER_SECONDARY,
-  backgroundContainer: '#1C1C1E', // Header/nav/card containers
-  canvas: '#1C1C1E',             // Card/container background
-  container: '#2C2C2E',          // Elevated secondary container
-  cardBackground: '#1C1C1E',     // Card background
-  activeCard: '#1C1C1E',         // Active/selected card state
-  /** Settings/profile card containers on light surfaces */
-  canvasContainer: '#1C1C1E',
-  /** Active cycle strip and pill background (backgroundCanvas at 30% opacity) */
-  cycleStripBackground: 'rgba(13, 13, 13, 0.3)',
-
-  // Primary actions
-  primary: ACCENT_PRIMARY,              // Spec accent-primary
-  primarySoft: '#1A1C0D',              // Very dark lime tint
-  
-  // Secondary/accent
-  secondary: '#007AFF',          // Blue
-  secondarySoft: '#1C2A3A',      // Soft blue background
-  accentPrimary: ACCENT_PRIMARY,
-  accentPrimarySoft: ACCENT_PRIMARY_SOFT,
-  accentPrimaryBackground: ACCENT_PRIMARY_BACKGROUND,
-  accentPrimaryLight: adjustLightness(ACCENT_PRIMARY, 15),
-  accentPrimaryDark: '#8C5509',
-  todayIndicator: BASE_INFO,  // Current day label & selected box
-  accentPrimaryDimmed: '#372E1A',       // Subtle lime tint bg for selected states
-  /** Spec accent-secondary (teal) */
-  accentSecondary: ACCENT_SECONDARY,
-  /** Spec accent-secondary-soft — schedule pie incomplete, muted teal surfaces */
-  accentSecondarySoft: ACCENT_SECONDARY_SOFT,
-  /** Spec accent-secondary-disabled — disabled content on light surfaces */
-  accentSecondaryDisabled: ACCENT_SECONDARY_DISABLED,
-  /** Work timer (time-based) — page tint */
-  backgroundTimer: '#C1FF24',
-  /** Work timer — Completed card surface */
-  containerTertiaryTimer: '#B1EF15',
-  /** Work timer — Up Next card surface */
-  containerSecondaryTimer: '#9BD508',
-  /** accent-secondary @ 60% — work-timer header chrome (Complete / Up Next) */
-  textMetaTimer: hexToRgba(ACCENT_SECONDARY, 0.6),
-  /** Workout completion stacked numerals — middle trail echo */
-  celebrationTrailMid: '#9960FB',
-
-  // Text — white on dark
-  text: '#FFFFFF',                  // Default text color
-  textPrimary: '#1F1F1F',           // Primary text
-  textSecondary: '#AEAEB2',        // Secondary text
-  /** Spec text-meta (light canvas) */
-  textMeta: '#685456',
-  textMetaSoft: '#48484A',         // Soft metadata/dividers
-  textDisabled: '#48484A',         // Disabled text
-  
-  // Borders & dividers — very subtle on dark
-  border: 'rgba(88, 88, 88, 0.2)', // #585858 @ 20%
-  disabledBorder: '#38383A',       // Disabled button border
-  borderDimmed: BORDER_DIMMED,     // Dimmed dividers
-  divider: BORDER_DIMMED,          // Dividers
-  overlay: 'rgba(0, 0, 0, 0.5)',   // Bottom sheet overlays
-  containerBackground: '#1C1C1E',  // Container background
-  
-  // Status colors
-  signalNegative: SIGNAL_NEGATIVE,
-  signalPositive: SIGNAL_POSITIVE,
-  signalWarning: SIGNAL_WARNING,
-  signalWarningDimmed: 'rgba(255, 214, 10, 0.15)',
-  signalNegativeDimmed: 'rgba(255, 69, 58, 0.15)',
-  success: SIGNAL_POSITIVE,
-  successBright: '#06FF8F',
-  successDark: adjustLightness(BASE_GREEN, 10),
-  successDimmed: '#142A22',
-  failure: BASE_FAILURE,
-  failureBright: adjustLightness(BASE_FAILURE, 40),
-  info: BASE_INFO,
-  infoBright: adjustLightness(BASE_INFO, 40),
-  infoDimmed: '#0f1528',
-  warning: SIGNAL_WARNING,
-  error: SIGNAL_NEGATIVE,
-  
-  // Exercise categories
-  chest: SIGNAL_NEGATIVE,
-  back: '#4ECDC4',
-  legs: SIGNAL_WARNING,
-  shoulders: '#A8E6CF',
-  arms: '#FF8B94',
-  core: '#C7CEEA',
-};
+export { hexToRgba } from '../theme/colorUtils';
+import { basePalette } from '../theme/basePalette';
 
 // Muted background colors for cycle/plan grouping on the calendar (dark theme)
 export const CYCLE_COLORS = [
-  `${BASE_INFO}29`, // info at 16% opacity — cycle strip background
+  `${basePalette.info}29`, // info at 16% opacity — cycle strip background
   '#1A3A1A', // dark green
   '#3A2A1A', // dark amber
   '#3A1A2A', // dark rose
@@ -226,7 +14,7 @@ export const CYCLE_COLORS = [
 
 export const GRADIENTS = {
   accentPrimary: {
-    colors: [ACCENT_PRIMARY, '#A8C41A'] as const,
+    colors: [basePalette.accentPrimary, '#A8C41A'] as const,
     start: { x: 0.42, y: 0.42 },
     end: { x: 1, y: 1 },
   },
@@ -256,7 +44,7 @@ export const TYPOGRAPHY = {
   },
   h2: {
     fontSize: 24,
-    fontWeight: '500' as const,
+    fontWeight: '400' as const,
   },
   h3: {
     fontSize: 20,
@@ -291,6 +79,16 @@ export const TYPOGRAPHY = {
   metaBold: {
     fontSize: 14,
     fontWeight: '600' as const,
+  },
+  /**
+   * Uppercase section label (e.g. add-workout stack, schedule deck meta headers).
+   * Use with `textMeta` or other semantic text colors.
+   */
+  sectionHeader: {
+    fontSize: 14,
+    fontWeight: '600' as const,
+    letterSpacing: 0.6,
+    textTransform: 'uppercase' as const,
   },
   legal: {
     fontSize: 12,
@@ -434,7 +232,7 @@ export const BUTTONS = {
     height: 80,
     borderRadius: 20,
     borderCurve: 'continuous' as const,
-    backgroundColor: ACCENT_PRIMARY,
+    backgroundColor: basePalette.accentPrimary,
     alignItems: 'center' as const,
     justifyContent: 'center' as const,
   },
@@ -442,7 +240,7 @@ export const BUTTONS = {
     height: 56,
     borderRadius: 16,
     borderCurve: 'continuous' as const,
-    backgroundColor: ACCENT_PRIMARY,
+    backgroundColor: basePalette.accentPrimary,
     alignItems: 'center' as const,
     justifyContent: 'center' as const,
     paddingHorizontal: 24,

@@ -5,9 +5,11 @@ import * as Haptics from 'expo-haptics';
 import dayjs from 'dayjs';
 import { BottomDrawer } from './common/BottomDrawer';
 import { IconPause, IconPlay, IconClose, IconTrash, IconShare, IconSave } from './icons';
-import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS } from '../constants';
+import { SPACING, TYPOGRAPHY, BORDER_RADIUS } from '../constants';
 import { useTranslation } from '../i18n/useTranslation';
 import type { CyclePlan } from '../types/training';
+import { useAppTheme } from '../theme/useAppTheme';
+import { getAppThemeFromStore } from '../theme/getAppThemeFromStore';
 
 type CycleState = 'active' | 'paused' | 'finished' | 'none';
 
@@ -199,7 +201,7 @@ export function CycleControlSheet({
               }}
             >
               <View style={styles.shareExportIconRow}>
-                <IconShare size={20} color={COLORS.text} />
+                <IconShare size={20} color={themeColors.text} />
                 <Text style={styles.actionLabel}>{t('shareCycle')}</Text>
               </View>
             </TouchableOpacity>
@@ -213,7 +215,7 @@ export function CycleControlSheet({
               }}
             >
               <View style={styles.shareExportIconRow}>
-                <IconSave size={20} color={COLORS.text} />
+                <IconSave size={20} color={themeColors.text} />
                 <Text style={styles.actionLabel}>{t('exportData')}</Text>
               </View>
             </TouchableOpacity>
@@ -223,7 +225,7 @@ export function CycleControlSheet({
               onPress={handleDelete}
             >
               <View style={styles.shareExportIconRow}>
-                <IconTrash size={20} color={COLORS.signalNegative} />
+                <IconTrash size={20} color={themeColors.signalNegative} />
                 <Text style={[styles.actionLabel, styles.actionLabelDestructive]}>{t('deleteCycle')}</Text>
               </View>
             </TouchableOpacity>
@@ -241,7 +243,7 @@ export function CycleControlSheet({
                 }}
               >
                 <View style={styles.shareExportIconRow}>
-                  <IconShare size={20} color={COLORS.text} />
+                  <IconShare size={20} color={themeColors.text} />
                   <Text style={styles.actionLabel}>{t('shareCycle')}</Text>
                 </View>
               </TouchableOpacity>
@@ -255,7 +257,7 @@ export function CycleControlSheet({
                 }}
               >
                 <View style={styles.shareExportIconRow}>
-                  <IconSave size={20} color={COLORS.text} />
+                  <IconSave size={20} color={themeColors.text} />
                   <Text style={styles.actionLabel}>{t('exportData')}</Text>
                 </View>
               </TouchableOpacity>
@@ -271,7 +273,7 @@ export function CycleControlSheet({
                   }}
                 >
                   <View style={styles.iconContainer}>
-                    <IconPause size={20} color={COLORS.text} />
+                    <IconPause size={20} color={themeColors.text} />
                   </View>
                   <Text style={styles.actionLabel}>{t('pauseCycle')}</Text>
                 </TouchableOpacity>
@@ -288,7 +290,7 @@ export function CycleControlSheet({
                   }}
                 >
                   <View style={styles.iconContainer}>
-                    <IconPlay size={20} color={COLORS.text} />
+                    <IconPlay size={20} color={themeColors.text} />
                   </View>
                   <Text style={styles.actionLabel}>{t('resumeCycle')}</Text>
                 </TouchableOpacity>
@@ -300,7 +302,7 @@ export function CycleControlSheet({
                 onPress={handleEnd}
               >
                 <View style={styles.iconContainer}>
-                  <IconClose size={20} color={COLORS.text} />
+                  <IconClose size={20} color={themeColors.text} />
                 </View>
                 <Text style={styles.actionLabel}>{t('endCycle')}</Text>
               </TouchableOpacity>
@@ -311,7 +313,7 @@ export function CycleControlSheet({
                 onPress={handleDelete}
               >
                 <View style={styles.iconContainer}>
-                  <IconTrash size={20} color={COLORS.signalNegative} />
+                  <IconTrash size={20} color={themeColors.signalNegative} />
                 </View>
                 <Text style={[styles.actionLabel, styles.actionLabelDestructive]}>{t('deleteCycle')}</Text>
               </TouchableOpacity>
@@ -323,6 +325,7 @@ export function CycleControlSheet({
   );
 }
 
+const themeColors = getAppThemeFromStore().colors;
 const styles = StyleSheet.create({
   container: {
     paddingHorizontal: 24,
@@ -337,12 +340,12 @@ const styles = StyleSheet.create({
   },
   title: {
     ...TYPOGRAPHY.h3,
-    color: COLORS.text,
+    color: themeColors.text,
     flexShrink: 1,
   },
   subtitle: {
     ...TYPOGRAPHY.meta,
-    color: COLORS.textMeta,
+    color: themeColors.textMeta,
     marginBottom: SPACING.xl,
   },
   metaRow: {
@@ -353,40 +356,40 @@ const styles = StyleSheet.create({
   },
   metaText: {
     ...TYPOGRAPHY.meta,
-    color: COLORS.textSecondary,
+    color: themeColors.textSecondary,
   },
   statusBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: COLORS.cycleStripBackground,
+    backgroundColor: themeColors.cycleStripBackground,
     paddingHorizontal: 12,
     paddingVertical: 4,
     borderRadius: 12,
     marginLeft: SPACING.md,
   },
   statusBadgePaused: {
-    backgroundColor: COLORS.accentPrimaryDimmed,
+    backgroundColor: themeColors.accentPrimaryDimmed,
   },
   statusBadgeFinished: {
     backgroundColor: 'transparent',
     borderWidth: 1,
-    borderColor: COLORS.container,
+    borderColor: themeColors.container,
     borderRadius: 14,
   },
   statusText: {
     ...TYPOGRAPHY.meta,
     fontWeight: '600',
-    color: COLORS.accentPrimary,
+    color: themeColors.accentPrimary,
   },
   statusTextPaused: {
-    color: COLORS.accentPrimary,
+    color: themeColors.accentPrimary,
   },
   statusTextFinished: {
-    color: COLORS.textMeta,
+    color: themeColors.textMeta,
   },
   resumeDateText: {
     ...TYPOGRAPHY.meta,
-    color: COLORS.accentPrimary,
+    color: themeColors.accentPrimary,
   },
   shareExportRow: {
     flexDirection: 'row',
@@ -396,7 +399,7 @@ const styles = StyleSheet.create({
   shareExportButton: {
     flex: 1,
     minWidth: 0,
-    backgroundColor: COLORS.activeCard,
+    backgroundColor: themeColors.activeCard,
     borderRadius: 16,
     paddingVertical: SPACING.lg,
     paddingHorizontal: SPACING.sm,
@@ -415,7 +418,7 @@ const styles = StyleSheet.create({
   },
   actionItem: {
     flex: 1,
-    backgroundColor: COLORS.activeCard,
+    backgroundColor: themeColors.activeCard,
     borderRadius: 16,
     paddingVertical: SPACING.lg,
     paddingHorizontal: SPACING.md,
@@ -423,7 +426,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   actionItemDestructive: {
-    backgroundColor: COLORS.signalNegativeDimmed,
+    backgroundColor: themeColors.signalNegativeDimmed,
   },
   iconContainer: {
     alignItems: 'center',
@@ -433,19 +436,19 @@ const styles = StyleSheet.create({
   actionLabel: {
     ...TYPOGRAPHY.meta,
     fontWeight: '600',
-    color: COLORS.text,
+    color: themeColors.text,
     textAlign: 'center',
   },
   actionLabelDestructive: {
-    color: COLORS.signalNegative,
+    color: themeColors.signalNegative,
   },
   datePickerLabel: {
     ...TYPOGRAPHY.meta,
-    color: COLORS.textSecondary,
+    color: themeColors.textSecondary,
     marginBottom: SPACING.sm,
   },
   primaryButton: {
-    backgroundColor: COLORS.accentPrimary,
+    backgroundColor: themeColors.accentPrimary,
     paddingVertical: 14,
     borderRadius: BORDER_RADIUS.md,
     alignItems: 'center',
@@ -453,6 +456,6 @@ const styles = StyleSheet.create({
   },
   primaryButtonText: {
     ...TYPOGRAPHY.bodyBold,
-    color: COLORS.backgroundCanvas,
+    color: themeColors.backgroundCanvas,
   },
 });

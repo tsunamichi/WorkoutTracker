@@ -1,13 +1,15 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Platform } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
-import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS, CARDS } from '../constants';
+import { SPACING, TYPOGRAPHY, BORDER_RADIUS, CARDS } from '../constants';
 import { IconCalendar } from './icons';
 import { BottomDrawer } from './common/BottomDrawer';
 import { useTranslation } from '../i18n/useTranslation';
 import { CyclePlan } from '../types/training';
 import dayjs from 'dayjs';
 import * as Haptics from 'expo-haptics';
+import { useAppTheme } from '../theme/useAppTheme';
+import { getAppThemeFromStore } from '../theme/getAppThemeFromStore';
 
 // Dark theme colors
 const LIGHT_COLORS = {
@@ -141,7 +143,7 @@ export function PlanSelectionSheet({
                 activeOpacity={0.85}
               >
                 <View style={styles.dateButtonInner}>
-                  <IconCalendar size={20} color={COLORS.text} />
+                  <IconCalendar size={20} color={themeColors.text} />
                   <Text style={styles.dateButtonText}>
                     {dayjs(startDate).format('dddd, MMMM D, YYYY')}
                   </Text>
@@ -204,6 +206,7 @@ export function PlanSelectionSheet({
   );
 }
 
+const themeColors = getAppThemeFromStore().colors;
 const styles = StyleSheet.create({
   container: {
     paddingHorizontal: SPACING.xxl,
@@ -240,7 +243,7 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.md,
   },
   planCardSelected: {
-    borderColor: COLORS.accentPrimary,
+    borderColor: themeColors.accentPrimary,
     borderWidth: 2,
   },
   planCardInner: {
@@ -251,19 +254,19 @@ const styles = StyleSheet.create({
   },
   planTitle: {
     ...TYPOGRAPHY.body,
-    color: COLORS.text,
+    color: themeColors.text,
     fontWeight: '600',
     marginBottom: 4,
   },
   planSubtitle: {
     ...TYPOGRAPHY.meta,
-    color: COLORS.textMeta,
+    color: themeColors.textMeta,
   },
   selectedBadge: {
     width: 24,
     height: 24,
     borderRadius: 12,
-    backgroundColor: COLORS.accentPrimary,
+    backgroundColor: themeColors.accentPrimary,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -271,7 +274,7 @@ const styles = StyleSheet.create({
     width: 12,
     height: 12,
     borderRadius: 6,
-    backgroundColor: COLORS.backgroundCanvas,
+    backgroundColor: themeColors.backgroundCanvas,
   },
   sectionHeader: {
     marginTop: SPACING.xl,
@@ -284,10 +287,10 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   dateButton: {
-    backgroundColor: COLORS.activeCard,
+    backgroundColor: themeColors.activeCard,
     borderRadius: BORDER_RADIUS.lg,
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: themeColors.border,
     marginBottom: SPACING.xl,
   },
   dateButtonInner: {
@@ -298,20 +301,20 @@ const styles = StyleSheet.create({
   },
   dateButtonText: {
     ...TYPOGRAPHY.body,
-    color: COLORS.text,
+    color: themeColors.text,
     fontWeight: '600',
   },
   summaryCard: {
-    backgroundColor: COLORS.accentPrimaryDimmed,
+    backgroundColor: themeColors.accentPrimaryDimmed,
     borderRadius: BORDER_RADIUS.lg,
     borderWidth: 1,
-    borderColor: COLORS.accentPrimary,
+    borderColor: themeColors.accentPrimary,
     padding: SPACING.lg,
     marginBottom: SPACING.xl,
   },
   summaryTitle: {
     ...TYPOGRAPHY.bodyBold,
-    color: COLORS.text,
+    color: themeColors.text,
     marginBottom: SPACING.md,
   },
   summaryRow: {
@@ -321,16 +324,16 @@ const styles = StyleSheet.create({
   },
   summaryLabel: {
     ...TYPOGRAPHY.body,
-    color: COLORS.textMeta,
+    color: themeColors.textMeta,
   },
   summaryValue: {
     ...TYPOGRAPHY.body,
-    color: COLORS.text,
+    color: themeColors.text,
     fontWeight: '600',
   },
   applyButton: {
     height: 56,
-    backgroundColor: COLORS.accentPrimary,
+    backgroundColor: themeColors.accentPrimary,
     borderRadius: BORDER_RADIUS.md,
     alignItems: 'center',
     justifyContent: 'center',
@@ -338,6 +341,6 @@ const styles = StyleSheet.create({
   applyButtonText: {
     ...TYPOGRAPHY.meta,
     fontWeight: 'bold',
-    color: COLORS.backgroundCanvas,
+    color: themeColors.backgroundCanvas,
   },
 });

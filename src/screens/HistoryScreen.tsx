@@ -7,12 +7,11 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import Reanimated, { Extrapolation, interpolate, useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import dayjs from 'dayjs';
-import { COLORS, SPACING, TYPOGRAPHY } from '../constants';
+import { SPACING, TYPOGRAPHY } from '../constants';
 import { useAppTheme } from '../theme/useAppTheme';
 import { BackTextButton } from '../components/common/BackTextButton';
 import { FourWeekActivityChart } from '../components/history/FourWeekActivityChart';
 import { HistoryWorkoutDetailPanel } from '../components/history/HistoryWorkoutDetailPanel';
-import { HISTORY_VISUAL } from '../components/history/historyVisualTokens';
 import { useStore } from '../store';
 import { buildWorkoutHistoryByDateFromSchedule } from '../utils/buildWorkoutHistoryByDateFromSchedule';
 import { pickDefaultHistorySelection } from '../utils/historyDefaultSelection';
@@ -21,6 +20,7 @@ import {
   formatHistorySelectedHeading,
 } from '../utils/historyWeekGrid';
 import type { RootStackParamList } from '../navigation/AppNavigator';
+import { getAppThemeFromStore } from '../theme/getAppThemeFromStore';
 import {
   SCHEDULE_DECK_T,
   SCHEDULE_DECK_EXECUTION_INCOMING_SCALE_START,
@@ -151,13 +151,20 @@ export function HistoryScreen() {
     <Reanimated.View
       style={[
         styles.screen,
+        /* Page canvas — same token as TodayScreen root schedule (`styles.gradient` → `themeColors.canvasLight`). */
         { paddingTop: insets.top, backgroundColor: themeColors.canvasLight },
         isScheduleOriginTransition && scheduleDeckIncomingShellStyle,
       ]}
     >
       <StatusBar style="dark" />
 
-      <BackTextButton label="Home" chevronPointsLeft onPress={onPressBack} textStyle={styles.backText} />
+      {/* e.g. screenshot: "‹ Home" — chevron + label; both use `textMeta` (BackTextButton merges this onto chevron and label). */}
+      <BackTextButton
+        label="Home"
+        chevronPointsLeft
+        onPress={onPressBack}
+        textStyle={{ color: themeColors.textMeta }}
+      />
 
       <ScrollView
         style={styles.scroll}
@@ -165,7 +172,9 @@ export function HistoryScreen() {
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.titleBlock}>
-          <Text style={styles.titlePrimary}>History</Text>
+          {/* e.g. screenshot: large "History" — `containerPrimary` */}
+          <Text style={[styles.titlePrimary, { color: themeColors.containerPrimary }]}>History</Text>
+          {/* e.g. screenshot: "Last 4 weeks" under the title — stays meta tone */}
           <Text style={styles.titleSecondary}>Last 4 weeks</Text>
         </View>
 
@@ -189,12 +198,10 @@ export function HistoryScreen() {
   );
 }
 
+const themeColors = getAppThemeFromStore().colors;
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-  },
-  backText: {
-    color: HISTORY_VISUAL.textGray,
   },
   scroll: {
     flex: 1,
@@ -205,13 +212,11 @@ const styles = StyleSheet.create({
   titleBlock: {
     marginTop: SPACING.sm,
   },
-  /** Match Today schedule header (`scheduleHeaderTitle` / `scheduleHeaderDateLabel`). */
   titlePrimary: {
     ...TYPOGRAPHY.displayLarge,
-    color: COLORS.textPrimary,
   },
   titleSecondary: {
     ...TYPOGRAPHY.displayLarge,
-    color: COLORS.textMeta,
+    color: themeColors.textMeta,
   },
 });

@@ -11,7 +11,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useStore } from '../store';
-import { COLORS, SPACING, CARDS, TYPOGRAPHY, GRADIENTS } from '../constants';
+import { SPACING, CARDS, TYPOGRAPHY, GRADIENTS } from '../constants';
 import {
   executionCtaLabelStyle,
   EXECUTION_CTA_HEIGHT,
@@ -23,6 +23,8 @@ import type { HIITTimer } from '../types';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/AppNavigator';
 import { useTranslation } from '../i18n/useTranslation';
+import { useAppTheme } from '../theme/useAppTheme';
+import { getAppThemeFromStore } from '../theme/getAppThemeFromStore';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'HIITTimerForm'>;
 
@@ -464,10 +466,11 @@ export default function HIITTimerFormScreen({ navigation, route }: Props) {
   );
 }
 
+const themeColors = getAppThemeFromStore().colors;
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.backgroundCanvas,
+    backgroundColor: themeColors.backgroundCanvas,
   },
   innerContainer: {
     flex: 1,
@@ -509,7 +512,7 @@ const styles = StyleSheet.create({
     ...TYPOGRAPHY.h2,
     color: LIGHT_COLORS.secondary,
     borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
+    borderBottomColor: themeColors.border,
     paddingVertical: 0,
   },
   scrollView: {
@@ -558,7 +561,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   startButton: {
-    backgroundColor: COLORS.accentPrimaryDimmed,
+    backgroundColor: themeColors.accentPrimaryDimmed,
     height: EXECUTION_CTA_HEIGHT,
     minHeight: EXECUTION_CTA_HEIGHT,
     paddingHorizontal: EXECUTION_CTA_PADDING_H,
@@ -570,7 +573,6 @@ const styles = StyleSheet.create({
   },
   startButtonText: {
     ...executionCtaLabelStyle,
-    color: COLORS.accentPrimary,
+    color: themeColors.accentPrimary,
   },
 });
-

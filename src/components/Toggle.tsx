@@ -1,7 +1,8 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Animated } from 'react-native';
-import { COLORS, SPACING, TYPOGRAPHY } from '../constants';
+import { SPACING, TYPOGRAPHY } from '../constants';
 import { useAppTheme } from '../theme/useAppTheme';
+import { getAppThemeFromStore } from '../theme/getAppThemeFromStore';
 
 interface ToggleProps {
   label: string;
@@ -12,7 +13,7 @@ interface ToggleProps {
   hideLabel?: boolean;
   /** Track color when off (non-disabled). Default `#48484A`. */
   trackOffColor?: string;
-  /** Thumb color when on (non-disabled). Default `COLORS.backgroundCanvas`. */
+  /** Thumb color when on (non-disabled). Default `themeColors.backgroundCanvas`. */
   thumbOnColor?: string;
   /** Thumb color when off (non-disabled). Default `#FFFFFF`. */
   thumbOffColor?: string;
@@ -40,7 +41,7 @@ export function Toggle({
   }, [value, animatedValue]);
 
   const trackOff = trackOffColor ?? '#48484A';
-  const thumbOn = thumbOnColor ?? COLORS.backgroundCanvas;
+  const thumbOn = thumbOnColor ?? themeColors.backgroundCanvas;
   const thumbOff = thumbOffColor ?? '#FFFFFF';
 
   const trackColor = animatedValue.interpolate({
@@ -81,6 +82,7 @@ export function Toggle({
   );
 }
 
+const themeColors = getAppThemeFromStore().colors;
 const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
@@ -93,10 +95,10 @@ const styles = StyleSheet.create({
   },
   label: {
     ...TYPOGRAPHY.metaBold,
-    color: COLORS.text,
+    color: themeColors.text,
   },
   labelDisabled: {
-    color: COLORS.textMeta, // Lighter color when disabled
+    color: themeColors.textMeta, // Lighter color when disabled
     opacity: 0.5,
   },
   track: {
@@ -117,4 +119,3 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
 });
-

@@ -6,9 +6,11 @@ import {
   TouchableOpacity,
   useWindowDimensions,
 } from 'react-native';
-import { COLORS, SPACING, TYPOGRAPHY, CARDS, BORDER_RADIUS } from '../../constants';
+import { SPACING, TYPOGRAPHY, CARDS, BORDER_RADIUS } from '../../constants';
 import { IconPlay, IconCheckmark, IconChevronDown } from '../icons';
 import type { CoreSetTemplate } from '../../types/training';
+import { useAppTheme } from '../../theme/useAppTheme';
+import { getAppThemeFromStore } from '../../theme/getAppThemeFromStore';
 
 const CARD_MARGIN_H = 20;
 const CARD_GAP_V = 12;
@@ -55,7 +57,7 @@ function SessionCard({
         <View style={styles.cardContent}>
           {completed && (
             <View style={styles.stateIconAbsolute} pointerEvents="none">
-              <IconCheckmark size={18} color={COLORS.successBright} />
+              <IconCheckmark size={18} color={themeColors.successBright} />
             </View>
           )}
           <Text
@@ -111,7 +113,7 @@ function SessionCard({
             </Text>
             <IconPlay
               size={16}
-              color={isUpNext ? COLORS.backgroundCanvas : COLORS.accentPrimary}
+              color={isUpNext ? themeColors.backgroundCanvas : themeColors.accentPrimary}
             />
           </TouchableOpacity>
         )}
@@ -178,7 +180,7 @@ export function CoreProgramTimeline({
                   {group.sessions.length} workout{group.sessions.length !== 1 ? 's' : ''}
                 </Text>
                 <View style={[styles.chevronWrap, isExpanded && styles.chevronWrapRotated]}>
-                  <IconChevronDown size={20} color={COLORS.text} />
+                  <IconChevronDown size={20} color={themeColors.text} />
                 </View>
               </View>
             </TouchableOpacity>
@@ -209,6 +211,7 @@ export function CoreProgramTimeline({
   );
 }
 
+const themeColors = getAppThemeFromStore().colors;
 const styles = StyleSheet.create({
   wrap: {
     paddingHorizontal: CARD_MARGIN_H,
@@ -223,12 +226,12 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     height: 48,
     paddingHorizontal: SPACING.lg,
-    backgroundColor: COLORS.activeCard,
+    backgroundColor: themeColors.activeCard,
     borderRadius: BORDER_RADIUS.md,
   },
   weekRowLabel: {
     ...TYPOGRAPHY.bodyBold,
-    color: COLORS.text,
+    color: themeColors.text,
   },
   weekRowValue: {
     flexDirection: 'row',
@@ -237,7 +240,7 @@ const styles = StyleSheet.create({
   },
   weekRowValueText: {
     ...TYPOGRAPHY.body,
-    color: COLORS.text,
+    color: themeColors.text,
   },
   chevronWrap: {
     transform: [{ rotate: '0deg' }],
@@ -275,12 +278,12 @@ const styles = StyleSheet.create({
   },
   cardTitle: {
     ...TYPOGRAPHY.h3,
-    color: COLORS.text,
+    color: themeColors.text,
     marginBottom: 8,
   },
   cardTitleCollapsed: {
     ...TYPOGRAPHY.body,
-    color: COLORS.text,
+    color: themeColors.text,
     marginBottom: 4,
   },
   cardTitleSkipped: {
@@ -288,12 +291,12 @@ const styles = StyleSheet.create({
   },
   exerciseCount: {
     ...TYPOGRAPHY.meta,
-    color: COLORS.textMeta,
+    color: themeColors.textMeta,
   },
   exerciseList: {},
   exerciseName: {
     ...TYPOGRAPHY.meta,
-    color: COLORS.textMeta,
+    color: themeColors.textMeta,
     marginBottom: 2,
   },
   footer: {
@@ -303,7 +306,7 @@ const styles = StyleSheet.create({
   },
   skippedLabel: {
     ...TYPOGRAPHY.meta,
-    color: COLORS.textMeta,
+    color: themeColors.textMeta,
   },
   startButtonBar: {
     width: '100%',
@@ -321,7 +324,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   startButtonBarPrimary: {
-    backgroundColor: COLORS.accentPrimary,
+    backgroundColor: themeColors.accentPrimary,
   },
   startButtonBarSecondary: {
     backgroundColor: 'transparent',
@@ -330,9 +333,9 @@ const styles = StyleSheet.create({
     ...TYPOGRAPHY.metaBold,
   },
   startButtonBarTextPrimary: {
-    color: COLORS.backgroundCanvas,
+    color: themeColors.backgroundCanvas,
   },
   startButtonBarTextSecondary: {
-    color: COLORS.accentPrimary,
+    color: themeColors.accentPrimary,
   },
 });

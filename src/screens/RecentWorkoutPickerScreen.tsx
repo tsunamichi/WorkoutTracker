@@ -13,7 +13,7 @@ import Reanimated, {
 } from 'react-native-reanimated';
 import dayjs from 'dayjs';
 import * as Haptics from 'expo-haptics';
-import { COLORS, SPACING, TYPOGRAPHY } from '../constants';
+import { SPACING, TYPOGRAPHY } from '../constants';
 import { IconArrowDiagonal } from '../components/icons';
 import { useAppTheme } from '../theme/useAppTheme';
 import { BackTextButton } from '../components/common/BackTextButton';
@@ -23,6 +23,7 @@ import { findActiveTemplateByName } from '../utils/workoutNameCollision';
 import { hydrateWorkoutDraftFromSnapshot } from '../utils/hydrateWorkoutDraftFromSnapshot';
 import { buildRecentWorkoutPickerOptions, type RecentWorkoutPickerOption } from '../utils/recentWorkoutPickerOptions';
 import type { RootStackParamList } from '../navigation/AppNavigator';
+import { getAppThemeFromStore } from '../theme/getAppThemeFromStore';
 import {
   SCHEDULE_DECK_HOME_SCALE_MAX,
   SCHEDULE_DECK_T,
@@ -48,7 +49,7 @@ export function RecentWorkoutPickerScreen() {
   const appTheme = useAppTheme();
   const { colors: themeColors } = appTheme;
   const isV2Theme = appTheme.id === 'v2';
-  const timerCardBackground = isV2Theme ? themeColors.canvasContainer : COLORS.containerTertiary;
+  const timerCardBackground = isV2Theme ? themeColors.canvasContainer : themeColors.containerTertiary;
   const timerTitleInk = themeColors.containerPrimary;
 
   const selectedDate = route.params?.selectedDate ?? '';
@@ -267,6 +268,7 @@ export function RecentWorkoutPickerScreen() {
   );
 }
 
+const themeColors = getAppThemeFromStore().colors;
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
@@ -280,7 +282,7 @@ const styles = StyleSheet.create({
   /** Match Today `scheduleHeaderTitle` (“Workout of the day”). */
   title: {
     ...TYPOGRAPHY.displayLarge,
-    color: COLORS.textPrimary,
+    color: themeColors.containerPrimary,
     marginBottom: TITLE_TO_GRID_GAP_PX,
   },
   empty: {
@@ -319,7 +321,6 @@ const styles = StyleSheet.create({
   /** Same as Today `footerEntryTitle`. */
   rowTitle: {
     ...TYPOGRAPHY.h3,
-    fontWeight: '500',
   },
   /** Same as Today `footerEntryMeta`. */
   rowMeta: {

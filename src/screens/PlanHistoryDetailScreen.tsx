@@ -4,10 +4,12 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import * as Haptics from 'expo-haptics';
 import { useStore } from '../store';
-import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS, CARDS } from '../constants';
+import { SPACING, TYPOGRAPHY, BORDER_RADIUS, CARDS } from '../constants';
 import { IconArrowLeft, IconCheck } from '../components/icons';
 import { useTranslation } from '../i18n/useTranslation';
 import dayjs from 'dayjs';
+import { useAppTheme } from '../theme/useAppTheme';
+import { getAppThemeFromStore } from '../theme/getAppThemeFromStore';
 
 interface PlanHistoryDetailScreenProps {
   route: {
@@ -164,7 +166,7 @@ export function PlanHistoryDetailScreen({ route, navigation }: PlanHistoryDetail
       <View style={[styles.header, { paddingTop: insets.top }]}>
         <View style={styles.topBar}>
           <TouchableOpacity onPress={handleBack} style={styles.backButton}>
-            <IconArrowLeft size={24} color={COLORS.text} />
+            <IconArrowLeft size={24} color={themeColors.text} />
           </TouchableOpacity>
           <View style={styles.backButton} />
         </View>
@@ -234,7 +236,7 @@ export function PlanHistoryDetailScreen({ route, navigation }: PlanHistoryDetail
                   {isCompleted && (
                     <View style={styles.completedBadge}>
                       <Text style={styles.completedText}>{t('completed')}</Text>
-                      <IconCheck size={24} color={COLORS.successBright} />
+                      <IconCheck size={24} color={themeColors.successBright} />
                     </View>
                   )}
                 </TouchableOpacity>
@@ -306,10 +308,11 @@ export function PlanHistoryDetailScreen({ route, navigation }: PlanHistoryDetail
   );
 }
 
+const themeColors = getAppThemeFromStore().colors;
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.backgroundCanvas,
+    backgroundColor: themeColors.backgroundCanvas,
   },
   header: {
     paddingBottom: 0,
@@ -335,7 +338,7 @@ const styles = StyleSheet.create({
   },
   pageTitle: {
     ...TYPOGRAPHY.h2,
-    color: COLORS.text,
+    color: themeColors.text,
   },
   summarySection: {
     paddingHorizontal: SPACING.xxl,
@@ -361,17 +364,17 @@ const styles = StyleSheet.create({
   },
   summaryValue: {
     ...TYPOGRAPHY.h1,
-    color: COLORS.text,
+    color: themeColors.text,
     marginBottom: SPACING.xs,
   },
   summaryLabel: {
     ...TYPOGRAPHY.meta,
-    color: COLORS.textMeta,
+    color: themeColors.textMeta,
     textTransform: 'capitalize',
   },
   summaryDivider: {
     width: 1,
-    backgroundColor: COLORS.borderDimmed,
+    backgroundColor: themeColors.borderDimmed,
     marginHorizontal: SPACING.md,
   },
   scrollView: {
@@ -396,7 +399,7 @@ const styles = StyleSheet.create({
   },
   workoutTitle: {
     ...TYPOGRAPHY.h3,
-    color: COLORS.text,
+    color: themeColors.text,
     marginBottom: SPACING.xs,
   },
   workoutMetaRow: {
@@ -406,17 +409,17 @@ const styles = StyleSheet.create({
   },
   workoutDayLabel: {
     ...TYPOGRAPHY.meta,
-    color: COLORS.textMeta,
+    color: themeColors.textMeta,
     textTransform: 'uppercase',
     letterSpacing: 1,
   },
   workoutMetaDot: {
     ...TYPOGRAPHY.meta,
-    color: COLORS.textMeta,
+    color: themeColors.textMeta,
   },
   workoutDate: {
     ...TYPOGRAPHY.meta,
-    color: COLORS.textMeta,
+    color: themeColors.textMeta,
     letterSpacing: 1,
   },
   completedBadge: {
@@ -426,14 +429,14 @@ const styles = StyleSheet.create({
   },
   completedText: {
     ...TYPOGRAPHY.meta,
-    color: COLORS.successBright,
+    color: themeColors.successBright,
     textTransform: 'capitalize',
   },
   exerciseRow: {
     flexDirection: 'row',
     paddingVertical: SPACING.md,
     borderBottomWidth: 1,
-    borderBottomColor: COLORS.borderDimmed,
+    borderBottomColor: themeColors.borderDimmed,
     alignItems: 'flex-start',
   },
   exerciseNameColumn: {
@@ -442,11 +445,11 @@ const styles = StyleSheet.create({
   },
   exerciseName: {
     ...TYPOGRAPHY.body,
-    color: COLORS.text,
+    color: themeColors.text,
   },
   exerciseSetsInfo: {
     ...TYPOGRAPHY.meta,
-    color: COLORS.textMeta,
+    color: themeColors.textMeta,
   },
   exerciseDataColumn: {
     minWidth: 120,
@@ -465,25 +468,25 @@ const styles = StyleSheet.create({
   },
   setValue: {
     ...TYPOGRAPHY.body,
-    color: COLORS.text,
+    color: themeColors.text,
     fontVariant: ['tabular-nums'],
   },
   setUnit: {
     ...TYPOGRAPHY.meta,
-    color: COLORS.textMeta,
+    color: themeColors.textMeta,
   },
   noDataText: {
     ...TYPOGRAPHY.body,
-    color: COLORS.textMeta,
+    color: themeColors.textMeta,
   },
   undoneText: {
     ...TYPOGRAPHY.meta,
-    color: COLORS.textMeta,
+    color: themeColors.textMeta,
     fontStyle: 'italic',
   },
   workoutDivider: {
     height: 1,
-    backgroundColor: COLORS.border,
+    backgroundColor: themeColors.border,
     marginTop: SPACING.xl,
     marginHorizontal: -SPACING.xxl,
   },

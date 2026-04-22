@@ -11,12 +11,14 @@ import {
 import { useCreateCycleDraftStore } from '../../store/useCreateCycleDraftStore';
 import { useStore } from '../../store';
 import { ExerciseBlock, Weekday, ExerciseWeekPlan } from '../../types/manualCycle';
-import { SPACING, COLORS, TYPOGRAPHY, BORDER_RADIUS } from '../../constants';
+import { SPACING, TYPOGRAPHY, BORDER_RADIUS } from '../../constants';
 import { IconAddLine, IconMinusLine } from '../icons';
 import { BottomDrawer } from '../common/BottomDrawer';
 import { Toggle } from '../Toggle';
 import { formatWeightForLoad, toDisplayWeight, fromDisplayWeight } from '../../utils/weight';
 import { useTranslation } from '../../i18n/useTranslation';
+import { useAppTheme } from '../../theme/useAppTheme';
+import { getAppThemeFromStore } from '../../theme/getAppThemeFromStore';
 
 interface ExerciseEditorBottomSheetProps {
   weekday: Weekday;
@@ -246,7 +248,7 @@ export const ExerciseEditorBottomSheet = ({
                     >
                       <View style={styles.adjustButton}>
                         <View style={styles.adjustButtonInner}>
-                          <IconMinusLine size={24} color={COLORS.accentPrimary} />
+                          <IconMinusLine size={24} color={themeColors.accentPrimary} />
                         </View>
                       </View>
                     </TouchableOpacity>
@@ -257,7 +259,7 @@ export const ExerciseEditorBottomSheet = ({
                     >
                       <View style={styles.adjustButton}>
                         <View style={styles.adjustButtonInner}>
-                          <IconAddLine size={24} color={COLORS.accentPrimary} />
+                          <IconAddLine size={24} color={themeColors.accentPrimary} />
                         </View>
                       </View>
                     </TouchableOpacity>
@@ -281,7 +283,7 @@ export const ExerciseEditorBottomSheet = ({
                     >
                       <View style={styles.adjustButton}>
                         <View style={styles.adjustButtonInner}>
-                          <IconMinusLine size={24} color={COLORS.accentPrimary} />
+                          <IconMinusLine size={24} color={themeColors.accentPrimary} />
                         </View>
                       </View>
                     </TouchableOpacity>
@@ -292,7 +294,7 @@ export const ExerciseEditorBottomSheet = ({
                     >
                       <View style={styles.adjustButton}>
                         <View style={styles.adjustButtonInner}>
-                          <IconAddLine size={24} color={COLORS.accentPrimary} />
+                          <IconAddLine size={24} color={themeColors.accentPrimary} />
                         </View>
                       </View>
                     </TouchableOpacity>
@@ -314,7 +316,7 @@ export const ExerciseEditorBottomSheet = ({
                     >
                       <View style={styles.adjustButton}>
                         <View style={styles.adjustButtonInner}>
-                          <IconMinusLine size={24} color={COLORS.accentPrimary} />
+                          <IconMinusLine size={24} color={themeColors.accentPrimary} />
                         </View>
                       </View>
                     </TouchableOpacity>
@@ -325,7 +327,7 @@ export const ExerciseEditorBottomSheet = ({
                     >
                       <View style={styles.adjustButton}>
                         <View style={styles.adjustButtonInner}>
-                          <IconAddLine size={24} color={COLORS.accentPrimary} />
+                          <IconAddLine size={24} color={themeColors.accentPrimary} />
                         </View>
                       </View>
                     </TouchableOpacity>
@@ -350,6 +352,7 @@ export const ExerciseEditorBottomSheet = ({
   );
 };
 
+const themeColors = getAppThemeFromStore().colors;
 const styles = StyleSheet.create({
   drawerContent: {
     flex: 1,
@@ -369,7 +372,7 @@ const styles = StyleSheet.create({
   },
   title: {
     ...TYPOGRAPHY.h3,
-    color: COLORS.text,
+    color: themeColors.text,
     flex: 1,
   },
   settingsContainer: {
@@ -382,7 +385,7 @@ const styles = StyleSheet.create({
     padding: 0,
   },
   valuesCard: {
-    backgroundColor: COLORS.activeCard,
+    backgroundColor: themeColors.activeCard,
     borderBottomLeftRadius: BORDER_RADIUS.lg,
     borderBottomRightRadius: BORDER_RADIUS.lg,
     borderTopLeftRadius: 0,
@@ -396,7 +399,7 @@ const styles = StyleSheet.create({
   weekTabs: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: COLORS.backgroundCanvas,
+    backgroundColor: themeColors.backgroundCanvas,
     borderRadius: BORDER_RADIUS.full,
     borderCurve: 'continuous',
     padding: 0,
@@ -422,15 +425,15 @@ const styles = StyleSheet.create({
   },
   weekTabActive: {},
   weekTabInactive: {
-    backgroundColor: COLORS.borderDimmed,
+    backgroundColor: themeColors.borderDimmed,
   },
   weekTabText: {
     ...TYPOGRAPHY.metaBold,
-    color: COLORS.text,
+    color: themeColors.text,
   },
   weekTabActiveOverlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: COLORS.activeCard,
+    backgroundColor: themeColors.activeCard,
     borderTopLeftRadius: 12,
     borderTopRightRadius: 12,
     borderBottomLeftRadius: 0,
@@ -449,11 +452,11 @@ const styles = StyleSheet.create({
   },
   adjustValueText: {
     ...TYPOGRAPHY.h1,
-    color: COLORS.text,
+    color: themeColors.text,
   },
   adjustUnit: {
     ...TYPOGRAPHY.h1,
-    color: COLORS.textMeta,
+    color: themeColors.textMeta,
   },
   adjustButtons: {
     flexDirection: 'row',
@@ -480,13 +483,13 @@ const styles = StyleSheet.create({
     height: 48,
     borderRadius: BORDER_RADIUS.md,
     borderCurve: 'continuous',
-    backgroundColor: COLORS.accentPrimaryDimmed,
+    backgroundColor: themeColors.accentPrimaryDimmed,
     alignItems: 'center',
     justifyContent: 'center',
   },
   adjustDivider: {
     height: 1,
-    backgroundColor: COLORS.borderDimmed,
+    backgroundColor: themeColors.borderDimmed,
     marginVertical: 16,
   },
   saveButtonContainer: {
@@ -495,14 +498,13 @@ const styles = StyleSheet.create({
     paddingTop: SPACING.lg,
   },
   saveButton: {
-    backgroundColor: COLORS.accentPrimary,
+    backgroundColor: themeColors.accentPrimary,
     borderRadius: BORDER_RADIUS.md,
     paddingVertical: SPACING.lg,
     alignItems: 'center',
   },
   saveButtonText: {
     ...TYPOGRAPHY.metaBold,
-    color: COLORS.backgroundCanvas,
+    color: themeColors.backgroundCanvas,
   },
 });
-

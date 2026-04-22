@@ -1,7 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Modal, Animated } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { SPACING, TYPOGRAPHY, COLORS } from '../../constants';
+import { SPACING, TYPOGRAPHY } from '../../constants';
+import { useAppTheme } from '../../theme/useAppTheme';
+import { getAppThemeFromStore } from '../../theme/getAppThemeFromStore';
 
 export interface ActionSheetItem {
   icon: React.ReactNode;
@@ -165,6 +167,7 @@ export function ActionSheet({ visible, onClose, items }: ActionSheetProps) {
   );
 }
 
+const themeColors = getAppThemeFromStore().colors;
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
@@ -174,11 +177,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.lg,
   },
   drawer: {
-    backgroundColor: COLORS.backgroundCanvas,
+    backgroundColor: themeColors.backgroundCanvas,
     borderRadius: 16,
     borderCurve: 'continuous' as const,
     borderWidth: 1,
-    borderColor: COLORS.activeCard,
+    borderColor: themeColors.activeCard,
     overflow: 'hidden' as const,
   },
   container: {
@@ -197,7 +200,7 @@ const styles = StyleSheet.create({
     alignItems: 'center' as const,
     justifyContent: 'center' as const,
     gap: SPACING.sm,
-    backgroundColor: COLORS.activeCard,
+    backgroundColor: themeColors.activeCard,
     borderRadius: 10,
     borderCurve: 'continuous' as const,
     paddingVertical: SPACING.lg,
@@ -209,7 +212,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center' as const,
     gap: SPACING.sm,
     height: 48,
-    backgroundColor: COLORS.activeCard,
+    backgroundColor: themeColors.activeCard,
     borderRadius: 10,
     borderCurve: 'continuous' as const,
     paddingHorizontal: SPACING.lg,
@@ -224,19 +227,19 @@ const styles = StyleSheet.create({
   drawerItemText: {
     ...TYPOGRAPHY.meta,
     fontWeight: '400',
-    color: COLORS.text,
+    color: themeColors.text,
     textAlign: 'center' as const,
   },
   drawerItemTextFeatured: {
     ...TYPOGRAPHY.meta,
     fontWeight: '400',
-    color: COLORS.text,
+    color: themeColors.text,
     textAlign: 'center' as const,
   },
   drawerItemLabelWrap: {
     minHeight: 22,
   },
   drawerItemTextDanger: {
-    color: COLORS.signalNegative,
+    color: themeColors.signalNegative,
   },
 });

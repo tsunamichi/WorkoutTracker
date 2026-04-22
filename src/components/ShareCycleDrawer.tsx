@@ -2,12 +2,14 @@ import React, { useMemo, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Share, Alert } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { BottomDrawer } from './common/BottomDrawer';
-import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS } from '../constants';
+import { SPACING, TYPOGRAPHY, BORDER_RADIUS } from '../constants';
 import { useStore } from '../store';
 import { useTranslation } from '../i18n/useTranslation';
 import type { CyclePlan, WorkoutTemplate, WorkoutTemplateExercise } from '../types/training';
 
 import { IconSave } from './icons';
+import { useAppTheme } from '../theme/useAppTheme';
+import { getAppThemeFromStore } from '../theme/getAppThemeFromStore';
 
 interface ShareCycleDrawerProps {
   visible: boolean;
@@ -197,7 +199,7 @@ export function ShareCycleDrawer({ visible, onClose, plan, onExportData }: Share
             }}
             activeOpacity={0.85}
           >
-            <IconSave size={20} color={COLORS.text} />
+            <IconSave size={20} color={themeColors.text} />
             <Text style={styles.exportDataButtonText}>{t('exportData')}</Text>
           </TouchableOpacity>
         )}
@@ -206,6 +208,7 @@ export function ShareCycleDrawer({ visible, onClose, plan, onExportData }: Share
   );
 }
 
+const themeColors = getAppThemeFromStore().colors;
 const styles = StyleSheet.create({
   container: {
     padding: SPACING.lg,
@@ -214,12 +217,12 @@ const styles = StyleSheet.create({
   },
   title: {
     ...TYPOGRAPHY.h3,
-    color: COLORS.text,
+    color: themeColors.text,
     marginBottom: 4,
   },
   subtitle: {
     ...TYPOGRAPHY.meta,
-    color: COLORS.textMeta,
+    color: themeColors.textMeta,
     marginBottom: SPACING.lg,
   },
   list: {
@@ -241,27 +244,27 @@ const styles = StyleSheet.create({
     height: 24,
     borderRadius: 6,
     borderWidth: 2,
-    borderColor: COLORS.border,
+    borderColor: themeColors.border,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: SPACING.md,
   },
   checkboxSelected: {
-    backgroundColor: COLORS.accentPrimary,
-    borderColor: COLORS.accentPrimary,
+    backgroundColor: themeColors.accentPrimary,
+    borderColor: themeColors.accentPrimary,
   },
   checkmark: {
-    color: COLORS.backgroundCanvas,
+    color: themeColors.backgroundCanvas,
     fontSize: 14,
     fontWeight: '600',
   },
   workoutName: {
     ...TYPOGRAPHY.body,
-    color: COLORS.text,
+    color: themeColors.text,
     flex: 1,
   },
   shareButton: {
-    backgroundColor: COLORS.accentPrimary,
+    backgroundColor: themeColors.accentPrimary,
     height: 56,
     borderRadius: BORDER_RADIUS.md,
     alignItems: 'center',
@@ -269,23 +272,23 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.md,
   },
   shareButtonDisabled: {
-    backgroundColor: COLORS.backgroundCanvas,
+    backgroundColor: themeColors.backgroundCanvas,
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: themeColors.border,
   },
   shareButtonText: {
     ...TYPOGRAPHY.bodyBold,
-    color: COLORS.backgroundCanvas,
+    color: themeColors.backgroundCanvas,
   },
   shareButtonTextDisabled: {
-    color: COLORS.textMeta,
+    color: themeColors.textMeta,
   },
   exportDataButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: SPACING.sm,
-    backgroundColor: COLORS.activeCard,
+    backgroundColor: themeColors.activeCard,
     height: 48,
     borderRadius: BORDER_RADIUS.md,
     marginTop: SPACING.lg,
@@ -294,6 +297,6 @@ const styles = StyleSheet.create({
   exportDataButtonText: {
     ...TYPOGRAPHY.meta,
     fontWeight: '600',
-    color: COLORS.text,
+    color: themeColors.text,
   },
 });

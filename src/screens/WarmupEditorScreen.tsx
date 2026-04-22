@@ -4,7 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import * as Haptics from 'expo-haptics';
 import { useStore } from '../store';
-import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS, CARDS, BUTTONS } from '../constants';
+import { SPACING, TYPOGRAPHY, BORDER_RADIUS, CARDS, BUTTONS } from '../constants';
 import { IconArrowLeft, IconAdd, IconTrash, IconPlay } from '../components/icons';
 import { useTranslation } from '../i18n/useTranslation';
 import { formatWeightForLoad } from '../utils/weight';
@@ -12,6 +12,8 @@ import { WarmupItemEditorSheet } from '../components/WarmupItemEditorSheet';
 import { AddWarmupToCycleSheet } from '../components/AddWarmupToCycleSheet';
 import type { WarmupItem } from '../types/training';
 import { createNewExerciseItem, getDisplayValuesFromItem, migrateItemsArray } from '../utils/exerciseMigration';
+import { useAppTheme } from '../theme/useAppTheme';
+import { getAppThemeFromStore } from '../theme/getAppThemeFromStore';
 
 // Warmup Templates
 const WARMUP_TEMPLATES = {
@@ -55,6 +57,7 @@ type RouteParams = {
 };
 
 export function WarmupEditorScreen() {
+  const { colors: themeColors } = useAppTheme();
   const navigation = useNavigation();
   const route = useRoute<RouteProp<RouteParams, 'WarmupEditor'>>();
   const insets = useSafeAreaInsets();
@@ -323,7 +326,7 @@ export function WarmupEditorScreen() {
         <View style={[styles.header, { paddingTop: insets.top }]}>
           <View style={styles.topBar}>
             <TouchableOpacity onPress={handleBack} style={styles.backButton}>
-              <IconArrowLeft size={24} color={COLORS.text} />
+              <IconArrowLeft size={24} color={themeColors.text} />
             </TouchableOpacity>
             <View style={styles.backButton} />
           </View>
@@ -341,7 +344,7 @@ export function WarmupEditorScreen() {
       <View style={[styles.header, { paddingTop: insets.top }]}>
         <View style={styles.topBar}>
           <TouchableOpacity onPress={handleBack} style={styles.backButton}>
-            <IconArrowLeft size={24} color={COLORS.text} />
+            <IconArrowLeft size={24} color={themeColors.text} />
           </TouchableOpacity>
           <View style={styles.backButton} />
         </View>
@@ -380,7 +383,7 @@ export function WarmupEditorScreen() {
                       activeOpacity={1}
                     >
                       <Text style={styles.applyButtonText}>{t('useTemplate')}</Text>
-                      <IconPlay size={10} color={COLORS.accentPrimary} />
+                      <IconPlay size={10} color={themeColors.accentPrimary} />
                     </TouchableOpacity>
                   </View>
                 </View>
@@ -432,7 +435,7 @@ export function WarmupEditorScreen() {
                         onPress={() => handleDeleteItem(item.id)}
                         activeOpacity={0.7}
                       >
-                        <IconTrash size={20} color={COLORS.error} />
+                        <IconTrash size={20} color={themeColors.error} />
                       </TouchableOpacity>
                     </View>
                   </TouchableOpacity>
@@ -453,7 +456,7 @@ export function WarmupEditorScreen() {
                     onPress={() => handleAddToCycle(item.id)}
                     activeOpacity={0.7}
                   >
-                    <IconAdd size={16} color={COLORS.accentPrimary} />
+                    <IconAdd size={16} color={themeColors.accentPrimary} />
                     <Text style={styles.addToCycleText}>{t('addToCycle')}</Text>
                   </TouchableOpacity>
                 )}
@@ -468,7 +471,7 @@ export function WarmupEditorScreen() {
           onPress={handleAddItem}
           activeOpacity={1}
         >
-          <IconAdd size={20} color={COLORS.text} />
+          <IconAdd size={20} color={themeColors.text} />
           <Text style={styles.addItemText}>{t('createNew')}</Text>
         </TouchableOpacity>
       </ScrollView>
@@ -507,10 +510,11 @@ export function WarmupEditorScreen() {
   );
 }
 
+const themeColors = getAppThemeFromStore().colors;
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.backgroundCanvas,
+    backgroundColor: themeColors.backgroundCanvas,
   },
   header: {
     paddingBottom: 0,
@@ -536,12 +540,12 @@ const styles = StyleSheet.create({
   },
   pageTitle: {
     ...TYPOGRAPHY.h2,
-    color: COLORS.text,
+    color: themeColors.text,
     marginBottom: SPACING.xs,
   },
   pageSubtitle: {
     ...TYPOGRAPHY.body,
-    color: COLORS.textMeta,
+    color: themeColors.textMeta,
   },
   scrollView: {
     flex: 1,
@@ -555,12 +559,12 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     ...TYPOGRAPHY.h3,
-    color: COLORS.text,
+    color: themeColors.text,
     marginBottom: SPACING.sm,
   },
   emptySubtext: {
     ...TYPOGRAPHY.body,
-    color: COLORS.textMeta,
+    color: themeColors.textMeta,
     textAlign: 'center',
   },
   warmupItemCard: {
@@ -583,7 +587,7 @@ const styles = StyleSheet.create({
   },
   warmupItemNumber: {
     ...TYPOGRAPHY.h3,
-    color: COLORS.textMeta,
+    color: themeColors.textMeta,
     width: 32,
   },
   warmupItemInfo: {
@@ -597,12 +601,12 @@ const styles = StyleSheet.create({
   },
   warmupItemName: {
     ...TYPOGRAPHY.body,
-    color: COLORS.text,
+    color: themeColors.text,
     fontWeight: '600',
   },
   warmupItemDetails: {
     ...TYPOGRAPHY.meta,
-    color: COLORS.textMeta,
+    color: themeColors.textMeta,
   },
   deleteButton: {
     width: 40,
@@ -615,7 +619,7 @@ const styles = StyleSheet.create({
     height: 56,
     borderRadius: BORDER_RADIUS.lg,
     borderWidth: 1,
-    borderColor: COLORS.textMeta,
+    borderColor: themeColors.textMeta,
     borderStyle: 'dashed',
     backgroundColor: 'transparent',
     flexDirection: 'row',
@@ -626,15 +630,15 @@ const styles = StyleSheet.create({
   },
   addItemText: {
     ...TYPOGRAPHY.metaBold,
-    color: COLORS.text,
+    color: themeColors.text,
   },
   cycleBadge: {
     width: 20,
     height: 20,
     borderRadius: 10,
-    backgroundColor: COLORS.accentPrimaryDimmed,
+    backgroundColor: themeColors.accentPrimaryDimmed,
     borderWidth: 1,
-    borderColor: COLORS.accentPrimary,
+    borderColor: themeColors.accentPrimary,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -642,7 +646,7 @@ const styles = StyleSheet.create({
     ...TYPOGRAPHY.meta,
     fontSize: 10,
     fontWeight: '600',
-    color: COLORS.accentPrimary,
+    color: themeColors.accentPrimary,
   },
   cycleConnector: {
     flexDirection: 'row',
@@ -655,13 +659,13 @@ const styles = StyleSheet.create({
   cycleConnectorLine: {
     width: 2,
     height: 24,
-    backgroundColor: COLORS.accentPrimaryDimmed,
+    backgroundColor: themeColors.accentPrimaryDimmed,
   },
   cycleConnectorText: {
     ...TYPOGRAPHY.meta,
     fontSize: 10,
     fontWeight: '600',
-    color: COLORS.accentPrimary,
+    color: themeColors.accentPrimary,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
@@ -672,10 +676,10 @@ const styles = StyleSheet.create({
     gap: SPACING.xs,
     paddingVertical: SPACING.sm,
     paddingHorizontal: SPACING.md,
-    backgroundColor: COLORS.accentPrimaryDimmed,
+    backgroundColor: themeColors.accentPrimaryDimmed,
     borderRadius: BORDER_RADIUS.md,
     borderWidth: 1,
-    borderColor: COLORS.accentPrimary,
+    borderColor: themeColors.accentPrimary,
     borderStyle: 'dashed',
     marginTop: SPACING.sm,
     marginBottom: SPACING.md,
@@ -683,14 +687,14 @@ const styles = StyleSheet.create({
   addToCycleText: {
     ...TYPOGRAPHY.meta,
     fontWeight: '600',
-    color: COLORS.accentPrimary,
+    color: themeColors.accentPrimary,
   },
   templatesSection: {
     marginBottom: SPACING.xxxl,
   },
   sectionTitle: {
     ...TYPOGRAPHY.h3,
-    color: COLORS.text,
+    color: themeColors.text,
     marginBottom: SPACING.md,
   },
   templatesGrid: {
@@ -709,12 +713,12 @@ const styles = StyleSheet.create({
   },
   templateName: {
     ...TYPOGRAPHY.h3,
-    color: COLORS.text,
+    color: themeColors.text,
     marginBottom: 4,
   },
   templateCount: {
     ...TYPOGRAPHY.body,
-    color: COLORS.textMeta,
+    color: themeColors.textMeta,
   },
   applyButton: {
     flexDirection: 'row',
@@ -724,6 +728,6 @@ const styles = StyleSheet.create({
   },
   applyButtonText: {
     ...TYPOGRAPHY.metaBold,
-    color: COLORS.accentPrimary,
+    color: themeColors.accentPrimary,
   },
 });

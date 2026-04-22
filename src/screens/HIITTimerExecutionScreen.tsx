@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback , useMemo} from 'react';
 import {
   View,
   Text,
@@ -14,7 +14,7 @@ import { Audio } from 'expo-av';
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import dayjs from 'dayjs';
 import { useStore } from '../store';
-import { COLORS, SPACING, TYPOGRAPHY } from '../constants';
+import { SPACING, TYPOGRAPHY } from '../constants';
 import { IconArrowLeft, IconMenu, IconEdit, IconTrash } from '../components/icons';
 import { useTranslation } from '../i18n/useTranslation';
 import { ActionSheet } from '../components/common/ActionSheet';
@@ -37,6 +37,7 @@ import { ExecutionScreenShell } from '../components/execution/ExecutionScreenShe
 import { ExecutionControlButton } from '../components/execution/ExecutionControlButton';
 import { EXECUTION_CTA_ROW_GAP } from '../components/execution/executionCtaTokens';
 import { useAppTheme } from '../theme/useAppTheme';
+import { getAppThemeFromStore } from '../theme/getAppThemeFromStore';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'HIITTimerExecution'>;
 
@@ -94,14 +95,14 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
   const isRestPhase = currentPhase === 'workRest' || currentPhase === 'roundRest';
   const timerPageBackground = isV2Theme
     ? (isRestPhase ? themeColors.accentPrimary : themeColors.containerTertiary)
-    : (isRestPhase ? COLORS.accentPrimary : COLORS.backgroundTimer);
+    : (isRestPhase ? themeColors.accentPrimary : themeColors.backgroundTimer);
   const timerCardBackground = isV2Theme ? themeColors.containerPrimary : explore.surfaceCurrentCard;
   const timerInk = isV2Theme ? themeColors.containerTertiary : LIGHT_COLORS.text;
-  const timerMetaInk = isV2Theme ? themeColors.containerTertiary : COLORS.accentSecondary;
-  const timerValueInk = isV2Theme ? themeColors.containerTertiary : COLORS.containerSecondary;
+  const timerMetaInk = isV2Theme ? themeColors.containerTertiary : themeColors.accentSecondary;
+  const timerValueInk = isV2Theme ? themeColors.containerTertiary : themeColors.containerSecondary;
   const timerHeaderInk = isV2Theme ? themeColors.containerPrimary : '#1F1F1F';
-  const miniProgressBg = isV2Theme ? themeColors.containerPrimaryDark : COLORS.containerPrimaryDark;
-  const miniProgressFill = isV2Theme ? themeColors.containerTertiary : COLORS.canvasLight;
+  const miniProgressBg = isV2Theme ? themeColors.containerPrimaryDark : themeColors.containerPrimaryDark;
+  const miniProgressFill = isV2Theme ? themeColors.containerTertiary : themeColors.canvasLight;
   const heroLayoutProgress = useSharedValue(1);
   const heroWorkBlueProgress = useSharedValue(0);
   const restTransitionProgress = useSharedValue(isRestPhase ? 1 : 0);
@@ -1433,21 +1434,21 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
                   <Reanimated.View
                     style={[
                       styles.ambientCircle,
-                      { backgroundColor: isV2Theme ? themeColors.containerTertiary : COLORS.backgroundTimer },
+                      { backgroundColor: isV2Theme ? themeColors.containerTertiary : themeColors.backgroundTimer },
                       ambientLeftCircleStyle,
                     ]}
                   />
                   <Reanimated.View
                     style={[
                       styles.ambientCircle,
-                      { backgroundColor: isV2Theme ? themeColors.containerTertiary : COLORS.backgroundTimer },
+                      { backgroundColor: isV2Theme ? themeColors.containerTertiary : themeColors.backgroundTimer },
                       ambientRightCircleStyle,
                     ]}
                   />
                   <Reanimated.View
                     style={[
                       styles.ambientCircle,
-                      { backgroundColor: isV2Theme ? themeColors.containerTertiary : COLORS.backgroundTimer },
+                      { backgroundColor: isV2Theme ? themeColors.containerTertiary : themeColors.backgroundTimer },
                       ambientTrailingCircleStyle,
                     ]}
                   />
@@ -1485,7 +1486,7 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
             onPress: handleEdit,
           },
           {
-            icon: <IconTrash size={24} color={COLORS.signalNegative} />,
+            icon: <IconTrash size={24} color={themeColors.signalNegative} />,
             label: t('delete'),
             onPress: handleDelete,
             destructive: true,
@@ -1496,10 +1497,11 @@ export default function HIITTimerExecutionScreen({ navigation, route }: Props) {
   );
 }
 
+const themeColors = getAppThemeFromStore().colors;
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.backgroundCanvas,
+    backgroundColor: themeColors.backgroundCanvas,
   },
   innerContainer: {
     flex: 1,
@@ -1570,10 +1572,10 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   cardMetaLabel: {
-    color: COLORS.accentSecondary,
+    color: themeColors.accentSecondary,
   },
   cardMetaValue: {
-    color: COLORS.containerSecondary,
+    color: themeColors.containerSecondary,
   },
   cardMiniTimeRow: {
     flexDirection: 'row',
@@ -1584,7 +1586,7 @@ const styles = StyleSheet.create({
   },
   cardMiniTime: {
     ...TYPOGRAPHY.legal,
-    color: COLORS.containerSecondary,
+    color: themeColors.containerSecondary,
   },
   cardMiniProgressCircle: {
     opacity: 0.95,
@@ -1593,7 +1595,7 @@ const styles = StyleSheet.create({
     width: 16,
     height: 16,
     borderRadius: 8,
-    backgroundColor: COLORS.containerPrimaryDark,
+    backgroundColor: themeColors.containerPrimaryDark,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1619,7 +1621,7 @@ const styles = StyleSheet.create({
   ambientCircle: {
     position: 'absolute',
     top: 0,
-    backgroundColor: COLORS.backgroundTimer,
+    backgroundColor: themeColors.backgroundTimer,
   },
   restDiamond: {
     position: 'absolute',
@@ -1630,7 +1632,7 @@ const styles = StyleSheet.create({
     marginLeft: -99,
     marginTop: -99,
     borderRadius: 10,
-    backgroundColor: COLORS.accentPrimary,
+    backgroundColor: themeColors.accentPrimary,
   },
   mainTimerCircle: {
     position: 'absolute',
@@ -1650,18 +1652,18 @@ const styles = StyleSheet.create({
   },
   primaryActionBtn: {
     borderRadius: 14,
-    backgroundColor: COLORS.accentPrimary,
+    backgroundColor: themeColors.accentPrimary,
     flexShrink: 0,
   },
   primaryActionLabel: {
-    color: COLORS.backgroundCanvas,
+    color: themeColors.backgroundCanvas,
   },
   skipActionBtn: {
     justifyContent: 'center',
     flexShrink: 0,
   },
   skipActionLabel: {
-    color: COLORS.accentPrimary,
+    color: themeColors.accentPrimary,
   },
   completeMessageContainer: {
     flex: 1,

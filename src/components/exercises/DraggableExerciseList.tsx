@@ -8,9 +8,11 @@ import {
   PanResponder,
   PanResponderInstance,
 } from 'react-native';
-import { COLORS, SPACING, TYPOGRAPHY, CARDS, BORDER_RADIUS } from '../../constants';
+import { SPACING, TYPOGRAPHY, CARDS, BORDER_RADIUS } from '../../constants';
 import { IconGripVertical, IconSwap, IconTrash, IconEdit, IconAdd } from '../icons';
 import { useTranslation } from '../../i18n/useTranslation';
+import { useAppTheme } from '../../theme/useAppTheme';
+import { getAppThemeFromStore } from '../../theme/getAppThemeFromStore';
 
 export type DraggableExerciseItem = {
   id: string;
@@ -334,7 +336,7 @@ export function DraggableExerciseList({
                         {...panResponder.panHandlers}
                         onStartShouldSetResponder={() => true}
                       >
-                        <IconGripVertical size={20} color={isDragging ? COLORS.text : COLORS.textMeta} />
+                        <IconGripVertical size={20} color={isDragging ? themeColors.text : themeColors.textMeta} />
                       </View>
                     </TouchableOpacity>
                   </View>
@@ -357,7 +359,7 @@ export function DraggableExerciseList({
                       style={styles.actionButton}
                       activeOpacity={1}
                     >
-                      <IconSwap size={20} color={COLORS.text} />
+                      <IconSwap size={20} color={themeColors.text} />
                     </TouchableOpacity>
                   )}
                   {actionButtons.includes('edit') && onEdit && (
@@ -366,7 +368,7 @@ export function DraggableExerciseList({
                       style={styles.actionButton}
                       activeOpacity={1}
                     >
-                      <IconEdit size={20} color={COLORS.textMeta} />
+                      <IconEdit size={20} color={themeColors.textMeta} />
                     </TouchableOpacity>
                   )}
                   {actionButtons.includes('delete') && (
@@ -375,7 +377,7 @@ export function DraggableExerciseList({
                       style={styles.actionButton}
                       activeOpacity={1}
                     >
-                      <IconTrash size={20} color={COLORS.error} />
+                      <IconTrash size={20} color={themeColors.error} />
                     </TouchableOpacity>
                   )}
                 </Animated.View>
@@ -397,7 +399,7 @@ export function DraggableExerciseList({
                 onPress={() => onAddToCycle?.(exercise.id)}
                 activeOpacity={0.7}
               >
-                <IconAdd size={16} color={COLORS.accentPrimary} />
+                <IconAdd size={16} color={themeColors.accentPrimary} />
                 <Text style={styles.addToCycleText}>{t('addToCycle')}</Text>
               </TouchableOpacity>
             )}
@@ -415,6 +417,7 @@ export function DraggableExerciseList({
   );
 }
 
+const themeColors = getAppThemeFromStore().colors;
 const styles = StyleSheet.create({
   exerciseItemWrapper: {
     marginBottom: SPACING.md,
@@ -467,9 +470,9 @@ const styles = StyleSheet.create({
     width: 24,
     height: 24,
     borderRadius: 12,
-    backgroundColor: COLORS.accentPrimaryDimmed,
+    backgroundColor: themeColors.accentPrimaryDimmed,
     borderWidth: 1,
-    borderColor: COLORS.accentPrimary,
+    borderColor: themeColors.accentPrimary,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -477,7 +480,7 @@ const styles = StyleSheet.create({
     ...TYPOGRAPHY.meta,
     fontSize: 11,
     fontWeight: '600',
-    color: COLORS.accentPrimary,
+    color: themeColors.accentPrimary,
   },
   cycleConnector: {
     flexDirection: 'row',
@@ -490,13 +493,13 @@ const styles = StyleSheet.create({
   cycleConnectorLine: {
     width: 2,
     height: 24,
-    backgroundColor: COLORS.accentPrimaryDimmed,
+    backgroundColor: themeColors.accentPrimaryDimmed,
   },
   cycleConnectorText: {
     ...TYPOGRAPHY.meta,
     fontSize: 10,
     fontWeight: '600',
-    color: COLORS.accentPrimary,
+    color: themeColors.accentPrimary,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
@@ -507,10 +510,10 @@ const styles = StyleSheet.create({
     gap: SPACING.xs,
     paddingVertical: SPACING.sm,
     paddingHorizontal: SPACING.md,
-    backgroundColor: COLORS.accentPrimaryDimmed,
+    backgroundColor: themeColors.accentPrimaryDimmed,
     borderRadius: BORDER_RADIUS.md,
     borderWidth: 1,
-    borderColor: COLORS.accentPrimary,
+    borderColor: themeColors.accentPrimary,
     borderStyle: 'dashed',
     marginTop: SPACING.sm,
     marginBottom: SPACING.md,
@@ -518,7 +521,7 @@ const styles = StyleSheet.create({
   addToCycleText: {
     ...TYPOGRAPHY.meta,
     fontWeight: '600',
-    color: COLORS.accentPrimary,
+    color: themeColors.accentPrimary,
   },
   gripHandle: {
     position: 'absolute',
@@ -531,7 +534,7 @@ const styles = StyleSheet.create({
   },
   exerciseName: {
     ...TYPOGRAPHY.body,
-    color: COLORS.text,
+    color: themeColors.text,
     flex: 1,
   },
   exerciseActions: {

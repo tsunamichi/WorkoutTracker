@@ -5,11 +5,13 @@ import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import * as Haptics from 'expo-haptics';
 import dayjs from 'dayjs';
 import { useStore } from '../store';
-import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS, CARDS, BUTTONS } from '../constants';
+import { SPACING, TYPOGRAPHY, BORDER_RADIUS, CARDS, BUTTONS } from '../constants';
 import { IconArrowLeft, IconCalendar, IconTrash, IconEdit, IconAdd } from '../components/icons';
 import { useTranslation } from '../i18n/useTranslation';
 import type { WorkoutTemplateExercise } from '../types/training';
 import { DraggableExerciseList, type DraggableExerciseItem, ExerciseSettingsSheet, AddToCycleSheet } from '../components/exercises';
+import { useAppTheme } from '../theme/useAppTheme';
+import { getAppThemeFromStore } from '../theme/getAppThemeFromStore';
 
 // Enable LayoutAnimation on Android
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -23,6 +25,7 @@ type RouteParams = {
 };
 
 export function WorkoutTemplateDetailScreen() {
+  const { colors: themeColors } = useAppTheme();
   const navigation = useNavigation();
   const route = useRoute<RouteProp<RouteParams, 'WorkoutTemplateDetail'>>();
   const insets = useSafeAreaInsets();
@@ -306,7 +309,7 @@ export function WorkoutTemplateDetailScreen() {
         <View style={[styles.header, { paddingTop: insets.top }]}>
           <View style={styles.topBar}>
             <TouchableOpacity onPress={handleBack} style={styles.backButton}>
-              <IconArrowLeft size={24} color={COLORS.text} />
+              <IconArrowLeft size={24} color={themeColors.text} />
             </TouchableOpacity>
             <View style={styles.backButton} />
           </View>
@@ -342,11 +345,11 @@ export function WorkoutTemplateDetailScreen() {
         {/* Top Bar with Back and Delete buttons */}
         <View style={styles.topBar}>
           <TouchableOpacity onPress={handleBack} style={styles.backButton}>
-            <IconArrowLeft size={24} color={COLORS.text} />
+            <IconArrowLeft size={24} color={themeColors.text} />
           </TouchableOpacity>
           <TouchableOpacity onPress={handleDelete} style={styles.headerDeleteButton}>
             <Text style={styles.deleteLabel}>{t('deleteWorkout')}</Text>
-            <IconTrash size={24} color={COLORS.error} />
+            <IconTrash size={24} color={themeColors.error} />
           </TouchableOpacity>
         </View>
         
@@ -358,7 +361,7 @@ export function WorkoutTemplateDetailScreen() {
         >
           <View style={styles.pageTitleRow}>
             <Text style={styles.pageTitle}>{template.name}</Text>
-            <IconEdit size={20} color={COLORS.textMeta} />
+            <IconEdit size={20} color={themeColors.textMeta} />
           </View>
         </TouchableOpacity>
       </View>
@@ -409,7 +412,7 @@ export function WorkoutTemplateDetailScreen() {
             }}
             activeOpacity={1}
           >
-            <IconAdd size={20} color={COLORS.text} />
+            <IconAdd size={20} color={themeColors.text} />
             <Text style={styles.addExerciseText}>{t('addExercise')}</Text>
           </TouchableOpacity>
         </View>
@@ -420,7 +423,7 @@ export function WorkoutTemplateDetailScreen() {
       {/* Bottom CTA */}
       <View style={[styles.bottomCTA, { paddingBottom: insets.bottom || 16 }]}>
         <TouchableOpacity style={styles.scheduleButton} onPress={handleSchedule}>
-          <IconCalendar size={20} color={COLORS.backgroundCanvas} />
+          <IconCalendar size={20} color={themeColors.backgroundCanvas} />
           <Text style={styles.scheduleButtonText}>{t('scheduleForToday')}</Text>
         </TouchableOpacity>
       </View>
@@ -468,10 +471,11 @@ export function WorkoutTemplateDetailScreen() {
   );
 }
 
+const themeColors = getAppThemeFromStore().colors;
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.backgroundCanvas,
+    backgroundColor: themeColors.backgroundCanvas,
   },
   header: {
     paddingBottom: SPACING.md,
@@ -499,7 +503,7 @@ const styles = StyleSheet.create({
   },
   deleteLabel: {
     ...TYPOGRAPHY.body,
-    color: COLORS.error,
+    color: themeColors.error,
   },
   pageTitleContainer: {
     paddingHorizontal: SPACING.xxl,
@@ -513,7 +517,7 @@ const styles = StyleSheet.create({
   },
   pageTitle: {
     ...TYPOGRAPHY.h2,
-    color: COLORS.text,
+    color: themeColors.text,
   },
   scrollView: {
     flex: 1,
@@ -532,12 +536,12 @@ const styles = StyleSheet.create({
   },
   statValue: {
     ...TYPOGRAPHY.h1,
-    color: COLORS.text,
+    color: themeColors.text,
     marginBottom: SPACING.xs,
   },
   statLabel: {
     ...TYPOGRAPHY.meta,
-    color: COLORS.textMeta,
+    color: themeColors.textMeta,
     textAlign: 'center',
   },
   section: {
@@ -551,14 +555,14 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     ...TYPOGRAPHY.meta,
-    color: COLORS.textMeta,
+    color: themeColors.textMeta,
   },
   addExerciseButton: {
     width: '100%',
     height: 56,
     borderRadius: BORDER_RADIUS.lg,
     borderWidth: 1,
-    borderColor: COLORS.textMeta,
+    borderColor: themeColors.textMeta,
     borderStyle: 'dashed',
     backgroundColor: 'transparent',
     flexDirection: 'row',
@@ -569,7 +573,7 @@ const styles = StyleSheet.create({
   },
   addExerciseText: {
     ...TYPOGRAPHY.metaBold,
-    color: COLORS.text,
+    color: themeColors.text,
   },
   bottomCTA: {
     position: 'absolute',
@@ -586,6 +590,6 @@ const styles = StyleSheet.create({
   },
   scheduleButtonText: {
     ...TYPOGRAPHY.metaBold,
-    color: COLORS.backgroundCanvas,
+    color: themeColors.backgroundCanvas,
   },
 });

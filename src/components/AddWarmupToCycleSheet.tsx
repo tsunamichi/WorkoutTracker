@@ -7,7 +7,7 @@ import {
   ScrollView,
   TextInput,
 } from 'react-native';
-import { SPACING, COLORS, TYPOGRAPHY, BORDER_RADIUS } from '../constants';
+import { SPACING, TYPOGRAPHY, BORDER_RADIUS } from '../constants';
 import { IconAddLine, IconMinusLine } from './icons';
 import { BottomDrawer } from './common/BottomDrawer';
 import { Toggle } from './Toggle';
@@ -15,6 +15,8 @@ import { formatWeightForLoad, toDisplayWeight, fromDisplayWeight } from '../util
 import { useTranslation } from '../i18n/useTranslation';
 import { useStore } from '../store';
 import type { WarmupItem_DEPRECATED as WarmupItem } from '../types/training';
+import { useAppTheme } from '../theme/useAppTheme';
+import { getAppThemeFromStore } from '../theme/getAppThemeFromStore';
 
 interface AddWarmupToCycleSheetProps {
   visible: boolean;
@@ -106,7 +108,7 @@ export const AddWarmupToCycleSheet = ({
               value={exerciseName}
               onChangeText={setExerciseName}
               placeholder={t('warmupExercisePlaceholder')}
-              placeholderTextColor={COLORS.textMeta}
+              placeholderTextColor={themeColors.textMeta}
               autoCapitalize="words"
               autoFocus
             />
@@ -144,7 +146,7 @@ export const AddWarmupToCycleSheet = ({
                   >
                     <View style={styles.adjustButton}>
                       <View style={styles.adjustButtonInner}>
-                        <IconMinusLine size={24} color={COLORS.accentPrimary} />
+                        <IconMinusLine size={24} color={themeColors.accentPrimary} />
                       </View>
                     </View>
                   </TouchableOpacity>
@@ -155,7 +157,7 @@ export const AddWarmupToCycleSheet = ({
                   >
                     <View style={styles.adjustButton}>
                       <View style={styles.adjustButtonInner}>
-                        <IconAddLine size={24} color={COLORS.accentPrimary} />
+                        <IconAddLine size={24} color={themeColors.accentPrimary} />
                       </View>
                     </View>
                   </TouchableOpacity>
@@ -178,7 +180,7 @@ export const AddWarmupToCycleSheet = ({
                   >
                     <View style={styles.adjustButton}>
                       <View style={styles.adjustButtonInner}>
-                        <IconMinusLine size={24} color={COLORS.accentPrimary} />
+                        <IconMinusLine size={24} color={themeColors.accentPrimary} />
                       </View>
                     </View>
                   </TouchableOpacity>
@@ -189,7 +191,7 @@ export const AddWarmupToCycleSheet = ({
                   >
                     <View style={styles.adjustButton}>
                       <View style={styles.adjustButtonInner}>
-                        <IconAddLine size={24} color={COLORS.accentPrimary} />
+                        <IconAddLine size={24} color={themeColors.accentPrimary} />
                       </View>
                     </View>
                   </TouchableOpacity>
@@ -214,6 +216,7 @@ export const AddWarmupToCycleSheet = ({
   );
 };
 
+const themeColors = getAppThemeFromStore().colors;
 const styles = StyleSheet.create({
   drawerContent: {
     flex: 1,
@@ -228,16 +231,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.xxl,
     paddingVertical: SPACING.lg,
     borderBottomWidth: 1,
-    borderBottomColor: COLORS.borderDimmed,
+    borderBottomColor: themeColors.borderDimmed,
   },
   title: {
     ...TYPOGRAPHY.h3,
-    color: COLORS.text,
+    color: themeColors.text,
     marginBottom: SPACING.xs,
   },
   subtitle: {
     ...TYPOGRAPHY.meta,
-    color: COLORS.textMeta,
+    color: themeColors.textMeta,
   },
   field: {
     paddingHorizontal: SPACING.xxl,
@@ -245,17 +248,17 @@ const styles = StyleSheet.create({
   },
   label: {
     ...TYPOGRAPHY.meta,
-    color: COLORS.textMeta,
+    color: themeColors.textMeta,
     marginBottom: SPACING.sm,
     textTransform: 'capitalize',
   },
   input: {
     ...TYPOGRAPHY.body,
-    color: COLORS.text,
-    backgroundColor: COLORS.activeCard,
+    color: themeColors.text,
+    backgroundColor: themeColors.activeCard,
     borderRadius: BORDER_RADIUS.md,
     borderWidth: 1,
-    borderColor: COLORS.borderDimmed,
+    borderColor: themeColors.borderDimmed,
     padding: SPACING.md,
     minHeight: 48,
   },
@@ -268,17 +271,17 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
   },
   cycleInfoBanner: {
-    backgroundColor: COLORS.accentPrimaryDimmed,
+    backgroundColor: themeColors.accentPrimaryDimmed,
     borderRadius: BORDER_RADIUS.md,
     padding: SPACING.md,
   },
   cycleInfoText: {
     ...TYPOGRAPHY.meta,
-    color: COLORS.accentPrimary,
+    color: themeColors.accentPrimary,
     textAlign: 'center',
   },
   valuesCard: {
-    backgroundColor: COLORS.activeCard,
+    backgroundColor: themeColors.activeCard,
     borderRadius: BORDER_RADIUS.lg,
     borderCurve: 'continuous',
     padding: 24,
@@ -295,11 +298,11 @@ const styles = StyleSheet.create({
   },
   adjustValueText: {
     ...TYPOGRAPHY.h1,
-    color: COLORS.text,
+    color: themeColors.text,
   },
   adjustUnit: {
     ...TYPOGRAPHY.h1,
-    color: COLORS.textMeta,
+    color: themeColors.textMeta,
   },
   adjustButtons: {
     flexDirection: 'row',
@@ -324,13 +327,13 @@ const styles = StyleSheet.create({
     height: 48,
     borderRadius: BORDER_RADIUS.md,
     borderCurve: 'continuous',
-    backgroundColor: COLORS.accentPrimaryDimmed,
+    backgroundColor: themeColors.accentPrimaryDimmed,
     alignItems: 'center',
     justifyContent: 'center',
   },
   adjustDivider: {
     height: 1,
-    backgroundColor: COLORS.borderDimmed,
+    backgroundColor: themeColors.borderDimmed,
     marginVertical: 16,
   },
   addButtonContainer: {
@@ -339,7 +342,7 @@ const styles = StyleSheet.create({
     paddingTop: SPACING.lg,
   },
   addButton: {
-    backgroundColor: COLORS.accentPrimary,
+    backgroundColor: themeColors.accentPrimary,
     borderRadius: BORDER_RADIUS.md,
     paddingVertical: SPACING.lg,
     alignItems: 'center',
@@ -349,6 +352,6 @@ const styles = StyleSheet.create({
   },
   addButtonText: {
     ...TYPOGRAPHY.metaBold,
-    color: COLORS.backgroundCanvas,
+    color: themeColors.backgroundCanvas,
   },
 });

@@ -609,7 +609,6 @@ const styles = StyleSheet.create({
   },
   currentValueUnit: {
     ...TYPOGRAPHY.h2,
-    fontWeight: '500',
     marginTop: 14,
   },
   insightCardText: {

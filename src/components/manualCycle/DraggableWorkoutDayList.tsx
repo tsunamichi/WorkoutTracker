@@ -8,9 +8,11 @@ import {
   PanResponder,
   PanResponderInstance,
 } from 'react-native';
-import { COLORS, SPACING, TYPOGRAPHY, CARDS } from '../../constants';
+import { SPACING, TYPOGRAPHY, CARDS } from '../../constants';
 import { IconGripVertical, IconCheck } from '../icons';
 import { Weekday } from '../../types/manualCycle';
+import { useAppTheme } from '../../theme/useAppTheme';
+import { getAppThemeFromStore } from '../../theme/getAppThemeFromStore';
 
 export type DraggableWorkoutDay = {
   weekday: Weekday;
@@ -197,7 +199,7 @@ export function DraggableWorkoutDayList({
                       >
                         <IconGripVertical 
                           size={20} 
-                          color={isDragging ? COLORS.text : COLORS.textMeta} 
+                          color={isDragging ? themeColors.text : themeColors.textMeta} 
                         />
                       </View>
                     </View>
@@ -208,7 +210,7 @@ export function DraggableWorkoutDayList({
                   </View>
                   {isComplete && (
                     <View style={styles.dayCheckIcon}>
-                      <IconCheck size={24} color={COLORS.successBright} />
+                      <IconCheck size={24} color={themeColors.successBright} />
                     </View>
                   )}
                   {!isComplete && (
@@ -235,6 +237,7 @@ export function DraggableWorkoutDayList({
   );
 }
 
+const themeColors = getAppThemeFromStore().colors;
 const styles = StyleSheet.create({
   dayCardWrapper: {
     marginBottom: SPACING.md,
@@ -290,23 +293,23 @@ const styles = StyleSheet.create({
   },
   dayLabel: {
     ...TYPOGRAPHY.h2,
-    color: COLORS.text,
+    color: themeColors.text,
     flex: 1,
     paddingRight: 40, // Make room for grip handle
   },
   exerciseCount: {
     ...TYPOGRAPHY.meta,
-    color: COLORS.textMeta,
+    color: themeColors.textMeta,
   },
   dayActionText: {
     ...TYPOGRAPHY.metaBold,
-    color: COLORS.accentPrimary,
+    color: themeColors.accentPrimary,
     textAlign: 'left',
   },
   dayActionBar: {
     width: '100%',
     height: 48,
-    backgroundColor: COLORS.accentPrimaryDimmed,
+    backgroundColor: themeColors.accentPrimaryDimmed,
     paddingHorizontal: 20,
     borderTopLeftRadius: 0,
     borderTopRightRadius: 0,

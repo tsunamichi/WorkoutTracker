@@ -2,9 +2,11 @@ import React, { useMemo, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, FlatList, Alert } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useStore } from '../store';
-import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS } from '../constants';
+import { SPACING, TYPOGRAPHY, BORDER_RADIUS } from '../constants';
 import { IconArrowLeft, IconCheck } from '../components/icons';
 import { useTranslation } from '../i18n/useTranslation';
+import { useAppTheme } from '../theme/useAppTheme';
+import { getAppThemeFromStore } from '../theme/getAppThemeFromStore';
 
 const MAX_PINNED = 4;
 
@@ -57,7 +59,7 @@ export function EditKeyLiftsScreen({ navigation }: any) {
     <View style={styles.container}>
       <View style={[styles.header, { paddingTop: insets.top }]}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton} activeOpacity={1}>
-          <IconArrowLeft size={24} color={COLORS.text} />
+          <IconArrowLeft size={24} color={themeColors.text} />
         </TouchableOpacity>
         <Text style={styles.title}>Edit Key Lifts</Text>
         <TouchableOpacity onPress={handleSave} style={styles.saveBtn} activeOpacity={0.7}>
@@ -84,7 +86,7 @@ export function EditKeyLiftsScreen({ navigation }: any) {
             >
               <Text style={styles.exerciseName}>{item.name}</Text>
               <View style={[styles.checkbox, isSelected && styles.checkboxSelected]}>
-                {isSelected && <IconCheck size={16} color={COLORS.backgroundCanvas} />}
+                {isSelected && <IconCheck size={16} color={themeColors.backgroundCanvas} />}
               </View>
             </TouchableOpacity>
           );
@@ -101,10 +103,11 @@ export function EditKeyLiftsScreen({ navigation }: any) {
   );
 }
 
+const themeColors = getAppThemeFromStore().colors;
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.backgroundCanvas,
+    backgroundColor: themeColors.backgroundCanvas,
   },
   header: {
     paddingHorizontal: SPACING.xxl,
@@ -122,7 +125,7 @@ const styles = StyleSheet.create({
   },
   title: {
     ...TYPOGRAPHY.h2,
-    color: COLORS.text,
+    color: themeColors.text,
   },
   saveBtn: {
     paddingHorizontal: SPACING.md,
@@ -130,11 +133,11 @@ const styles = StyleSheet.create({
   },
   saveBtnText: {
     ...TYPOGRAPHY.bodyBold,
-    color: COLORS.accentPrimary,
+    color: themeColors.accentPrimary,
   },
   hint: {
     ...TYPOGRAPHY.body,
-    color: COLORS.textMeta,
+    color: themeColors.textMeta,
     paddingHorizontal: SPACING.xxl,
     marginBottom: SPACING.lg,
   },
@@ -147,11 +150,11 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingVertical: SPACING.md,
     borderBottomWidth: 1,
-    borderBottomColor: COLORS.borderDimmed,
+    borderBottomColor: themeColors.borderDimmed,
   },
   exerciseName: {
     ...TYPOGRAPHY.body,
-    color: COLORS.text,
+    color: themeColors.text,
     flex: 1,
     marginRight: SPACING.md,
   },
@@ -160,13 +163,13 @@ const styles = StyleSheet.create({
     height: 24,
     borderRadius: 6,
     borderWidth: 2,
-    borderColor: COLORS.border,
+    borderColor: themeColors.border,
     justifyContent: 'center',
     alignItems: 'center',
   },
   checkboxSelected: {
-    backgroundColor: COLORS.accentPrimary,
-    borderColor: COLORS.accentPrimary,
+    backgroundColor: themeColors.accentPrimary,
+    borderColor: themeColors.accentPrimary,
   },
   emptyState: {
     paddingTop: 80,
@@ -175,7 +178,7 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     ...TYPOGRAPHY.body,
-    color: COLORS.textMeta,
+    color: themeColors.textMeta,
     textAlign: 'center',
   },
 });

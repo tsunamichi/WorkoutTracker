@@ -1,11 +1,13 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
-import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS, CARDS } from '../constants';
+import { SPACING, TYPOGRAPHY, BORDER_RADIUS, CARDS } from '../constants';
 import { IconCheck } from './icons';
 import { BottomDrawer } from './common/BottomDrawer';
 import { useTranslation } from '../i18n/useTranslation';
 import { CyclePlan, WorkoutTemplate } from '../types/training';
 import * as Haptics from 'expo-haptics';
+import { useAppTheme } from '../theme/useAppTheme';
+import { getAppThemeFromStore } from '../theme/getAppThemeFromStore';
 
 // Dark theme colors
 const LIGHT_COLORS = {
@@ -118,7 +120,7 @@ export function ExtractDayFromPlanSheet({
                       </View>
                       {isSelected && (
                         <View style={styles.selectedBadge}>
-                          <IconCheck size={16} color={COLORS.backgroundCanvas} />
+                          <IconCheck size={16} color={themeColors.backgroundCanvas} />
                         </View>
                       )}
                     </View>
@@ -143,6 +145,7 @@ export function ExtractDayFromPlanSheet({
   );
 }
 
+const themeColors = getAppThemeFromStore().colors;
 const styles = StyleSheet.create({
   container: {
     paddingHorizontal: SPACING.xxl,
@@ -193,7 +196,7 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.md,
   },
   dayCardSelected: {
-    borderColor: COLORS.accentPrimary,
+    borderColor: themeColors.accentPrimary,
     borderWidth: 2,
   },
   dayCardInner: {
@@ -204,29 +207,29 @@ const styles = StyleSheet.create({
   },
   dayName: {
     ...TYPOGRAPHY.bodyBold,
-    color: COLORS.text,
+    color: themeColors.text,
     marginBottom: 4,
   },
   workoutName: {
     ...TYPOGRAPHY.body,
-    color: COLORS.text,
+    color: themeColors.text,
     marginBottom: 2,
   },
   exerciseCount: {
     ...TYPOGRAPHY.meta,
-    color: COLORS.textMeta,
+    color: themeColors.textMeta,
   },
   selectedBadge: {
     width: 28,
     height: 28,
     borderRadius: 14,
-    backgroundColor: COLORS.accentPrimary,
+    backgroundColor: themeColors.accentPrimary,
     alignItems: 'center',
     justifyContent: 'center',
   },
   extractButton: {
     height: 56,
-    backgroundColor: COLORS.accentPrimary,
+    backgroundColor: themeColors.accentPrimary,
     borderRadius: BORDER_RADIUS.md,
     alignItems: 'center',
     justifyContent: 'center',
@@ -235,6 +238,6 @@ const styles = StyleSheet.create({
   extractButtonText: {
     ...TYPOGRAPHY.meta,
     fontWeight: 'bold',
-    color: COLORS.backgroundCanvas,
+    color: themeColors.backgroundCanvas,
   },
 });

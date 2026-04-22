@@ -10,7 +10,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useStore } from '../store';
-import { COLORS, SPACING, CARDS, TYPOGRAPHY, BORDER_RADIUS, GRADIENTS } from '../constants';
+import { SPACING, CARDS, TYPOGRAPHY, BORDER_RADIUS, GRADIENTS } from '../constants';
 import { IconArrowLeft, IconPlay, IconAdd } from '../components/icons';
 import { DiagonalLinePattern } from '../components/common/DiagonalLinePattern';
 import type { HIITTimer } from '../types';
@@ -20,6 +20,7 @@ import type { RootStackParamList } from '../navigation/AppNavigator';
 import { useTranslation } from '../i18n/useTranslation';
 import dayjs from 'dayjs';
 import { useAppTheme } from '../theme/useAppTheme';
+import { getAppThemeFromStore } from '../theme/getAppThemeFromStore';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'HIITTimerList'>;
 
@@ -38,11 +39,11 @@ export default function HIITTimerListScreen({ navigation, route }: Props) {
   const theme = useAppTheme();
   const { colors: themeColors } = theme;
   const isV2Theme = theme.id === 'v2';
-  const pageBackground = isV2Theme ? themeColors.canvasLight : COLORS.backgroundCanvas;
+  const pageBackground = isV2Theme ? themeColors.canvasLight : themeColors.backgroundCanvas;
   const timerCardBackground = isV2Theme ? themeColors.canvasContainer : CARDS.cardDeepDimmed.inner.backgroundColor;
-  const timerInk = isV2Theme ? themeColors.containerPrimary : COLORS.text;
-  const timerMetaInk = isV2Theme ? themeColors.containerPrimary : COLORS.textMeta;
-  const timerActionInk = isV2Theme ? themeColors.containerPrimary : COLORS.accentPrimary;
+  const timerInk = isV2Theme ? themeColors.containerPrimary : themeColors.text;
+  const timerMetaInk = isV2Theme ? themeColors.containerPrimary : themeColors.textMeta;
+  const timerActionInk = isV2Theme ? themeColors.containerPrimary : themeColors.accentPrimary;
   const bonusMode = route.params?.bonusMode === true;
   
   const templates = hiitTimers.filter(t => t.isTemplate);
@@ -197,10 +198,11 @@ export default function HIITTimerListScreen({ navigation, route }: Props) {
   );
 }
 
+const themeColors = getAppThemeFromStore().colors;
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.backgroundCanvas,
+    backgroundColor: themeColors.backgroundCanvas,
   },
   innerContainer: {
     flex: 1,
@@ -256,12 +258,12 @@ const styles = StyleSheet.create({
   },
   timerName: {
     ...TYPOGRAPHY.h3,
-    color: COLORS.text,
+    color: themeColors.text,
     marginBottom: 4,
   },
   totalTime: {
     ...TYPOGRAPHY.body,
-    color: COLORS.textMeta,
+    color: themeColors.textMeta,
   },
   startButton: {
     flexDirection: 'row',
@@ -271,7 +273,7 @@ const styles = StyleSheet.create({
   },
   startButtonText: {
     ...TYPOGRAPHY.metaBold,
-    color: COLORS.accentPrimary,
+    color: themeColors.accentPrimary,
   },
   addTimerCardButton: {
     width: '100%',
@@ -286,7 +288,6 @@ const styles = StyleSheet.create({
   },
   addTimerCardText: {
     ...TYPOGRAPHY.metaBold,
-    color: COLORS.text,
+    color: themeColors.text,
   },
 });
-

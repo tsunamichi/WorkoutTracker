@@ -2,8 +2,9 @@ import React, { useCallback, useMemo, useRef, useState, useEffect } from 'react'
 import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView } from 'react-native';
 // import BottomSheet, { BottomSheetBackdrop } from '@gorhom/bottom-sheet';
 import { Exercise } from '../../types/workout';
-import { COLORS } from '../../constants';
 import { useTranslation } from '../../i18n/useTranslation';
+import { useAppTheme } from '../../theme/useAppTheme';
+import { getAppThemeFromStore } from '../../theme/getAppThemeFromStore';
 
 interface EditExerciseBottomSheetProps {
   isVisible: boolean;
@@ -208,6 +209,7 @@ export function EditExerciseBottomSheet({
   );
 }
 
+const themeColors = getAppThemeFromStore().colors;
 const styles = StyleSheet.create({
   contentContainer: {
     flex: 1,
@@ -303,7 +305,7 @@ const styles = StyleSheet.create({
   deleteButtonText: {
     fontSize: 16,
     fontWeight: '600',
-    color: COLORS.signalNegative,
+    color: themeColors.signalNegative,
   },
   rightActions: {
     flexDirection: 'row',
@@ -330,4 +332,3 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
   },
 });
-

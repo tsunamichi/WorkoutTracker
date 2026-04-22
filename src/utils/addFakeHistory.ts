@@ -3,49 +3,6 @@ import * as storage from '../storage';
 import dayjs from 'dayjs';
 
 /**
- * Adds fake workout history for testing the history feature on exercise detail screens
- */
-export async function addFakeHistory() {
-  const store = useStore.getState();
-  
-  const barbellRow = store.exercises.find(e => e.name === 'Barbell Row');
-  const hammerCurl = store.exercises.find(e => e.name === 'Hammer Curl');
-  const rearDeltRow = store.exercises.find(e => e.name.includes('Rear Delt'));
-  
-  if (!barbellRow || !hammerCurl || !rearDeltRow) {
-    console.log('❌ Could not find exercises. Available:', store.exercises.map(e => e.name));
-    return;
-  }
-  
-  const sessions = [];
-  
-  sessions.push({
-    id: `fake-session-${Date.now()}-1`,
-    date: dayjs().subtract(21, 'days').format('YYYY-MM-DD'),
-    startTime: dayjs().subtract(21, 'days').hour(10).minute(0).toISOString(),
-    endTime: dayjs().subtract(21, 'days').hour(11).minute(30).toISOString(),
-    notes: 'Good session',
-    sets: [
-      { id: `set-1-1`, sessionId: `fake-session-${Date.now()}-1`, exerciseId: barbellRow.id, setIndex: 0, weight: 135, reps: 8, isCompleted: true },
-      { id: `set-1-2`, sessionId: `fake-session-${Date.now()}-1`, exerciseId: barbellRow.id, setIndex: 1, weight: 135, reps: 8, isCompleted: true },
-      { id: `set-1-3`, sessionId: `fake-session-${Date.now()}-1`, exerciseId: barbellRow.id, setIndex: 2, weight: 135, reps: 7, isCompleted: true },
-      { id: `set-1-4`, sessionId: `fake-session-${Date.now()}-1`, exerciseId: rearDeltRow.id, setIndex: 0, weight: 80, reps: 12, isCompleted: true },
-      { id: `set-1-5`, sessionId: `fake-session-${Date.now()}-1`, exerciseId: rearDeltRow.id, setIndex: 1, weight: 80, reps: 12, isCompleted: true },
-      { id: `set-1-6`, sessionId: `fake-session-${Date.now()}-1`, exerciseId: rearDeltRow.id, setIndex: 2, weight: 80, reps: 11, isCompleted: true },
-      { id: `set-1-7`, sessionId: `fake-session-${Date.now()}-1`, exerciseId: hammerCurl.id, setIndex: 0, weight: 35, reps: 12, isCompleted: true },
-      { id: `set-1-8`, sessionId: `fake-session-${Date.now()}-1`, exerciseId: hammerCurl.id, setIndex: 1, weight: 35, reps: 12, isCompleted: true },
-      { id: `set-1-9`, sessionId: `fake-session-${Date.now()}-1`, exerciseId: hammerCurl.id, setIndex: 2, weight: 35, reps: 11, isCompleted: true },
-    ],
-  });
-  
-  for (const session of sessions) {
-    await store.addSession(session);
-  }
-  
-  console.log(`✅ Added ${sessions.length} fake workout sessions with history!`);
-}
-
-/**
  * Seeds a single fake detailedWorkoutProgress entry for Bench Press only.
  * Does NOT touch other exercises — they use their real logged data.
  *

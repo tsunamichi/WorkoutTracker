@@ -12,13 +12,15 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useCreateCycleDraftStore } from '../../store/useCreateCycleDraftStore';
 import { formatWeekdayFull, getExerciseSummary } from '../../utils/manualCycleUtils';
 import { Weekday, ExerciseBlock } from '../../types/manualCycle';
-import { COLORS, SPACING, TYPOGRAPHY, CARDS, BORDER_RADIUS } from '../../constants';
+import { SPACING, TYPOGRAPHY, CARDS, BORDER_RADIUS } from '../../constants';
 import { IconAdd, IconTrash, IconArrowLeft, IconChevronDown, IconEdit } from '../../components/icons';
 import { ExerciseEditorBottomSheet } from '../../components/manualCycle/ExerciseEditorBottomSheet';
 import { useStore } from '../../store';
 import { BottomDrawer } from '../../components/common/BottomDrawer';
 import { useTranslation } from '../../i18n/useTranslation';
 import { DraggableExerciseList, type DraggableExerciseItem } from '../../components/exercises';
+import { useAppTheme } from '../../theme/useAppTheme';
+import { getAppThemeFromStore } from '../../theme/getAppThemeFromStore';
 
 interface CreateCycleDayEditorProps {
   navigation: any;
@@ -161,7 +163,7 @@ export function CreateCycleDayEditor({ navigation, route }: CreateCycleDayEditor
             style={styles.backButton}
             activeOpacity={1}
           >
-              <IconArrowLeft size={24} color={COLORS.text} />
+              <IconArrowLeft size={24} color={themeColors.text} />
           </TouchableOpacity>
             <View style={{ width: 48 }} />
           </View>
@@ -179,12 +181,12 @@ export function CreateCycleDayEditor({ navigation, route }: CreateCycleDayEditor
                 onBlur={() => setIsEditingName(false)}
                 autoFocus
                 placeholder={t('workoutName')}
-                placeholderTextColor={COLORS.textMeta}
+                placeholderTextColor={themeColors.textMeta}
               />
             ) : (
               <View style={styles.pageTitleRow}>
                 <Text style={styles.pageTitle}>{workoutName}</Text>
-                <IconEdit size={20} color={COLORS.textMeta} />
+                <IconEdit size={20} color={themeColors.textMeta} />
               </View>
             )}
           </TouchableOpacity>
@@ -227,7 +229,7 @@ export function CreateCycleDayEditor({ navigation, route }: CreateCycleDayEditor
               onPress={() => setShowExerciseDrawer(true)}
               activeOpacity={1}
             >
-              <IconAdd size={20} color={COLORS.text} />
+              <IconAdd size={20} color={themeColors.text} />
               <Text style={styles.addExerciseCardText}>{t('addExercise')}</Text>
             </TouchableOpacity>
           </View>
@@ -269,7 +271,7 @@ export function CreateCycleDayEditor({ navigation, route }: CreateCycleDayEditor
                 value={searchQuery}
                 onChangeText={setSearchQuery}
                 placeholder={t('searchExercisesPlaceholder')}
-                placeholderTextColor={COLORS.textMeta}
+                placeholderTextColor={themeColors.textMeta}
               />
               {searchQuery.length > 0 && (
                 <TouchableOpacity
@@ -298,7 +300,7 @@ export function CreateCycleDayEditor({ navigation, route }: CreateCycleDayEditor
                       <Text style={styles.muscleTitle}>{muscle}</Text>
                       <IconChevronDown
                         size={20}
-                        color={COLORS.textMeta}
+                        color={themeColors.textMeta}
                         style={{
                           transform: [{ rotate: isExpanded ? '180deg' : '0deg' }],
                         }}
@@ -343,10 +345,11 @@ export function CreateCycleDayEditor({ navigation, route }: CreateCycleDayEditor
   );
 }
 
+const themeColors = getAppThemeFromStore().colors;
 const styles = StyleSheet.create({
   gradient: {
     flex: 1,
-    backgroundColor: COLORS.backgroundCanvas,
+    backgroundColor: themeColors.backgroundCanvas,
   },
   container: {
     flex: 1,
@@ -377,11 +380,11 @@ const styles = StyleSheet.create({
   },
   pageTitle: {
     ...TYPOGRAPHY.h2,
-    color: COLORS.text,
+    color: themeColors.text,
   },
   pageTitleInput: {
     ...TYPOGRAPHY.h2,
-    color: COLORS.text,
+    color: themeColors.text,
   },
   content: {
     flex: 1,
@@ -395,7 +398,7 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     ...TYPOGRAPHY.meta,
-    color: COLORS.textMeta,
+    color: themeColors.textMeta,
     marginBottom: SPACING.lg,
   },
   addExerciseCardButton: {
@@ -403,7 +406,7 @@ const styles = StyleSheet.create({
     height: 56,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: COLORS.textMeta,
+    borderColor: themeColors.textMeta,
     borderStyle: 'dashed',
     backgroundColor: 'transparent',
     flexDirection: 'row',
@@ -414,7 +417,7 @@ const styles = StyleSheet.create({
   },
   addExerciseCardText: {
     ...TYPOGRAPHY.metaBold,
-    color: COLORS.text,
+    color: themeColors.text,
   },
   drawerContent: {
     flex: 1,
@@ -430,19 +433,19 @@ const styles = StyleSheet.create({
   },
   drawerTitle: {
     ...TYPOGRAPHY.h3,
-    color: COLORS.text,
+    color: themeColors.text,
   },
   searchButton: {
     padding: SPACING.xs,
   },
   searchButtonText: {
     fontSize: 20,
-    color: COLORS.text,
+    color: themeColors.text,
   },
   swapSearchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: COLORS.backgroundCanvas,
+    backgroundColor: themeColors.backgroundCanvas,
     borderRadius: BORDER_RADIUS.md,
     borderCurve: 'continuous',
     paddingHorizontal: SPACING.lg,
@@ -451,21 +454,21 @@ const styles = StyleSheet.create({
     marginTop: SPACING.lg,
     marginBottom: SPACING.md,
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: themeColors.border,
     gap: SPACING.md,
   },
   searchIcon: {
     fontSize: 18,
-    color: COLORS.textMeta,
+    color: themeColors.textMeta,
   },
   swapSearchInput: {
     flex: 1,
     ...TYPOGRAPHY.body,
-    color: COLORS.text,
+    color: themeColors.text,
   },
   clearIcon: {
     fontSize: 16,
-    color: COLORS.textMeta,
+    color: themeColors.textMeta,
   },
   drawerScroll: {
     flex: 1,
@@ -479,7 +482,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   muscleCard: {
-    backgroundColor: COLORS.activeCard,
+    backgroundColor: themeColors.activeCard,
     borderRadius: BORDER_RADIUS.md,
     borderCurve: 'continuous',
     overflow: 'hidden',
@@ -493,7 +496,7 @@ const styles = StyleSheet.create({
   },
   muscleTitle: {
     ...TYPOGRAPHY.body,
-    color: COLORS.text,
+    color: themeColors.text,
     fontWeight: '600',
   },
   muscleContent: {},
@@ -503,13 +506,12 @@ const styles = StyleSheet.create({
   },
   swapExerciseName: {
     ...TYPOGRAPHY.body,
-    color: COLORS.text,
+    color: themeColors.text,
   },
   muscleExerciseDivider: {
     height: 1,
-    backgroundColor: COLORS.borderDimmed,
+    backgroundColor: themeColors.borderDimmed,
     marginHorizontal: SPACING.lg,
     marginVertical: 4,
   },
 });
-

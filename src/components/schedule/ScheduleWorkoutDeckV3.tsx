@@ -15,10 +15,11 @@ import Animated, {
   useAnimatedStyle,
   useSharedValue,
 } from 'react-native-reanimated';
-import { CARDS, COLORS, SPACING, TYPOGRAPHY } from '../../constants';
+import { CARDS, SPACING, TYPOGRAPHY } from '../../constants';
 import { IconArrowDiagonal } from '../icons';
 import { useAppTheme } from '../../theme/useAppTheme';
 import { useTranslation } from '../../i18n/useTranslation';
+import { getAppThemeFromStore } from '../../theme/getAppThemeFromStore';
 
 const FRONT_H = 330;
 const STACK_HEIGHT = FRONT_H;
@@ -512,6 +513,7 @@ export function ScheduleWorkoutDeckV3({
   );
 }
 
+const themeColors = getAppThemeFromStore().colors;
 const styles = StyleSheet.create({
   stackRoot: {
     position: 'relative',
@@ -528,7 +530,7 @@ const styles = StyleSheet.create({
     borderRadius: CARDS.cardDeep.outer.borderRadius,
     borderCurve: CARDS.cardDeep.outer.borderCurve,
     borderWidth: 2,
-    borderColor: COLORS.canvasLight,
+    borderColor: themeColors.canvasLight,
     overflow: CARDS.cardDeep.outer.overflow,
     width: '100%',
     height: '100%',
@@ -567,7 +569,7 @@ const styles = StyleSheet.create({
   },
   cardTitle: {
     ...TYPOGRAPHY.displayLarge,
-    color: COLORS.containerPrimary,
+    color: themeColors.containerPrimary,
   },
   cardSpacer: {
     flex: 1,
@@ -579,7 +581,7 @@ const styles = StyleSheet.create({
   },
   cardMeta: {
     ...TYPOGRAPHY.body,
-    color: COLORS.containerPrimary,
+    color: themeColors.containerPrimary,
     fontWeight: '500',
     marginTop: 10,
   },
@@ -587,7 +589,7 @@ const styles = StyleSheet.create({
     ...TYPOGRAPHY.body,
     fontWeight: '500',
     marginTop: 12,
-    color: COLORS.containerPrimary,
+    color: themeColors.containerPrimary,
   },
   cardFooterLabel: {
     ...TYPOGRAPHY.legal,
@@ -606,10 +608,7 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-start',
   },
   createStackSectionTitle: {
-    ...TYPOGRAPHY.meta,
-    fontWeight: '600',
-    letterSpacing: 0.6,
-    textTransform: 'uppercase',
+    ...TYPOGRAPHY.sectionHeader,
     marginBottom: SPACING.xxxl,
   },
   createStackRow: {
@@ -625,6 +624,5 @@ const styles = StyleSheet.create({
   /** 24px — same as current-card exercise name (`ExploreV2CurrentCard` `exerciseName`). */
   createStackRowRest: {
     ...TYPOGRAPHY.h2,
-    fontWeight: '400',
   },
 });

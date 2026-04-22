@@ -1,0 +1,15 @@
+{
+  "$schema": "https://unpkg.com/knip@5/schema.json",
+  "entry": [
+    "index.ts",
+    "App.tsx",
+    "src/navigation/RootNavigator.tsx",
+    "src/navigation/AppNavigator.tsx",
+    "app.json",
+    "babel.config.js",
+    "metro.config.js"
+  ],
+  "project": ["src/**/*.ts", "src/**/*.tsx", "App.tsx", "index.ts"],
+  "ignore": ["**/*.d.ts", ".maestro/**"],
+  "ignoreDependencies": ["@expo/vector-icons", "react-dom", "babel-preset-expo", "@expo/ngrok", "lsof"]
+}

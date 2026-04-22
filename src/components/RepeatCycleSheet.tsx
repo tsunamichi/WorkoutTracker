@@ -1,12 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, TextInput } from 'react-native';
-import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS } from '../constants';
+import { SPACING, TYPOGRAPHY, BORDER_RADIUS } from '../constants';
 import { IconEdit } from './icons';
 import { BottomDrawer } from './common/BottomDrawer';
 import { ExpandableCalendarStrip } from './calendar/ExpandableCalendarStrip';
 import { useStore } from '../store';
 import dayjs from 'dayjs';
 import * as Haptics from 'expo-haptics';
+import { useAppTheme } from '../theme/useAppTheme';
+import { getAppThemeFromStore } from '../theme/getAppThemeFromStore';
 
 interface RepeatCycleSheetProps {
   visible: boolean;
@@ -58,7 +60,7 @@ export function RepeatCycleSheet({
   const previewRange = {
     start: selectedDate,
     end: endDate,
-    color: COLORS.accentPrimaryDimmed,
+    color: themeColors.accentPrimaryDimmed,
   };
 
   return (
@@ -71,7 +73,7 @@ export function RepeatCycleSheet({
               value={name}
               onChangeText={setName}
               placeholder={cycleName}
-              placeholderTextColor={COLORS.textMeta}
+              placeholderTextColor={themeColors.textMeta}
               returnKeyType="done"
               autoFocus
               onSubmitEditing={() => setIsEditing(false)}
@@ -84,7 +86,7 @@ export function RepeatCycleSheet({
               activeOpacity={0.7}
             >
               <Text style={styles.cycleName} numberOfLines={1}>{name}</Text>
-              <IconEdit size={18} color={COLORS.textMeta} />
+              <IconEdit size={18} color={themeColors.textMeta} />
             </TouchableOpacity>
           )}
         </View>
@@ -117,6 +119,7 @@ export function RepeatCycleSheet({
   );
 }
 
+const themeColors = getAppThemeFromStore().colors;
 const styles = StyleSheet.create({
   container: {
     paddingHorizontal: SPACING.xxl,
@@ -136,7 +139,7 @@ const styles = StyleSheet.create({
   },
   cycleName: {
     ...TYPOGRAPHY.h2,
-    color: COLORS.text,
+    color: themeColors.text,
     flexShrink: 1,
   },
   calendarSection: {
@@ -146,7 +149,7 @@ const styles = StyleSheet.create({
   },
   startButton: {
     height: 56,
-    backgroundColor: COLORS.accentPrimary,
+    backgroundColor: themeColors.accentPrimary,
     borderRadius: BORDER_RADIUS.md,
     alignItems: 'center',
     justifyContent: 'center',
@@ -154,6 +157,6 @@ const styles = StyleSheet.create({
   startButtonText: {
     ...TYPOGRAPHY.meta,
     fontWeight: 'bold',
-    color: COLORS.backgroundCanvas,
+    color: themeColors.backgroundCanvas,
   },
 });

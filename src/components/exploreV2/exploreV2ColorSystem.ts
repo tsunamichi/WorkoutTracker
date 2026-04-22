@@ -3,7 +3,6 @@
  * Edit EXPLORE_V2_CARD_MAINS only; soft / dark / muted derive from each main.
  */
 
-import { COLORS } from '../../constants';
 
 export type CardRole = 'complete' | 'upNext' | 'current';
 

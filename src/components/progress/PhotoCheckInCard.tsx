@@ -1,9 +1,11 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Image, FlatList } from 'react-native';
-import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS } from '../../constants';
+import { SPACING, TYPOGRAPHY, BORDER_RADIUS } from '../../constants';
 import { IconAdd } from '../icons';
 import { DiagonalLinePattern } from '../common/DiagonalLinePattern';
 import type { ProgressPhoto } from '../../types';
+import { useAppTheme } from '../../theme/useAppTheme';
+import { getAppThemeFromStore } from '../../theme/getAppThemeFromStore';
 
 interface PhotoCheckInCardProps {
   latestPhoto: ProgressPhoto | null;
@@ -42,7 +44,7 @@ export function PhotoCheckInCard({
         style={styles.addButton}
       >
         <DiagonalLinePattern width="100%" height={48} borderRadius={BORDER_RADIUS.md} />
-        <IconAdd size={18} color={COLORS.text} />
+        <IconAdd size={18} color={themeColors.text} />
         <Text style={styles.addText}>Add photo</Text>
       </TouchableOpacity>
 
@@ -71,17 +73,18 @@ export function PhotoCheckInCard({
   );
 }
 
+const themeColors = getAppThemeFromStore().colors;
 const styles = StyleSheet.create({
   container: {
     gap: SPACING.md,
   },
   mainCard: {
     flexDirection: 'row',
-    backgroundColor: COLORS.cardBackground,
+    backgroundColor: themeColors.cardBackground,
     borderRadius: BORDER_RADIUS.md,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: COLORS.borderDimmed,
+    borderColor: themeColors.borderDimmed,
   },
   thumbnail: {
     width: 72,
@@ -94,12 +97,12 @@ const styles = StyleSheet.create({
   },
   label: {
     ...TYPOGRAPHY.bodyBold,
-    color: COLORS.text,
+    color: themeColors.text,
     marginBottom: 2,
   },
   date: {
     ...TYPOGRAPHY.meta,
-    color: COLORS.textMeta,
+    color: themeColors.textMeta,
   },
   addButton: {
     width: '100%',
@@ -113,7 +116,7 @@ const styles = StyleSheet.create({
   },
   addText: {
     ...TYPOGRAPHY.metaBold,
-    color: COLORS.text,
+    color: themeColors.text,
   },
   photoStrip: {
     marginTop: SPACING.xs,
@@ -126,11 +129,11 @@ const styles = StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: BORDER_RADIUS.sm,
-    backgroundColor: COLORS.activeCard,
+    backgroundColor: themeColors.activeCard,
   },
   stripLabel: {
     ...TYPOGRAPHY.note,
-    color: COLORS.textMeta,
+    color: themeColors.textMeta,
     marginTop: 4,
   },
 });

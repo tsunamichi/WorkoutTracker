@@ -1,12 +1,12 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { ActivityIndicator, View, StyleSheet, Text, TextInput, TouchableOpacity } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { RootNavigator } from './src/navigation/RootNavigator';
 import { useStore } from './src/store';
-import { COLORS } from './src/constants';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useAppTheme } from './src/theme/useAppTheme';
 
 // Keep typography deterministic across devices by disabling OS-level font scaling app-wide.
 Text.defaultProps = Text.defaultProps || {};
@@ -46,6 +46,7 @@ class RootErrorBoundary extends React.Component<
 }
 
 export default function App() {
+  const { colors: themeColors } = useAppTheme();
   const { initialize, isLoading } = useStore();
   const [fatalError, setFatalError] = useState<Error | null>(null);
   
@@ -92,11 +93,64 @@ export default function App() {
       }
     };
   }, []);
+
+  const styles = useMemo(
+    () =>
+      StyleSheet.create({
+        loadingContainer: {
+          flex: 1,
+          backgroundColor: themeColors.background,
+          alignItems: 'center',
+          justifyContent: 'center',
+        },
+        fatalContainer: {
+          flex: 1,
+          backgroundColor: themeColors.background,
+          alignItems: 'center',
+          justifyContent: 'center',
+          paddingHorizontal: 24,
+        },
+        fatalTitle: {
+          fontSize: 20,
+          fontWeight: '800',
+          color: themeColors.text,
+          marginBottom: 12,
+          textAlign: 'center',
+        },
+        fatalBody: {
+          fontSize: 14,
+          color: themeColors.text,
+          opacity: 0.9,
+          textAlign: 'center',
+          marginBottom: 12,
+        },
+        fatalHint: {
+          fontSize: 12,
+          color: themeColors.text,
+          opacity: 0.6,
+          textAlign: 'center',
+          marginBottom: 18,
+        },
+        fatalButton: {
+          height: 44,
+          paddingHorizontal: 16,
+          borderRadius: 12,
+          backgroundColor: themeColors.primary,
+          alignItems: 'center',
+          justifyContent: 'center',
+        },
+        fatalButtonText: {
+          color: '#fff',
+          fontWeight: '700',
+        },
+      }),
+    [themeColors]
+  );
   
   if (isLoading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={COLORS.primary} />
+        <ActivityIndicator size="large" color={themeColors.primary} />
       </View>
     );
   }
@@ -130,52 +184,3 @@ export default function App() {
     </GestureHandlerRootView>
   );
 }
-
-const styles = StyleSheet.create({
-  loadingContainer: {
-    flex: 1,
-    backgroundColor: COLORS.background,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  fatalContainer: {
-    flex: 1,
-    backgroundColor: COLORS.background,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 24,
-  },
-  fatalTitle: {
-    fontSize: 20,
-    fontWeight: '800',
-    color: COLORS.text,
-    marginBottom: 12,
-    textAlign: 'center',
-  },
-  fatalBody: {
-    fontSize: 14,
-    color: COLORS.text,
-    opacity: 0.9,
-    textAlign: 'center',
-    marginBottom: 12,
-  },
-  fatalHint: {
-    fontSize: 12,
-    color: COLORS.text,
-    opacity: 0.6,
-    textAlign: 'center',
-    marginBottom: 18,
-  },
-  fatalButton: {
-    height: 44,
-    paddingHorizontal: 16,
-    borderRadius: 12,
-    backgroundColor: COLORS.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  fatalButtonText: {
-    color: '#fff',
-    fontWeight: '700',
-  },
-});

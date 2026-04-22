@@ -26,7 +26,7 @@ import Reanimated, {
 } from 'react-native-reanimated';
 import { EXPLORE_V2 } from './exploreV2Tokens';
 import { EXECUTION_CTA_HEIGHT, EXECUTION_CTA_PADDING_H, executionCtaLabelStyle } from '../execution/executionCtaTokens';
-import { BORDER_RADIUS, COLORS, TYPOGRAPHY, hexToRgba } from '../../constants';
+import { BORDER_RADIUS, TYPOGRAPHY, hexToRgba } from '../../constants';
 import { useAppTheme } from '../../theme/useAppTheme';
 import { formatWeightForLoad, fromDisplayWeight } from '../../utils/weight';
 import { applyForwardPropagationForExerciseRounds } from '../../utils/exerciseLocalValues';
@@ -40,6 +40,7 @@ import {
 import * as Haptics from 'expo-haptics';
 import { TertiaryButton, UnderlinedActionButton } from '../common/UnderlinedActionButton';
 import { useTranslation } from '../../i18n/useTranslation';
+import { getAppThemeFromStore } from '../../theme/getAppThemeFromStore';
 
 /** iOS: toolbar above the keyboard (numeric pads have no Done key). */
 export const EXPLORE_V2_HERO_METRICS_ACCESSORY_ID = 'exploreV2HeroMetricsAccessory';
@@ -1156,8 +1157,13 @@ export function ExploreV2CurrentCard({
           <View style={styles.collapsedOverlayHost} pointerEvents="box-none">
             {showCollapsedAddSetRow ? (
               <>
-                {/* Absorb taps without expanding — expansion happens after Add set (new incomplete set). */}
-                <View style={styles.collapsedTapOverlay} pointerEvents="auto" />
+                {/* Tap peek to re-expand Current; Add set stays above (zIndex) so it does not open the card. */}
+                <Pressable
+                  style={styles.collapsedTapOverlay}
+                  onPress={onCollapsedPress}
+                  accessibilityRole="button"
+                  accessibilityLabel={t('exploreV2ExpandCurrentPeek')}
+                />
                 {/* Peek only shows ~CURRENT_IN_PROGRESS_PEEK_VISIBLE_HEIGHT from the card top — keep control in header strip. */}
                 <View style={styles.collapsedAddSetHeaderSlot} pointerEvents="box-none">
                   <UnderlinedActionButton
@@ -1204,18 +1210,19 @@ export function ExploreV2CurrentCard({
 
 const pad = EXPLORE_V2.cardPadding;
 
+const themeColors = getAppThemeFromStore().colors;
 const styles = StyleSheet.create({
   kav: { flex: 1, minHeight: 0 },
   heroMetricsKeyboardAccessory: {
-    backgroundColor: COLORS.backgroundCanvas,
+    backgroundColor: themeColors.backgroundCanvas,
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderTopWidth: 1,
-    borderTopColor: COLORS.border,
+    borderTopColor: themeColors.border,
     alignItems: 'flex-end',
   },
   heroMetricsKeyboardDone: {
-    backgroundColor: COLORS.accentPrimary,
+    backgroundColor: themeColors.accentPrimary,
     borderRadius: BORDER_RADIUS.md,
     height: EXECUTION_CTA_HEIGHT,
     minHeight: EXECUTION_CTA_HEIGHT,
@@ -1317,7 +1324,6 @@ const styles = StyleSheet.create({
   },
   exerciseName: {
     ...TYPOGRAPHY.h2,
-    fontWeight: '400',
     flexShrink: 1,
     marginTop: 12,
   },
@@ -1443,7 +1449,6 @@ const styles = StyleSheet.create({
   },
   valueMetric: {
     ...TYPOGRAPHY.h2,
-    fontWeight: '400',
   },
   /** Height matches `lineHeight` so the field isn’t taller than the line box — avoids vertically
    * centering the glyph in extra space (which made Remove look aligned to the view, not the digit). */

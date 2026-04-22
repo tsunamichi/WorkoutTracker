@@ -13,8 +13,9 @@ import { ExerciseRow } from '../../components/exercises/ExerciseRow';
 import { AddExerciseBottomSheet } from '../../components/exercises/AddExerciseBottomSheet';
 import { EditExerciseBottomSheet } from '../../components/exercises/EditExerciseBottomSheet';
 import { Exercise } from '../../types/workout';
-import { COLORS } from '../../constants';
 import { useTranslation } from '../../i18n/useTranslation';
+import { useAppTheme } from '../../theme/useAppTheme';
+import { getAppThemeFromStore } from '../../theme/getAppThemeFromStore';
 
 type OnboardingStackParamList = {
   TemplateEditor: undefined;
@@ -173,10 +174,11 @@ export function TemplateEditorScreen({ navigation }: TemplateEditorScreenProps) 
   );
 }
 
+const themeColors = getAppThemeFromStore().colors;
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.backgroundCanvas,
+    backgroundColor: themeColors.backgroundCanvas,
   },
   scrollView: {
     flex: 1,
@@ -255,4 +257,3 @@ const styles = StyleSheet.create({
     color: '#FD6B00',
   },
 });
-

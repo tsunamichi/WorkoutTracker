@@ -4,7 +4,7 @@ import Svg, { Circle, Path } from 'react-native-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useStore } from '../store';
 import { formatWeightForLoad } from '../utils/weight';
-import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS, CARDS } from '../constants';
+import { SPACING, TYPOGRAPHY, BORDER_RADIUS, CARDS } from '../constants';
 import { IconArrowLeft, IconMenu, IconShare, IconTrash, IconCheck, IconPlay } from '../components/icons';
 import { ActionSheet } from '../components/common/ActionSheet';
 import { BottomDrawer } from '../components/common/BottomDrawer';
@@ -14,6 +14,8 @@ import * as Haptics from 'expo-haptics';
 import dayjs from 'dayjs';
 import isoWeek from 'dayjs/plugin/isoWeek';
 import { useTranslation } from '../i18n/useTranslation';
+import { useAppTheme } from '../theme/useAppTheme';
+import { getAppThemeFromStore } from '../theme/getAppThemeFromStore';
 
 dayjs.extend(isoWeek);
 
@@ -145,7 +147,7 @@ export function CycleDetailScreen({ route, navigation }: CycleDetailScreenProps)
         <View style={[styles.header, { paddingTop: insets.top }]}>
           <View style={styles.topBar}>
             <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-              <IconArrowLeft size={24} color={COLORS.text} />
+              <IconArrowLeft size={24} color={themeColors.text} />
             </TouchableOpacity>
           </View>
         </View>
@@ -164,10 +166,10 @@ export function CycleDetailScreen({ route, navigation }: CycleDetailScreenProps)
       <View style={[styles.header, { paddingTop: insets.top }]}>
         <View style={styles.topBar}>
           <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-            <IconArrowLeft size={24} color={COLORS.text} />
+            <IconArrowLeft size={24} color={themeColors.text} />
           </TouchableOpacity>
           <TouchableOpacity onPress={() => setMenuVisible(true)} style={styles.menuButton}>
-            <IconMenu size={24} color={COLORS.text} />
+            <IconMenu size={24} color={themeColors.text} />
           </TouchableOpacity>
         </View>
 
@@ -195,13 +197,13 @@ export function CycleDetailScreen({ route, navigation }: CycleDetailScreenProps)
         items={[
           ...(cyclePlan && !cyclePlan.active
             ? [{
-                icon: <IconPlay size={24} color={COLORS.accentPrimary} />,
+                icon: <IconPlay size={24} color={themeColors.accentPrimary} />,
                 label: 'Make active again',
                 onPress: handleMakeActiveAgain,
               }]
             : []),
           {
-            icon: <IconShare size={24} color={COLORS.text} />,
+            icon: <IconShare size={24} color={themeColors.text} />,
             label: t('exportData'),
             onPress: handleExportData,
           },
@@ -248,17 +250,17 @@ export function CycleDetailScreen({ route, navigation }: CycleDetailScreenProps)
                           </View>
                           <View style={styles.progressIndicator}>
                             {progress >= 0.999 ? (
-                              <IconCheck size={20} color={COLORS.successBright} />
+                              <IconCheck size={20} color={themeColors.successBright} />
                             ) : completion > 0 ? (
                               <>
                                 <Text style={styles.progressText}>{completion}%</Text>
                                 <Svg height="16" width="16" viewBox="0 0 16 16">
-                                  <Circle cx="8" cy="8" r="8" fill={COLORS.container} />
+                                  <Circle cx="8" cy="8" r="8" fill={themeColors.container} />
                                   <Path
                                     d={`M 8 8 L 8 0 A 8 8 0 ${progress > 0.5 ? 1 : 0} 1 ${
                                       8 + 8 * Math.sin(2 * Math.PI * progress)
                                     } ${8 - 8 * Math.cos(2 * Math.PI * progress)} Z`}
-                                    fill={COLORS.signalWarning}
+                                    fill={themeColors.signalWarning}
                                   />
                                 </Svg>
                               </>
@@ -333,7 +335,7 @@ export function CycleDetailScreen({ route, navigation }: CycleDetailScreenProps)
                                 </Text>
                               </View>
                               {set.completed && (
-                                <IconCheck size={14} color={COLORS.successBright} />
+                                <IconCheck size={14} color={themeColors.successBright} />
                               )}
                             </View>
                           ))
@@ -357,10 +359,11 @@ export function CycleDetailScreen({ route, navigation }: CycleDetailScreenProps)
   );
 }
 
+const themeColors = getAppThemeFromStore().colors;
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.backgroundCanvas,
+    backgroundColor: themeColors.backgroundCanvas,
   },
   header: {
     paddingBottom: SPACING.md,
@@ -393,7 +396,7 @@ const styles = StyleSheet.create({
   },
   pageTitle: {
     ...TYPOGRAPHY.h2,
-    color: COLORS.text,
+    color: themeColors.text,
   },
   metaRow: {
     flexDirection: 'row',
@@ -402,7 +405,7 @@ const styles = StyleSheet.create({
   },
   metaText: {
     ...TYPOGRAPHY.meta,
-    color: COLORS.textMeta,
+    color: themeColors.textMeta,
   },
   statusBadge: {
     paddingHorizontal: 8,
@@ -410,24 +413,24 @@ const styles = StyleSheet.create({
     borderRadius: 6,
   },
   statusActive: {
-    backgroundColor: COLORS.accentPrimaryDimmed,
+    backgroundColor: themeColors.accentPrimaryDimmed,
   },
   statusFinished: {
-    backgroundColor: COLORS.container,
+    backgroundColor: themeColors.container,
   },
   statusText: {
     ...TYPOGRAPHY.note,
     fontWeight: '600',
   },
   statusTextActive: {
-    color: COLORS.accentPrimary,
+    color: themeColors.accentPrimary,
   },
   statusTextFinished: {
-    color: COLORS.textMeta,
+    color: themeColors.textMeta,
   },
   summaryText: {
     ...TYPOGRAPHY.meta,
-    color: COLORS.textMeta,
+    color: themeColors.textMeta,
   },
   content: {
     flex: 1,
@@ -443,7 +446,7 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     ...TYPOGRAPHY.body,
-    color: COLORS.textMeta,
+    color: themeColors.textMeta,
   },
   weekHeader: {
     marginTop: 32,
@@ -454,11 +457,11 @@ const styles = StyleSheet.create({
   },
   weekHeaderText: {
     ...TYPOGRAPHY.bodyBold,
-    color: COLORS.text,
+    color: themeColors.text,
   },
   weekHeaderDates: {
     ...TYPOGRAPHY.meta,
-    color: COLORS.textMeta,
+    color: themeColors.textMeta,
   },
   workoutCardWrapper: {
     marginBottom: SPACING.sm,
@@ -480,12 +483,12 @@ const styles = StyleSheet.create({
   },
   workoutName: {
     ...TYPOGRAPHY.body,
-    color: COLORS.text,
+    color: themeColors.text,
     marginBottom: 2,
   },
   workoutDate: {
     ...TYPOGRAPHY.meta,
-    color: COLORS.textMeta,
+    color: themeColors.textMeta,
   },
   progressIndicator: {
     flexDirection: 'row',
@@ -494,7 +497,7 @@ const styles = StyleSheet.create({
   },
   progressText: {
     ...TYPOGRAPHY.meta,
-    color: COLORS.textMeta,
+    color: themeColors.textMeta,
   },
 
   // Drawer
@@ -508,12 +511,12 @@ const styles = StyleSheet.create({
   },
   sheetTitle: {
     ...TYPOGRAPHY.h2,
-    color: COLORS.text,
+    color: themeColors.text,
     marginBottom: 4,
   },
   sheetSubtitle: {
     ...TYPOGRAPHY.meta,
-    color: COLORS.textMeta,
+    color: themeColors.textMeta,
   },
   sheetBody: {
     flex: 1,
@@ -532,11 +535,11 @@ const styles = StyleSheet.create({
   },
   exerciseName: {
     ...TYPOGRAPHY.body,
-    color: COLORS.text,
+    color: themeColors.text,
   },
   exerciseTarget: {
     ...TYPOGRAPHY.meta,
-    color: COLORS.textMeta,
+    color: themeColors.textMeta,
   },
   setsColumn: {
     flex: 1,
@@ -557,18 +560,18 @@ const styles = StyleSheet.create({
   },
   setValueText: {
     ...TYPOGRAPHY.body,
-    color: COLORS.text,
+    color: themeColors.text,
   },
   setUnitText: {
     ...TYPOGRAPHY.meta,
-    color: COLORS.textMeta,
+    color: themeColors.textMeta,
   },
   noDataText: {
     ...TYPOGRAPHY.meta,
-    color: COLORS.textMeta,
+    color: themeColors.textMeta,
   },
   divider: {
     height: 1,
-    backgroundColor: COLORS.borderDimmed,
+    backgroundColor: themeColors.borderDimmed,
   },
 });

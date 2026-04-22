@@ -4,7 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import * as Haptics from 'expo-haptics';
 import { useStore } from '../store';
-import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS, CARDS } from '../constants';
+import { SPACING, TYPOGRAPHY, BORDER_RADIUS, CARDS } from '../constants';
 import { useAppTheme } from '../theme/useAppTheme';
 import {
   executionCtaLabelStyle,
@@ -19,6 +19,7 @@ import { ShapeConfetti } from '../components/common/ShapeConfetti';
 import { formatWeightForLoad, toDisplayWeight, fromDisplayWeight } from '../utils/weight';
 import type { AccessoryItem } from '../types/training';
 import { migrateItemsArray, getDisplayValuesFromItem } from '../utils/exerciseMigration';
+import { getAppThemeFromStore } from '../theme/getAppThemeFromStore';
 
 // Enable LayoutAnimation on Android
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -449,7 +450,7 @@ export function AccessoriesExecutionScreen() {
               activeOpacity={1}
             >
               <Text style={styles.removeButtonText}>{t('remove')}</Text>
-              <IconTrash size={16} color={COLORS.error} />
+              <IconTrash size={16} color={themeColors.error} />
             </TouchableOpacity>
           )}
         </View>
@@ -467,7 +468,7 @@ export function AccessoriesExecutionScreen() {
         {allGroupsComplete ? (
           <View style={styles.historyViewContainer}>
             <View style={styles.historyViewHeader}>
-              <IconCheckmark size={16} color={COLORS.successBright} />
+              <IconCheckmark size={16} color={themeColors.successBright} />
               <Text style={styles.historyViewTitle}>{t('workoutComplete')}</Text>
             </View>
             {accessoryGroups.flatMap((group) =>
@@ -583,7 +584,7 @@ export function AccessoriesExecutionScreen() {
                                     {exercise.movementId}
                                   </Text>
                                   {(isExerciseCompleted || isCompleted) && (
-                                    <IconCheck size={20} color={COLORS.successBright} />
+                                    <IconCheck size={20} color={themeColors.successBright} />
                                   )}
                                 </View>
 
@@ -605,7 +606,7 @@ export function AccessoriesExecutionScreen() {
                                       )}
                                     </View>
                                     <View style={styles.editIconContainer}>
-                                      <IconEdit size={20} color={COLORS.textMeta} />
+                                      <IconEdit size={20} color={themeColors.textMeta} />
                                     </View>
                                   </View>
                                 )}
@@ -628,7 +629,7 @@ export function AccessoriesExecutionScreen() {
                     <View style={styles.inlineStartButtonInner}>
                       <Text style={styles.inlineStartButtonText}>{t('start')}</Text>
                     </View>
-                    <View style={[styles.inlineSetIndicator, { backgroundColor: COLORS.canvasContainer }]}>
+                    <View style={[styles.inlineSetIndicator, { backgroundColor: themeColors.canvasContainer }]}>
                       <Text style={[styles.setCountText, { color: themeColors.textMeta }]} numberOfLines={1}>
                         {currentRound + 1}/{group.totalRounds}
                       </Text>
@@ -776,10 +777,11 @@ export function AccessoriesExecutionScreen() {
   );
 }
 
+const themeColors = getAppThemeFromStore().colors;
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.backgroundCanvas,
+    backgroundColor: themeColors.backgroundCanvas,
   },
   header: {
     paddingBottom: 0,
@@ -815,7 +817,7 @@ const styles = StyleSheet.create({
     ...TYPOGRAPHY.body,
     fontSize: 15,
     fontWeight: '500',
-    color: COLORS.error,
+    color: themeColors.error,
   },
   headerTitle: {
     ...TYPOGRAPHY.h3,
@@ -857,14 +859,14 @@ const styles = StyleSheet.create({
   },
   supersetDivider: {
     height: 1,
-    backgroundColor: COLORS.border,
+    backgroundColor: themeColors.border,
     marginHorizontal: 16,
   },
   exerciseContentDimmed: {
     opacity: 0.5,
   },
   setCountIndicator: {
-    backgroundColor: COLORS.canvasContainer,
+    backgroundColor: themeColors.canvasContainer,
     borderTopLeftRadius: 0,
     borderTopRightRadius: BORDER_RADIUS.sm,
     borderBottomLeftRadius: 0,
@@ -882,7 +884,7 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 2,
-    backgroundColor: COLORS.textMeta,
+    backgroundColor: themeColors.textMeta,
     // Use transform to make it appear as 4x4 while occupying 8x8 space
     transform: [{ scale: 0.5 }],
   },
@@ -890,13 +892,13 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: COLORS.text,
+    backgroundColor: themeColors.text,
     transform: [{ scale: 1 }],
   },
   roundDotActive: {
     backgroundColor: 'transparent',
     borderWidth: 2,
-    borderColor: COLORS.text,
+    borderColor: themeColors.text,
     width: 8,
     height: 8,
     borderRadius: 4,
@@ -923,10 +925,10 @@ const styles = StyleSheet.create({
   },
   exerciseNameTextInCard: {
     ...TYPOGRAPHY.meta,
-    color: COLORS.textMeta,
+    color: themeColors.textMeta,
   },
   exerciseNameTextActive: {
-    color: COLORS.text,
+    color: themeColors.text,
   },
   exerciseNameRow: {
     flexDirection: 'row',
@@ -956,13 +958,13 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: COLORS.borderDimmed,
+    backgroundColor: themeColors.borderDimmed,
   },
   progressDotCompleted: {
-    backgroundColor: COLORS.signalPositive,
+    backgroundColor: themeColors.signalPositive,
   },
   progressDotActive: {
-    backgroundColor: COLORS.accentPrimary,
+    backgroundColor: themeColors.accentPrimary,
     width: 12,
     height: 12,
     borderRadius: 6,
@@ -970,7 +972,7 @@ const styles = StyleSheet.create({
   progressText: {
     ...TYPOGRAPHY.meta,
     fontSize: 12,
-    color: COLORS.textMeta,
+    color: themeColors.textMeta,
     marginLeft: 4,
   },
   activeItemWrapper: {
@@ -979,7 +981,7 @@ const styles = StyleSheet.create({
   itemCard: {
     ...CARDS.cardDeep.outer,
     borderWidth: 2,
-    borderColor: COLORS.accentPrimary,
+    borderColor: themeColors.accentPrimary,
   },
   itemCardInner: {
     ...CARDS.cardDeep.inner,
@@ -1027,7 +1029,7 @@ const styles = StyleSheet.create({
   },
   itemCollapsedUnit: {
     ...TYPOGRAPHY.body,
-    color: COLORS.textMeta,
+    color: themeColors.textMeta,
   },
   itemCheckIcon: {
     margin: -4,
@@ -1057,7 +1059,7 @@ const styles = StyleSheet.create({
   },
   unit: {
     ...TYPOGRAPHY.body,
-    color: COLORS.textMeta,
+    color: themeColors.textMeta,
   },
   editIconContainer: {
     marginLeft: SPACING.md,
@@ -1082,13 +1084,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 8,
-    backgroundColor: COLORS.accentPrimary,
+    backgroundColor: themeColors.accentPrimary,
     marginLeft: 8,
   },
   doneEditButtonText: {
     ...TYPOGRAPHY.bodyBold,
     fontSize: 14,
-    color: COLORS.backgroundCanvas,
+    color: themeColors.backgroundCanvas,
   },
   valuesWithEditContainer: {
     flexDirection: 'row',
@@ -1104,7 +1106,7 @@ const styles = StyleSheet.create({
   },
   valueSeparator: {
     ...TYPOGRAPHY.body,
-    color: COLORS.textMeta,
+    color: themeColors.textMeta,
   },
   adjustmentRow: {
     flexDirection: 'row',
@@ -1128,7 +1130,7 @@ const styles = StyleSheet.create({
   },
   unit: {
     ...TYPOGRAPHY.h1,
-    color: COLORS.textMeta,
+    color: themeColors.textMeta,
   },
   mediumValue: {
     ...TYPOGRAPHY.body,
@@ -1136,7 +1138,7 @@ const styles = StyleSheet.create({
   },
   mediumUnit: {
     ...TYPOGRAPHY.body,
-    color: COLORS.textMeta,
+    color: themeColors.textMeta,
   },
   buttonsContainer: {
     flexDirection: 'row',
@@ -1162,7 +1164,7 @@ const styles = StyleSheet.create({
     borderCurve: 'continuous',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: COLORS.accentPrimaryDimmed,
+    backgroundColor: themeColors.accentPrimaryDimmed,
   },
   dividerContainer: {
     height: 2,
@@ -1171,7 +1173,7 @@ const styles = StyleSheet.create({
   },
   dividerTop: {
     height: 1,
-    backgroundColor: COLORS.borderDimmed,
+    backgroundColor: themeColors.borderDimmed,
   },
   dividerBottom: {
     height: 1,
@@ -1185,7 +1187,7 @@ const styles = StyleSheet.create({
     right: 0,
     paddingHorizontal: SPACING.xxl,
     paddingTop: SPACING.md,
-    backgroundColor: COLORS.backgroundCanvas,
+    backgroundColor: themeColors.backgroundCanvas,
   },
   markAsDoneButton: {
     width: '100%',
@@ -1200,11 +1202,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   markAsDoneButtonBackground: {
-    backgroundColor: COLORS.accentPrimary,
+    backgroundColor: themeColors.accentPrimary,
   },
   markAsDoneButtonText: {
     ...executionCtaLabelStyle,
-    color: COLORS.backgroundCanvas,
+    color: themeColors.backgroundCanvas,
   },
   inlineStartButton: {
     marginLeft: 4,
@@ -1213,7 +1215,7 @@ const styles = StyleSheet.create({
     alignSelf: 'stretch',
   },
   inlineStartButtonInner: {
-    backgroundColor: COLORS.accentPrimary,
+    backgroundColor: themeColors.accentPrimary,
     borderTopLeftRadius: 0,
     borderTopRightRadius: BORDER_RADIUS.sm,
     borderBottomLeftRadius: 0,
@@ -1226,7 +1228,7 @@ const styles = StyleSheet.create({
   },
   inlineStartButtonText: {
     ...executionCtaLabelStyle,
-    color: COLORS.backgroundCanvas,
+    color: themeColors.backgroundCanvas,
   },
   inlineSetIndicator: {
     borderTopLeftRadius: 0,
@@ -1239,7 +1241,7 @@ const styles = StyleSheet.create({
   },
   exerciseSeparator: {
     height: 1,
-    backgroundColor: COLORS.borderDimmed,
+    backgroundColor: themeColors.borderDimmed,
     marginTop: 0,
     marginBottom: 4,
     marginHorizontal: 16,
@@ -1257,12 +1259,12 @@ const styles = StyleSheet.create({
   },
   adjustmentDrawerTitle: {
     ...TYPOGRAPHY.h3,
-    color: COLORS.text,
+    color: themeColors.text,
     marginBottom: SPACING.lg,
     flex: 1,
   },
   drawerValuesCard: {
-    backgroundColor: COLORS.activeCard,
+    backgroundColor: themeColors.activeCard,
     borderRadius: BORDER_RADIUS.lg,
     overflow: 'hidden',
   },
@@ -1287,26 +1289,26 @@ const styles = StyleSheet.create({
   },
   drawerInput: {
     ...TYPOGRAPHY.h1,
-    color: COLORS.text,
+    color: themeColors.text,
     padding: 0,
     minWidth: 30,
   },
   drawerInputUnit: {
     ...TYPOGRAPHY.body,
-    color: COLORS.textMeta,
+    color: themeColors.textMeta,
   },
   keyboardAccessory: {
-    backgroundColor: COLORS.backgroundCanvas,
+    backgroundColor: themeColors.backgroundCanvas,
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderTopWidth: 1,
-    borderTopColor: COLORS.border,
+    borderTopColor: themeColors.border,
     alignItems: 'center',
   },
   keyboardDoneButton: {
     alignSelf: 'center',
     flexShrink: 0,
-    backgroundColor: COLORS.accentPrimary,
+    backgroundColor: themeColors.accentPrimary,
     borderRadius: BORDER_RADIUS.md,
     height: EXECUTION_CTA_HEIGHT,
     minHeight: EXECUTION_CTA_HEIGHT,
@@ -1329,7 +1331,7 @@ const styles = StyleSheet.create({
   },
   drawerAdjustUnit: {
     ...TYPOGRAPHY.body,
-    color: COLORS.textMeta,
+    color: themeColors.textMeta,
   },
   drawerAdjustButtons: {
     flexDirection: 'row',
@@ -1337,7 +1339,7 @@ const styles = StyleSheet.create({
   },
   drawerAdjustDivider: {
     height: 1,
-    backgroundColor: COLORS.borderDimmed,
+    backgroundColor: themeColors.borderDimmed,
     marginHorizontal: SPACING.xl,
   },
   doneButton: {
@@ -1348,7 +1350,7 @@ const styles = StyleSheet.create({
   },
   doneButtonText: {
     ...TYPOGRAPHY.bodyBold,
-    color: COLORS.successBright,
+    color: themeColors.successBright,
   },
   historyViewContainer: {
     paddingTop: SPACING.xs,
@@ -1361,13 +1363,13 @@ const styles = StyleSheet.create({
   },
   historyViewTitle: {
     ...TYPOGRAPHY.bodyBold,
-    color: COLORS.successBright,
+    color: themeColors.successBright,
   },
   historyExerciseRow: {
     flexDirection: 'row',
     paddingVertical: SPACING.md,
     borderBottomWidth: 1,
-    borderBottomColor: COLORS.borderDimmed,
+    borderBottomColor: themeColors.borderDimmed,
   },
   historyExerciseNameColumn: {
     flex: 1,
@@ -1375,7 +1377,7 @@ const styles = StyleSheet.create({
   },
   historyExerciseName: {
     ...TYPOGRAPHY.body,
-    color: COLORS.text,
+    color: themeColors.text,
   },
   historyExerciseDataColumn: {
     minWidth: 120,
@@ -1394,11 +1396,11 @@ const styles = StyleSheet.create({
   },
   historySetValue: {
     ...TYPOGRAPHY.body,
-    color: COLORS.text,
+    color: themeColors.text,
     fontVariant: ['tabular-nums'] as any,
   },
   historySetUnit: {
     ...TYPOGRAPHY.meta,
-    color: COLORS.textMeta,
+    color: themeColors.textMeta,
   },
 });

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState , useMemo} from 'react';
 import { ActivityIndicator, View, StyleSheet } from 'react-native';
 import { DefaultTheme, NavigationContainer } from '@react-navigation/native';
 import AppNavigator from './AppNavigator';
@@ -6,10 +6,10 @@ import { navigationRef } from './navigationService';
 import { LoginScreen } from '../screens/LoginScreen';
 import { getCurrentUser } from '../services/authService';
 import { isSupabaseConfigured } from '../services/supabase';
-import { COLORS } from '../constants';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ScheduleDeckTransitionProvider } from '../context/ScheduleDeckTransitionContext';
 import { useAppTheme } from '../theme/useAppTheme';
+import { getAppThemeFromStore } from '../theme/getAppThemeFromStore';
 
 const GUEST_MODE_KEY = '@app/guestMode';
 
@@ -62,7 +62,7 @@ export function RootNavigator() {
   if (authState === 'loading') {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={COLORS.primary} />
+        <ActivityIndicator size="large" color={themeColors.primary} />
       </View>
     );
   }
@@ -85,10 +85,11 @@ export function RootNavigator() {
   );
 }
 
+const themeColors = getAppThemeFromStore().colors;
 const styles = StyleSheet.create({
   loadingContainer: {
     flex: 1,
-    backgroundColor: COLORS.backgroundCanvas,
+    backgroundColor: themeColors.backgroundCanvas,
     alignItems: 'center',
     justifyContent: 'center',
   },

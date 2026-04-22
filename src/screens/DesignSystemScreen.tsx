@@ -2,12 +2,16 @@ import React from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
-import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS, GRADIENTS, BUTTONS, CARDS } from '../constants';
+import { SPACING, TYPOGRAPHY, BORDER_RADIUS, GRADIENTS, BUTTONS, CARDS } from '../constants';
 import { 
   IconAdd, IconCheck, IconPlay, IconPause, IconEdit, IconTrash, 
   IconCalendar, IconWorkouts, IconUser, IconArrowLeft 
 } from '../components/icons';
 import { useTranslation } from '../i18n/useTranslation';
+import { useAppTheme } from '../theme/useAppTheme';
+import { getAppThemeFromStore } from '../theme/getAppThemeFromStore';
+
+const snapshotColors = getAppThemeFromStore().colors;
 
 interface DesignSystemScreenProps {
   navigation: any;
@@ -15,39 +19,41 @@ interface DesignSystemScreenProps {
 
 const LIGHT_COLORS = {
   // Backgrounds
-  backgroundCanvas: COLORS.backgroundCanvas,
-  backgroundContainer: COLORS.backgroundContainer,
-  activeCard: COLORS.activeCard,
-  
+  backgroundCanvas: snapshotColors.backgroundCanvas,
+  backgroundContainer: snapshotColors.backgroundContainer,
+  activeCard: snapshotColors.activeCard,
+
   // Text
-  text: COLORS.text,
-  textSecondary: COLORS.textSecondary,
-  textMeta: COLORS.textMeta,
-  textMetaSoft: COLORS.textMetaSoft,
-  textDisabled: COLORS.textDisabled,
-  
+  text: snapshotColors.text,
+  textSecondary: snapshotColors.textSecondary,
+  textMeta: snapshotColors.textMeta,
+  textMetaSoft: snapshotColors.textMetaSoft,
+  textDisabled: snapshotColors.textDisabled,
+
   // Borders
-  border: COLORS.border,
-  borderDimmed: COLORS.borderDimmed,
-  disabledBorder: COLORS.disabledBorder,
-  
+  border: snapshotColors.border,
+  borderDimmed: snapshotColors.borderDimmed,
+  disabledBorder: snapshotColors.disabledBorder,
+
   // Accent
-  accentPrimary: COLORS.accentPrimary,
-  accentPrimaryLight: COLORS.accentPrimaryLight,
-  accentPrimaryDark: COLORS.accentPrimaryDark,
-  accentPrimaryDimmed: COLORS.accentPrimaryDimmed,
-  
+  secondary: snapshotColors.secondary,
+  accentPrimary: snapshotColors.accentPrimary,
+  accentPrimaryLight: snapshotColors.accentPrimaryLight,
+  accentPrimaryDark: snapshotColors.accentPrimaryDark,
+  accentPrimaryDimmed: snapshotColors.accentPrimaryDimmed,
+
   // Signals
-  signalPositive: COLORS.signalPositive,
-  signalNegative: COLORS.signalNegative,
-  signalWarning: COLORS.signalWarning,
-  
+  signalPositive: snapshotColors.signalPositive,
+  signalNegative: snapshotColors.signalNegative,
+  signalWarning: snapshotColors.signalWarning,
+
   // Overlay
-  overlay: COLORS.overlay,
-};
+  overlay: snapshotColors.overlay,
+} as const;
 
 export function DesignSystemScreen({ navigation }: DesignSystemScreenProps) {
   const { t } = useTranslation();
+  const { colors: themeColors } = useAppTheme();
   
   return (
     <View style={styles.gradient}>
@@ -92,10 +98,10 @@ export function DesignSystemScreen({ navigation }: DesignSystemScreenProps) {
               <View style={styles.clarificationRow}>
                 <View style={styles.clarificationItem}>
                   <View style={styles.colorSwatchWrapper}>
-                    <View style={[styles.colorSwatchGradient, { backgroundColor: COLORS.accentPrimary }]} />
+                    <View style={[styles.colorSwatchGradient, { backgroundColor: themeColors.accentPrimary }]} />
                   </View>
                   <Text style={styles.clarificationLabel}>Solid Color</Text>
-                  <Text style={styles.clarificationValue}>{COLORS.accentPrimary}</Text>
+                  <Text style={styles.clarificationValue}>{themeColors.accentPrimary}</Text>
                   <Text style={styles.clarificationUsage}>Use for: borders, highlights, animated effects</Text>
                 </View>
                 <View style={styles.clarificationItem}>
@@ -403,7 +409,7 @@ export function DesignSystemScreen({ navigation }: DesignSystemScreenProps) {
               
               {/* Card with Active Border */}
               <View style={styles.animatedCardWrapper}>
-                <View style={[styles.animatedCardInner, { borderWidth: 2, borderColor: COLORS.accentPrimary }]}>
+                <View style={[styles.animatedCardInner, { borderWidth: 2, borderColor: themeColors.accentPrimary }]}>
                   <Text style={styles.cardTitle}>Card with Active Border</Text>
                   <Text style={styles.cardDescription}>
                     Solid 2px border using accentPrimary
@@ -423,7 +429,7 @@ export function DesignSystemScreen({ navigation }: DesignSystemScreenProps) {
 const styles = StyleSheet.create({
   gradient: {
     flex: 1,
-    backgroundColor: COLORS.backgroundCanvas,
+    backgroundColor: snapshotColors.backgroundCanvas,
   },
   container: {
     flex: 1,
@@ -474,7 +480,7 @@ const styles = StyleSheet.create({
   
   // Colors
   accentClarification: {
-    backgroundColor: COLORS.activeCard,
+    backgroundColor: snapshotColors.activeCard,
     borderRadius: BORDER_RADIUS.md,
     padding: SPACING.lg,
     marginBottom: SPACING.xl,
@@ -584,7 +590,7 @@ const styles = StyleSheet.create({
   },
   divider: {
     height: 1,
-    backgroundColor: COLORS.borderDimmed,
+    backgroundColor: snapshotColors.borderDimmed,
   },
 
   // Typography
@@ -657,10 +663,10 @@ const styles = StyleSheet.create({
     borderLeftWidth: 2,
     borderBottomWidth: 2,
     borderRightWidth: 2,
-    borderTopColor: COLORS.accentPrimaryLight,
-    borderLeftColor: COLORS.accentPrimaryLight,
-    borderBottomColor: COLORS.accentPrimaryDark,
-    borderRightColor: COLORS.accentPrimaryDark,
+    borderTopColor: snapshotColors.accentPrimaryLight,
+    borderLeftColor: snapshotColors.accentPrimaryLight,
+    borderBottomColor: snapshotColors.accentPrimaryDark,
+    borderRightColor: snapshotColors.accentPrimaryDark,
     overflow: 'hidden',
   },
   buttonPrimary: {
@@ -701,7 +707,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: SPACING.sm,
-    backgroundColor: COLORS.activeCard,
+    backgroundColor: snapshotColors.activeCard,
     paddingVertical: SPACING.md,
     paddingHorizontal: SPACING.xl,
     borderRadius: BORDER_RADIUS.md,
@@ -757,15 +763,15 @@ const styles = StyleSheet.create({
   cardShadowWhite: {
   },
   cardWithShadow: {
-    backgroundColor: COLORS.activeCard,
+    backgroundColor: snapshotColors.activeCard,
     borderRadius: 12,
     borderCurve: 'continuous',
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: snapshotColors.border,
     overflow: 'hidden',
   },
   cardWithShadowInner: {
-    backgroundColor: COLORS.activeCard,
+    backgroundColor: snapshotColors.activeCard,
     borderRadius: 12,
     borderCurve: 'continuous',
     paddingHorizontal: 24,
@@ -802,4 +808,3 @@ const styles = StyleSheet.create({
     padding: SPACING.lg,
   },
 });
-

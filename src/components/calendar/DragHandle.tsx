@@ -1,6 +1,8 @@
 import React from 'react';
 import { View, StyleSheet } from 'react-native';
-import { COLORS, SPACING } from '../../constants';
+import { SPACING } from '../../constants';
+import { useAppTheme } from '../../theme/useAppTheme';
+import { getAppThemeFromStore } from '../../theme/getAppThemeFromStore';
 
 export function DragHandle({ testID }: { testID?: string }) {
   return (
@@ -10,6 +12,7 @@ export function DragHandle({ testID }: { testID?: string }) {
   );
 }
 
+const themeColors = getAppThemeFromStore().colors;
 const styles = StyleSheet.create({
   container: {
     alignItems: 'center',
@@ -20,6 +23,6 @@ const styles = StyleSheet.create({
     width: 36,
     height: 4,
     borderRadius: 2,
-    backgroundColor: COLORS.border,
+    backgroundColor: themeColors.border,
   },
 });

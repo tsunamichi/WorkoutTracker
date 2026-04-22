@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
-import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS } from '../constants';
+import { SPACING, TYPOGRAPHY, BORDER_RADIUS } from '../constants';
 import { useTranslation } from '../i18n/useTranslation';
 import {
   signInWithApple,
@@ -20,6 +20,8 @@ import {
 import { isSupabaseConfigured } from '../services/supabase';
 import { getCloudBackupInfo, downloadBackup } from '../services/cloudSync';
 import { useStore } from '../store';
+import { useAppTheme } from '../theme/useAppTheme';
+import { getAppThemeFromStore } from '../theme/getAppThemeFromStore';
 
 interface LoginScreenProps {
   onAuthenticated: () => void;
@@ -165,7 +167,7 @@ export function LoginScreen({ onAuthenticated, onContinueAsGuest }: LoginScreenP
           >
             {isSigningIn ? (
               <View style={styles.signingInRow}>
-                <ActivityIndicator size="small" color={COLORS.backgroundCanvas} />
+                <ActivityIndicator size="small" color={themeColors.backgroundCanvas} />
                 {statusText ? <Text style={styles.statusText}>{statusText}</Text> : null}
               </View>
             ) : (
@@ -192,10 +194,11 @@ export function LoginScreen({ onAuthenticated, onContinueAsGuest }: LoginScreenP
   );
 }
 
+const themeColors = getAppThemeFromStore().colors;
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.backgroundCanvas,
+    backgroundColor: themeColors.backgroundCanvas,
     justifyContent: 'space-between',
     paddingHorizontal: SPACING.xxl,
   },
@@ -214,14 +217,14 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 34,
     fontWeight: '600',
-    color: COLORS.text,
+    color: themeColors.text,
     textAlign: 'center',
     marginBottom: SPACING.lg,
     lineHeight: 40,
   },
   subtitle: {
     ...TYPOGRAPHY.body,
-    color: COLORS.textMeta,
+    color: themeColors.textMeta,
     textAlign: 'center',
     lineHeight: 22,
     maxWidth: 300,
@@ -264,12 +267,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingVertical: 16,
     borderRadius: BORDER_RADIUS.md,
-    backgroundColor: COLORS.activeCard,
+    backgroundColor: themeColors.activeCard,
     minHeight: 54,
   },
   guestButtonText: {
     fontSize: 17,
     fontWeight: '600',
-    color: COLORS.textSecondary,
+    color: themeColors.textSecondary,
   },
 });

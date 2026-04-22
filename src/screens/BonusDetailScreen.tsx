@@ -3,15 +3,18 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert } from 'rea
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { useStore } from '../store';
-import { COLORS, SPACING, TYPOGRAPHY, CARDS, BORDER_RADIUS } from '../constants';
+import { SPACING, TYPOGRAPHY, CARDS, BORDER_RADIUS } from '../constants';
 import { IconArrowLeft, IconTrash, IconPlay, IconCheckmark } from '../components/icons';
 import { useTranslation } from '../i18n/useTranslation';
 import type { RootStackParamList } from '../navigation/AppNavigator';
 import { formatWeightForLoad } from '../utils/weight';
+import { useAppTheme } from '../theme/useAppTheme';
+import { getAppThemeFromStore } from '../theme/getAppThemeFromStore';
 
 type RouteParams = RouteProp<RootStackParamList, 'BonusDetail'>;
 
 export function BonusDetailScreen() {
+  const { colors: themeColors } = useAppTheme();
   const navigation = useNavigation<any>();
   const route = useRoute<RouteParams>();
   const insets = useSafeAreaInsets();
@@ -32,7 +35,7 @@ export function BonusDetailScreen() {
       <View style={[styles.container, { paddingTop: insets.top }]}>
         <View style={styles.header}>
           <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-            <IconArrowLeft size={24} color={COLORS.text} />
+            <IconArrowLeft size={24} color={themeColors.text} />
           </TouchableOpacity>
         </View>
       </View>
@@ -164,11 +167,11 @@ export function BonusDetailScreen() {
     <View style={[styles.container, { paddingTop: insets.top }]}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-          <IconArrowLeft size={24} color={COLORS.text} />
+          <IconArrowLeft size={24} color={themeColors.text} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>{log.presetName}</Text>
         <TouchableOpacity onPress={handleDelete} style={styles.backButton}>
-          <IconTrash size={20} color={COLORS.textMeta} />
+          <IconTrash size={20} color={themeColors.textMeta} />
         </TouchableOpacity>
       </View>
 
@@ -177,7 +180,7 @@ export function BonusDetailScreen() {
           <Text style={styles.typeLabel}>{typeLabel}</Text>
           {isCompleted && (
             <View style={styles.completedBadge}>
-              <IconCheckmark size={14} color={COLORS.successBright} />
+              <IconCheckmark size={14} color={themeColors.successBright} />
               <Text style={styles.completedText}>{t('completed')}</Text>
             </View>
           )}
@@ -189,7 +192,7 @@ export function BonusDetailScreen() {
       {!isCompleted && (
         <View style={[styles.footer, { paddingBottom: insets.bottom + SPACING.md }]}>
           <TouchableOpacity style={styles.startButton} onPress={handleStart} activeOpacity={0.8}>
-            <IconPlay size={18} color={COLORS.backgroundCanvas} />
+            <IconPlay size={18} color={themeColors.backgroundCanvas} />
             <Text style={styles.startButtonText}>{t('start')}</Text>
           </TouchableOpacity>
         </View>
@@ -198,10 +201,11 @@ export function BonusDetailScreen() {
   );
 }
 
+const themeColors = getAppThemeFromStore().colors;
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.backgroundCanvas,
+    backgroundColor: themeColors.backgroundCanvas,
   },
   header: {
     flexDirection: 'row',
@@ -218,7 +222,7 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     ...TYPOGRAPHY.h3,
-    color: COLORS.text,
+    color: themeColors.text,
     flex: 1,
     textAlign: 'center',
   },
@@ -236,7 +240,7 @@ const styles = StyleSheet.create({
   },
   typeLabel: {
     ...TYPOGRAPHY.meta,
-    color: COLORS.textMeta,
+    color: themeColors.textMeta,
     textTransform: 'uppercase',
   },
   completedBadge: {
@@ -246,7 +250,7 @@ const styles = StyleSheet.create({
   },
   completedText: {
     ...TYPOGRAPHY.meta,
-    color: COLORS.successBright,
+    color: themeColors.successBright,
   },
   detailSection: {
     gap: SPACING.sm,
@@ -257,29 +261,29 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: SPACING.sm,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: COLORS.backgroundContainer,
+    borderBottomColor: themeColors.backgroundContainer,
   },
   resultRow: {
     marginTop: SPACING.md,
     borderTopWidth: 1,
-    borderTopColor: COLORS.backgroundContainer,
+    borderTopColor: themeColors.backgroundContainer,
   },
   detailLabel: {
     ...TYPOGRAPHY.body,
-    color: COLORS.textMeta,
+    color: themeColors.textMeta,
   },
   detailValue: {
     ...TYPOGRAPHY.body,
-    color: COLORS.text,
+    color: themeColors.text,
   },
   resultValue: {
     ...TYPOGRAPHY.body,
-    color: COLORS.successBright,
+    color: themeColors.successBright,
     fontWeight: '600',
   },
   metaText: {
     ...TYPOGRAPHY.body,
-    color: COLORS.textMeta,
+    color: themeColors.textMeta,
   },
   exerciseRow: {
     flexDirection: 'row',
@@ -287,17 +291,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: SPACING.md,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: COLORS.backgroundContainer,
+    borderBottomColor: themeColors.backgroundContainer,
   },
   exerciseName: {
     ...TYPOGRAPHY.body,
-    color: COLORS.text,
+    color: themeColors.text,
     flex: 1,
     marginRight: SPACING.md,
   },
   exerciseMeta: {
     ...TYPOGRAPHY.meta,
-    color: COLORS.textMeta,
+    color: themeColors.textMeta,
   },
   footer: {
     paddingHorizontal: SPACING.xxl,
@@ -309,11 +313,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 8,
     height: 56,
-    backgroundColor: COLORS.accentPrimary,
+    backgroundColor: themeColors.accentPrimary,
     borderRadius: BORDER_RADIUS.md,
   },
   startButtonText: {
     ...TYPOGRAPHY.metaBold,
-    color: COLORS.backgroundCanvas,
+    color: themeColors.backgroundCanvas,
   },
 });

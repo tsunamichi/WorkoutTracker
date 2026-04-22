@@ -1,8 +1,8 @@
 import React from 'react';
 import { TouchableOpacity, StyleSheet, Text, Image } from 'react-native';
 import { IconUser } from './icons';
-import { COLORS } from '../constants';
 import { useTranslation } from '../i18n/useTranslation';
+import { useAppTheme } from '../theme/useAppTheme';
 
 interface ProfileAvatarProps {
   onPress: () => void;
@@ -13,14 +13,17 @@ interface ProfileAvatarProps {
   imageUri?: string | null;
 }
 
-export function ProfileAvatar({ 
-  onPress, 
+export function ProfileAvatar({
+  onPress,
   size = 32,
-  backgroundColor = COLORS.canvas,
-  textColor = COLORS.textPrimary,
+  backgroundColor: bgProp,
+  textColor: textColorProp,
   showInitial = false,
   imageUri = null,
 }: ProfileAvatarProps) {
+  const { colors: themeColors } = useAppTheme();
+  const backgroundColor = bgProp ?? themeColors.canvas;
+  const textColor = textColorProp ?? themeColors.textPrimary;
   const { t } = useTranslation();
   return (
     <TouchableOpacity 
@@ -58,5 +61,4 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
 });
-
 

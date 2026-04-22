@@ -13,10 +13,12 @@ import Animated, {
 import * as Haptics from 'expo-haptics';
 import dayjs from 'dayjs';
 import isoWeek from 'dayjs/plugin/isoWeek';
-import { COLORS, SPACING, TYPOGRAPHY } from '../../constants';
+import { SPACING, TYPOGRAPHY } from '../../constants';
 import { CalendarDayButton } from './CalendarDayButton';
 import { DragHandle } from './DragHandle';
 import type { CyclePlan, ScheduledWorkout } from '../../types/training';
+import { useAppTheme } from '../../theme/useAppTheme';
+import { getAppThemeFromStore } from '../../theme/getAppThemeFromStore';
 
 dayjs.extend(isoWeek);
 
@@ -125,7 +127,7 @@ export function ExpandableCalendarStrip({
     }
 
     const paintPlan = (plan: CyclePlan) => {
-      const color = COLORS.cycleStripBackground;
+      const color = themeColors.cycleStripBackground;
       const start = dayjs(plan.startDate);
 
       // For inactive plans, only paint dates that have actual workouts
@@ -394,7 +396,7 @@ export function ExpandableCalendarStrip({
                     borderRadius: 20,
                     overflow: 'hidden',
                     zIndex: 1,
-                    backgroundColor: COLORS.backgroundContainer,
+                    backgroundColor: themeColors.backgroundContainer,
                   }}
                   pointerEvents="none"
                 >
@@ -408,7 +410,7 @@ export function ExpandableCalendarStrip({
                           y1={0}
                           x2={offset + 500}
                           y2={500}
-                          stroke={COLORS.cycleStripBackground}
+                          stroke={themeColors.cycleStripBackground}
                           strokeWidth={2}
                         />
                       );
@@ -523,6 +525,7 @@ export function ExpandableCalendarStrip({
   );
 }
 
+const themeColors = getAppThemeFromStore().colors;
 const styles = StyleSheet.create({
   wrapper: {
     paddingHorizontal: 16,
@@ -546,7 +549,7 @@ const styles = StyleSheet.create({
   },
   navArrowText: {
     fontSize: 22,
-    color: COLORS.textPrimary,
+    color: themeColors.textPrimary,
     fontWeight: '500',
   },
   monthLabel: {
@@ -562,7 +565,7 @@ const styles = StyleSheet.create({
   },
   dayOfWeekText: {
     ...TYPOGRAPHY.note,
-    color: COLORS.textMeta,
+    color: themeColors.textMeta,
     textAlign: 'center',
   },
   weeksContainer: {

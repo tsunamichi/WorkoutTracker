@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, StyleSheet } from 'react-native';
 import Svg, { Line } from 'react-native-svg';
-import { COLORS } from '../../constants';
+import { useAppTheme } from '../../theme/useAppTheme';
 
 interface DiagonalLinePatternProps {
   width: number | string;
@@ -10,6 +10,7 @@ interface DiagonalLinePatternProps {
 }
 
 export function DiagonalLinePattern({ width, height, borderRadius = 0 }: DiagonalLinePatternProps) {
+  const { colors: themeColors } = useAppTheme();
   // Spacing: 2px line + 4px gap = 6px
   const spacing = 6;
   const lineWidth = 2;
@@ -29,7 +30,7 @@ export function DiagonalLinePattern({ width, height, borderRadius = 0 }: Diagona
         y1="0"
         x2={offset + maxDimension}
         y2={maxDimension}
-        stroke={COLORS.activeCard}
+        stroke={themeColors.activeCard}
         strokeWidth={lineWidth}
         strokeOpacity={0.8}
       />

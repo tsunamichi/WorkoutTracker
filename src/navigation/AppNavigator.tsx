@@ -28,7 +28,6 @@ import { CoreProgramScreen } from '../screens/CoreProgramScreen';
 import { CycleDetailScreen } from '../screens/CycleDetailScreen';
 import { CyclePlanDetailScreen } from '../screens/CyclePlanDetailScreen';
 import { CycleConflictsScreen } from '../screens/CycleConflictsScreen';
-// import { WorkoutExecutionScreen } from '../screens/WorkoutExecutionScreen'; // Removed - navigating directly to ExerciseExecution
 import WorkoutEditScreen from '../screens/WorkoutEditScreen';
 import { ExerciseDetailScreen } from '../screens/ExerciseDetailScreen';
 import { DesignSystemScreen } from '../screens/DesignSystemScreen';
@@ -51,7 +50,7 @@ import { WorkoutCompletionCelebrationPrototypeScreen } from '../screens/WorkoutC
 import { WorkoutCompletionCelebrationRouteScreen } from '../screens/WorkoutCompletionCelebrationRouteScreen';
 import type { WorkoutCompletionCelebrationData } from '../components/celebration/WorkoutCompletionCelebrationScreen';
 import { IconCalendar, IconHistory, IconAdd, IconStopwatch, IconPlay, IconCore, IconWarmup } from '../components/icons';
-import { COLORS, TYPOGRAPHY, SPACING } from '../constants';
+import { TYPOGRAPHY, SPACING } from '../constants';
 import { useStore } from '../store';
 import { useAppTheme } from '../theme/useAppTheme';
 import { CycleTemplateId } from '../types/workout';
@@ -65,6 +64,7 @@ import { RepeatCycleSheet } from '../components/RepeatCycleSheet';
 import * as Haptics from 'expo-haptics';
 import dayjs from 'dayjs';
 import { useTranslation } from '../i18n/useTranslation';
+import { getAppThemeFromStore } from '../theme/getAppThemeFromStore';
 
 export type RootStackParamList = {
   Tabs: { initialTab?: 'Schedule' | 'Progress' } | undefined;
@@ -108,7 +108,6 @@ export type RootStackParamList = {
   CyclePlanDetail: { planId: string };
   Progress: { exerciseId?: string; exerciseName?: string } | undefined;
   CycleConflicts: { plan: any; conflicts: any[]; planId?: string; fromPauseShift?: boolean; resumeDate?: string };
-  WorkoutExecution: { workoutId?: string; cycleId?: string; templateId?: string; workoutTemplateId?: string; date: string; isLocked?: boolean };
   WorkoutEdit: { cycleId: string; workoutTemplateId: string; date: string };
   ExerciseDetail: { exerciseId: string; workoutKey: string };
   HIITTimerList: { bonusMode?: boolean } | undefined;
@@ -173,7 +172,7 @@ function TabNavigator() {
     () =>
       indicatorPosition.interpolate({
         inputRange: [0, 1],
-        outputRange: [COLORS.backgroundCanvas, tabThemeColors.accentPrimary],
+        outputRange: [themeColors.backgroundCanvas, tabThemeColors.accentPrimary],
       }),
     [indicatorPosition, tabThemeColors.accentPrimary],
   );
@@ -181,7 +180,7 @@ function TabNavigator() {
     () =>
       indicatorPosition.interpolate({
         inputRange: [0, 1],
-        outputRange: [tabThemeColors.accentPrimary, COLORS.backgroundCanvas],
+        outputRange: [tabThemeColors.accentPrimary, themeColors.backgroundCanvas],
       }),
     [indicatorPosition, tabThemeColors.accentPrimary],
   );
@@ -470,7 +469,7 @@ function TabNavigator() {
   };
   
   return (
-    <View style={{ flex: 1, backgroundColor: COLORS.backgroundCanvas }}>
+    <View style={{ flex: 1, backgroundColor: themeColors.backgroundCanvas }}>
       {/* Screen Content */}
       {activeTab === 'Schedule' ? (
         <TodayScreen 
@@ -538,7 +537,7 @@ function TabNavigator() {
             >
               <IconCalendar 
                 size={24} 
-                color={activeTab === 'Schedule' ? COLORS.backgroundCanvas : tabThemeColors.accentPrimary} 
+                color={activeTab === 'Schedule' ? themeColors.backgroundCanvas : tabThemeColors.accentPrimary} 
               />
             </Animated.View>
             <Animated.View
@@ -595,7 +594,7 @@ function TabNavigator() {
             >
               <IconHistory 
                 size={24} 
-                color={activeTab === 'Progress' ? COLORS.backgroundCanvas : tabThemeColors.accentPrimary} 
+                color={activeTab === 'Progress' ? themeColors.backgroundCanvas : tabThemeColors.accentPrimary} 
               />
             </Animated.View>
             <Animated.View
@@ -637,9 +636,9 @@ function TabNavigator() {
             <Text style={styles.bonusDrawerTitle}>{t('selectBonusType')}</Text>
             <View style={styles.bonusDrawerRow}>
               {([
-                { type: 'timer' as const, icon: <IconStopwatch size={22} color={COLORS.text} />, label: t('timer') },
-                { type: 'warmup' as const, icon: <IconWarmup size={22} color={COLORS.text} />, label: t('warmUp') },
-                { type: 'core' as const, icon: <IconCore size={22} color={COLORS.text} />, label: t('core') },
+                { type: 'timer' as const, icon: <IconStopwatch size={22} color={themeColors.text} />, label: t('timer') },
+                { type: 'warmup' as const, icon: <IconWarmup size={22} color={themeColors.text} />, label: t('warmUp') },
+                { type: 'core' as const, icon: <IconCore size={22} color={themeColors.text} />, label: t('core') },
               ]).map(({ type, icon, label }) => (
                 <Pressable
                   key={type}
@@ -713,6 +712,7 @@ function TabNavigator() {
   );
 }
 
+const themeColors = getAppThemeFromStore().colors;
 const styles = StyleSheet.create({
   bottomNavContainer: {
     position: 'absolute',
@@ -727,12 +727,12 @@ const styles = StyleSheet.create({
   tabBar: {
     flex: 1,
     height: 56,
-    backgroundColor: COLORS.accentPrimaryDimmed,
+    backgroundColor: themeColors.accentPrimaryDimmed,
     borderRadius: 28,
     flexDirection: 'row',
     position: 'relative',
     borderWidth: 1,
-    borderColor: COLORS.accentPrimary,
+    borderColor: themeColors.accentPrimary,
   },
   tabIndicator: {
     position: 'absolute',
@@ -741,7 +741,7 @@ const styles = StyleSheet.create({
     left: 4,
     right: '50%',
     marginRight: 4,
-    backgroundColor: COLORS.accentPrimary,
+    backgroundColor: themeColors.accentPrimary,
     borderRadius: 24,
     borderWidth: 0,
     borderColor: 'transparent',
@@ -770,7 +770,7 @@ const styles = StyleSheet.create({
   },
   bonusDrawerTitle: {
     ...TYPOGRAPHY.h3,
-    color: COLORS.text,
+    color: themeColors.text,
     marginBottom: SPACING.xl,
   },
   bonusDrawerRow: {
@@ -780,7 +780,7 @@ const styles = StyleSheet.create({
   },
   bonusDrawerItem: {
     flex: 1,
-    backgroundColor: COLORS.activeCard,
+    backgroundColor: themeColors.activeCard,
     borderRadius: 16,
     paddingVertical: SPACING.lg,
     paddingHorizontal: SPACING.md,
@@ -795,7 +795,7 @@ const styles = StyleSheet.create({
   bonusDrawerLabel: {
     fontSize: 13,
     fontWeight: '600' as const,
-    color: COLORS.text,
+    color: themeColors.text,
     textAlign: 'center',
   },
 });
@@ -911,7 +911,6 @@ export default function AppNavigator() {
         <Stack.Screen name="CyclePlanDetail" component={CyclePlanDetailScreen} />
         <Stack.Screen name="Progress" component={ProgressScreen} />
         <Stack.Screen name="CycleConflicts" component={CycleConflictsScreen} />
-        {/* <Stack.Screen name="WorkoutExecution" component={WorkoutExecutionScreen} /> */}
         {/* Removed - navigating directly to ExerciseExecution with type='main' */}
         <Stack.Screen name="WorkoutEdit" component={WorkoutEditScreen} />
         <Stack.Screen name="ExerciseDetail" component={ExerciseDetailScreen} />
@@ -941,5 +940,4 @@ export default function AppNavigator() {
     </View>
   );
 }
-
 

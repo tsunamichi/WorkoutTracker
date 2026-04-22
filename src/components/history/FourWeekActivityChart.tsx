@@ -3,8 +3,14 @@ import { View, Text, StyleSheet, Pressable, Animated, Easing } from 'react-nativ
 import Svg, { Path } from 'react-native-svg';
 import dayjs from 'dayjs';
 import type { HistoryGridRow } from '../../utils/historyWeekGrid';
+import { useAppTheme } from '../../theme/useAppTheme';
 import { HISTORY_CHART } from './historyChartLayout';
-import { HISTORY_VISUAL } from './historyVisualTokens';
+import {
+  textMetaForHistoryCalendarDayLabel,
+  textMetaForHistoryCalendarFutureFace,
+  historyCalendarEmptyUnselectedDayLabelFromContainerPrimary,
+  historyCalendarCompletedUnselectedDayLabelFromContainerSecondary,
+} from './historyTextMetaDerive';
 
 const WEEKDAY_LABELS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'] as const;
 
@@ -56,41 +62,49 @@ function cellState(iso: string, completed: ReadonlySet<string>, todayIso: string
 }
 
 function ChartDayDot({
-  isSunday,
   isSelected,
   dotState,
-  sundayNumber,
   dayOfMonth,
   accessibilityLabel,
   onPress,
   completedWorkoutColor,
   emptyDayFill,
+  futureDayFaceFill,
+  futureDayLabelColor,
+  emptyUnselectedDayLabelColor,
+  completedUnselectedDayLabelColor,
 }: {
-  isSunday: boolean;
   isSelected: boolean;
   dotState: DotState;
-  sundayNumber: number | null;
   dayOfMonth: number;
   accessibilityLabel: string;
   onPress: () => void;
   completedWorkoutColor: string;
   emptyDayFill: string;
+  /** Future-day dot face: `textMeta` @ 12% — see `textMetaForHistoryCalendarFutureFace`. */
+  futureDayFaceFill: string;
+  /** Future-day unselected numeral: `textMeta` @ 30% — see `textMetaForHistoryCalendarDayLabel`. */
+  futureDayLabelColor: string;
+  /** Empty-day unselected numeral: `containerPrimary` @ 20% — see `historyCalendarEmptyUnselectedDayLabelFromContainerPrimary`. */
+  emptyUnselectedDayLabelColor: string;
+  /** Logged-day unselected numeral: `containerSecondary` @ 40% — see `historyCalendarCompletedUnselectedDayLabelFromContainerSecondary`. */
+  completedUnselectedDayLabelColor: string;
 }) {
   const innerFill =
     dotState === 'completed'
       ? completedWorkoutColor
       : dotState === 'future'
-        ? HISTORY_VISUAL.futureDayDotFill
+        ? futureDayFaceFill
         : emptyDayFill;
   /** Inverse of face — selection cap + numeral. */
   const selectionInk = dotState === 'completed' ? emptyDayFill : completedWorkoutColor;
 
-  const sundayTextColor =
+  const unselectedNumberColor =
     dotState === 'completed'
-      ? HISTORY_VISUAL.historySundayAnchorOnPrimaryFill
+      ? completedUnselectedDayLabelColor
       : dotState === 'future'
-        ? HISTORY_VISUAL.textGray
-        : HISTORY_VISUAL.historySundayAnchorLime;
+        ? futureDayLabelColor
+        : emptyUnselectedDayLabelColor;
 
   const [showSelectionChrome, setShowSelectionChrome] = useState(isSelected);
   const capSlideY = useRef(new Animated.Value(isSelected ? 0 : SELECTION_SLIDE_PX)).current;
@@ -196,6 +210,9 @@ function ChartDayDot({
             },
           ]}
         >
+          {!showSelectionChrome ? (
+            <Text style={[styles.unselectedDayNumber, { color: unselectedNumberColor }]}>{dayOfMonth}</Text>
+          ) : null}
           {showSelectionChrome ? (
             <>
               <Animated.View
@@ -216,8 +233,6 @@ function ChartDayDot({
                 <Text style={[styles.selectedDayNumber, { color: selectionInk }]}>{dayOfMonth}</Text>
               </Animated.View>
             </>
-          ) : isSunday && sundayNumber != null ? (
-            <Text style={[styles.sundayNumber, { color: sundayTextColor }]}>{sundayNumber}</Text>
           ) : null}
         </View>
       </View>
@@ -234,12 +249,22 @@ export function FourWeekActivityChart({
   completedWorkoutColor,
   emptyDayFill,
 }: FourWeekActivityChartProps) {
+  const { colors: themeColors } = useAppTheme();
+  const futureDayFaceFill = textMetaForHistoryCalendarFutureFace(themeColors.textMeta);
+  const futureDayLabelColor = textMetaForHistoryCalendarDayLabel(themeColors.textMeta);
+  const emptyUnselectedDayLabelColor = historyCalendarEmptyUnselectedDayLabelFromContainerPrimary(
+    themeColors.containerPrimary,
+  );
+  const completedUnselectedDayLabelColor = historyCalendarCompletedUnselectedDayLabelFromContainerSecondary(
+    themeColors.containerSecondary,
+  );
   return (
     <View style={styles.wrap}>
+      {/* e.g. screenshot: day initials row "S M T W T F S" — `textMeta` */}
       <View style={styles.headerRow}>
         {WEEKDAY_LABELS.map((label, i) => (
           <View key={`${label}-${i}`} style={styles.headerCell}>
-            <Text style={styles.headerText}>{label}</Text>
+            <Text style={[styles.headerText, { color: themeColors.textMeta }]}>{label}</Text>
           </View>
         ))}
       </View>
@@ -251,20 +276,21 @@ export function FourWeekActivityChart({
           {row.map(cell => {
             const dotState = cellState(cell.isoDate, completedIsoSet, todayIso);
             const isSelected = cell.isoDate === selectedIso;
-            const sundayNumber = cell.isSunday ? cell.instant.date() : null;
             const a11yLabel = dayjs(cell.isoDate).format('dddd, MMMM D');
             return (
               <View key={cell.isoDate} style={styles.cell}>
                 <ChartDayDot
-                  isSunday={cell.isSunday}
                   isSelected={isSelected}
                   dotState={dotState}
-                  sundayNumber={sundayNumber}
                   dayOfMonth={cell.instant.date()}
                   accessibilityLabel={a11yLabel}
                   onPress={() => onSelectIso(cell.isoDate)}
                   completedWorkoutColor={completedWorkoutColor}
                   emptyDayFill={emptyDayFill}
+                  futureDayFaceFill={futureDayFaceFill}
+                  futureDayLabelColor={futureDayLabelColor}
+                  emptyUnselectedDayLabelColor={emptyUnselectedDayLabelColor}
+                  completedUnselectedDayLabelColor={completedUnselectedDayLabelColor}
                 />
               </View>
             );
@@ -291,7 +317,6 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '500',
     letterSpacing: 1.2,
-    color: HISTORY_VISUAL.columnLabel,
     textTransform: 'uppercase',
   },
   row: {
@@ -346,7 +371,7 @@ const styles = StyleSheet.create({
     fontSize: HISTORY_CHART.sundayNumberSize,
     fontWeight: '600',
   },
-  sundayNumber: {
+  unselectedDayNumber: {
     fontSize: HISTORY_CHART.sundayNumberSize,
     fontWeight: '600',
   },

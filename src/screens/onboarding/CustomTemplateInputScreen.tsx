@@ -4,8 +4,9 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useOnboardingStore } from '../../store/useOnboardingStore';
 import { ProgressHeader } from '../../components/common/ProgressHeader';
 import { StickyFooter } from '../../components/common/StickyFooter';
-import { COLORS } from '../../constants';
 import { useTranslation } from '../../i18n/useTranslation';
+import { useAppTheme } from '../../theme/useAppTheme';
+import { getAppThemeFromStore } from '../../theme/getAppThemeFromStore';
 
 type OnboardingStackParamList = {
   CustomTemplateInput: undefined;
@@ -110,10 +111,11 @@ export function CustomTemplateInputScreen({ navigation }: CustomTemplateInputScr
   );
 }
 
+const themeColors = getAppThemeFromStore().colors;
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.backgroundCanvas,
+    backgroundColor: themeColors.backgroundCanvas,
   },
   scrollView: {
     flex: 1,
@@ -175,4 +177,3 @@ const styles = StyleSheet.create({
     color: '#3C3C43',
   },
 });
-

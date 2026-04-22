@@ -1,6 +1,7 @@
 import React from 'react';
 import { StyleSheet, Text, TouchableOpacity, View, type StyleProp, type TextStyle, type ViewStyle } from 'react-native';
-import { COLORS, TYPOGRAPHY } from '../../constants';
+import { TYPOGRAPHY } from '../../constants';
+import { useAppTheme } from '../../theme/useAppTheme';
 
 export type TertiaryButtonProps = {
   label: string;
@@ -20,11 +21,13 @@ export function TertiaryButton({
   activeOpacity = 0.85,
   style,
   textStyle,
-  color = COLORS.inkCharcoal,
+  color: colorProp,
   underlineColor,
   underlineOffset = 2,
   underlineHeight = StyleSheet.hairlineWidth,
 }: TertiaryButtonProps) {
+  const { colors: themeColors } = useAppTheme();
+  const color = colorProp ?? themeColors.inkCharcoal;
   const lineColor = underlineColor ?? color;
 
   return (

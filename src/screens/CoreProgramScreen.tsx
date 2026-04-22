@@ -5,7 +5,7 @@ import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import * as Haptics from 'expo-haptics';
 import dayjs from 'dayjs';
 import { useStore } from '../store';
-import { COLORS, SPACING, TYPOGRAPHY, CARDS, BORDER_RADIUS } from '../constants';
+import { SPACING, TYPOGRAPHY, CARDS, BORDER_RADIUS } from '../constants';
 import { IconArrowLeft, IconAdd, IconCheckmark, IconEdit, IconMenu, IconPlay, IconRestart, IconTrash } from '../components/icons';
 import { DiagonalLinePattern } from '../components/common/DiagonalLinePattern';
 import { BottomDrawer } from '../components/common/BottomDrawer';
@@ -15,11 +15,14 @@ import { getBuiltinCoreWorkouts } from '../constants/coreTemplates';
 import { CoreProgramTimeline } from '../components/core/CoreProgramTimeline';
 import type { CoreSetTemplate } from '../types/training';
 import type { BonusLog } from '../types/training';
+import { useAppTheme } from '../theme/useAppTheme';
+import { getAppThemeFromStore } from '../theme/getAppThemeFromStore';
 
 const OUT_OF_ORDER_TITLE = 'Do out of order?';
 const OUT_OF_ORDER_BODY = "This will log progress, but won't move your 'Up next' spot.";
 
 export function CoreProgramScreen() {
+  const { colors: themeColors } = useAppTheme();
   const insets = useSafeAreaInsets();
   const { width: screenWidth } = useWindowDimensions();
   const navigation = useNavigation<any>();
@@ -321,12 +324,12 @@ export function CoreProgramScreen() {
               ))}
             </View>
             <View style={styles.sessionCardFooter}>
-              {completed && <IconCheckmark size={18} color={COLORS.successBright} />}
+              {completed && <IconCheckmark size={18} color={themeColors.successBright} />}
               {skipped && <Text style={styles.skippedLabel}>Skipped</Text>}
               {!completed && !skipped && (
                 <TouchableOpacity onPress={startHandler} style={styles.startCta} activeOpacity={1}>
                   <Text style={styles.startCtaText}>{t('start')}</Text>
-                  <IconPlay size={10} color={COLORS.accentPrimary} />
+                  <IconPlay size={10} color={themeColors.accentPrimary} />
                 </TouchableOpacity>
               )}
             </View>
@@ -341,7 +344,7 @@ export function CoreProgramScreen() {
       <View style={[styles.container, { paddingTop: insets.top }]}>
         <View style={styles.header}>
           <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-            <IconArrowLeft size={24} color={COLORS.text} />
+            <IconArrowLeft size={24} color={themeColors.text} />
           </TouchableOpacity>
           <View style={styles.headerSpacer} />
         </View>
@@ -360,11 +363,11 @@ export function CoreProgramScreen() {
       <View style={[styles.container, { paddingTop: insets.top }]}>
         <View style={styles.header}>
           <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-            <IconArrowLeft size={24} color={COLORS.text} />
+            <IconArrowLeft size={24} color={themeColors.text} />
           </TouchableOpacity>
           <View style={styles.headerSpacer} />
           <TouchableOpacity onPress={() => setProgramMenuVisible(true)} style={styles.headerMenuButton} hitSlop={8}>
-            <IconMenu size={24} color={COLORS.text} />
+            <IconMenu size={24} color={themeColors.text} />
           </TouchableOpacity>
         </View>
         <View style={styles.finishedState}>
@@ -380,21 +383,21 @@ export function CoreProgramScreen() {
             <View style={styles.drawerRow}>
               <TouchableOpacity style={[styles.drawerItem, styles.drawerItemStacked]} onPress={openEditSheet} activeOpacity={0.85}>
                 <View style={styles.drawerItemIconWrap}>
-                  <IconEdit size={24} color={COLORS.text} />
+                  <IconEdit size={24} color={themeColors.text} />
                 </View>
                 <Text style={styles.drawerItemText}>Edit</Text>
               </TouchableOpacity>
               <TouchableOpacity style={[styles.drawerItem, styles.drawerItemStacked]} onPress={handleRestartProgram} activeOpacity={0.85}>
                 <View style={styles.drawerItemIconWrap}>
-                  <IconRestart size={24} color={COLORS.text} />
+                  <IconRestart size={24} color={themeColors.text} />
                 </View>
                 <Text style={styles.drawerItemText}>Restart</Text>
               </TouchableOpacity>
               <TouchableOpacity style={[styles.drawerItem, styles.drawerItemStacked, styles.drawerItemDanger]} onPress={handleDeleteProgram} activeOpacity={0.85}>
                 <View style={styles.drawerItemIconWrap}>
-                  <IconTrash size={24} color={COLORS.signalNegative} />
+                  <IconTrash size={24} color={themeColors.signalNegative} />
                 </View>
-                <Text style={[styles.drawerItemText, { color: COLORS.signalNegative }]}>Delete</Text>
+                <Text style={[styles.drawerItemText, { color: themeColors.signalNegative }]}>Delete</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -404,17 +407,17 @@ export function CoreProgramScreen() {
           <View style={styles.sheetContent}>
             <Text style={styles.sheetTitle}>Edit program</Text>
             <Text style={styles.editLabel}>Name</Text>
-            <TextInput style={styles.editInput} value={editName} onChangeText={setEditName} placeholder="Core Program" placeholderTextColor={COLORS.textMeta} />
+            <TextInput style={styles.editInput} value={editName} onChangeText={setEditName} placeholder="Core Program" placeholderTextColor={themeColors.textMeta} />
             <Text style={styles.editLabel}>Duration (weeks)</Text>
-            <TextInput style={styles.editInput} value={editWeeks} onChangeText={setEditWeeks} placeholder="6" keyboardType="number-pad" placeholderTextColor={COLORS.textMeta} />
+            <TextInput style={styles.editInput} value={editWeeks} onChangeText={setEditWeeks} placeholder="6" keyboardType="number-pad" placeholderTextColor={themeColors.textMeta} />
             <Text style={styles.editLabel}>Sessions per week</Text>
-            <TextInput style={styles.editInput} value={editSessionsPerWeek} onChangeText={setEditSessionsPerWeek} placeholder="3" keyboardType="number-pad" placeholderTextColor={COLORS.textMeta} />
+            <TextInput style={styles.editInput} value={editSessionsPerWeek} onChangeText={setEditSessionsPerWeek} placeholder="3" keyboardType="number-pad" placeholderTextColor={themeColors.textMeta} />
             <View style={styles.drawerRow}>
-              <TouchableOpacity style={[styles.drawerItem, { backgroundColor: COLORS.accentPrimary }]} onPress={saveEdit} activeOpacity={0.85}>
-                <Text style={[styles.drawerItemText, { color: COLORS.backgroundCanvas }]}>Save</Text>
+              <TouchableOpacity style={[styles.drawerItem, { backgroundColor: themeColors.accentPrimary }]} onPress={saveEdit} activeOpacity={0.85}>
+                <Text style={[styles.drawerItemText, { color: themeColors.backgroundCanvas }]}>Save</Text>
               </TouchableOpacity>
               <TouchableOpacity style={styles.drawerItem} onPress={openAddToProgramFromEdit} activeOpacity={0.85}>
-                <IconAdd size={20} color={COLORS.text} />
+                <IconAdd size={20} color={themeColors.text} />
                 <Text style={styles.drawerItemText}>Add to Program</Text>
               </TouchableOpacity>
             </View>
@@ -428,11 +431,11 @@ export function CoreProgramScreen() {
     <View style={styles.container}>
       <View style={[styles.header, { paddingTop: insets.top }]}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-          <IconArrowLeft size={24} color={COLORS.text} />
+          <IconArrowLeft size={24} color={themeColors.text} />
         </TouchableOpacity>
         <View style={styles.headerSpacer} />
         <TouchableOpacity onPress={() => setProgramMenuVisible(true)} style={styles.headerMenuButton} hitSlop={8}>
-          <IconMenu size={24} color={COLORS.text} />
+          <IconMenu size={24} color={themeColors.text} />
         </TouchableOpacity>
       </View>
 
@@ -498,21 +501,21 @@ export function CoreProgramScreen() {
           <View style={styles.drawerRow}>
             <TouchableOpacity style={[styles.drawerItem, styles.drawerItemStacked]} onPress={openEditSheet} activeOpacity={0.85}>
               <View style={styles.drawerItemIconWrap}>
-                <IconEdit size={24} color={COLORS.text} />
+                <IconEdit size={24} color={themeColors.text} />
               </View>
               <Text style={styles.drawerItemText}>Edit</Text>
             </TouchableOpacity>
             <TouchableOpacity style={[styles.drawerItem, styles.drawerItemStacked]} onPress={handleResetCycle} activeOpacity={0.85}>
               <View style={styles.drawerItemIconWrap}>
-                <IconRestart size={24} color={COLORS.text} />
+                <IconRestart size={24} color={themeColors.text} />
               </View>
               <Text style={styles.drawerItemText}>Reset</Text>
             </TouchableOpacity>
             <TouchableOpacity style={[styles.drawerItem, styles.drawerItemStacked, styles.drawerItemDanger]} onPress={handleDeleteProgram} activeOpacity={0.85}>
               <View style={styles.drawerItemIconWrap}>
-                <IconTrash size={24} color={COLORS.signalNegative} />
+                <IconTrash size={24} color={themeColors.signalNegative} />
               </View>
-              <Text style={[styles.drawerItemText, { color: COLORS.signalNegative }]}>Delete</Text>
+              <Text style={[styles.drawerItemText, { color: themeColors.signalNegative }]}>Delete</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -527,7 +530,7 @@ export function CoreProgramScreen() {
             value={editName}
             onChangeText={setEditName}
             placeholder="Core Program"
-            placeholderTextColor={COLORS.textMeta}
+            placeholderTextColor={themeColors.textMeta}
           />
           <Text style={styles.editLabel}>Duration (weeks)</Text>
           <TextInput
@@ -536,7 +539,7 @@ export function CoreProgramScreen() {
             onChangeText={setEditWeeks}
             placeholder="6"
             keyboardType="number-pad"
-            placeholderTextColor={COLORS.textMeta}
+            placeholderTextColor={themeColors.textMeta}
           />
           <Text style={styles.editLabel}>Sessions per week</Text>
           <TextInput
@@ -545,14 +548,14 @@ export function CoreProgramScreen() {
             onChangeText={setEditSessionsPerWeek}
             placeholder="3"
             keyboardType="number-pad"
-            placeholderTextColor={COLORS.textMeta}
+            placeholderTextColor={themeColors.textMeta}
           />
           <View style={styles.drawerRow}>
-            <TouchableOpacity style={[styles.drawerItem, { backgroundColor: COLORS.accentPrimary }]} onPress={saveEdit} activeOpacity={0.85}>
-              <Text style={[styles.drawerItemText, { color: COLORS.backgroundCanvas }]}>Save</Text>
+            <TouchableOpacity style={[styles.drawerItem, { backgroundColor: themeColors.accentPrimary }]} onPress={saveEdit} activeOpacity={0.85}>
+              <Text style={[styles.drawerItemText, { color: themeColors.backgroundCanvas }]}>Save</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.drawerItem} onPress={openAddToProgramFromEdit} activeOpacity={0.85}>
-              <IconAdd size={20} color={COLORS.text} />
+              <IconAdd size={20} color={themeColors.text} />
               <Text style={styles.drawerItemText}>Add to Program</Text>
             </TouchableOpacity>
           </View>
@@ -562,8 +565,9 @@ export function CoreProgramScreen() {
   );
 }
 
+const themeColors = getAppThemeFromStore().colors;
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.backgroundCanvas },
+  container: { flex: 1, backgroundColor: themeColors.backgroundCanvas },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -580,33 +584,33 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.xxl,
   },
   programHeaderLeft: {},
-  programTitle: { ...TYPOGRAPHY.h2, color: COLORS.text, marginBottom: 4 },
+  programTitle: { ...TYPOGRAPHY.h2, color: themeColors.text, marginBottom: 4 },
   progressInfo: {
     ...TYPOGRAPHY.body,
   },
   progressLabel: {
     ...TYPOGRAPHY.body,
-    color: COLORS.textMeta,
+    color: themeColors.textMeta,
   },
   progressValue: {
     ...TYPOGRAPHY.body,
-    color: COLORS.text,
+    color: themeColors.text,
   },
   timelineContainer: { marginBottom: SPACING.md },
   section: { marginBottom: SPACING.xl },
-  sectionLabel: { ...TYPOGRAPHY.h3, color: COLORS.textMeta, marginBottom: SPACING.md },
+  sectionLabel: { ...TYPOGRAPHY.h3, color: themeColors.textMeta, marginBottom: SPACING.md },
   collapsibleRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     height: 48,
     paddingHorizontal: SPACING.lg,
-    backgroundColor: COLORS.activeCard,
+    backgroundColor: themeColors.activeCard,
     borderRadius: BORDER_RADIUS.md,
   },
   collapsibleRowLabel: {
     ...TYPOGRAPHY.bodyBold,
-    color: COLORS.text,
+    color: themeColors.text,
   },
   collapsibleRowValue: {
     flexDirection: 'row',
@@ -615,7 +619,7 @@ const styles = StyleSheet.create({
   },
   collapsibleRowValueText: {
     ...TYPOGRAPHY.body,
-    color: COLORS.text,
+    color: themeColors.text,
   },
   chevronWrap: {
     transform: [{ rotate: '0deg' }],
@@ -629,56 +633,56 @@ const styles = StyleSheet.create({
   },
   sessionCard: { marginBottom: SPACING.md },
   sessionCardUpNext: {},
-  sessionCardBorder: { borderWidth: 2, borderColor: COLORS.accentPrimary },
+  sessionCardBorder: { borderWidth: 2, borderColor: themeColors.accentPrimary },
   sessionCardInner: { paddingVertical: SPACING.lg, paddingHorizontal: 24 },
   upNextBadge: {
     alignSelf: 'flex-start',
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 6,
-    backgroundColor: COLORS.accentPrimaryDimmed,
+    backgroundColor: themeColors.accentPrimaryDimmed,
     marginBottom: 8,
   },
-  upNextBadgeText: { ...TYPOGRAPHY.meta, fontWeight: '600', color: COLORS.accentPrimary },
-  sessionCardName: { ...TYPOGRAPHY.h3, color: COLORS.text, marginBottom: 8 },
+  upNextBadgeText: { ...TYPOGRAPHY.meta, fontWeight: '600', color: themeColors.accentPrimary },
+  sessionCardName: { ...TYPOGRAPHY.h3, color: themeColors.text, marginBottom: 8 },
   sessionCardSkipped: { opacity: 0.6 },
   sessionCardExercises: { marginBottom: 0 },
-  sessionCardExerciseName: { ...TYPOGRAPHY.meta, color: COLORS.textMeta, marginBottom: 2 },
+  sessionCardExerciseName: { ...TYPOGRAPHY.meta, color: themeColors.textMeta, marginBottom: 2 },
   sessionCardFooter: { marginTop: 16, flexDirection: 'row', alignItems: 'center' },
   startCta: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  startCtaText: { ...TYPOGRAPHY.metaBold, color: COLORS.accentPrimary },
-  skippedLabel: { ...TYPOGRAPHY.meta, color: COLORS.textMeta },
+  startCtaText: { ...TYPOGRAPHY.metaBold, color: themeColors.accentPrimary },
+  skippedLabel: { ...TYPOGRAPHY.meta, color: themeColors.textMeta },
   emptyState: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: SPACING.xxl },
-  emptyStateTitle: { ...TYPOGRAPHY.h3, color: COLORS.text, marginBottom: SPACING.xl, textAlign: 'center' },
+  emptyStateTitle: { ...TYPOGRAPHY.h3, color: themeColors.text, marginBottom: SPACING.xl, textAlign: 'center' },
   createButton: {
     paddingHorizontal: 24,
     paddingVertical: 14,
     borderRadius: BORDER_RADIUS.lg,
-    backgroundColor: COLORS.accentPrimary,
+    backgroundColor: themeColors.accentPrimary,
   },
-  createButtonText: { ...TYPOGRAPHY.body, fontWeight: '600', color: COLORS.backgroundCanvas },
+  createButtonText: { ...TYPOGRAPHY.body, fontWeight: '600', color: themeColors.backgroundCanvas },
   finishedState: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: SPACING.xxl },
-  finishedTitle: { ...TYPOGRAPHY.h3, color: COLORS.text, marginBottom: SPACING.xl, textAlign: 'center' },
+  finishedTitle: { ...TYPOGRAPHY.h3, color: themeColors.text, marginBottom: SPACING.xl, textAlign: 'center' },
   restartButton: {
     paddingHorizontal: 24,
     paddingVertical: 14,
     borderRadius: BORDER_RADIUS.lg,
-    backgroundColor: COLORS.accentPrimary,
+    backgroundColor: themeColors.accentPrimary,
   },
-  restartButtonText: { ...TYPOGRAPHY.body, fontWeight: '600', color: COLORS.backgroundCanvas },
+  restartButtonText: { ...TYPOGRAPHY.body, fontWeight: '600', color: themeColors.backgroundCanvas },
   sheetContent: { paddingHorizontal: SPACING.xxl, paddingTop: SPACING.lg, paddingBottom: SPACING.xxl },
-  sheetTitle: { ...TYPOGRAPHY.h3, color: COLORS.text, marginBottom: SPACING.md },
+  sheetTitle: { ...TYPOGRAPHY.h3, color: themeColors.text, marginBottom: SPACING.md },
   sheetRow: {
     height: 52,
     borderRadius: BORDER_RADIUS.lg,
-    backgroundColor: COLORS.activeCard,
+    backgroundColor: themeColors.activeCard,
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: themeColors.border,
     justifyContent: 'center',
     paddingHorizontal: SPACING.lg,
     marginBottom: SPACING.sm,
   },
-  sheetRowText: { ...TYPOGRAPHY.body, color: COLORS.text, fontWeight: '600' },
+  sheetRowText: { ...TYPOGRAPHY.body, color: themeColors.text, fontWeight: '600' },
   drawerRow: {
     flexDirection: 'row',
     gap: SPACING.md,
@@ -686,7 +690,7 @@ const styles = StyleSheet.create({
   },
   drawerItem: {
     flex: 1,
-    backgroundColor: COLORS.activeCard,
+    backgroundColor: themeColors.activeCard,
     borderRadius: 16,
     paddingVertical: SPACING.lg,
     paddingHorizontal: SPACING.md,
@@ -703,17 +707,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  drawerItemText: { ...TYPOGRAPHY.body, color: COLORS.text, fontWeight: '600', textAlign: 'center' },
+  drawerItemText: { ...TYPOGRAPHY.body, color: themeColors.text, fontWeight: '600', textAlign: 'center' },
   drawerItemDanger: {},
-  editLabel: { ...TYPOGRAPHY.meta, color: COLORS.textMeta, marginTop: 12, marginBottom: 4 },
+  editLabel: { ...TYPOGRAPHY.meta, color: themeColors.textMeta, marginTop: 12, marginBottom: 4 },
   editInput: {
     height: 48,
     borderRadius: BORDER_RADIUS.lg,
-    backgroundColor: COLORS.activeCard,
+    backgroundColor: themeColors.activeCard,
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: themeColors.border,
     paddingHorizontal: SPACING.lg,
     ...TYPOGRAPHY.body,
-    color: COLORS.text,
+    color: themeColors.text,
   },
 });

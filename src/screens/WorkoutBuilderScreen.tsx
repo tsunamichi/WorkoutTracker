@@ -29,7 +29,7 @@ import Reanimated, {
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { useStore } from '../store';
-import { COLORS, SPACING, TYPOGRAPHY } from '../constants';
+import { SPACING, TYPOGRAPHY } from '../constants';
 import { exploreV2UpNextQueueExerciseNameStyle } from '../components/exploreV2/exploreV2Tokens';
 import { IconTrash } from '../components/icons';
 import { useTranslation } from '../i18n/useTranslation';
@@ -45,6 +45,7 @@ import { findActiveTemplateByName } from '../utils/workoutNameCollision';
 import { buildCustomExerciseDefinition } from '../utils/exerciseIdentity';
 import { ExerciseSearchPickModal } from '../components/workoutBuilder/ExerciseSearchPickModal';
 import type { RootStackParamList } from '../navigation/AppNavigator';
+import { getAppThemeFromStore } from '../theme/getAppThemeFromStore';
 import {
   SCHEDULE_DECK_T,
   SCHEDULE_DECK_EXECUTION_INCOMING_SCALE_START,
@@ -565,7 +566,7 @@ export function WorkoutBuilderScreen() {
                     <Text
                       style={[
                         styles.exerciseRowText,
-                        needsPick && { color: COLORS.signalNegative },
+                        needsPick && { color: themeColors.signalNegative },
                       ]}
                       numberOfLines={3}
                     >
@@ -579,7 +580,7 @@ export function WorkoutBuilderScreen() {
                     accessibilityRole="button"
                     accessibilityLabel={`${t('remove')}: ${line.name}`}
                   >
-                    <IconTrash size={20} color={COLORS.signalNegative} />
+                    <IconTrash size={20} color={themeColors.signalNegative} />
                   </TouchableOpacity>
                 </View>
               );
@@ -664,7 +665,7 @@ export function WorkoutBuilderScreen() {
               ref={workoutNameInputRef}
               style={styles.titleInput}
               placeholder={t('workoutName')}
-              placeholderTextColor={COLORS.textMeta}
+              placeholderTextColor={themeColors.textMeta}
               value={activeDraft?.name ?? ''}
               onChangeText={setActiveWorkoutName}
               autoCapitalize="sentences"
@@ -741,6 +742,7 @@ export function WorkoutBuilderScreen() {
   );
 }
 
+const themeColors = getAppThemeFromStore().colors;
 const styles = StyleSheet.create({
   safe: {
     flex: 1,
@@ -787,7 +789,7 @@ const styles = StyleSheet.create({
    */
   titleInput: {
     ...TYPOGRAPHY.displayLarge,
-    color: COLORS.textPrimary,
+    color: themeColors.textPrimary,
     paddingVertical: 0,
     paddingHorizontal: 0,
     marginBottom: TITLE_TO_CONTENT_GAP_PX,
@@ -802,7 +804,7 @@ const styles = StyleSheet.create({
   },
   exerciseRow: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     justifyContent: 'space-between',
     gap: SPACING.lg,
   },

@@ -2,11 +2,14 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
-import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS } from '../constants';
+import { SPACING, TYPOGRAPHY, BORDER_RADIUS } from '../constants';
 import { IconArrowLeft } from '../components/icons';
 import { useTranslation } from '../i18n/useTranslation';
+import { useAppTheme } from '../theme/useAppTheme';
+import { getAppThemeFromStore } from '../theme/getAppThemeFromStore';
 
 export function WorkoutCreationOptionsScreen() {
+  const { colors: themeColors } = useAppTheme();
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
   const { t } = useTranslation();
@@ -17,7 +20,7 @@ export function WorkoutCreationOptionsScreen() {
         {/* Back Button */}
         <View style={styles.topBar}>
           <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-            <IconArrowLeft size={24} color={COLORS.text} />
+            <IconArrowLeft size={24} color={themeColors.text} />
           </TouchableOpacity>
         </View>
         
@@ -45,7 +48,7 @@ export function WorkoutCreationOptionsScreen() {
           <TouchableOpacity
             style={styles.manuallyButton}
             onPress={() => {
-              navigation.navigate('CreateCycleBasics' as never);
+              navigation.navigate('CreateCycleFlow' as never);
             }}
             activeOpacity={1}
           >
@@ -68,10 +71,11 @@ export function WorkoutCreationOptionsScreen() {
   );
 }
 
+const themeColors = getAppThemeFromStore().colors;
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.backgroundCanvas,
+    backgroundColor: themeColors.backgroundCanvas,
   },
   header: {
     paddingBottom: SPACING.md,
@@ -92,7 +96,7 @@ const styles = StyleSheet.create({
   },
   pageTitle: {
     ...TYPOGRAPHY.h2,
-    color: COLORS.text,
+    color: themeColors.text,
   },
   content: {
     flex: 1,
@@ -112,10 +116,10 @@ const styles = StyleSheet.create({
     lineHeight: 28,
   },
   questionTextGray: {
-    color: COLORS.textMeta,
+    color: themeColors.textMeta,
   },
   questionTextBlack: {
-    color: COLORS.text,
+    color: themeColors.text,
   },
   
   // Actions Section
@@ -127,7 +131,7 @@ const styles = StyleSheet.create({
   manuallyButton: {
     flex: 1,
     height: 56,
-    backgroundColor: COLORS.text,
+    backgroundColor: themeColors.text,
     borderRadius: BORDER_RADIUS.md,
     alignItems: 'center',
     justifyContent: 'center',
@@ -135,12 +139,12 @@ const styles = StyleSheet.create({
   manuallyButtonText: {
     ...TYPOGRAPHY.meta,
     fontWeight: 'bold',
-    color: COLORS.backgroundCanvas,
+    color: themeColors.backgroundCanvas,
   },
   aiButton: {
     flex: 1,
     height: 56,
-    backgroundColor: COLORS.accentPrimary,
+    backgroundColor: themeColors.accentPrimary,
     borderRadius: BORDER_RADIUS.md,
     alignItems: 'center',
     justifyContent: 'center',
@@ -148,9 +152,8 @@ const styles = StyleSheet.create({
   aiButtonText: {
     ...TYPOGRAPHY.meta,
     fontWeight: 'bold',
-    color: COLORS.backgroundCanvas,
+    color: themeColors.backgroundCanvas,
   },
   
   // Templates section removed
 });
-

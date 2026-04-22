@@ -1176,7 +1176,6 @@ const styles = StyleSheet.create({
   },
   completedOnLine: {
     ...TYPOGRAPHY.h3,
-    fontWeight: '500',
     color: '#002E29',
   },
   completeOnlyListWrap: {

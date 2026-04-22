@@ -3,6 +3,7 @@ import { View, StyleSheet, Dimensions } from 'react-native';
 import Animated, { useSharedValue, useAnimatedStyle } from 'react-native-reanimated';
 import Svg, { Path, Circle as SvgCircle, Rect } from 'react-native-svg';
 import { DeviceMotion } from 'expo-sensors';
+import { useAppTheme } from '../../theme/useAppTheme';
 
 // Bounds read each frame in step() so rotation/window changes are respected
 function getScreenBounds() {

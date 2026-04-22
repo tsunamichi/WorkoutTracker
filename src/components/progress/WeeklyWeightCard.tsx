@@ -1,10 +1,12 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
-import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS } from '../../constants';
+import { SPACING, TYPOGRAPHY, BORDER_RADIUS } from '../../constants';
 import { Sparkline } from '../common/Sparkline';
 import { IconAdd } from '../icons';
 import { formatWeight } from '../../utils/weight';
 import type { BodyWeightEntry } from '../../types';
+import { useAppTheme } from '../../theme/useAppTheme';
+import { getAppThemeFromStore } from '../../theme/getAppThemeFromStore';
 
 interface WeeklyWeightCardProps {
   latestEntry: BodyWeightEntry | null;
@@ -24,7 +26,7 @@ export function WeeklyWeightCard({
   if (!latestEntry) {
     return (
       <TouchableOpacity testID="progress-body-weekly-card" style={styles.emptyCard} onPress={onLogWeight} activeOpacity={0.7}>
-        <IconAdd size={18} color={COLORS.textMeta} />
+        <IconAdd size={18} color={themeColors.textMeta} />
         <Text style={styles.emptyText}>Log weight</Text>
       </TouchableOpacity>
     );
@@ -43,7 +45,7 @@ export function WeeklyWeightCard({
             {formatWeight(latestEntry.weight, useKg)} {unit}
           </Text>
           {delta !== null ? (
-            <Text style={[styles.delta, { color: delta <= 0 ? COLORS.successBright : COLORS.textMeta }]}>
+            <Text style={[styles.delta, { color: delta <= 0 ? themeColors.successBright : themeColors.textMeta }]}>
               {delta > 0 ? '+' : ''}{formatWeight(Math.abs(delta), useKg)} {unit} vs last week
             </Text>
           ) : (
@@ -56,7 +58,7 @@ export function WeeklyWeightCard({
               data={weightTrend}
               width={72}
               height={28}
-              color={COLORS.textMeta}
+              color={themeColors.textMeta}
               strokeWidth={1.5}
             />
           </View>
@@ -66,12 +68,13 @@ export function WeeklyWeightCard({
   );
 }
 
+const themeColors = getAppThemeFromStore().colors;
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: COLORS.cardBackground,
+    backgroundColor: themeColors.cardBackground,
     borderRadius: BORDER_RADIUS.md,
     borderWidth: 1,
-    borderColor: COLORS.borderDimmed,
+    borderColor: themeColors.borderDimmed,
     padding: SPACING.md,
   },
   row: {
@@ -85,7 +88,7 @@ const styles = StyleSheet.create({
   },
   weight: {
     ...TYPOGRAPHY.bodyBold,
-    color: COLORS.text,
+    color: themeColors.text,
     marginBottom: 2,
   },
   delta: {
@@ -93,13 +96,13 @@ const styles = StyleSheet.create({
   },
   deltaLabel: {
     ...TYPOGRAPHY.meta,
-    color: COLORS.textMeta,
+    color: themeColors.textMeta,
   },
   emptyCard: {
-    backgroundColor: COLORS.cardBackground,
+    backgroundColor: themeColors.cardBackground,
     borderRadius: BORDER_RADIUS.md,
     borderWidth: 1,
-    borderColor: COLORS.borderDimmed,
+    borderColor: themeColors.borderDimmed,
     borderStyle: 'dashed',
     padding: SPACING.lg,
     flexDirection: 'row',
@@ -109,6 +112,6 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     ...TYPOGRAPHY.meta,
-    color: COLORS.textMeta,
+    color: themeColors.textMeta,
   },
 });

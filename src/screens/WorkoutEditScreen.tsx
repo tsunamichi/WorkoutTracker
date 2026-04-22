@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef , useMemo} from 'react';
 import {
   View,
   Text,
@@ -20,7 +20,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useStore } from '../store';
 import { BottomDrawer } from '../components/common/BottomDrawer';
-import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS, CARDS } from '../constants';
+import { SPACING, TYPOGRAPHY, BORDER_RADIUS, CARDS } from '../constants';
 import { IconArrowLeft, IconGripVertical, IconTrash, IconSwap, IconAdd, IconEdit, IconChevronDown, IconMinusLine, IconAddLine } from '../components/icons';
 import { generateId } from '../utils/manualCycleUtils';
 import { Toggle } from '../components/Toggle';
@@ -29,6 +29,8 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/AppNavigator';
 import type { WorkoutTemplateExercise } from '../types';
 import { useTranslation } from '../i18n/useTranslation';
+import { useAppTheme } from '../theme/useAppTheme';
+import { getAppThemeFromStore } from '../theme/getAppThemeFromStore';
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -533,14 +535,14 @@ export default function WorkoutEditScreen({ navigation, route }: Props) {
                 onBlur={() => setIsEditingName(false)}
                 autoFocus
                 placeholder={t('workoutNamePlaceholder')}
-                placeholderTextColor={COLORS.textMeta}
+                placeholderTextColor={themeColors.textMeta}
               />
             ) : (
               <View style={styles.pageTitleRow}>
                 <Text style={[styles.pageTitle, !workoutName && styles.pageTitlePlaceholder]}>
                   {workoutName || 'Workout name'}
                 </Text>
-                <IconEdit size={20} color={COLORS.textMeta} />
+                <IconEdit size={20} color={themeColors.textMeta} />
               </View>
             )}
           </TouchableOpacity>
@@ -667,7 +669,7 @@ export default function WorkoutEditScreen({ navigation, route }: Props) {
                               {...panResponder.panHandlers}
                               onStartShouldSetResponder={() => true}
                             >
-                              <IconGripVertical size={20} color={isDragging ? COLORS.text : COLORS.textMeta} />
+                              <IconGripVertical size={20} color={isDragging ? themeColors.text : themeColors.textMeta} />
                             </View>
                       </TouchableOpacity>
                     </View>
@@ -689,14 +691,14 @@ export default function WorkoutEditScreen({ navigation, route }: Props) {
                       style={styles.actionButton}
                       activeOpacity={1}
                     >
-                      <IconSwap size={20} color={COLORS.text} />
+                      <IconSwap size={20} color={themeColors.text} />
                     </TouchableOpacity>
                     <TouchableOpacity
                       onPress={() => handleDeleteExercise(exercise.id)}
                       style={styles.actionButton}
                       activeOpacity={1}
                     >
-                      <IconTrash size={20} color={COLORS.error} />
+                      <IconTrash size={20} color={themeColors.error} />
                     </TouchableOpacity>
                   </Animated.View>
                 </View>
@@ -717,7 +719,7 @@ export default function WorkoutEditScreen({ navigation, route }: Props) {
             onPress={handleAddExercise}
             activeOpacity={1}
           >
-            <IconAdd size={20} color={COLORS.text} />
+            <IconAdd size={20} color={themeColors.text} />
             <Text style={styles.addExerciseCardText}>{t('addExercise')}</Text>
           </TouchableOpacity>
         </ScrollView>
@@ -756,7 +758,7 @@ export default function WorkoutEditScreen({ navigation, route }: Props) {
                 style={[styles.drawerBackButton, styles.drawerBackButtonSettings]}
                 activeOpacity={1}
               >
-                <IconArrowLeft size={24} color={COLORS.text} />
+                <IconArrowLeft size={24} color={themeColors.text} />
               </TouchableOpacity>
               <Text style={styles.drawerHeaderSettingsTitle}>
                 Exercise Settings
@@ -765,7 +767,7 @@ export default function WorkoutEditScreen({ navigation, route }: Props) {
             </View>
           ) : (
             <View style={[styles.drawerHeader, styles.drawerHeaderList]}>
-            <Text style={[TYPOGRAPHY.h3, { color: COLORS.text }]}>
+            <Text style={[TYPOGRAPHY.h3, { color: themeColors.text }]}>
                 {isAddMode ? 'Add Exercise' : 'Swap Exercise'}
             </Text>
             <TouchableOpacity
@@ -791,7 +793,7 @@ export default function WorkoutEditScreen({ navigation, route }: Props) {
                   value={searchQuery}
                   onChangeText={setSearchQuery}
                   placeholder={t('searchExercisesPlaceholder')}
-                  placeholderTextColor={COLORS.textMeta}
+                  placeholderTextColor={themeColors.textMeta}
                 />
                 {searchQuery.length > 0 && (
                   <TouchableOpacity
@@ -842,7 +844,7 @@ export default function WorkoutEditScreen({ navigation, route }: Props) {
                         <Text style={styles.muscleTitle}>{muscle}</Text>
                         <IconChevronDown
                           size={20}
-                          color={COLORS.textMeta}
+                          color={themeColors.textMeta}
                           style={{
                             transform: [{ rotate: isExpanded ? '180deg' : '0deg' }],
                           }}
@@ -916,7 +918,7 @@ export default function WorkoutEditScreen({ navigation, route }: Props) {
                       >
                         <View style={styles.adjustButton}>
                           <View style={styles.adjustButtonInner}>
-                            <IconMinusLine size={24} color={COLORS.accentPrimary} />
+                            <IconMinusLine size={24} color={themeColors.accentPrimary} />
                     </View>
                   </View>
                       </TouchableOpacity>
@@ -931,7 +933,7 @@ export default function WorkoutEditScreen({ navigation, route }: Props) {
                       >
                         <View style={styles.adjustButton}>
                           <View style={styles.adjustButtonInner}>
-                            <IconAddLine size={24} color={COLORS.accentPrimary} />
+                            <IconAddLine size={24} color={themeColors.accentPrimary} />
                 </View>
                         </View>
                       </TouchableOpacity>
@@ -961,7 +963,7 @@ export default function WorkoutEditScreen({ navigation, route }: Props) {
                       >
                         <View style={styles.adjustButton}>
                           <View style={styles.adjustButtonInner}>
-                            <IconMinusLine size={24} color={COLORS.accentPrimary} />
+                            <IconMinusLine size={24} color={themeColors.accentPrimary} />
                           </View>
                         </View>
                       </TouchableOpacity>
@@ -977,7 +979,7 @@ export default function WorkoutEditScreen({ navigation, route }: Props) {
                       >
                         <View style={styles.adjustButton}>
                           <View style={styles.adjustButtonInner}>
-                            <IconAddLine size={24} color={COLORS.accentPrimary} />
+                            <IconAddLine size={24} color={themeColors.accentPrimary} />
                           </View>
                         </View>
                       </TouchableOpacity>
@@ -1005,7 +1007,7 @@ export default function WorkoutEditScreen({ navigation, route }: Props) {
                       >
                         <View style={styles.adjustButton}>
                           <View style={styles.adjustButtonInner}>
-                            <IconMinusLine size={24} color={COLORS.accentPrimary} />
+                            <IconMinusLine size={24} color={themeColors.accentPrimary} />
                           </View>
                         </View>
                       </TouchableOpacity>
@@ -1020,7 +1022,7 @@ export default function WorkoutEditScreen({ navigation, route }: Props) {
                       >
                         <View style={styles.adjustButton}>
                           <View style={styles.adjustButtonInner}>
-                            <IconAddLine size={24} color={COLORS.accentPrimary} />
+                            <IconAddLine size={24} color={themeColors.accentPrimary} />
                           </View>
                         </View>
                       </TouchableOpacity>
@@ -1094,10 +1096,11 @@ export default function WorkoutEditScreen({ navigation, route }: Props) {
   );
 }
 
+const themeColors = getAppThemeFromStore().colors;
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.backgroundCanvas,
+    backgroundColor: themeColors.backgroundCanvas,
   },
   innerContainer: {
     flex: 1,
@@ -1133,11 +1136,11 @@ const styles = StyleSheet.create({
     color: LIGHT_COLORS.secondary,
   },
   pageTitlePlaceholder: {
-    color: COLORS.textMeta,
+    color: themeColors.textMeta,
   },
   pageTitleInput: {
     ...TYPOGRAPHY.h2,
-    color: COLORS.text,
+    color: themeColors.text,
   },
   exercisesSectionHeader: {
     flexDirection: 'row',
@@ -1147,7 +1150,7 @@ const styles = StyleSheet.create({
   },
   sectionLabel: {
     ...TYPOGRAPHY.meta,
-    color: COLORS.textMeta,
+    color: themeColors.textMeta,
     marginBottom: SPACING.md,
   },
   addExerciseCardButton: {
@@ -1155,7 +1158,7 @@ const styles = StyleSheet.create({
     height: 56,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: COLORS.textMeta,
+    borderColor: themeColors.textMeta,
     borderStyle: 'dashed',
     backgroundColor: 'transparent',
     flexDirection: 'row',
@@ -1166,7 +1169,7 @@ const styles = StyleSheet.create({
   },
   addExerciseCardText: {
     ...TYPOGRAPHY.metaBold,
-    color: COLORS.text,
+    color: themeColors.text,
   },
   scrollView: {
     flex: 1,
@@ -1258,14 +1261,14 @@ const styles = StyleSheet.create({
   saveButtonDisabled: {
     backgroundColor: 'transparent',
     borderWidth: 1,
-    borderColor: COLORS.disabledBorder,
+    borderColor: themeColors.disabledBorder,
   },
   saveButtonText: {
     ...TYPOGRAPHY.metaBold,
     color: '#FFFFFF',
   },
   saveButtonTextDisabled: {
-    color: COLORS.textMeta,
+    color: themeColors.textMeta,
   },
   modalOverlay: {
     flex: 1,
@@ -1315,11 +1318,11 @@ const styles = StyleSheet.create({
   modalButtonSecondary: {
     backgroundColor: 'transparent',
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: themeColors.border,
   },
   modalButtonSecondaryText: {
     ...TYPOGRAPHY.metaBold,
-    color: COLORS.text,
+    color: themeColors.text,
   },
   modalCancelButton: {
     paddingVertical: SPACING.md,
@@ -1327,11 +1330,11 @@ const styles = StyleSheet.create({
   },
   modalCancelText: {
     ...TYPOGRAPHY.meta,
-    color: COLORS.textMeta,
+    color: themeColors.textMeta,
   },
   errorText: {
     ...TYPOGRAPHY.body,
-    color: COLORS.error,
+    color: themeColors.error,
     textAlign: 'center',
     padding: SPACING.xl,
   },
@@ -1378,7 +1381,7 @@ const styles = StyleSheet.create({
   },
   drawerHeaderSettingsTitle: {
     ...TYPOGRAPHY.meta,
-    color: COLORS.textMeta,
+    color: themeColors.textMeta,
     flex: 1,
     textAlign: 'center',
   },
@@ -1391,12 +1394,12 @@ const styles = StyleSheet.create({
   },
   searchButtonText: {
     fontSize: 20,
-    color: COLORS.text,
+    color: themeColors.text,
   },
   swapSearchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: COLORS.backgroundCanvas,
+    backgroundColor: themeColors.backgroundCanvas,
     borderRadius: BORDER_RADIUS.md,
     borderCurve: 'continuous',
     paddingHorizontal: SPACING.lg,
@@ -1405,21 +1408,21 @@ const styles = StyleSheet.create({
     marginTop: SPACING.lg,
     marginBottom: SPACING.md,
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: themeColors.border,
     gap: SPACING.md,
   },
   searchIcon: {
     fontSize: 18,
-    color: COLORS.textMeta,
+    color: themeColors.textMeta,
   },
   swapSearchInput: {
     flex: 1,
     ...TYPOGRAPHY.body,
-    color: COLORS.text,
+    color: themeColors.text,
   },
   clearIcon: {
     fontSize: 16,
-    color: COLORS.textMeta,
+    color: themeColors.textMeta,
   },
   swapExerciseListContent: {
     paddingHorizontal: SPACING.xxl,
@@ -1448,11 +1451,11 @@ const styles = StyleSheet.create({
   },
   swapAdjustValueText: {
     ...TYPOGRAPHY.h1,
-    color: COLORS.text,
+    color: themeColors.text,
   },
   swapAdjustUnit: {
     ...TYPOGRAPHY.h1,
-    color: COLORS.textMeta,
+    color: themeColors.textMeta,
   },
   swapAdjustButtons: {
     flexDirection: 'row',
@@ -1478,13 +1481,13 @@ const styles = StyleSheet.create({
     borderCurve: 'continuous',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: COLORS.accentPrimaryDimmed,
+    backgroundColor: themeColors.accentPrimaryDimmed,
   },
   muscleSection: {
     marginBottom: 12,
   },
   muscleCard: {
-    backgroundColor: COLORS.activeCard,
+    backgroundColor: themeColors.activeCard,
     borderRadius: BORDER_RADIUS.md,
     borderCurve: 'continuous',
     overflow: 'hidden',
@@ -1498,7 +1501,7 @@ const styles = StyleSheet.create({
   },
   muscleTitle: {
     ...TYPOGRAPHY.body,
-    color: COLORS.text,
+    color: themeColors.text,
     fontWeight: '600',
   },
   muscleContent: {
@@ -1509,11 +1512,11 @@ const styles = StyleSheet.create({
   },
   swapExerciseName: {
     ...TYPOGRAPHY.body,
-    color: COLORS.text,
+    color: themeColors.text,
   },
   muscleExerciseDivider: {
     height: 1,
-    backgroundColor: COLORS.borderDimmed,
+    backgroundColor: themeColors.borderDimmed,
     marginHorizontal: SPACING.lg,
     marginVertical: 4,
   },
@@ -1527,7 +1530,7 @@ const styles = StyleSheet.create({
   },
   swapControlDivider: {
     height: 1,
-    backgroundColor: COLORS.borderDimmed,
+    backgroundColor: themeColors.borderDimmed,
     marginVertical: 16,
   },
   swapConfigRow: {
@@ -1539,17 +1542,17 @@ const styles = StyleSheet.create({
   },
   swapConfigLabel: {
     ...TYPOGRAPHY.meta,
-    color: COLORS.textMeta,
+    color: themeColors.textMeta,
     marginBottom: SPACING.xs,
   },
   swapConfigInput: {
     ...TYPOGRAPHY.body,
-    color: COLORS.text,
-    backgroundColor: COLORS.backgroundCanvas,
+    color: themeColors.text,
+    backgroundColor: themeColors.backgroundCanvas,
     borderRadius: BORDER_RADIUS.md,
     borderCurve: 'continuous',
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: themeColors.border,
     paddingHorizontal: SPACING.lg,
     paddingVertical: SPACING.md,
     textAlign: 'center',
@@ -1562,7 +1565,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.xxl,
     paddingBottom: 40,
     paddingTop: SPACING.md,
-    backgroundColor: COLORS.backgroundCanvas,
+    backgroundColor: themeColors.backgroundCanvas,
   },
   swapConfirmButton: {
     backgroundColor: '#FFFFFF',
@@ -1574,14 +1577,13 @@ const styles = StyleSheet.create({
   swapConfirmButtonDisabled: {
     backgroundColor: 'transparent',
     borderWidth: 1,
-    borderColor: COLORS.disabledBorder,
+    borderColor: themeColors.disabledBorder,
   },
   swapConfirmButtonText: {
     ...TYPOGRAPHY.metaBold,
     color: '#FFFFFF',
   },
   swapConfirmButtonTextDisabled: {
-    color: COLORS.textMeta,
+    color: themeColors.textMeta,
   },
 });
-

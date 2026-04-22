@@ -1,6 +1,8 @@
 import React from 'react';
 import { Text, StyleSheet } from 'react-native';
-import { COLORS, TYPOGRAPHY } from '../../constants';
+import { TYPOGRAPHY } from '../../constants';
+import { useAppTheme } from '../../theme/useAppTheme';
+import { getAppThemeFromStore } from '../../theme/getAppThemeFromStore';
 
 interface DeltaBadgeProps {
   value: number | null;
@@ -11,7 +13,7 @@ export function DeltaBadge({ value, suffix }: DeltaBadgeProps) {
   if (value === null) return <Text style={styles.neutral}>—</Text>;
 
   const isPositive = value > 0;
-  const color = isPositive ? COLORS.successBright : COLORS.textMeta;
+  const color = isPositive ? themeColors.successBright : themeColors.textMeta;
   const prefix = isPositive ? '+' : '';
 
   return (
@@ -21,6 +23,7 @@ export function DeltaBadge({ value, suffix }: DeltaBadgeProps) {
   );
 }
 
+const themeColors = getAppThemeFromStore().colors;
 const styles = StyleSheet.create({
   text: {
     ...TYPOGRAPHY.meta,
@@ -28,6 +31,6 @@ const styles = StyleSheet.create({
   },
   neutral: {
     ...TYPOGRAPHY.meta,
-    color: COLORS.textMetaSoft,
+    color: themeColors.textMetaSoft,
   },
 });

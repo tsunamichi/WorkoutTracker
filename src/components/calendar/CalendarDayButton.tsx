@@ -1,6 +1,8 @@
 import React from 'react';
 import { TouchableOpacity, View, Text, StyleSheet } from 'react-native';
-import { COLORS, TYPOGRAPHY } from '../../constants';
+import { TYPOGRAPHY } from '../../constants';
+import { useAppTheme } from '../../theme/useAppTheme';
+import { getAppThemeFromStore } from '../../theme/getAppThemeFromStore';
 
 interface CalendarDayButtonProps {
   dayNumber: number;
@@ -68,6 +70,7 @@ export function CalendarDayButton({
   );
 }
 
+const themeColors = getAppThemeFromStore().colors;
 const styles = StyleSheet.create({
   touchable: {
     alignItems: 'center',
@@ -84,26 +87,26 @@ const styles = StyleSheet.create({
     // no background or border — just text color change
   },
   dayButtonSelected: {
-    backgroundColor: COLORS.accentPrimary,
+    backgroundColor: themeColors.accentPrimary,
   },
   dayButtonTodaySelected: {
-    backgroundColor: COLORS.accentPrimary,
+    backgroundColor: themeColors.accentPrimary,
   },
   dayNumber: {
     ...TYPOGRAPHY.metaBold,
     color: '#FFFFFF',
   },
   dayNumberOtherMonth: {
-    color: COLORS.textMeta,
+    color: themeColors.textMeta,
   },
   dayNumberSelected: {
-    color: COLORS.backgroundCanvas,
+    color: themeColors.backgroundCanvas,
   },
   dayNumberToday: {
-    color: COLORS.accentPrimary,
+    color: themeColors.accentPrimary,
   },
   dayNumberPaused: {
-    color: COLORS.textMeta,
+    color: themeColors.textMeta,
   },
   completionCircle: {
     position: 'absolute',
@@ -118,12 +121,12 @@ const styles = StyleSheet.create({
     borderColor: '#FFFFFF',
   },
   completionCircleOutlineSelected: {
-    borderColor: COLORS.backgroundCanvas,
+    borderColor: themeColors.backgroundCanvas,
   },
   completionCircleFilled: {
     backgroundColor: '#FFFFFF',
   },
   completionCircleFilledSelected: {
-    backgroundColor: COLORS.backgroundCanvas,
+    backgroundColor: themeColors.backgroundCanvas,
   },
 });

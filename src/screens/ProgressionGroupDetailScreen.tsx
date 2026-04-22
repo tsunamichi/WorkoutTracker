@@ -15,9 +15,11 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import * as Haptics from 'expo-haptics';
 import { useStore } from '../store';
-import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS } from '../constants';
+import { SPACING, TYPOGRAPHY, BORDER_RADIUS } from '../constants';
 import { IconArrowLeft, IconAdd, IconTrash } from '../components/icons';
 import type { ProgressionMode } from '../types/progression';
+import { useAppTheme } from '../theme/useAppTheme';
+import { getAppThemeFromStore } from '../theme/getAppThemeFromStore';
 
 type RouteParams = { ProgressionGroupDetail: { groupId: string } };
 
@@ -28,6 +30,7 @@ const MODES: { value: ProgressionMode; label: string }[] = [
 ];
 
 export function ProgressionGroupDetailScreen() {
+  const { colors: themeColors } = useAppTheme();
   const insets = useSafeAreaInsets();
   const navigation = useNavigation();
   const route = useRoute<RouteProp<RouteParams, 'ProgressionGroupDetail'>>();
@@ -152,7 +155,7 @@ export function ProgressionGroupDetailScreen() {
     <View style={[styles.container, { paddingTop: insets.top }]}>
       <View style={styles.header}>
         <TouchableOpacity style={styles.backButton} onPress={handleBack} activeOpacity={0.7}>
-          <IconArrowLeft size={24} color={COLORS.text} />
+          <IconArrowLeft size={24} color={themeColors.text} />
         </TouchableOpacity>
         <TouchableOpacity onPress={handleSave} activeOpacity={0.7}>
           <Text style={styles.saveButton}>Save</Text>
@@ -172,7 +175,7 @@ export function ProgressionGroupDetailScreen() {
             value={name}
             onChangeText={setName}
             placeholder="e.g. Main Lifts"
-            placeholderTextColor={COLORS.textMeta}
+            placeholderTextColor={themeColors.textMeta}
           />
         </View>
 
@@ -186,7 +189,7 @@ export function ProgressionGroupDetailScreen() {
               onChangeText={setRepMin}
               keyboardType="number-pad"
               placeholder="8"
-              placeholderTextColor={COLORS.textMeta}
+              placeholderTextColor={themeColors.textMeta}
             />
             <Text style={styles.rangeDash}>–</Text>
             <TextInput
@@ -195,7 +198,7 @@ export function ProgressionGroupDetailScreen() {
               onChangeText={setRepMax}
               keyboardType="number-pad"
               placeholder="12"
-              placeholderTextColor={COLORS.textMeta}
+              placeholderTextColor={themeColors.textMeta}
             />
           </View>
         </View>
@@ -208,7 +211,7 @@ export function ProgressionGroupDetailScreen() {
             onChangeText={setWeightInc}
             keyboardType="decimal-pad"
             placeholder="2.5"
-            placeholderTextColor={COLORS.textMeta}
+            placeholderTextColor={themeColors.textMeta}
           />
         </View>
 
@@ -255,7 +258,7 @@ export function ProgressionGroupDetailScreen() {
                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                 activeOpacity={0.7}
               >
-                <IconTrash size={18} color={COLORS.textMeta} />
+                <IconTrash size={18} color={themeColors.textMeta} />
               </TouchableOpacity>
             </View>
           );
@@ -266,13 +269,13 @@ export function ProgressionGroupDetailScreen() {
           onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setShowExercisePicker(true); }}
           activeOpacity={0.7}
         >
-          <IconAdd size={20} color={COLORS.primary} />
+          <IconAdd size={20} color={themeColors.primary} />
           <Text style={styles.addExerciseLabel}>Add exercise</Text>
         </TouchableOpacity>
 
         {/* Delete group */}
         <TouchableOpacity style={styles.deleteButton} onPress={handleDelete} activeOpacity={0.7}>
-          <IconTrash size={18} color={COLORS.error} />
+          <IconTrash size={18} color={themeColors.error} />
           <Text style={styles.deleteLabel}>Delete group</Text>
         </TouchableOpacity>
       </ScrollView>
@@ -293,7 +296,7 @@ export function ProgressionGroupDetailScreen() {
               value={searchQuery}
               onChangeText={setSearchQuery}
               placeholder="Search exercises…"
-              placeholderTextColor={COLORS.textMeta}
+              placeholderTextColor={themeColors.textMeta}
               autoFocus
             />
           </View>
@@ -426,12 +429,12 @@ function RuleEditorModal({
             <View style={ruleStyles.fields}>
               <Text style={ruleStyles.fieldLabel}>Rep range</Text>
               <View style={ruleStyles.row}>
-                <TextInput style={ruleStyles.input} value={repMin} onChangeText={setRepMin} keyboardType="number-pad" placeholderTextColor={COLORS.textMeta} />
+                <TextInput style={ruleStyles.input} value={repMin} onChangeText={setRepMin} keyboardType="number-pad" placeholderTextColor={themeColors.textMeta} />
                 <Text style={ruleStyles.dash}>–</Text>
-                <TextInput style={ruleStyles.input} value={repMax} onChangeText={setRepMax} keyboardType="number-pad" placeholderTextColor={COLORS.textMeta} />
+                <TextInput style={ruleStyles.input} value={repMax} onChangeText={setRepMax} keyboardType="number-pad" placeholderTextColor={themeColors.textMeta} />
               </View>
               <Text style={ruleStyles.fieldLabel}>Weight increment</Text>
-              <TextInput style={ruleStyles.inputFull} value={weightInc} onChangeText={setWeightInc} keyboardType="decimal-pad" placeholderTextColor={COLORS.textMeta} />
+              <TextInput style={ruleStyles.inputFull} value={weightInc} onChangeText={setWeightInc} keyboardType="decimal-pad" placeholderTextColor={themeColors.textMeta} />
               <Text style={ruleStyles.fieldLabel}>Progression mode</Text>
               {MODES.map(m => (
                 <TouchableOpacity
@@ -453,8 +456,9 @@ function RuleEditorModal({
 
 /* ---- Styles ---- */
 
+const themeColors = getAppThemeFromStore().colors;
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.backgroundCanvas },
+  container: { flex: 1, backgroundColor: themeColors.backgroundCanvas },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -464,75 +468,75 @@ const styles = StyleSheet.create({
     paddingBottom: SPACING.md,
   },
   backButton: { width: 48, height: 48, justifyContent: 'center', alignItems: 'flex-start', marginLeft: -12 },
-  saveButton: { ...TYPOGRAPHY.bodyBold, color: COLORS.primary },
+  saveButton: { ...TYPOGRAPHY.bodyBold, color: themeColors.primary },
   scrollView: { flex: 1 },
   scrollContent: { paddingHorizontal: SPACING.xxl, paddingBottom: SPACING.xxxl },
   card: {
-    backgroundColor: COLORS.activeCard,
+    backgroundColor: themeColors.activeCard,
     borderRadius: BORDER_RADIUS.md,
     padding: SPACING.lg,
     marginBottom: SPACING.lg,
   },
-  label: { ...TYPOGRAPHY.bodyBold, color: COLORS.text, marginBottom: SPACING.md },
+  label: { ...TYPOGRAPHY.bodyBold, color: themeColors.text, marginBottom: SPACING.md },
   row: { flexDirection: 'row', alignItems: 'center', gap: SPACING.md },
   input: {
     flex: 1,
-    backgroundColor: COLORS.backgroundCanvas,
+    backgroundColor: themeColors.backgroundCanvas,
     borderRadius: BORDER_RADIUS.sm,
     paddingHorizontal: SPACING.md,
     paddingVertical: SPACING.sm,
     ...TYPOGRAPHY.body,
-    color: COLORS.text,
+    color: themeColors.text,
   },
   inputFull: {
-    backgroundColor: COLORS.backgroundCanvas,
+    backgroundColor: themeColors.backgroundCanvas,
     borderRadius: BORDER_RADIUS.sm,
     paddingHorizontal: SPACING.md,
     paddingVertical: SPACING.sm,
     ...TYPOGRAPHY.body,
-    color: COLORS.text,
+    color: themeColors.text,
   },
-  rangeDash: { ...TYPOGRAPHY.body, color: COLORS.textMeta },
+  rangeDash: { ...TYPOGRAPHY.body, color: themeColors.textMeta },
   modeRow: {
     paddingVertical: SPACING.md,
     paddingHorizontal: SPACING.sm,
     borderRadius: BORDER_RADIUS.sm,
     marginBottom: SPACING.xs,
   },
-  modeRowSelected: { backgroundColor: COLORS.accentPrimaryDimmed },
-  modeLabel: { ...TYPOGRAPHY.body, color: COLORS.text },
-  modeLabelSelected: { ...TYPOGRAPHY.bodyBold, color: COLORS.text },
+  modeRowSelected: { backgroundColor: themeColors.accentPrimaryDimmed },
+  modeLabel: { ...TYPOGRAPHY.body, color: themeColors.text },
+  modeLabelSelected: { ...TYPOGRAPHY.bodyBold, color: themeColors.text },
   sectionLabel: {
     ...TYPOGRAPHY.bodyBold,
-    color: COLORS.text,
+    color: themeColors.text,
     marginBottom: SPACING.md,
     marginTop: SPACING.md,
   },
-  emptyText: { ...TYPOGRAPHY.meta, color: COLORS.textMeta, marginBottom: SPACING.lg },
+  emptyText: { ...TYPOGRAPHY.meta, color: themeColors.textMeta, marginBottom: SPACING.lg },
   exerciseRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: COLORS.activeCard,
+    backgroundColor: themeColors.activeCard,
     borderRadius: BORDER_RADIUS.md,
     padding: SPACING.lg,
     marginBottom: SPACING.sm,
   },
   exerciseInfo: { flex: 1, marginRight: SPACING.md },
-  exerciseName: { ...TYPOGRAPHY.bodyBold, color: COLORS.text, marginBottom: 2 },
-  exerciseMeta: { ...TYPOGRAPHY.meta, color: COLORS.textMeta },
+  exerciseName: { ...TYPOGRAPHY.bodyBold, color: themeColors.text, marginBottom: 2 },
+  exerciseMeta: { ...TYPOGRAPHY.meta, color: themeColors.textMeta },
   addExerciseButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     borderStyle: 'dashed',
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: themeColors.border,
     borderRadius: BORDER_RADIUS.md,
     padding: SPACING.lg,
     marginTop: SPACING.sm,
     marginBottom: SPACING.xxxl,
   },
-  addExerciseLabel: { ...TYPOGRAPHY.bodyBold, color: COLORS.primary, marginLeft: SPACING.sm },
+  addExerciseLabel: { ...TYPOGRAPHY.bodyBold, color: themeColors.primary, marginLeft: SPACING.sm },
   deleteButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -540,9 +544,9 @@ const styles = StyleSheet.create({
     padding: SPACING.lg,
     marginBottom: SPACING.xxxl,
   },
-  deleteLabel: { ...TYPOGRAPHY.bodyBold, color: COLORS.error, marginLeft: SPACING.sm },
+  deleteLabel: { ...TYPOGRAPHY.bodyBold, color: themeColors.error, marginLeft: SPACING.sm },
   // Picker modal
-  pickerContainer: { flex: 1, backgroundColor: COLORS.backgroundCanvas },
+  pickerContainer: { flex: 1, backgroundColor: themeColors.backgroundCanvas },
   pickerHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -550,39 +554,39 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.xxl,
     paddingVertical: SPACING.lg,
     borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
+    borderBottomColor: themeColors.border,
   },
-  pickerTitle: { ...TYPOGRAPHY.h3, color: COLORS.text },
+  pickerTitle: { ...TYPOGRAPHY.h3, color: themeColors.text },
   pickerClose: { padding: 8 },
-  pickerCloseText: { fontSize: 20, color: COLORS.text },
+  pickerCloseText: { fontSize: 20, color: themeColors.text },
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: COLORS.activeCard,
+    backgroundColor: themeColors.activeCard,
     borderRadius: BORDER_RADIUS.md,
     paddingHorizontal: SPACING.lg,
     paddingVertical: 12,
     margin: SPACING.xxl,
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: themeColors.border,
     gap: 12,
   },
   searchIcon: { fontSize: 18 },
-  searchInput: { flex: 1, fontSize: 16, color: COLORS.text },
+  searchInput: { flex: 1, fontSize: 16, color: themeColors.text },
   pickerList: { paddingHorizontal: SPACING.xxl, paddingBottom: SPACING.xxl },
   pickerItem: {
-    backgroundColor: COLORS.activeCard,
+    backgroundColor: themeColors.activeCard,
     borderRadius: BORDER_RADIUS.md,
     padding: SPACING.lg,
     marginBottom: SPACING.md,
   },
-  pickerItemName: { ...TYPOGRAPHY.bodyBold, color: COLORS.text },
-  pickerItemMeta: { ...TYPOGRAPHY.meta, color: COLORS.textMeta, marginTop: 2 },
-  pickerEmpty: { ...TYPOGRAPHY.meta, color: COLORS.textMeta, textAlign: 'center', paddingVertical: SPACING.xxxl },
+  pickerItemName: { ...TYPOGRAPHY.bodyBold, color: themeColors.text },
+  pickerItemMeta: { ...TYPOGRAPHY.meta, color: themeColors.textMeta, marginTop: 2 },
+  pickerEmpty: { ...TYPOGRAPHY.meta, color: themeColors.textMeta, textAlign: 'center', paddingVertical: SPACING.xxxl },
 });
 
 const ruleStyles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.backgroundCanvas },
+  container: { flex: 1, backgroundColor: themeColors.backgroundCanvas },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -590,41 +594,41 @@ const ruleStyles = StyleSheet.create({
     paddingHorizontal: SPACING.xxl,
     paddingVertical: SPACING.lg,
     borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
+    borderBottomColor: themeColors.border,
   },
-  cancel: { ...TYPOGRAPHY.body, color: COLORS.textMeta },
-  title: { ...TYPOGRAPHY.bodyBold, color: COLORS.text, flex: 1, textAlign: 'center', marginHorizontal: SPACING.md },
-  save: { ...TYPOGRAPHY.bodyBold, color: COLORS.primary },
+  cancel: { ...TYPOGRAPHY.body, color: themeColors.textMeta },
+  title: { ...TYPOGRAPHY.bodyBold, color: themeColors.text, flex: 1, textAlign: 'center', marginHorizontal: SPACING.md },
+  save: { ...TYPOGRAPHY.bodyBold, color: themeColors.primary },
   content: { padding: SPACING.xxl },
   toggleRow: {
     padding: SPACING.lg,
     borderRadius: BORDER_RADIUS.md,
-    backgroundColor: COLORS.activeCard,
+    backgroundColor: themeColors.activeCard,
     marginBottom: SPACING.sm,
   },
-  toggleRowSelected: { backgroundColor: COLORS.accentPrimaryDimmed },
-  toggleLabel: { ...TYPOGRAPHY.body, color: COLORS.text },
-  toggleLabelSelected: { ...TYPOGRAPHY.bodyBold, color: COLORS.text },
+  toggleRowSelected: { backgroundColor: themeColors.accentPrimaryDimmed },
+  toggleLabel: { ...TYPOGRAPHY.body, color: themeColors.text },
+  toggleLabelSelected: { ...TYPOGRAPHY.bodyBold, color: themeColors.text },
   fields: { marginTop: SPACING.lg },
-  fieldLabel: { ...TYPOGRAPHY.bodyBold, color: COLORS.text, marginBottom: SPACING.sm, marginTop: SPACING.md },
+  fieldLabel: { ...TYPOGRAPHY.bodyBold, color: themeColors.text, marginBottom: SPACING.sm, marginTop: SPACING.md },
   row: { flexDirection: 'row', alignItems: 'center', gap: SPACING.md },
-  dash: { ...TYPOGRAPHY.body, color: COLORS.textMeta },
+  dash: { ...TYPOGRAPHY.body, color: themeColors.textMeta },
   input: {
     flex: 1,
-    backgroundColor: COLORS.activeCard,
+    backgroundColor: themeColors.activeCard,
     borderRadius: BORDER_RADIUS.sm,
     paddingHorizontal: SPACING.md,
     paddingVertical: SPACING.sm,
     ...TYPOGRAPHY.body,
-    color: COLORS.text,
+    color: themeColors.text,
   },
   inputFull: {
-    backgroundColor: COLORS.activeCard,
+    backgroundColor: themeColors.activeCard,
     borderRadius: BORDER_RADIUS.sm,
     paddingHorizontal: SPACING.md,
     paddingVertical: SPACING.sm,
     ...TYPOGRAPHY.body,
-    color: COLORS.text,
+    color: themeColors.text,
   },
   modeRow: {
     paddingVertical: SPACING.md,
@@ -632,7 +636,7 @@ const ruleStyles = StyleSheet.create({
     borderRadius: BORDER_RADIUS.sm,
     marginBottom: SPACING.xs,
   },
-  modeRowSelected: { backgroundColor: COLORS.accentPrimaryDimmed },
-  modeLabel: { ...TYPOGRAPHY.body, color: COLORS.text },
-  modeLabelSelected: { ...TYPOGRAPHY.bodyBold, color: COLORS.text },
+  modeRowSelected: { backgroundColor: themeColors.accentPrimaryDimmed },
+  modeLabel: { ...TYPOGRAPHY.body, color: themeColors.text },
+  modeLabelSelected: { ...TYPOGRAPHY.bodyBold, color: themeColors.text },
 });

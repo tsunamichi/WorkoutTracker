@@ -9,7 +9,7 @@ import * as Haptics from 'expo-haptics';
 import dayjs from 'dayjs';
 import type { WorkoutTemplateExercise } from '../types';
 import { useStore } from '../store';
-import { COLORS, SPACING, TYPOGRAPHY, GRADIENTS, CARDS, BORDER_RADIUS } from '../constants';
+import { SPACING, TYPOGRAPHY, GRADIENTS, CARDS, BORDER_RADIUS } from '../constants';
 import { IconArrowLeft, IconPlay, IconCheck, IconMenu, IconMinusLine, IconAddLine, IconHistory, IconSkip, IconRestart, IconEdit } from '../components/icons';
 import { SetTimerSheet } from '../components/timer/SetTimerSheet';
 import { Toggle } from '../components/Toggle';
@@ -18,6 +18,8 @@ import { ActionSheet } from '../components/common/ActionSheet';
 import { ShapeConfetti } from '../components/common/ShapeConfetti';
 import { formatWeightForLoad, toDisplayWeight, fromDisplayWeight } from '../utils/weight';
 import { useTranslation } from '../i18n/useTranslation';
+import { useAppTheme } from '../theme/useAppTheme';
+import { getAppThemeFromStore } from '../theme/getAppThemeFromStore';
 
 interface ExerciseDetailScreenProps {
   route?: {
@@ -33,6 +35,7 @@ interface ExerciseDetailScreenProps {
   navigation?: any;
 }
 
+const lightSnap = getAppThemeFromStore().colors;
 const LIGHT_COLORS = {
   backgroundCanvas: '#0D0D0D',
   backgroundContainer: '#1C1C1E',
@@ -40,7 +43,7 @@ const LIGHT_COLORS = {
   textSecondary: '#AEAEB2',
   textMeta: '#8E8E93',
   border: '#38383A',
-  divider: COLORS.borderDimmed,
+  divider: lightSnap.borderDimmed,
   buttonBg: '#2C2C2E',
 };
 
@@ -73,7 +76,7 @@ function PulsatingCircle() {
         width: 8,
         height: 8,
         borderRadius: 4,
-        backgroundColor: COLORS.accentPrimary,
+        backgroundColor: themeColors.accentPrimary,
         transform: [{ scale: pulseAnim }],
       }}
     />
@@ -996,7 +999,7 @@ export function ExerciseDetailScreen({ route, navigation }: ExerciseDetailScreen
                               )}
                             </View>
                             <View style={styles.editIconContainer}>
-                              <IconEdit size={20} color={COLORS.textMeta} />
+                              <IconEdit size={20} color={themeColors.textMeta} />
                             </View>
                           </View>
                         </View>
@@ -1053,7 +1056,7 @@ export function ExerciseDetailScreen({ route, navigation }: ExerciseDetailScreen
                                   <PulsatingCircle />
                                 ) : isCompleted ? (
                                   <View style={styles.setCheckIcon}>
-                                    <IconCheck size={24} color={COLORS.successBright} />
+                                    <IconCheck size={24} color={themeColors.successBright} />
                                   </View>
                                 ) : null}
                               </View>
@@ -1193,7 +1196,7 @@ export function ExerciseDetailScreen({ route, navigation }: ExerciseDetailScreen
                     >
                       <View style={styles.adjustButton}>
                         <View style={styles.adjustButtonInner}>
-                          <IconMinusLine size={24} color={COLORS.accentPrimary} />
+                          <IconMinusLine size={24} color={themeColors.accentPrimary} />
                         </View>
                       </View>
                     </TouchableOpacity>
@@ -1204,7 +1207,7 @@ export function ExerciseDetailScreen({ route, navigation }: ExerciseDetailScreen
                     >
                       <View style={styles.adjustButton}>
                         <View style={styles.adjustButtonInner}>
-                          <IconAddLine size={24} color={COLORS.accentPrimary} />
+                          <IconAddLine size={24} color={themeColors.accentPrimary} />
                         </View>
                       </View>
                     </TouchableOpacity>
@@ -1229,7 +1232,7 @@ export function ExerciseDetailScreen({ route, navigation }: ExerciseDetailScreen
                     >
                       <View style={styles.adjustButton}>
                         <View style={styles.adjustButtonInner}>
-                          <IconMinusLine size={24} color={COLORS.accentPrimary} />
+                          <IconMinusLine size={24} color={themeColors.accentPrimary} />
                         </View>
                       </View>
                     </TouchableOpacity>
@@ -1240,7 +1243,7 @@ export function ExerciseDetailScreen({ route, navigation }: ExerciseDetailScreen
                     >
                       <View style={styles.adjustButton}>
                         <View style={styles.adjustButtonInner}>
-                          <IconAddLine size={24} color={COLORS.accentPrimary} />
+                          <IconAddLine size={24} color={themeColors.accentPrimary} />
                         </View>
                       </View>
                     </TouchableOpacity>
@@ -1346,7 +1349,7 @@ export function ExerciseDetailScreen({ route, navigation }: ExerciseDetailScreen
             featured: true
           },
           { 
-            icon: <IconRestart size={24} color={COLORS.signalNegative} />,
+            icon: <IconRestart size={24} color={themeColors.signalNegative} />,
             label: t('reset'), 
             onPress: handleResetExercise,
             destructive: true 
@@ -1367,10 +1370,11 @@ export function ExerciseDetailScreen({ route, navigation }: ExerciseDetailScreen
   );
 }
 
+const themeColors = getAppThemeFromStore().colors;
 const styles = StyleSheet.create({
   gradient: {
     flex: 1,
-    backgroundColor: COLORS.backgroundCanvas,
+    backgroundColor: themeColors.backgroundCanvas,
   },
   container: {
     flex: 1,
@@ -1437,7 +1441,7 @@ const styles = StyleSheet.create({
     position: 'relative',
     zIndex: 1,
     borderWidth: 2,
-    borderColor: COLORS.accentPrimary,
+    borderColor: themeColors.accentPrimary,
   },
   setCardInner: {
     ...CARDS.cardDeep.inner,
@@ -1603,7 +1607,7 @@ const styles = StyleSheet.create({
     borderCurve: 'continuous',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: COLORS.accentPrimaryDimmed,
+    backgroundColor: themeColors.accentPrimaryDimmed,
   },
   adjustButtonText: {
     ...TYPOGRAPHY.body,
@@ -1616,7 +1620,7 @@ const styles = StyleSheet.create({
   },
   dividerTop: {
     height: 1,
-    backgroundColor: COLORS.borderDimmed,
+    backgroundColor: themeColors.borderDimmed,
   },
   dividerBottom: {
     height: 1,
@@ -1628,9 +1632,9 @@ const styles = StyleSheet.create({
     borderLeftWidth: 1,
     borderBottomWidth: 1,
     borderRightWidth: 1,
-    borderLeftColor: COLORS.border,
-    borderBottomColor: COLORS.border,
-    borderRightColor: COLORS.border,
+    borderLeftColor: themeColors.border,
+    borderBottomColor: themeColors.border,
+    borderRightColor: themeColors.border,
     borderBottomLeftRadius: 12,
     borderBottomRightRadius: 12,
     overflow: 'hidden',
@@ -1648,17 +1652,17 @@ const styles = StyleSheet.create({
     borderLeftWidth: 2,
     borderBottomWidth: 2,
     borderRightWidth: 2,
-    borderTopColor: COLORS.accentPrimaryLight,
-    borderLeftColor: COLORS.accentPrimaryLight,
-    borderBottomColor: COLORS.accentPrimaryDark,
-    borderRightColor: COLORS.accentPrimaryDark,
+    borderTopColor: themeColors.accentPrimaryLight,
+    borderLeftColor: themeColors.accentPrimaryLight,
+    borderBottomColor: themeColors.accentPrimaryDark,
+    borderRightColor: themeColors.accentPrimaryDark,
   },
   recordRowCompleted: {
     opacity: 1, // Full opacity when disabled
-    borderTopColor: COLORS.backgroundCanvas,
-    borderLeftColor: COLORS.backgroundCanvas,
-    borderBottomColor: COLORS.border,
-    borderRightColor: COLORS.border,
+    borderTopColor: themeColors.backgroundCanvas,
+    borderLeftColor: themeColors.backgroundCanvas,
+    borderBottomColor: themeColors.border,
+    borderRightColor: themeColors.border,
   },
   recordRowActive: {
     opacity: 1, // Full opacity when there are unsaved changes
@@ -1684,7 +1688,7 @@ const styles = StyleSheet.create({
   },
   adjustmentDrawerTitle: {
     ...TYPOGRAPHY.h2,
-    color: COLORS.text,
+    color: themeColors.text,
     marginBottom: SPACING.xl,
   },
   drawerToggleRow: {
@@ -1692,7 +1696,7 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.xl,
   },
   drawerValuesCard: {
-    backgroundColor: COLORS.activeCard,
+    backgroundColor: themeColors.activeCard,
     borderRadius: BORDER_RADIUS.lg,
     overflow: 'hidden',
   },
@@ -1710,11 +1714,11 @@ const styles = StyleSheet.create({
   },
   drawerAdjustValueText: {
     ...TYPOGRAPHY.h1,
-    color: COLORS.text,
+    color: themeColors.text,
   },
   drawerAdjustUnit: {
     ...TYPOGRAPHY.body,
-    color: COLORS.textMeta,
+    color: themeColors.textMeta,
   },
   drawerAdjustButtons: {
     flexDirection: 'row',
@@ -1722,7 +1726,7 @@ const styles = StyleSheet.create({
   },
   drawerAdjustDivider: {
     height: 1,
-    backgroundColor: COLORS.borderDimmed,
+    backgroundColor: themeColors.borderDimmed,
     marginHorizontal: SPACING.xl,
   },
   
@@ -1780,7 +1784,7 @@ const styles = StyleSheet.create({
   },
   historyDividerTop: {
     height: 1,
-    backgroundColor: COLORS.borderDimmed,
+    backgroundColor: themeColors.borderDimmed,
   },
   historyDividerBottom: {
     height: 1,
@@ -1816,10 +1820,9 @@ const styles = StyleSheet.create({
     backgroundColor: '#1B1B1B',
   },
   markAsDoneButtonBackground: {
-    backgroundColor: COLORS.accentPrimary,
+    backgroundColor: themeColors.accentPrimary,
   },
   buttonDisabled: {
     opacity: 0.4,
   },
 });
-

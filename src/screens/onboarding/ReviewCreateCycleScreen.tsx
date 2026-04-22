@@ -7,21 +7,17 @@ import { ProgressHeader } from '../../components/common/ProgressHeader';
 import { StickyFooter } from '../../components/common/StickyFooter';
 import { convertOnboardingCycleToAppCycle } from '../../utils/convertOnboardingCycle';
 import { generateRandomWorkoutAssignments } from '../../utils/assignCycleWorkouts';
-import { COLORS } from '../../constants';
 import { useTranslation } from '../../i18n/useTranslation';
+import { useAppTheme } from '../../theme/useAppTheme';
+import { getAppThemeFromStore } from '../../theme/getAppThemeFromStore';
 
 type OnboardingStackParamList = {
   ReviewCreateCycle: undefined;
   TemplateEditor: undefined;
 };
 
-type RootStackParamList = {
-  OnboardingStack: undefined;
-  AppTabs: undefined;
-};
-
 type ReviewCreateCycleScreenProps = {
-  navigation: NativeStackNavigationProp<OnboardingStackParamList & RootStackParamList, 'ReviewCreateCycle'>;
+  navigation: NativeStackNavigationProp<OnboardingStackParamList, 'ReviewCreateCycle'>;
 };
 
 const CYCLE_LENGTH_OPTIONS = [4, 6, 8];
@@ -213,10 +209,11 @@ export function ReviewCreateCycleScreen({ navigation }: ReviewCreateCycleScreenP
   );
 }
 
+const themeColors = getAppThemeFromStore().colors;
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.backgroundCanvas,
+    backgroundColor: themeColors.backgroundCanvas,
   },
   scrollView: {
     flex: 1,
@@ -335,4 +332,3 @@ const styles = StyleSheet.create({
     color: '#817B77',
   },
 });
-

@@ -12,13 +12,15 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
-import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS } from '../constants';
+import { SPACING, TYPOGRAPHY, BORDER_RADIUS } from '../constants';
 import { IconArrowLeft, IconMenu, IconTrash, IconClose, IconPause, IconPlay } from '../components/icons';
 import { ActionSheet } from '../components/common/ActionSheet';
 import { useStore } from '../store';
 import { useTranslation } from '../i18n/useTranslation';
 import type { CyclePlanStatus } from '../types/training';
 import dayjs from 'dayjs';
+import { useAppTheme } from '../theme/useAppTheme';
+import { getAppThemeFromStore } from '../theme/getAppThemeFromStore';
 
 type RouteParams = {
   CyclePlanDetail: { planId: string };
@@ -32,6 +34,7 @@ const STATUS_LABEL: Record<CyclePlanStatus, string> = {
 };
 
 export function CyclePlanDetailScreen() {
+  const { colors: themeColors } = useAppTheme();
   const insets = useSafeAreaInsets();
   const navigation = useNavigation();
   const route = useRoute<RouteProp<RouteParams, 'CyclePlanDetail'>>();
@@ -166,16 +169,16 @@ export function CyclePlanDetailScreen() {
   const actionSheetItems = [
     ...(isActiveOrPaused
       ? [
-          { icon: <IconClose size={20} color={COLORS.text} />, label: 'End', onPress: handleEndCycle },
+          { icon: <IconClose size={20} color={themeColors.text} />, label: 'End', onPress: handleEndCycle },
           ...(status === 'active'
-            ? [{ icon: <IconPause size={20} color={COLORS.text} />, label: 'Pause / Shift', onPress: handlePauseShift }]
-            : [{ icon: <IconPlay size={20} color={COLORS.text} />, label: 'Resume', onPress: handleResumeCycle }]),
+            ? [{ icon: <IconPause size={20} color={themeColors.text} />, label: 'Pause / Shift', onPress: handlePauseShift }]
+            : [{ icon: <IconPlay size={20} color={themeColors.text} />, label: 'Resume', onPress: handleResumeCycle }]),
         ]
       : []),
     ...(isEnded
-      ? [{ icon: <IconPlay size={20} color={COLORS.accentPrimary} />, label: 'Make active again', onPress: handleReactivateCycle }]
+      ? [{ icon: <IconPlay size={20} color={themeColors.accentPrimary} />, label: 'Make active again', onPress: handleReactivateCycle }]
       : []),
-    { icon: <IconTrash size={20} color={COLORS.error} />, label: t('delete'), onPress: handleDeleteCycle, destructive: true as const },
+    { icon: <IconTrash size={20} color={themeColors.error} />, label: t('delete'), onPress: handleDeleteCycle, destructive: true as const },
   ].filter(Boolean) as { icon: React.ReactNode; label: string; onPress: () => void; destructive?: boolean }[];
 
   if (!plan) {
@@ -194,11 +197,11 @@ export function CyclePlanDetailScreen() {
       <SafeAreaView style={styles.container} edges={[]}>
         <View style={styles.header}>
           <TouchableOpacity onPress={handleBack} style={styles.backButton} hitSlop={12}>
-            <IconArrowLeft size={24} color={COLORS.text} />
+            <IconArrowLeft size={24} color={themeColors.text} />
           </TouchableOpacity>
           <Text style={styles.headerTitle} numberOfLines={1}>{plan.name}</Text>
           <TouchableOpacity onPress={() => { setMenuVisible(true); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); }} style={styles.menuButton} hitSlop={12}>
-            <IconMenu size={24} color={COLORS.text} />
+            <IconMenu size={24} color={themeColors.text} />
           </TouchableOpacity>
         </View>
 
@@ -268,10 +271,11 @@ export function CyclePlanDetailScreen() {
   );
 }
 
+const themeColors = getAppThemeFromStore().colors;
 const styles = StyleSheet.create({
   gradient: {
     flex: 1,
-    backgroundColor: COLORS.backgroundCanvas,
+    backgroundColor: themeColors.backgroundCanvas,
   },
   container: {
     flex: 1,
@@ -283,14 +287,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.lg,
     paddingVertical: SPACING.md,
     borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
+    borderBottomColor: themeColors.border,
   },
   backButton: {
     padding: SPACING.xs,
   },
   headerTitle: {
     ...TYPOGRAPHY.h3,
-    color: COLORS.text,
+    color: themeColors.text,
     flex: 1,
     textAlign: 'center',
     marginHorizontal: SPACING.sm,
@@ -305,7 +309,7 @@ const styles = StyleSheet.create({
     padding: SPACING.xl,
   },
   card: {
-    backgroundColor: COLORS.backgroundContainer,
+    backgroundColor: themeColors.backgroundContainer,
     borderRadius: BORDER_RADIUS.lg,
     padding: SPACING.xl,
   },
@@ -317,30 +321,30 @@ const styles = StyleSheet.create({
   },
   label: {
     ...TYPOGRAPHY.meta,
-    color: COLORS.textSecondary,
+    color: themeColors.textSecondary,
   },
   value: {
     ...TYPOGRAPHY.body,
-    color: COLORS.text,
+    color: themeColors.text,
   },
   statusBadge: {
     paddingHorizontal: SPACING.md,
     paddingVertical: SPACING.xs,
     borderRadius: BORDER_RADIUS.sm,
-    backgroundColor: COLORS.container,
+    backgroundColor: themeColors.container,
   },
   statusBadgeActive: {
-    backgroundColor: COLORS.accentPrimaryDimmed,
+    backgroundColor: themeColors.accentPrimaryDimmed,
   },
   statusBadgePaused: {
     backgroundColor: 'rgba(255, 159, 10, 0.15)',
   },
   statusText: {
     ...TYPOGRAPHY.metaBold,
-    color: COLORS.textSecondary,
+    color: themeColors.textSecondary,
   },
   statusTextActive: {
-    color: COLORS.accentPrimary,
+    color: themeColors.accentPrimary,
   },
   statusTextPaused: {
     color: '#FF9F0A',
@@ -353,10 +357,10 @@ const styles = StyleSheet.create({
   },
   actionIcon: {
     fontSize: 18,
-    color: COLORS.text,
+    color: themeColors.text,
   },
   datePickerContainer: {
-    backgroundColor: COLORS.backgroundContainer,
+    backgroundColor: themeColors.backgroundContainer,
     paddingBottom: SPACING.lg,
   },
   datePickerDone: {
@@ -365,17 +369,17 @@ const styles = StyleSheet.create({
   },
   datePickerDoneText: {
     ...TYPOGRAPHY.button,
-    color: COLORS.accentPrimary,
+    color: themeColors.accentPrimary,
   },
   errorText: {
     ...TYPOGRAPHY.body,
-    color: COLORS.text,
+    color: themeColors.text,
     textAlign: 'center',
     marginTop: SPACING.xxl,
   },
   backText: {
     ...TYPOGRAPHY.body,
-    color: COLORS.accentPrimary,
+    color: themeColors.accentPrimary,
     textAlign: 'center',
     marginTop: SPACING.md,
   },

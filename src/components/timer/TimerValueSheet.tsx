@@ -8,7 +8,7 @@ import {
   Animated,
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
-import { COLORS, SPACING, TYPOGRAPHY } from '../../constants';
+import { SPACING, TYPOGRAPHY } from '../../constants';
 import {
   executionCtaLabelStyle,
   EXECUTION_CTA_HEIGHT,
@@ -16,6 +16,8 @@ import {
 } from '../execution/executionCtaTokens';
 import { BottomDrawer } from '../common/BottomDrawer';
 import { useTranslation } from '../../i18n/useTranslation';
+import { useAppTheme } from '../../theme/useAppTheme';
+import { getAppThemeFromStore } from '../../theme/getAppThemeFromStore';
 
 interface TimerValueSheetProps {
   visible: boolean;
@@ -203,6 +205,7 @@ export function TimerValueSheet({
   );
 }
 
+const themeColors = getAppThemeFromStore().colors;
 const styles = StyleSheet.create({
   container: {
     paddingHorizontal: SPACING.xxl,
@@ -259,7 +262,7 @@ const styles = StyleSheet.create({
   saveButton: {
     alignSelf: 'center',
     flexShrink: 0,
-    backgroundColor: COLORS.accentPrimary,
+    backgroundColor: themeColors.accentPrimary,
     height: EXECUTION_CTA_HEIGHT,
     minHeight: EXECUTION_CTA_HEIGHT,
     paddingHorizontal: EXECUTION_CTA_PADDING_H,
@@ -270,6 +273,6 @@ const styles = StyleSheet.create({
   },
   saveButtonText: {
     ...executionCtaLabelStyle,
-    color: COLORS.canvas,
+    color: themeColors.canvas,
   },
 });

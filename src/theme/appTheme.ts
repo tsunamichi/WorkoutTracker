@@ -1,9 +1,9 @@
 /**
- * App color themes — accents + Explore execution chrome only.
- * Structural neutrals (canvas, ink, card grays) stay on COLORS.
+ * App color themes — accents + Explore execution chrome and structural tokens.
+ * Built on `basePalette`, overridden per `AppColorThemeId`.
  */
 
-import { COLORS, hexToRgba } from '../constants';
+import { basePalette } from './basePalette';
 import type { AppColorThemeId } from '../types';
 import { mixHex } from '../components/exploreV2/exploreV2ColorSystem';
 
@@ -38,7 +38,7 @@ export type ExploreAccentTokens = {
 
 export type AppTheme = {
   id: AppColorThemeId;
-  colors: typeof COLORS;
+  colors: typeof basePalette;
   explore: ExploreAccentTokens;
 };
 
@@ -68,13 +68,13 @@ export function normalizeColorThemeId(raw: unknown): AppColorThemeId {
 export function buildAppTheme(id: AppColorThemeId): AppTheme {
   if (id === 'v1') {
     /** Forest card + spec accent-primary (#FFA424) + cyan accents (Schedule + Explore execution). */
-    const brandPrimary = COLORS.accentPrimary;
+    const brandPrimary = basePalette.accentPrimary;
     const cyan = '#26C2B4';
     const forest = '#002E29';
     return {
       id,
       colors: {
-        ...COLORS,
+        ...basePalette,
         ...accentSurfaces(brandPrimary),
         accentPrimaryDark: '#8C5509',
         secondary: cyan,
@@ -92,8 +92,8 @@ export function buildAppTheme(id: AppColorThemeId): AppTheme {
         activityInfo: cyan,
         amberBand: '#E78B0B',
         amberBandComplete: '#F3940F',
-        workTimerCompleteCardBg: COLORS.containerTertiaryTimer,
-        workTimerUpNextCardBg: COLORS.containerSecondaryTimer,
+        workTimerCompleteCardBg: basePalette.containerTertiaryTimer,
+        workTimerUpNextCardBg: basePalette.containerSecondaryTimer,
         restTimerHeaderInk: '#7A6020',
         restTimerCompletedUnitInk: '#A67C1F',
         skipRestCtaBg: '#052220',
@@ -106,7 +106,7 @@ export function buildAppTheme(id: AppColorThemeId): AppTheme {
 
   if (id === 'v2') {
     /** v1 palette copy with targeted v2 container/canvas overrides. */
-    const brandPrimary = COLORS.accentPrimary;
+    const brandPrimary = basePalette.accentPrimary;
     const cyan = '#26C2B4';
     const containerPrimaryV2 = '#133011';
     const canvasLightV2 = '#E6DCE1';
@@ -117,7 +117,7 @@ export function buildAppTheme(id: AppColorThemeId): AppTheme {
     return {
       id: 'v2',
       colors: {
-        ...COLORS,
+        ...basePalette,
         ...accentSurfaces(brandPrimary),
         accentPrimaryDark: '#8C5509',
         secondary: cyan,
@@ -138,8 +138,8 @@ export function buildAppTheme(id: AppColorThemeId): AppTheme {
         activityInfo: cyan,
         amberBand: '#E78B0B',
         amberBandComplete: '#F3940F',
-        workTimerCompleteCardBg: COLORS.containerTertiaryTimer,
-        workTimerUpNextCardBg: COLORS.containerSecondaryTimer,
+        workTimerCompleteCardBg: basePalette.containerTertiaryTimer,
+        workTimerUpNextCardBg: basePalette.containerSecondaryTimer,
         restTimerHeaderInk: '#7A6020',
         restTimerCompletedUnitInk: '#A67C1F',
         skipRestCtaBg: '#052220',

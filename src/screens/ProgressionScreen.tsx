@@ -4,11 +4,13 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import { useNavigation } from '@react-navigation/native';
 import { useStore } from '../store';
-import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS } from '../constants';
+import { SPACING, TYPOGRAPHY, BORDER_RADIUS } from '../constants';
 import { IconArrowLeft, IconTriangle, IconAdd } from '../components/icons';
 import { Toggle } from '../components/Toggle';
 import { addFakeProgressionLogs } from '../utils/addFakeHistory';
 import type { ProgressionGroup } from '../types/progression';
+import { useAppTheme } from '../theme/useAppTheme';
+import { getAppThemeFromStore } from '../theme/getAppThemeFromStore';
 
 const DEFAULT_PROGRESSION = {
   repRangeMin: 8,
@@ -18,6 +20,7 @@ const DEFAULT_PROGRESSION = {
 };
 
 export function ProgressionScreen() {
+  const { colors: themeColors } = useAppTheme();
   const insets = useSafeAreaInsets();
   const navigation = useNavigation();
   const {
@@ -59,7 +62,7 @@ export function ProgressionScreen() {
     <View style={[styles.container, { paddingTop: insets.top }]}>
       <View style={styles.header}>
         <TouchableOpacity style={styles.backButton} onPress={handleBack} activeOpacity={0.7}>
-          <IconArrowLeft size={24} color={COLORS.text} />
+          <IconArrowLeft size={24} color={themeColors.text} />
         </TouchableOpacity>
       </View>
       <ScrollView
@@ -107,7 +110,7 @@ export function ProgressionScreen() {
               </Text>
             </View>
             <View style={{ transform: [{ rotate: '90deg' }] }}>
-              <IconTriangle size={12} color={COLORS.text} />
+              <IconTriangle size={12} color={themeColors.text} />
             </View>
           </View>
         </TouchableOpacity>
@@ -138,7 +141,7 @@ export function ProgressionScreen() {
                   </Text>
                 </View>
                 <View style={{ transform: [{ rotate: '90deg' }] }}>
-                  <IconTriangle size={12} color={COLORS.text} />
+                  <IconTriangle size={12} color={themeColors.text} />
                 </View>
               </View>
             </TouchableOpacity>
@@ -149,7 +152,7 @@ export function ProgressionScreen() {
           activeOpacity={0.7}
         >
           <View style={styles.settingRow}>
-            <IconAdd size={20} color={COLORS.primary} />
+            <IconAdd size={20} color={themeColors.primary} />
             <Text style={styles.addGroupLabel}>Add group</Text>
           </View>
         </TouchableOpacity>
@@ -173,10 +176,11 @@ export function ProgressionScreen() {
   );
 }
 
+const themeColors = getAppThemeFromStore().colors;
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.backgroundCanvas,
+    backgroundColor: themeColors.backgroundCanvas,
   },
   header: {
     flexDirection: 'row',
@@ -200,10 +204,10 @@ const styles = StyleSheet.create({
   },
   pageTitle: {
     ...TYPOGRAPHY.h2,
-    color: COLORS.text,
+    color: themeColors.text,
   },
   settingCard: {
-    backgroundColor: COLORS.activeCard,
+    backgroundColor: themeColors.activeCard,
     borderRadius: BORDER_RADIUS.md,
     padding: SPACING.lg,
     marginBottom: SPACING.lg,
@@ -216,41 +220,41 @@ const styles = StyleSheet.create({
   settingInfo: { flex: 1, marginRight: SPACING.md },
   settingLabel: {
     ...TYPOGRAPHY.bodyBold,
-    color: COLORS.text,
+    color: themeColors.text,
     marginBottom: SPACING.xs,
   },
   settingDescription: {
     ...TYPOGRAPHY.meta,
-    color: COLORS.textMeta,
+    color: themeColors.textMeta,
   },
   sectionLabel: {
     ...TYPOGRAPHY.bodyBold,
-    color: COLORS.text,
+    color: themeColors.text,
     marginBottom: SPACING.xs,
     marginTop: SPACING.sm,
   },
   sectionDescription: {
     ...TYPOGRAPHY.meta,
-    color: COLORS.textMeta,
+    color: themeColors.textMeta,
     marginBottom: SPACING.lg,
   },
-  addGroupCard: { borderStyle: 'dashed', borderWidth: 1, borderColor: COLORS.border },
+  addGroupCard: { borderStyle: 'dashed', borderWidth: 1, borderColor: themeColors.border },
   addGroupLabel: {
     ...TYPOGRAPHY.bodyBold,
-    color: COLORS.primary,
+    color: themeColors.primary,
     marginLeft: SPACING.sm,
   },
   debugButton: {
     marginTop: SPACING.xxxl,
     padding: SPACING.lg,
     borderRadius: BORDER_RADIUS.md,
-    backgroundColor: COLORS.activeCard,
+    backgroundColor: themeColors.activeCard,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: COLORS.warning,
+    borderColor: themeColors.warning,
   },
   debugButtonLabel: {
     ...TYPOGRAPHY.meta,
-    color: COLORS.warning,
+    color: themeColors.warning,
   },
 });

@@ -220,6 +220,7 @@ type TranslationKey =
   | 'restBetweenRounds'
   | 'save'
   | 'createTimer'
+  | 'newTimer'
   | 'savedTimers'
   | 'savedWorkouts'
   | 'noScheduledSessionForWorkout'
@@ -250,6 +251,7 @@ type TranslationKey =
   | 'addExerciseCta'
   | 'addExerciseFromLibrary'
   | 'exerciseSearchPlaceholder'
+  | 'exerciseAddedMessage'
   | 'createCustomExercise'
   | 'createExerciseNamedTemplate'
   | 'builderExerciseSearchEmptyHint'
@@ -508,6 +510,7 @@ type TranslationKey =
   | 'exploreV2TimerLabelRightSide'
   | 'exploreV2AddSet'
   | 'exploreV2RemoveSet'
+  | 'exploreV2ExpandCurrentPeek'
   | 'betweenSets'
   | 'monthlyProgressCheck'
   | 'monthlyProgressReminder'
@@ -873,6 +876,7 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     restBetweenRounds: 'Rest between rounds',
     save: 'Save',
     createTimer: 'Create Timer',
+    newTimer: 'New timer',
     savedTimers: 'Saved timers',
     savedWorkouts: 'Saved workouts',
     noScheduledSessionForWorkout:
@@ -904,6 +908,7 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     addExerciseCta: '+ add exercise',
     addExerciseFromLibrary: 'Add from library',
     exerciseSearchPlaceholder: 'Search exercises',
+    exerciseAddedMessage: 'Added {name}',
     createCustomExercise: 'Create custom exercise',
     createExerciseNamedTemplate: 'Create "{name}"',
     builderExerciseSearchEmptyHint:
@@ -1171,6 +1176,7 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     exploreV2TimerLabelRightSide: 'Right side',
     exploreV2AddSet: 'Add set',
     exploreV2RemoveSet: 'Remove',
+    exploreV2ExpandCurrentPeek: 'Expand current exercise',
     betweenSets: 'between sets',
     monthlyProgressCheck: 'Monthly progress check',
     monthlyProgressReminder: 'Reminder on day {day} of each month',
@@ -1550,6 +1556,7 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     restBetweenRounds: 'Descanso entre rondas',
     save: 'Guardar',
     createTimer: 'Crear temporizador',
+    newTimer: 'Nuevo temporizador',
     savedTimers: 'Temporizadores guardados',
     savedWorkouts: 'Entrenamientos guardados',
     noScheduledSessionForWorkout:
@@ -1581,6 +1588,7 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     addExerciseCta: '+ agregar ejercicio',
     addExerciseFromLibrary: 'Añadir desde biblioteca',
     exerciseSearchPlaceholder: 'Buscar ejercicios',
+    exerciseAddedMessage: 'Se agregó {name}',
     createCustomExercise: 'Crear ejercicio personalizado',
     createExerciseNamedTemplate: 'Crear «{name}»',
     builderExerciseSearchEmptyHint:
@@ -1849,6 +1857,7 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     exploreV2TimerLabelRightSide: 'Lado derecho',
     exploreV2AddSet: 'Añadir serie',
     exploreV2RemoveSet: 'Quitar',
+    exploreV2ExpandCurrentPeek: 'Ampliar ejercicio actual',
     betweenSets: 'entre series',
     monthlyProgressCheck: 'Revision mensual',
     monthlyProgressReminder: 'Recordatorio el dia {day} de cada mes',

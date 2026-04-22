@@ -5,24 +5,28 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useNavigation } from '@react-navigation/native';
 import * as Haptics from 'expo-haptics';
 import { ProfileAvatar } from '../components/ProfileAvatar';
-import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS, CARDS } from '../constants';
+import { SPACING, TYPOGRAPHY, BORDER_RADIUS, CARDS } from '../constants';
 import { IconAdd, IconWorkouts, IconCalendar, IconMenu, IconSwap } from '../components/icons';
 import { useStore } from '../store';
 import { useTranslation } from '../i18n/useTranslation';
 import dayjs from 'dayjs';
 import { BottomDrawer } from '../components/common/BottomDrawer';
+import { useAppTheme } from '../theme/useAppTheme';
+import { getAppThemeFromStore } from '../theme/getAppThemeFromStore';
 
 // Dark theme colors
+const snap = getAppThemeFromStore().colors;
 const LIGHT_COLORS = {
   backgroundCanvas: '#0D0D0D',
   secondary: '#FFFFFF',
   textMeta: '#8E8E93',
   border: '#38383A',
-  accentPrimary: COLORS.accentPrimary,
+  accentPrimary: snap.accentPrimary,
   buttonBg: '#2C2C2E',
 };
 
 export function WorkoutsScreen() {
+  const { colors: themeColors } = useAppTheme();
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
   const {
@@ -148,7 +152,7 @@ export function WorkoutsScreen() {
               activeOpacity={0.9}
             >
               <View style={styles.dashedCreateInner}>
-                <IconAdd size={20} color={COLORS.text} />
+                <IconAdd size={20} color={themeColors.text} />
                 <Text style={styles.dashedCreateText}>{t('createWorkout')}</Text>
               </View>
             </TouchableOpacity>
@@ -176,7 +180,7 @@ export function WorkoutsScreen() {
                     activeOpacity={0.8}
                     hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                   >
-                    <IconMenu size={22} color={COLORS.textMeta} />
+                    <IconMenu size={22} color={themeColors.textMeta} />
                   </TouchableOpacity>
                 </View>
               </TouchableOpacity>
@@ -199,7 +203,7 @@ export function WorkoutsScreen() {
               activeOpacity={0.9}
             >
               <View style={styles.dashedCreateInner}>
-                <IconAdd size={20} color={COLORS.text} />
+                <IconAdd size={20} color={themeColors.text} />
                 <Text style={styles.dashedCreateText}>{t('createPlan')}</Text>
               </View>
             </TouchableOpacity>
@@ -222,7 +226,7 @@ export function WorkoutsScreen() {
                       {t('week')}s: {plan.weeks} • {t('start')}: {dayjs(plan.startDate).format('MMM D')}
                     </Text>
                   </View>
-                  <IconSwap size={22} color={COLORS.textMeta} />
+                  <IconSwap size={22} color={themeColors.textMeta} />
                 </View>
               </TouchableOpacity>
             ))}
@@ -258,7 +262,7 @@ export function WorkoutsScreen() {
               <Text style={styles.actionText}>{t('duplicate')}</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.actionRow} onPress={() => setTemplateActionsId(null)} activeOpacity={0.85}>
-              <Text style={[styles.actionText, { color: COLORS.textMeta }]}>{t('cancel')}</Text>
+              <Text style={[styles.actionText, { color: themeColors.textMeta }]}>{t('cancel')}</Text>
             </TouchableOpacity>
           </View>
         </BottomDrawer>
@@ -276,7 +280,7 @@ export function WorkoutsScreen() {
                 if (createSheet === 'single') {
                   (navigation as any).navigate('WorkoutBuilder');
                 } else {
-                  (navigation as any).navigate('CreateCycleBasics');
+                  (navigation as any).navigate('CreateCycleFlow');
                 }
               }}
               activeOpacity={0.85}
@@ -297,7 +301,7 @@ export function WorkoutsScreen() {
               <Text style={styles.actionText}>{t('createWithAI')}</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.actionRow} onPress={() => setCreateSheet(null)} activeOpacity={0.85}>
-              <Text style={[styles.actionText, { color: COLORS.textMeta }]}>{t('cancel')}</Text>
+              <Text style={[styles.actionText, { color: themeColors.textMeta }]}>{t('cancel')}</Text>
             </TouchableOpacity>
           </View>
         </BottomDrawer>
@@ -356,10 +360,10 @@ export function WorkoutsScreen() {
               }}
               activeOpacity={0.85}
             >
-              <Text style={[styles.actionText, { color: COLORS.signalWarning }]}>{t('archive')}</Text>
+              <Text style={[styles.actionText, { color: themeColors.signalWarning }]}>{t('archive')}</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.actionRow} onPress={() => setPlanActionsId(null)} activeOpacity={0.85}>
-              <Text style={[styles.actionText, { color: COLORS.textMeta }]}>{t('cancel')}</Text>
+              <Text style={[styles.actionText, { color: themeColors.textMeta }]}>{t('cancel')}</Text>
             </TouchableOpacity>
           </View>
         </BottomDrawer>
@@ -379,10 +383,11 @@ export function WorkoutsScreen() {
   );
 }
 
+const themeColors = getAppThemeFromStore().colors;
 const styles = StyleSheet.create({
   gradient: {
     flex: 1,
-    backgroundColor: COLORS.backgroundCanvas,
+    backgroundColor: themeColors.backgroundCanvas,
   },
   container: {
     flex: 1,
@@ -437,7 +442,7 @@ const styles = StyleSheet.create({
     height: 56,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: COLORS.text,
+    borderColor: themeColors.text,
     borderStyle: 'dashed',
     backgroundColor: 'transparent',
     alignItems: 'center',
@@ -451,7 +456,7 @@ const styles = StyleSheet.create({
   },
   dashedCreateText: {
     ...TYPOGRAPHY.meta,
-    color: COLORS.text,
+    color: themeColors.text,
     fontWeight: '600',
   },
   emptyState: {
@@ -539,16 +544,16 @@ const styles = StyleSheet.create({
   actionRow: {
     height: 52,
     borderRadius: BORDER_RADIUS.lg,
-    backgroundColor: COLORS.activeCard,
+    backgroundColor: themeColors.activeCard,
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: themeColors.border,
     paddingHorizontal: SPACING.lg,
     alignItems: 'center',
     justifyContent: 'center',
   },
   actionText: {
     ...TYPOGRAPHY.body,
-    color: COLORS.text,
+    color: themeColors.text,
     fontWeight: '600',
   },
 });

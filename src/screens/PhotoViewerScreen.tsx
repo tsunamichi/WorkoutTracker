@@ -12,9 +12,11 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import dayjs from 'dayjs';
 import { useStore } from '../store';
-import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS } from '../constants';
+import { SPACING, TYPOGRAPHY, BORDER_RADIUS } from '../constants';
 import { IconArrowLeft, IconTrash } from '../components/icons';
 import type { ProgressPhoto } from '../types';
+import { useAppTheme } from '../theme/useAppTheme';
+import { getAppThemeFromStore } from '../theme/getAppThemeFromStore';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const IMAGE_HEIGHT = SCREEN_HEIGHT * 0.55;
@@ -64,7 +66,7 @@ export function PhotoViewerScreen({ navigation, route }: any) {
           style={styles.backButton}
           activeOpacity={1}
         >
-          <IconArrowLeft size={24} color={COLORS.text} />
+          <IconArrowLeft size={24} color={themeColors.text} />
         </TouchableOpacity>
         <View style={styles.headerCenter}>
           {activePhoto && (
@@ -82,7 +84,7 @@ export function PhotoViewerScreen({ navigation, route }: any) {
           style={styles.deleteButton}
           activeOpacity={0.7}
         >
-          <IconTrash size={22} color={COLORS.error} />
+          <IconTrash size={22} color={themeColors.error} />
         </TouchableOpacity>
       </View>
 
@@ -140,10 +142,11 @@ export function PhotoViewerScreen({ navigation, route }: any) {
   );
 }
 
+const themeColors = getAppThemeFromStore().colors;
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.backgroundCanvas,
+    backgroundColor: themeColors.backgroundCanvas,
   },
   header: {
     paddingHorizontal: SPACING.xxl,
@@ -165,11 +168,11 @@ const styles = StyleSheet.create({
   },
   headerLabel: {
     ...TYPOGRAPHY.bodyBold,
-    color: COLORS.text,
+    color: themeColors.text,
   },
   headerDate: {
     ...TYPOGRAPHY.meta,
-    color: COLORS.textMeta,
+    color: themeColors.textMeta,
     marginTop: 2,
   },
   deleteButton: {
@@ -200,10 +203,10 @@ const styles = StyleSheet.create({
     width: 6,
     height: 6,
     borderRadius: 3,
-    backgroundColor: COLORS.border,
+    backgroundColor: themeColors.border,
   },
   dotActive: {
-    backgroundColor: COLORS.text,
+    backgroundColor: themeColors.text,
     width: 8,
     height: 8,
     borderRadius: 4,
@@ -213,7 +216,7 @@ const styles = StyleSheet.create({
   },
   notesText: {
     ...TYPOGRAPHY.body,
-    color: COLORS.textMeta,
+    color: themeColors.textMeta,
     textAlign: 'center',
   },
 });

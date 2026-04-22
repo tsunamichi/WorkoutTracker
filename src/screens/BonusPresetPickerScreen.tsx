@@ -4,7 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import dayjs from 'dayjs';
 import { useStore } from '../store';
-import { COLORS, SPACING, TYPOGRAPHY, CARDS, BORDER_RADIUS } from '../constants';
+import { SPACING, TYPOGRAPHY, CARDS, BORDER_RADIUS } from '../constants';
 import { useAppTheme } from '../theme/useAppTheme';
 import { IconArrowLeft, IconPlay, IconAdd, IconArrowRight } from '../components/icons';
 import { DiagonalLinePattern } from '../components/common/DiagonalLinePattern';
@@ -14,6 +14,7 @@ import { createNewExerciseItem } from '../utils/exerciseMigration';
 import { BUILTIN_CORE_TEMPLATES, resolveBuiltinCoreItems } from '../constants/coreTemplates';
 import type { RootStackParamList } from '../navigation/AppNavigator';
 import type { BonusLog, BonusType, ExerciseInstanceWithCycle } from '../types/training';
+import { getAppThemeFromStore } from '../theme/getAppThemeFromStore';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'BonusPresetPicker'>;
 
@@ -205,7 +206,7 @@ export function BonusPresetPickerScreen({ navigation, route }: Props) {
         <View style={[styles.header, { paddingTop: insets.top }]}>
           <View style={styles.topBar}>
             <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-              <IconArrowLeft size={24} color={COLORS.text} />
+              <IconArrowLeft size={24} color={themeColors.text} />
             </TouchableOpacity>
             <View style={{ width: 48 }} />
           </View>
@@ -243,7 +244,7 @@ export function BonusPresetPickerScreen({ navigation, route }: Props) {
                     <Text style={styles.programCardMeta}>Create a program to track progress and see what's next</Text>
                     <View style={styles.programCardCta}>
                       <Text style={styles.programCardCtaText}>Create program</Text>
-                      <IconArrowRight size={16} color={COLORS.accentPrimary} />
+                      <IconArrowRight size={16} color={themeColors.accentPrimary} />
                     </View>
                   </View>
                 </TouchableOpacity>
@@ -265,7 +266,7 @@ export function BonusPresetPickerScreen({ navigation, route }: Props) {
                     ) : null}
                     <View style={styles.programCardCta}>
                       <Text style={styles.programCardCtaText}>View workouts & details</Text>
-                      <IconArrowRight size={16} color={COLORS.accentPrimary} />
+                      <IconArrowRight size={16} color={themeColors.accentPrimary} />
                     </View>
                   </View>
                 </TouchableOpacity>
@@ -280,7 +281,7 @@ export function BonusPresetPickerScreen({ navigation, route }: Props) {
               activeOpacity={0.7}
             >
               <DiagonalLinePattern width="100%" height={56} borderRadius={16} />
-              <IconAdd size={24} color={COLORS.text} />
+              <IconAdd size={24} color={themeColors.text} />
               <Text style={styles.addButtonText}>Add Core Workout</Text>
             </TouchableOpacity>
           ) : (
@@ -324,7 +325,7 @@ export function BonusPresetPickerScreen({ navigation, route }: Props) {
                           activeOpacity={1}
                         >
                           <Text style={styles.startButtonText}>{t('start')}</Text>
-                          <IconPlay size={10} color={COLORS.accentPrimary} />
+                          <IconPlay size={10} color={themeColors.accentPrimary} />
                         </TouchableOpacity>
                       </View>
                     </View>
@@ -337,7 +338,7 @@ export function BonusPresetPickerScreen({ navigation, route }: Props) {
                 activeOpacity={0.7}
               >
                 <DiagonalLinePattern width="100%" height={56} borderRadius={16} />
-                <IconAdd size={24} color={COLORS.text} />
+                <IconAdd size={24} color={themeColors.text} />
                 <Text style={styles.addButtonText}>{`Add ${t('warmUp')}`}</Text>
               </TouchableOpacity>
             </>
@@ -392,7 +393,7 @@ export function BonusPresetPickerScreen({ navigation, route }: Props) {
                 activeOpacity={0.7}
               >
                 <DiagonalLinePattern width="100%" height={56} borderRadius={16} />
-                <IconAdd size={24} color={COLORS.text} />
+                <IconAdd size={24} color={themeColors.text} />
                 <Text style={styles.addButtonText}>Create new</Text>
               </TouchableOpacity>
               <View style={{ height: 32 }} />
@@ -404,10 +405,11 @@ export function BonusPresetPickerScreen({ navigation, route }: Props) {
   );
 }
 
+const themeColors = getAppThemeFromStore().colors;
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.backgroundCanvas,
+    backgroundColor: themeColors.backgroundCanvas,
   },
   innerContainer: {
     flex: 1,
@@ -438,7 +440,7 @@ const styles = StyleSheet.create({
   },
   pageTitle: {
     ...TYPOGRAPHY.h2,
-    color: COLORS.text,
+    color: themeColors.text,
   },
   scrollView: {
     flex: 1,
@@ -463,12 +465,12 @@ const styles = StyleSheet.create({
   },
   cardName: {
     ...TYPOGRAPHY.h3,
-    color: COLORS.text,
+    color: themeColors.text,
     marginBottom: 4,
   },
   cardMeta: {
     ...TYPOGRAPHY.body,
-    color: COLORS.textMeta,
+    color: themeColors.textMeta,
   },
   startButton: {
     flexDirection: 'row',
@@ -478,7 +480,7 @@ const styles = StyleSheet.create({
   },
   startButtonText: {
     ...TYPOGRAPHY.metaBold,
-    color: COLORS.accentPrimary,
+    color: themeColors.accentPrimary,
   },
   addButton: {
     width: '100%',
@@ -493,7 +495,7 @@ const styles = StyleSheet.create({
   },
   addButtonText: {
     ...TYPOGRAPHY.metaBold,
-    color: COLORS.text,
+    color: themeColors.text,
   },
   programCardSection: {
     marginBottom: SPACING.xl,
@@ -507,17 +509,17 @@ const styles = StyleSheet.create({
   },
   programCardTitle: {
     ...TYPOGRAPHY.h3,
-    color: COLORS.text,
+    color: themeColors.text,
     marginBottom: 4,
   },
   programCardMeta: {
     ...TYPOGRAPHY.meta,
-    color: COLORS.textMeta,
+    color: themeColors.textMeta,
     marginBottom: 4,
   },
   programCardUpNext: {
     ...TYPOGRAPHY.meta,
-    color: COLORS.accentPrimary,
+    color: themeColors.accentPrimary,
     marginBottom: 12,
   },
   programCardCta: {
@@ -527,7 +529,7 @@ const styles = StyleSheet.create({
   },
   programCardCtaText: {
     ...TYPOGRAPHY.metaBold,
-    color: COLORS.accentPrimary,
+    color: themeColors.accentPrimary,
   },
   addCoreDrawerContent: {
     paddingHorizontal: SPACING.xxl,

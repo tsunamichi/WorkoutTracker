@@ -8,7 +8,7 @@ import * as ImagePicker from 'expo-image-picker';
 import dayjs from 'dayjs';
 import isoWeek from 'dayjs/plugin/isoWeek';
 import { useStore } from '../store';
-import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS } from '../constants';
+import { SPACING, TYPOGRAPHY, BORDER_RADIUS } from '../constants';
 import { IconSettings, IconEdit } from '../components/icons';
 import { formatWeight, fromDisplayWeight } from '../utils/weight';
 import { BottomDrawer } from '../components/common/BottomDrawer';
@@ -18,6 +18,8 @@ import { useProgressMetrics, CycleSnapshot, WeeklySnapshot } from '../hooks/useP
 import { KeyLiftCard } from '../components/progress/KeyLiftCard';
 import { WeeklyWeightCard } from '../components/progress/WeeklyWeightCard';
 import { PhotoCheckInCard } from '../components/progress/PhotoCheckInCard';
+import { useAppTheme } from '../theme/useAppTheme';
+import { getAppThemeFromStore } from '../theme/getAppThemeFromStore';
 
 dayjs.extend(isoWeek);
 
@@ -212,7 +214,7 @@ export function ProgressHomeScreen({ navigation }: ProgressHomeScreenProps) {
                   activeOpacity={0.7}
                   hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
                 >
-                  <IconEdit size={20} color={COLORS.textMeta} />
+                  <IconEdit size={20} color={themeColors.textMeta} />
                 </TouchableOpacity>
               </View>
 
@@ -276,7 +278,7 @@ export function ProgressHomeScreen({ navigation }: ProgressHomeScreenProps) {
             <TextInput
               style={styles.weightInput}
               placeholder={settings.useKg ? '70' : '155'}
-              placeholderTextColor={COLORS.textMeta}
+              placeholderTextColor={themeColors.textMeta}
               keyboardType="decimal-pad"
               value={weightValue}
               onChangeText={setWeightValue}
@@ -533,10 +535,11 @@ function CurrentCycleModule({
 
 // ─── Styles ────────────────────────────────────────────────────────
 
+const themeColors = getAppThemeFromStore().colors;
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.backgroundCanvas,
+    backgroundColor: themeColors.backgroundCanvas,
   },
   scrollView: {
     flex: 1,
@@ -577,7 +580,7 @@ const styles = StyleSheet.create({
   },
   sectionSubtitle: {
     ...TYPOGRAPHY.meta,
-    color: COLORS.textMeta,
+    color: themeColors.textMeta,
     marginTop: 4,
   },
 
@@ -595,18 +598,18 @@ const styles = StyleSheet.create({
   },
   emptyTitle: {
     ...TYPOGRAPHY.h3,
-    color: COLORS.text,
+    color: themeColors.text,
     marginBottom: SPACING.sm,
   },
   emptySubtitle: {
     ...TYPOGRAPHY.body,
-    color: COLORS.textMeta,
+    color: themeColors.textMeta,
     textAlign: 'center',
     lineHeight: 22,
   },
   emptyHint: {
     ...TYPOGRAPHY.meta,
-    color: COLORS.textMeta,
+    color: themeColors.textMeta,
     marginTop: SPACING.md,
   },
 
@@ -615,7 +618,7 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.md,
   },
   moduleCard: {
-    backgroundColor: COLORS.backgroundContainer,
+    backgroundColor: themeColors.backgroundContainer,
     borderBottomLeftRadius: 24,
     borderBottomRightRadius: 24,
     paddingBottom: SPACING.xs,
@@ -623,7 +626,7 @@ const styles = StyleSheet.create({
   },
   moduleWeekLabel: {
     ...TYPOGRAPHY.meta,
-    color: COLORS.textMeta,
+    color: themeColors.textMeta,
     paddingHorizontal: SPACING.xxl,
   },
   moduleBody: {
@@ -644,22 +647,22 @@ const styles = StyleSheet.create({
   heroStatValue: {
     fontSize: 28,
     fontWeight: '300',
-    color: COLORS.text,
+    color: themeColors.text,
     marginBottom: 2,
   },
   heroStatLabel: {
     ...TYPOGRAPHY.meta,
-    color: COLORS.textMeta,
+    color: themeColors.textMeta,
     marginBottom: 4,
   },
   heroStatMeta: {
     ...TYPOGRAPHY.meta,
-    color: COLORS.textMetaSoft,
+    color: themeColors.textMetaSoft,
   },
   heroStatDivider: {
     width: 1,
     height: 48,
-    backgroundColor: COLORS.borderDimmed,
+    backgroundColor: themeColors.borderDimmed,
     marginHorizontal: SPACING.lg,
     alignSelf: 'center',
   },
@@ -667,32 +670,32 @@ const styles = StyleSheet.create({
     marginTop: SPACING.lg,
     paddingTop: SPACING.md,
     borderTopWidth: 1,
-    borderTopColor: COLORS.borderDimmed,
+    borderTopColor: themeColors.borderDimmed,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
   heroTopLiftLabel: {
     ...TYPOGRAPHY.meta,
-    color: COLORS.textMeta,
+    color: themeColors.textMeta,
   },
   heroTopLiftValue: {
     ...TYPOGRAPHY.metaBold,
-    color: COLORS.text,
+    color: themeColors.text,
   },
 
   // Hero consistency bar
   heroConsistencyBar: {
     width: '100%',
     height: 4,
-    backgroundColor: COLORS.activeCard,
+    backgroundColor: themeColors.activeCard,
     borderRadius: 2,
     overflow: 'hidden',
     marginTop: 6,
   },
   heroConsistencyFill: {
     height: 4,
-    backgroundColor: COLORS.accentPrimary,
+    backgroundColor: themeColors.accentPrimary,
     borderRadius: 2,
   },
 
@@ -702,12 +705,12 @@ const styles = StyleSheet.create({
   },
   drawerTitle: {
     ...TYPOGRAPHY.h2,
-    color: COLORS.text,
+    color: themeColors.text,
     marginBottom: SPACING.xs,
   },
   drawerSubtitle: {
     ...TYPOGRAPHY.body,
-    color: COLORS.textMeta,
+    color: themeColors.textMeta,
     marginBottom: SPACING.xl,
   },
   drawerSection: {
@@ -715,38 +718,38 @@ const styles = StyleSheet.create({
   },
   drawerSectionLabel: {
     ...TYPOGRAPHY.bodyBold,
-    color: COLORS.text,
+    color: themeColors.text,
     marginBottom: SPACING.md,
   },
   weightInput: {
     ...TYPOGRAPHY.body,
-    color: COLORS.text,
-    backgroundColor: COLORS.activeCard,
+    color: themeColors.text,
+    backgroundColor: themeColors.activeCard,
     borderRadius: BORDER_RADIUS.md,
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: themeColors.border,
     padding: SPACING.md,
   },
   saveButton: {
-    backgroundColor: COLORS.accentPrimary,
+    backgroundColor: themeColors.accentPrimary,
     borderRadius: BORDER_RADIUS.md,
     padding: SPACING.md,
     alignItems: 'center',
   },
   saveButtonText: {
     ...TYPOGRAPHY.bodyBold,
-    color: COLORS.backgroundCanvas,
+    color: themeColors.backgroundCanvas,
   },
 
   // Photo capture drawer
   photoLabelRow: {
     paddingVertical: SPACING.md,
     borderBottomWidth: 1,
-    borderBottomColor: COLORS.borderDimmed,
+    borderBottomColor: themeColors.borderDimmed,
   },
   photoLabelText: {
     ...TYPOGRAPHY.bodyBold,
-    color: COLORS.text,
+    color: themeColors.text,
     marginBottom: SPACING.sm,
   },
   photoActions: {
@@ -754,14 +757,14 @@ const styles = StyleSheet.create({
     gap: SPACING.md,
   },
   photoActionBtn: {
-    backgroundColor: COLORS.activeCard,
+    backgroundColor: themeColors.activeCard,
     borderRadius: BORDER_RADIUS.sm,
     paddingHorizontal: SPACING.md,
     paddingVertical: SPACING.sm,
   },
   photoActionText: {
     ...TYPOGRAPHY.meta,
-    color: COLORS.accentPrimary,
+    color: themeColors.accentPrimary,
     fontWeight: '600',
   },
 
@@ -774,7 +777,7 @@ const styles = StyleSheet.create({
   },
   drawerRowLabel: {
     ...TYPOGRAPHY.meta,
-    color: COLORS.textMeta,
+    color: themeColors.textMeta,
   },
   drawerRowRight: {
     flexDirection: 'row',
@@ -783,18 +786,18 @@ const styles = StyleSheet.create({
   },
   drawerRowValue: {
     ...TYPOGRAPHY.metaBold,
-    color: COLORS.text,
+    color: themeColors.text,
   },
   progressBarTrack: {
     height: 4,
-    backgroundColor: COLORS.activeCard,
+    backgroundColor: themeColors.activeCard,
     borderRadius: 2,
     overflow: 'hidden',
     marginBottom: 8,
   },
   progressBarFill: {
     height: 4,
-    backgroundColor: COLORS.accentPrimary,
+    backgroundColor: themeColors.accentPrimary,
     borderRadius: 2,
   },
   drawerCta: {
@@ -804,7 +807,7 @@ const styles = StyleSheet.create({
   },
   drawerCtaText: {
     ...TYPOGRAPHY.meta,
-    color: COLORS.accentPrimary,
+    color: themeColors.accentPrimary,
     fontWeight: '600',
   },
 });

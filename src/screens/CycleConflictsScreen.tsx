@@ -9,12 +9,14 @@ import {
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
-import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS, CARDS } from '../constants';
+import { SPACING, TYPOGRAPHY, BORDER_RADIUS, CARDS } from '../constants';
 import { IconArrowLeft } from '../components/icons';
 import { useTranslation } from '../i18n/useTranslation';
 import { useStore } from '../store';
 import type { ConflictItem, CyclePlan, CycleConflictResolution, ConflictResolutionMap } from '../types/training';
 import dayjs from 'dayjs';
+import { useAppTheme } from '../theme/useAppTheme';
+import { getAppThemeFromStore } from '../theme/getAppThemeFromStore';
 
 interface CycleConflictsScreenProps {
   navigation: any;
@@ -106,7 +108,7 @@ export function CycleConflictsScreen({ navigation, route }: CycleConflictsScreen
               style={styles.backButton}
               activeOpacity={1}
             >
-              <IconArrowLeft size={24} color={COLORS.text} />
+              <IconArrowLeft size={24} color={themeColors.text} />
             </TouchableOpacity>
             <View style={{ width: 48 }} />
           </View>
@@ -241,10 +243,11 @@ export function CycleConflictsScreen({ navigation, route }: CycleConflictsScreen
   );
 }
 
+const themeColors = getAppThemeFromStore().colors;
 const styles = StyleSheet.create({
   gradient: {
     flex: 1,
-    backgroundColor: COLORS.backgroundCanvas,
+    backgroundColor: themeColors.backgroundCanvas,
   },
   container: {
     flex: 1,
@@ -270,7 +273,7 @@ const styles = StyleSheet.create({
   },
   pageTitle: {
     ...TYPOGRAPHY.h2,
-    color: COLORS.text,
+    color: themeColors.text,
   },
   content: {
     flex: 1,
@@ -281,7 +284,7 @@ const styles = StyleSheet.create({
   },
   description: {
     ...TYPOGRAPHY.body,
-    color: COLORS.text,
+    color: themeColors.text,
     marginBottom: SPACING.xxxl,
   },
   section: {
@@ -289,7 +292,7 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     ...TYPOGRAPHY.meta,
-    color: COLORS.textMeta,
+    color: themeColors.textMeta,
     marginBottom: SPACING.lg,
   },
   conflictCard: {
@@ -307,22 +310,22 @@ const styles = StyleSheet.create({
   },
   conflictDate: {
     ...TYPOGRAPHY.metaBold,
-    color: COLORS.textMeta,
+    color: themeColors.textMeta,
     marginBottom: SPACING.xs,
   },
   conflictWorkoutName: {
     ...TYPOGRAPHY.body,
-    color: COLORS.text,
+    color: themeColors.text,
   },
   sourceBadge: {
-    backgroundColor: COLORS.backgroundCanvas,
+    backgroundColor: themeColors.backgroundCanvas,
     paddingHorizontal: SPACING.md,
     paddingVertical: SPACING.xs,
     borderRadius: BORDER_RADIUS.sm,
   },
   sourceBadgeText: {
     ...TYPOGRAPHY.meta,
-    color: COLORS.textMeta,
+    color: themeColors.textMeta,
     fontSize: 11,
     textTransform: 'uppercase',
   },
@@ -331,7 +334,7 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.md,
   },
   resolutionOptionSelected: {
-    borderColor: COLORS.accentPrimary,
+    borderColor: themeColors.accentPrimary,
     borderWidth: 2,
   },
   resolutionOptionInner: {
@@ -346,7 +349,7 @@ const styles = StyleSheet.create({
     height: 24,
     borderRadius: 12,
     borderWidth: 2,
-    borderColor: COLORS.border,
+    borderColor: themeColors.border,
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: 2,
@@ -355,23 +358,23 @@ const styles = StyleSheet.create({
     width: 12,
     height: 12,
     borderRadius: 6,
-    backgroundColor: COLORS.accentPrimary,
+    backgroundColor: themeColors.accentPrimary,
   },
   resolutionContent: {
     flex: 1,
   },
   resolutionTitle: {
     ...TYPOGRAPHY.h3,
-    color: COLORS.text,
+    color: themeColors.text,
     marginBottom: SPACING.xs,
   },
   resolutionDescription: {
     ...TYPOGRAPHY.meta,
-    color: COLORS.textMeta,
+    color: themeColors.textMeta,
   },
   footerNote: {
     ...TYPOGRAPHY.meta,
-    color: COLORS.textMeta,
+    color: themeColors.textMeta,
     textAlign: 'center',
     fontStyle: 'italic',
   },
@@ -382,10 +385,10 @@ const styles = StyleSheet.create({
     right: 0,
     paddingHorizontal: SPACING.xxl,
     paddingTop: SPACING.md,
-    backgroundColor: COLORS.backgroundCanvas,
+    backgroundColor: themeColors.backgroundCanvas,
   },
   applyButton: {
-    backgroundColor: COLORS.accentPrimary,
+    backgroundColor: themeColors.accentPrimary,
     paddingVertical: SPACING.lg,
     borderRadius: BORDER_RADIUS.md,
     alignItems: 'center',
@@ -395,6 +398,6 @@ const styles = StyleSheet.create({
   },
   applyButtonText: {
     ...TYPOGRAPHY.metaBold,
-    color: COLORS.backgroundCanvas,
+    color: themeColors.backgroundCanvas,
   },
 });

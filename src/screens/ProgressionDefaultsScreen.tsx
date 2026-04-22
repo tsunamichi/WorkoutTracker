@@ -4,9 +4,11 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import { useNavigation } from '@react-navigation/native';
 import { useStore } from '../store';
-import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS } from '../constants';
+import { SPACING, TYPOGRAPHY, BORDER_RADIUS } from '../constants';
 import { IconArrowLeft } from '../components/icons';
 import type { ProgressionDefaults as ProgressionDefaultsType, ProgressionMode } from '../types/progression';
+import { useAppTheme } from '../theme/useAppTheme';
+import { getAppThemeFromStore } from '../theme/getAppThemeFromStore';
 
 const MODES: { value: ProgressionMode; label: string }[] = [
   { value: 'double', label: 'Double (reps then weight)' },
@@ -22,6 +24,7 @@ const DEFAULT_DEFAULTS: ProgressionDefaultsType = {
 };
 
 export function ProgressionDefaultsScreen() {
+  const { colors: themeColors } = useAppTheme();
   const insets = useSafeAreaInsets();
   const navigation = useNavigation();
   const { progressionDefaults, setProgressionDefaults } = useStore();
@@ -74,7 +77,7 @@ export function ProgressionDefaultsScreen() {
     <View style={[styles.container, { paddingTop: insets.top }]}>
       <View style={styles.header}>
         <TouchableOpacity style={styles.backButton} onPress={handleBack} activeOpacity={0.7}>
-          <IconArrowLeft size={24} color={COLORS.text} />
+          <IconArrowLeft size={24} color={themeColors.text} />
         </TouchableOpacity>
         <TouchableOpacity onPress={handleSave} activeOpacity={0.7}>
           <Text style={styles.saveButton}>Save</Text>
@@ -101,7 +104,7 @@ export function ProgressionDefaultsScreen() {
               onChangeText={setRepMin}
               keyboardType="number-pad"
               placeholder="8"
-              placeholderTextColor={COLORS.textMeta}
+              placeholderTextColor={themeColors.textMeta}
             />
             <Text style={styles.rangeDash}>–</Text>
             <TextInput
@@ -110,7 +113,7 @@ export function ProgressionDefaultsScreen() {
               onChangeText={setRepMax}
               keyboardType="number-pad"
               placeholder="12"
-              placeholderTextColor={COLORS.textMeta}
+              placeholderTextColor={themeColors.textMeta}
             />
           </View>
         </View>
@@ -123,7 +126,7 @@ export function ProgressionDefaultsScreen() {
             onChangeText={setWeightInc}
             keyboardType="decimal-pad"
             placeholder="2.5"
-            placeholderTextColor={COLORS.textMeta}
+            placeholderTextColor={themeColors.textMeta}
           />
         </View>
 
@@ -150,8 +153,9 @@ export function ProgressionDefaultsScreen() {
   );
 }
 
+const themeColors = getAppThemeFromStore().colors;
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.backgroundCanvas },
+  container: { flex: 1, backgroundColor: themeColors.backgroundCanvas },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -167,45 +171,45 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     marginLeft: -12,
   },
-  saveButton: { ...TYPOGRAPHY.bodyBold, color: COLORS.primary },
+  saveButton: { ...TYPOGRAPHY.bodyBold, color: themeColors.primary },
   scrollView: { flex: 1 },
   scrollContent: { paddingHorizontal: SPACING.xxl, paddingBottom: SPACING.xxxl },
   pageTitleContainer: { paddingTop: SPACING.md, marginBottom: SPACING.xxxl },
-  pageTitle: { ...TYPOGRAPHY.h2, color: COLORS.text, marginBottom: SPACING.xs },
-  pageDescription: { ...TYPOGRAPHY.meta, color: COLORS.textMeta },
+  pageTitle: { ...TYPOGRAPHY.h2, color: themeColors.text, marginBottom: SPACING.xs },
+  pageDescription: { ...TYPOGRAPHY.meta, color: themeColors.textMeta },
   card: {
-    backgroundColor: COLORS.activeCard,
+    backgroundColor: themeColors.activeCard,
     borderRadius: BORDER_RADIUS.md,
     padding: SPACING.lg,
     marginBottom: SPACING.lg,
   },
-  label: { ...TYPOGRAPHY.bodyBold, color: COLORS.text, marginBottom: SPACING.md },
+  label: { ...TYPOGRAPHY.bodyBold, color: themeColors.text, marginBottom: SPACING.md },
   row: { flexDirection: 'row', alignItems: 'center', gap: SPACING.md },
   input: {
     flex: 1,
-    backgroundColor: COLORS.backgroundCanvas,
+    backgroundColor: themeColors.backgroundCanvas,
     borderRadius: BORDER_RADIUS.sm,
     paddingHorizontal: SPACING.md,
     paddingVertical: SPACING.sm,
     ...TYPOGRAPHY.body,
-    color: COLORS.text,
+    color: themeColors.text,
   },
   inputFull: {
-    backgroundColor: COLORS.backgroundCanvas,
+    backgroundColor: themeColors.backgroundCanvas,
     borderRadius: BORDER_RADIUS.sm,
     paddingHorizontal: SPACING.md,
     paddingVertical: SPACING.sm,
     ...TYPOGRAPHY.body,
-    color: COLORS.text,
+    color: themeColors.text,
   },
-  rangeDash: { ...TYPOGRAPHY.body, color: COLORS.textMeta },
+  rangeDash: { ...TYPOGRAPHY.body, color: themeColors.textMeta },
   modeRow: {
     paddingVertical: SPACING.md,
     paddingHorizontal: SPACING.sm,
     borderRadius: BORDER_RADIUS.sm,
     marginBottom: SPACING.xs,
   },
-  modeRowSelected: { backgroundColor: COLORS.accentPrimaryDimmed },
-  modeLabel: { ...TYPOGRAPHY.body, color: COLORS.text },
-  modeLabelSelected: { ...TYPOGRAPHY.bodyBold, color: COLORS.text },
+  modeRowSelected: { backgroundColor: themeColors.accentPrimaryDimmed },
+  modeLabel: { ...TYPOGRAPHY.body, color: themeColors.text },
+  modeLabelSelected: { ...TYPOGRAPHY.bodyBold, color: themeColors.text },
 });

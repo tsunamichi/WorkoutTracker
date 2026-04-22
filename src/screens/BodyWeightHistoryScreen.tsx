@@ -3,10 +3,12 @@ import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-nati
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import dayjs from 'dayjs';
 import { useStore } from '../store';
-import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS } from '../constants';
+import { SPACING, TYPOGRAPHY, BORDER_RADIUS } from '../constants';
 import { IconArrowLeft } from '../components/icons';
 import { useTranslation } from '../i18n/useTranslation';
 import { formatWeight } from '../utils/weight';
+import { useAppTheme } from '../theme/useAppTheme';
+import { getAppThemeFromStore } from '../theme/getAppThemeFromStore';
 
 interface BodyWeightHistoryScreenProps {
   navigation: any;
@@ -34,7 +36,7 @@ export function BodyWeightHistoryScreen({ navigation }: BodyWeightHistoryScreenP
     <View style={styles.container}>
       <View style={[styles.header, { paddingTop: insets.top }]}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-          <IconArrowLeft size={24} color={COLORS.text} />
+          <IconArrowLeft size={24} color={themeColors.text} />
         </TouchableOpacity>
         <Text style={styles.title}>{t('bodyWeight')}</Text>
         <View style={styles.headerSpacer} />
@@ -82,10 +84,11 @@ export function BodyWeightHistoryScreen({ navigation }: BodyWeightHistoryScreenP
   );
 }
 
+const themeColors = getAppThemeFromStore().colors;
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.backgroundCanvas,
+    backgroundColor: themeColors.backgroundCanvas,
   },
   header: {
     flexDirection: 'row',
@@ -102,7 +105,7 @@ const styles = StyleSheet.create({
   },
   title: {
     ...TYPOGRAPHY.h2,
-    color: COLORS.text,
+    color: themeColors.text,
   },
   headerSpacer: {
     flex: 1,
@@ -113,7 +116,7 @@ const styles = StyleSheet.create({
     gap: SPACING.sm,
   },
   entryCard: {
-    backgroundColor: COLORS.activeCard,
+    backgroundColor: themeColors.activeCard,
     borderRadius: BORDER_RADIUS.lg,
     borderWidth: 2,
     borderColor: 'transparent',
@@ -131,26 +134,26 @@ const styles = StyleSheet.create({
   },
   entryValue: {
     ...TYPOGRAPHY.h3,
-    color: COLORS.text,
+    color: themeColors.text,
   },
   entryDate: {
     ...TYPOGRAPHY.meta,
-    color: COLORS.textMeta,
+    color: themeColors.textMeta,
   },
   entryUnit: {
     ...TYPOGRAPHY.h3,
-    color: COLORS.textMeta,
+    color: themeColors.textMeta,
   },
   entryDelta: {
     ...TYPOGRAPHY.meta,
   },
   entryDeltaUp: {
-    color: COLORS.signalNegative,
+    color: themeColors.signalNegative,
   },
   entryDeltaDown: {
-    color: COLORS.successBright,
+    color: themeColors.successBright,
   },
   entryDeltaNeutral: {
-    color: COLORS.textMeta,
+    color: themeColors.textMeta,
   },
 });

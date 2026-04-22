@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
-import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS, BUTTONS } from '../constants';
+import { SPACING, TYPOGRAPHY, BORDER_RADIUS, BUTTONS } from '../constants';
 import { BottomDrawer } from './common/BottomDrawer';
 import { Toggle } from './Toggle';
 import { IconAddLine, IconMinusLine } from './icons';
@@ -11,6 +11,8 @@ import { formatWeightForLoad, toDisplayWeight, fromDisplayWeight } from '../util
 import { useStore } from '../store';
 import type { WarmupItem } from '../types/training';
 import { getDisplayValuesFromItem } from '../utils/exerciseMigration';
+import { useAppTheme } from '../theme/useAppTheme';
+import { getAppThemeFromStore } from '../theme/getAppThemeFromStore';
 
 interface WarmupItemEditorSheetProps {
   item: WarmupItem;
@@ -124,7 +126,7 @@ export function WarmupItemEditorSheet({
               value={exerciseName}
               onChangeText={setExerciseName}
               placeholder={t('warmupExercisePlaceholder')}
-              placeholderTextColor={COLORS.textMeta}
+              placeholderTextColor={themeColors.textMeta}
               autoCapitalize="words"
             />
           </View>
@@ -175,7 +177,7 @@ export function WarmupItemEditorSheet({
                   >
                     <View style={styles.adjustButton}>
                       <View style={styles.adjustButtonInner}>
-                        <IconMinusLine size={24} color={COLORS.accentPrimary} />
+                        <IconMinusLine size={24} color={themeColors.accentPrimary} />
                       </View>
                     </View>
                   </TouchableOpacity>
@@ -186,7 +188,7 @@ export function WarmupItemEditorSheet({
                   >
                     <View style={styles.adjustButton}>
                       <View style={styles.adjustButtonInner}>
-                        <IconAddLine size={24} color={COLORS.accentPrimary} />
+                        <IconAddLine size={24} color={themeColors.accentPrimary} />
                       </View>
                     </View>
                   </TouchableOpacity>
@@ -209,7 +211,7 @@ export function WarmupItemEditorSheet({
                   >
                     <View style={styles.adjustButton}>
                       <View style={styles.adjustButtonInner}>
-                        <IconMinusLine size={24} color={COLORS.accentPrimary} />
+                        <IconMinusLine size={24} color={themeColors.accentPrimary} />
                       </View>
                     </View>
                   </TouchableOpacity>
@@ -220,7 +222,7 @@ export function WarmupItemEditorSheet({
                   >
                     <View style={styles.adjustButton}>
                       <View style={styles.adjustButtonInner}>
-                        <IconAddLine size={24} color={COLORS.accentPrimary} />
+                        <IconAddLine size={24} color={themeColors.accentPrimary} />
                       </View>
                     </View>
                   </TouchableOpacity>
@@ -250,7 +252,7 @@ export function WarmupItemEditorSheet({
                       <View style={[styles.adjustButtonInner, isPartOfCycle && !isFirstInCycle && styles.disabledButtonInner]}>
                         <IconMinusLine 
                           size={24} 
-                          color={isPartOfCycle && !isFirstInCycle ? COLORS.textMeta : COLORS.accentPrimary} 
+                          color={isPartOfCycle && !isFirstInCycle ? themeColors.textMeta : themeColors.accentPrimary} 
                         />
                       </View>
                     </View>
@@ -265,7 +267,7 @@ export function WarmupItemEditorSheet({
                       <View style={[styles.adjustButtonInner, isPartOfCycle && !isFirstInCycle && styles.disabledButtonInner]}>
                         <IconAddLine 
                           size={24} 
-                          color={isPartOfCycle && !isFirstInCycle ? COLORS.textMeta : COLORS.accentPrimary} 
+                          color={isPartOfCycle && !isFirstInCycle ? themeColors.textMeta : themeColors.accentPrimary} 
                         />
                       </View>
                     </View>
@@ -295,6 +297,7 @@ export function WarmupItemEditorSheet({
   );
 }
 
+const themeColors = getAppThemeFromStore().colors;
 const styles = StyleSheet.create({
   drawerContent: {
     flex: 1,
@@ -312,24 +315,24 @@ const styles = StyleSheet.create({
   },
   title: {
     ...TYPOGRAPHY.h2,
-    color: COLORS.text,
+    color: themeColors.text,
   },
   field: {
     marginBottom: SPACING.xl,
   },
   label: {
     ...TYPOGRAPHY.meta,
-    color: COLORS.textMeta,
+    color: themeColors.textMeta,
     marginBottom: SPACING.sm,
     textTransform: 'capitalize',
   },
   input: {
     ...TYPOGRAPHY.body,
-    color: COLORS.text,
-    backgroundColor: COLORS.activeCard,
+    color: themeColors.text,
+    backgroundColor: themeColors.activeCard,
     borderRadius: BORDER_RADIUS.md,
     borderWidth: 1,
-    borderColor: COLORS.borderDimmed,
+    borderColor: themeColors.borderDimmed,
     padding: SPACING.md,
     minHeight: 48,
   },
@@ -340,13 +343,13 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
   },
   cycleInfoBanner: {
-    backgroundColor: COLORS.accentPrimaryDimmed,
+    backgroundColor: themeColors.accentPrimaryDimmed,
     borderRadius: BORDER_RADIUS.md,
     padding: SPACING.md,
   },
   cycleInfoText: {
     ...TYPOGRAPHY.meta,
-    color: COLORS.accentPrimary,
+    color: themeColors.accentPrimary,
     textAlign: 'center',
   },
   disabledText: {
@@ -356,10 +359,10 @@ const styles = StyleSheet.create({
     opacity: 0.5,
   },
   disabledButtonInner: {
-    backgroundColor: COLORS.borderDimmed,
+    backgroundColor: themeColors.borderDimmed,
   },
   valuesCard: {
-    backgroundColor: COLORS.activeCard,
+    backgroundColor: themeColors.activeCard,
     borderRadius: BORDER_RADIUS.lg,
     overflow: 'hidden',
   },
@@ -377,11 +380,11 @@ const styles = StyleSheet.create({
   },
   adjustValueText: {
     ...TYPOGRAPHY.h1,
-    color: COLORS.text,
+    color: themeColors.text,
   },
   adjustUnit: {
     ...TYPOGRAPHY.body,
-    color: COLORS.textMeta,
+    color: themeColors.textMeta,
   },
   adjustButtons: {
     flexDirection: 'row',
@@ -407,11 +410,11 @@ const styles = StyleSheet.create({
     borderCurve: 'continuous',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: COLORS.accentPrimaryDimmed,
+    backgroundColor: themeColors.accentPrimaryDimmed,
   },
   adjustDivider: {
     height: 1,
-    backgroundColor: COLORS.borderDimmed,
+    backgroundColor: themeColors.borderDimmed,
     marginHorizontal: SPACING.xl,
   },
   saveButtonContainer: {
@@ -426,6 +429,6 @@ const styles = StyleSheet.create({
   },
   saveButtonText: {
     ...TYPOGRAPHY.metaBold,
-    color: COLORS.backgroundCanvas,
+    color: themeColors.backgroundCanvas,
   },
 });

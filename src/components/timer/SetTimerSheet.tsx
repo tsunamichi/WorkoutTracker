@@ -16,7 +16,7 @@ import { Audio } from 'expo-av';
 import * as Haptics from 'expo-haptics';
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import { useStore } from '../../store';
-import { TYPOGRAPHY, COLORS, SPACING } from '../../constants';
+import { TYPOGRAPHY, SPACING } from '../../constants';
 import {
   executionCtaLabelStyle,
   EXECUTION_CTA_HEIGHT,
@@ -26,6 +26,8 @@ import {
 import { IconPause, IconPlay } from '../icons';
 import { useTranslation } from '../../i18n/useTranslation';
 import { COUNTDOWN_SOUND, COMPLETE_SOUND } from '../../utils/sounds';
+import { useAppTheme } from '../../theme/useAppTheme';
+import { getAppThemeFromStore } from '../../theme/getAppThemeFromStore';
 
 // Optional local notifications (expo-notifications). If not installed, notifications are skipped.
 let Notifications: any = null;
@@ -1000,7 +1002,7 @@ export function SetTimerSheet({
             </View>
             <View style={styles.controlsRow}>
               <TouchableOpacity style={styles.pauseBtn} onPress={handleTogglePauseWrapper} activeOpacity={0.8} disabled={isPreCountdownActive}>
-                {isRunning ? <IconPause size={20} color={COLORS.backgroundCanvas} /> : <IconPlay size={20} color={COLORS.backgroundCanvas} />}
+                {isRunning ? <IconPause size={20} color={themeColors.backgroundCanvas} /> : <IconPlay size={20} color={themeColors.backgroundCanvas} />}
                 <Text style={styles.pauseBtnText}>{isRunning ? 'Pause' : 'Resume'}</Text>
               </TouchableOpacity>
               <TouchableOpacity style={styles.skipBtn} onPress={handleSkip} activeOpacity={0.8}>
@@ -1014,12 +1016,13 @@ export function SetTimerSheet({
   );
 }
 
+const themeColors = getAppThemeFromStore().colors;
 const styles = StyleSheet.create({
   timerOverlay: {
     ...StyleSheet.absoluteFillObject,
     zIndex: 1000,
     justifyContent: 'flex-end',
-    backgroundColor: COLORS.backgroundCanvas,
+    backgroundColor: themeColors.backgroundCanvas,
   },
   timerDrawer: {
     flex: 1,
@@ -1039,11 +1042,11 @@ const styles = StyleSheet.create({
     fontSize: 84,
     lineHeight: 88,
     fontWeight: '400',
-    color: COLORS.backgroundCanvas,
+    color: themeColors.backgroundCanvas,
   },
   heroTimerLabel: {
     ...TYPOGRAPHY.body,
-    color: COLORS.backgroundCanvas,
+    color: themeColors.backgroundCanvas,
     marginTop: -8,
   },
   currentCard: {
@@ -1063,7 +1066,7 @@ const styles = StyleSheet.create({
   },
   currentExercise: {
     ...TYPOGRAPHY.h2,
-    color: COLORS.canvasLight,
+    color: themeColors.canvasLight,
     flex: 1,
     marginRight: 12,
   },
@@ -1125,7 +1128,7 @@ const styles = StyleSheet.create({
   },
   pauseBtnText: {
     ...executionCtaLabelStyle,
-    color: COLORS.backgroundCanvas,
+    color: themeColors.backgroundCanvas,
   },
   skipBtn: {
     flexShrink: 0,
@@ -1140,4 +1143,3 @@ const styles = StyleSheet.create({
     color: '#FFB835',
   },
 });
-

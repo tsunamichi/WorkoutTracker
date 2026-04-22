@@ -17,8 +17,8 @@ import * as Clipboard from 'expo-clipboard';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { useStore } from '../store';
-import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS, CARDS } from '../constants';
-import { IconCheckmark, IconAdd, IconCalendar, IconPlay, IconStopwatch, IconArrowDiagonal } from '../components/icons';
+import { SPACING, TYPOGRAPHY, BORDER_RADIUS, CARDS } from '../constants';
+import { IconCheckmark, IconAdd, IconCalendar, IconPlay, IconStopwatch, IconArrowDiagonal, IconChevronDown } from '../components/icons';
 import { ScheduleWorkoutDeckV3, type ScheduleDeckV3Item } from '../components/schedule/ScheduleWorkoutDeckV3';
 import { CycleControlSheet } from '../components/CycleControlSheet';
 import { ShareCycleDrawer } from '../components/ShareCycleDrawer';
@@ -36,15 +36,17 @@ import { findActiveTemplateByName, suggestNonCollidingName } from '../utils/work
 import { draftLineFromImportedName } from '../utils/exerciseIdentity';
 import type { ScheduledWorkout } from '../types/training';
 import type { ExerciseProgress } from '../types';
+import { getAppThemeFromStore } from '../theme/getAppThemeFromStore';
 import {
   SCHEDULE_DECK_T,
   SCHEDULE_DECK_WITH_TIMING_CONFIG,
   useScheduleDeckTransition,
 } from '../context/ScheduleDeckTransitionContext';
+import { textMetaForHistoryCalendarFutureFace } from '../components/history/historyTextMetaDerive';
 
 dayjs.extend(isoWeek);
 
-/** Staggered entering delays for extras panel (timer / warm up / core), top → bottom. */
+/** Staggered entering delays for the home timer panel, top → bottom. */
 const EXTRAS_ENTER_ADD_DELAY_MS = 140;
 const EXTRAS_ENTER_CARD_BASE_MS = 300;
 const EXTRAS_ENTER_CARD_STAGGER_MS = 48;
@@ -170,7 +172,7 @@ function formatDateWithOrdinal(dateStr: string): string {
   return `${d.format('MMMM')} ${day}${suffix}`;
 }
 
-/** Reserve vertical space above home indicator for pinned Extras bar */
+/** Reserve vertical space above home indicator for pinned Timer row */
 const EXTRAS_PIN_BAR_HEIGHT = 56;
 
 /** Week strip: swipe snap animation (ms) */
@@ -206,8 +208,6 @@ export function TodayScreen({ onDateChange, onOpenAddWorkout, onOpenBonusDrawer 
     deleteCyclePlanCompletely,
     updateCyclePlan,
     repairPausedCycleSchedule,
-    ensureScheduledWorkoutWarmup,
-    ensureScheduledWorkoutCore,
     exercises,
     detailedWorkoutProgress,
     hiitTimers,
@@ -219,14 +219,13 @@ export function TodayScreen({ onDateChange, onOpenAddWorkout, onOpenBonusDrawer 
   const today = dayjs();
   const { t } = useTranslation();
   const appTheme = useAppTheme();
-  const { colors: themeColors, explore: exploreTheme } = appTheme;
+  const { colors: themeColors } = appTheme;
   const isV2Theme = appTheme.id === 'v2';
-  const savedTimersPageBackground = isV2Theme ? themeColors.canvasLight : COLORS.canvasLight;
-  const savedTimersCardBackground = isV2Theme ? themeColors.canvasContainer : COLORS.containerTertiary;
-  const savedTimersInk = isV2Theme ? themeColors.containerPrimary : COLORS.containerPrimary;
+  const savedTimersPageBackground = isV2Theme ? themeColors.canvasLight : themeColors.canvasLight;
+  const savedTimersCardBackground = isV2Theme ? themeColors.canvasContainer : themeColors.containerTertiary;
+  const savedTimersInk = isV2Theme ? themeColors.containerPrimary : themeColors.containerPrimary;
   /** Meta line + diagonal arrow on timer / warm-up / core cards — always `textMeta`, not `containerPrimary`. */
   const savedTimersMetaInk = themeColors.textMeta;
-  const completedCardTextColor = exploreTheme.amberBand;
 
   // One-time repair for paused cycle schedule (safe to remove after fix is applied)
   React.useEffect(() => {
@@ -239,18 +238,16 @@ export function TodayScreen({ onDateChange, onOpenAddWorkout, onOpenBonusDrawer 
   const [showCycleSheet, setShowCycleSheet] = useState(false);
   const [showShareCycleSheet, setShowShareCycleSheet] = useState(false);
   const [shareCyclePlan, setShareCyclePlan] = useState<CyclePlan | undefined>(undefined);
-  const [extrasExpanded, setExtrasExpanded] = useState(false);
-  type ExtrasPanelMode = 'timer' | 'warmup' | 'core' | null;
+  type ExtrasPanelMode = 'timer' | null;
   const [extrasPanelMode, setExtrasPanelMode] = useState<ExtrasPanelMode>(null);
   const isExtrasPanelOpen = extrasPanelMode !== null;
-  /** Bumps when the extras sheet opens or switches mode so entering animations replay. */
+  /** Bumps when the timer sheet opens so entering animations replay. */
   const [extrasEnterSeq, setExtrasEnterSeq] = useState(0);
   const [selectedDeckWorkout, setSelectedDeckWorkout] = useState<ScheduledWorkout | undefined>(undefined);
   const timerModeProgress = useSharedValue(0);
   const timerHeaderProgress = useSharedValue(0);
-  /** 0→1 when switching Warm up / Core / Timer while the extras sheet is open — same ease/duration as schedule deck. */
   const extrasTabContentEnter = useSharedValue(1);
-  const extrasTabPrevRef = useRef<{ open: boolean; mode: 'timer' | 'warmup' | 'core' | null }>({
+  const extrasTabPrevRef = useRef<{ open: boolean; mode: 'timer' | null }>({
     open: false,
     mode: null,
   });
@@ -260,11 +257,11 @@ export function TodayScreen({ onDateChange, onOpenAddWorkout, onOpenBonusDrawer 
   /** Keeps the newly created workout card last in the deck (before the create tile). */
   const [deckTailSwId, setDeckTailSwId] = useState<string | null>(null);
   const [imperativeDeckScroll, setImperativeDeckScroll] = useState<{ index: number; token: number } | null>(null);
-  const openExtrasPanel = useCallback((mode: 'timer' | 'warmup' | 'core') => {
+  const openTimerPanel = useCallback(() => {
     cancelAnimation(timerHeaderProgress);
     timerHeaderProgress.value = 1;
     setExtrasEnterSeq(s => s + 1);
-    setExtrasPanelMode(mode);
+    setExtrasPanelMode('timer');
   }, [timerHeaderProgress]);
 
   /** Keep `extrasPanelMode` until the slide-out finishes so content stays mounted over the animation. */
@@ -870,78 +867,6 @@ export function TodayScreen({ onDateChange, onOpenAddWorkout, onOpenBonusDrawer 
   const isInPastCycle = selectedDateCyclePlan ? !selectedDateCyclePlan.active : false;
   const timerTemplates = useMemo(() => hiitTimers.filter(timer => timer.isTemplate), [hiitTimers]);
 
-  const sortedWorkoutTemplates = useMemo(() => {
-    return [...workoutTemplates].sort((a, b) => {
-      if (a.lastUsedAt && b.lastUsedAt) {
-        return dayjs(b.lastUsedAt).valueOf() - dayjs(a.lastUsedAt).valueOf();
-      }
-      if (a.lastUsedAt && !b.lastUsedAt) return -1;
-      if (!a.lastUsedAt && b.lastUsedAt) return 1;
-      return dayjs(b.createdAt).valueOf() - dayjs(a.createdAt).valueOf();
-    });
-  }, [workoutTemplates]);
-
-  const resolveScheduledWorkoutForTemplate = useCallback(
-    (templateId: string): ScheduledWorkout | undefined => {
-      const onSelected = getScheduledWorkoutsForDate(selectedDate).find(
-        sw => sw.templateId === templateId && !sw.isLocked,
-      );
-      if (onSelected) {
-        return onSelected;
-      }
-      const matches = scheduledWorkouts
-        .filter(sw => sw.templateId === templateId && !sw.isLocked)
-        .sort((a, b) => a.date.localeCompare(b.date) || a.id.localeCompare(b.id));
-      const futureOrSame = matches.find(sw => !dayjs(sw.date).isBefore(selectedDate, 'day'));
-      return futureOrSame ?? matches[0];
-    },
-    [getScheduledWorkoutsForDate, selectedDate, scheduledWorkouts],
-  );
-
-  const handleSelectSavedWorkoutForWarmup = useCallback(
-    async (templateId: string) => {
-      const sw = resolveScheduledWorkoutForTemplate(templateId);
-      if (!sw) {
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-        Alert.alert(t('savedWorkouts'), t('noScheduledSessionForWorkout'));
-        return;
-      }
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-      await ensureScheduledWorkoutWarmup(sw.id);
-      setExtrasPanelMode(null);
-      (navigation as any).navigate('WarmupExecution', {
-        workoutKey: sw.id,
-        workoutTemplateId: sw.templateId,
-      });
-    },
-    [
-      resolveScheduledWorkoutForTemplate,
-      ensureScheduledWorkoutWarmup,
-      navigation,
-      t,
-    ],
-  );
-
-  const handleSelectSavedWorkoutForCore = useCallback(
-    async (templateId: string) => {
-      const sw = resolveScheduledWorkoutForTemplate(templateId);
-      if (!sw) {
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-        Alert.alert(t('savedWorkouts'), t('noScheduledSessionForWorkout'));
-        return;
-      }
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-      await ensureScheduledWorkoutCore(sw.id);
-      setExtrasPanelMode(null);
-      (navigation as any).navigate('ExerciseExecution', {
-        workoutKey: sw.id,
-        workoutTemplateId: sw.templateId,
-        type: 'core',
-      });
-    },
-    [resolveScheduledWorkoutForTemplate, ensureScheduledWorkoutCore, navigation, t],
-  );
-
   const headerDateLabel = formatDateWithOrdinal(selectedDate);
   /** Cycle row is now the lightweight entry point into full cycle/calendar management context. */
   const cyclePlanForHeader = selectedDateCyclePlan ?? activeCyclePlan;
@@ -963,7 +888,7 @@ export function TodayScreen({ onDateChange, onOpenAddWorkout, onOpenBonusDrawer 
       timerHeaderProgress.value = 1;
       return;
     }
-    // Closed without animated close (e.g. navigate to warmup) — snap to rest. Avoid `cancelAnimation`
+    // Closed without animated close (e.g. navigate to timer execution) — snap to rest. Avoid `cancelAnimation`
     // here after an animated close: completion + this effect in the same tick can race on native.
     timerModeProgress.value = 0;
     timerHeaderProgress.value = 0;
@@ -1083,12 +1008,12 @@ export function TodayScreen({ onDateChange, onOpenAddWorkout, onOpenBonusDrawer 
       subtitle,
       exerciseCount,
       variant: 'completed',
-      cardBackgroundColor: COLORS.accentPrimaryBackground,
-      cardTextColor: completedCardTextColor,
+      cardBackgroundColor: textMetaForHistoryCalendarFutureFace(themeColors.textMeta),
+      cardTextColor: themeColors.textMeta,
       footerLabel: 'Completed',
       onPress: () => navigateToWorkoutExecution(sw),
     };
-  }, [completedWorkoutsForSelectedDay, completedCardTextColor, exercises, navigateToWorkoutExecution]);
+  }, [completedWorkoutsForSelectedDay, themeColors.textMeta, exercises, navigateToWorkoutExecution]);
 
   const handleHomeCreateWorkout = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -1243,7 +1168,6 @@ export function TodayScreen({ onDateChange, onOpenAddWorkout, onOpenBonusDrawer 
                     style={[
                       styles.weekStripNum,
                       styles.weekStripTextOnSelection,
-                      styles.weekStripNumSelected,
                     ]}
                   >
                     {d.dayNumber}
@@ -1309,17 +1233,14 @@ export function TodayScreen({ onDateChange, onOpenAddWorkout, onOpenBonusDrawer 
             </View>
           </View>
 
-              <ScrollView
-                style={styles.contentScroll}
-                contentContainerStyle={[
+              <View
+                style={[
+                  styles.contentScroll,
                   styles.contentScrollContent,
                   {
                     paddingBottom: SPACING.lg + (isScheduleFutureDay ? insets.bottom + 8 : EXTRAS_PIN_BAR_HEIGHT),
-                    flexGrow: 1,
                   },
                 ]}
-                showsVerticalScrollIndicator={true}
-                keyboardShouldPersistTaps="handled"
               >
                 {/* Workout Content Wrapper - Fixed height for consistent Intervals positioning */}
                 <View style={styles.workoutContentWrapper}>
@@ -1328,7 +1249,7 @@ export function TodayScreen({ onDateChange, onOpenAddWorkout, onOpenBonusDrawer 
               {isPausedDay && (!selectedDay?.scheduledWorkout || selectedDay.scheduledWorkout.status === 'planned') ? (
                 <View style={[styles.workoutCard, styles.pausedCard]}>
                   <TouchableOpacity
-                    style={[styles.workoutCardInner, { backgroundColor: COLORS.signalWarningDimmed }]}
+                    style={[styles.workoutCardInner, { backgroundColor: themeColors.signalWarningDimmed }]}
                     activeOpacity={0.8}
                     onPress={() => {
                       if (!activeCyclePlan) return;
@@ -1415,54 +1336,34 @@ export function TodayScreen({ onDateChange, onOpenAddWorkout, onOpenBonusDrawer 
                     onPress={() => handleAddOrCreateWorkout(selectedDate)}
                     activeOpacity={1}
                   >
-                    <IconAdd size={24} color={COLORS.accentPrimary} />
+                    <IconAdd size={24} color={themeColors.accentPrimary} />
                     <Text style={styles.addWorkoutButtonText}>{t('addWorkout')}</Text>
                   </TouchableOpacity>
                 ) : null}
               </View>
               </View>
               </View>
-              </ScrollView>
+              </View>
           <View pointerEvents={isExtrasPanelOpen ? 'none' : 'auto'}>
             <View
               pointerEvents={isExtrasPanelOpen ? 'none' : 'auto'}
               style={[styles.footerActionsWrap, { paddingBottom: insets.bottom }]}
             >
-              <View style={styles.footerEntrySection}>
-                <Text style={styles.footerSectionTitle}>Extras</Text>
-                <View style={styles.footerEntryLinksRow}>
-                  <TouchableOpacity
-                    style={styles.footerEntryLinkButton}
-                    activeOpacity={0.85}
-                    onPress={() => {
-                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                      openExtrasPanel('warmup');
-                    }}
-                  >
-                    <Text style={styles.footerEntryLinkText}>Warm up</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={styles.footerEntryLinkButton}
-                    activeOpacity={0.85}
-                    onPress={() => {
-                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                      openExtrasPanel('core');
-                    }}
-                  >
-                    <Text style={styles.footerEntryLinkText}>Core</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={styles.footerEntryLinkButton}
-                    activeOpacity={0.85}
-                    onPress={() => {
-                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                      openExtrasPanel('timer');
-                    }}
-                  >
-                    <Text style={styles.footerEntryLinkText}>Timer</Text>
-                  </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.footerTimerRow}
+                activeOpacity={0.85}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  openTimerPanel();
+                }}
+                accessibilityRole="button"
+                accessibilityLabel={t('timer')}
+              >
+                <View style={styles.footerTimerLabelRow}>
+                  <Text style={styles.footerTimerLabel}>{t('timer')}</Text>
+                  <IconChevronDown size={22} color={themeColors.textMeta} />
                 </View>
-              </View>
+              </TouchableOpacity>
             </View>
           </View>
           </Animated.View>
@@ -1473,24 +1374,33 @@ export function TodayScreen({ onDateChange, onOpenAddWorkout, onOpenBonusDrawer 
           >
             <Animated.View style={[styles.extrasTabContentWrap, extrasTabContentSlideStyle]}>
               <Animated.View style={[styles.timerModeHeader, timerHeaderAnimatedStyle]}>
-                {extrasPanelMode !== null && (
-                  <View key={`extras-header-${extrasEnterSeq}-${extrasPanelMode}`}>
+                {extrasPanelMode === 'timer' && (
+                  <View key={`extras-header-${extrasEnterSeq}-timer`} style={styles.timerHeaderShell}>
+                    <Animated.View
+                      key={`extras-add-${extrasEnterSeq}-timer`}
+                      entering={FadeInDown.duration(EXTRAS_ENTER_DURATION_MS).delay(EXTRAS_ENTER_ADD_DELAY_MS)}
+                      style={[
+                        styles.timerNewButtonWrap,
+                        { top: insets.top + SPACING.sm, zIndex: 2 },
+                      ]}
+                    >
+                      <TertiaryButton
+                        label={t('newTimer')}
+                        onPress={() => (navigation as any).navigate('HIITTimerForm', { mode: 'create' })}
+                        activeOpacity={0.85}
+                        style={styles.timerAddTertiary}
+                        textStyle={styles.timerAddTertiaryText}
+                        color={themeColors.containerPrimary}
+                        underlineColor={themeColors.containerPrimary}
+                      />
+                    </Animated.View>
                     <StackPageHeader
                       paddingTop={insets.top}
                       backLabel="Home"
                       onBackPress={closeExtrasPanelAnimated}
-                      title={
-                        extrasPanelMode === 'timer'
-                          ? t('timer')
-                          : extrasPanelMode === 'warmup'
-                            ? t('extrasSheetTitleWarmUp')
-                            : extrasPanelMode === 'core'
-                              ? t('core')
-                              : ''
-                      }
-                      titleColor={
-                        extrasPanelMode === 'core' ? themeColors.containerPrimary : themeColors.textPrimary
-                      }
+                      title={t('timer')}
+                      titleColor={themeColors.containerPrimary}
+                      unifiedHeaderPressable
                     />
                   </View>
                 )}
@@ -1501,29 +1411,6 @@ export function TodayScreen({ onDateChange, onOpenAddWorkout, onOpenBonusDrawer 
                 contentContainerStyle={[styles.timerModeScrollContent, { paddingBottom: insets.bottom + 24 }]}
                 showsVerticalScrollIndicator={false}
               >
-              {(extrasPanelMode === 'timer' || extrasPanelMode === 'warmup' || extrasPanelMode === 'core') && (
-                <Animated.View
-                  key={`extras-add-${extrasEnterSeq}-${extrasPanelMode}`}
-                  entering={FadeInDown.duration(EXTRAS_ENTER_DURATION_MS).delay(EXTRAS_ENTER_ADD_DELAY_MS)}
-                >
-                  <TouchableOpacity
-                    style={styles.addTimerInlineAction}
-                    onPress={() => {
-                      if (extrasPanelMode === 'timer') {
-                        (navigation as any).navigate('HIITTimerForm', { mode: 'create' });
-                      } else {
-                        (navigation as any).navigate('WorkoutBuilder', {
-                          selectedDate,
-                          shouldScheduleAfterCreate: true,
-                        });
-                      }
-                    }}
-                    activeOpacity={0.75}
-                  >
-                    <Text style={[styles.addTimerCardText, { color: themeColors.textMeta }]}>{t('extrasAddShort')}</Text>
-                  </TouchableOpacity>
-                </Animated.View>
-              )}
               {extrasPanelMode === 'timer' ? (
                 <View style={styles.timerGrid}>
                   {timerTemplates.map((timer, cardIndex) => (
@@ -1552,83 +1439,6 @@ export function TodayScreen({ onDateChange, onOpenAddWorkout, onOpenBonusDrawer 
                       </TouchableOpacity>
                     </Animated.View>
                   ))}
-                </View>
-              ) : extrasPanelMode === 'warmup' || extrasPanelMode === 'core' ? (
-                <View style={styles.timerGrid}>
-                  {sortedWorkoutTemplates.map((template, cardIndex) => {
-                    const sw = resolveScheduledWorkoutForTemplate(template.id);
-                    const meta =
-                      sw && sw.date !== selectedDate
-                        ? `${template.items.length} ${t('exercises')} · ${dayjs(sw.date).format('MMM D')}`
-                        : `${template.items.length} ${t('exercises')}`;
-                    return (
-                      <Animated.View
-                        key={`${template.id}-${extrasEnterSeq}`}
-                        style={styles.timerGridCard}
-                        entering={FadeInDown.duration(EXTRAS_ENTER_DURATION_MS).delay(
-                          EXTRAS_ENTER_CARD_BASE_MS + cardIndex * EXTRAS_ENTER_CARD_STAGGER_MS,
-                        )}
-                      >
-                        <TouchableOpacity
-                          style={styles.timerGridCardFill}
-                          onPress={() =>
-                            void (extrasPanelMode === 'warmup'
-                              ? handleSelectSavedWorkoutForWarmup(template.id)
-                              : handleSelectSavedWorkoutForCore(template.id))
-                          }
-                          activeOpacity={0.85}
-                        >
-                          <View style={[styles.footerEntryCard, styles.timerGridCardShell, { backgroundColor: savedTimersCardBackground }]}>
-                            <View style={styles.footerEntryTopRow}>
-                              <Text style={[styles.footerEntryMeta, { color: savedTimersMetaInk }]}>{meta}</Text>
-                              <View style={styles.footerEntryChevron}>
-                                <IconArrowDiagonal size={8} color={savedTimersMetaInk} />
-                              </View>
-                            </View>
-                            <Text style={[styles.footerEntryTitle, { color: savedTimersInk }]} numberOfLines={2}>{template.name}</Text>
-                          </View>
-                        </TouchableOpacity>
-                      </Animated.View>
-                    );
-                  })}
-                  <Animated.View
-                    key={`create-workout-template-${extrasEnterSeq}-${extrasPanelMode}`}
-                    style={styles.timerGridCard}
-                    entering={FadeInDown.duration(EXTRAS_ENTER_DURATION_MS).delay(
-                      EXTRAS_ENTER_CARD_BASE_MS +
-                        sortedWorkoutTemplates.length * EXTRAS_ENTER_CARD_STAGGER_MS,
-                    )}
-                  >
-                    <TouchableOpacity
-                      style={styles.timerGridCardFill}
-                      onPress={() => {
-                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                        setExtrasPanelMode(null);
-                        (navigation as any).navigate('WorkoutBuilder', {
-                          selectedDate,
-                          shouldScheduleAfterCreate: true,
-                        });
-                      }}
-                      activeOpacity={0.85}
-                    >
-                      <View
-                        style={[
-                          styles.footerEntryCard,
-                          styles.timerGridCardShell,
-                          {
-                            backgroundColor: themeColors.canvasLight,
-                            borderWidth: StyleSheet.hairlineWidth,
-                            borderColor: themeColors.textMeta,
-                          },
-                        ]}
-                      >
-                        <Text style={[styles.footerEntryMeta, { color: themeColors.textMeta }]}>{t('buildNewWorkoutHint')}</Text>
-                        <Text style={[styles.footerEntryTitle, { color: themeColors.textMeta }]} numberOfLines={2}>
-                          {t('createWorkout')}
-                        </Text>
-                      </View>
-                    </TouchableOpacity>
-                  </Animated.View>
                 </View>
               ) : null}
             </ScrollView>
@@ -1705,6 +1515,7 @@ export function TodayScreen({ onDateChange, onOpenAddWorkout, onOpenBonusDrawer 
   );
 }
 
+const themeColors = getAppThemeFromStore().colors;
 const styles = StyleSheet.create({
   gradient: {
     flex: 1,
@@ -1766,17 +1577,17 @@ const styles = StyleSheet.create({
   },
   emptyTitle: {
     ...TYPOGRAPHY.h3,
-    color: COLORS.inkCharcoal,
+    color: themeColors.inkCharcoal,
     marginBottom: SPACING.xs,
   },
   emptyText: {
     ...TYPOGRAPHY.h3,
-    color: COLORS.inkCharcoal,
+    color: themeColors.inkCharcoal,
     textAlign: 'center',
     marginBottom: SPACING.xl,
   },
   createButton: {
-    backgroundColor: COLORS.accentPrimary,
+    backgroundColor: themeColors.accentPrimary,
     height: 56,
     paddingHorizontal: SPACING.xl,
     borderRadius: BORDER_RADIUS.md,
@@ -1788,7 +1599,7 @@ const styles = StyleSheet.create({
   createButtonText: {
     ...TYPOGRAPHY.meta,
     fontWeight: 'bold',
-    color: COLORS.backgroundCanvas,
+    color: themeColors.backgroundCanvas,
   },
   
   scheduleHeaderStack: {
@@ -1810,11 +1621,11 @@ const styles = StyleSheet.create({
   },
   profileLinkText: {
     ...TYPOGRAPHY.meta,
-    color: COLORS.inkCharcoal,
+    color: themeColors.inkCharcoal,
   },
   scheduleHeaderTitle: {
     ...TYPOGRAPHY.displayLarge,
-    color: COLORS.textPrimary,
+    color: themeColors.containerPrimary,
   },
   scheduleHeaderDateRow: {
     flexDirection: 'column',
@@ -1824,7 +1635,7 @@ const styles = StyleSheet.create({
   },
   scheduleHeaderDateLabel: {
     ...TYPOGRAPHY.displayLarge,
-    color: COLORS.textMeta,
+    color: themeColors.textMeta,
   },
   scheduleHeaderHistoryLink: {
     alignSelf: 'flex-start',
@@ -1838,11 +1649,11 @@ const styles = StyleSheet.create({
   },
   scheduleHeaderCycleLabel: {
     ...TYPOGRAPHY.body,
-    color: COLORS.textMeta,
+    color: themeColors.textMeta,
   },
   scheduleHeaderCycleChevron: {
     ...TYPOGRAPHY.body,
-    color: COLORS.textMeta,
+    color: themeColors.textMeta,
     marginLeft: 6,
   },
   weekStripRow: {
@@ -1881,18 +1692,18 @@ const styles = StyleSheet.create({
   },
   weekStripDayLetters: {
     ...TYPOGRAPHY.note,
-    color: COLORS.textMeta,
+    color: themeColors.textMeta,
     fontVariant: ['tabular-nums'],
   },
   weekStripSelectedPill: {
-    backgroundColor: COLORS.containerTertiary,
+    backgroundColor: themeColors.containerTertiary,
     borderRadius: 6,
     paddingTop: 10,
     alignItems: 'center',
     alignSelf: 'center',
   },
   weekStripTextOnSelection: {
-    color: COLORS.containerPrimary,
+    color: themeColors.containerPrimary,
   },
   weekStripNumWrap: {
     minWidth: 36,
@@ -1910,20 +1721,17 @@ const styles = StyleSheet.create({
     width: 4,
     height: 4,
     borderRadius: 2,
-    backgroundColor: COLORS.containerPrimary,
+    backgroundColor: themeColors.containerPrimary,
   },
   weekStripNum: {
     ...TYPOGRAPHY.h3,
-    color: COLORS.textMeta,
+    color: themeColors.textMeta,
     fontVariant: ['tabular-nums'],
-  },
-  weekStripNumSelected: {
-    fontWeight: '500' as const,
   },
   extrasPanel: {
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: 'rgba(31, 31, 31, 0.12)',
-    backgroundColor: COLORS.canvasLight,
+    backgroundColor: themeColors.canvasLight,
   },
   extrasPanelScroll: {
     flexGrow: 0,
@@ -1936,7 +1744,7 @@ const styles = StyleSheet.create({
     paddingTop: SPACING.md,
   },
   extrasPinBarWrap: {
-    backgroundColor: COLORS.canvasLight,
+    backgroundColor: themeColors.canvasLight,
   },
   extrasPinBar: {
     minHeight: EXTRAS_PIN_BAR_HEIGHT,
@@ -1953,7 +1761,7 @@ const styles = StyleSheet.create({
   extrasPinLabel: {
     ...TYPOGRAPHY.body,
     fontWeight: '600',
-    color: COLORS.inkCharcoal,
+    color: themeColors.inkCharcoal,
   },
   topBar: {
     flexDirection: 'row',
@@ -1965,8 +1773,7 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     ...TYPOGRAPHY.h3,
-    fontWeight: '500' as const,
-    color: COLORS.inkCharcoal,
+    color: themeColors.inkCharcoal,
   },
   headerRight: {
     flexDirection: 'row',
@@ -1993,7 +1800,7 @@ const styles = StyleSheet.create({
   },
   scheduleCycleMetaLine: {
     ...TYPOGRAPHY.body,
-    color: COLORS.textMeta,
+    color: themeColors.textMeta,
     marginTop: 2,
   },
 
@@ -2016,15 +1823,15 @@ const styles = StyleSheet.create({
   pauseBannerTitle: {
     ...TYPOGRAPHY.meta,
     fontWeight: '600' as const,
-    color: COLORS.signalWarning,
+    color: themeColors.signalWarning,
   },
   pauseBannerSubtext: {
     ...TYPOGRAPHY.meta,
-    color: COLORS.textMeta,
+    color: themeColors.textMeta,
     marginTop: 2,
   },
   pauseBannerButton: {
-    backgroundColor: COLORS.signalWarning,
+    backgroundColor: themeColors.signalWarning,
     paddingHorizontal: 14,
     paddingVertical: 6,
     borderRadius: 12,
@@ -2033,39 +1840,39 @@ const styles = StyleSheet.create({
   pauseBannerButtonText: {
     fontSize: 13,
     fontWeight: '600' as const,
-    color: COLORS.backgroundCanvas,
+    color: themeColors.backgroundCanvas,
   },
   // Paused Card
   pausedCard: {
-    backgroundColor: COLORS.signalWarningDimmed,
+    backgroundColor: themeColors.signalWarningDimmed,
     borderWidth: 1,
-    borderColor: COLORS.signalWarningDimmed,
+    borderColor: themeColors.signalWarningDimmed,
   },
   pausedCardTitle: {
     ...TYPOGRAPHY.h3,
-    color: COLORS.accentPrimary,
+    color: themeColors.accentPrimary,
   },
   pausedCardMeta: {
     ...TYPOGRAPHY.meta,
-    color: COLORS.inkCharcoal,
+    color: themeColors.inkCharcoal,
     marginTop: 4,
     marginBottom: 24,
   },
   pausedCardButton: {
-    backgroundColor: COLORS.backgroundCanvas,
+    backgroundColor: themeColors.backgroundCanvas,
   },
   pausedCardButtonText: {
-    color: COLORS.text,
+    color: themeColors.text,
   },
 
   // Workout Card
   workoutCard: {
-    backgroundColor: COLORS.inkCharcoal,
+    backgroundColor: themeColors.inkCharcoal,
     borderRadius: CARDS.cardDeep.outer.borderRadius,
     borderCurve: CARDS.cardDeep.outer.borderCurve,
     overflow: CARDS.cardDeep.outer.overflow,
     borderWidth: 2,
-    borderColor: COLORS.canvasLight,
+    borderColor: themeColors.canvasLight,
     width: '100%',
     minHeight: 300,
   },
@@ -2098,7 +1905,7 @@ const styles = StyleSheet.create({
   workoutName: {
     ...TYPOGRAPHY.displayLarge,
     fontWeight: '400',
-    color: COLORS.canvasLight,
+    color: themeColors.canvasLight,
     flexShrink: 1,
   },
   workoutExerciseList: {
@@ -2107,17 +1914,17 @@ const styles = StyleSheet.create({
   },
   workoutExerciseListItem: {
     ...TYPOGRAPHY.body,
-    color: COLORS.canvasLight,
+    color: themeColors.canvasLight,
     opacity: 0.9,
   },
   workoutMoreExercises: {
     ...TYPOGRAPHY.body,
-    color: COLORS.canvasLight,
+    color: themeColors.canvasLight,
     opacity: 0.65,
   },
   programLabel: {
     ...TYPOGRAPHY.meta,
-    color: COLORS.accentPrimary,
+    color: themeColors.accentPrimary,
     marginBottom: 16,
   },
   
@@ -2155,18 +1962,18 @@ const styles = StyleSheet.create({
   },
   progressText: {
     ...TYPOGRAPHY.meta,
-    color: COLORS.canvasLight,
+    color: themeColors.canvasLight,
   },
   workoutProgress: {
     ...TYPOGRAPHY.body,
-    color: COLORS.successBright,
+    color: themeColors.successBright,
   },
   
   // Start Button
   startButton: {
     width: '100%',
     height: 48,
-    backgroundColor: COLORS.accentPrimary,
+    backgroundColor: themeColors.accentPrimary,
     paddingHorizontal: 20,
     borderTopLeftRadius: 0,
     borderTopRightRadius: 0,
@@ -2186,24 +1993,24 @@ const styles = StyleSheet.create({
     backgroundColor: 'transparent',
   },
   startButtonPast: {
-    backgroundColor: COLORS.accentPrimaryDimmed,
+    backgroundColor: themeColors.accentPrimaryDimmed,
   },
   startButtonFuture: {
-    backgroundColor: COLORS.accentPrimaryDimmed,
+    backgroundColor: themeColors.accentPrimaryDimmed,
   },
   startButtonText: {
     ...TYPOGRAPHY.metaBold,
-    color: COLORS.inkCharcoal,
+    color: themeColors.inkCharcoal,
     textAlign: 'left',
   },
   startButtonTextCompleted: {
-    color: COLORS.successBright,
+    color: themeColors.successBright,
   },
   startButtonTextPast: {
-    color: COLORS.accentPrimary,
+    color: themeColors.accentPrimary,
   },
   startButtonTextFuture: {
-    color: COLORS.accentPrimary,
+    color: themeColors.accentPrimary,
   },
   startButtonTextSkippedOnCard: {
     color: 'rgba(245, 244, 244, 0.55)',
@@ -2215,7 +2022,7 @@ const styles = StyleSheet.create({
     height: 32,
     borderRadius: 16,
     borderCurve: 'continuous',
-    backgroundColor: COLORS.signalPositive,
+    backgroundColor: themeColors.signalPositive,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -2239,13 +2046,13 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   restDayQuestionGray: {
-    color: COLORS.inkCharcoal,
+    color: themeColors.inkCharcoal,
   },
   createCycleButton: {
     width: '100%',
     height: 56,
     borderRadius: 16,
-    backgroundColor: COLORS.accentPrimaryDimmed,
+    backgroundColor: themeColors.accentPrimaryDimmed,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -2253,16 +2060,16 @@ const styles = StyleSheet.create({
   },
   createCycleButtonText: {
     ...TYPOGRAPHY.bodyBold,
-    color: COLORS.accentPrimary,
+    color: themeColors.accentPrimary,
   },
   restDayQuestionBlack: {
-    color: COLORS.inkCharcoal,
+    color: themeColors.inkCharcoal,
   },
   addWorkoutButton: {
     flexDirection: 'row',
     width: '100%',
     height: 56,
-    backgroundColor: COLORS.accentPrimaryDimmed,
+    backgroundColor: themeColors.accentPrimaryDimmed,
     borderRadius: BORDER_RADIUS.md,
     alignItems: 'center',
     justifyContent: 'center',
@@ -2272,7 +2079,7 @@ const styles = StyleSheet.create({
   addWorkoutButtonText: {
     ...TYPOGRAPHY.meta,
     fontWeight: 'bold',
-    color: COLORS.accentPrimary,
+    color: themeColors.accentPrimary,
   },
   
   cardActionsContainer: {
@@ -2284,35 +2091,27 @@ const styles = StyleSheet.create({
     paddingTop: SPACING.md,
     backgroundColor: 'transparent',
   },
-  footerEntrySection: {
+  /** Single home row: Timer + chevron (replaces Extras / warm up / core links). */
+  footerTimerRow: {
     width: '100%',
+    minHeight: 48,
+    paddingVertical: SPACING.xs,
+    justifyContent: 'flex-start',
   },
-  footerSectionTitle: {
-    ...TYPOGRAPHY.meta,
-    color: COLORS.textMeta,
-  },
-  footerEntryLinksRow: {
-    marginTop: 4,
+  /** Label and chevron grouped; chevron is not pushed to the trailing edge of the screen. */
+  footerTimerLabelRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    gap: 6,
   },
-  footerEntryLinkButton: {
-    paddingVertical: 4,
-    alignSelf: 'flex-start',
-  },
-  footerEntryLinkText: {
+  footerTimerLabel: {
     ...TYPOGRAPHY.h1,
-    color: COLORS.textMeta,
+    color: themeColors.textMeta,
     fontWeight: '500',
-  },
-  footerEntryRow: {
-    flexDirection: 'row',
-    gap: SPACING.md,
   },
   footerEntryCard: {
     flex: 1,
-    backgroundColor: COLORS.containerTertiary,
+    backgroundColor: themeColors.containerTertiary,
     borderRadius: 10,
     paddingLeft: SPACING.lg,
     paddingRight: 6,
@@ -2328,13 +2127,12 @@ const styles = StyleSheet.create({
   },
   footerEntryMeta: {
     ...TYPOGRAPHY.legal,
-    color: COLORS.textMeta,
+    color: themeColors.textMeta,
     fontWeight: '500',
   },
   footerEntryTitle: {
     ...TYPOGRAPHY.h3,
-    color: COLORS.containerPrimary,
-    fontWeight: '500',
+    color: themeColors.containerPrimary,
   },
   footerEntryChevron: {
     width: 28,
@@ -2344,13 +2142,22 @@ const styles = StyleSheet.create({
   },
   timerModePane: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: COLORS.canvasLight,
+    backgroundColor: themeColors.canvasLight,
   },
   extrasTabContentWrap: {
     flex: 1,
   },
   timerModeHeader: {
     alignSelf: 'stretch',
+  },
+  /** Header + absolute “New timer” action (top right). */
+  timerHeaderShell: {
+    position: 'relative',
+    alignSelf: 'stretch',
+  },
+  timerNewButtonWrap: {
+    position: 'absolute',
+    right: SPACING.xxl,
   },
   timerModeScroll: {
     flex: 1,
@@ -2372,12 +2179,17 @@ const styles = StyleSheet.create({
   timerGridCardShell: {
     minHeight: 112,
   },
-  addTimerInlineAction: {
-    paddingVertical: 8,
-    marginBottom: 40,
+  /** Match `WorkoutBuilderScreen` `footerAddExerciseButton` + `footerAddExerciseText` (tertiary underline). */
+  timerAddTertiary: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 2,
+    flexShrink: 0,
+    alignSelf: 'flex-end',
   },
-  addTimerCardText: {
-    ...TYPOGRAPHY.h1,
+  timerAddTertiaryText: {
+    ...TYPOGRAPHY.meta,
+    fontWeight: '400',
   },
   
   // Intervals / Bonus Section
@@ -2389,12 +2201,12 @@ const styles = StyleSheet.create({
   },
   intervalsSectionTitle: {
     ...TYPOGRAPHY.meta,
-    color: COLORS.inkCharcoal,
+    color: themeColors.inkCharcoal,
     textTransform: 'uppercase',
   },
   bonusShowAllText: {
     ...TYPOGRAPHY.metaBold,
-    color: COLORS.accentPrimary,
+    color: themeColors.accentPrimary,
   },
   addIntervalCardButton: {
     width: '100%',
@@ -2412,7 +2224,7 @@ const styles = StyleSheet.create({
   },
   addIntervalCardText: {
     ...TYPOGRAPHY.metaBold,
-    color: COLORS.inkCharcoal,
+    color: themeColors.inkCharcoal,
   },
   addIntervalButton: {
     flexDirection: 'row',
@@ -2424,7 +2236,7 @@ const styles = StyleSheet.create({
   },
   addIntervalButtonText: {
     ...TYPOGRAPHY.metaBold,
-    color: COLORS.inkCharcoal,
+    color: themeColors.inkCharcoal,
   },
   bonusCardWrapper: {
     marginBottom: SPACING.sm,
@@ -2447,7 +2259,7 @@ const styles = StyleSheet.create({
   },
   bonusPresetCardName: {
     ...TYPOGRAPHY.body,
-    color: COLORS.text,
+    color: themeColors.text,
     marginBottom: 4,
   },
   bonusPresetCardBottomRow: {
@@ -2457,7 +2269,7 @@ const styles = StyleSheet.create({
   },
   bonusPresetCardMeta: {
     ...TYPOGRAPHY.meta,
-    color: COLORS.textMeta,
+    color: themeColors.textMeta,
   },
   bonusPresetCardCta: {
     flexDirection: 'row',
@@ -2466,7 +2278,7 @@ const styles = StyleSheet.create({
   },
   bonusPresetCardCtaStart: {
     ...TYPOGRAPHY.metaBold,
-    color: COLORS.accentPrimary,
+    color: themeColors.accentPrimary,
   },
   bonusCardsRow: {
     flexDirection: 'row',
@@ -2500,11 +2312,11 @@ const styles = StyleSheet.create({
   },
   intervalName: {
     ...TYPOGRAPHY.body,
-    color: COLORS.text,
+    color: themeColors.text,
   },
   noIntervalsText: {
     ...TYPOGRAPHY.body,
-    color: COLORS.inkCharcoal,
+    color: themeColors.inkCharcoal,
     marginTop: SPACING.sm,
   },
   
@@ -2515,7 +2327,7 @@ const styles = StyleSheet.create({
   },
   bonusTypeMeta: {
     ...TYPOGRAPHY.meta,
-    color: COLORS.textMeta,
+    color: themeColors.textMeta,
     marginTop: 2,
   },
   bonusTypeIconWrap: {
@@ -2523,10 +2335,9 @@ const styles = StyleSheet.create({
   },
   bonusStatusText: {
     ...TYPOGRAPHY.meta,
-    color: COLORS.textMeta,
+    color: themeColors.textMeta,
   },
 });
-
 
 
 

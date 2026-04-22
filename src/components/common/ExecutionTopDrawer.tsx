@@ -36,12 +36,12 @@ type Props = {
 
 /**
  * Expanded drawer height for animations / content push — must match layout here
- * (`TYPOGRAPHY.timer` is 80px tall; each `textAction` is 16 + line + 16 vertical padding).
+ * (`TYPOGRAPHY.timer` is 80px tall; each `textAction` is 12 + h2 line + 12 vertical padding).
  * Keep in sync with `menuExpandedHeight` on `ExerciseExecutionScreen`.
  */
 export function getExecutionTopDrawerExpandedHeight(actionCount: number): number {
   const TIMER_BLOCK_HEIGHT = 164;
-  const ACTION_ROW_HEIGHT = 72;
+  const ACTION_ROW_HEIGHT = 64;
   return TIMER_BLOCK_HEIGHT + actionCount * ACTION_ROW_HEIGHT;
 }
 
@@ -301,13 +301,13 @@ const styles = StyleSheet.create({
     borderRadius: 6,
   },
   textAction: {
-    paddingVertical: 16,
+    paddingVertical: 12,
   },
   completeText: {
-    ...TYPOGRAPHY.h1,
+    ...TYPOGRAPHY.h2,
   },
   resetText: {
-    ...TYPOGRAPHY.h1,
+    ...TYPOGRAPHY.h2,
   },
 });
 

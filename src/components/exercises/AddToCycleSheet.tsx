@@ -7,7 +7,7 @@ import {
   ScrollView,
   TextInput,
 } from 'react-native';
-import { SPACING, COLORS, TYPOGRAPHY, BORDER_RADIUS, BUTTONS } from '../../constants';
+import { SPACING, TYPOGRAPHY, BORDER_RADIUS, BUTTONS } from '../../constants';
 import { IconAddLine, IconMinusLine, IconSearch } from '../icons';
 import { BottomDrawer } from '../common/BottomDrawer';
 import { Toggle } from '../Toggle';
@@ -16,6 +16,8 @@ import { useTranslation } from '../../i18n/useTranslation';
 import { useStore } from '../../store';
 import type { WorkoutTemplateExercise } from '../../types/training';
 import type { Exercise } from '../../types/training';
+import { useAppTheme } from '../../theme/useAppTheme';
+import { getAppThemeFromStore } from '../../theme/getAppThemeFromStore';
 
 interface AddToCycleSheetProps {
   visible: boolean;
@@ -110,11 +112,11 @@ export const AddToCycleSheet = ({
             </View>
 
             <View style={styles.searchContainer}>
-              <IconSearch size={20} color={COLORS.textMeta} />
+              <IconSearch size={20} color={themeColors.textMeta} />
               <TextInput
                 style={styles.searchInput}
                 placeholder={t('search')}
-                placeholderTextColor={COLORS.textMeta}
+                placeholderTextColor={themeColors.textMeta}
                 value={searchQuery}
                 onChangeText={setSearchQuery}
                 autoCapitalize="none"
@@ -180,7 +182,7 @@ export const AddToCycleSheet = ({
                       >
                         <View style={styles.adjustButton}>
                           <View style={styles.adjustButtonInner}>
-                            <IconMinusLine size={24} color={COLORS.accentPrimary} />
+                            <IconMinusLine size={24} color={themeColors.accentPrimary} />
                           </View>
                         </View>
                       </TouchableOpacity>
@@ -191,7 +193,7 @@ export const AddToCycleSheet = ({
                       >
                         <View style={styles.adjustButton}>
                           <View style={styles.adjustButtonInner}>
-                            <IconAddLine size={24} color={COLORS.accentPrimary} />
+                            <IconAddLine size={24} color={themeColors.accentPrimary} />
                           </View>
                         </View>
                       </TouchableOpacity>
@@ -214,7 +216,7 @@ export const AddToCycleSheet = ({
                       >
                         <View style={styles.adjustButton}>
                           <View style={styles.adjustButtonInner}>
-                            <IconMinusLine size={24} color={COLORS.accentPrimary} />
+                            <IconMinusLine size={24} color={themeColors.accentPrimary} />
                           </View>
                         </View>
                       </TouchableOpacity>
@@ -225,7 +227,7 @@ export const AddToCycleSheet = ({
                       >
                         <View style={styles.adjustButton}>
                           <View style={styles.adjustButtonInner}>
-                            <IconAddLine size={24} color={COLORS.accentPrimary} />
+                            <IconAddLine size={24} color={themeColors.accentPrimary} />
                           </View>
                         </View>
                       </TouchableOpacity>
@@ -252,6 +254,7 @@ export const AddToCycleSheet = ({
   );
 };
 
+const themeColors = getAppThemeFromStore().colors;
 const styles = StyleSheet.create({
   drawerContent: {
     flex: 1,
@@ -263,24 +266,24 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.xxl,
     paddingVertical: SPACING.lg,
     borderBottomWidth: 1,
-    borderBottomColor: COLORS.borderDimmed,
+    borderBottomColor: themeColors.borderDimmed,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
   },
   title: {
     ...TYPOGRAPHY.h3,
-    color: COLORS.text,
+    color: themeColors.text,
     flex: 1,
   },
   subtitle: {
     ...TYPOGRAPHY.meta,
-    color: COLORS.textMeta,
+    color: themeColors.textMeta,
     marginTop: SPACING.xs,
   },
   changeExerciseText: {
     ...TYPOGRAPHY.metaBold,
-    color: COLORS.accentPrimary,
+    color: themeColors.accentPrimary,
   },
   searchContainer: {
     flexDirection: 'row',
@@ -288,13 +291,13 @@ const styles = StyleSheet.create({
     gap: SPACING.sm,
     paddingHorizontal: SPACING.xxl,
     paddingVertical: SPACING.md,
-    backgroundColor: COLORS.activeCard,
+    backgroundColor: themeColors.activeCard,
     borderBottomWidth: 1,
-    borderBottomColor: COLORS.borderDimmed,
+    borderBottomColor: themeColors.borderDimmed,
   },
   searchInput: {
     ...TYPOGRAPHY.body,
-    color: COLORS.text,
+    color: themeColors.text,
     flex: 1,
   },
   exerciseList: {
@@ -304,18 +307,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.xxl,
     paddingVertical: SPACING.lg,
     borderBottomWidth: 1,
-    borderBottomColor: COLORS.borderDimmed,
+    borderBottomColor: themeColors.borderDimmed,
   },
   exerciseItemContent: {
     gap: SPACING.xs,
   },
   exerciseName: {
     ...TYPOGRAPHY.body,
-    color: COLORS.text,
+    color: themeColors.text,
   },
   exerciseMeta: {
     ...TYPOGRAPHY.meta,
-    color: COLORS.textMeta,
+    color: themeColors.textMeta,
   },
   content: {
     paddingBottom: SPACING.xl,
@@ -329,17 +332,17 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
   },
   cycleInfoBanner: {
-    backgroundColor: COLORS.accentPrimaryDimmed,
+    backgroundColor: themeColors.accentPrimaryDimmed,
     borderRadius: BORDER_RADIUS.md,
     padding: SPACING.md,
   },
   cycleInfoText: {
     ...TYPOGRAPHY.meta,
-    color: COLORS.accentPrimary,
+    color: themeColors.accentPrimary,
     textAlign: 'center',
   },
   valuesCard: {
-    backgroundColor: COLORS.activeCard,
+    backgroundColor: themeColors.activeCard,
     borderRadius: BORDER_RADIUS.lg,
     borderCurve: 'continuous',
     padding: 24,
@@ -356,11 +359,11 @@ const styles = StyleSheet.create({
   },
   adjustValueText: {
     ...TYPOGRAPHY.h1,
-    color: COLORS.text,
+    color: themeColors.text,
   },
   adjustUnit: {
     ...TYPOGRAPHY.h1,
-    color: COLORS.textMeta,
+    color: themeColors.textMeta,
   },
   adjustButtons: {
     flexDirection: 'row',
@@ -385,13 +388,13 @@ const styles = StyleSheet.create({
     height: 48,
     borderRadius: BORDER_RADIUS.md,
     borderCurve: 'continuous',
-    backgroundColor: COLORS.accentPrimaryDimmed,
+    backgroundColor: themeColors.accentPrimaryDimmed,
     alignItems: 'center',
     justifyContent: 'center',
   },
   adjustDivider: {
     height: 1,
-    backgroundColor: COLORS.borderDimmed,
+    backgroundColor: themeColors.borderDimmed,
     marginVertical: 16,
   },
   addButtonContainer: {
@@ -400,7 +403,7 @@ const styles = StyleSheet.create({
     paddingTop: SPACING.lg,
   },
   addButton: {
-    backgroundColor: COLORS.accentPrimary,
+    backgroundColor: themeColors.accentPrimary,
     borderRadius: BORDER_RADIUS.md,
     paddingVertical: SPACING.lg,
     alignItems: 'center',
@@ -410,6 +413,6 @@ const styles = StyleSheet.create({
   },
   addButtonText: {
     ...TYPOGRAPHY.metaBold,
-    color: COLORS.backgroundCanvas,
+    color: themeColors.backgroundCanvas,
   },
 });

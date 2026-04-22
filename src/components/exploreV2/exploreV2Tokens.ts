@@ -193,10 +193,25 @@ export const EXPLORE_V2 = {
   },
 } as const;
 
+/**
+ * Completed card exercise list layout — shared with History read-only detail so rows match execution.
+ * Keep in sync with `ExploreV2CompleteCard` list styles.
+ */
+export const COMPLETED_EXERCISE_LIST_LAYOUT = {
+  setLogGap: 2,
+  /** Caps the weight numeral column so values don’t stretch the row. */
+  weightNumeralMaxWidth: 70,
+  repsValueWidth: 28,
+  nameColPaddingRight: 10,
+  valRowGap: 20,
+  valWithUnitGap: 2,
+  rowDividerPadBottom: 20,
+  rowDividerMarginBottom: 20,
+} as const;
+
 /** Exercise names in Up Next queue rows (`ExploreV2UpNextCard`); reuse when listing exercises in create/add flows. */
 export const exploreV2UpNextQueueExerciseNameStyle: TextStyle = {
   ...TYPOGRAPHY.h2,
-  fontWeight: '400',
   flexShrink: 1,
   minWidth: 0,
 };

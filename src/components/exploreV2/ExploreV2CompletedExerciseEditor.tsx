@@ -22,13 +22,14 @@ import {
 import * as Haptics from 'expo-haptics';
 import Reanimated, { useAnimatedStyle, interpolateColor, type SharedValue } from 'react-native-reanimated';
 import { EXPLORE_V2 } from './exploreV2Tokens';
-import { BORDER_RADIUS, COLORS, TYPOGRAPHY } from '../../constants';
+import { BORDER_RADIUS, TYPOGRAPHY } from '../../constants';
 import { EXECUTION_CTA_HEIGHT, EXECUTION_CTA_PADDING_H, executionCtaLabelStyle } from '../execution/executionCtaTokens';
 import { useAppTheme } from '../../theme/useAppTheme';
 import { useTranslation } from '../../i18n/useTranslation';
 import type { ExploreV2Group } from './exploreV2Types';
 import { CurrentSetHeroPage } from './ExploreV2CurrentCard';
 import { TertiaryButton } from '../common/UnderlinedActionButton';
+import { getAppThemeFromStore } from '../../theme/getAppThemeFromStore';
 
 const AnimatedTouchableOpacity = Reanimated.createAnimatedComponent(TouchableOpacity);
 
@@ -451,6 +452,7 @@ export const ExploreV2CompletedExerciseEditor = forwardRef<ExploreV2CompletedExe
   },
 );
 
+const themeColors = getAppThemeFromStore().colors;
 const styles = StyleSheet.create({
   root: {
     flex: 1,
@@ -459,7 +461,6 @@ const styles = StyleSheet.create({
   },
   exerciseTitle: {
     ...TYPOGRAPHY.h2,
-    fontWeight: '400',
     marginBottom: 8,
     flexShrink: 0,
   },
@@ -565,15 +566,15 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   heroMetricsKeyboardAccessory: {
-    backgroundColor: COLORS.backgroundCanvas,
+    backgroundColor: themeColors.backgroundCanvas,
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderTopWidth: 1,
-    borderTopColor: COLORS.border,
+    borderTopColor: themeColors.border,
     alignItems: 'flex-end',
   },
   heroMetricsKeyboardDone: {
-    backgroundColor: COLORS.accentPrimary,
+    backgroundColor: themeColors.accentPrimary,
     borderRadius: BORDER_RADIUS.md,
     height: EXECUTION_CTA_HEIGHT,
     minHeight: EXECUTION_CTA_HEIGHT,

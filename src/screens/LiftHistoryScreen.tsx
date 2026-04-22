@@ -3,11 +3,13 @@ import { View, Text, StyleSheet, TouchableOpacity, FlatList, Dimensions } from '
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import dayjs from 'dayjs';
 import { useStore } from '../store';
-import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS } from '../constants';
+import { SPACING, TYPOGRAPHY, BORDER_RADIUS } from '../constants';
 import { IconArrowLeft, IconPR } from '../components/icons';
 import { Sparkline } from '../components/common/Sparkline';
 import { formatWeight } from '../utils/weight';
 import { useTranslation } from '../i18n/useTranslation';
+import { useAppTheme } from '../theme/useAppTheme';
+import { getAppThemeFromStore } from '../theme/getAppThemeFromStore';
 
 interface SessionEntry {
   date: string;
@@ -66,7 +68,7 @@ export function LiftHistoryScreen({ navigation, route }: any) {
     <View style={styles.container}>
       <View style={[styles.header, { paddingTop: insets.top }]}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton} activeOpacity={1}>
-          <IconArrowLeft size={24} color={COLORS.text} />
+          <IconArrowLeft size={24} color={themeColors.text} />
         </TouchableOpacity>
         <Text style={styles.title} numberOfLines={1}>{exerciseName}</Text>
         <View style={{ width: 48 }} />
@@ -79,7 +81,7 @@ export function LiftHistoryScreen({ navigation, route }: any) {
             data={chartData}
             width={SCREEN_WIDTH - SPACING.xxl * 2}
             height={120}
-            color={COLORS.accentPrimary}
+            color={themeColors.accentPrimary}
             strokeWidth={2}
           />
         </View>
@@ -88,7 +90,7 @@ export function LiftHistoryScreen({ navigation, route }: any) {
       {/* PR Banner */}
       {pr && (
         <View style={styles.prBanner}>
-          <IconPR size={16} color={COLORS.accentPrimary} />
+          <IconPR size={16} color={themeColors.accentPrimary} />
           <Text style={styles.prBannerText}>
             PR: {formatWeight(pr.weight, useKg)} {useKg ? 'kg' : 'lb'} × {pr.reps} · {dayjs(pr.date).format('MMM D')}
           </Text>
@@ -117,7 +119,7 @@ export function LiftHistoryScreen({ navigation, route }: any) {
                 <Text style={styles.sessionWeight}>
                   {formatWeight(item.topWeight, useKg)} {useKg ? 'kg' : 'lb'} × {item.topReps}
                 </Text>
-                {item.isPR && <IconPR size={12} color={COLORS.accentPrimary} />}
+                {item.isPR && <IconPR size={12} color={themeColors.accentPrimary} />}
               </View>
             </View>
           </View>
@@ -129,10 +131,11 @@ export function LiftHistoryScreen({ navigation, route }: any) {
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
 
+const themeColors = getAppThemeFromStore().colors;
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.backgroundCanvas,
+    backgroundColor: themeColors.backgroundCanvas,
   },
   header: {
     paddingHorizontal: SPACING.xxl,
@@ -150,7 +153,7 @@ const styles = StyleSheet.create({
   },
   title: {
     ...TYPOGRAPHY.h2,
-    color: COLORS.text,
+    color: themeColors.text,
     flex: 1,
     textAlign: 'center',
   },
@@ -165,14 +168,14 @@ const styles = StyleSheet.create({
     gap: SPACING.sm,
     marginHorizontal: SPACING.xxl,
     marginBottom: SPACING.lg,
-    backgroundColor: COLORS.accentPrimaryDimmed,
+    backgroundColor: themeColors.accentPrimaryDimmed,
     borderRadius: BORDER_RADIUS.md,
     paddingHorizontal: SPACING.md,
     paddingVertical: SPACING.sm,
   },
   prBannerText: {
     ...TYPOGRAPHY.metaBold,
-    color: COLORS.accentPrimary,
+    color: themeColors.accentPrimary,
   },
   listContent: {
     paddingHorizontal: SPACING.xxl,
@@ -183,18 +186,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: SPACING.md,
     borderBottomWidth: 1,
-    borderBottomColor: COLORS.borderDimmed,
+    borderBottomColor: themeColors.borderDimmed,
   },
   sessionLeft: {
     flex: 1,
   },
   sessionDate: {
     ...TYPOGRAPHY.body,
-    color: COLORS.text,
+    color: themeColors.text,
   },
   sessionSets: {
     ...TYPOGRAPHY.meta,
-    color: COLORS.textMeta,
+    color: themeColors.textMeta,
     marginTop: 2,
   },
   sessionRight: {
@@ -207,7 +210,7 @@ const styles = StyleSheet.create({
   },
   sessionWeight: {
     ...TYPOGRAPHY.bodyBold,
-    color: COLORS.text,
+    color: themeColors.text,
   },
   emptyState: {
     paddingTop: 80,
@@ -215,6 +218,6 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     ...TYPOGRAPHY.body,
-    color: COLORS.textMeta,
+    color: themeColors.textMeta,
   },
 });

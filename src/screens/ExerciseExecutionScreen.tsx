@@ -42,7 +42,7 @@ import Svg, { Circle, Path } from 'react-native-svg';
 import * as Haptics from 'expo-haptics';
 import { useStore } from '../store';
 import { useAppTheme } from '../theme/useAppTheme';
-import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS, CARDS } from '../constants';
+import { SPACING, TYPOGRAPHY, BORDER_RADIUS, CARDS } from '../constants';
 import { IconArrowLeft, IconCheck, IconCheckmark, IconAddLine, IconMinusLine, IconTrash, IconEdit, IconMenu, IconHistory, IconRestart, IconSkip, IconSwap, IconArrowRight, IconAdd, IconPause, IconPlay, IconAddTime, IconChevronDown } from '../components/icons';
 import { BottomDrawer } from '../components/common/BottomDrawer';
 import { NextLabel } from '../components/common/NextLabel';
@@ -72,6 +72,9 @@ import type { WarmupItem_DEPRECATED as WarmupItem, AccessoryItem_DEPRECATED as A
 import { isDeprecatedItem, getDisplayValuesFromItem } from '../utils/exerciseMigration';
 import { computeNextSuggestion } from '../utils/progressionSuggestions';
 import dayjs from 'dayjs';
+import { getAppThemeFromStore } from '../theme/getAppThemeFromStore';
+import { buildCustomExerciseDefinition } from '../utils/exerciseIdentity';
+import { ExerciseSearchPickModal } from '../components/workoutBuilder/ExerciseSearchPickModal';
 import {
   SCHEDULE_DECK_EXECUTION_INCOMING_SCALE_START,
   SCHEDULE_DECK_T,
@@ -293,6 +296,7 @@ export function ExerciseExecutionScreen() {
   } = useStore();
 
   const appTheme = useAppTheme();
+  const themeColors = appTheme.colors;
 
   useEffect(() => {
     scheduleDeckTransitionActiveSV.value = isScheduleOriginTransition ? 1 : 0;
@@ -1828,8 +1832,9 @@ export function ExerciseExecutionScreen() {
     setExploreDetailGroupIndex(null);
   }, [executionMode]);
 
-  // Handler for adding a new exercise to the workout template
-  const handleAddExercise = async (exerciseId: string, exerciseName: string) => {
+  // Handler for adding a new exercise to the workout template.
+  // Dismissing the add-exercise sheet is only done by `ExerciseSearchPickModal` (backdrop / onClose) — not here.
+  const handleAddExercise = async (exerciseId: string, _exerciseName: string) => {
     if (!template) return;
 
     // Use current list from store (snapshot if scheduled, else template) so we append to what's actually shown
@@ -1851,7 +1856,6 @@ export function ExerciseExecutionScreen() {
     if (scheduledWorkout) {
       await updateScheduledWorkoutSnapshots(workoutKey, { exercisesSnapshot: updatedItems });
     }
-    setShowAddExerciseDrawer(false);
     // Force re-render after store and DOM tick so useMemo sees updated getState()
     requestAnimationFrame(() => {
       setRefreshKey(prev => prev + 1);
@@ -3568,6 +3572,9 @@ export function ExerciseExecutionScreen() {
   const preExecutionSwitchCtaHandler = shouldRenderWarmupSwitchCta
     ? handleSelectDifferentWarmup
     : handleSelectDifferentCore;
+  const closeAddExercisePicker = useCallback(() => {
+    setShowAddExerciseDrawer(false);
+  }, []);
   const handleOpenAddExerciseDrawer = useCallback(() => {
     setShowAddExerciseDrawer(true);
   }, []);
@@ -3592,7 +3599,7 @@ export function ExerciseExecutionScreen() {
         <DeviceEdgeTimer
           visible={inlineRestActive}
           progress={inlineRestProgress}
-          strokeColor={COLORS.info}
+          strokeColor={themeColors.info}
           strokeWidth={4}
         />
       )}
@@ -3617,7 +3624,7 @@ export function ExerciseExecutionScreen() {
             disabled={showMenu}
           >
             <View style={styles.backMetaButton}>
-              <IconArrowLeft size={18} color={executionMode === 'explore-v2' ? COLORS.textMeta : 'rgba(255,255,255,0.72)'} />
+              <IconArrowLeft size={18} color={executionMode === 'explore-v2' ? themeColors.textMeta : 'rgba(255,255,255,0.72)'} />
               <Text style={[styles.backMetaText, executionMode === 'explore-v2' && styles.backMetaTextExploreV2]}>Schedule</Text>
             </View>
             <Text
@@ -3633,13 +3640,13 @@ export function ExerciseExecutionScreen() {
             {executionMode === 'explore' && inlineRestActive && (
               <View style={[styles.headerTimerPill, styles.headerTimerPillBelowTitle]}>
                 <TouchableOpacity onPress={handleInlineRestPauseToggle} activeOpacity={0.7} style={styles.exploreTimerIconBtn}>
-                  {inlineRestPaused ? <IconPlay size={16} color={COLORS.accentPrimary} /> : <IconPause size={16} color={COLORS.accentPrimary} />}
+                  {inlineRestPaused ? <IconPlay size={16} color={themeColors.accentPrimary} /> : <IconPause size={16} color={themeColors.accentPrimary} />}
                 </TouchableOpacity>
                 <Text style={styles.exploreTimerText}>
                   {Math.floor(inlineRestTimeLeft / 60)}:{String(inlineRestTimeLeft % 60).padStart(2, '0')}
                 </Text>
                 <TouchableOpacity onPress={handleInlineRestSkip} activeOpacity={0.7} style={styles.exploreTimerIconBtn}>
-                  <IconSkip size={16} color={COLORS.accentPrimary} />
+                  <IconSkip size={16} color={themeColors.accentPrimary} />
                 </TouchableOpacity>
               </View>
             )}
@@ -3902,7 +3909,7 @@ export function ExerciseExecutionScreen() {
                                   <View style={styles.cardHeaderActionSlot}>
                                     {isCompleted ? (
                                       <View style={styles.cardHeaderActionTouchable}>
-                                        <IconCheckmark size={18} color={COLORS.successBright} />
+                                        <IconCheckmark size={18} color={themeColors.successBright} />
                                       </View>
                                     ) : (
                                       <TouchableOpacity
@@ -3915,7 +3922,7 @@ export function ExerciseExecutionScreen() {
                                         style={styles.cardHeaderActionTouchable}
                                       >
                                         <View style={styles.pencilIconOffset}>
-                                          <IconEdit size={18} color={COLORS.textMeta} />
+                                          <IconEdit size={18} color={themeColors.textMeta} />
                                         </View>
                                       </TouchableOpacity>
                                     )}
@@ -4005,7 +4012,7 @@ export function ExerciseExecutionScreen() {
                                 <View style={styles.exploreSetRowLeft}>
                                   {isSetCompleted && (
                                     <View style={styles.exploreSetDoneIcon}>
-                                      <IconCheckmark size={18} color={COLORS.successBright} />
+                                      <IconCheckmark size={18} color={themeColors.successBright} />
                                     </View>
                                   )}
                                   <Text style={styles.exploreInlineSetNumber}>Set {setIndex + 1}</Text>
@@ -4135,7 +4142,7 @@ export function ExerciseExecutionScreen() {
                         isExploreCompletedExpanded && styles.exploreSectionAccordionIconWrapExpanded,
                       ]}
                     >
-                      <IconChevronDown size={20} color={COLORS.accentPrimary} />
+                      <IconChevronDown size={20} color={themeColors.accentPrimary} />
                     </View>
                   </TouchableOpacity>
                   {isExploreCompletedExpanded && renderExploreCompletedRows()}
@@ -4175,7 +4182,7 @@ export function ExerciseExecutionScreen() {
           /* ===== COMPLETED WORKOUT - HISTORY VIEW ===== */
           <View style={styles.historyViewContainer}>
             <View style={styles.historyViewHeader}>
-              <IconCheckmark size={16} color={COLORS.successBright} />
+              <IconCheckmark size={16} color={themeColors.successBright} />
               <Text style={styles.historyViewTitle}>{t('workoutComplete')}</Text>
             </View>
             
@@ -4342,7 +4349,7 @@ export function ExerciseExecutionScreen() {
                                           <View style={styles.cardHeaderActionSlot}>
                                             {isCompleted || (displayActive && inlineRestActive && inlineRestIsLastSet) ? (
                                               <View style={styles.cardHeaderActionTouchable}>
-                                                <IconCheckmark size={18} color={COLORS.successBright} />
+                                                <IconCheckmark size={18} color={themeColors.successBright} />
                                               </View>
                                             ) : (
                                               <TouchableOpacity
@@ -4359,7 +4366,7 @@ export function ExerciseExecutionScreen() {
                                                 style={styles.cardHeaderActionTouchable}
                                               >
                                                 <View style={styles.pencilIconOffset}>
-                                                  <IconEdit size={18} color={COLORS.textMeta} />
+                                                  <IconEdit size={18} color={themeColors.textMeta} />
                                                 </View>
                                               </TouchableOpacity>
                                             )}
@@ -4511,12 +4518,12 @@ export function ExerciseExecutionScreen() {
                       </Animated.View>
                       <Animated.View style={{ opacity: restStagger.pauseIcon, transform: [{ translateX: restStagger.pauseIcon.interpolate({ inputRange: [0, 1], outputRange: [-8, 0] }) }] }}>
                         <TouchableOpacity onPress={handleInlineRestPauseToggle} activeOpacity={0.7} style={styles.inlineRestIconBtn}>
-                          {inlineRestPaused ? <IconPlay size={20} color={inlineRestActive ? COLORS.accentPrimary : COLORS.text} /> : <IconPause size={20} color={inlineRestActive ? COLORS.accentPrimary : COLORS.text} />}
+                          {inlineRestPaused ? <IconPlay size={20} color={inlineRestActive ? themeColors.accentPrimary : themeColors.text} /> : <IconPause size={20} color={inlineRestActive ? themeColors.accentPrimary : themeColors.text} />}
                         </TouchableOpacity>
                       </Animated.View>
                       <Animated.View style={{ opacity: restStagger.skipIcon, transform: [{ translateX: restStagger.skipIcon.interpolate({ inputRange: [0, 1], outputRange: [-8, 0] }) }] }}>
                         <TouchableOpacity onPress={handleInlineRestSkip} activeOpacity={0.7} style={styles.inlineRestIconBtn}>
-                          <IconSkip size={20} color={inlineRestActive ? COLORS.accentPrimary : COLORS.text} />
+                          <IconSkip size={20} color={inlineRestActive ? themeColors.accentPrimary : themeColors.text} />
                         </TouchableOpacity>
                       </Animated.View>
                     </View>
@@ -4651,7 +4658,7 @@ export function ExerciseExecutionScreen() {
           }}
           maxHeight="90%"
           scrollable={true}
-          backgroundColor={COLORS.backgroundCanvas}
+          backgroundColor={themeColors.backgroundCanvas}
           keyboardShouldPersistTaps="always"
         >
           <View style={styles.exploreDetailSheetContent}>
@@ -4824,7 +4831,7 @@ export function ExerciseExecutionScreen() {
                   }}
                   activeOpacity={0.7}
                 >
-                  <IconSwap size={18} color={COLORS.textMeta} />
+                  <IconSwap size={18} color={themeColors.textMeta} />
                   <Text style={[styles.exploreActionText, styles.exploreActionCellLabel]} numberOfLines={1}>
                     Swap exercise
                   </Text>
@@ -4851,7 +4858,7 @@ export function ExerciseExecutionScreen() {
                   }}
                   activeOpacity={0.7}
                 >
-                  <IconTrash size={18} color={COLORS.signalNegative} />
+                  <IconTrash size={18} color={themeColors.signalNegative} />
                   <Text style={[styles.exploreActionTextDanger, styles.exploreActionCellLabel]} numberOfLines={1}>
                     {t('remove')}
                   </Text>
@@ -4872,7 +4879,7 @@ export function ExerciseExecutionScreen() {
             onClose={closeExploreSetEditor}
             maxHeight="52%"
             scrollable={true}
-            backgroundColor={COLORS.backgroundCanvas}
+            backgroundColor={themeColors.backgroundCanvas}
             keyboardShouldPersistTaps="always"
           >
             <View style={styles.exploreSetEditorSheet}>
@@ -4968,7 +4975,7 @@ export function ExerciseExecutionScreen() {
         }}
         maxHeight="90%"
         scrollable={true}
-        backgroundColor={COLORS.backgroundCanvas}
+        backgroundColor={themeColors.backgroundCanvas}
         keyboardShouldPersistTaps="always"
       >
         <View style={styles.adjustmentDrawerContent}>
@@ -4984,7 +4991,7 @@ export function ExerciseExecutionScreen() {
                   onPress={() => setShowExerciseSettingsMenu(true)}
                   activeOpacity={0.7}
                 >
-                  <IconMenu size={24} color={COLORS.text} />
+                  <IconMenu size={24} color={themeColors.text} />
                 </TouchableOpacity>
               </View>
             )}
@@ -5063,7 +5070,7 @@ export function ExerciseExecutionScreen() {
                         </View>
                         {isCompleted && (
                           <View style={styles.completedBadge}>
-                            <IconCheckmark size={16} color={COLORS.successBright} />
+                            <IconCheckmark size={16} color={themeColors.successBright} />
                           </View>
                         )}
                       </TouchableOpacity>
@@ -5190,7 +5197,7 @@ export function ExerciseExecutionScreen() {
                                   {showExerciseHistory ? t('showLess') : t('viewAll')}
                                 </Text>
                                 <View style={{ transform: [{ rotate: showExerciseHistory ? '180deg' : '0deg' }] }}>
-                                  <IconChevronDown size={16} color={COLORS.accentPrimary} />
+                                  <IconChevronDown size={16} color={themeColors.accentPrimary} />
                                 </View>
                               </TouchableOpacity>
                             )}
@@ -5365,7 +5372,7 @@ export function ExerciseExecutionScreen() {
                               Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
                             }}
                           >
-                            <IconAdd size={20} color={COLORS.accentPrimary} />
+                            <IconAdd size={20} color={themeColors.accentPrimary} />
                             <Text style={styles.swapAddNewText}>Create "{swapSearchQuery.trim()}"</Text>
                           </TouchableOpacity>
                         )}
@@ -5377,7 +5384,7 @@ export function ExerciseExecutionScreen() {
               <TextInput
                 style={styles.swapSearchInputLarge}
                 placeholder="Search exercises..."
-                placeholderTextColor={COLORS.textSecondary}
+                placeholderTextColor={themeColors.textSecondary}
                 value={swapSearchQuery}
                 onChangeText={setSwapSearchQuery}
                 autoFocus={true}
@@ -5406,7 +5413,7 @@ export function ExerciseExecutionScreen() {
             maxHeight="65%"
             scrollable={true}
             showHandle={true}
-            backgroundColor={COLORS.backgroundCanvas}
+            backgroundColor={themeColors.backgroundCanvas}
           >
             <View style={[styles.exerciseSettingsMenuContent, { paddingBottom: Math.max(SPACING.xl, insets.bottom) }]}>
               <Text style={styles.exerciseSettingsMenuSectionTitle}>Set behavior</Text>
@@ -5508,7 +5515,7 @@ export function ExerciseExecutionScreen() {
                   }}
                   activeOpacity={0.7}
                 >
-                  <IconSwap size={24} color={COLORS.text} />
+                  <IconSwap size={24} color={themeColors.text} />
                   <Text style={styles.exerciseSettingsMenuActionLabel}>{t('swap')}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
@@ -5567,8 +5574,8 @@ export function ExerciseExecutionScreen() {
                 }}
                   activeOpacity={0.7}
                 >
-                  <IconTrash size={24} color={COLORS.signalNegative} />
-                  <Text style={[styles.exerciseSettingsMenuActionLabel, { color: COLORS.signalNegative }]}>{t('remove')}</Text>
+                  <IconTrash size={24} color={themeColors.signalNegative} />
+                  <Text style={[styles.exerciseSettingsMenuActionLabel, { color: themeColors.signalNegative }]}>{t('remove')}</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -5576,22 +5583,19 @@ export function ExerciseExecutionScreen() {
         );
       })()}
 
-      {/* Add Exercise Drawer */}
-      <BottomDrawer
+      {/* Picker: dismissOnSuccessfulAdd=false keeps it open for rapid adds; only backdrop closes (see `closeAddExercisePicker`). */}
+      <ExerciseSearchPickModal
         visible={showAddExerciseDrawer}
-        onClose={() => setShowAddExerciseDrawer(false)}
-        maxHeight="70%"
-        fixedHeight={true}
-        showHandle={false}
-        scrollable={false}
-        contentStyle={{ padding: 0 }}
-      >
-        <AddExerciseDrawerContent
-          exercisesLibrary={exercisesLibrary}
-          onSelect={handleAddExercise}
-          onClose={() => setShowAddExerciseDrawer(false)}
-        />
-      </BottomDrawer>
+        exercises={exercisesLibrary}
+        dismissOnSuccessfulAdd={false}
+        onClose={closeAddExercisePicker}
+        onSelectExercise={ex => handleAddExercise(ex.id, ex.name)}
+        onCreateCustom={async name => {
+          const def = buildCustomExerciseDefinition(name, Date.now());
+          await addExercise(def);
+          await handleAddExercise(def.id, def.name);
+        }}
+      />
     </AnimatedReanimated.View>
   );
 }
@@ -5660,120 +5664,7 @@ function ExecutionModeToggle({
   );
 }
 
-// Separate component to avoid re-renders on the main screen
-function AddExerciseDrawerContent({
-  exercisesLibrary,
-  onSelect,
-  onClose
-}: {
-  exercisesLibrary: Array<{ id: string; name: string }>;
-  onSelect: (id: string, name: string) => void | Promise<void>;
-  onClose: () => void;
-}) {
-  const { t } = useTranslation();
-  const [searchQuery, setSearchQuery] = useState('');
-
-  const filteredExercises = useMemo(() => {
-    if (!searchQuery.trim()) return exercisesLibrary;
-    const lowerQuery = searchQuery.toLowerCase();
-    return exercisesLibrary.filter(ex => ex.name.toLowerCase().includes(lowerQuery));
-  }, [searchQuery, exercisesLibrary]);
-
-  return (
-    <View style={addExerciseStyles.container}>
-      <View style={addExerciseStyles.header}>
-        <Text style={addExerciseStyles.title}>{t('addExercise')}</Text>
-        <TouchableOpacity onPress={onClose} activeOpacity={0.7}>
-          <Text style={addExerciseStyles.cancelText}>{t('cancel')}</Text>
-        </TouchableOpacity>
-      </View>
-
-      <View style={addExerciseStyles.searchContainer}>
-        <TextInput
-          style={addExerciseStyles.searchInput}
-          placeholder={t('searchExercisesPlaceholder')}
-          placeholderTextColor={COLORS.textMeta}
-          value={searchQuery}
-          onChangeText={setSearchQuery}
-          autoCapitalize="none"
-          autoCorrect={false}
-        />
-      </View>
-
-      <FlatList
-        data={filteredExercises}
-        keyExtractor={(item) => item.id}
-        style={addExerciseStyles.list}
-        keyboardShouldPersistTaps="handled"
-        renderItem={({ item }) => (
-          <TouchableOpacity
-            style={addExerciseStyles.exerciseItem}
-            onPress={async () => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              await onSelect(item.id, item.name);
-            }}
-            activeOpacity={0.7}
-          >
-            <Text style={addExerciseStyles.exerciseName}>{item.name}</Text>
-          </TouchableOpacity>
-        )}
-        ItemSeparatorComponent={() => <View style={addExerciseStyles.separator} />}
-      />
-    </View>
-  );
-}
-
-const addExerciseStyles = StyleSheet.create({
-  container: {
-    flex: 1,
-    paddingTop: SPACING.md,
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: SPACING.xxl,
-    paddingBottom: SPACING.md,
-  },
-  title: {
-    ...TYPOGRAPHY.h3,
-    color: COLORS.text,
-  },
-  cancelText: {
-    ...TYPOGRAPHY.body,
-    color: COLORS.accentPrimary,
-  },
-  searchContainer: {
-    paddingHorizontal: SPACING.xxl,
-    paddingBottom: SPACING.md,
-  },
-  searchInput: {
-    ...TYPOGRAPHY.body,
-    color: COLORS.text,
-    backgroundColor: COLORS.container,
-    borderRadius: BORDER_RADIUS.md,
-    paddingHorizontal: SPACING.lg,
-    paddingVertical: SPACING.md,
-    borderWidth: 1,
-    borderColor: COLORS.borderDimmed,
-  },
-  list: {
-    flex: 1,
-    paddingHorizontal: SPACING.xxl,
-  },
-  exerciseItem: {
-    paddingVertical: SPACING.lg,
-  },
-  exerciseName: {
-    ...exploreV2UpNextQueueExerciseNameStyle,
-    color: COLORS.text,
-  },
-  separator: {
-    height: 1,
-    backgroundColor: COLORS.borderDimmed,
-  },
-});
-
+const themeColors = getAppThemeFromStore().colors;
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -5807,7 +5698,7 @@ const styles = StyleSheet.create({
     color: 'rgba(255,255,255,0.72)',
   },
   backMetaTextExploreV2: {
-    color: COLORS.textMeta,
+    color: themeColors.textMeta,
   },
   menuTextAction: {
     width: 48,
@@ -5839,9 +5730,7 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   headerTitleExploreV2Left: {
-    ...TYPOGRAPHY.h3,
-    fontWeight: '500' as const,
-    color: COLORS.inkCharcoal,
+    color: themeColors.inkCharcoal,
     textAlign: 'left',
     width: 'auto',
   },
@@ -5858,10 +5747,10 @@ const styles = StyleSheet.create({
   executionModeToggleRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: COLORS.containerBackground,
+    backgroundColor: themeColors.containerBackground,
     borderRadius: BORDER_RADIUS.round,
     borderWidth: 1,
-    borderColor: COLORS.borderDimmed,
+    borderColor: themeColors.borderDimmed,
     padding: 2,
   },
   executionModeToggleOption: {
@@ -5873,19 +5762,19 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   executionModeToggleOptionActive: {
-    backgroundColor: COLORS.accentPrimary,
+    backgroundColor: themeColors.accentPrimary,
   },
   executionModeToggleText: {
     ...TYPOGRAPHY.legal,
-    color: COLORS.textSecondary,
+    color: themeColors.textSecondary,
   },
   executionModeToggleTextActive: {
-    color: COLORS.backgroundCanvas,
+    color: themeColors.backgroundCanvas,
   },
   headerTimerPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: COLORS.accentPrimaryDimmed,
+    backgroundColor: themeColors.accentPrimaryDimmed,
     borderRadius: BORDER_RADIUS.round,
     paddingVertical: 6,
     paddingHorizontal: 12,
@@ -5938,7 +5827,7 @@ const styles = StyleSheet.create({
   },
   preWarmupSwitchText: {
     ...TYPOGRAPHY.meta,
-    color: COLORS.textMeta,
+    color: themeColors.textMeta,
     textDecorationLine: 'underline',
   },
   /**
@@ -5975,7 +5864,7 @@ const styles = StyleSheet.create({
   },
   exploreTimerText: {
     ...TYPOGRAPHY.metaBold,
-    color: COLORS.accentPrimary,
+    color: themeColors.accentPrimary,
     flex: 1,
     textAlign: 'center',
   },
@@ -6011,7 +5900,7 @@ const styles = StyleSheet.create({
   },
   exploreCurrentSummaryText: {
     ...TYPOGRAPHY.meta,
-    color: COLORS.textMeta,
+    color: themeColors.textMeta,
   },
   exploreSetListBlock: {
     width: '100%',
@@ -6022,7 +5911,7 @@ const styles = StyleSheet.create({
   },
   exploreSectionTitle: {
     ...TYPOGRAPHY.legal,
-    color: COLORS.textMeta,
+    color: themeColors.textMeta,
     textTransform: 'uppercase',
   },
   exploreSectionAccordionHeader: {
@@ -6046,16 +5935,16 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   exploreCard: {
-    backgroundColor: COLORS.cardBackground,
+    backgroundColor: themeColors.cardBackground,
     borderRadius: BORDER_RADIUS.md,
     borderWidth: 1,
-    borderColor: COLORS.borderDimmed,
+    borderColor: themeColors.borderDimmed,
     paddingHorizontal: SPACING.md,
     paddingVertical: SPACING.sm,
     gap: SPACING.sm,
   },
   exploreCardExpanded: {
-    borderColor: COLORS.accentPrimaryDimmed,
+    borderColor: themeColors.accentPrimaryDimmed,
   },
   exploreCardCompleted: {
     opacity: 0.85,
@@ -6071,12 +5960,12 @@ const styles = StyleSheet.create({
   },
   exploreCardTitle: {
     ...TYPOGRAPHY.bodyBold,
-    color: COLORS.text,
+    color: themeColors.text,
     flex: 1,
   },
   exploreCardMeta: {
     ...TYPOGRAPHY.meta,
-    color: COLORS.textMeta,
+    color: themeColors.textMeta,
   },
   exploreCardExpandedContent: {
     gap: SPACING.sm,
@@ -6090,15 +5979,15 @@ const styles = StyleSheet.create({
   },
   exploreMetricText: {
     ...TYPOGRAPHY.body,
-    color: COLORS.text,
+    color: themeColors.text,
   },
   exploreMetricProgress: {
     ...TYPOGRAPHY.meta,
-    color: COLORS.textMeta,
+    color: themeColors.textMeta,
   },
   exploreHelperText: {
     ...TYPOGRAPHY.legal,
-    color: COLORS.textMeta,
+    color: themeColors.textMeta,
   },
   exploreExpandedActionsRow: {
     flexDirection: 'row',
@@ -6111,7 +6000,7 @@ const styles = StyleSheet.create({
     height: 30,
     borderRadius: 15,
     borderWidth: 1,
-    borderColor: COLORS.borderDimmed,
+    borderColor: themeColors.borderDimmed,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -6119,7 +6008,7 @@ const styles = StyleSheet.create({
     minHeight: EXECUTION_CTA_HEIGHT,
     height: EXECUTION_CTA_HEIGHT,
     borderRadius: BORDER_RADIUS.md,
-    backgroundColor: COLORS.accentPrimary,
+    backgroundColor: themeColors.accentPrimary,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: EXECUTION_CTA_PADDING_H,
@@ -6128,7 +6017,7 @@ const styles = StyleSheet.create({
   },
   explorePrimaryButtonText: {
     ...executionCtaLabelStyle,
-    color: COLORS.backgroundCanvas,
+    color: themeColors.backgroundCanvas,
   },
   exploreDetailSheetContent: {
     paddingHorizontal: SPACING.xxl,
@@ -6142,22 +6031,22 @@ const styles = StyleSheet.create({
   },
   exploreDetailTitle: {
     ...TYPOGRAPHY.h3,
-    color: COLORS.text,
+    color: themeColors.text,
   },
   exploreDetailSheetSubtitle: {
     ...TYPOGRAPHY.meta,
-    color: COLORS.textMeta,
+    color: themeColors.textMeta,
   },
   exploreInlineSetNumber: {
     ...TYPOGRAPHY.meta,
     fontWeight: '600',
-    color: COLORS.text,
+    color: themeColors.text,
   },
   exploreSetUpcomingLabel: {
     ...TYPOGRAPHY.legal,
     fontSize: 10,
     fontWeight: '600',
-    color: COLORS.textMeta,
+    color: themeColors.textMeta,
     textTransform: 'uppercase',
   },
   exploreDetailSection: {
@@ -6165,7 +6054,7 @@ const styles = StyleSheet.create({
   },
   exploreDetailSectionTitle: {
     ...TYPOGRAPHY.legal,
-    color: COLORS.textMeta,
+    color: themeColors.textMeta,
     textTransform: 'uppercase',
   },
   /** Actions block: no extra gap so spacing above buttons is controlled by exploreActionsRow */
@@ -6175,7 +6064,7 @@ const styles = StyleSheet.create({
   /** Edge-to-edge within the padded drawer content */
   exploreDetailSheetDivider: {
     height: StyleSheet.hairlineWidth,
-    backgroundColor: COLORS.border,
+    backgroundColor: themeColors.border,
     marginHorizontal: -SPACING.xxl,
     alignSelf: 'stretch',
   },
@@ -6190,7 +6079,7 @@ const styles = StyleSheet.create({
     opacity: 0.88,
   },
   exploreSetRowActive: {
-    backgroundColor: COLORS.activeCard,
+    backgroundColor: themeColors.activeCard,
     borderColor: 'transparent',
   },
   exploreSetRowUpcoming: {
@@ -6223,20 +6112,20 @@ const styles = StyleSheet.create({
     ...TYPOGRAPHY.legal,
     fontSize: 10,
     fontWeight: '700',
-    color: COLORS.accentPrimary,
+    color: themeColors.accentPrimary,
     textTransform: 'uppercase',
     letterSpacing: 0.4,
   },
   exploreSetValueCompact: {
     ...TYPOGRAPHY.meta,
     fontSize: 14,
-    color: COLORS.text,
+    color: themeColors.text,
     textAlign: 'right',
     flex: 1,
     minWidth: 0,
   },
   exploreSetValueMuted: {
-    color: COLORS.textMeta,
+    color: themeColors.textMeta,
   },
   exploreSetDoneIcon: {
     flexShrink: 0,
@@ -6251,14 +6140,14 @@ const styles = StyleSheet.create({
     ...TYPOGRAPHY.body,
     fontSize: 20,
     fontVariant: ['tabular-nums'],
-    color: COLORS.text,
+    color: themeColors.text,
     padding: 0,
     minWidth: 48,
     flex: 1,
   },
   exploreSetEditUnit: {
     ...TYPOGRAPHY.legal,
-    color: COLORS.textMeta,
+    color: themeColors.textMeta,
     flexShrink: 0,
   },
   exploreSetEditorSheet: {
@@ -6269,11 +6158,11 @@ const styles = StyleSheet.create({
   },
   exploreSetEditorTitle: {
     ...TYPOGRAPHY.h3,
-    color: COLORS.text,
+    color: themeColors.text,
   },
   exploreSetEditorExerciseName: {
     ...TYPOGRAPHY.meta,
-    color: COLORS.textMeta,
+    color: themeColors.textMeta,
   },
   exploreSetEditorInputsColumn: {
     gap: SPACING.md,
@@ -6285,7 +6174,7 @@ const styles = StyleSheet.create({
     marginTop: SPACING.sm,
     alignSelf: 'center',
     flexShrink: 0,
-    backgroundColor: COLORS.accentPrimary,
+    backgroundColor: themeColors.accentPrimary,
     borderRadius: BORDER_RADIUS.md,
     height: EXECUTION_CTA_HEIGHT,
     minHeight: EXECUTION_CTA_HEIGHT,
@@ -6295,19 +6184,19 @@ const styles = StyleSheet.create({
   },
   exploreSetEditorSaveText: {
     ...executionCtaLabelStyle,
-    color: COLORS.backgroundCanvas,
+    color: themeColors.backgroundCanvas,
   },
   exploreSetEditorKeyboardAccessory: {
-    backgroundColor: COLORS.backgroundCanvas,
+    backgroundColor: themeColors.backgroundCanvas,
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderTopWidth: 1,
-    borderTopColor: COLORS.border,
+    borderTopColor: themeColors.border,
   },
   exploreSetEditorKeyboardDone: {
     alignSelf: 'center',
     flexShrink: 0,
-    backgroundColor: COLORS.accentPrimary,
+    backgroundColor: themeColors.accentPrimary,
     borderRadius: BORDER_RADIUS.md,
     height: EXECUTION_CTA_HEIGHT,
     minHeight: EXECUTION_CTA_HEIGHT,
@@ -6321,14 +6210,14 @@ const styles = StyleSheet.create({
   },
   exploreDetailEmptyText: {
     ...TYPOGRAPHY.meta,
-    color: COLORS.textMeta,
+    color: themeColors.textMeta,
   },
   exploreHistoryRow: {
     paddingVertical: SPACING.xs,
   },
   exploreHistoryText: {
     ...TYPOGRAPHY.meta,
-    color: COLORS.text,
+    color: themeColors.text,
   },
   exploreViewAllHistoryButton: {
     alignSelf: 'flex-start',
@@ -6336,7 +6225,7 @@ const styles = StyleSheet.create({
   },
   exploreViewAllHistoryText: {
     ...TYPOGRAPHY.meta,
-    color: COLORS.accentPrimary,
+    color: themeColors.accentPrimary,
   },
   exploreSetupRow: {
     flexDirection: 'row',
@@ -6354,11 +6243,11 @@ const styles = StyleSheet.create({
   },
   exploreSetupLabel: {
     ...TYPOGRAPHY.meta,
-    color: COLORS.text,
+    color: themeColors.text,
   },
   exploreSetupDesc: {
     ...TYPOGRAPHY.legal,
-    color: COLORS.textMeta,
+    color: themeColors.textMeta,
   },
   exploreProgressionPills: {
     flexDirection: 'row',
@@ -6395,11 +6284,11 @@ const styles = StyleSheet.create({
   },
   exploreActionText: {
     ...executionCtaLabelStyle,
-    color: COLORS.textMeta,
+    color: themeColors.textMeta,
   },
   exploreActionTextDanger: {
     ...executionCtaLabelStyle,
-    color: COLORS.signalNegative,
+    color: themeColors.signalNegative,
   },
   itemRow: {
     width: '100%',
@@ -6409,7 +6298,7 @@ const styles = StyleSheet.create({
   },
   supersetDivider: {
     height: 1,
-    backgroundColor: COLORS.borderDimmed,
+    backgroundColor: themeColors.borderDimmed,
     marginHorizontal: 16,
   },
   exerciseContentDimmed: {
@@ -6422,7 +6311,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   itemCardFill: {
-    backgroundColor: COLORS.activeCard,
+    backgroundColor: themeColors.activeCard,
     borderRadius: 9,
     borderCurve: 'continuous' as const,
     overflow: 'hidden',
@@ -6474,7 +6363,7 @@ const styles = StyleSheet.create({
   },
   setCountCollapsed: {
     ...TYPOGRAPHY.legal,
-    color: COLORS.textMeta,
+    color: themeColors.textMeta,
     flexShrink: 0,
   },
   itemCardExpanded: {
@@ -6501,10 +6390,10 @@ const styles = StyleSheet.create({
   },
   exerciseNameText: {
     ...TYPOGRAPHY.body,
-    color: COLORS.textMeta,
+    color: themeColors.textMeta,
   },
   exerciseNameTextActive: {
-    color: COLORS.text,
+    color: themeColors.text,
   },
   editIconContainer: {
     marginLeft: SPACING.md,
@@ -6533,7 +6422,7 @@ const styles = StyleSheet.create({
   },
   setCountInValues: {
     ...TYPOGRAPHY.legal,
-    color: COLORS.text,
+    color: themeColors.text,
     flexShrink: 0,
   },
   valuesDisplayRow: {
@@ -6564,7 +6453,7 @@ const styles = StyleSheet.create({
   },
   unit: {
     ...TYPOGRAPHY.body,
-    color: COLORS.textMeta,
+    color: themeColors.textMeta,
   },
   unitWithDelta: {
     position: 'relative',
@@ -6575,7 +6464,7 @@ const styles = StyleSheet.create({
     top: -12,
     left: 0,
     fontSize: 12,
-    color: COLORS.successBright,
+    color: themeColors.successBright,
     fontWeight: '700',
   },
   cardActionRow: {
@@ -6605,7 +6494,7 @@ const styles = StyleSheet.create({
   externalActionCard: {
     marginTop: 2,
     borderRadius: 10,
-    backgroundColor: COLORS.accentPrimaryDimmed,
+    backgroundColor: themeColors.accentPrimaryDimmed,
     overflow: 'hidden',
     height: EXECUTION_CTA_HEIGHT,
   },
@@ -6638,14 +6527,14 @@ const styles = StyleSheet.create({
   },
   cardStartButtonText: {
     ...executionCtaLabelStyle,
-    color: COLORS.accentPrimary,
+    color: themeColors.accentPrimary,
   },
   cardStartButtonTextDisabled: {
     opacity: 0.6,
   },
   setCountText: {
     ...TYPOGRAPHY.meta,
-    color: COLORS.accentPrimary,
+    color: themeColors.accentPrimary,
     textAlign: 'right',
   },
   setCountIndicatorRow: {
@@ -6654,7 +6543,7 @@ const styles = StyleSheet.create({
   },
   setCountNextLabel: {
     ...TYPOGRAPHY.meta,
-    color: COLORS.text,
+    color: themeColors.text,
     flexShrink: 0,
   },
   inlineRestControlsAbsolute: {
@@ -6671,13 +6560,13 @@ const styles = StyleSheet.create({
   },
   inlineRestTime: {
     ...TYPOGRAPHY.metaBold,
-    color: COLORS.text,
+    color: themeColors.text,
     paddingVertical: 4,
     width: 40,
     textAlign: 'left',
   },
   inlineRestTimeActive: {
-    color: COLORS.accentPrimary,
+    color: themeColors.accentPrimary,
   },
   inlineRestIconBtn: {
     width: 32,
@@ -6696,13 +6585,13 @@ const styles = StyleSheet.create({
     right: 0,
     paddingHorizontal: SPACING.lg,
     paddingTop: SPACING.md,
-    backgroundColor: COLORS.backgroundCanvas,
+    backgroundColor: themeColors.backgroundCanvas,
   },
   startButton: {
     width: '100%',
   },
   startButtonInner: {
-    backgroundColor: COLORS.accentPrimary,
+    backgroundColor: themeColors.accentPrimary,
     height: EXECUTION_CTA_HEIGHT,
     minHeight: EXECUTION_CTA_HEIGHT,
     paddingHorizontal: EXECUTION_CTA_PADDING_H,
@@ -6712,7 +6601,7 @@ const styles = StyleSheet.create({
   },
   startButtonText: {
     ...executionCtaLabelStyle,
-    color: COLORS.backgroundCanvas,
+    color: themeColors.backgroundCanvas,
   },
   adjustmentDrawerContent: {
     paddingHorizontal: SPACING.xxl,
@@ -6720,12 +6609,12 @@ const styles = StyleSheet.create({
   },
   adjustmentDrawerTitle: {
     ...TYPOGRAPHY.h3,
-    color: COLORS.text,
+    color: themeColors.text,
     flex: 1,
   },
   drawerValuesCard: {
     ...CARDS.cardDeep.outer,
-    backgroundColor: COLORS.activeCard,
+    backgroundColor: themeColors.activeCard,
     paddingVertical: 8,
     paddingHorizontal: 24,
   },
@@ -6746,24 +6635,24 @@ const styles = StyleSheet.create({
   },
   drawerInput: {
     ...TYPOGRAPHY.h1,
-    color: COLORS.text,
+    color: themeColors.text,
     padding: 0,
     minWidth: 30,
   },
   drawerInputUnit: {
     ...TYPOGRAPHY.body,
-    color: COLORS.textMeta,
+    color: themeColors.textMeta,
   },
   drawerKeyboardSaveContainer: {
     paddingVertical: 12,
     borderTopWidth: 1,
-    borderTopColor: COLORS.border,
+    borderTopColor: themeColors.border,
     alignItems: 'center',
   },
   drawerKeyboardSaveButton: {
     alignSelf: 'center',
     flexShrink: 0,
-    backgroundColor: COLORS.accentPrimaryDimmed,
+    backgroundColor: themeColors.accentPrimaryDimmed,
     borderRadius: 16,
     height: EXECUTION_CTA_HEIGHT,
     minHeight: EXECUTION_CTA_HEIGHT,
@@ -6773,7 +6662,7 @@ const styles = StyleSheet.create({
   },
   drawerKeyboardSaveText: {
     ...executionCtaLabelStyle,
-    color: COLORS.accentPrimary,
+    color: themeColors.accentPrimary,
   },
   drawerTitleRow: {
     flexDirection: 'row',
@@ -6786,7 +6675,7 @@ const styles = StyleSheet.create({
   },
   setCard: {
     ...CARDS.cardDeep.outer,
-    backgroundColor: COLORS.backgroundContainer,
+    backgroundColor: themeColors.backgroundContainer,
     overflow: 'hidden',
   },
   inProgressBadge: {
@@ -6827,11 +6716,11 @@ const styles = StyleSheet.create({
   },
   setHeaderTitle: {
     ...TYPOGRAPHY.bodyBold,
-    color: COLORS.text,
+    color: themeColors.text,
   },
   setHeaderPreview: {
     ...TYPOGRAPHY.meta,
-    color: COLORS.textMeta,
+    color: themeColors.textMeta,
   },
   completedBadge: {
     position: 'absolute',
@@ -6850,11 +6739,11 @@ const styles = StyleSheet.create({
   },
   setPreviewValueText: {
     ...TYPOGRAPHY.body,
-    color: COLORS.text,
+    color: themeColors.text,
   },
   setPreviewUnit: {
     ...TYPOGRAPHY.meta,
-    color: COLORS.textMeta,
+    color: themeColors.textMeta,
   },
   setControls: {
     paddingTop: 0,
@@ -6872,15 +6761,15 @@ const styles = StyleSheet.create({
   },
   weightPerSideText: {
     ...TYPOGRAPHY.meta,
-    color: COLORS.textMeta,
+    color: themeColors.textMeta,
   },
   drawerAdjustValueText: {
     ...TYPOGRAPHY.h1,
-    color: COLORS.text,
+    color: themeColors.text,
   },
   drawerAdjustUnit: {
     ...TYPOGRAPHY.body,
-    color: COLORS.textMeta,
+    color: themeColors.textMeta,
   },
   drawerAdjustButtons: {
     flexDirection: 'row',
@@ -6891,11 +6780,11 @@ const styles = StyleSheet.create({
   },
   adjustButton: {
     ...CARDS.cardDeep.outer,
-    backgroundColor: COLORS.accentPrimaryDimmed,
+    backgroundColor: themeColors.accentPrimaryDimmed,
   },
   adjustButtonInner: {
     ...CARDS.cardDeep.inner,
-    backgroundColor: COLORS.accentPrimaryDimmed,
+    backgroundColor: themeColors.accentPrimaryDimmed,
     width: 48,
     height: 48,
     alignItems: 'center',
@@ -6903,7 +6792,7 @@ const styles = StyleSheet.create({
   },
   drawerAdjustDivider: {
     height: 1,
-    backgroundColor: COLORS.disabledBorder,
+    backgroundColor: themeColors.disabledBorder,
     marginVertical: 16,
   },
   viewHistoryButton: {
@@ -6916,11 +6805,11 @@ const styles = StyleSheet.create({
   },
   viewHistoryButtonText: {
     ...TYPOGRAPHY.metaBold,
-    color: COLORS.text,
+    color: themeColors.text,
   },
   historyFullBleedDivider: {
     height: 1,
-    backgroundColor: COLORS.disabledBorder,
+    backgroundColor: themeColors.disabledBorder,
     marginHorizontal: -SPACING.xxl,
     marginTop: 40,
   },
@@ -6937,7 +6826,7 @@ const styles = StyleSheet.create({
   },
   historyLabel: {
     ...TYPOGRAPHY.meta,
-    color: COLORS.textMeta,
+    color: themeColors.textMeta,
   },
   viewAllButton: {
     flexDirection: 'row',
@@ -6947,16 +6836,16 @@ const styles = StyleSheet.create({
   },
   viewAllText: {
     ...TYPOGRAPHY.meta,
-    color: COLORS.accentPrimary,
+    color: themeColors.accentPrimary,
   },
   historyEmptyText: {
     ...TYPOGRAPHY.meta,
-    color: COLORS.text,
+    color: themeColors.text,
     paddingTop: 4,
   },
   historyDateLine: {
     ...TYPOGRAPHY.meta,
-    color: COLORS.text,
+    color: themeColors.text,
     marginTop: 4,
   },
   historySetsColumn: {
@@ -6977,15 +6866,15 @@ const styles = StyleSheet.create({
   },
   historySetText: {
     ...TYPOGRAPHY.body,
-    color: COLORS.text,
+    color: themeColors.text,
   },
   historySetUnit: {
     ...TYPOGRAPHY.meta,
-    color: COLORS.textMeta,
+    color: themeColors.textMeta,
   },
   historyDivider: {
     height: 1,
-    backgroundColor: COLORS.disabledBorder,
+    backgroundColor: themeColors.disabledBorder,
     marginVertical: SPACING.md,
   },
   drawerActionButtons: {
@@ -7012,7 +6901,7 @@ const styles = StyleSheet.create({
   },
   exerciseSettingsMenuSectionTitle: {
     ...TYPOGRAPHY.legal,
-    color: COLORS.textMeta,
+    color: themeColors.textMeta,
     textTransform: 'uppercase',
     marginBottom: SPACING.sm,
   },
@@ -7027,11 +6916,11 @@ const styles = StyleSheet.create({
   },
   exerciseSettingsMenuLabel: {
     ...TYPOGRAPHY.body,
-    color: COLORS.text,
+    color: themeColors.text,
   },
   exerciseSettingsMenuLabelDesc: {
     ...TYPOGRAPHY.meta,
-    color: COLORS.textMeta,
+    color: themeColors.textMeta,
   },
   exerciseSettingsMenuActionsRow: {
     flexDirection: 'row',
@@ -7044,7 +6933,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: SPACING.sm,
-    backgroundColor: COLORS.backgroundContainer,
+    backgroundColor: themeColors.backgroundContainer,
     borderRadius: BORDER_RADIUS.lg,
     paddingVertical: SPACING.lg,
     paddingHorizontal: SPACING.md,
@@ -7059,27 +6948,27 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.md,
     paddingVertical: SPACING.sm,
     borderRadius: BORDER_RADIUS.full,
-    backgroundColor: COLORS.backgroundContainer,
+    backgroundColor: themeColors.backgroundContainer,
   },
   progressionGroupPillSelected: {
-    backgroundColor: COLORS.accentPrimary,
+    backgroundColor: themeColors.accentPrimary,
   },
   progressionGroupPillText: {
     ...TYPOGRAPHY.meta,
-    color: COLORS.textMeta,
+    color: themeColors.textMeta,
   },
   progressionGroupPillTextSelected: {
-    color: COLORS.backgroundCanvas,
+    color: themeColors.backgroundCanvas,
     fontWeight: '600',
   },
   exerciseSettingsMenuActionLabel: {
     ...TYPOGRAPHY.body,
-    color: COLORS.text,
+    color: themeColors.text,
     fontWeight: '600',
   },
   exerciseOptionCardLabel: {
     ...TYPOGRAPHY.meta,
-    color: COLORS.text,
+    color: themeColors.text,
     textAlign: 'center',
   },
   exerciseOptionRow: {
@@ -7090,15 +6979,15 @@ const styles = StyleSheet.create({
   },
   exerciseOptionLabel: {
     ...TYPOGRAPHY.body,
-    color: COLORS.text,
+    color: themeColors.text,
   },
   barbellToggleLabel: {
     ...TYPOGRAPHY.body,
-    color: COLORS.text,
+    color: themeColors.text,
   },
   modalContainer: {
     flex: 1,
-    backgroundColor: COLORS.backgroundCanvas,
+    backgroundColor: themeColors.backgroundCanvas,
   },
   modalHeader: {
     flexDirection: 'row',
@@ -7107,11 +6996,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.lg,
     paddingVertical: SPACING.md,
     borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
+    borderBottomColor: themeColors.border,
   },
   modalTitle: {
     ...TYPOGRAPHY.h3,
-    color: COLORS.text,
+    color: themeColors.text,
   },
   modalContent: {
     flex: 1,
@@ -7120,14 +7009,14 @@ const styles = StyleSheet.create({
   exerciseOption: {
     paddingVertical: SPACING.md,
     borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
+    borderBottomColor: themeColors.border,
   },
   exerciseOptionLast: {
     borderBottomWidth: 0,
   },
   exerciseOptionText: {
     ...TYPOGRAPHY.body,
-    color: COLORS.text,
+    color: themeColors.text,
   },
   swapOverlay: {
     flex: 1,
@@ -7141,7 +7030,7 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   swapAutocompleteContainer: {
-    backgroundColor: COLORS.backgroundContainer,
+    backgroundColor: themeColors.backgroundContainer,
     paddingHorizontal: 24,
     paddingTop: 24,
     paddingBottom: SPACING.sm,
@@ -7153,33 +7042,33 @@ const styles = StyleSheet.create({
   swapInputRow: {
     paddingHorizontal: SPACING.xl,
     paddingTop: SPACING.md,
-    backgroundColor: COLORS.backgroundContainer,
+    backgroundColor: themeColors.backgroundContainer,
   },
   swapSearchInput: {
     ...TYPOGRAPHY.body,
-    color: COLORS.text,
-    backgroundColor: COLORS.cardBackground,
+    color: themeColors.text,
+    backgroundColor: themeColors.cardBackground,
     borderRadius: BORDER_RADIUS.md,
     paddingHorizontal: SPACING.md,
     paddingVertical: SPACING.sm + 2,
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: themeColors.border,
   },
   swapSearchInputLarge: {
     ...TYPOGRAPHY.body,
     fontSize: 18,
-    color: COLORS.text,
-    backgroundColor: COLORS.cardBackground,
+    color: themeColors.text,
+    backgroundColor: themeColors.cardBackground,
     borderRadius: BORDER_RADIUS.lg,
     paddingHorizontal: SPACING.lg,
     paddingVertical: SPACING.lg + 4,
     minHeight: 56,
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: themeColors.border,
   },
   swapNoResults: {
     ...TYPOGRAPHY.body,
-    color: COLORS.textSecondary,
+    color: themeColors.textSecondary,
     textAlign: 'center',
     paddingVertical: SPACING.xl,
   },
@@ -7192,7 +7081,7 @@ const styles = StyleSheet.create({
   },
   swapAddNewText: {
     ...TYPOGRAPHY.body,
-    color: COLORS.accentPrimary,
+    color: themeColors.accentPrimary,
     fontWeight: '600',
   },
   // Warm-up and Core Cards (when shown on main exercise screen)
@@ -7215,22 +7104,22 @@ const styles = StyleSheet.create({
   },
   halfWidthCardTitle: {
     ...TYPOGRAPHY.body,
-    color: COLORS.text,
+    color: themeColors.text,
     marginBottom: 4,
   },
   halfWidthCardSubtitle: {
     ...TYPOGRAPHY.meta,
-    color: COLORS.textMeta,
+    color: themeColors.textMeta,
   },
   halfWidthCardAction: {
     ...TYPOGRAPHY.metaBold,
-    color: COLORS.accentPrimary,
+    color: themeColors.accentPrimary,
   },
   halfWidthCardCompleteIcon: {
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: COLORS.success,
+    backgroundColor: themeColors.success,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -7241,7 +7130,7 @@ const styles = StyleSheet.create({
   },
   halfWidthProgressText: {
     ...TYPOGRAPHY.meta,
-    color: COLORS.textMeta,
+    color: themeColors.textMeta,
   },
   progressCircle: {
     // SVG styling handled inline
@@ -7261,11 +7150,11 @@ const styles = StyleSheet.create({
   },
   halfWidthAddText: {
     ...TYPOGRAPHY.meta,
-    color: COLORS.text,
+    color: themeColors.text,
   },
   sectionLabel: {
     ...TYPOGRAPHY.meta,
-    color: COLORS.text,
+    color: themeColors.text,
     textTransform: 'uppercase',
     marginTop: SPACING.xs,
     marginBottom: SPACING.md,
@@ -7293,7 +7182,7 @@ const styles = StyleSheet.create({
   },
   addExerciseButtonText: {
     ...TYPOGRAPHY.meta,
-    color: COLORS.text,
+    color: themeColors.text,
   },
   // Completed workout - history view
   historyViewContainer: {
@@ -7307,13 +7196,13 @@ const styles = StyleSheet.create({
   },
   historyViewTitle: {
     ...TYPOGRAPHY.bodyBold,
-    color: COLORS.successBright,
+    color: themeColors.successBright,
   },
   historyExerciseRow: {
     flexDirection: 'row',
     paddingVertical: SPACING.md,
     borderBottomWidth: 1,
-    borderBottomColor: COLORS.borderDimmed,
+    borderBottomColor: themeColors.borderDimmed,
     alignItems: 'flex-start',
   },
   historyExerciseNameColumn: {
@@ -7322,7 +7211,7 @@ const styles = StyleSheet.create({
   },
   historyExerciseName: {
     ...TYPOGRAPHY.body,
-    color: COLORS.text,
+    color: themeColors.text,
   },
   historyExerciseDataColumn: {
     minWidth: 120,
@@ -7343,7 +7232,7 @@ const styles = StyleSheet.create({
   },
   historySetValue: {
     ...TYPOGRAPHY.body,
-    color: COLORS.text,
+    color: themeColors.text,
     fontVariant: ['tabular-nums'],
   },
 });

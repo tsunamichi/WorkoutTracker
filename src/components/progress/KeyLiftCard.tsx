@@ -1,11 +1,13 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
-import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS } from '../../constants';
+import { SPACING, TYPOGRAPHY, BORDER_RADIUS } from '../../constants';
 import { DeltaBadge } from '../common/DeltaBadge';
 import { Sparkline } from '../common/Sparkline';
 import { IconPR } from '../icons';
 import { formatWeight } from '../../utils/weight';
 import type { KeyLift } from '../../hooks/useProgressMetrics';
+import { useAppTheme } from '../../theme/useAppTheme';
+import { getAppThemeFromStore } from '../../theme/getAppThemeFromStore';
 
 interface KeyLiftCardProps {
   lift: KeyLift;
@@ -27,7 +29,7 @@ export function KeyLiftCard({ lift, useKg, onPress, testID }: KeyLiftCardProps) 
           <Text style={styles.name} numberOfLines={1}>{lift.exerciseName}</Text>
           {lift.isPR && (
             <View style={styles.prBadge}>
-              <IconPR size={12} color={COLORS.accentPrimary} />
+              <IconPR size={12} color={themeColors.accentPrimary} />
               <Text style={styles.prText}>PR</Text>
             </View>
           )}
@@ -37,7 +39,7 @@ export function KeyLiftCard({ lift, useKg, onPress, testID }: KeyLiftCardProps) 
             data={lift.sparklineData}
             width={64}
             height={24}
-            color={COLORS.accentPrimary}
+            color={themeColors.accentPrimary}
             strokeWidth={1.5}
           />
         )}
@@ -52,11 +54,12 @@ export function KeyLiftCard({ lift, useKg, onPress, testID }: KeyLiftCardProps) 
   );
 }
 
+const themeColors = getAppThemeFromStore().colors;
 const styles = StyleSheet.create({
   container: {
     paddingVertical: SPACING.md,
     borderBottomWidth: 1,
-    borderBottomColor: COLORS.borderDimmed,
+    borderBottomColor: themeColors.borderDimmed,
   },
   topRow: {
     flexDirection: 'row',
@@ -73,21 +76,21 @@ const styles = StyleSheet.create({
   },
   name: {
     ...TYPOGRAPHY.body,
-    color: COLORS.text,
+    color: themeColors.text,
     flexShrink: 1,
   },
   prBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 3,
-    backgroundColor: COLORS.accentPrimaryDimmed,
+    backgroundColor: themeColors.accentPrimaryDimmed,
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 6,
   },
   prText: {
     ...TYPOGRAPHY.note,
-    color: COLORS.accentPrimary,
+    color: themeColors.accentPrimary,
     fontWeight: '600',
   },
   bottomRow: {
@@ -97,6 +100,6 @@ const styles = StyleSheet.create({
   },
   stat: {
     ...TYPOGRAPHY.meta,
-    color: COLORS.textMeta,
+    color: themeColors.textMeta,
   },
 });
