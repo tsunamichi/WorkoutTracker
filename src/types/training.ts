@@ -25,7 +25,7 @@ export type WarmupItem_DEPRECATED = {
   exerciseName: string;
   sets: number;
   reps: number; // if isTimeBased, this is seconds; otherwise it's reps
-  weight: number; // in lbs (internal storage)
+  weight: number; // in lb (internal storage)
   isTimeBased: boolean;
   isPerSide?: boolean; // if true, timer runs for one side, then 10s countdown, then repeats for other side
   cycleId?: string; // optional ID to group warmup items in a cycle/circuit
@@ -39,7 +39,7 @@ export type ExerciseInstanceSet = {
   id: string;
   reps?: number;        // required when mode === "reps"
   durationSec?: number; // required when mode === "time"
-  weight?: number;      // optional, in lbs (stored)
+  weight?: number;      // optional, in lb (stored)
 };
 
 export type ExerciseInstance = {

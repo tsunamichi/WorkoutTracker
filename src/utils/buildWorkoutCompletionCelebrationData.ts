@@ -7,7 +7,7 @@ type StoreState = ReturnType<typeof useStore.getState>;
 
 /**
  * Total training volume (weight × reps) for the workout from persisted detailed progress.
- * Weights are stored in lbs internally.
+ * Weights are stored in lb internally.
  */
 export function computeWorkoutVolumeFromDetailedProgress(
   state: StoreState,

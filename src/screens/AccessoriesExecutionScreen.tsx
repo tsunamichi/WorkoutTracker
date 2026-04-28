@@ -476,7 +476,7 @@ export function AccessoriesExecutionScreen() {
                 const isLast =
                   group === accessoryGroups[accessoryGroups.length - 1] &&
                   exIdx === group.exercises.length - 1;
-                const repsUnit = exercise.mode === 'time' ? 'secs' : 'reps';
+                const repsUnit = exercise.mode === 'time' ? 'sec' : 'reps';
 
                 return (
                   <View
@@ -552,7 +552,7 @@ export function AccessoriesExecutionScreen() {
                         const isActive = isExpanded && exIndex === activeExerciseIndex;
                         const setId = `${exercise.id}-set-${currentRound}`;
                         const isExerciseCompleted = completedSets.has(setId);
-                        const repsUnit = exercise.mode === 'time' ? 'secs' : 'reps';
+                        const repsUnit = exercise.mode === 'time' ? 'sec' : 'reps';
 
                         return (
                           <React.Fragment key={exercise.id}>
@@ -699,7 +699,7 @@ export function AccessoriesExecutionScreen() {
                 const defaultReps = activeExercise.mode === 'time' ? (firstSet?.durationSec ?? 0) : (firstSet?.reps ?? 0);
                 const displayWeight = localValues[activeExercise.id]?.weight ?? defaultWeight;
                 const displayReps = localValues[activeExercise.id]?.reps ?? defaultReps;
-                const repsUnit = activeExercise.mode === 'time' ? 'secs' : 'reps';
+                const repsUnit = activeExercise.mode === 'time' ? 'sec' : 'reps';
                 
                 return (
                   <View style={styles.drawerInputRow}>

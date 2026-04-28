@@ -76,14 +76,20 @@ function getOrdinalSuffix(day: number): string {
   }
 }
 
-function formatLatestLogInline(
+function consolidateSetsForDisplay(
   sets: Array<{ setNumber: number; weight: number; reps: number }>,
-  useKg: boolean,
-  weightUnit: string,
-) {
-  return sets
-    .map(set => `${set.reps} x ${formatWeightForLoad(set.weight, useKg)}${weightUnit}`)
-    .join(', ');
+): Array<{ setNumber: number; weight: number; reps: number }> {
+  const unique = new Map<string, { setNumber: number; weight: number; reps: number }>();
+  sets.forEach(set => {
+    const weight = Number(set.weight) || 0;
+    const reps = Number(set.reps) || 0;
+    if (weight <= 0) return;
+    const key = `${weight}|${reps}`;
+    if (!unique.has(key)) {
+      unique.set(key, { ...set, weight, reps });
+    }
+  });
+  return Array.from(unique.values());
 }
 
 function HistoryMiniChart({
@@ -257,6 +263,7 @@ export function ExploreV2CurrentOverflowPanel({
 }: PanelProps) {
   const { t } = useTranslation();
   const { colors: themeColors, explore } = useAppTheme();
+  const historyUnitInk = themeColors.accentSecondaryDisabled;
   const accentSecondary20 = useMemo(() => hexToRgba(themeColors.accentSecondary, 0.2), [themeColors.accentSecondary]);
   const [scrollContentHeight, setScrollContentHeight] = useState(0);
 
@@ -331,12 +338,23 @@ export function ExploreV2CurrentOverflowPanel({
     if (latestPriorWorkout) return latestPriorWorkout;
     return historyForDisplay.length > 0 ? historyForDisplay[historyForDisplay.length - 1] : null;
   }, [latestPriorWorkout, historyForDisplay]);
-  const historyTrendValues = useMemo(() => {
+  const latestPriorConsolidatedSets = useMemo(
+    () => (latestPriorWorkout ? consolidateSetsForDisplay(latestPriorWorkout.sets) : []),
+    [latestPriorWorkout],
+  );
+  const latestWorkoutConsolidatedSets = useMemo(
+    () => (latestWorkoutForDisplay ? consolidateSetsForDisplay(latestWorkoutForDisplay.sets) : []),
+    [latestWorkoutForDisplay],
+  );
+  const historyTrendPoints = useMemo(() => {
     const points = historyForDisplay.flatMap(entry =>
-      entry.sets.map(set => Number(set.weight) || 0).filter(v => v > 0),
+      consolidateSetsForDisplay(entry.sets).map(set => ({ date: entry.date, set })),
     );
     return points.slice(-7);
   }, [historyForDisplay]);
+  const historyTrendValues = useMemo(() => {
+    return historyTrendPoints.map(point => Number(point.set.weight) || 0).filter(v => v > 0);
+  }, [historyTrendPoints]);
   const [heldHistoryIndex, setHeldHistoryIndex] = useState<number | null>(null);
   const [isHistoryChartInteracting, setIsHistoryChartInteracting] = useState(false);
 
@@ -447,7 +465,6 @@ export function ExploreV2CurrentOverflowPanel({
             <View style={styles.pad}>
               {!latestPriorWorkout ? (
                 <View style={styles.historyLeadRow}>
-                  <Text style={styles.historyLeadLabel}>Last log</Text>
                   <Text style={[styles.historyDateMuted, { color: themeColors.accentSecondary }]}>
                     {t('noHistoryRecordedYet')}
                   </Text>
@@ -456,33 +473,30 @@ export function ExploreV2CurrentOverflowPanel({
                 <View style={styles.historyBlock}>
                   <View style={styles.historyDataRow}>
                     <View style={styles.historyLeftColumn}>
-                      <Text style={styles.historyLeadLabel}>Last log</Text>
                       <Text style={[styles.historyDateMuted, { color: themeColors.accentSecondary }]}>
                         {dayjs(latestPriorWorkout.date).format('MMMM D')}
                         {getOrdinalSuffix(dayjs(latestPriorWorkout.date).date())}
                       </Text>
                     </View>
                     <View style={styles.historySetsColumn}>
-                      {latestPriorWorkout.sets.map((set, setIndex) => (
+                      {latestPriorConsolidatedSets.map((set, setIndex) => (
                         <View key={setIndex} style={styles.historySetRow}>
-                          <View style={styles.historyValueColumn}>
-                            <Text style={[styles.historySetText, { color: themeColors.text }]}>
-                              {formatWeightForLoad(set.weight, useKg)}
+                          <Text style={[styles.historySetText, { color: themeColors.text }]}>
+                            {formatWeightForLoad(set.weight, useKg)}
+                            <Text style={[styles.historySetText, { color: historyUnitInk }]}> {weightUnit}</Text>
+                            {' '}
+                            {set.reps}
+                            <Text style={[styles.historySetText, { color: historyUnitInk }]}>
+                              {' '}
+                              {timeBased ? 'sec' : 'reps'}
                             </Text>
-                            <Text style={[styles.historySetUnit, { color: themeColors.accentSecondary }]}>{weightUnit}</Text>
-                          </View>
-                          <View style={styles.historyValueColumn}>
-                            <Text style={[styles.historySetText, { color: themeColors.text }]}>{set.reps}</Text>
-                            <Text style={[styles.historySetUnit, { color: themeColors.accentSecondary }]}>
-                              {timeBased ? 'secs' : 'reps'}
-                            </Text>
-                          </View>
+                          </Text>
                         </View>
                       ))}
                     </View>
                   </View>
                   <HistoryMiniChart
-                    values={latestPriorWorkout.sets.map(set => Number(set.weight) || 0)}
+                    values={latestPriorConsolidatedSets.map(set => Number(set.weight) || 0)}
                     color={themeColors.text}
                   />
                 </View>
@@ -607,20 +621,24 @@ export function ExploreV2CurrentOverflowPanel({
       selectedProgressionGroup && typeof (selectedProgressionGroup as any).weightIncrement === 'number'
         ? `↑ ${(selectedProgressionGroup as any).weightIncrement} ${weightUnit}`
         : null;
-    const latestInline = latestWorkoutForDisplay
-      ? formatLatestLogInline(latestWorkoutForDisplay.sets, useKg, weightUnit)
-      : null;
-    const latestDisplayWeight = latestWorkoutForDisplay
-      ? latestWorkoutForDisplay.sets.reduce((max, set) => Math.max(max, Number(set.weight) || 0), 0)
-      : 0;
     const liveHistoryIndex =
       heldHistoryIndex == null
-        ? Math.max(0, historyTrendValues.length - 1)
-        : Math.max(0, Math.min(historyTrendValues.length - 1, heldHistoryIndex));
-    const liveHistoryWeight =
-      historyTrendValues.length > 0
-        ? historyTrendValues[liveHistoryIndex]
-        : latestDisplayWeight;
+        ? Math.max(0, historyTrendPoints.length - 1)
+        : Math.max(0, Math.min(historyTrendPoints.length - 1, heldHistoryIndex));
+    const liveHistoryPoint =
+      historyTrendPoints.length > 0 ? historyTrendPoints[liveHistoryIndex] : null;
+    const fallbackSet =
+      latestWorkoutConsolidatedSets.length > 0
+        ? latestWorkoutConsolidatedSets[latestWorkoutConsolidatedSets.length - 1]
+        : null;
+    const liveHistorySet = liveHistoryPoint?.set ?? fallbackSet;
+    const liveHistoryDateIso = liveHistoryPoint?.date ?? latestWorkoutForDisplay?.date ?? null;
+    const liveHistoryDateLabel = liveHistoryDateIso
+      ? `${dayjs(liveHistoryDateIso).format('MMMM D')}${getOrdinalSuffix(dayjs(liveHistoryDateIso).date())}`
+      : null;
+    const liveHistoryWeightLabel = liveHistorySet
+      ? formatWeightForLoad(liveHistorySet.weight, useKg)
+      : null;
 
     return (
       <View style={[styles.embeddedPanel, { height: containerHeight }]} pointerEvents={interactive ? 'auto' : 'none'}>
@@ -635,22 +653,33 @@ export function ExploreV2CurrentOverflowPanel({
           <View style={[styles.embeddedSection, { borderTopColor: accentSecondary20 }]}>
             <View style={styles.embeddedRow}>
               <Text style={styles.embeddedLabel}>History</Text>
-              <View style={styles.embeddedRightColumn}>
-                <Text style={[styles.embeddedHistoryTitle, { color: themeColors.accentSecondary }]}>
-                  Latest log
-                </Text>
-                <Text style={[styles.embeddedHistoryValue, { color: settingsValueInk }]}>
-                  {latestInline || 'No history recorded yet'}
-                </Text>
-              </View>
             </View>
-            {latestDisplayWeight > 0 ? (
+            {liveHistorySet ? (
               <View style={styles.embeddedHistoryHeroRow}>
-                <Text style={[styles.embeddedHistoryHeroValue, { color: settingsValueInk }]}>
-                  {formatWeightForLoad(liveHistoryWeight, useKg)}
-                </Text>
-                <Text style={[styles.embeddedHistoryHeroUnit, { color: settingsValueInk }]}>{weightUnit}</Text>
+                <View style={styles.embeddedHistoryMetricGroup}>
+                  <Text style={[styles.embeddedHistoryHeroValue, { color: settingsValueInk }]}>
+                    {liveHistoryWeightLabel}
+                  </Text>
+                  <Text style={[styles.embeddedHistoryHeroValue, { color: historyUnitInk }]}>
+                    {weightUnit}
+                  </Text>
+                </View>
+                <View style={styles.embeddedHistoryMetricGroup}>
+                  <Text style={[styles.embeddedHistoryHeroValue, { color: settingsValueInk }]}>
+                    {liveHistorySet?.reps}
+                  </Text>
+                  <Text style={[styles.embeddedHistoryHeroValue, { color: historyUnitInk }]}>
+                    {timeBased ? 'sec' : 'reps'}
+                  </Text>
+                </View>
               </View>
+            ) : (
+              <Text style={[styles.embeddedHistoryValue, { color: settingsValueInk }]}>{t('noHistoryRecordedYet')}</Text>
+            )}
+            {liveHistoryDateLabel ? (
+              <Text style={[styles.embeddedHistoryDate, { color: settingsValueInk }]}>
+                {liveHistoryDateLabel}
+              </Text>
             ) : null}
             {historyTrendValues.length > 0 ? (
               <HistoryMiniChart
@@ -818,7 +847,6 @@ export function ExploreV2CurrentOverflowPanel({
       <View style={styles.pad}>
               {!latestPriorWorkout ? (
                 <View style={styles.historyLeadRow}>
-                  <Text style={styles.historyLeadLabel}>Last log</Text>
                   <Text style={[styles.historyDateMuted, { color: themeColors.accentSecondary }]}>
                     {t('noHistoryRecordedYet')}
                   </Text>
@@ -827,33 +855,30 @@ export function ExploreV2CurrentOverflowPanel({
                 <View style={styles.historyBlock}>
                   <View style={styles.historyDataRow}>
                     <View style={styles.historyLeftColumn}>
-                      <Text style={styles.historyLeadLabel}>Last log</Text>
                       <Text style={[styles.historyDateMuted, { color: themeColors.accentSecondary }]}>
                         {dayjs(latestPriorWorkout.date).format('MMMM D')}
                         {getOrdinalSuffix(dayjs(latestPriorWorkout.date).date())}
                       </Text>
                     </View>
                     <View style={styles.historySetsColumn}>
-                      {latestPriorWorkout.sets.map((set, setIndex) => (
+                      {latestPriorConsolidatedSets.map((set, setIndex) => (
                         <View key={setIndex} style={styles.historySetRow}>
-                          <View style={styles.historyValueColumn}>
-                            <Text style={[styles.historySetText, { color: themeColors.text }]}>
-                              {formatWeightForLoad(set.weight, useKg)}
+                          <Text style={[styles.historySetText, { color: themeColors.text }]}>
+                            {formatWeightForLoad(set.weight, useKg)}
+                            <Text style={[styles.historySetText, { color: historyUnitInk }]}> {weightUnit}</Text>
+                            {' '}
+                            {set.reps}
+                            <Text style={[styles.historySetText, { color: historyUnitInk }]}>
+                              {' '}
+                              {timeBased ? 'sec' : 'reps'}
                             </Text>
-                            <Text style={[styles.historySetUnit, { color: themeColors.accentSecondary }]}>{weightUnit}</Text>
-                          </View>
-                          <View style={styles.historyValueColumn}>
-                            <Text style={[styles.historySetText, { color: themeColors.text }]}>{set.reps}</Text>
-                            <Text style={[styles.historySetUnit, { color: themeColors.accentSecondary }]}>
-                              {timeBased ? 'secs' : 'reps'}
-                            </Text>
-                          </View>
+                          </Text>
                         </View>
                       ))}
                     </View>
                   </View>
                   <HistoryMiniChart
-                    values={latestPriorWorkout.sets.map(set => Number(set.weight) || 0)}
+                    values={latestPriorConsolidatedSets.map(set => Number(set.weight) || 0)}
                     color={themeColors.text}
                   />
         </View>
@@ -1038,12 +1063,21 @@ const styles = StyleSheet.create({
     marginTop: 22,
     flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: 6,
+    gap: 14,
+  },
+  embeddedHistoryMetricGroup: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 2,
   },
   embeddedHistoryHeroValue: {
     ...TYPOGRAPHY.metricDisplay,
     lineHeight: TYPOGRAPHY.metricDisplay.lineHeight,
     includeFontPadding: false,
+  },
+  embeddedHistoryDate: {
+    ...TYPOGRAPHY.meta,
+    marginTop: 4,
   },
   embeddedHistoryHeroUnit: {
     ...TYPOGRAPHY.h1,

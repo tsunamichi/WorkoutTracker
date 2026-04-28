@@ -484,7 +484,7 @@ export const useStore = create<WorkoutStore>((set, get) => ({
         storage.loadProgressionDefaults(),
       ]);
       
-      // Normalize body weight entries to lbs
+      // Normalize body weight entries to lb
       let finalBodyWeightEntries = bodyWeightEntries;
       const needsWeightUnitMigration = bodyWeightEntries.some(entry => entry.unit === 'kg');
       if (needsWeightUnitMigration) {
@@ -2242,7 +2242,7 @@ export const useStore = create<WorkoutStore>((set, get) => ({
       set({ exercisePRs: updatedPRs });
       await storage.saveExercisePRs(updatedPRs);
       
-      console.log(`🎉 NEW PR! ${exerciseName}: ${weight}lbs x ${reps} reps`);
+      console.log(`🎉 NEW PR! ${exerciseName}: ${weight}lb x ${reps} reps`);
     }
   },
   

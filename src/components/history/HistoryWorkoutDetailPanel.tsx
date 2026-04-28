@@ -30,7 +30,7 @@ type RowAnim = { opacity: Animated.Value; translateY: Animated.Value };
 export function HistoryWorkoutDetailPanel({ entry, selectedDateLabel }: HistoryWorkoutDetailPanelProps) {
   const { colors: themeColors } = useAppTheme();
   const useKg = useStore(s => s.settings?.useKg ?? false);
-  const weightUnitLabel = useKg ? 'kg' : 'lbs';
+  const weightUnitLabel = useKg ? 'kg' : 'lb';
   const titleInk = themeColors.containerPrimary;
   const unitInk = themeColors.textMeta;
   const exerciseRowDividerColor = textMetaForHistoryWorkoutDetailExerciseDivider(themeColors.textMeta);

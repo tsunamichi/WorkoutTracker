@@ -622,15 +622,14 @@ export function TodayScreen({ onDateChange, onOpenAddWorkout, onOpenBonusDrawer 
 
       // Manual schedules (e.g. blank workout from home) are source 'manual' and were omitted above.
       const queuedIds = new Set(queue.map(sw => sw.id));
-      const manualPlanned = scheduledWorkouts
+      const manualOpen = scheduledWorkouts
         .filter(sw => sw.source === 'manual')
-        // Include in_progress so sessions stay on the deck after opening execution (before any sets are logged).
+        // Keep all incomplete manual workouts on deck (even from prior dates) until completed/removed.
         .filter(sw => (sw.status === 'planned' || sw.status === 'in_progress') && isNotFinished(sw))
-        .filter(sw => !dayjs(sw.date).isBefore(selectedDate, 'day'))
         .filter(sw => !queuedIds.has(sw.id))
         .sort((a, b) => a.date.localeCompare(b.date) || a.id.localeCompare(b.id));
 
-      const merged = [...queue, ...manualPlanned];
+      const merged = [...queue, ...manualOpen];
       if (__DEV__) {
         console.log('[ScheduleDeck] cycle-backed queue', {
           planId: cyclePlanForDeck.id,
@@ -642,31 +641,23 @@ export function TodayScreen({ onDateChange, onOpenAddWorkout, onOpenBonusDrawer 
       return merged;
     }
 
-    const onSelectedDate = scheduledWorkouts.filter(sw => workoutDisplayDate(sw) === selectedDate);
-    // Any in-progress session on this day (not only after first logged set — opening execution marks in_progress immediately).
-    const inProgressOnSelectedDay = onSelectedDate.filter(
-      sw => sw.status === 'in_progress' && isNotFinished(sw),
-    );
-
-    const upcomingPlanned = scheduledWorkouts
-      .filter(sw => !dayjs(sw.date).isBefore(selectedDate, 'day'))
-      .filter(sw => sw.status === 'planned' && isNotFinished(sw))
+    const allOpen = scheduledWorkouts
+      .filter(sw => (sw.status === 'planned' || sw.status === 'in_progress') && isNotFinished(sw))
       .sort((a, b) => a.date.localeCompare(b.date) || a.id.localeCompare(b.id));
 
-    if (inProgressOnSelectedDay.length > 0) {
-      const inProgressSorted = [...inProgressOnSelectedDay].sort((a, b) => a.id.localeCompare(b.id));
-      const inProgressIds = new Set(inProgressSorted.map(sw => sw.id));
-      return [...inProgressSorted, ...upcomingPlanned.filter(sw => !inProgressIds.has(sw.id))];
-    }
+    const selectedDayPriority = allOpen.filter(sw => workoutDisplayDate(sw) === selectedDate);
+    const selectedIds = new Set(selectedDayPriority.map(sw => sw.id));
+    const remaining = allOpen.filter(sw => !selectedIds.has(sw.id));
+    const merged = [...selectedDayPriority, ...remaining];
 
     if (__DEV__) {
       console.log('[ScheduleDeck] fallback queue', {
         selectedDate,
-        size: upcomingPlanned.length,
-        ids: upcomingPlanned.map(sw => sw.id),
+        size: merged.length,
+        ids: merged.map(sw => sw.id),
       });
     }
-    return upcomingPlanned;
+    return merged;
   }, [
     scheduledWorkouts,
     selectedDate,
@@ -1129,9 +1120,13 @@ export function TodayScreen({ onDateChange, onOpenAddWorkout, onOpenBonusDrawer 
       return;
     }
 
-    setDeckTailSwId(focus.scheduledWorkoutId);
-    const reorderedLen = raw.length;
-    const carouselIndex = (completedTodayDeckItem ? 1 : 0) + (reorderedLen - 1);
+    /**
+     * Scroll to the workout’s natural index in `remainingWorkoutsQueue`.
+     * Do **not** move it to the deck tail: `setDeckTailSwId` spliced the focused row to the end,
+     * which reversed order when several workouts were added in one batch (e.g. first pick A, second B → [B, A]).
+     */
+    setDeckTailSwId(null);
+    const carouselIndex = (completedTodayDeckItem ? 1 : 0) + pos;
     setImperativeDeckScroll({ index: carouselIndex, token: Date.now() });
     setScheduleDeckFocusAfterCreate(null);
   }, [

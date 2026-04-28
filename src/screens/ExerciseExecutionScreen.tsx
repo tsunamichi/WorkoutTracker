@@ -386,7 +386,7 @@ export function ExerciseExecutionScreen() {
     return plan ? !plan.active : false;
   }, [scheduledWorkouts, cyclePlans, workoutKey]);
   const useKg = settings.useKg;
-  const weightUnit = useKg ? 'kg' : 'lbs';
+  const weightUnit = useKg ? 'kg' : 'lb';
   const weightStep = useKg ? 0.5 : 5;
   
   // Refresh template when screen comes back into focus (not on initial mount)
@@ -3864,7 +3864,7 @@ export function ExerciseExecutionScreen() {
                   Number(focusExercise.reps) ?? 0,
                 );
                 const showWeight = displayVals.weight > 0;
-                const repsUnit = focusExercise.isTimeBased ? 'secs' : 'reps';
+                const repsUnit = focusExercise.isTimeBased ? 'sec' : 'reps';
                 const groupHasStarted = group.exercises.some(ex => completedSets.has(`${ex.id}-set-0`));
                 const ctaLabel = !groupHasStarted
                   ? 'Log first set'
@@ -3993,7 +3993,7 @@ export function ExerciseExecutionScreen() {
                             focusExercise.weight ?? 0,
                             focusExercise.reps ?? 0,
                           );
-                          const setRepsUnit = focusExercise.isTimeBased ? 'secs' : 'reps';
+                          const setRepsUnit = focusExercise.isTimeBased ? 'sec' : 'reps';
                           const rowShellStyle = [
                             styles.exploreSetRow,
                             isSetCompleted && styles.exploreSetRowCompleted,
@@ -4114,7 +4114,7 @@ export function ExerciseExecutionScreen() {
                             <View style={styles.historySetValueGroup}>
                               <Text style={styles.historySetValue}>{displayReps}</Text>
                               <Text style={styles.historySetUnit}>
-                                {entry.exercise.isTimeBased ? 'secs' : 'reps'}
+                                {entry.exercise.isTimeBased ? 'sec' : 'reps'}
                               </Text>
                             </View>
                           </View>
@@ -4235,7 +4235,7 @@ export function ExerciseExecutionScreen() {
                             <View style={styles.historySetValueGroup}>
                               <Text style={styles.historySetValue}>{displayReps}</Text>
                               <Text style={styles.historySetUnit}>
-                                {exercise.isTimeBased ? 'secs' : 'reps'}
+                                {exercise.isTimeBased ? 'sec' : 'reps'}
                               </Text>
                             </View>
                           </View>
@@ -4289,7 +4289,7 @@ export function ExerciseExecutionScreen() {
                         const shouldBeOpen = isActive;
                         const displayActive = isActive;
                         const isExerciseCompleted = completedSets.has(setId);
-                        const repsUnit = exercise.isTimeBased ? 'secs' : 'reps';
+                        const repsUnit = exercise.isTimeBased ? 'sec' : 'reps';
 
                         return (
                           <React.Fragment key={exercise.id}>
@@ -4939,7 +4939,7 @@ export function ExerciseExecutionScreen() {
                     onSubmitEditing={closeExploreSetEditor}
                   />
                   <Text style={styles.exploreSetEditUnit}>
-                    {exploreExecutionEditTarget.exercise.isTimeBased ? 'secs' : 'reps'}
+                    {exploreExecutionEditTarget.exercise.isTimeBased ? 'sec' : 'reps'}
                   </Text>
                 </View>
               </View>
@@ -5003,7 +5003,7 @@ export function ExerciseExecutionScreen() {
                 const currentGroup = exerciseGroups[drawerGrpIdx];
                 const activeExercise = currentGroup.exercises[drawerExIdx];
                 const isBarbellMode = getBarbellMode(activeExercise.id);
-                const repsUnit = activeExercise.isTimeBased ? 'secs' : 'reps';
+                const repsUnit = activeExercise.isTimeBased ? 'sec' : 'reps';
                 const setId = `${activeExercise.id}-set-${setIndex}`;
                 const isCompleted = completedSets.has(setId);
                 const isExpanded = expandedSetInDrawer === setIndex;
@@ -5213,7 +5213,7 @@ export function ExerciseExecutionScreen() {
                                 </View>
                                 <View style={styles.historyValueColumn}>
                                   <Text style={styles.historySetText}>{set.reps}</Text>
-                                  <Text style={styles.historySetUnit}>{activeExercise.isTimeBased ? 'secs' : 'reps'}</Text>
+                                  <Text style={styles.historySetUnit}>{activeExercise.isTimeBased ? 'sec' : 'reps'}</Text>
                                 </View>
                               </View>
                             ))}

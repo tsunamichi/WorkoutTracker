@@ -519,7 +519,7 @@ export function ProgressScreen() {
               <View style={styles.chartCardTop}>
                 <View style={styles.valueRow}>
                   <Text style={[styles.currentValueCard, { color: progressInk }]}>{latest > 0 ? `${latest}` : '--'}</Text>
-                  <Text style={[styles.currentValueUnit, { color: progressInk }]}>lbs</Text>
+                  <Text style={[styles.currentValueUnit, { color: progressInk }]}>lb</Text>
                 </View>
                 <Text style={[styles.insightCardText, { color: progressInk }]}>{metadataText}</Text>
               </View>

@@ -144,7 +144,7 @@ const parseExerciseLine = (lineRaw: string, inheritedUnit: "lb" | "kg" | null): 
   }
 
   // time like 3x45s or 3x45 sec
-  const mTime = details.match(/\b(\d+)\s*x\s*(\d+)\s*(s|sec|secs|second|seconds)\b/i);
+  const mTime = details.match(/\b(\d+)\s*x\s*(\d+)\s*(s|sec|second|seconds)\b/i);
   if (mTime) {
     sets = parseInt(mTime[1], 10);
     seconds = parseInt(mTime[2], 10);

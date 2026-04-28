@@ -57,16 +57,16 @@ const parseWarmupLine = (lineRaw: string): ParsedWarmup | null => {
     return { name, reps, seconds, weight, isTimeBased: false, raw: lineRaw };
   }
   
-  // Pattern 2: "Exercise x Number sec/secs/second/seconds"
-  const timeMatchX = body.match(/^(.*?)\s+x\s+(\d+)\s*(s|sec|secs|second|seconds)$/i);
+  // Pattern 2: "Exercise x Number sec/second/seconds"
+  const timeMatchX = body.match(/^(.*?)\s+x\s+(\d+)\s*(s|sec|second|seconds)$/i);
   if (timeMatchX) {
     name = timeMatchX[1].trim();
     seconds = parseInt(timeMatchX[2], 10);
     return { name, reps, seconds, weight, isTimeBased: true, raw: lineRaw };
   }
   
-  // Pattern 3: "Exercise Number sec/secs/second/seconds" (no 'x')
-  const timeMatch = body.match(/^(.*?)\s+(\d+)\s*(s|sec|secs|second|seconds)$/i);
+  // Pattern 3: "Exercise Number sec/second/seconds" (no 'x')
+  const timeMatch = body.match(/^(.*?)\s+(\d+)\s*(s|sec|second|seconds)$/i);
   if (timeMatch) {
     name = timeMatch[1].trim();
     seconds = parseInt(timeMatch[2], 10);

@@ -630,6 +630,10 @@ type TranslationKey =
   | 'untitledWorkout'
   | 'useRecentWorkoutPickerTitle'
   | 'useRecentWorkoutPickerSubtitle'
+  | 'recentWorkoutPickerAddWorkoutsDisabled'
+  | 'recentWorkoutPickerAddOneWorkout'
+  | 'recentWorkoutPickerAddManyWorkouts'
+  | 'recentWorkoutPickerCouldNotAdd'
   | 'noWorkoutHistoryYet'
   | 'lastPerformedPrefix'
   | 'exerciseCountLabel'
@@ -1308,7 +1312,11 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     untitledWorkout: 'Untitled',
     useRecentWorkoutPickerTitle: 'Use recent workout',
     useRecentWorkoutPickerSubtitle:
-      'Choose a workout structure from your history. Past sessions stay unchanged.',
+      'Select one or more workout structures from your history. Past sessions stay unchanged.',
+    recentWorkoutPickerAddWorkoutsDisabled: 'Add workouts',
+    recentWorkoutPickerAddOneWorkout: 'Add 1 workout',
+    recentWorkoutPickerAddManyWorkouts: 'Add {count} workouts',
+    recentWorkoutPickerCouldNotAdd: 'Could not add all workouts. Please try again.',
     noWorkoutHistoryYet: 'No completed workouts in history yet.',
     lastPerformedPrefix: 'Last performed',
     exerciseCountLabel: '{count} exercises',
@@ -1989,7 +1997,11 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     untitledWorkout: 'Sin título',
     useRecentWorkoutPickerTitle: 'Usar entrenamiento reciente',
     useRecentWorkoutPickerSubtitle:
-      'Elige una estructura de tu historial. Las sesiones pasadas no cambian.',
+      'Selecciona una o más estructuras de tu historial. Las sesiones pasadas no cambian.',
+    recentWorkoutPickerAddWorkoutsDisabled: 'Añadir entrenamientos',
+    recentWorkoutPickerAddOneWorkout: 'Añadir 1 entrenamiento',
+    recentWorkoutPickerAddManyWorkouts: 'Añadir {count} entrenamientos',
+    recentWorkoutPickerCouldNotAdd: 'No se pudieron añadir todos los entrenamientos. Inténtalo de nuevo.',
     noWorkoutHistoryYet: 'Aún no hay entrenamientos completados en el historial.',
     lastPerformedPrefix: 'Última vez',
     exerciseCountLabel: '{count} ejercicios',
