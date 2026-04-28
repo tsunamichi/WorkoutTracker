@@ -23,7 +23,7 @@ import Reanimated, {
 import dayjs from 'dayjs';
 import * as Haptics from 'expo-haptics';
 import { SPACING, TYPOGRAPHY, BORDER_RADIUS } from '../constants';
-import { IconCheck } from '../components/icons';
+import { IconCheckmark } from '../components/icons';
 import { useAppTheme } from '../theme/useAppTheme';
 import { BackTextButton } from '../components/common/BackTextButton';
 import { useTranslation } from '../i18n/useTranslation';
@@ -358,13 +358,18 @@ export function RecentWorkoutPickerScreen() {
                         style={[
                           styles.checkbox,
                           {
-                            borderColor: checked ? themeColors.accentPrimary : themeColors.border,
-                            backgroundColor: checked ? themeColors.accentPrimary : 'transparent',
+                            borderColor: themeColors.border,
+                            backgroundColor: checked ? themeColors.containerPrimary : 'transparent',
                           },
                         ]}
                       >
                         {checked ? (
-                          <IconCheck size={14} color={themeColors.backgroundCanvas ?? themeColors.canvasLight} />
+                          <IconCheckmark
+                            size={24}
+                            color={themeColors.containerSecondary}
+                            showContainer={false}
+                            animateDraw
+                          />
                         ) : null}
                       </View>
                     </View>
@@ -384,7 +389,7 @@ export function RecentWorkoutPickerScreen() {
               style={[
                 styles.ctaButton,
                 canConfirm
-                  ? { backgroundColor: themeColors.accentPrimary }
+                  ? { backgroundColor: themeColors.containerPrimary }
                   : { backgroundColor: themeColors.canvasLight, borderWidth: 1, borderColor: themeColors.border },
               ]}
               onPress={() => void handleConfirmAdd()}
@@ -400,7 +405,7 @@ export function RecentWorkoutPickerScreen() {
                 <Text
                   style={[
                     styles.ctaButtonText,
-                    { color: canConfirm ? themeColors.backgroundCanvas : themeColors.textMeta },
+                    { color: canConfirm ? themeColors.containerSecondary : themeColors.textMeta },
                   ]}
                 >
                   {addButtonLabel}
@@ -464,7 +469,8 @@ const styles = StyleSheet.create({
     width: 24,
     height: 24,
     borderRadius: 6,
-    borderWidth: 2,
+    borderWidth: 1,
+    marginRight: 6,
     alignItems: 'center',
     justifyContent: 'center',
   },
