@@ -396,12 +396,19 @@ export function WorkoutBuilderScreen() {
     const items: WorkoutTemplate['items'] = [];
     for (let i = 0; i < w.lines.length; i++) {
       const line = w.lines[i]!;
+      const seed = line.templateSeed;
       items.push({
         id: `tex-${templateId}-${i}`,
         exerciseId: line.exerciseId!,
         order: i,
-        sets: 1,
-        reps: '',
+        sets: typeof seed?.sets === 'number' && seed.sets > 0 ? seed.sets : 1,
+        reps: seed?.reps ?? '',
+        weight: seed?.weight,
+        isTimeBased: seed?.isTimeBased,
+        isPerSide: seed?.isPerSide,
+        restSeconds: seed?.restSeconds,
+        cycleId: seed?.cycleId,
+        cycleOrder: seed?.cycleOrder,
       });
     }
 

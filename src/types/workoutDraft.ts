@@ -20,6 +20,20 @@ export type WorkoutDraftLine = {
   resolutionStatus?: 'needs_pick';
   /** When ambiguous import — short list for quick pick */
   matchCandidateIds?: string[];
+  /**
+   * Optional main-template seed copied from a scheduled workout snapshot.
+   * Keeps set/rep/load structure when reusing recent workouts.
+   */
+  templateSeed?: {
+    sets?: number;
+    reps?: string | number;
+    weight?: number;
+    isTimeBased?: boolean;
+    isPerSide?: boolean;
+    restSeconds?: number;
+    cycleId?: string;
+    cycleOrder?: number;
+  };
 };
 
 export type WorkoutDraft = {

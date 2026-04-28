@@ -32,6 +32,16 @@ export function hydrateWorkoutDraftFromSnapshot(
       name: displayName ?? `Exercise ${i + 1}`,
       exerciseId,
       resolutionStatus,
+      templateSeed: {
+        sets: ex.sets,
+        reps: ex.reps,
+        weight: ex.weight,
+        isTimeBased: ex.isTimeBased,
+        isPerSide: ex.isPerSide,
+        restSeconds: ex.restSeconds,
+        cycleId: ex.cycleId,
+        cycleOrder: ex.cycleOrder,
+      },
     };
   });
 
