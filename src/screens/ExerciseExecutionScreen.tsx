@@ -73,7 +73,6 @@ import { isDeprecatedItem, getDisplayValuesFromItem } from '../utils/exerciseMig
 import { computeNextSuggestion } from '../utils/progressionSuggestions';
 import dayjs from 'dayjs';
 import { getAppThemeFromStore } from '../theme/getAppThemeFromStore';
-import { buildCustomExerciseDefinition } from '../utils/exerciseIdentity';
 import { ExerciseSearchPickModal } from '../components/workoutBuilder/ExerciseSearchPickModal';
 import {
   SCHEDULE_DECK_EXECUTION_INCOMING_SCALE_START,
@@ -275,7 +274,7 @@ export function ExerciseExecutionScreen() {
     completeWorkout,
     uncompleteWorkout,
     updateExercisePR,
-    addExercise,
+    ensureUserExercise,
     scheduledWorkouts,
     cyclePlans,
     updateBonusLog,
@@ -601,7 +600,7 @@ export function ExerciseExecutionScreen() {
     items.forEach(item => {
       const libraryId = (item as any).exerciseId || item.id;
       if (!libraryId) return;
-      const rule = getEffectiveProgressionRule(libraryId);
+      const rule = getEffectiveProgressionRule(libraryId, (item as WorkoutTemplateExercise).progressionType);
       if (!rule) return;
       const lastLog = getLastCompletedLogForExercise(libraryId);
       const setCount = typeof item.sets === 'number' ? item.sets : (Array.isArray(item.sets) ? item.sets.length : undefined);
@@ -5333,14 +5332,8 @@ export function ExerciseExecutionScreen() {
                             style={styles.swapAddNewRow}
                             onPress={async () => {
                               const newName = swapSearchQuery.trim();
-                              const newId = newName.toLowerCase().replace(/\s+/g, '-') + '-' + Date.now();
-                              const newExercise = {
-                                id: newId,
-                                name: newName,
-                                category: 'Other' as any,
-                                isCustom: true,
-                              };
-                              await addExercise(newExercise);
+                              const created = await ensureUserExercise(newName);
+                              const newId = created.id;
                               if (currentExercise) {
                                 if (type === 'warmup' && template?.warmupItems) {
                                   const updatedItems = template.warmupItems.map(item =>
@@ -5591,8 +5584,7 @@ export function ExerciseExecutionScreen() {
         onClose={closeAddExercisePicker}
         onSelectExercise={ex => handleAddExercise(ex.id, ex.name)}
         onCreateCustom={async name => {
-          const def = buildCustomExerciseDefinition(name, Date.now());
-          await addExercise(def);
+          const def = await ensureUserExercise(name);
           await handleAddExercise(def.id, def.name);
         }}
       />

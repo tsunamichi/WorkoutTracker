@@ -42,7 +42,6 @@ import { BackTextButton } from '../components/common/BackTextButton';
 import { TertiaryButton } from '../components/common/UnderlinedActionButton';
 import { newDraftId } from '../utils/workoutBuilderPaste';
 import { findActiveTemplateByName } from '../utils/workoutNameCollision';
-import { buildCustomExerciseDefinition } from '../utils/exerciseIdentity';
 import { ExerciseSearchPickModal } from '../components/workoutBuilder/ExerciseSearchPickModal';
 import type { RootStackParamList } from '../navigation/AppNavigator';
 import { getAppThemeFromStore } from '../theme/getAppThemeFromStore';
@@ -79,7 +78,7 @@ export function WorkoutBuilderScreen() {
   const params = route.params as WorkoutBuilderRouteParams | undefined;
   const insets = useSafeAreaInsets();
   const { width: windowWidth } = useWindowDimensions();
-  const { addWorkoutTemplate, updateWorkoutTemplate, scheduleWorkout, addExercise, workoutTemplates } = useStore();
+  const { addWorkoutTemplate, updateWorkoutTemplate, scheduleWorkout, ensureUserExercise, workoutTemplates } = useStore();
   const exercises = useStore(s => s.exercises);
   const { t } = useTranslation();
   const { colors: themeColors } = useAppTheme();
@@ -738,8 +737,7 @@ export function WorkoutBuilderScreen() {
             applyExerciseToTargetLine(ex, resolvingLineId);
           }}
           onCreateCustom={async name => {
-            const def = buildCustomExerciseDefinition(name, Date.now());
-            await addExercise(def);
+            const def = await ensureUserExercise(name);
             applyExerciseToTargetLine(def, resolvingLineId);
           }}
         />

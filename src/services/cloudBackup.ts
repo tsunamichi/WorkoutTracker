@@ -16,6 +16,31 @@ class CloudBackupService {
   private lastBackupTime: number = 0;
 
   /**
+   * Restore iCloud backup when local storage is empty (new device / reinstall).
+   * Must run before the store loads AsyncStorage so migration runs on restored data.
+   */
+  async restoreIfLocalStorageEmpty(): Promise<{ restored: boolean; restoredKeys?: number }> {
+    if (Platform.OS !== 'ios' || !iCloudDirectory) {
+      return { restored: false };
+    }
+
+    try {
+      const allKeys = await AsyncStorage.getAllKeys();
+      const hasLocalData = allKeys.length > 5;
+      if (hasLocalData) return { restored: false };
+
+      const hasCloudBackup = await this.hasCloudBackup();
+      if (!hasCloudBackup) return { restored: false };
+
+      const result = await this.restoreFromCloud();
+      return { restored: result.success, restoredKeys: result.restoredKeys };
+    } catch (error) {
+      console.error('Error checking iCloud restore before load:', error);
+      return { restored: false };
+    }
+  }
+
+  /**
    * Initialize cloud backup service
    * - Checks for existing backups
    * - Starts automatic backup timer
@@ -29,18 +54,10 @@ class CloudBackupService {
         return;
       }
 
-      // Check if we have a cloud backup
       const hasCloudBackup = await this.hasCloudBackup();
       console.log('Cloud backup exists:', hasCloudBackup);
 
-      // Check if local storage is empty or has minimal data
-      const allKeys = await AsyncStorage.getAllKeys();
-      const hasLocalData = allKeys.length > 5; // More than just settings
-
-      if (hasCloudBackup && !hasLocalData) {
-        console.log('📥 Local data is empty but cloud backup exists. Restoring...');
-        await this.restoreFromCloud();
-      }
+      // Restore before load is handled in store.initialize(); skip duplicate restore here.
 
       // Start automatic backup timer
       this.startAutomaticBackup();

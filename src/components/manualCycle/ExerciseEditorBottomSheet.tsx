@@ -18,6 +18,7 @@ import { Toggle } from '../Toggle';
 import { formatWeightForLoad, toDisplayWeight, fromDisplayWeight } from '../../utils/weight';
 import { useTranslation } from '../../i18n/useTranslation';
 import { useAppTheme } from '../../theme/useAppTheme';
+import { resolveExerciseByIdOrName } from '../../utils/personalExerciseCatalog';
 import { getAppThemeFromStore } from '../../theme/getAppThemeFromStore';
 
 interface ExerciseEditorBottomSheetProps {
@@ -33,7 +34,7 @@ export const ExerciseEditorBottomSheet = ({
   visible,
   onClose,
 }: ExerciseEditorBottomSheetProps) => {
-  const { exercises: exerciseLibrary, settings } = useStore();
+  const { exercises: personalExerciseCatalog, settings } = useStore();
   const { weeks, workouts, updateExerciseWeekPlan, updateExerciseBlock } =
     useCreateCycleDraftStore();
   const { t } = useTranslation();
@@ -46,7 +47,11 @@ export const ExerciseEditorBottomSheet = ({
     );
   }, [exerciseBlock, weekday, workouts]);
 
-  const exerciseData = exerciseLibrary.find((e) => e.id === liveExerciseBlock.exerciseId);
+  const exerciseData = resolveExerciseByIdOrName(
+    personalExerciseCatalog,
+    liveExerciseBlock.exerciseId,
+    liveExerciseBlock.nameSnapshot,
+  );
 
   const [selectedWeekIndex, setSelectedWeekIndex] = useState(0);
   const [tabsWidth, setTabsWidth] = useState(0);
@@ -400,7 +405,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: themeColors.backgroundCanvas,
-    borderRadius: BORDER_RADIUS.full,
+    borderRadius: BORDER_RADIUS.round,
     borderCurve: 'continuous',
     padding: 0,
     gap: 4,
@@ -473,7 +478,6 @@ const styles = StyleSheet.create({
     height: 48,
     borderRadius: BORDER_RADIUS.md,
     borderCurve: 'continuous',
-    overflow: 'visible',
     overflow: 'visible',
     alignItems: 'center',
     justifyContent: 'center',

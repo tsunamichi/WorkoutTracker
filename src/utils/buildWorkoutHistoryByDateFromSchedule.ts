@@ -65,7 +65,7 @@ function scheduledWorkoutToHistoryEntry(
 
   const exercisesOut: WorkoutHistoryExercise[] = snapshot.map(tex => {
     const exMeta = exercises.find(e => e.id === tex.exerciseId);
-    const name = exMeta?.name ?? 'Exercise';
+    const name = tex.nameSnapshot?.trim() || exMeta?.name || 'Exercise';
     const ep = exerciseProgressForTemplateExercise(wp, tex);
     const sets: WorkoutHistorySet[] = [];
     if (ep?.sets?.length) {

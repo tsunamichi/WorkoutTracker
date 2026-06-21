@@ -21,13 +21,16 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useStore } from '../store';
 import { BottomDrawer } from '../components/common/BottomDrawer';
 import { SPACING, TYPOGRAPHY, BORDER_RADIUS, CARDS } from '../constants';
-import { IconArrowLeft, IconGripVertical, IconTrash, IconSwap, IconAdd, IconEdit, IconChevronDown, IconMinusLine, IconAddLine } from '../components/icons';
+import { IconArrowLeft, IconGripVertical, IconTrash, IconSwap, IconAdd, IconEdit, IconMinusLine, IconAddLine } from '../components/icons';
 import { generateId } from '../utils/manualCycleUtils';
 import { Toggle } from '../components/Toggle';
 import { formatWeightForLoad, fromDisplayWeight } from '../utils/weight';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/AppNavigator';
 import type { WorkoutTemplateExercise } from '../types';
+import { ExerciseSearchPickModal } from '../components/workoutBuilder/ExerciseSearchPickModal';
+import { resolveExerciseByIdOrName } from '../utils/personalExerciseCatalog';
+import type { Exercise } from '../types';
 import { useTranslation } from '../i18n/useTranslation';
 import { useAppTheme } from '../theme/useAppTheme';
 import { getAppThemeFromStore } from '../theme/getAppThemeFromStore';
@@ -49,7 +52,7 @@ const LIGHT_COLORS = {
 export default function WorkoutEditScreen({ navigation, route }: Props) {
   const insets = useSafeAreaInsets();
   const { cycleId, workoutTemplateId, date } = route.params;
-  const { cycles, exercises, updateCycle, updateExercise, settings, getWorkoutTemplate, updateWorkoutTemplate } = useStore();
+  const { cycles, exercises, updateCycle, updateExercise, settings, getWorkoutTemplate, updateWorkoutTemplate, ensureUserExercise } = useStore();
   const { t } = useTranslation();
   const useKg = settings.useKg;
   const weightUnit = useKg ? 'kg' : 'lb';
@@ -67,18 +70,23 @@ export default function WorkoutEditScreen({ navigation, route }: Props) {
       // Convert WorkoutTemplate to old workout format for backward compatibility
       workout = {
         id: template.id,
+        cycleId: cycleId ?? '',
         name: template.name,
+        workoutType: 'Other',
+        orderIndex: 0,
         exercises: template.items.map(item => ({
-          id: item.exerciseId,
+          id: item.id,
           exerciseId: item.exerciseId,
+          nameSnapshot: item.nameSnapshot,
           orderIndex: item.order,
           targetSets: item.sets,
-          targetRepsMin: item.reps,
-          targetRepsMax: item.reps,
+          targetRepsMin: typeof item.reps === 'number' ? item.reps : parseInt(String(item.reps), 10) || 8,
+          targetRepsMax: typeof item.reps === 'number' ? item.reps : parseInt(String(item.reps), 10) || 8,
           targetWeight: item.weight,
+          restSeconds: item.restSeconds,
           progressionType: 'double' as const,
-          repRangeMin: item.reps,
-          repRangeMax: item.reps,
+          repRangeMin: typeof item.reps === 'number' ? item.reps : parseInt(String(item.reps), 10) || 8,
+          repRangeMax: typeof item.reps === 'number' ? item.reps : parseInt(String(item.reps), 10) || 8,
         })),
       };
     }
@@ -93,15 +101,27 @@ export default function WorkoutEditScreen({ navigation, route }: Props) {
   }
   
   const [workoutName, setWorkoutName] = useState(workout.name);
-  const [workoutExercises, setWorkoutExercises] = useState<WorkoutTemplateExercise[]>([...workout.exercises]);
+  const normalizeWorkoutExerciseLines = (lines: WorkoutTemplateExercise[]): WorkoutTemplateExercise[] =>
+    lines.map(line => {
+      const resolved = resolveExerciseByIdOrName(exercises, line.exerciseId, line.nameSnapshot);
+      if (!resolved) return line;
+      return {
+        ...line,
+        exerciseId: resolved.id,
+        nameSnapshot: resolved.name,
+      };
+    });
+
+  const [workoutExercises, setWorkoutExercises] = useState<WorkoutTemplateExercise[]>(() =>
+    normalizeWorkoutExerciseLines([...workout.exercises]),
+  );
   const [hasChanges, setHasChanges] = useState(false);
   const [isEditingName, setIsEditingName] = useState(false);
   const [selectedExerciseId, setSelectedExerciseId] = useState<string | null>(null);
   const [showApplyModal, setShowApplyModal] = useState(false);
+  const [showExercisePicker, setShowExercisePicker] = useState(false);
   const [showSwapDrawer, setShowSwapDrawer] = useState(false);
   const [swappingExerciseId, setSwappingExerciseId] = useState<string | null>(null);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [showSearch, setShowSearch] = useState(false);
   const [selectedNewExerciseId, setSelectedNewExerciseId] = useState<string | null>(null);
   const [swapWeight, setSwapWeight] = useState('');
   const [swapReps, setSwapReps] = useState('');
@@ -116,7 +136,6 @@ export default function WorkoutEditScreen({ navigation, route }: Props) {
   const dragOffsetY = useRef(new Animated.Value(0)).current;
   const draggingIndexRef = useRef<number | null>(null);
   const dropTargetIndexRef = useRef<number | null>(null);
-  const searchInputRef = useRef<TextInput>(null);
   const panRespondersRef = useRef<Record<string, PanResponderInstance>>({});
   const indexByIdRef = useRef<Record<string, number>>({});
   
@@ -138,31 +157,7 @@ export default function WorkoutEditScreen({ navigation, route }: Props) {
     }
   });
 
-  // Filtered exercises for swap drawer
-  const filteredExercises = React.useMemo(() => {
-    if (!searchQuery.trim()) {
-      return exercises;
-    }
-    const query = searchQuery.toLowerCase();
-    return exercises.filter((exercise) =>
-      exercise.name.toLowerCase().includes(query)
-    );
-  }, [exercises, searchQuery]);
-
-  const groupedExercises = React.useMemo(() => {
-    const groups: Record<string, typeof filteredExercises> = {};
-    filteredExercises.forEach(exercise => {
-      const muscle = exercise.category || 'Other';
-      if (!groups[muscle]) {
-        groups[muscle] = [];
-      }
-      groups[muscle].push(exercise);
-    });
-    return Object.entries(groups).sort(([a], [b]) => a.localeCompare(b));
-  }, [filteredExercises]);
-
-  const [expandedMuscles, setExpandedMuscles] = useState<Record<string, boolean>>({});
-  
+  // Filtered exercises for swap drawer — removed; personal catalog search uses ExerciseSearchPickModal.
   // Check for changes
   useEffect(() => {
     const nameChanged = workoutName !== workout.name;
@@ -256,7 +251,9 @@ export default function WorkoutEditScreen({ navigation, route }: Props) {
         await updateWorkoutTemplate(workoutTemplateId, {
           name: workoutName,
           items: workoutExercises.map((ex, idx) => ({
+            id: ex.id,
             exerciseId: ex.exerciseId,
+            nameSnapshot: ex.nameSnapshot ?? exercises.find(e => e.id === ex.exerciseId)?.name,
             order: idx,
             sets: ex.targetSets || 3,
             reps: ex.targetRepsMin || 8,
@@ -276,6 +273,7 @@ export default function WorkoutEditScreen({ navigation, route }: Props) {
                   exercises: workoutExercises.map((ex, idx) => ({
                     ...ex,
                     orderIndex: idx,
+                    nameSnapshot: ex.nameSnapshot ?? exercises.find(e => e.id === ex.exerciseId)?.name,
                   })),
                 }
               : template
@@ -296,6 +294,7 @@ export default function WorkoutEditScreen({ navigation, route }: Props) {
                   exercises: workoutExercises.map((ex, idx) => ({
                     ...ex,
                     orderIndex: idx,
+                    nameSnapshot: ex.nameSnapshot ?? exercises.find(e => e.id === ex.exerciseId)?.name,
                   })),
                 }
               : template
@@ -345,15 +344,23 @@ export default function WorkoutEditScreen({ navigation, route }: Props) {
       );
       setSwapReps(exercise.targetRepsMin?.toString() || '');
       setSwapSets(exercise.targetSets?.toString() || '');
-      const exerciseData = exercises.find(e => e.id === exercise.exerciseId);
-      const muscle = exerciseData?.category || 'Other';
-      setExpandedMuscles({ [muscle]: true });
       setSwapStep('list');
-      setShowSwapDrawer(true);
+      setShowExercisePicker(true);
     }
   };
 
+  const handlePickerSelect = (ex: Exercise) => {
+    setSelectedNewExerciseId(ex.id);
+    setIsTimeBasedSwap(ex.measurementType === 'time');
+    setShowExercisePicker(false);
+    setShowSwapDrawer(true);
+    setSwapStep('settings');
+  };
+
   const handleConfirmSwap = () => {
+    const picked = exercises.find(e => e.id === selectedNewExerciseId);
+    const nameSnapshot = picked?.name;
+
     if (selectedNewExerciseId && !swappingExerciseId) {
       const reps = swapReps ? parseInt(swapReps, 10) : 8;
       const sets = swapSets ? parseInt(swapSets, 10) : 3;
@@ -363,6 +370,7 @@ export default function WorkoutEditScreen({ navigation, route }: Props) {
       const newExercise: WorkoutTemplateExercise = {
         id: generateId(),
         exerciseId: selectedNewExerciseId,
+        nameSnapshot,
         orderIndex: workoutExercises.length,
         targetSets: sets,
         targetRepsMin: reps,
@@ -387,6 +395,7 @@ export default function WorkoutEditScreen({ navigation, route }: Props) {
           return {
             ...ex,
             exerciseId: selectedNewExerciseId,
+            nameSnapshot,
             targetWeight: swapWeight ? weight : ex.targetWeight,
             targetRepsMin: reps,
             targetRepsMax: reps, // Set max to same value as min
@@ -403,8 +412,6 @@ export default function WorkoutEditScreen({ navigation, route }: Props) {
     setShowSwapDrawer(false);
     setSwappingExerciseId(null);
     setSelectedNewExerciseId(null);
-    setSearchQuery('');
-    setShowSearch(false);
     setSwapWeight('');
     setSwapReps('');
     setSwapSets('');
@@ -493,17 +500,19 @@ export default function WorkoutEditScreen({ navigation, route }: Props) {
   const handleAddExercise = () => {
     setSwappingExerciseId(null);
     setSelectedNewExerciseId(null);
-    setSearchQuery('');
     setSwapWeight('0');
     setSwapReps('8');
     setSwapSets('3');
     setIsTimeBasedSwap(false);
-    setShowSwapDrawer(true);
+    setShowExercisePicker(true);
   };
   
   const isAddMode = showSwapDrawer && !swappingExerciseId;
 
-  const swapDrawerMaxHeight = Math.round(Dimensions.get('window').height * 0.9);
+  const exerciseDisplayName = (line: WorkoutTemplateExercise) => {
+    const resolved = resolveExerciseByIdOrName(exercises, line.exerciseId, line.nameSnapshot);
+    return resolved?.name ?? line.nameSnapshot ?? t('unknownExercise');
+  };
   
   return (
     <View style={styles.container}>
@@ -560,11 +569,10 @@ export default function WorkoutEditScreen({ navigation, route }: Props) {
             <Text style={styles.sectionLabel}>{t('listOfExercises')}</Text>
           </View>
           {workoutExercises.map((exercise, index) => {
-            const exerciseData = exercises.find(e => e.id === exercise.exerciseId);
             const isSelected = selectedExerciseId === exercise.id;
             const anims = animValuesRef.current[exercise.id];
             const isDragging = draggingIndex === index;
-            
+
             if (!anims) return null;
 
             // Create a pan responder for this exercise's grip handle
@@ -659,7 +667,7 @@ export default function WorkoutEditScreen({ navigation, route }: Props) {
                             numberOfLines={1}
                             ellipsizeMode="tail"
                           >
-                                {exerciseData?.name || 'Unknown Exercise'}
+                                {exerciseDisplayName(exercise)}
                               </Text>
                         </View>
                             
@@ -739,9 +747,9 @@ export default function WorkoutEditScreen({ navigation, route }: Props) {
         </View>
       </View>
       
-      {/* Swap Exercise Drawer */}
+      {/* Exercise settings after personal-catalog pick (add / swap) */}
       <BottomDrawer
-        visible={showSwapDrawer}
+        visible={showSwapDrawer && swapStep === 'settings'}
         onClose={handleCloseSwapDrawer}
         maxHeight="90%"
         scrollable={false}
@@ -750,65 +758,20 @@ export default function WorkoutEditScreen({ navigation, route }: Props) {
         contentStyle={styles.swapDrawerContent}
       >
         <View style={styles.drawerContent}>
-          {/* Drawer Header */}
-          {swapStep === 'settings' ? (
-            <View style={[styles.drawerHeader, styles.drawerHeaderSettings]}>
-              <TouchableOpacity
-                onPress={() => setSwapStep('list')}
-                style={[styles.drawerBackButton, styles.drawerBackButtonSettings]}
-                activeOpacity={1}
-              >
-                <IconArrowLeft size={24} color={themeColors.text} />
-              </TouchableOpacity>
-              <Text style={styles.drawerHeaderSettingsTitle}>
-                Exercise Settings
-              </Text>
-              <View style={styles.drawerHeaderSettingsSpacer} />
-            </View>
-          ) : (
-            <View style={[styles.drawerHeader, styles.drawerHeaderList]}>
-            <Text style={[TYPOGRAPHY.h3, { color: themeColors.text }]}>
-                {isAddMode ? 'Add Exercise' : 'Swap Exercise'}
-            </Text>
+          <View style={[styles.drawerHeader, styles.drawerHeaderSettings]}>
             <TouchableOpacity
-                onPress={() => {
-                  setShowSearch(true);
-                  setTimeout(() => searchInputRef.current?.focus(), 0);
-                }}
-                style={styles.searchButton}
+              onPress={() => {
+                setShowSwapDrawer(false);
+                setShowExercisePicker(true);
+              }}
+              style={[styles.drawerBackButton, styles.drawerBackButtonSettings]}
               activeOpacity={1}
             >
-                <Text style={styles.searchButtonText}>🔍</Text>
+              <IconArrowLeft size={24} color={themeColors.text} />
             </TouchableOpacity>
+            <Text style={styles.drawerHeaderSettingsTitle}>Exercise Settings</Text>
+            <View style={styles.drawerHeaderSettingsSpacer} />
           </View>
-          )}
-
-              {/* Search Input */}
-          {showSearch && swapStep === 'list' && (
-              <View style={styles.swapSearchContainer}>
-                <Text style={styles.searchIcon}>🔍</Text>
-                <TextInput
-                ref={searchInputRef}
-                  style={styles.swapSearchInput}
-                  value={searchQuery}
-                  onChangeText={setSearchQuery}
-                  placeholder={t('searchExercisesPlaceholder')}
-                  placeholderTextColor={themeColors.textMeta}
-                />
-                {searchQuery.length > 0 && (
-                  <TouchableOpacity
-                  onPress={() => {
-                    setSearchQuery('');
-                    setShowSearch(false);
-                    searchInputRef.current?.blur();
-                  }}
-                    activeOpacity={1}
-                  >
-                    <Text style={styles.clearIcon}>✕</Text>
-                  </TouchableOpacity>
-                )}
-              </View>
-          )}
 
           <ScrollView
             style={styles.swapScroll}
@@ -816,71 +779,7 @@ export default function WorkoutEditScreen({ navigation, route }: Props) {
             bounces={true}
             showsVerticalScrollIndicator={true}
           >
-              {/* Exercise List */}
-            {swapStep === 'list' && (
-              <Animated.View
-                      style={[
-                  styles.swapExerciseListContent,
-                  {
-                    opacity: swapStepAnim.interpolate({
-                      inputRange: [0, 1],
-                      outputRange: [1, 0],
-                    }),
-                  },
-                ]}
-              >
-                {groupedExercises.map(([muscle, muscleExercises]) => {
-                  const isExpanded = !!expandedMuscles[muscle];
-                  return (
-                    <View key={muscle} style={styles.muscleSection}>
-                      <View style={styles.muscleCard}>
-                      <TouchableOpacity
-                        style={styles.muscleHeader}
-                        onPress={() =>
-                          setExpandedMuscles(prev => ({ ...prev, [muscle]: !isExpanded }))
-                        }
-                        activeOpacity={1}
-                      >
-                        <Text style={styles.muscleTitle}>{muscle}</Text>
-                        <IconChevronDown
-                          size={20}
-                          color={themeColors.textMeta}
-                          style={{
-                            transform: [{ rotate: isExpanded ? '180deg' : '0deg' }],
-                          }}
-                        />
-                      </TouchableOpacity>
-                      {isExpanded && (
-                        <View style={styles.muscleContent}>
-                          {muscleExercises.map((exercise, exerciseIndex) => (
-                            <View key={exercise.id}>
-                              <TouchableOpacity
-                                style={styles.swapExerciseItem}
-                                onPress={() => {
-                                  setSelectedNewExerciseId(exercise.id);
-                                  setIsTimeBasedSwap(exercise.measurementType === 'time');
-                                  setSwapStep('settings');
-                                }}
-                      activeOpacity={1}
-                    >
-                      <Text style={styles.swapExerciseName}>{exercise.name}</Text>
-                    </TouchableOpacity>
-                              {exerciseIndex < muscleExercises.length - 1 && (
-                                <View style={styles.muscleExerciseDivider} />
-                              )}
-                            </View>
-                          ))}
-                        </View>
-                      )}
-                      </View>
-                    </View>
-                  );
-                })}
-              </Animated.View>
-            )}
-
-              {/* Weight, Reps, Sets Configuration */}
-            {swapStep === 'settings' && selectedNewExerciseId && (
+            {selectedNewExerciseId ? (
               <Animated.View
                 style={[
                   styles.swapConfigSection,
@@ -1030,11 +929,10 @@ export default function WorkoutEditScreen({ navigation, route }: Props) {
                   </View>
                 </View>
               </Animated.View>
-            )}
+            ) : null}
           </ScrollView>
 
-              {/* Confirm Button */}
-          {swapStep === 'settings' && selectedNewExerciseId && (
+          {selectedNewExerciseId && (
             <View style={styles.swapButtonContainerPinned}>
               <TouchableOpacity
                 style={styles.swapConfirmButton}
@@ -1049,6 +947,20 @@ export default function WorkoutEditScreen({ navigation, route }: Props) {
           )}
         </View>
       </BottomDrawer>
+
+      <ExerciseSearchPickModal
+        visible={showExercisePicker}
+        exercises={exercises}
+        onClose={() => {
+          setShowExercisePicker(false);
+          setSwappingExerciseId(null);
+        }}
+        onSelectExercise={handlePickerSelect}
+        onCreateCustom={async name => {
+          const ex = await ensureUserExercise(name);
+          handlePickerSelect(ex);
+        }}
+      />
       
       {/* Apply Changes Modal */}
       <Modal

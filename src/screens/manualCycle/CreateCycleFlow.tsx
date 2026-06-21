@@ -37,7 +37,7 @@ interface CreateCycleFlowProps {
 export function CreateCycleFlow({ navigation, route }: CreateCycleFlowProps) {
   const insets = useSafeAreaInsets();
   const { t } = useTranslation();
-  const { addWorkoutTemplate, addCyclePlan } = useStore();
+  const { addWorkoutTemplate, addCyclePlan, exercises: catalogExercises } = useStore();
   
   const {
     weeks,
@@ -227,6 +227,8 @@ export function CreateCycleFlow({ navigation, route }: CreateCycleFlowProps) {
         items: workout.exercises.map((ex, idx) => ({
           id: generateId(),
           exerciseId: ex.exerciseId,
+          nameSnapshot:
+            ex.nameSnapshot ?? catalogExercises.find(e => e.id === ex.exerciseId)?.name,
           order: idx,
           sets: ex.weeks[0]?.sets || 3,
           reps: ex.weeks[0]?.reps || '8',

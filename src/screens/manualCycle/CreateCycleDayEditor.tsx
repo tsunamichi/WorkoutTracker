@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -10,15 +10,16 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useCreateCycleDraftStore } from '../../store/useCreateCycleDraftStore';
-import { formatWeekdayFull, getExerciseSummary } from '../../utils/manualCycleUtils';
 import { Weekday, ExerciseBlock } from '../../types/manualCycle';
-import { SPACING, TYPOGRAPHY, CARDS, BORDER_RADIUS } from '../../constants';
-import { IconAdd, IconTrash, IconArrowLeft, IconChevronDown, IconEdit } from '../../components/icons';
+import { SPACING, TYPOGRAPHY } from '../../constants';
+import { IconAdd, IconArrowLeft, IconEdit } from '../../components/icons';
 import { ExerciseEditorBottomSheet } from '../../components/manualCycle/ExerciseEditorBottomSheet';
 import { useStore } from '../../store';
-import { BottomDrawer } from '../../components/common/BottomDrawer';
+import { ExerciseSearchPickModal } from '../../components/workoutBuilder/ExerciseSearchPickModal';
 import { useTranslation } from '../../i18n/useTranslation';
 import { DraggableExerciseList, type DraggableExerciseItem } from '../../components/exercises';
+import { resolveExerciseByIdOrName } from '../../utils/personalExerciseCatalog';
+import type { Exercise } from '../../types';
 import { useAppTheme } from '../../theme/useAppTheme';
 import { getAppThemeFromStore } from '../../theme/getAppThemeFromStore';
 
@@ -39,16 +40,14 @@ export function CreateCycleDayEditor({ navigation, route }: CreateCycleDayEditor
   const { workouts, setWorkoutDayName, addExerciseToDay, removeExerciseFromDay, reorderExercises } =
     useCreateCycleDraftStore();
 
-  const { exercises: exerciseLibrary } = useStore();
+  const exercises = useStore(s => s.exercises);
+  const ensureUserExercise = useStore(s => s.ensureUserExercise);
 
-  const workout = workouts.find((w) => w.weekday === weekday);
+  const workout = workouts.find(w => w.weekday === weekday);
 
   const [workoutName, setWorkoutName] = useState(workout?.name || '');
-  const [isEditingName, setIsEditingName] = useState(true); // Start in editing mode
-  const [showExerciseDrawer, setShowExerciseDrawer] = useState(false);
-  const [showSearchInput, setShowSearchInput] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [expandedMuscles, setExpandedMuscles] = useState<Record<string, boolean>>({});
+  const [isEditingName, setIsEditingName] = useState(true);
+  const [showExercisePicker, setShowExercisePicker] = useState(false);
   const [selectedExercise, setSelectedExercise] = useState<ExerciseBlock | null>(null);
   const [showExerciseEditor, setShowExerciseEditor] = useState(false);
   const [selectedExerciseId, setSelectedExerciseId] = useState<string | null>(null);
@@ -56,7 +55,6 @@ export function CreateCycleDayEditor({ navigation, route }: CreateCycleDayEditor
   const nameInputRef = useRef<TextInput>(null);
   const hasFocusedInitialNameRef = useRef(false);
 
-  // Auto-focus the name input when component mounts
   useEffect(() => {
     if (!workout?.name && !hasFocusedInitialNameRef.current) {
       hasFocusedInitialNameRef.current = true;
@@ -66,50 +64,27 @@ export function CreateCycleDayEditor({ navigation, route }: CreateCycleDayEditor
     }
   }, [workout?.name]);
 
-  // Auto-save workout name whenever it changes
   useEffect(() => {
     if (workoutName.trim()) {
       setWorkoutDayName(weekday, workoutName.trim());
     }
   }, [workoutName, weekday, setWorkoutDayName]);
 
-  const handleAddExercise = (exerciseId: string) => {
-    const newExercise = addExerciseToDay(weekday, exerciseId);
-    setShowExerciseDrawer(false);
-    setShowSearchInput(false);
-    setSearchQuery('');
-    setExpandedMuscles({});
+  const openEditorForBlock = (block: ExerciseBlock) => {
+    setSelectedExercise(block);
+    setShowExerciseEditor(true);
+  };
+
+  const handlePickerSelect = (ex: Exercise) => {
+    const newExercise = addExerciseToDay(weekday, ex.id, ex.name);
+    setShowExercisePicker(false);
     if (newExercise) {
-      setSelectedExercise(newExercise);
-      setShowExerciseEditor(true);
+      openEditorForBlock(newExercise);
     }
   };
 
-  const filteredExercises = useMemo(() => {
-    if (!searchQuery.trim()) {
-      return exerciseLibrary;
-    }
-    const query = searchQuery.toLowerCase();
-    return exerciseLibrary.filter((exercise) =>
-      exercise.name.toLowerCase().includes(query)
-    );
-  }, [exerciseLibrary, searchQuery]);
-
-  const groupedExercises = useMemo(() => {
-    const groups: Record<string, typeof filteredExercises> = {};
-    filteredExercises.forEach(exercise => {
-      const muscle = exercise.category || 'Other';
-      if (!groups[muscle]) {
-        groups[muscle] = [];
-      }
-      groups[muscle].push(exercise);
-    });
-    return Object.entries(groups).sort(([a], [b]) => a.localeCompare(b));
-  }, [filteredExercises]);
-
   const handleEditExercise = (exercise: ExerciseBlock) => {
-    setSelectedExercise(exercise);
-    setShowExerciseEditor(true);
+    openEditorForBlock(exercise);
   };
 
   const handleDeleteExercise = (exerciseBlockId: string) => {
@@ -130,41 +105,33 @@ export function CreateCycleDayEditor({ navigation, route }: CreateCycleDayEditor
 
   const handleReorderExercises = (reorderedExercises: DraggableExerciseItem[]) => {
     if (!workout) return;
-    
-    // Build a map of exercise ID to its current index
+
     const originalOrder = workout.exercises;
     const idToOriginalIndex = new Map(originalOrder.map((ex, idx) => [ex.id, idx]));
-    
-    // Find which item moved and where
+
     for (let newIndex = 0; newIndex < reorderedExercises.length; newIndex++) {
       const item = reorderedExercises[newIndex];
       const originalIndex = idToOriginalIndex.get(item.id);
-      
+
       if (originalIndex !== undefined && originalIndex !== newIndex) {
-        // This item moved from originalIndex to newIndex
         reorderExercises(weekday, originalIndex, newIndex);
-        break; // Only handle one move at a time
+        break;
       }
     }
-  };
-
-  const handleSelectExercise = (exerciseId: string | null) => {
-    setSelectedExerciseId(exerciseId);
   };
 
   return (
     <View style={styles.gradient}>
       <View style={styles.container}>
-        {/* Header */}
         <View style={[styles.header, { paddingTop: insets.top }]}>
           <View style={styles.topBar}>
-          <TouchableOpacity
-            onPress={() => navigation.goBack()}
-            style={styles.backButton}
-            activeOpacity={1}
-          >
+            <TouchableOpacity
+              onPress={() => navigation.goBack()}
+              style={styles.backButton}
+              activeOpacity={1}
+            >
               <IconArrowLeft size={24} color={themeColors.text} />
-          </TouchableOpacity>
+            </TouchableOpacity>
             <View style={{ width: 48 }} />
           </View>
           <TouchableOpacity
@@ -192,33 +159,36 @@ export function CreateCycleDayEditor({ navigation, route }: CreateCycleDayEditor
           </TouchableOpacity>
         </View>
 
-        <ScrollView 
-          style={styles.content} 
-          contentContainerStyle={styles.scrollContent} 
+        <ScrollView
+          style={styles.content}
+          contentContainerStyle={styles.scrollContent}
           bounces={false}
           scrollEnabled={scrollEnabled}
         >
-          {/* Exercises */}
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>{t('exercises')}</Text>
             <DraggableExerciseList
               exercises={(workout?.exercises || []).map((exercise, index) => {
-                const exerciseData = exerciseLibrary.find((e) => e.id === exercise.exerciseId);
+                const exerciseData = resolveExerciseByIdOrName(
+                  exercises,
+                  exercise.exerciseId,
+                  exercise.nameSnapshot,
+                );
                 return {
                   id: exercise.id,
                   exerciseId: exercise.exerciseId,
-                  name: exerciseData?.name || t('unknownExercise'),
+                  name: exerciseData?.name ?? exercise.nameSnapshot ?? t('unknownExercise'),
                   order: index,
                 };
               })}
               onReorder={handleReorderExercises}
-              onEdit={(id) => {
+              onEdit={id => {
                 const exercise = workout?.exercises.find(ex => ex.id === id);
                 if (exercise) handleEditExercise(exercise);
               }}
-              onDelete={(id) => handleDeleteExercise(id)}
+              onDelete={id => handleDeleteExercise(id)}
               selectedExerciseId={selectedExerciseId}
-              onSelectExercise={handleSelectExercise}
+              onSelectExercise={setSelectedExerciseId}
               actionButtons={['edit', 'delete']}
               scrollEnabled={scrollEnabled}
               onScrollEnabledChange={setScrollEnabled}
@@ -226,7 +196,7 @@ export function CreateCycleDayEditor({ navigation, route }: CreateCycleDayEditor
 
             <TouchableOpacity
               style={styles.addExerciseCardButton}
-              onPress={() => setShowExerciseDrawer(true)}
+              onPress={() => setShowExercisePicker(true)}
               activeOpacity={1}
             >
               <IconAdd size={20} color={themeColors.text} />
@@ -236,111 +206,25 @@ export function CreateCycleDayEditor({ navigation, route }: CreateCycleDayEditor
         </ScrollView>
       </View>
 
-      {/* Exercise Picker Drawer */}
-      <BottomDrawer
-        visible={showExerciseDrawer}
-        onClose={() => setShowExerciseDrawer(false)}
-        maxHeight="90%"
-        fixedHeight={true}
-        showHandle={false}
-        scrollable={false}
-        contentStyle={styles.drawerContent}
-      >
-        <View style={styles.drawerContent}>
-          <View style={styles.drawerHeader}>
-            <Text style={styles.drawerTitle}>{t('addExerciseTitle')}</Text>
-            <TouchableOpacity
-              onPress={() => {
-                setShowSearchInput(prev => !prev);
-                if (showSearchInput) {
-                  setSearchQuery('');
-                }
-              }}
-              style={styles.searchButton}
-              activeOpacity={1}
-            >
-              <Text style={styles.searchButtonText}>🔍</Text>
-            </TouchableOpacity>
-          </View>
+      <ExerciseSearchPickModal
+        visible={showExercisePicker}
+        exercises={exercises}
+        onClose={() => setShowExercisePicker(false)}
+        onSelectExercise={handlePickerSelect}
+        onCreateCustom={async name => {
+          const ex = await ensureUserExercise(name);
+          handlePickerSelect(ex);
+        }}
+      />
 
-          {showSearchInput && (
-            <View style={styles.swapSearchContainer}>
-              <Text style={styles.searchIcon}>🔍</Text>
-              <TextInput
-                style={styles.swapSearchInput}
-                value={searchQuery}
-                onChangeText={setSearchQuery}
-                placeholder={t('searchExercisesPlaceholder')}
-                placeholderTextColor={themeColors.textMeta}
-              />
-              {searchQuery.length > 0 && (
-                <TouchableOpacity
-                  onPress={() => setSearchQuery('')}
-                  activeOpacity={1}
-                >
-                  <Text style={styles.clearIcon}>✕</Text>
-                </TouchableOpacity>
-              )}
-            </View>
-          )}
-
-          <ScrollView style={styles.drawerScroll} contentContainerStyle={styles.drawerScrollContent} bounces={true}>
-            {groupedExercises.map(([muscle, muscleExercises]) => {
-              const isExpanded = !!expandedMuscles[muscle];
-              return (
-                <View key={muscle} style={styles.muscleSection}>
-                  <View style={styles.muscleCard}>
-                    <TouchableOpacity
-                      style={styles.muscleHeader}
-                      onPress={() =>
-                        setExpandedMuscles(prev => ({ ...prev, [muscle]: !isExpanded }))
-                      }
-                      activeOpacity={1}
-                    >
-                      <Text style={styles.muscleTitle}>{muscle}</Text>
-                      <IconChevronDown
-                        size={20}
-                        color={themeColors.textMeta}
-                        style={{
-                          transform: [{ rotate: isExpanded ? '180deg' : '0deg' }],
-                        }}
-                      />
-                    </TouchableOpacity>
-                    {isExpanded && (
-                      <View style={styles.muscleContent}>
-                        {muscleExercises.map((exercise, exerciseIndex) => (
-                          <View key={exercise.id}>
-                            <TouchableOpacity
-                              style={styles.swapExerciseItem}
-                              onPress={() => handleAddExercise(exercise.id)}
-                              activeOpacity={1}
-                            >
-                              <Text style={styles.swapExerciseName}>{exercise.name}</Text>
-                            </TouchableOpacity>
-                            {exerciseIndex < muscleExercises.length - 1 && (
-                              <View style={styles.muscleExerciseDivider} />
-      )}
-                          </View>
-                        ))}
-                      </View>
-                    )}
-                  </View>
-                </View>
-              );
-            })}
-          </ScrollView>
-        </View>
-      </BottomDrawer>
-
-      {/* Exercise Editor Bottom Sheet */}
-      {selectedExercise && (
+      {selectedExercise ? (
         <ExerciseEditorBottomSheet
           weekday={weekday}
           exerciseBlock={selectedExercise}
           visible={showExerciseEditor}
           onClose={handleCloseEditor}
         />
-      )}
+      ) : null}
     </View>
   );
 }
@@ -418,100 +302,5 @@ const styles = StyleSheet.create({
   addExerciseCardText: {
     ...TYPOGRAPHY.metaBold,
     color: themeColors.text,
-  },
-  drawerContent: {
-    flex: 1,
-    minHeight: 0,
-  },
-  drawerHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: SPACING.xxl,
-    paddingTop: SPACING.lg,
-    paddingBottom: SPACING.md,
-  },
-  drawerTitle: {
-    ...TYPOGRAPHY.h3,
-    color: themeColors.text,
-  },
-  searchButton: {
-    padding: SPACING.xs,
-  },
-  searchButtonText: {
-    fontSize: 20,
-    color: themeColors.text,
-  },
-  swapSearchContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: themeColors.backgroundCanvas,
-    borderRadius: BORDER_RADIUS.md,
-    borderCurve: 'continuous',
-    paddingHorizontal: SPACING.lg,
-    paddingVertical: SPACING.md,
-    marginHorizontal: SPACING.xxl,
-    marginTop: SPACING.lg,
-    marginBottom: SPACING.md,
-    borderWidth: 1,
-    borderColor: themeColors.border,
-    gap: SPACING.md,
-  },
-  searchIcon: {
-    fontSize: 18,
-    color: themeColors.textMeta,
-  },
-  swapSearchInput: {
-    flex: 1,
-    ...TYPOGRAPHY.body,
-    color: themeColors.text,
-  },
-  clearIcon: {
-    fontSize: 16,
-    color: themeColors.textMeta,
-  },
-  drawerScroll: {
-    flex: 1,
-    minHeight: 0,
-  },
-  drawerScrollContent: {
-    paddingHorizontal: SPACING.xxl,
-    paddingBottom: SPACING.xl,
-  },
-  muscleSection: {
-    marginBottom: 12,
-  },
-  muscleCard: {
-    backgroundColor: themeColors.activeCard,
-    borderRadius: BORDER_RADIUS.md,
-    borderCurve: 'continuous',
-    overflow: 'hidden',
-  },
-  muscleHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: SPACING.lg,
-    paddingHorizontal: SPACING.lg,
-  },
-  muscleTitle: {
-    ...TYPOGRAPHY.body,
-    color: themeColors.text,
-    fontWeight: '600',
-  },
-  muscleContent: {},
-  swapExerciseItem: {
-    paddingVertical: SPACING.md,
-    paddingHorizontal: SPACING.lg,
-  },
-  swapExerciseName: {
-    ...TYPOGRAPHY.body,
-    color: themeColors.text,
-  },
-  muscleExerciseDivider: {
-    height: 1,
-    backgroundColor: themeColors.borderDimmed,
-    marginHorizontal: SPACING.lg,
-    marginVertical: 4,
   },
 });

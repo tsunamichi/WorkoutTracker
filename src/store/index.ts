@@ -6,13 +6,22 @@ import type { WorkoutTemplate, CyclePlan, ScheduledWorkout, ConflictResolution, 
 import type { ProgressionGroup, ProgressionRule, ProgressionDefaults, EffectiveProgressionRule, LastLogForExercise } from '../types/progression';
 import * as coreProgramUtil from '../utils/coreProgram';
 import * as storage from '../storage';
-import { SEED_EXERCISES } from '../constants';
 import { kgToLbs } from '../utils/weight';
 import { cloudBackupService } from '../services/cloudBackup';
 import { migrateOldStorageKeys } from '../utils/dataMigration';
 import { cloudSyncService } from '../services/cloudSync';
 import { createNewExerciseItem } from '../utils/exerciseMigration';
-import { migrateLoadedExerciseCatalog, normalizeExerciseLabel } from '../utils/exerciseIdentity';
+import { migrateLoadedExerciseCatalog, normalizeExerciseLabel, buildCustomExerciseDefinition } from '../utils/exerciseIdentity';
+import { getLatestExerciseLog } from '../utils/getLatestExerciseLog';
+import {
+  findExerciseByNormalizedName,
+  migrateToPersonalExerciseCatalog,
+  persistPersonalCatalogMigration,
+} from '../utils/personalExerciseCatalog';
+import {
+  effectiveRuleForProgressionType,
+  resolveProgressionType,
+} from '../utils/resolveProgressionType';
 
 dayjs.extend(isoWeek);
 
@@ -49,6 +58,8 @@ interface WorkoutStore {
   updateCycle: (cycleId: string, updates: Partial<Cycle>) => Promise<void>;
   deleteCycle: (cycleId: string) => Promise<void>;
   addExercise: (exercise: Exercise) => Promise<void>;
+  /** Find or create a personal-catalog exercise (deduped by normalized name). */
+  ensureUserExercise: (displayName: string) => Promise<Exercise>;
   updateExercise: (exerciseId: string, updates: Partial<Exercise>) => Promise<void>;
   addSession: (session: WorkoutSession) => Promise<void>;
   updateSession: (sessionId: string, session: WorkoutSession) => Promise<void>;
@@ -239,7 +250,7 @@ interface WorkoutStore {
   getProgressionRule: (exerciseId: string) => ProgressionRule | undefined;
   setProgressionRule: (rule: ProgressionRule) => Promise<void>;
   removeProgressionRule: (exerciseId: string) => Promise<void>;
-  getEffectiveProgressionRule: (exerciseId: string) => EffectiveProgressionRule | null;
+  getEffectiveProgressionRule: (exerciseId: string, itemProgressionType?: string) => EffectiveProgressionRule;
   getLastCompletedLogForExercise: (exerciseId: string) => LastLogForExercise | null;
 }
 
@@ -425,6 +436,17 @@ export const useStore = create<WorkoutStore>((set, get) => ({
       } catch (error) {
         console.error('Error during auto-migration:', error);
       }
+
+      try {
+        const icloudRestore = await cloudBackupService.restoreIfLocalStorageEmpty();
+        if (icloudRestore.restored) {
+          console.log(
+            `📥 iCloud backup restored before load (${icloudRestore.restoredKeys ?? 0} keys)`,
+          );
+        }
+      } catch (error) {
+        console.error('Error restoring iCloud backup before load:', error);
+      }
       
       const [
         cycles,
@@ -521,22 +543,13 @@ export const useStore = create<WorkoutStore>((set, get) => ({
         await storage.saveBodyWeightEntries(finalBodyWeightEntries);
       }
       
-      // Seed exercises if none exist
+      // Fresh installs start with an empty personal catalog (no static library seed).
       let finalExercises = exercises;
       let exercisesDeduped = false;
       const exerciseIdMap = new Map<string, string>();
       const exerciseNameById = new Map<string, string>();
       if (exercises.length === 0) {
-        finalExercises = SEED_EXERCISES.map((ex, idx) => ({
-          id: `seed-${idx}`,
-          name: ex.name,
-          canonicalName: normalizeExerciseLabel(ex.name),
-          aliases: [] as string[],
-          category: ex.category as any,
-          equipment: ex.equipment,
-          isCustom: false,
-        }));
-        await storage.saveExercises(finalExercises);
+        finalExercises = [];
       }
 
       {
@@ -547,10 +560,10 @@ export const useStore = create<WorkoutStore>((set, get) => ({
         }
       }
 
-      // Seed workout sessions for demo/testing if none exist - will be assigned to finalSessions later
+      // Seed workout sessions for demo/testing only when legacy seed catalog existed.
       let seedSessions: WorkoutSession[] = [];
       
-      if (sessions.length === 0 && finalExercises.length > 0) {
+      if (sessions.length === 0 && finalExercises.length > 0 && exercises.length > 0) {
         // Find some exercises to use for demo sessions
         const benchPress = finalExercises.find(e => e.name.toLowerCase().includes('bench press'));
         const squat = finalExercises.find(e => e.name.toLowerCase().includes('squat'));
@@ -1501,19 +1514,48 @@ export const useStore = create<WorkoutStore>((set, get) => ({
         if (renamed) await storage.saveProgressionGroups(finalProgressionGroups);
       }
 
+      const personalCatalogMigration = migrateToPersonalExerciseCatalog({
+        exercises: finalExercises,
+        sessions: finalSessions,
+        detailedWorkoutProgress,
+        exercisePRs: finalExercisePRs,
+        workoutTemplates: finalWorkoutTemplates,
+        scheduledWorkouts: finalScheduledWorkouts,
+        progressionGroups: finalProgressionGroups,
+        progressionRules: progressionRules || [],
+        pinnedKeyLifts,
+        settings: finalSettings,
+      });
+
+      if (personalCatalogMigration.changed) {
+        finalExercises = personalCatalogMigration.exercises;
+        finalSessions = personalCatalogMigration.sessions;
+        finalExercisePRs = personalCatalogMigration.exercisePRs;
+        finalWorkoutTemplates = personalCatalogMigration.workoutTemplates;
+        finalScheduledWorkouts = personalCatalogMigration.scheduledWorkouts;
+        finalProgressionGroups = personalCatalogMigration.progressionGroups;
+        try {
+          finalSettings = await persistPersonalCatalogMigration(personalCatalogMigration);
+        } catch (error) {
+          console.error('❌ Personal exercise catalog migration persist failed:', error);
+          throw error;
+        }
+        console.log(`✅ Personal exercise catalog migration complete (${finalExercises.length} exercises)`);
+      }
+
       set({
         cycles: finalCycles,
         exercises: finalExercises,
         sessions: finalSessions,
         bodyWeightEntries: finalBodyWeightEntries,
         progressPhotos,
-        pinnedKeyLifts,
+        pinnedKeyLifts: personalCatalogMigration.pinnedKeyLifts,
         workoutAssignments: finalWorkoutAssignments,
         exercisePRs: finalExercisePRs,
         trainerConversations: finalConversations,
         settings: finalSettings,
         workoutProgress: finalWorkoutProgress,
-        detailedWorkoutProgress,
+        detailedWorkoutProgress: personalCatalogMigration.detailedWorkoutProgress,
         hiitTimers,
         hiitTimerSessions,
         warmupPresets,
@@ -1524,7 +1566,7 @@ export const useStore = create<WorkoutStore>((set, get) => ({
         warmupCompletionByKey: warmupCompletionByKey || {},
         accessoryCompletionByKey: accessoryCompletionByKey || {},
         progressionGroups: finalProgressionGroups,
-        progressionRules: progressionRules || [],
+        progressionRules: personalCatalogMigration.progressionRules,
         progressionDefaults: finalProgressionDefaults,
         workoutTemplates: finalWorkoutTemplates,
         cyclePlans: finalCyclePlans,
@@ -1589,14 +1631,30 @@ export const useStore = create<WorkoutStore>((set, get) => ({
   },
   
   addExercise: async (exercise) => {
+    const existing = findExerciseByNormalizedName(get().exercises, exercise.name);
+    if (existing) return;
+
     const enriched: Exercise = {
       ...exercise,
       canonicalName: exercise.canonicalName ?? normalizeExerciseLabel(exercise.name),
       aliases: exercise.aliases ?? [],
+      isCustom: true,
+      createdAt: exercise.createdAt ?? new Date().toISOString(),
+      defaultProgressionType: exercise.defaultProgressionType ?? 'accessory',
     };
     const exercises = [...get().exercises, enriched];
     set({ exercises });
     await storage.saveExercises(exercises);
+  },
+
+  ensureUserExercise: async (displayName) => {
+    const trimmed = displayName.trim();
+    const existing = findExerciseByNormalizedName(get().exercises, trimmed);
+    if (existing) return existing;
+
+    const def = buildCustomExerciseDefinition(trimmed, Date.now());
+    await get().addExercise(def);
+    return get().exercises.find(e => e.id === def.id) ?? def;
   },
   
   updateExercise: async (exerciseId, updates) => {
@@ -2096,7 +2154,7 @@ export const useStore = create<WorkoutStore>((set, get) => ({
       const existingCompleted = sw.mainCompletion?.completedItems?.length ?? 0;
       const snapshot = sw.exercisesSnapshot || [];
 
-      // Build a map: exerciseLibraryId → template item id
+      // Build a map: exerciseId → template item id
       const libIdToItemId: Record<string, string> = {};
       snapshot.forEach((item: any) => {
         const libId = item.exerciseId || item.id;
@@ -4293,7 +4351,7 @@ export const useStore = create<WorkoutStore>((set, get) => ({
     set({ progressionRules: rules });
     await storage.saveProgressionRules(rules);
   },
-  getEffectiveProgressionRule: (exerciseId) => {
+  getEffectiveProgressionRule: (exerciseId, itemProgressionType) => {
     const defs = get().progressionDefaults ?? DEFAULT_PROGRESSION_DEFAULTS;
     const rule = get().progressionRules.find(r => r.exerciseId === exerciseId);
     if (rule) {
@@ -4315,55 +4373,14 @@ export const useStore = create<WorkoutStore>((set, get) => ({
         source: 'group' as const,
       };
     }
-    // No group and no individual rule → no progression
-    return null;
+    const exercise = get().exercises.find(e => e.id === exerciseId);
+    const type = resolveProgressionType(itemProgressionType, exercise);
+    return effectiveRuleForProgressionType(type);
   },
 
   getLastCompletedLogForExercise: (exerciseId) => {
-    const { detailedWorkoutProgress, scheduledWorkouts, workoutTemplates } = get();
-    const templateMap = new Map(workoutTemplates.map(t => [t.id, t]));
-    const entries: { date: string; workingSets: Array<{ setNumber: number; weight: number; reps: number }> }[] = [];
-
-    Object.entries(detailedWorkoutProgress).forEach(([wKey, progress]) => {
-      let date = '';
-      let template: WorkoutTemplate | undefined;
-      if (wKey.startsWith('sw-')) {
-        const sw = scheduledWorkouts.find(s => s.id === wKey);
-        if (sw) {
-          date = sw.date || '';
-          template = templateMap.get(sw.templateId);
-        }
-      }
-      if (!template) {
-        const parts = wKey.split('-');
-        const templateId = parts.length >= 3 ? parts.slice(0, -3).join('-') : wKey;
-        template = templateMap.get(templateId);
-        const dateMatch = wKey.match(/(\d{4}-\d{2}-\d{2})/);
-        date = dateMatch ? dateMatch[1] : progress.lastUpdated?.split('T')[0] || '';
-      }
-      if (!template) return;
-
-      const items = (template as any).items ?? (template as any).exercises ?? [];
-      const templateItemIds = items
-        .filter((i: any) => (i.exerciseId || i.id) === exerciseId)
-        .map((i: any) => i.id);
-
-      for (const templateItemId of templateItemIds) {
-        const exProgress = progress.exercises[templateItemId];
-        if (!exProgress?.sets?.length) continue;
-        const completed = exProgress.sets
-          .filter((s: any) => s.completed)
-          .map((s: any) => ({ setNumber: s.setNumber, weight: s.weight, reps: s.reps }));
-        if (completed.length > 0) {
-          entries.push({ date: date || progress.lastUpdated?.split('T')[0] || '', workingSets: completed });
-          break;
-        }
-      }
-    });
-
-    if (entries.length === 0) return null;
-    entries.sort((a, b) => (b.date > a.date ? 1 : b.date < a.date ? -1 : 0));
-    return entries[0];
+    const { detailedWorkoutProgress, scheduledWorkouts, sessions } = get();
+    return getLatestExerciseLog(exerciseId, sessions, detailedWorkoutProgress, scheduledWorkouts);
   },
   
   // Bonus feature: Warmup Presets

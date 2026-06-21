@@ -16,6 +16,9 @@ export type ExerciseCategory =
 
 export type ProgressionType = 'weight' | 'reps' | 'double' | 'none';
 
+/** Default double-progression bucket for a personal-catalog exercise. */
+export type UserExerciseProgressionType = 'main_upper' | 'main_lower' | 'accessory' | 'none';
+
 export interface Cycle {
   id: string;
   cycleNumber: number; // NEW: Cycles identified by number (Cycle 1, Cycle 2, etc.)
@@ -54,13 +57,15 @@ export interface WorkoutAssignment {
 export interface WorkoutTemplateExercise {
   id: string;
   exerciseId: string;
+  /** Display fallback when exerciseId is not in the personal catalog yet. */
+  nameSnapshot?: string;
   orderIndex: number;
   targetSets: number;
   targetRepsMin: number;
   targetRepsMax?: number;
   targetWeight?: number;
   notes?: string;
-  
+  restSeconds?: number;
   // NEW: Progression logic
   progressionType: ProgressionType;
   progressionValue?: number; // e.g., 2.5 for +2.5kg or 1 for +1 rep
@@ -88,6 +93,7 @@ export type ExerciseMeasurementType = 'reps' | 'time';
 export interface Exercise {
   id: string;
   name: string;
+  /** Normalized identity for dedupe/search (alias: canonicalName). */
   canonicalName?: string;
   aliases?: string[];
   category: ExerciseCategory;
@@ -95,6 +101,9 @@ export interface Exercise {
   isCustom: boolean;
   measurementType?: ExerciseMeasurementType; // 'reps' (default) or 'time' (for isometric/time-based exercises)
   notes?: string;
+  defaultProgressionType?: UserExerciseProgressionType;
+  createdAt?: string;
+  archivedAt?: string;
 }
 
 /** Canonical library exercise (same shape as {@link Exercise}). */
@@ -171,6 +180,10 @@ export interface AppSettings {
   barbellMode?: Record<string, boolean>; // exerciseId -> barbell mode preference
   // Progression rules – show next-session suggestions during workout
   progressionSuggestionsEnabled?: boolean;
+  /** Manual order for History → Weight progress exercise list (exercise ids). */
+  historyExerciseOrder?: string[];
+  /** One-time personal exercise catalog migration marker. */
+  personalCatalogMigrationVersion?: number;
 }
 
 // Helper type for cycle creation flow

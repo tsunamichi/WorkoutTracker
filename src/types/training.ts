@@ -162,6 +162,10 @@ export type AccessoryItem = ExerciseInstanceWithCycle;
 export type WorkoutTemplateExercise = {
   id: string;
   exerciseId: string;
+  /** Display fallback when exerciseId is not yet in the personal catalog. */
+  nameSnapshot?: string;
+  /** Optional per-item progression override (falls back to catalog default, then accessory). */
+  progressionType?: import('./index').UserExerciseProgressionType;
   order: number;
   sets: number;
   reps: string | number; // string for "8-10", "AMRAP", or numeric

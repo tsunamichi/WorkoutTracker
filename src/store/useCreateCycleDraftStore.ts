@@ -29,7 +29,7 @@ interface CreateCycleDraftStore {
   setWorkoutLength: (length: WorkoutLength) => void;
   ensureWorkoutsForSelectedDays: () => void;
   setWorkoutDayName: (weekday: Weekday, name: string) => void;
-  addExerciseToDay: (weekday: Weekday, exerciseId: string) => ExerciseBlock;
+  addExerciseToDay: (weekday: Weekday, exerciseId: string, nameSnapshot?: string) => ExerciseBlock;
   removeExerciseFromDay: (weekday: Weekday, exerciseBlockId: string) => void;
   reorderExercises: (weekday: Weekday, fromIndex: number, toIndex: number) => void;
   reorderWorkoutDays: (newOrder: Weekday[]) => void;
@@ -182,8 +182,8 @@ export const useCreateCycleDraftStore = create<CreateCycleDraftStore>((set, get)
     }));
   },
 
-  addExerciseToDay: (weekday: Weekday, exerciseId: string) => {
-    let newExercise: ExerciseBlock | null = null;
+  addExerciseToDay: (weekday: Weekday, exerciseId: string, nameSnapshot?: string) => {
+    let newExercise!: ExerciseBlock;
     set((state) => {
       const weeks: ExerciseWeekPlan[] = [];
       for (let i = 0; i < state.weeks; i++) {
@@ -193,6 +193,7 @@ export const useCreateCycleDraftStore = create<CreateCycleDraftStore>((set, get)
       newExercise = {
         id: generateId(),
         exerciseId,
+        nameSnapshot,
         isPerSide: false,
         weeks,
       };

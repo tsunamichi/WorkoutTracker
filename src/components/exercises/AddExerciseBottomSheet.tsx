@@ -1,261 +1,56 @@
-// Dependencies required (install if missing):
-// npm install @gorhom/bottom-sheet react-native-reanimated react-native-gesture-handler
-
-import React, { useCallback, useMemo, useRef, useState } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, FlatList, Keyboard } from 'react-native';
-// import BottomSheet, { BottomSheetBackdrop } from '@gorhom/bottom-sheet';
-import { MovementPattern, Equipment, Exercise } from '../../types/workout';
-import { searchExercises, ExerciseLibraryEntry } from '../../utils/exerciseLibrary';
-import { useTranslation } from '../../i18n/useTranslation';
+import React, { useCallback } from 'react';
+import type { Exercise as CatalogExercise } from '../../types';
+import type { Exercise as OnboardingExercise } from '../../types/workout';
+import { ExerciseSearchPickModal } from '../workoutBuilder/ExerciseSearchPickModal';
+import { useStore } from '../../store';
 
 interface AddExerciseBottomSheetProps {
   isVisible: boolean;
   onClose: () => void;
-  onSelectExercise: (exercise: Exercise) => void;
+  onSelectExercise: (exercise: OnboardingExercise) => void;
 }
-
-const MOVEMENT_PATTERNS: MovementPattern[] = ['squat', 'hinge', 'push', 'pull', 'carry', 'core', 'cardio', 'other'];
-const EQUIPMENT_TYPES: Equipment[] = ['barbell', 'dumbbell', 'machine', 'cable', 'bodyweight', 'kettlebell', 'other'];
 
 function generateId(): string {
-  return `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  return `${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
 }
 
+function mapCatalogToOnboardingExercise(ex: CatalogExercise): OnboardingExercise {
+  return {
+    id: generateId(),
+    name: ex.name,
+    sets: 3,
+    reps: '8',
+    restSec: 90,
+  };
+}
+
+/** Onboarding add-exercise flow — searches personal catalog only (no static library). */
 export function AddExerciseBottomSheet({ isVisible, onClose, onSelectExercise }: AddExerciseBottomSheetProps) {
-  const { t } = useTranslation();
-  const bottomSheetRef = useRef<BottomSheet>(null);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [selectedPattern, setSelectedPattern] = useState<MovementPattern | undefined>();
-  const [selectedEquipment, setSelectedEquipment] = useState<Equipment | undefined>();
+  const exercises = useStore(s => s.exercises);
+  const ensureUserExercise = useStore(s => s.ensureUserExercise);
 
-  const snapPoints = useMemo(() => ['75%', '90%'], []);
-
-  const filteredExercises = useMemo(() => {
-    return searchExercises(searchQuery, {
-      pattern: selectedPattern,
-      equipment: selectedEquipment,
-    });
-  }, [searchQuery, selectedPattern, selectedEquipment]);
-
-  const handleSelectExercise = useCallback((libraryExercise: ExerciseLibraryEntry) => {
-    const exercise: Exercise = {
-      id: generateId(),
-      name: libraryExercise.name,
-      pattern: libraryExercise.pattern,
-      equipment: libraryExercise.equipment,
-      sets: 3,
-      reps: '8-12',
-      restSec: 90,
-    };
-    onSelectExercise(exercise);
-    onClose();
-    setSearchQuery('');
-    setSelectedPattern(undefined);
-    setSelectedEquipment(undefined);
-    Keyboard.dismiss();
-  }, [onSelectExercise, onClose]);
-
-  const renderBackdrop = useCallback(
-    (props: any) => (
-      <BottomSheetBackdrop
-        {...props}
-        disappearsOnIndex={-1}
-        appearsOnIndex={0}
-        opacity={0.5}
-      />
-    ),
-    []
+  const handleSelect = useCallback(
+    (ex: CatalogExercise) => {
+      onSelectExercise(mapCatalogToOnboardingExercise(ex));
+    },
+    [onSelectExercise],
   );
 
-  React.useEffect(() => {
-    if (isVisible) {
-      bottomSheetRef.current?.expand();
-    } else {
-      bottomSheetRef.current?.close();
-    }
-  }, [isVisible]);
+  const handleCreate = useCallback(
+    async (name: string) => {
+      const ex = await ensureUserExercise(name);
+      onSelectExercise(mapCatalogToOnboardingExercise(ex));
+    },
+    [ensureUserExercise, onSelectExercise],
+  );
 
   return (
-    <BottomSheet
-      ref={bottomSheetRef}
-      index={-1}
-      snapPoints={snapPoints}
-      enablePanDownToClose
+    <ExerciseSearchPickModal
+      visible={isVisible}
+      exercises={exercises}
       onClose={onClose}
-      backdropComponent={renderBackdrop}
-      keyboardBehavior="interactive"
-      keyboardBlurBehavior="restore"
-    >
-      <View style={styles.contentContainer}>
-        <Text style={styles.title}>{t('addExerciseTitle')}</Text>
-
-        <TextInput
-          style={styles.searchInput}
-          placeholder={t('searchExercisesPlaceholder')}
-          value={searchQuery}
-          onChangeText={setSearchQuery}
-          autoCapitalize="none"
-          autoCorrect={false}
-        />
-
-        <View style={styles.filterSection}>
-          <Text style={styles.filterLabel}>{t('movementLabel')}</Text>
-          <FlatList
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            data={MOVEMENT_PATTERNS}
-            keyExtractor={(item) => item}
-            renderItem={({ item }) => (
-              <TouchableOpacity
-                style={[
-                  styles.filterChip,
-                  selectedPattern === item && styles.filterChipSelected,
-                ]}
-                onPress={() => setSelectedPattern(selectedPattern === item ? undefined : item)}
-              >
-                <Text
-                  style={[
-                    styles.filterChipText,
-                    selectedPattern === item && styles.filterChipTextSelected,
-                  ]}
-                >
-                  {item}
-                </Text>
-              </TouchableOpacity>
-            )}
-            contentContainerStyle={styles.filterList}
-          />
-        </View>
-
-        <View style={styles.filterSection}>
-          <Text style={styles.filterLabel}>{t('equipmentLabel')}</Text>
-          <FlatList
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            data={EQUIPMENT_TYPES}
-            keyExtractor={(item) => item}
-            renderItem={({ item }) => (
-              <TouchableOpacity
-                style={[
-                  styles.filterChip,
-                  selectedEquipment === item && styles.filterChipSelected,
-                ]}
-                onPress={() => setSelectedEquipment(selectedEquipment === item ? undefined : item)}
-              >
-                <Text
-                  style={[
-                    styles.filterChipText,
-                    selectedEquipment === item && styles.filterChipTextSelected,
-                  ]}
-                >
-                  {item}
-                </Text>
-              </TouchableOpacity>
-            )}
-            contentContainerStyle={styles.filterList}
-          />
-        </View>
-
-        <FlatList
-          data={filteredExercises}
-          keyExtractor={(item, index) => `${item.name}-${index}`}
-          renderItem={({ item }) => (
-            <TouchableOpacity
-              style={styles.exerciseItem}
-              onPress={() => handleSelectExercise(item)}
-            >
-              <Text style={styles.exerciseName}>{item.name}</Text>
-              <View style={styles.exerciseTags}>
-                {item.pattern && (
-                  <Text style={styles.exerciseTag}>{item.pattern}</Text>
-                )}
-                {item.equipment && (
-                  <Text style={styles.exerciseTag}>{item.equipment}</Text>
-                )}
-              </View>
-            </TouchableOpacity>
-          )}
-          style={styles.exerciseList}
-          keyboardShouldPersistTaps="handled"
-        />
-      </View>
-    </BottomSheet>
+      onSelectExercise={handleSelect}
+      onCreateCustom={handleCreate}
+    />
   );
 }
-
-const styles = StyleSheet.create({
-  contentContainer: {
-    flex: 1,
-    paddingHorizontal: 24,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: '600',
-    color: '#FFFFFF',
-    marginBottom: 16,
-  },
-  searchInput: {
-    backgroundColor: '#2C2C2E',
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 12,
-    fontSize: 16,
-    marginBottom: 16,
-  },
-  filterSection: {
-    marginBottom: 12,
-  },
-  filterLabel: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: '#817B77',
-    marginBottom: 8,
-  },
-  filterList: {
-    gap: 8,
-  },
-  filterChip: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
-    backgroundColor: '#2C2C2E',
-    marginRight: 8,
-  },
-  filterChipSelected: {
-    backgroundColor: '#FD6B00',
-  },
-  filterChipText: {
-    fontSize: 13,
-    color: '#3C3C43',
-    fontWeight: '500',
-    textTransform: 'capitalize',
-  },
-  filterChipTextSelected: {
-    color: '#FFFFFF',
-  },
-  exerciseList: {
-    flex: 1,
-    marginTop: 8,
-  },
-  exerciseItem: {
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E5E5',
-  },
-  exerciseName: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: '#FFFFFF',
-    marginBottom: 4,
-  },
-  exerciseTags: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  exerciseTag: {
-    fontSize: 12,
-    color: '#817B77',
-    textTransform: 'capitalize',
-  },
-});
-

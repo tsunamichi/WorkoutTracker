@@ -1,4 +1,5 @@
-import type { Exercise, WorkoutTemplateExercise } from '../types/training';
+import type { Exercise } from '../types';
+import type { WorkoutTemplateExercise } from '../types/training';
 
 function formatExerciseLine(
   exerciseName: string,

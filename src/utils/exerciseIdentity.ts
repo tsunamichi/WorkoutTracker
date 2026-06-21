@@ -197,7 +197,7 @@ export function draftLineFromImportedName(
   };
 }
 
-/** Build a new custom catalog entry with a stable id and identity fields. */
+/** Build a new personal-catalog entry with stable identity fields. */
 export function buildCustomExerciseDefinition(displayName: string, index: number): Exercise {
   const trimmed = displayName.trim();
   const id = `ex-user-${Date.now()}-${index}`;
@@ -209,5 +209,7 @@ export function buildCustomExerciseDefinition(displayName: string, index: number
     aliases: [],
     category: 'Other',
     isCustom: true,
+    defaultProgressionType: 'accessory',
+    createdAt: new Date().toISOString(),
   };
 }

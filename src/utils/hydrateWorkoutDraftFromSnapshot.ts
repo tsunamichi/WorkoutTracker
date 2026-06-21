@@ -1,11 +1,12 @@
 import type { Exercise } from '../types';
 import type { WorkoutTemplateExercise } from '../types/training';
 import type { WorkoutDraft, WorkoutDraftLine } from '../types/workoutDraft';
+import { resolveExerciseByIdOrName } from './personalExerciseCatalog';
 import { newDraftId } from './workoutBuilderPaste';
 
 /**
  * Build an editable draft from a frozen main snapshot.
- * Prefer catalog match by exerciseId; if the id is missing (deleted catalog row), require re-pick.
+ * Prefer catalog match by exerciseId; fall back to nameSnapshot; otherwise require re-pick.
  */
 export function hydrateWorkoutDraftFromSnapshot(
   workoutTitle: string,
@@ -17,10 +18,14 @@ export function hydrateWorkoutDraftFromSnapshot(
     let exerciseId: string | undefined;
     let resolutionStatus: WorkoutDraftLine['resolutionStatus'];
 
-    const byId = exercises.find(e => e.id === ex.exerciseId);
-    if (byId) {
-      displayName = byId.name;
-      exerciseId = byId.id;
+    const resolved = resolveExerciseByIdOrName(exercises, ex.exerciseId, ex.nameSnapshot);
+    if (resolved) {
+      displayName = resolved.name;
+      exerciseId = resolved.id;
+    } else if (ex.nameSnapshot?.trim()) {
+      displayName = ex.nameSnapshot.trim();
+      exerciseId = undefined;
+      resolutionStatus = 'needs_pick';
     } else {
       displayName = `Custom exercise ${i + 1}`;
       exerciseId = undefined;
