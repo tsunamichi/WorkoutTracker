@@ -70,7 +70,13 @@ export type RootStackParamList = {
   Tabs: { initialTab?: 'Schedule' | 'Progress' } | undefined;
   Profile: { mode?: 'settings' } | undefined;
   BodyWeightHistory: undefined;
-  History: { planId?: string; transitionSource?: 'scheduleDeck' } | undefined;
+  History:
+    | {
+        planId?: string;
+        transitionSource?: 'scheduleDeck';
+        initialTab?: 'last4Weeks' | 'weightProgress';
+      }
+    | undefined;
   /** Picks a completed workout snapshot to start a new scheduled workout (replaces bottom drawer). */
   RecentWorkoutPicker: { selectedDate: string; transitionSource?: 'scheduleDeck' } | undefined;
   PlanHistoryDetail: { programId: string; programName: string };

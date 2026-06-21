@@ -6,21 +6,17 @@ import { useNavigation, useRoute, type RouteProp } from '@react-navigation/nativ
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import Reanimated, { Extrapolation, interpolate, useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
-import dayjs from 'dayjs';
 import { SPACING, TYPOGRAPHY } from '../constants';
 import { useAppTheme } from '../theme/useAppTheme';
 import { BackTextButton } from '../components/common/BackTextButton';
-import { FourWeekActivityChart } from '../components/history/FourWeekActivityChart';
-import { HistoryWorkoutDetailPanel } from '../components/history/HistoryWorkoutDetailPanel';
-import { useStore } from '../store';
-import { buildWorkoutHistoryByDateFromSchedule } from '../utils/buildWorkoutHistoryByDateFromSchedule';
-import { pickDefaultHistorySelection } from '../utils/historyDefaultSelection';
-import {
-  buildSundayFirstFourWeekGrid,
-  formatHistorySelectedHeading,
-} from '../utils/historyWeekGrid';
+import { HistoryTabBar } from '../components/history/HistoryTabBar';
+import { LastFourWeeksHistoryTab } from '../components/history/LastFourWeeksHistoryTab';
+import { WeightProgressTab } from '../components/history/WeightProgressTab';
+import { ExportHistorySheet } from '../components/history/ExportHistorySheet';
 import type { RootStackParamList } from '../navigation/AppNavigator';
 import { getAppThemeFromStore } from '../theme/getAppThemeFromStore';
+import { useTranslation } from '../i18n/useTranslation';
+import type { HistoryTabId } from '../types/exerciseWeightProgress';
 import {
   SCHEDULE_DECK_T,
   SCHEDULE_DECK_EXECUTION_INCOMING_SCALE_START,
@@ -35,11 +31,19 @@ export function HistoryScreen() {
   const route = useRoute<HistoryRouteProp>();
   const insets = useSafeAreaInsets();
   const { colors: themeColors } = useAppTheme();
-  const scheduledWorkouts = useStore(s => s.scheduledWorkouts);
-  const getMainCompletion = useStore(s => s.getMainCompletion);
-  const detailedWorkoutProgress = useStore(s => s.detailedWorkoutProgress);
-  const exercises = useStore(s => s.exercises);
-  const settings = useStore(s => s.settings);
+  const { t } = useTranslation();
+
+  const initialTab: HistoryTabId = route.params?.initialTab ?? 'last4Weeks';
+  const [activeTab, setActiveTab] = useState<HistoryTabId>(initialTab);
+  const [exportSheetVisible, setExportSheetVisible] = useState(false);
+  const [scrollEnabled, setScrollEnabled] = useState(true);
+
+  const last4WeeksScrollRef = useRef<ScrollView>(null);
+  const last4WeeksScrollY = useRef(0);
+
+  useEffect(() => {
+    setActiveTab(route.params?.initialTab ?? 'last4Weeks');
+  }, [route.params?.initialTab]);
 
   const transitionSource = route.params?.transitionSource;
   const isScheduleOriginTransition = transitionSource === 'scheduleDeck';
@@ -56,7 +60,6 @@ export function HistoryScreen() {
     scheduleDeckTransitionActiveSV.value = isScheduleOriginTransition ? 1 : 0;
   }, [isScheduleOriginTransition, scheduleDeckTransitionActiveSV]);
 
-  /** Same incoming shell as ExerciseExecution (shared schedule-deck timeline). */
   const scheduleDeckIncomingShellStyle = useAnimatedStyle(() => {
     if (scheduleDeckTransitionActiveSV.value === 0) {
       return {};
@@ -115,50 +118,39 @@ export function HistoryScreen() {
     });
   }, [isScheduleOriginTransition, navigation, resetScheduleDeckTransition, startScheduleDeckReverseTransition]);
 
-  const reference = useMemo(() => dayjs().startOf('day'), []);
-  const rows = useMemo(() => buildSundayFirstFourWeekGrid(reference), [reference]);
-  const byDate = useMemo(
-    () =>
-      buildWorkoutHistoryByDateFromSchedule(
-        scheduledWorkouts,
-        getMainCompletion,
-        detailedWorkoutProgress,
-        exercises,
-        settings?.useKg ?? false,
-      ),
-    [scheduledWorkouts, getMainCompletion, detailedWorkoutProgress, exercises, settings?.useKg],
-  );
-  const completedIsoSet = useMemo(() => new Set(byDate.keys()), [byDate]);
-
-  const [selectedIso, setSelectedIso] = useState(() =>
-    pickDefaultHistorySelection(rows, completedIsoSet, reference),
-  );
-
-  const selectedEntry = byDate.get(selectedIso) ?? null;
-  const selectedHeading = formatHistorySelectedHeading(selectedIso);
-  const todayIso = reference.format('YYYY-MM-DD');
-
-  const onSelectIso = useCallback((iso: string) => {
-    setSelectedIso(iso);
-  }, []);
-
   const onPressBack = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     runCloseToScheduleCard();
   }, [runCloseToScheduleCard]);
 
+  const handleTabChange = useCallback((tab: HistoryTabId) => {
+    setActiveTab(tab);
+  }, []);
+
+  const handleOpenExport = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setExportSheetVisible(true);
+  }, []);
+
+  const scrollViewProps = useMemo(
+    () => ({
+      scrollEnabled,
+      showsVerticalScrollIndicator: false as const,
+      contentContainerStyle: [styles.scrollContent, { paddingBottom: insets.bottom + SPACING.xxxl }],
+    }),
+    [scrollEnabled, insets.bottom],
+  );
+
   return (
     <Reanimated.View
       style={[
         styles.screen,
-        /* Page canvas — same token as TodayScreen root schedule (`styles.gradient` → `themeColors.canvasLight`). */
         { paddingTop: insets.top, backgroundColor: themeColors.canvasLight },
         isScheduleOriginTransition && scheduleDeckIncomingShellStyle,
       ]}
     >
       <StatusBar style="dark" />
 
-      {/* e.g. screenshot: "‹ Home" — chevron + label; both use `textMeta` (BackTextButton merges this onto chevron and label). */}
       <BackTextButton
         label="Home"
         chevronPointsLeft
@@ -166,34 +158,43 @@ export function HistoryScreen() {
         textStyle={{ color: themeColors.textMeta }}
       />
 
-      <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + SPACING.xxxl }]}
-        showsVerticalScrollIndicator={false}
-      >
-        <View style={styles.titleBlock}>
-          {/* e.g. screenshot: large "History" — `containerPrimary` */}
-          <Text style={[styles.titlePrimary, { color: themeColors.containerPrimary }]}>History</Text>
-          {/* e.g. screenshot: "Last 4 weeks" under the title — stays meta tone */}
-          <Text style={styles.titleSecondary}>Last 4 weeks</Text>
-        </View>
-
-        <View style={{ height: SPACING.xxxl }} />
-
-        <FourWeekActivityChart
-          rows={rows}
-          selectedIso={selectedIso}
-          completedIsoSet={completedIsoSet}
-          todayIso={todayIso}
-          onSelectIso={onSelectIso}
-          completedWorkoutColor={themeColors.containerPrimary}
-          emptyDayFill={themeColors.containerSecondary}
+      <View style={styles.headerBlock}>
+        <Text style={[styles.titlePrimary, { color: themeColors.containerPrimary }]}>{t('history')}</Text>
+        <HistoryTabBar
+          activeTab={activeTab}
+          onChange={handleTabChange}
+          last4WeeksLabel={t('historyTabLast4Weeks')}
+          progressLabel={t('historyTabProgress')}
         />
+      </View>
 
-        <View style={{ height: SPACING.xxxl + SPACING.md }} />
+      {activeTab === 'last4Weeks' ? (
+        <ScrollView
+          ref={last4WeeksScrollRef}
+          style={styles.scroll}
+          {...scrollViewProps}
+          onScroll={e => {
+            last4WeeksScrollY.current = e.nativeEvent.contentOffset.y;
+          }}
+          scrollEventThrottle={16}
+        >
+          <LastFourWeeksHistoryTab
+            exportHistoryLabel={t('historyExportLink')}
+            onPressExportHistory={handleOpenExport}
+          />
+        </ScrollView>
+      ) : (
+        <View style={styles.weightTabContainer}>
+          <WeightProgressTab
+            onScrollEnabledChange={setScrollEnabled}
+            listScrollEnabled={scrollEnabled}
+            contentPaddingBottom={insets.bottom + SPACING.xxxl}
+            horizontalPadding={SPACING.xxl}
+          />
+        </View>
+      )}
 
-        <HistoryWorkoutDetailPanel entry={selectedEntry} selectedDateLabel={selectedHeading} />
-      </ScrollView>
+      <ExportHistorySheet visible={exportSheetVisible} onClose={() => setExportSheetVisible(false)} />
     </Reanimated.View>
   );
 }
@@ -209,14 +210,14 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingHorizontal: SPACING.xxl,
   },
-  titleBlock: {
+  headerBlock: {
+    paddingHorizontal: SPACING.xxl,
     marginTop: SPACING.sm,
   },
   titlePrimary: {
     ...TYPOGRAPHY.displayLarge,
   },
-  titleSecondary: {
-    ...TYPOGRAPHY.displayLarge,
-    color: themeColors.textMeta,
+  weightTabContainer: {
+    flex: 1,
   },
 });

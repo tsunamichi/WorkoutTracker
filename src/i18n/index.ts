@@ -175,6 +175,25 @@ type TranslationKey =
   | 'viewHistory'
   | 'hideHistory'
   | 'noHistoryRecordedYet'
+  | 'historyTabLast4Weeks'
+  | 'historyTabWeightProgress'
+  | 'historyTabProgress'
+  | 'historyExportLink'
+  | 'historyExportTitle'
+  | 'historyExportFrom'
+  | 'historyExportTo'
+  | 'historyExportCta'
+  | 'historyExportInvalidRange'
+  | 'historyExportEmptyRange'
+  | 'historyExportPrepared'
+  | 'historyExportCopyCta'
+  | 'historyExportCopied'
+  | 'historyWeightProgressEmpty'
+  | 'historyWeightFirst'
+  | 'historyWeightBest'
+  | 'historyMainLiftBadge'
+  | 'kg'
+  | 'lb'
   | 'latestExerciseLog'
   | 'alertCompleteExerciseTitle'
   | 'alertCompleteExerciseMessage'
@@ -836,6 +855,25 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     viewHistory: 'View history',
     hideHistory: 'Hide history',
     noHistoryRecordedYet: 'No history recorded yet',
+    historyTabLast4Weeks: 'Last 4 weeks',
+    historyTabWeightProgress: 'Weight progress',
+    historyTabProgress: 'Progress',
+    historyExportLink: 'Export history',
+    historyExportTitle: 'Export history',
+    historyExportFrom: 'From',
+    historyExportTo: 'To',
+    historyExportCta: 'Export history',
+    historyExportInvalidRange: 'Start date must be on or before end date.',
+    historyExportEmptyRange: 'No completed workouts in this date range.',
+    historyExportPrepared: 'Exported {count} workouts. Save the JSON from the share sheet.',
+    historyExportCopyCta: 'Copy JSON to clipboard',
+    historyExportCopied: 'Copied {count} workouts to clipboard. Paste into Notes or any editor.',
+    historyWeightProgressEmpty: 'Log weighted sets to see your strength progress.',
+    historyWeightFirst: 'First',
+    historyWeightBest: 'Best',
+    historyMainLiftBadge: 'Main lift',
+    kg: 'kg',
+    lb: 'lb',
     alertCompleteExerciseTitle: 'Complete Exercise',
     alertCompleteExerciseMessage: 'Mark all sets as complete?',
     alertResetExerciseTitle: 'Reset Exercise',
@@ -1520,6 +1558,26 @@ const TRANSLATIONS: Record<Language, Record<TranslationKey, string>> = {
     viewHistory: 'Ver historial',
     hideHistory: 'Ocultar historial',
     noHistoryRecordedYet: 'Sin historial',
+    historyTabLast4Weeks: 'Últimas 4 semanas',
+    historyTabWeightProgress: 'Progreso de peso',
+    historyTabProgress: 'Progreso',
+    historyExportLink: 'Exportar historial',
+    historyExportTitle: 'Exportar historial',
+    historyExportFrom: 'Desde',
+    historyExportTo: 'Hasta',
+    historyExportCta: 'Exportar historial',
+    historyExportInvalidRange: 'La fecha de inicio debe ser anterior o igual a la de fin.',
+    historyExportEmptyRange: 'No hay entrenamientos completados en este rango.',
+    historyExportPrepared: 'Exportados {count} entrenamientos. Guarda el JSON desde compartir.',
+    historyExportCopyCta: 'Copiar JSON al portapapeles',
+    historyExportCopied:
+      'Copiados {count} entrenamientos al portapapeles. Pégalo en Notas o cualquier editor.',
+    historyWeightProgressEmpty: 'Registra series con peso para ver tu progreso de fuerza.',
+    historyWeightFirst: 'Primero',
+    historyWeightBest: 'Mejor',
+    historyMainLiftBadge: 'Levantamiento principal',
+    kg: 'kg',
+    lb: 'lb',
     alertCompleteExerciseTitle: 'Completar ejercicio',
     alertCompleteExerciseMessage: 'Marcar todas las series como completas?',
     alertResetExerciseTitle: 'Reiniciar ejercicio',
