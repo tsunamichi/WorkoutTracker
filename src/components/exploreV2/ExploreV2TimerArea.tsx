@@ -14,6 +14,7 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 import { TYPOGRAPHY } from '../../constants';
+import { outfitNumericStyle } from '../../constants/fonts';
 import { useAppTheme } from '../../theme/useAppTheme';
 import { EXPLORE_V2 } from './exploreV2Tokens';
 import { EXPLORE_V2_CHROME } from './exploreV2ColorSystem';
@@ -398,9 +399,9 @@ const styles = StyleSheet.create({
     opacity: 0,
   },
   timeHero: {
+    ...outfitNumericStyle,
     fontSize: 80,
     lineHeight: 80,
-    fontWeight: '400',
     textAlign: 'center',
     includeFontPadding: false,
     textAlignVertical: 'center',

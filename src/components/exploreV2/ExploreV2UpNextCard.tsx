@@ -8,6 +8,7 @@ import Reanimated, {
   type SharedValue,
 } from 'react-native-reanimated';
 import { EXPLORE_V2, exploreV2UpNextQueueExerciseNameStyle } from './exploreV2Tokens';
+import { exploreV2CardBorderColor } from './exploreV2TimerBorderColor';
 import { TYPOGRAPHY } from '../../constants';
 import { EXECUTION_CTA_HEIGHT } from '../execution/executionCtaTokens';
 import { useAppTheme } from '../../theme/useAppTheme';
@@ -280,13 +281,13 @@ export function ExploreV2UpNextCard({
   const workUpNextBg = ex.workTimerUpNextCardBg;
   const amberBand = ex.amberBand;
   const accentPrimary = themeColors.accentPrimary;
-  const textMetaTimer = themeColors.textMetaTimer;
   const accentPrimaryDark = themeColors.accentPrimaryDark;
   const containerPrimary = themeColors.containerPrimary;
   const containerSecondary = themeColors.containerSecondary;
   const upNextBaseBg = themeColors.containerSecondary;
   const menuMutedBg = '#CFC9CC';
   const menuMutedInk = themeColors.textMeta;
+  const currentCardSurface = ex.surfaceCurrentCard;
   /** Mirrors `timerThemeActive` on UI thread — multiplies theme progress so chrome snaps idle when rest ends. */
   const restChromeGateSV = useSharedValue(timerThemeActive ? 1 : 0);
   useLayoutEffect(() => {
@@ -295,18 +296,18 @@ export function ExploreV2UpNextCard({
 
   const [removeMode, setRemoveMode] = useState(false);
 
-  /** Rest band (b, w=0): “Up Next” header → textMeta; work (w=1) → text-meta-timer. */
+  /** Rest band (b, w=0): “Up Next” header → textMeta; work (w=1) → current card surface. */
   const headerChromeAnimatedStyle = useAnimatedStyle(() => {
     const b = restThemeProgress.value;
     const w = exploreV2WorkBlueProgress.value;
     const pRest = b * (1 - w);
     const pWork = b * w;
     const restCol = interpolateColor(pRest, [0, 1], [containerPrimary, accentPrimaryDark]);
-    const baseColor = interpolateColor(pWork, [0, 1], [restCol, textMetaTimer]);
+    const baseColor = interpolateColor(pWork, [0, 1], [restCol, currentCardSurface]);
     return {
       color: interpolateColor(menuToneProgress.value, [0, 1], [baseColor, menuMutedInk]),
     };
-  }, [containerPrimary, accentPrimaryDark, textMetaTimer, menuMutedInk, menuToneProgress]);
+  }, [containerPrimary, accentPrimaryDark, currentCardSurface, menuMutedInk, menuToneProgress]);
   /** Add / Remove footer links — `containerPrimary` ink (menu open: muted). */
   const tertiaryActionInk = menuThemeActive ? menuMutedInk : containerPrimary;
   const chevronIdleOpacityStyle = useAnimatedStyle(() => ({
@@ -323,15 +324,17 @@ export function ExploreV2UpNextCard({
   const shellAnimatedStyle = useAnimatedStyle(() => {
     const b = restThemeProgress.value;
     const w = exploreV2WorkBlueProgress.value;
-    const pRest = b * (1 - w);
     const whenUpBg = interpolateColor(w, [0, 1], [amberBand, workUpNextBg]);
     const baseBg = interpolateColor(b, [0, 1], [upNextBaseBg, whenUpBg]);
-    const baseBorder = interpolateColor(pRest, [0, 1], [themeColors.canvasLight, accentPrimary]);
     return {
       backgroundColor: interpolateColor(menuToneProgress.value, [0, 1], [baseBg, menuMutedBg]),
-      borderColor: baseBorder,
+      borderColor: exploreV2CardBorderColor(b, w, {
+        pageIdle: themeColors.canvasLight,
+        pageRest: accentPrimary,
+        pageWork: themeColors.backgroundTimer,
+      }),
     };
-  }, [upNextBaseBg, amberBand, workUpNextBg, themeColors.canvasLight, accentPrimary, menuMutedBg, menuToneProgress]);
+  }, [upNextBaseBg, amberBand, workUpNextBg, themeColors.canvasLight, themeColors.backgroundTimer, accentPrimary, menuMutedBg, menuToneProgress]);
   const scrollBgAnimatedStyle = useAnimatedStyle(() => {
     const b = restThemeProgress.value;
     const w = exploreV2WorkBlueProgress.value;

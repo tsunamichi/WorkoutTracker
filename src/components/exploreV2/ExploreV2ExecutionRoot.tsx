@@ -22,6 +22,7 @@ import Animated, {
 import * as Haptics from 'expo-haptics';
 import { useAppTheme } from '../../theme/useAppTheme';
 import { EXPLORE_V2 } from './exploreV2Tokens';
+import { exploreV2CardBorderColor } from './exploreV2TimerBorderColor';
 import { TYPOGRAPHY } from '../../constants';
 import type { ExploreV2Group } from './exploreV2Types';
 import type { PrimaryRevealedCard } from './exploreV2Types';
@@ -634,11 +635,14 @@ function ExploreV2ExecutionRootComponent(props: ExploreV2ExecutionRootProps) {
   const walletBorderOverlayAnimatedStyle = useAnimatedStyle(() => {
     const b = restThemeProgress.value;
     const w = exploreV2WorkBlueProgress.value;
-    const pRest = b * (1 - w);
     return {
-      borderColor: interpolateColor(pRest, [0, 1], [themeColorsRoot.canvasLight, themeColorsRoot.accentPrimary]),
+      borderColor: exploreV2CardBorderColor(b, w, {
+        pageIdle: themeColorsRoot.canvasLight,
+        pageRest: themeColorsRoot.accentPrimary,
+        pageWork: backgroundTimerRoot,
+      }),
     };
-  }, [themeColorsRoot.canvasLight, themeColorsRoot.accentPrimary]);
+  }, [themeColorsRoot.canvasLight, themeColorsRoot.accentPrimary, backgroundTimerRoot]);
 
   const onSelectUpNext = useCallback(
     (gi: number) => {

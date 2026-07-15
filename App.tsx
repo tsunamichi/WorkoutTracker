@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { StatusBar } from 'expo-status-bar';
+import { useFonts } from 'expo-font';
 import { ActivityIndicator, View, StyleSheet, Text, TextInput, TouchableOpacity } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -7,6 +8,7 @@ import { RootNavigator } from './src/navigation/RootNavigator';
 import { useStore } from './src/store';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAppTheme } from './src/theme/useAppTheme';
+import { FONT_OUTFIT_MEDIUM } from './src/constants/fonts';
 
 // Keep typography deterministic across devices by disabling OS-level font scaling app-wide.
 Text.defaultProps = Text.defaultProps || {};
@@ -49,10 +51,19 @@ export default function App() {
   const { colors: themeColors } = useAppTheme();
   const { initialize, isLoading } = useStore();
   const [fatalError, setFatalError] = useState<Error | null>(null);
+  const [fontsLoaded, fontError] = useFonts({
+    [FONT_OUTFIT_MEDIUM]: require('./assets/fonts/Outfit-Medium.otf'),
+  });
   
   useEffect(() => {
     initialize();
   }, []);
+
+  useEffect(() => {
+    if (fontError) {
+      console.error('Failed to load custom fonts:', fontError);
+    }
+  }, [fontError]);
 
   useEffect(() => {
     // Prevent hard-crashes on production builds by intercepting fatal JS errors.
@@ -147,7 +158,7 @@ export default function App() {
     [themeColors]
   );
   
-  if (isLoading) {
+  if (!fontsLoaded || isLoading) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color={themeColors.primary} />
