@@ -16,6 +16,7 @@ import Animated, {
   useSharedValue,
 } from 'react-native-reanimated';
 import { CARDS, SPACING, TYPOGRAPHY } from '../../constants';
+import { outfitNumericStyle } from '../../constants/fonts';
 import { IconArrowDiagonal } from '../icons';
 import { useAppTheme } from '../../theme/useAppTheme';
 import { useTranslation } from '../../i18n/useTranslation';
@@ -555,15 +556,16 @@ const styles = StyleSheet.create({
     bottom: -94,
   },
   cardPositionLabelText: {
+    ...outfitNumericStyle,
     fontSize: 300,
     lineHeight: 300,
-    fontWeight: '500',
     includeFontPadding: false,
     textAlign: 'right',
     width: '100%',
   },
   /** "+" at 300pt reads smaller than digits; scale up so cap height matches digit numerals. */
   cardPositionLabelPlus: {
+    ...outfitNumericStyle,
     fontSize: 352,
     lineHeight: 352,
   },

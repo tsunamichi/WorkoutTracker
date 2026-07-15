@@ -1,5 +1,6 @@
 // Design tokens and constants for the app
 export { hexToRgba } from '../theme/colorUtils';
+export { FONT_OUTFIT_MEDIUM, outfitNumericStyle } from './fonts';
 import { basePalette } from '../theme/basePalette';
 
 // Muted background colors for cycle/plan grouping on the calendar (dark theme)

@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity, Pressable, Keyboard } from 'r
 import { Platform } from 'react-native';
 import Animated, { useAnimatedStyle, interpolateColor, type SharedValue } from 'react-native-reanimated';
 import { EXPLORE_V2, COMPLETED_EXERCISE_LIST_LAYOUT } from './exploreV2Tokens';
+import { exploreV2CardBorderColor } from './exploreV2TimerBorderColor';
 import { TYPOGRAPHY } from '../../constants';
 import { useAppTheme } from '../../theme/useAppTheme';
 import { IconChevronDown } from '../icons';
@@ -107,7 +108,6 @@ export function ExploreV2CompleteCard({
     }
   }, [completedExerciseEdit, editValid, onCloseCompletedExerciseEdit]);
   const pageBgChrome = themeColors.canvasLight;
-  const textMetaTimer = themeColors.textMetaTimer;
   const textMeta = themeColors.textMeta;
   const accentPrimaryDark = themeColors.accentPrimaryDark;
   const accentPrimary = themeColors.accentPrimary;
@@ -117,6 +117,7 @@ export function ExploreV2CompleteCard({
   const amberBand = ex.amberBand;
   const menuMutedBg = '#CFC9CC';
   const menuMutedInk = themeColors.textMeta;
+  const currentCardSurface = ex.surfaceCurrentCard;
 
   const headerChromeAnimatedStyle = useAnimatedStyle(() => {
     const b = restThemeProgress.value;
@@ -124,11 +125,11 @@ export function ExploreV2CompleteCard({
     const pRest = b * (1 - w);
     const pWork = b * w;
     const restCol = interpolateColor(pRest, [0, 1], [containerPrimary, accentPrimaryDark]);
-    const baseColor = interpolateColor(pWork, [0, 1], [restCol, textMetaTimer]);
+    const baseColor = interpolateColor(pWork, [0, 1], [restCol, currentCardSurface]);
     return {
       color: interpolateColor(menuToneProgress.value, [0, 1], [baseColor, menuMutedInk]),
     };
-  }, [containerPrimary, accentPrimaryDark, textMetaTimer, menuMutedInk, menuToneProgress]);
+  }, [containerPrimary, accentPrimaryDark, currentCardSurface, menuMutedInk, menuToneProgress]);
   const chevronIdleOpacityStyle = useAnimatedStyle(() => ({
     opacity: 1 - restThemeProgress.value * (1 - exploreV2WorkBlueProgress.value),
   }));
@@ -143,15 +144,17 @@ export function ExploreV2CompleteCard({
   const shellAnimatedStyle = useAnimatedStyle(() => {
     const b = restThemeProgress.value;
     const w = exploreV2WorkBlueProgress.value;
-    const pRest = b * (1 - w);
     const whenUpBg = interpolateColor(w, [0, 1], [amberBand, workUpNextBg]);
     const baseBg = interpolateColor(b, [0, 1], [upNextBaseBg, whenUpBg]);
-    const baseBorder = interpolateColor(pRest, [0, 1], [themeColors.canvasLight, accentPrimary]);
     return {
       backgroundColor: interpolateColor(menuToneProgress.value, [0, 1], [baseBg, menuMutedBg]),
-      borderColor: baseBorder,
+      borderColor: exploreV2CardBorderColor(b, w, {
+        pageIdle: themeColors.canvasLight,
+        pageRest: accentPrimary,
+        pageWork: themeColors.backgroundTimer,
+      }),
     };
-  }, [upNextBaseBg, amberBand, workUpNextBg, themeColors.canvasLight, accentPrimary, menuMutedBg, menuToneProgress]);
+  }, [upNextBaseBg, amberBand, workUpNextBg, themeColors.canvasLight, themeColors.backgroundTimer, accentPrimary, menuMutedBg, menuToneProgress]);
   const scrollContentAnimatedStyle = useAnimatedStyle(() => {
     const b = restThemeProgress.value;
     const w = exploreV2WorkBlueProgress.value;

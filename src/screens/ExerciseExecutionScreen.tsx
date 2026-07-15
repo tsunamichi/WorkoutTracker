@@ -942,6 +942,17 @@ export function ExerciseExecutionScreen() {
       backgroundColor: interpolateColor(p, [0, 1], [exploreV2BasePageBg, activeTint]),
     };
   }, [exploreV2BasePageBg, exploreV2TimerPageRestTint, exploreV2TimerPageWorkTint]);
+  const exploreV2CurrentCardSurface = appTheme.explore.surfaceCurrentCard;
+  const exploreV2BackChromeAnimatedStyle = useAnimatedStyle(() => {
+    const b = exploreV2TimerBandProgress.value;
+    const w = exploreV2WorkBlueProgress.value;
+    const pRest = b * (1 - w);
+    const pWork = b * w;
+    const restCol = interpolateColor(pRest, [0, 1], [themeColors.textMeta, themeColors.accentPrimaryDark]);
+    return {
+      color: interpolateColor(pWork, [0, 1], [restCol, exploreV2CurrentCardSurface]),
+    };
+  }, [themeColors.textMeta, themeColors.accentPrimaryDark, exploreV2CurrentCardSurface]);
   const exploreV2HeaderInk = '#1F1F1F';
   const historyOpacity = useRef(new Animated.Value(0)).current;
   
@@ -3623,8 +3634,18 @@ export function ExerciseExecutionScreen() {
             disabled={showMenu}
           >
             <View style={styles.backMetaButton}>
-              <IconArrowLeft size={18} color={executionMode === 'explore-v2' ? themeColors.textMeta : 'rgba(255,255,255,0.72)'} />
-              <Text style={[styles.backMetaText, executionMode === 'explore-v2' && styles.backMetaTextExploreV2]}>Schedule</Text>
+              {executionMode === 'explore-v2' ? (
+                <AnimatedReanimated.Text
+                  style={[styles.backMetaText, styles.backMetaTextExploreV2, exploreV2BackChromeAnimatedStyle]}
+                >
+                  ← Schedule
+                </AnimatedReanimated.Text>
+              ) : (
+                <>
+                  <IconArrowLeft size={18} color="rgba(255,255,255,0.72)" />
+                  <Text style={styles.backMetaText}>Schedule</Text>
+                </>
+              )}
             </View>
             <Text
               testID="header-title"
@@ -5690,7 +5711,7 @@ const styles = StyleSheet.create({
     color: 'rgba(255,255,255,0.72)',
   },
   backMetaTextExploreV2: {
-    color: themeColors.textMeta,
+    includeFontPadding: false,
   },
   menuTextAction: {
     width: 48,

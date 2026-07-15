@@ -25,8 +25,10 @@ import Reanimated, {
   type AnimatedStyle,
 } from 'react-native-reanimated';
 import { EXPLORE_V2 } from './exploreV2Tokens';
+import { exploreV2CardBorderColor } from './exploreV2TimerBorderColor';
 import { EXECUTION_CTA_HEIGHT, EXECUTION_CTA_PADDING_H, executionCtaLabelStyle } from '../execution/executionCtaTokens';
 import { BORDER_RADIUS, TYPOGRAPHY, hexToRgba } from '../../constants';
+import { outfitNumericStyle } from '../../constants/fonts';
 import { useAppTheme } from '../../theme/useAppTheme';
 import { formatWeightForLoad, fromDisplayWeight } from '../../utils/weight';
 import { applyForwardPropagationForExerciseRounds } from '../../utils/exerciseLocalValues';
@@ -718,14 +720,16 @@ export function ExploreV2CurrentCard({
   const shellAnimatedStyle = useAnimatedStyle(() => {
     const b = restThemeProgress.value;
     const w = exploreV2WorkBlueProgress.value;
-    const pRest = b * (1 - w);
-    const baseBorder = interpolateColor(pRest, [0, 1], [themeColors.canvasLight, accentPrimary]);
     const menuP = menuToneProgress.value;
     return {
-      borderColor: baseBorder,
+      borderColor: exploreV2CardBorderColor(b, w, {
+        pageIdle: themeColors.canvasLight,
+        pageRest: accentPrimary,
+        pageWork: themeColors.backgroundTimer,
+      }),
       backgroundColor: interpolateColor(menuP, [0, 1], [surfaceColor, menuMutedBg]),
     };
-  }, [themeColors.canvasLight, accentPrimary, menuToneProgress, surfaceColor, menuMutedBg]);
+  }, [themeColors.canvasLight, themeColors.backgroundTimer, accentPrimary, menuToneProgress, surfaceColor, menuMutedBg]);
   const shellCornerAnimatedStyle = useAnimatedStyle(() => {
     const cp = celebrationProgress?.value ?? 0;
     return {
@@ -1453,10 +1457,10 @@ const styles = StyleSheet.create({
   /** Height matches `lineHeight` so the field isn’t taller than the line box — avoids vertically
    * centering the glyph in extra space (which made Remove look aligned to the view, not the digit). */
   valueInput: {
+    ...outfitNumericStyle,
     fontSize: 96,
     lineHeight: 104,
     height: 104,
-    fontWeight: '400',
     letterSpacing: -0.5,
     fontVariant: ['tabular-nums'],
     minWidth: 0,
