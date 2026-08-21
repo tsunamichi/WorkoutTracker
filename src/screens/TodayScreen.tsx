@@ -18,7 +18,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { useStore } from '../store';
 import { SPACING, TYPOGRAPHY, BORDER_RADIUS, CARDS } from '../constants';
-import { IconCheckmark, IconAdd, IconCalendar, IconPlay, IconStopwatch, IconArrowDiagonal, IconChevronDown } from '../components/icons';
+import { IconCheckmark, IconAdd, IconCalendar, IconPlay, IconStopwatch, IconArrowDiagonal, IconChevronDown, IconSettings } from '../components/icons';
 import { ScheduleWorkoutDeckV3, type ScheduleDeckV3Item } from '../components/schedule/ScheduleWorkoutDeckV3';
 import { CycleControlSheet } from '../components/CycleControlSheet';
 import { ShareCycleDrawer } from '../components/ShareCycleDrawer';
@@ -1202,14 +1202,15 @@ export function TodayScreen({ onDateChange, onOpenAddWorkout, onOpenBonusDrawer 
             <View style={[styles.scheduleHeaderStack, { paddingTop: insets.top + 24 }]}>
               <View style={styles.scheduleHeaderTopRow}>
                 <View style={styles.scheduleHeaderTopSpacer} />
-                <TertiaryButton
-                  label="Settings"
+                <TouchableOpacity
                   onPress={() => (navigation as any).navigate('Profile')}
-                  style={styles.profileLinkButton}
-                  color={themeColors.textMeta}
-                  underlineColor={themeColors.textMeta}
-                  textStyle={[styles.profileLinkText, { color: themeColors.textMeta }]}
-                />
+                  activeOpacity={1}
+                  style={styles.homeSettingsIconButton}
+                  accessibilityRole="button"
+                  accessibilityLabel="Settings"
+                >
+                  <IconSettings size={24} color={themeColors.textMeta} filled={false} />
+                </TouchableOpacity>
               </View>
               <Text style={styles.scheduleHeaderTitle}>Workout of the day</Text>
               <View style={styles.scheduleHeaderDateRow}>
@@ -1613,6 +1614,14 @@ const styles = StyleSheet.create({
   },
   profileLinkButton: {
     alignSelf: 'flex-end',
+  },
+  homeSettingsIconButton: {
+    width: 48,
+    height: 48,
+    marginVertical: -12,
+    marginRight: -12,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   profileLinkText: {
     ...TYPOGRAPHY.meta,
@@ -2333,7 +2342,6 @@ const styles = StyleSheet.create({
     color: themeColors.textMeta,
   },
 });
-
 
 
 

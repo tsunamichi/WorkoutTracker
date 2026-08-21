@@ -12,6 +12,7 @@ export { IconClose } from './IconClose';
 export { IconCore } from './IconCore';
 export { IconMinusLine } from './IconMinusLine';
 export { IconEdit } from './IconEdit';
+export { IconFilters } from './IconFilters';
 export { IconGripVertical } from './IconGripVertical';
 export { IconHistory } from './IconHistory';
 export { IconImport } from './IconImport';
@@ -32,4 +33,3 @@ export { IconTriangle } from './IconTriangle';
 export { IconUser } from './IconUser';
 export { IconWarmup } from './IconWarmup';
 export { IconWorkouts } from './IconWorkouts';
-

@@ -43,7 +43,7 @@ import * as Haptics from 'expo-haptics';
 import { useStore } from '../store';
 import { useAppTheme } from '../theme/useAppTheme';
 import { SPACING, TYPOGRAPHY, BORDER_RADIUS, CARDS } from '../constants';
-import { IconArrowLeft, IconCheck, IconCheckmark, IconAddLine, IconMinusLine, IconTrash, IconEdit, IconMenu, IconHistory, IconRestart, IconSkip, IconSwap, IconArrowRight, IconAdd, IconPause, IconPlay, IconAddTime, IconChevronDown } from '../components/icons';
+import { IconCheck, IconCheckmark, IconAddLine, IconMinusLine, IconTrash, IconEdit, IconMenu, IconHistory, IconRestart, IconSkip, IconSwap, IconArrowRight, IconAdd, IconPause, IconPlay, IconAddTime, IconChevronDown, IconSettings } from '../components/icons';
 import { BottomDrawer } from '../components/common/BottomDrawer';
 import { NextLabel } from '../components/common/NextLabel';
 import { SetTimerSheet } from '../components/timer/SetTimerSheet';
@@ -942,17 +942,6 @@ export function ExerciseExecutionScreen() {
       backgroundColor: interpolateColor(p, [0, 1], [exploreV2BasePageBg, activeTint]),
     };
   }, [exploreV2BasePageBg, exploreV2TimerPageRestTint, exploreV2TimerPageWorkTint]);
-  const exploreV2CurrentCardSurface = appTheme.explore.surfaceCurrentCard;
-  const exploreV2BackChromeAnimatedStyle = useAnimatedStyle(() => {
-    const b = exploreV2TimerBandProgress.value;
-    const w = exploreV2WorkBlueProgress.value;
-    const pRest = b * (1 - w);
-    const pWork = b * w;
-    const restCol = interpolateColor(pRest, [0, 1], [themeColors.textMeta, themeColors.accentPrimaryDark]);
-    return {
-      color: interpolateColor(pWork, [0, 1], [restCol, exploreV2CurrentCardSurface]),
-    };
-  }, [themeColors.textMeta, themeColors.accentPrimaryDark, exploreV2CurrentCardSurface]);
   const exploreV2HeaderInk = '#1F1F1F';
   const historyOpacity = useRef(new Animated.Value(0)).current;
   
@@ -3633,30 +3622,22 @@ export function ExerciseExecutionScreen() {
             activeOpacity={1}
             disabled={showMenu}
           >
-            <View style={styles.backMetaButton}>
-              {executionMode === 'explore-v2' ? (
-                <AnimatedReanimated.Text
-                  style={[styles.backMetaText, styles.backMetaTextExploreV2, exploreV2BackChromeAnimatedStyle]}
-                >
-                  ← Schedule
-                </AnimatedReanimated.Text>
-              ) : (
-                <>
-                  <IconArrowLeft size={18} color="rgba(255,255,255,0.72)" />
-                  <Text style={styles.backMetaText}>Schedule</Text>
-                </>
-              )}
+            <View style={styles.backTitleRow}>
+              <IconChevronDown
+                size={24}
+                color={executionMode === 'explore-v2' ? exploreV2HeaderInk : 'rgba(255,255,255,0.72)'}
+              />
+              <Text
+                testID="header-title"
+                numberOfLines={1}
+                style={[
+                  styles.headerTitle,
+                  executionMode === 'explore-v2' && styles.headerTitleExploreV2Left,
+                ]}
+              >
+                {getTitle()}
+              </Text>
             </View>
-            <Text
-              testID="header-title"
-              numberOfLines={1}
-              style={[
-                styles.headerTitle,
-                executionMode === 'explore-v2' && styles.headerTitleExploreV2Left,
-              ]}
-            >
-              {getTitle()}
-            </Text>
             {executionMode === 'explore' && inlineRestActive && (
               <View style={[styles.headerTimerPill, styles.headerTimerPillBelowTitle]}>
                 <TouchableOpacity onPress={handleInlineRestPauseToggle} activeOpacity={0.7} style={styles.exploreTimerIconBtn}>
@@ -3672,13 +3653,19 @@ export function ExerciseExecutionScreen() {
             )}
           </TouchableOpacity>
           {!isInPastCycle ? (
-            <UnderlinedActionButton
-              label={showMenu ? 'Close' : 'Options'}
+            <TouchableOpacity
               onPress={() => (showMenu ? setShowMenu(false) : setShowMenu(true))}
               activeOpacity={1}
-              style={styles.menuTextAction}
-              color={executionMode === 'explore-v2' ? exploreV2HeaderInk : '#FFFFFF'}
-            />
+              style={styles.menuIconButton}
+              accessibilityRole="button"
+              accessibilityLabel={showMenu ? 'Close workout options' : 'Workout options'}
+            >
+              <IconSettings
+                size={24}
+                color={executionMode === 'explore-v2' ? exploreV2HeaderInk : '#FFFFFF'}
+                filled={false}
+              />
+            </TouchableOpacity>
           ) : (
             <View style={styles.menuSpacer} />
           )}
@@ -5689,31 +5676,25 @@ const styles = StyleSheet.create({
   topBar: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    minHeight: 70,
+    alignItems: 'center',
+    minHeight: 48,
     paddingHorizontal: SPACING.xxl,
     paddingBottom: SPACING.sm,
   },
   topBarLeft: {
     flex: 1,
     minWidth: 0,
+    minHeight: 48,
+    justifyContent: 'center',
     paddingRight: SPACING.md,
   },
-  backMetaButton: {
+  backTitleRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    alignSelf: 'flex-start',
-    gap: 4,
+    gap: SPACING.sm,
     marginLeft: -2,
   },
-  backMetaText: {
-    ...TYPOGRAPHY.legal,
-    color: 'rgba(255,255,255,0.72)',
-  },
-  backMetaTextExploreV2: {
-    includeFontPadding: false,
-  },
-  menuTextAction: {
+  menuIconButton: {
     width: 48,
     height: 48,
     justifyContent: 'center',
@@ -5739,13 +5720,10 @@ const styles = StyleSheet.create({
   headerTitle: {
     ...TYPOGRAPHY.h3,
     color: '#FFFFFF',
-    textAlign: 'center',
-    width: '100%',
+    flex: 1,
   },
   headerTitleExploreV2Left: {
     color: themeColors.inkCharcoal,
-    textAlign: 'left',
-    width: 'auto',
   },
   floatingModeToggle: {
     position: 'absolute',

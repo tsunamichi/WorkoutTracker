@@ -43,6 +43,7 @@ import * as Haptics from 'expo-haptics';
 import { TertiaryButton, UnderlinedActionButton } from '../common/UnderlinedActionButton';
 import { useTranslation } from '../../i18n/useTranslation';
 import { getAppThemeFromStore } from '../../theme/getAppThemeFromStore';
+import { IconAddLine, IconClose, IconFilters } from '../icons';
 
 /** iOS: toolbar above the keyboard (numeric pads have no Done key). */
 export const EXPLORE_V2_HERO_METRICS_ACCESSORY_ID = 'exploreV2HeroMetricsAccessory';
@@ -626,8 +627,23 @@ export function ExploreV2CurrentCard({
   /** Work / switch-side timers keep stricter chrome; rest timer still allows Current settings. */
   const settingsTimerBlocksChrome =
     exploreV2TimerPhase === 'work' || exploreV2TimerPhase === 'switchSides';
+  const collapsedSecondary = !isPrimary && showCollapsedWhenSecondary;
+  const allSetsLoggedInGroup = nextIncomplete === null && orderedSlots.length > 0;
+  const metricsEditable = isPrimary && !heroTimerActive;
+  const onRemoveSetPress = useCallback(() => {
+    carouselAfterRemoveRef.current = Math.max(0, carouselIndex - 1);
+    void onAdjustGroupSets?.(-1);
+  }, [carouselIndex, onAdjustGroupSets]);
+  const showRemoveSetRow =
+    Boolean(onAdjustGroupSets) &&
+    metricsEditable &&
+    orderedSlots.length > 0 &&
+    carouselIndex === orderedSlots.length - 1 &&
+    group.totalRounds > 1;
   const ctaLabel =
-    exploreV2TimerPhase === 'rest'
+    showRemoveSetRow
+      ? 'Remove set'
+      : exploreV2TimerPhase === 'rest'
       ? 'Skip rest time'
       : exploreV2TimerPhase === 'work'
         ? 'Skip timer'
@@ -638,10 +654,6 @@ export function ExploreV2CurrentCard({
           : !groupHasStarted
             ? 'Log first set'
             : 'Log next set';
-  const collapsedSecondary = !isPrimary && showCollapsedWhenSecondary;
-  const allSetsLoggedInGroup = nextIncomplete === null && orderedSlots.length > 0;
-  const metricsEditable = isPrimary && !heroTimerActive;
-
   const logEnabledForSlot =
     nextIncompleteIndex < 0 || carouselIndex === nextIncompleteIndex;
   const inactiveSetPreview = !heroTimerActive && !logEnabledForSlot;
@@ -681,7 +693,7 @@ export function ExploreV2CurrentCard({
       ? (useDisabledHeroPalette ? v2DisabledInk : containerTertiary)
       : accentSecondaryDisabled);
   const logPressable =
-    heroTimerActive || (showPrimaryCta && logEnabledForSlot);
+    showRemoveSetRow || heroTimerActive || (showPrimaryCta && logEnabledForSlot);
 
   const settingsDrawerOpen = Boolean(settingsOverflow?.visible && isPrimary);
   const settingsSurfaceActive = settingsDrawerOpen && settingsSurfaceOpen;
@@ -740,9 +752,11 @@ export function ExploreV2CurrentCard({
     };
   }, [celebrationProgress, bottomCornerRadius]);
   const ctaBgStyle = useAnimatedStyle(() => {
-    const isCtaDisabled = !logPressable || inactiveSetPreview;
+    const isCtaDisabled = !showRemoveSetRow && (!logPressable || inactiveSetPreview);
     const baseBg =
-      isCtaDisabled
+      showRemoveSetRow
+        ? skipRestCtaBg
+        : isCtaDisabled
         ? (isV2Theme ? v2DisabledInk : accentSecondaryDisabled)
         : exploreV2TimerPhase === 'rest' || exploreV2TimerPhase === 'work' || exploreV2TimerPhase === 'switchSides'
         ? accentPrimary
@@ -750,13 +764,13 @@ export function ExploreV2CurrentCard({
     return {
       backgroundColor: interpolateColor(menuToneProgress.value, [0, 1], [baseBg, menuMutedBg]),
     };
-  }, [exploreV2TimerPhase, inactiveSetPreview, logPressable, isV2Theme, v2DisabledInk, accentPrimary, accentPrimaryDimmed, accentSecondaryDisabled, menuMutedBg, menuToneProgress, restThemeProgress]);
+  }, [showRemoveSetRow, skipRestCtaBg, exploreV2TimerPhase, inactiveSetPreview, logPressable, isV2Theme, v2DisabledInk, accentPrimary, accentPrimaryDimmed, accentSecondaryDisabled, menuMutedBg, menuToneProgress, restThemeProgress]);
   const ctaLabelStyle = useAnimatedStyle(() => {
-    const baseColor = themeColors.containerPrimary;
+    const baseColor = showRemoveSetRow ? themeColors.signalNegative : themeColors.containerPrimary;
     return {
       color: interpolateColor(menuToneProgress.value, [0, 1], [baseColor, menuMutedInk]),
     };
-  }, [themeColors.containerPrimary, menuMutedInk, menuToneProgress]);
+  }, [showRemoveSetRow, themeColors.signalNegative, themeColors.containerPrimary, menuMutedInk, menuToneProgress]);
   const heroColumnReserveStyle = useAnimatedStyle(() => ({
     marginBottom: 0,
   }));
@@ -782,11 +796,6 @@ export function ExploreV2CurrentCard({
     [carouselViewportWidth, orderedSlots.length],
   );
 
-  const onRemoveSetPress = useCallback(() => {
-    carouselAfterRemoveRef.current = Math.max(0, carouselIndex - 1);
-    void onAdjustGroupSets?.(-1);
-  }, [carouselIndex, onAdjustGroupSets]);
-
   const EXPLORE_V2_MAX_GROUP_SETS = 30;
   const canAddSet = group.totalRounds < EXPLORE_V2_MAX_GROUP_SETS;
   /** When every set in the group is logged, allow adding a round even during rest (minimized or expanded). Work / switch-side timers still block. */
@@ -798,31 +807,12 @@ export function ExploreV2CurrentCard({
   const addSetPressable = (metricsEditable && canAddSet) || addSetPressableWhenAllSetsDone;
   const showCollapsedAddSetRow =
     collapsedSecondary && Boolean(onAdjustGroupSets) && addSetPressableWhenAllSetsDone;
-  const showRemoveSetRow =
-    Boolean(onAdjustGroupSets) &&
-    metricsEditable &&
-    orderedSlots.length > 0 &&
-    carouselIndex === orderedSlots.length - 1 &&
-    group.totalRounds > 1;
   const showAddSetIcon = Boolean(onAdjustGroupSets) && orderedSlots.length > 0;
   const addSetPlusIconInk = menuThemeActive
     ? menuMutedInk
     : !addSetPressable
       ? (isV2Theme ? containerTertiary : accentSecondaryDisabled)
       : (isV2Theme ? containerTertiary : accentSecondarySoft);
-
-  const removeSetHeroTrailing =
-    showRemoveSetRow ? (
-      <TertiaryButton
-        label={t('exploreV2RemoveSet')}
-        onPress={onRemoveSetPress}
-        activeOpacity={0.85}
-        style={styles.addSetTertiaryButton}
-        textStyle={styles.addSetTertiaryLinkText}
-        color={settingsInk}
-        underlineColor={settingsInk}
-      />
-    ) : null;
 
   const renderPaginationColumn = () => (
     <View style={styles.paginationColumn}>
@@ -861,8 +851,7 @@ export function ExploreV2CurrentCard({
           );
         })}
         {showAddSetIcon ? (
-          <TertiaryButton
-            label={t('add')}
+          <TouchableOpacity
             onPress={() => {
               if (addSetPressable) void onAdjustGroupSets?.(1);
             }}
@@ -873,16 +862,22 @@ export function ExploreV2CurrentCard({
               styles.addSetTertiaryButtonPadStart,
               !addSetPressable && styles.setAdjustButtonDimmed,
             ]}
-            textStyle={styles.addSetTertiaryLinkText}
-            color={addSetPlusIconInk}
-            underlineColor={addSetPlusIconInk}
-          />
+            accessibilityRole="button"
+            accessibilityLabel={t('add')}
+            accessibilityState={{ disabled: !addSetPressable }}
+          >
+            <IconAddLine size={24} color={addSetPlusIconInk} />
+          </TouchableOpacity>
         ) : null}
       </View>
     </View>
   );
 
   const onLogPress = useCallback(() => {
+    if (showRemoveSetRow) {
+      onRemoveSetPress();
+      return;
+    }
     if (heroTimerActive) {
       onSkipRest();
       return;
@@ -890,7 +885,7 @@ export function ExploreV2CurrentCard({
     const committedValues = activeSetId ? commitsRef.current[activeSetId]?.() : undefined;
     const values = committedValues ?? activeSetValues;
     void onLogNextSet(activeSetId && values ? { setId: activeSetId, values } : undefined);
-  }, [heroTimerActive, onSkipRest, activeSetId, onLogNextSet, activeSetValues, carouselIndex, nextIncompleteIndex]);
+  }, [showRemoveSetRow, onRemoveSetPress, heroTimerActive, onSkipRest, activeSetId, onLogNextSet, activeSetValues, carouselIndex, nextIncompleteIndex]);
   const celebrationContentFadeStyle = useAnimatedStyle(() => ({
     opacity: 1 - (celebrationProgress?.value ?? 0),
   }), [celebrationProgress]);
@@ -929,14 +924,19 @@ export function ExploreV2CurrentCard({
                 Current
               </Reanimated.Text>
               {settingsOverflow && isPrimary ? (
-                <UnderlinedActionButton
-                  label={settingsDrawerOpen ? 'Done' : 'Settings'}
+                <TouchableOpacity
                   onPress={handleSettingsPress}
                   style={styles.settingsActionBtn}
-                  textStyle={[styles.addSetTertiaryLinkText, { color: settingsInk }]}
-                  color={settingsInk}
-                  underlineColor={settingsInk}
-                />
+                  activeOpacity={0.85}
+                  accessibilityRole="button"
+                  accessibilityLabel={settingsDrawerOpen ? 'Close filters' : 'Exercise filters'}
+                >
+                  {settingsDrawerOpen ? (
+                    <IconClose size={24} color={settingsInk} />
+                  ) : (
+                    <IconFilters size={24} color={settingsInk} />
+                  )}
+                </TouchableOpacity>
               ) : null}
             </View>
             <Reanimated.Text
@@ -1001,11 +1001,6 @@ export function ExploreV2CurrentCard({
                               pageWidth={carouselViewportWidth}
                               commitsRef={commitsRef}
                               progressionValuesByItemId={progressionValuesByItemId}
-                              removeSetTrailing={
-                                showRemoveSetRow && slotIndex === orderedSlots.length - 1
-                                  ? removeSetHeroTrailing
-                                  : null
-                              }
                             />
                           ))}
                         </ScrollView>
@@ -1093,11 +1088,6 @@ export function ExploreV2CurrentCard({
                             pageWidth={carouselViewportWidth}
                             commitsRef={commitsRef}
                             progressionValuesByItemId={progressionValuesByItemId}
-                            removeSetTrailing={
-                              showRemoveSetRow && slotIndex === orderedSlots.length - 1
-                                ? removeSetHeroTrailing
-                                : null
-                            }
                           />
                         ))}
                       </ScrollView>
@@ -1170,17 +1160,18 @@ export function ExploreV2CurrentCard({
                 />
                 {/* Peek only shows ~CURRENT_IN_PROGRESS_PEEK_VISIBLE_HEIGHT from the card top — keep control in header strip. */}
                 <View style={styles.collapsedAddSetHeaderSlot} pointerEvents="box-none">
-                  <UnderlinedActionButton
-                    label={t('exploreV2AddSet')}
+                  <TouchableOpacity
                     onPress={() => {
                       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                       void onAdjustGroupSets?.(1);
                     }}
-                    color={currentHeaderInk}
-                    underlineColor={currentHeaderInk}
                     style={styles.collapsedAddSetBtn}
-                    textStyle={styles.collapsedAddSetBtnText}
-                  />
+                    activeOpacity={0.85}
+                    accessibilityRole="button"
+                    accessibilityLabel={t('exploreV2AddSet')}
+                  >
+                    <IconAddLine size={24} color={currentHeaderInk} />
+                  </TouchableOpacity>
                 </View>
               </>
             ) : (
@@ -1292,10 +1283,6 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     paddingLeft: 8,
   },
-  collapsedAddSetBtnText: {
-    ...TYPOGRAPHY.legal,
-    fontSize: 12,
-  },
   topBlock: {
     position: 'relative',
     width: '100%',
@@ -1322,9 +1309,11 @@ const styles = StyleSheet.create({
   },
   settingsActionBtn: {
     zIndex: 20,
-    paddingLeft: 6,
-    paddingRight: 0,
-    paddingVertical: 4,
+    width: 40,
+    height: 40,
+    marginRight: -8,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   exerciseName: {
     ...TYPOGRAPHY.h2,
