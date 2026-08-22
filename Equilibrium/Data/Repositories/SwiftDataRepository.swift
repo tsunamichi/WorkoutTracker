@@ -57,7 +57,7 @@ public final class SwiftDataRepository: ExerciseRepository, WorkoutTemplateRepos
         let key = id.rawValue; var descriptor = FetchDescriptor<WorkoutTemplateRecord>(predicate: #Predicate { $0.id == key }); descriptor.fetchLimit = 1
         guard let record = try context.fetch(descriptor).first else { throw RepositoryError.notFound }; record.archivedAt = date; record.updatedAt = date; try saveOrRollback()
     }
-    public static func normalizeExerciseName(_ value: String) -> String {
+    public nonisolated static func normalizeExerciseName(_ value: String) -> String {
         value.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: .current).lowercased().split(whereSeparator: { !$0.isLetter && !$0.isNumber }).joined(separator: " ")
     }
 

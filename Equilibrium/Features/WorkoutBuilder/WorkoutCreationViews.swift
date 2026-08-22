@@ -14,8 +14,8 @@ struct AddWorkoutSheet: View {
                 Button { path.append(.templates) } label: { Label("Existing Workout", systemImage: "rectangle.stack").frame(minHeight: EQDimension.minimumTouch) }
                 Button { path.append(.recent) } label: { Label("Recent Workout", systemImage: "clock.arrow.circlepath").frame(minHeight: EQDimension.minimumTouch) }
                 Button { path.append(.builder(.init())) } label: { Label("Blank Workout", systemImage: "plus.square").frame(minHeight: EQDimension.minimumTouch) }
-                Button { } label: { Label("Import Plan", systemImage: "doc.on.clipboard").frame(minHeight: EQDimension.minimumTouch) }.disabled(true)
-                    .accessibilityHint("Import Plan arrives in Phase 3B")
+                Button { path.append(.importPlan) } label: { Label("Import Plan", systemImage: "doc.on.clipboard").frame(minHeight: EQDimension.minimumTouch) }
+                    .accessibilityHint("Paste and review a structured workout plan")
             }
             .scrollContentBackground(.hidden).background(EQColor.canvas).navigationTitle("Add Workout")
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } } }
@@ -24,14 +24,16 @@ struct AddWorkoutSheet: View {
                 case .builder(let draft): WorkoutBuilderView(model: .init(day: day, draft: draft, templates: templates, workouts: workouts), exercises: exercises) { value in scheduled(value); dismiss() }
                 case .templates: WorkoutTemplatePicker(repository: templates) { path.append(.builder(.init(template: $0))) }
                 case .recent: RecentWorkoutPicker(repository: workouts) { path.append(.builder(.init(recent: $0))) }
+                case .importPlan: PlanImportInputView { path.append(.importReview($0)) }
+                case .importReview(let result): PlanImportReviewView(model: .init(result: result, repository: exercises), exercises: exercises) { path.append(.builder($0)) }
                 }
             }
         }.presentationDetents([.large]).preferredColorScheme(.dark)
     }
 }
 
-private enum CreationRoute: Hashable {
-    case builder(WorkoutDraft), templates, recent
+enum CreationRoute: Hashable {
+    case builder(WorkoutDraft), templates, recent, importPlan, importReview(PlanParseResult)
 }
 
 struct WorkoutBuilderView: View {
