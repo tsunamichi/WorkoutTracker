@@ -28,6 +28,13 @@ struct ScheduleCalendar: Sendable {
         return try LocalDay(date: moved, calendar: calendar)
     }
 
+    func moving(_ day: LocalDay, byDays amount: Int) throws -> LocalDay {
+        guard let date = day.date(in: calendar), let moved = calendar.date(byAdding: .day, value: amount, to: date) else {
+            throw LocalDayError.invalidDate
+        }
+        return try LocalDay(date: moved, calendar: calendar)
+    }
+
     func fullDate(_ day: LocalDay) -> String {
         guard let date = day.date(in: calendar) else { return day.iso8601 }
         return date.formatted(.dateTime.weekday(.wide).month(.wide).day().year())

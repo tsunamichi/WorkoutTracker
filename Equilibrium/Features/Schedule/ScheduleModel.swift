@@ -9,6 +9,7 @@ final class ScheduleModel {
     private(set) var workoutsByDay: [LocalDay: ScheduledWorkout] = [:]
     private(set) var errorMessage: String?
     var isAddWorkoutPresented = false
+    var isTimerPresented = false
     let calendar: ScheduleCalendar
 
     init(repository: any ScheduledWorkoutRepository, calendar: ScheduleCalendar = .init(), now: Date = .now) {
@@ -35,6 +36,13 @@ final class ScheduleModel {
     }
 
     func select(_ day: LocalDay) { selectedDay = day }
+
+    func moveDay(_ amount: Int) async {
+        do {
+            selectedDay = try calendar.moving(selectedDay, byDays: amount)
+            await load()
+        } catch { errorMessage = "That day could not be opened." }
+    }
 
     func moveWeek(_ amount: Int) async {
         do {

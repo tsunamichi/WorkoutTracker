@@ -10,12 +10,13 @@ enum EQColor {
     static let accent = Color(red: 0.45, green: 0.82, blue: 0.68)
     static let success = Color(red: 0.35, green: 0.78, blue: 0.50)
     static let warning = Color(red: 0.96, green: 0.68, blue: 0.28)
+    static let rest = Color(red: 0.95, green: 0.72, blue: 0.32)
 }
 enum EQSpacing { static let xxs: CGFloat = 4; static let xs: CGFloat = 8; static let sm: CGFloat = 12; static let md: CGFloat = 16; static let lg: CGFloat = 24; static let xl: CGFloat = 32 }
 enum EQRadius { static let compact: CGFloat = 8; static let control: CGFloat = 12; static let card: CGFloat = 20; static let hero: CGFloat = 28 }
-enum EQTypography { static let display: Font = .largeTitle.bold(); static let title: Font = .title.bold(); static let sectionTitle: Font = .title2.weight(.semibold); static let cardHero: Font = .title.bold(); static let cardTitle: Font = .headline; static let exerciseTitle: Font = .title3.weight(.semibold); static let body: Font = .body; static let caption: Font = .caption }
-enum EQDimension { static let minimumTouch: CGFloat = 44; static let inputHeight: CGFloat = 48 }
-enum EQMotion { static let completion: Double = 0.35 }
+enum EQTypography { static let display: Font = .largeTitle.bold(); static let title: Font = .title.bold(); static let sectionTitle: Font = .title2.weight(.semibold); static let cardHero: Font = .title.bold(); static let cardTitle: Font = .headline; static let exerciseTitle: Font = .title3.weight(.semibold); static let metric: Font = .system(.largeTitle, design: .rounded, weight: .bold); static let body: Font = .body; static let caption: Font = .caption }
+enum EQDimension { static let minimumTouch: CGFloat = 44; static let inputHeight: CGFloat = 48; static let workoutCardHeight: CGFloat = 300; static let restCardHeight: CGFloat = 180 }
+enum EQMotion { static let standard: Double = 0.25; static let completion: Double = 0.35 }
 enum EQPreferenceKey { static let weightUnit = "equilibrium.weight-unit" }
 
 struct EQCardModifier: ViewModifier {

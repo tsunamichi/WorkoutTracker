@@ -174,4 +174,106 @@ final class WorkoutExecutionNavigationStateTests: XCTestCase {
         let persisted = try await repository.workout(id: fixture.id)
         XCTAssertEqual(persisted?.exercises[0].loggedSets[0].repetitions, 9)
     }
+
+    func testPresentationDefaultsCurrentAndPanelAndFocusAreTransient() async throws {
+        let repository = SwiftDataRepository(container: try PersistenceController.makeContainer(inMemory: true))
+        let fixture = EquilibriumFixtures.midWorkout(id: "panels")
+        try await repository.schedule(fixture)
+        let model = WorkoutExecutionModel(workoutID: fixture.id, repository: repository)
+        await model.activate()
+        XCTAssertEqual(model.expandedPanel, .current)
+        XCTAssertEqual(model.currentExercise?.id, fixture.exercises[1].id)
+        model.expand(.upNext)
+        XCTAssertEqual(model.expandedPanel, .upNext)
+        model.focus(fixture.exercises[2].id)
+        XCTAssertEqual(model.expandedPanel, .current)
+        XCTAssertEqual(model.currentExercise?.id, fixture.exercises[2].id)
+        let persistedOrder = try await repository.workout(id: fixture.id)
+        XCTAssertEqual(persistedOrder?.exercises.map(\.id), fixture.exercises.map(\.id))
+
+        let relaunched = WorkoutExecutionModel(workoutID: fixture.id, repository: repository)
+        await relaunched.activate()
+        XCTAssertEqual(relaunched.expandedPanel, .current)
+        XCTAssertEqual(relaunched.currentExercise?.id, fixture.exercises[1].id)
+    }
+
+    func testCompletedPanelCanFocusCompletedExerciseOnlyWhileActive() async throws {
+        let repository = SwiftDataRepository(container: try PersistenceController.makeContainer(inMemory: true))
+        let active = EquilibriumFixtures.midWorkout(day: "2026-08-22", id: "review-active")
+        try await repository.schedule(active)
+        let model = WorkoutExecutionModel(workoutID: active.id, repository: repository)
+        await model.activate(); model.expand(.completed); model.focus(active.exercises[0].id)
+        XCTAssertEqual(model.currentExercise?.id, active.exercises[0].id)
+        XCTAssertEqual(model.selectedSetIndex, active.exercises[0].prescriptions.count - 1)
+
+        let complete = EquilibriumFixtures.completed(day: "2026-08-23", id: "review-readonly")
+        try await repository.schedule(complete)
+        let readOnly = WorkoutExecutionModel(workoutID: complete.id, repository: repository)
+        await readOnly.activate(); readOnly.focus(complete.exercises[0].id)
+        XCTAssertNil(readOnly.focusedExerciseID)
+        XCTAssertEqual(readOnly.expandedPanel, .completed)
+    }
+
+    func testCurrentSetDerivesAdvancesAndRevisitsLoggedSet() async throws {
+        let repository = SwiftDataRepository(container: try PersistenceController.makeContainer(inMemory: true))
+        let fixture = EquilibriumFixtures.planned(id: "set-position")
+        try await repository.schedule(fixture)
+        let model = WorkoutExecutionModel(workoutID: fixture.id, repository: repository)
+        await model.activate()
+        XCTAssertEqual(model.selectedSetIndex, 0)
+        await model.log(exerciseID: fixture.exercises[0].id, prescriptionID: fixture.exercises[0].prescriptions[0].id, input: .repetitions(weight: nil, repetitions: 8))
+        XCTAssertEqual(model.selectedSetIndex, 1)
+        model.selectSet(at: 0)
+        XCTAssertEqual(model.currentPrescription?.id, fixture.exercises[0].prescriptions[0].id)
+        await model.log(exerciseID: fixture.exercises[0].id, prescriptionID: fixture.exercises[0].prescriptions[0].id, input: .repetitions(weight: .init(pounds: 140), repetitions: 9))
+        let loaded = try await repository.workout(id: fixture.id)
+        let persisted = try XCTUnwrap(loaded)
+        XCTAssertEqual(persisted.exercises[0].loggedSets.count, 1)
+        XCTAssertEqual(persisted.exercises[0].loggedSets[0].repetitions, 9)
+    }
+
+    func testRepetitionAndDurationFocusedPrescriptionTypes() async throws {
+        let repository = SwiftDataRepository(container: try PersistenceController.makeContainer(inMemory: true))
+        let fixture = EquilibriumFixtures.mixed(id: "focused-types")
+        try await repository.schedule(fixture)
+        let model = WorkoutExecutionModel(workoutID: fixture.id, repository: repository)
+        await model.activate()
+        guard case .repetitions = model.currentPrescription?.target else { return XCTFail("Expected repetitions") }
+        model.focus(fixture.exercises[1].id)
+        guard case .duration = model.currentPrescription?.target else { return XCTFail("Expected duration") }
+    }
+
+    func testRestStartsCountsDownSkipsAndDoesNotOwnPersistence() async throws {
+        let repository = SwiftDataRepository(container: try PersistenceController.makeContainer(inMemory: true))
+        let fixture = EquilibriumFixtures.mixed(id: "rest")
+        try await repository.schedule(fixture)
+        var instant = Date(timeIntervalSince1970: 1_000)
+        let model = WorkoutExecutionModel(workoutID: fixture.id, repository: repository, now: { instant })
+        await model.activate()
+        let exercise = fixture.exercises[0], prescription = exercise.prescriptions[0]
+        await model.log(exerciseID: exercise.id, prescriptionID: prescription.id, input: .repetitions(weight: nil, repetitions: 8))
+        XCTAssertEqual(model.restState?.remaining, 120)
+        instant = instant.addingTimeInterval(45); model.refreshRest()
+        XCTAssertEqual(model.restState?.remaining, 75)
+        let persistedDuringRest = try await repository.workout(id: fixture.id)
+        XCTAssertEqual(persistedDuringRest?.exercises[0].loggedSets.count, 1)
+        model.skipRest()
+        XCTAssertNil(model.restState)
+        let persistedAfterSkip = try await repository.workout(id: fixture.id)
+        XCTAssertEqual(persistedAfterSkip?.exercises[0].loggedSets.count, 1)
+    }
+
+    func testRestDeadlineCompletionReturnsToActiveCurrent() async throws {
+        let repository = SwiftDataRepository(container: try PersistenceController.makeContainer(inMemory: true))
+        let fixture = EquilibriumFixtures.mixed(id: "rest-finish")
+        try await repository.schedule(fixture)
+        var instant = Date(timeIntervalSince1970: 2_000)
+        let model = WorkoutExecutionModel(workoutID: fixture.id, repository: repository, now: { instant })
+        await model.activate()
+        await model.log(exerciseID: fixture.exercises[0].id, prescriptionID: fixture.exercises[0].prescriptions[0].id, input: .repetitions(weight: nil, repetitions: 8))
+        instant = instant.addingTimeInterval(121); model.refreshRest()
+        XCTAssertNil(model.restState)
+        XCTAssertEqual(model.expandedPanel, .current)
+        XCTAssertEqual(model.selectedSetIndex, 1)
+    }
 }

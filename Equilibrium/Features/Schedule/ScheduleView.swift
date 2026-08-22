@@ -24,42 +24,53 @@ struct ScheduleView: View {
                 ScrollView {
                     VStack(alignment: .leading, spacing: EQSpacing.lg) {
                         header
-                        WeekStrip(model: model)
                         selectedDayContent
                     }
                     .padding(.horizontal, EQSpacing.lg)
                     .padding(.bottom, EQSpacing.xl)
                 }
                 .scrollIndicators(.hidden)
+                .simultaneousGesture(DragGesture(minimumDistance: EQDimension.minimumTouch).onEnded { value in
+                    guard abs(value.translation.width) > abs(value.translation.height), abs(value.translation.width) > EQDimension.minimumTouch else { return }
+                    Task { await model.moveDay(value.translation.width < 0 ? 1 : -1) }
+                })
             }
             .toolbar(.hidden, for: .navigationBar)
             .navigationDestination(for: ScheduleRoute.self) { route in destination(route) }
             .sheet(isPresented: $model.isAddWorkoutPresented) { AddWorkoutSheet(day: model.selectedDay, exercises: exerciseRepository, templates: templateRepository, workouts: repository) { model.applyPersistedWorkout($0) } }
+            .sheet(isPresented: $model.isTimerPresented) { StandaloneTimerPlaceholder() }
             .task { await model.load() }
         }
         .tint(EQColor.accent)
     }
 
     private var header: some View {
-        VStack(alignment: .leading, spacing: EQSpacing.xs) {
-            HStack {
-                Text("Schedule").font(EQTypography.display).foregroundStyle(EQColor.primaryText)
+        VStack(alignment: .leading, spacing: EQSpacing.sm) {
+            HStack(alignment: .top) {
+                VStack(alignment: .leading, spacing: EQSpacing.xxs) {
+                    Text("Workout of the day").font(EQTypography.title)
+                    Text(model.calendar.fullDate(model.selectedDay))
+                        .font(EQTypography.body).foregroundStyle(EQColor.secondaryText)
+                }
                 Spacer()
-                NavigationLink(value: ScheduleRoute.history) { Image(systemName: "clock.arrow.circlepath") }
-                    .accessibilityLabel("Workout History")
                 NavigationLink(value: ScheduleRoute.settings) { Image(systemName: "gearshape") }
+                    .frame(width: EQDimension.minimumTouch, height: EQDimension.minimumTouch)
                     .accessibilityLabel("Settings")
             }
-            .font(.title3)
-            .frame(minHeight: EQDimension.minimumTouch)
-            Text(model.calendar.fullDate(model.selectedDay))
-                .font(EQTypography.sectionTitle)
-                .foregroundStyle(EQColor.secondaryText)
-            if !model.isTodaySelected {
-                Button("Today") { Task { await model.selectToday() } }
-                    .font(EQTypography.cardTitle)
-                    .accessibilityHint("Returns to the current date")
+            HStack {
+                NavigationLink("Workout history", value: ScheduleRoute.history)
+                    .font(EQTypography.caption)
+                Spacer()
+                Button { Task { await model.moveDay(-1) } } label: { Image(systemName: "chevron.left") }
+                    .accessibilityLabel("Previous day")
+                if !model.isTodaySelected {
+                    Button("Today") { Task { await model.selectToday() } }
+                        .font(EQTypography.caption).accessibilityHint("Returns to the current date")
+                }
+                Button { Task { await model.moveDay(1) } } label: { Image(systemName: "chevron.right") }
+                    .accessibilityLabel("Next day")
             }
+            .frame(minHeight: EQDimension.minimumTouch)
         }
         .padding(.top, EQSpacing.sm)
     }
@@ -74,6 +85,12 @@ struct ScheduleView: View {
         } else {
             RestDayCard(day: model.selectedDay) { model.isAddWorkoutPresented = true }
         }
+        Button { model.isTimerPresented = true } label: {
+            HStack { Image(systemName: "timer"); Text("Timer"); Spacer(); Image(systemName: "chevron.up") }
+                .frame(minHeight: EQDimension.minimumTouch)
+        }
+        .buttonStyle(.plain)
+        .accessibilityHint("Opens the standalone timer placeholder")
         if let message = model.errorMessage {
             Label(message, systemImage: "exclamationmark.triangle")
                 .font(.caption).foregroundStyle(EQColor.warning)
@@ -94,72 +111,6 @@ struct ScheduleView: View {
 
 enum ScheduleRoute: Hashable { case workout(ScheduledWorkoutID), settings, history }
 
-private struct WeekStrip: View {
-    @Bindable var model: ScheduleModel
-    @State private var feedback = 0
-
-    var body: some View {
-        VStack(spacing: EQSpacing.xs) {
-            HStack {
-                Button { Task { await model.moveWeek(-1) } } label: { Image(systemName: "chevron.left") }
-                    .accessibilityLabel("Previous week")
-                Spacer()
-                Text(weekLabel).font(.subheadline.weight(.semibold)).foregroundStyle(EQColor.secondaryText)
-                Spacer()
-                Button { Task { await model.moveWeek(1) } } label: { Image(systemName: "chevron.right") }
-                    .accessibilityLabel("Next week")
-            }.frame(minHeight: EQDimension.minimumTouch)
-            HStack(spacing: EQSpacing.xxs) {
-                ForEach(model.week, id: \.self) { day in
-                    let workout = model.workoutsByDay[day]
-                    Button {
-                        model.select(day); feedback += 1
-                    } label: {
-                        VStack(spacing: EQSpacing.xs) {
-                            Text(shortWeekday(day)).font(.caption2.weight(.semibold))
-                            Text("\(day.day)").font(.body.weight(day == model.selectedDay ? .bold : .medium)).monospacedDigit()
-                            Image(systemName: marker(for: workout))
-                                .font(.system(size: 7, weight: .bold))
-                                .opacity(workout == nil && day != model.today ? 0 : 1)
-                        }
-                        .frame(maxWidth: .infinity, minHeight: 64)
-                        .foregroundStyle(day == model.selectedDay ? EQColor.primaryText : EQColor.secondaryText)
-                        .background(day == model.selectedDay ? EQColor.elevatedSurface : .clear, in: RoundedRectangle(cornerRadius: EQRadius.compact, style: .continuous))
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel(accessibilityLabel(day, workout: workout))
-                    .accessibilityAddTraits(day == model.selectedDay ? .isSelected : [])
-                }
-            }
-        }
-        .sensoryFeedback(.selection, trigger: feedback)
-        .gesture(DragGesture(minimumDistance: 40).onEnded { value in
-            guard abs(value.translation.width) > abs(value.translation.height) else { return }
-            Task { await model.moveWeek(value.translation.width < 0 ? 1 : -1) }
-        })
-    }
-
-    private var weekLabel: String {
-        guard let first = model.week.first?.date(in: model.calendar.calendar), let last = model.week.last?.date(in: model.calendar.calendar) else { return "Week" }
-        if model.week.first?.month == model.week.last?.month { return first.formatted(.dateTime.month(.wide).year()) }
-        return "\(first.formatted(.dateTime.month(.abbreviated))) – \(last.formatted(.dateTime.month(.abbreviated).year()))"
-    }
-    private func shortWeekday(_ day: LocalDay) -> String { day.date(in: model.calendar.calendar)?.formatted(.dateTime.weekday(.narrow)) ?? "" }
-    private func marker(for workout: ScheduledWorkout?) -> String {
-        if workout?.status == .completed { return "checkmark.circle.fill" }
-        if workout != nil { return "circle.fill" }
-        return "circle.fill"
-    }
-    private func accessibilityLabel(_ day: LocalDay, workout: ScheduledWorkout?) -> String {
-        var parts = [model.calendar.fullDate(day)]
-        if day == model.today { parts.append("today") }
-        if day == model.selectedDay { parts.append("selected") }
-        if let workout { parts.append(workout.status == .completed ? "workout completed" : workout.status == .inProgress ? "workout in progress" : "workout planned") }
-        else { parts.append("rest day") }
-        return parts.joined(separator: ", ")
-    }
-}
-
 private struct WorkoutCard: View {
     let workout: ScheduledWorkout
     private var presentation: ScheduleCardPresentation { .init(status: workout.status) }
@@ -179,7 +130,7 @@ private struct WorkoutCard: View {
         }
         .foregroundStyle(EQColor.primaryText)
         .padding(EQSpacing.lg)
-        .frame(maxWidth: .infinity, minHeight: 260, alignment: .topLeading)
+        .frame(maxWidth: .infinity, minHeight: EQDimension.workoutCardHeight, alignment: .topLeading)
         .background(EQColor.surface, in: RoundedRectangle(cornerRadius: EQRadius.hero, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: EQRadius.hero, style: .continuous).stroke(EQColor.separator))
         .accessibilityElement(children: .combine)
@@ -199,9 +150,20 @@ private struct RestDayCard: View {
                 .controlSize(.large).padding(.top, EQSpacing.sm)
         }
         .foregroundStyle(EQColor.primaryText).padding(EQSpacing.lg)
-        .frame(maxWidth: .infinity, minHeight: 260, alignment: .topLeading)
+        .frame(maxWidth: .infinity, minHeight: EQDimension.restCardHeight, alignment: .topLeading)
         .background(EQColor.surface, in: RoundedRectangle(cornerRadius: EQRadius.hero, style: .continuous))
         .accessibilityElement(children: .contain)
+    }
+}
+
+private struct StandaloneTimerPlaceholder: View {
+    @Environment(\.dismiss) private var dismiss
+    var body: some View {
+        NavigationStack {
+            ContentUnavailableView("Timer", systemImage: "timer", description: Text("The standalone timer arrives in a later migration phase."))
+                .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
+                .presentationDetents([.medium])
+        }
     }
 }
 

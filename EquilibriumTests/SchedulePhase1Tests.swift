@@ -23,6 +23,7 @@ final class ScheduleCalendarTests: XCTestCase {
         let leap = try LocalDay("2024-02-29")
         XCTAssertTrue(try calendar().week(containing: leap).contains(leap))
         XCTAssertEqual(try calendar().moving(leap, byWeeks: 1), try LocalDay("2024-03-07"))
+        XCTAssertEqual(try calendar().moving(leap, byDays: 1), try LocalDay("2024-03-01"))
     }
 
     func testDSTAndTimeZoneUseCalendarLocalDay() throws {
@@ -66,6 +67,35 @@ final class ScheduleFeatureTests: XCTestCase {
         XCTAssertFalse(model.isAddWorkoutPresented)
         model.isAddWorkoutPresented = true
         XCTAssertTrue(model.isAddWorkoutPresented)
+        XCTAssertFalse(model.isTimerPresented)
+        model.isTimerPresented = true
+        XCTAssertTrue(model.isTimerPresented)
+    }
+
+    func testDayNavigationIsLocalDaySafeAndLoadsWorkoutFirstState() async throws {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = try XCTUnwrap(TimeZone(identifier: "America/New_York"))
+        let repository = SwiftDataRepository(container: try PersistenceController.makeContainer(inMemory: true))
+        let workout = EquilibriumFixtures.planned(day: "2026-03-08", id: "dst-workout")
+        try await repository.schedule(workout)
+        let now = try XCTUnwrap(try LocalDay("2026-03-07").date(in: calendar))
+        let model = ScheduleModel(repository: repository, calendar: ScheduleCalendar(calendar: calendar), now: now)
+        await model.load()
+        XCTAssertNil(model.selectedWorkout)
+        await model.moveDay(1)
+        XCTAssertEqual(model.selectedDay, try LocalDay("2026-03-08"))
+        XCTAssertEqual(model.selectedWorkout?.id, workout.id)
+        await model.moveDay(-1)
+        XCTAssertNil(model.selectedWorkout)
+    }
+
+    func testOneWorkoutPerLocalDayRemainsCanonical() async throws {
+        let repository = SwiftDataRepository(container: try PersistenceController.makeContainer(inMemory: true))
+        try await repository.schedule(EquilibriumFixtures.planned(day: "2026-08-22", id: "one"))
+        do {
+            try await repository.schedule(EquilibriumFixtures.mixed(day: "2026-08-22", id: "two"))
+            XCTFail("Expected LocalDay conflict")
+        } catch { XCTAssertEqual(error as? RepositoryError, .workoutDayConflict(try LocalDay("2026-08-22"))) }
     }
 
     func testPlannedInProgressCompletedMappingAndCompletedCannotStartOrResume() {
