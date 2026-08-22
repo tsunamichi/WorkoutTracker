@@ -36,7 +36,7 @@ struct PlanImportInputView: View {
             }
         }
         .scrollContentBackground(.hidden).background(EQColor.canvas).scrollDismissesKeyboard(.interactively)
-        .navigationTitle("Import Plan")
+        .navigationTitle("Paste workout")
         .toolbar { ToolbarItemGroup(placement: .keyboard) { Spacer(); Button("Done") { editorFocused = false } } }
     }
     private func parse() {

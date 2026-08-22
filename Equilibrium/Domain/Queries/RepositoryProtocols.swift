@@ -14,7 +14,7 @@ public protocol WorkoutTemplateRepository: Sendable {
     func archiveTemplate(id: WorkoutTemplateID, at date: Date) async throws
 }
 public protocol ScheduledWorkoutRepository: Sendable {
-    func workout(on day: LocalDay) async throws -> ScheduledWorkout?
+    func workouts(on day: LocalDay) async throws -> [ScheduledWorkout]
     func workouts(from startDay: LocalDay, through endDay: LocalDay) async throws -> [ScheduledWorkout]
     func workout(id: ScheduledWorkoutID) async throws -> ScheduledWorkout?
     func allWorkouts() async throws -> [ScheduledWorkout]
@@ -24,7 +24,6 @@ public protocol ScheduledWorkoutRepository: Sendable {
     func startWorkout(id: ScheduledWorkoutID, at date: Date) async throws -> ScheduledWorkout
     func logSet(workoutID: ScheduledWorkoutID, exerciseID: ScheduledExerciseID, prescriptionID: SetID, input: SetLogInput, completed: Bool, at date: Date) async throws -> ScheduledWorkout
     func completeWorkout(id: ScheduledWorkoutID, at date: Date) async throws -> ScheduledWorkout
-    func replaceScheduledWorkout(_ workout: ScheduledWorkout) async throws
     func recentCompletedWorkouts(limit: Int) async throws -> [ScheduledWorkout]
 }
 public protocol CyclePlanRepository: Sendable {
@@ -39,11 +38,21 @@ public protocol BackupRepository: Sendable {
     func exportBackup(exportedAt: Date, sourceDeviceID: String) async throws -> EquilibriumBackupV1
     func restoreBackup(_ backup: EquilibriumBackupV1) async throws
 }
-public enum RepositoryError: Error, Equatable { case workoutDayConflict(LocalDay), notFound, immutableCompletedWorkout, workoutNotInProgress, prescriptionNotFound, invalidSetInput, incompleteWorkout, duplicateIdentifier, duplicateExerciseName, invalidBackup }
+public enum RepositoryError: Error, Equatable { case notFound, immutableCompletedWorkout, workoutNotCurrentDay, workoutNotInProgress, prescriptionNotFound, invalidSetInput, incompleteWorkout, duplicateIdentifier, duplicateExerciseName, invalidBackup }
 
 public extension ScheduledWorkoutRepository {
-    func replaceScheduledWorkout(_ workout: ScheduledWorkout) async throws { throw RepositoryError.workoutDayConflict(workout.day) }
     func recentCompletedWorkouts(limit: Int) async throws -> [ScheduledWorkout] {
-        Array(try await allWorkouts().filter { $0.status == .completed }.sorted { ($0.completedAt ?? $0.updatedAt) > ($1.completedAt ?? $1.updatedAt) }.prefix(limit))
+        Array(try await allWorkouts().filter { $0.status == .completed }.sorted {
+            let lhs = $0.completedAt ?? $0.updatedAt, rhs = $1.completedAt ?? $1.updatedAt
+            return lhs == rhs ? $0.id.rawValue < $1.id.rawValue : lhs > rhs
+        }.prefix(limit))
     }
+}
+
+public protocol CurrentDayProviding: Sendable { func currentDay() throws -> LocalDay }
+
+public struct SystemCurrentDayProvider: CurrentDayProviding {
+    private let calendar: Calendar
+    public init(calendar: Calendar = .autoupdatingCurrent) { self.calendar = calendar }
+    public func currentDay() throws -> LocalDay { try LocalDay(date: .now, calendar: calendar) }
 }

@@ -4,7 +4,10 @@ import SwiftData
 @MainActor
 public final class SwiftDataRepository: ExerciseRepository, WorkoutTemplateRepository, ScheduledWorkoutRepository, BackupRepository {
     private let context: ModelContext
-    public init(container: ModelContainer) { context = ModelContext(container); context.autosaveEnabled = false }
+    private let currentDayProvider: any CurrentDayProviding
+    public init(container: ModelContainer, currentDayProvider: any CurrentDayProviding = SystemCurrentDayProvider()) {
+        context = ModelContext(container); context.autosaveEnabled = false; self.currentDayProvider = currentDayProvider
+    }
 
     public func allExercises() async throws -> [ExerciseDefinition] {
         try context.fetch(FetchDescriptor<ExerciseDefinitionRecord>(sortBy: [SortDescriptor(\.name)])).map(DefinitionMapper.domain).filter { $0.archivedAt == nil }
@@ -61,28 +64,18 @@ public final class SwiftDataRepository: ExerciseRepository, WorkoutTemplateRepos
         value.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: .current).lowercased().split(whereSeparator: { !$0.isLetter && !$0.isNumber }).joined(separator: " ")
     }
 
-    public func workout(on day: LocalDay) async throws -> ScheduledWorkout? {
+    public func workouts(on day: LocalDay) async throws -> [ScheduledWorkout] {
         let key = day.iso8601
-        let records = try context.fetch(FetchDescriptor<ScheduledWorkoutRecord>(predicate: #Predicate { $0.localDay == key }))
-        guard records.count <= 1 else {
-            assertionFailure("More than one scheduled workout exists for \(key)")
-            throw RepositoryError.workoutDayConflict(day)
-        }
-        return try records.first.map { try WorkoutMapper.domain(from: $0) }
+        let descriptor = FetchDescriptor<ScheduledWorkoutRecord>(predicate: #Predicate { $0.localDay == key }, sortBy: [SortDescriptor(\.createdAt), SortDescriptor(\.id)])
+        return try context.fetch(descriptor).map { try WorkoutMapper.domain(from: $0) }
     }
     public func workouts(from startDay: LocalDay, through endDay: LocalDay) async throws -> [ScheduledWorkout] {
         let lower = startDay.iso8601, upper = endDay.iso8601
         let descriptor = FetchDescriptor<ScheduledWorkoutRecord>(
             predicate: #Predicate { $0.localDay >= lower && $0.localDay <= upper },
-            sortBy: [SortDescriptor(\.localDay)]
+            sortBy: [SortDescriptor(\.localDay), SortDescriptor(\.createdAt), SortDescriptor(\.id)]
         )
-        let workouts = try context.fetch(descriptor).map { try WorkoutMapper.domain(from: $0) }
-        let duplicate = Dictionary(grouping: workouts, by: \.day).first { $0.value.count > 1 }
-        if let duplicate {
-            assertionFailure("More than one scheduled workout exists for \(duplicate.key)")
-            throw RepositoryError.workoutDayConflict(duplicate.key)
-        }
-        return workouts
+        return try context.fetch(descriptor).map { try WorkoutMapper.domain(from: $0) }
     }
     public func workout(id: ScheduledWorkoutID) async throws -> ScheduledWorkout? {
         let key = id.rawValue
@@ -91,11 +84,10 @@ public final class SwiftDataRepository: ExerciseRepository, WorkoutTemplateRepos
         return try context.fetch(descriptor).first.map { try WorkoutMapper.domain(from: $0) }
     }
     public func allWorkouts() async throws -> [ScheduledWorkout] {
-        try context.fetch(FetchDescriptor<ScheduledWorkoutRecord>()).map { try WorkoutMapper.domain(from: $0) }.sorted { $0.day < $1.day }
+        try context.fetch(FetchDescriptor<ScheduledWorkoutRecord>(sortBy: [SortDescriptor(\.localDay), SortDescriptor(\.createdAt), SortDescriptor(\.id)])).map { try WorkoutMapper.domain(from: $0) }
     }
     public func schedule(_ workout: ScheduledWorkout) async throws {
         try DomainValidator.validate(workout)
-        guard try await self.workout(on: workout.day) == nil else { throw RepositoryError.workoutDayConflict(workout.day) }
         guard try await self.workout(id: workout.id) == nil else { throw RepositoryError.duplicateIdentifier }
         context.insert(WorkoutMapper.record(from: workout))
         do { try context.save() } catch { context.rollback(); throw error }
@@ -106,9 +98,9 @@ public final class SwiftDataRepository: ExerciseRepository, WorkoutTemplateRepos
         var descriptor = FetchDescriptor<ScheduledWorkoutRecord>(predicate: #Predicate { $0.id == key }); descriptor.fetchLimit = 1
         guard let existing = try context.fetch(descriptor).first else { throw RepositoryError.notFound }
         let dayKey = workout.day.iso8601
-        let conflicts = try context.fetch(FetchDescriptor<ScheduledWorkoutRecord>(predicate: #Predicate { $0.localDay == dayKey && $0.id != key }))
-        guard conflicts.isEmpty else { throw RepositoryError.workoutDayConflict(workout.day) }
         if existing.statusRaw == WorkoutStatus.completed.rawValue { throw RepositoryError.immutableCompletedWorkout }
+        let currentDay = try currentDayProvider.currentDay()
+        guard try LocalDay(existing.localDay) == currentDay, workout.day == currentDay else { throw RepositoryError.workoutNotCurrentDay }
         existing.localDay = dayKey; existing.titleSnapshot = workout.titleSnapshot; existing.templateID = workout.templateID?.rawValue; existing.planID = workout.planID?.rawValue
         existing.sourceRaw = workout.source.rawValue; existing.statusRaw = workout.status.rawValue; existing.startedAt = workout.startedAt; existing.completedAt = workout.completedAt; existing.updatedAt = workout.updatedAt
         for child in existing.exercises { context.delete(child) }
@@ -119,6 +111,7 @@ public final class SwiftDataRepository: ExerciseRepository, WorkoutTemplateRepos
 
     public func startWorkout(id: ScheduledWorkoutID, at date: Date = .now) async throws -> ScheduledWorkout {
         guard var workout = try await workout(id: id) else { throw RepositoryError.notFound }
+        try requireCurrentDay(workout)
         if workout.status == .completed { throw RepositoryError.immutableCompletedWorkout }
         if workout.status == .inProgress { return workout }
         workout.status = .inProgress
@@ -130,6 +123,7 @@ public final class SwiftDataRepository: ExerciseRepository, WorkoutTemplateRepos
 
     public func logSet(workoutID: ScheduledWorkoutID, exerciseID: ScheduledExerciseID, prescriptionID: SetID, input: SetLogInput, completed: Bool, at date: Date = .now) async throws -> ScheduledWorkout {
         guard var workout = try await workout(id: workoutID) else { throw RepositoryError.notFound }
+        try requireCurrentDay(workout)
         guard workout.status == .inProgress else {
             if workout.status == .completed { throw RepositoryError.immutableCompletedWorkout }
             throw RepositoryError.workoutNotInProgress
@@ -166,6 +160,7 @@ public final class SwiftDataRepository: ExerciseRepository, WorkoutTemplateRepos
 
     public func completeWorkout(id: ScheduledWorkoutID, at date: Date = .now) async throws -> ScheduledWorkout {
         guard var workout = try await workout(id: id) else { throw RepositoryError.notFound }
+        try requireCurrentDay(workout)
         if workout.status == .completed { return workout }
         guard workout.status == .inProgress else { throw RepositoryError.workoutNotInProgress }
         guard WorkoutExecutionQuery.canComplete(workout) else { throw RepositoryError.incompleteWorkout }
@@ -176,27 +171,13 @@ public final class SwiftDataRepository: ExerciseRepository, WorkoutTemplateRepos
         return workout
     }
     public func materializeAtomically(_ workouts: [ScheduledWorkout]) async throws {
-        let days = workouts.map(\.day)
-        guard Set(days).count == days.count else { throw RepositoryError.workoutDayConflict(days.first!) }
         for workout in workouts {
             try DomainValidator.validate(workout)
-            if try await self.workout(on: workout.day) != nil { throw RepositoryError.workoutDayConflict(workout.day) }
+            if try await self.workout(id: workout.id) != nil { throw RepositoryError.duplicateIdentifier }
         }
         for workout in workouts { context.insert(WorkoutMapper.record(from: workout)) }
         do { try context.save() } catch { context.rollback(); throw error }
     }
-    public func replaceScheduledWorkout(_ workout: ScheduledWorkout) async throws {
-        try DomainValidator.validate(workout)
-        let day = workout.day.iso8601
-        let matches = try context.fetch(FetchDescriptor<ScheduledWorkoutRecord>(predicate: #Predicate { $0.localDay == day }))
-        guard matches.count <= 1 else { throw RepositoryError.workoutDayConflict(workout.day) }
-        if let existing = matches.first {
-            guard existing.statusRaw != WorkoutStatus.completed.rawValue else { throw RepositoryError.immutableCompletedWorkout }
-            context.delete(existing)
-        }
-        context.insert(WorkoutMapper.record(from: workout)); try saveOrRollback()
-    }
-
     public func exportBackup(exportedAt: Date, sourceDeviceID: String) async throws -> EquilibriumBackupV1 {
         let stored = try loadCollection()
         return try EquilibriumBackupV1(exportedAt: exportedAt, sourceDeviceID: sourceDeviceID, exercises: try await allExercises(), workoutTemplates: try await allTemplates(), scheduledWorkouts: try await allWorkouts(), cyclePlans: stored?.cyclePlans ?? [], settings: stored?.settings ?? .init(weightUnit: .pounds, defaultRestDuration: 90), progression: stored?.progression ?? FixtureDefaults.progression)
@@ -204,8 +185,6 @@ public final class SwiftDataRepository: ExerciseRepository, WorkoutTemplateRepos
     public func restoreBackup(_ backup: EquilibriumBackupV1) async throws {
         guard backup.schemaVersion == 1 else { throw BackupError.unsupportedSchemaVersion(backup.schemaVersion) }
         guard try await allWorkouts().isEmpty, try await allExercises().isEmpty, try await allTemplates().isEmpty else { throw RepositoryError.invalidBackup }
-        let days = backup.scheduledWorkouts.map(\.day)
-        guard Set(days).count == days.count else { throw RepositoryError.workoutDayConflict(days.first!) }
         let exerciseIDs = backup.scheduledWorkouts.flatMap(\.exercises).map(\.id)
         let prescriptionIDs = backup.scheduledWorkouts.flatMap(\.exercises).flatMap(\.prescriptions).map(\.id)
         let loggedSetIDs = backup.scheduledWorkouts.flatMap(\.exercises).flatMap(\.loggedSets).map(\.id)
@@ -223,6 +202,9 @@ public final class SwiftDataRepository: ExerciseRepository, WorkoutTemplateRepos
         return try BackupCodec.decode(record.payload)
     }
     private func saveOrRollback() throws { do { try context.save() } catch { context.rollback(); throw error } }
+    private func requireCurrentDay(_ workout: ScheduledWorkout) throws {
+        guard workout.day == (try currentDayProvider.currentDay()) else { throw RepositoryError.workoutNotCurrentDay }
+    }
 }
 
 enum FixtureDefaults {

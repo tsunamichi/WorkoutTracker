@@ -2,72 +2,48 @@ import Foundation
 import Observation
 
 @MainActor @Observable
-final class ScheduleModel {
+final class HomeModel {
     private let repository: any ScheduledWorkoutRepository
-    private(set) var selectedDay: LocalDay
-    private(set) var week: [LocalDay] = []
-    private(set) var workoutsByDay: [LocalDay: ScheduledWorkout] = [:]
+    private let now: () -> Date
+    private(set) var today: LocalDay
+    private(set) var workouts: [ScheduledWorkout] = []
     private(set) var errorMessage: String?
     var isAddWorkoutPresented = false
     var isTimerPresented = false
     let calendar: ScheduleCalendar
 
-    init(repository: any ScheduledWorkoutRepository, calendar: ScheduleCalendar = .init(), now: Date = .now) {
-        self.repository = repository
-        self.calendar = calendar
-        selectedDay = (try? calendar.today(now: now)) ?? (try! LocalDay("2001-01-01"))
-        week = (try? calendar.week(containing: selectedDay)) ?? [selectedDay]
+    init(repository: any ScheduledWorkoutRepository, calendar: ScheduleCalendar = .init(), now: @escaping () -> Date = Date.init) {
+        self.repository = repository; self.calendar = calendar; self.now = now
+        today = (try? calendar.today(now: now())) ?? (try! LocalDay("2001-01-01"))
     }
-
-    var today: LocalDay { (try? calendar.today()) ?? selectedDay }
-    var selectedWorkout: ScheduledWorkout? { workoutsByDay[selectedDay] }
-    var isTodaySelected: Bool { selectedDay == today }
 
     func load() async {
         do {
-            week = try calendar.week(containing: selectedDay)
-            guard let first = week.first, let last = week.last else { return }
-            let workouts = try await repository.workouts(from: first, through: last)
-            workoutsByDay = Dictionary(uniqueKeysWithValues: workouts.map { ($0.day, $0) })
+            today = try calendar.today(now: now())
+            workouts = try await repository.workouts(on: today)
             errorMessage = nil
-        } catch {
-            errorMessage = "Schedule could not be loaded."
-        }
+        } catch { errorMessage = "Home could not be loaded." }
     }
 
-    func select(_ day: LocalDay) { selectedDay = day }
-
-    func moveDay(_ amount: Int) async {
-        do {
-            selectedDay = try calendar.moving(selectedDay, byDays: amount)
-            await load()
-        } catch { errorMessage = "That day could not be opened." }
-    }
-
-    func moveWeek(_ amount: Int) async {
-        do {
-            selectedDay = try calendar.moving(selectedDay, byWeeks: amount)
-            await load()
-        } catch { errorMessage = "That week could not be opened." }
-    }
-
-    func selectToday() async {
-        do { selectedDay = try calendar.today(); await load() }
-        catch { errorMessage = "Today could not be selected." }
-    }
+    func appBecameActive() async { await load() }
 
     func applyPersistedWorkout(_ workout: ScheduledWorkout) {
-        workoutsByDay[workout.day] = workout
+        guard workout.day == today else { return }
+        if let index = workouts.firstIndex(where: { $0.id == workout.id }) { workouts[index] = workout }
+        else { workouts.append(workout); workouts.sort(by: Self.carouselOrder) }
+    }
+
+    func applyPersistedWorkouts(_ values: [ScheduledWorkout]) { values.forEach(applyPersistedWorkout) }
+
+    private static func carouselOrder(_ lhs: ScheduledWorkout, _ rhs: ScheduledWorkout) -> Bool {
+        lhs.createdAt == rhs.createdAt ? lhs.id.rawValue < rhs.id.rawValue : lhs.createdAt < rhs.createdAt
     }
 }
 
-enum ScheduleCardAction: Equatable { case start, resume, view }
+enum HomeCardAction: Equatable { case start, resume, view }
 
-struct ScheduleCardPresentation: Equatable {
-    let stateLabel: String
-    let actionLabel: String
-    let action: ScheduleCardAction
-
+struct HomeCardPresentation: Equatable {
+    let stateLabel: String; let actionLabel: String; let action: HomeCardAction
     init(status: WorkoutStatus) {
         switch status {
         case .planned: stateLabel = "Planned"; actionLabel = "Start workout"; action = .start

@@ -82,7 +82,7 @@ final class WorkoutImportPhase3BTests: XCTestCase {
     func testUnresolvedMatchBlocksDraftConversionAndImportRouteExists() throws {
         let parsed = try XCTUnwrap(parser.parse(PlanImportFixtures.unmatched).workouts.first?.exercises.first)
         let unresolved = ResolvedParsedWorkout(id: UUID(), name: "Push", exercises: [.init(parsed: parsed, match: .unmatched)])
-        XCTAssertNil(PlanImportDraftConverter.draft(from: unresolved)); XCTAssertEqual(CreationRoute.importPlan, .importPlan)
+        XCTAssertNil(PlanImportDraftConverter.draft(from: unresolved)); XCTAssertEqual(CreationRoute.pasteWorkout, .pasteWorkout)
     }
 
     @MainActor func testImportedDraftUsesBuilderTemplateScheduleAndExecutionArchitecture() async throws {

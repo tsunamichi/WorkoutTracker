@@ -15,8 +15,8 @@ Equilibrium v1 should be a new native iOS product built in SwiftUI, not a transl
 
 The migration preserves the product’s useful center:
 
-- Schedule as the only home experience.
-- Reusable workouts, blank/recent/existing workout creation, plan creation/application, and **Import Plan**, the useful clipboard parser currently mislabeled “AI.” No AI or OpenAI integration is part of v1.
+- Home / Workout of the day as the only root experience, scoped to the current `LocalDay`.
+- Create-from-scratch, Paste workout, multi-select recent-workout reuse, plan creation/application, and the deterministic clipboard parser. No AI or OpenAI integration is part of v1.
 - One ordered exercise list per workout.
 - Set logging, resume, completion, workout history, exercise history, PR derivation, progression suggestions, and a simple rest/duration timer.
 - Settings needed by those features.
@@ -44,27 +44,24 @@ No phase depends on first cleaning RN internals. Later RN changes should be limi
 
 ## 2. Final SwiftUI product graph
 
-There is one root destination, Schedule. Authentication is optional and lives under Settings; it is neither a launch gate nor a tab. SwiftData persists the complete local workout product before sign-in. Modern SwiftUI `NavigationStack` handles pushes; native sheets handle creation/pickers/settings where their interaction is modal.
+There is one root destination, Home / Workout of the day. Authentication is optional and lives under Settings; it is neither a launch gate nor a tab. SwiftData persists the complete local workout product before sign-in. Modern SwiftUI `NavigationStack` handles pushes; native sheets handle creation/pickers/settings where their interaction is modal.
 
 ```text
 EQUILIBRIUM
-└── Schedule
-    ├── Date/week selection
-    ├── Scheduled workout card / rest-day state
-    ├── Add Workout
-    │   ├── Existing Workout
-    │   ├── Recent Workout
-    │   ├── Blank Workout
+└── Home / Workout of the day
+    ├── Current-day workout carousel (zero or more workouts)
+    ├── Add Workout (final carousel page)
+    │   ├── Create from scratch
     │   │   ├── Exercise picker/search
     │   │   └── Exercise/set prescription editor
-    │   └── Import Plan
-    │       ├── Paste formatted text
-    │       ├── Parse and match exercises
-    │       └── Review → create workouts / plan
+    │   ├── Paste workout
+    │   │   ├── Paste formatted text
+    │   │   ├── Parse and match exercises
+    │   │   └── Review → create current-day workout
+    │   └── Use recent workout (multi-select completed history)
     ├── Plans
     │   ├── Create
     │   ├── Apply
-    │   ├── Conflict Resolution
     │   └── Plan Detail / lifecycle
     ├── Workout
     │   └── Exercises
@@ -96,17 +93,16 @@ EQUILIBRIUM
 | Screen | Presentation | Primary responsibility |
 |---|---|---|
 | Account / Cloud Backup | Settings destination | Optional Apple identity, Supabase session, backup/restore and logout. Local use never depends on it. |
-| Schedule | Root `NavigationStack` | Calendar/week, selected local day, workout cards, plan state, history/settings/add entry points. |
-| Add Workout | Sheet with detents | Choose existing/recent/blank/import/plan without becoming a route hub. |
+| Home | Root `NavigationStack` | Current local day, ordered workout carousel, history/settings/add entry points and Timer affordance. No date navigation or Rest Day state. |
+| Add Workout | Final carousel page/sheet | Exactly Create from scratch, Paste workout, and Use recent workout. |
 | Workout Builder | Push or full-screen sheet | Edit one reusable workout definition and optionally schedule a snapshot. |
 | Exercise Picker | Searchable sheet | Select/create canonical catalog exercises. |
-| Recent Workout Picker | Sheet/push | Clone a completed canonical log into a new builder draft without linking history. |
-| Import Plan | Sheet/push | Paste, parse, match, review and create workouts/a plan. It is explicitly not AI-backed. |
+| Use recent workout | Sheet/push | Multi-select completed canonical logs and create fresh current-day snapshots in tap order without linking history. |
+| Paste workout | Sheet/push | Paste, parse, match, review and create a current-day workout. It is explicitly local and not AI-backed. |
 | Plan Builder/Review | Push flow | Create one `CyclePlan`, map weekdays to reusable templates, apply atomically. |
-| Conflict Resolution | Sheet/push | Per-date keep/replace; completed workouts are immutable. |
 | Workout Execution | Push with optional native zoom | Mutate one `ScheduledWorkout`; derive current/upcoming/completed presentation. |
 | Exercise Performance | Push/sheet from execution/history | Previous working sets, trend, derived PR, progression rationale. |
-| Workout Completion | Native overlay/presentation | Confirm canonical completion, show restrained celebration, return to Schedule. |
+| Workout Completion | Native overlay/presentation | Confirm canonical completion, show restrained celebration, return to Home. |
 | Workout History | Push | Completed workouts grouped by date; no Progress tab. |
 | Completed Workout Detail | Push | Read-only snapshot and logged sets. |
 | Plan Detail | Push/sheet | Current plan status and retained lifecycle actions. |
@@ -278,7 +274,8 @@ struct ScheduledWorkout: Identifiable, Codable, Hashable, Sendable {
 - `planned` requires `startedAt == nil && completedAt == nil`; `inProgress` requires `startedAt != nil && completedAt == nil`; `completed` requires both timestamps. Repository validation repairs invalid combinations.
 - A completed workout is immutable through normal UI. An explicit “reopen” command, if retained, records the transition and clears `completedAt`; history never silently edits it.
 - Completion percentage is derived from completed required logged sets plus skipped exercises according to one documented policy. No completion map is stored.
-- Scheduling is keyed by `LocalDay` with a strict cardinality of zero or one `ScheduledWorkout`. `ScheduledWorkoutRepository.schedule` must atomically return a conflict instead of inserting when that day is occupied. Replacement is explicit, and a completed workout is never replaceable.
+- Scheduling is keyed by `LocalDay` with zero or more distinct `ScheduledWorkout` instances. Same-day workouts are valid, retain stable deterministic carousel order, and never trigger day-occupancy replacement. Completed-record immutability applies to that record, not its day.
+- Start, log, edit, and complete commands require `workout.day == CurrentDayProviding.currentDay()` through the injectable `CurrentDayProviding` boundary. Historical and future workouts are read-only.
 - Presentation `ExerciseState` is transient:
 
 ```swift
@@ -326,7 +323,7 @@ struct CyclePlan: Identifiable, Codable, Hashable, Sendable {
 }
 ```
 
-Plan application is a transaction that materializes `ScheduledWorkout` snapshots. A plan does not dynamically render templates into history. Before inserting each day, the transaction enforces `LocalDay → 0...1 ScheduledWorkout`. Conflicts are transient command results containing the incoming snapshot and existing scheduled workout; each requires an explicit keep/replace choice, and completed existing workouts can never be replaced. The apply command is atomic across the plan after choices are validated. Pause/shift, end, repeat, and natural completion should be retained only to the extent verified in `src/store/index.ts` (`pauseShiftCyclePlan`, `endCyclePlan`, `repeatCyclePlan`, `getCyclePlanStatus`).
+Plan application is a transaction that materializes distinct `ScheduledWorkout` snapshots. A plan does not dynamically render templates into history, and existing same-day workouts are not conflicts solely because they share a `LocalDay`. The apply command is atomic after genuine identity/referential validation. Pause/shift, end, repeat, and natural completion should be retained only to the extent verified in `src/store/index.ts` (`pauseShiftCyclePlan`, `endCyclePlan`, `repeatCyclePlan`, `getCyclePlanStatus`).
 
 ### Progression model
 
@@ -435,10 +432,10 @@ Equilibrium/
 │   ├── Timer/
 │   ├── Haptics/
 │   ├── Audio/
-│   └── PlanImport/
+│   └── PasteWorkout/
 ├── Features/
 │   ├── Authentication/
-│   ├── Schedule/
+│   ├── Home/
 │   ├── WorkoutExecution/
 │   ├── WorkoutBuilder/
 │   ├── History/
@@ -465,14 +462,14 @@ Recommended repository protocols:
 ```swift
 protocol ExerciseRepository { /* query/upsert/archive catalog */ }
 protocol WorkoutTemplateRepository { /* CRUD reusable definitions */ }
-protocol ScheduledWorkoutRepository { /* unique LocalDay query + conflict-aware transactional mutation */ }
+protocol ScheduledWorkoutRepository { /* bounded ordered LocalDay queries + identity-safe transactional mutation */ }
 protocol CyclePlanRepository { /* plan lifecycle + materialization commands */ }
 protocol SettingsRepository { /* small preferences */ }
 protocol BackupRepository { /* export/restore EquilibriumBackup versions */ }
 protocol AuthenticationService { /* session stream, sign-in, sign-out */ }
 ```
 
-Commands such as `ScheduleWorkout`, `LogSet`, `CompleteWorkout`, `ApplyPlan`, and `RestoreBackup` own multi-record transaction rules. Views never write persistence records directly.
+Commands such as `AddScheduledWorkout`, `LogSet`, `CompleteWorkout`, `ApplyPlan`, and `RestoreBackup` own multi-record transaction rules. Views never write persistence records directly.
 
 ### Native design system
 
@@ -493,12 +490,12 @@ Use Observation (`@Observable`) for small feature models and environment injecti
 | State kind | Owner | Examples |
 |---|---|---|
 | Persistent domain | Repositories/SwiftData transactions | exercises, templates, scheduled workouts/logs, plans, settings, progression. |
-| Query/read state | Feature model using repository async query/observation | selected week’s workouts, history page, exercise performance series. |
-| Transient view state | SwiftUI `@State` | sheet visibility, selected date, search query, focus field, expanded card. |
-| Feature workflow state | `@Observable` feature model | unsaved builder draft, plan review/conflict choices, restore progress/errors. |
+| Query/read state | Feature model using repository async query/observation | current-day ordered workouts, history page, exercise performance series. Home derives its day from `CurrentDayProviding`. |
+| Transient view state | SwiftUI `@State` | sheet visibility, carousel position, search query, focus field, expanded card. |
+| Feature workflow state | `@Observable` feature model | unsaved builder draft, plan review, restore progress/errors. |
 | Execution session | `@Observable WorkoutExecutionModel` | focused exercise ID, editor focus, timer state, pending input. Completed set mutations are committed immediately to `ScheduledWorkout`; unsaved keystrokes remain transient. |
-| Navigation | `NavigationPath`/typed `AppRoute` in a small coordinator | Schedule pushes and modal destinations; no persisted navigation graph. |
-| Account/cloud | `@Observable AccountModel` backed by `AuthenticationService`/`BackupService` | optional signed-in user, backup status/revision/time, restore state and errors. It never gates local Schedule use. |
+| Navigation | `NavigationPath`/typed `AppRoute` in a small coordinator | Home routes and modal destinations; no persisted navigation graph. |
+| Account/cloud | `@Observable AccountModel` backed by `AuthenticationService`/`BackupService` | optional signed-in user, backup status/revision/time, restore state and errors. It never gates local Home use. |
 | Timer | actor/service plus feature projection | monotonic deadline, remaining time, pause/resume; not a domain database. |
 
 `AppEnvironment` should inject protocol-typed repositories/services. Production, preview, fixture, and test environments use different implementations. Feature models receive only what they need.
@@ -518,7 +515,7 @@ Persistence writes belong on actors or `@ModelActor`-backed repositories. UI cha
 
 ### Recommendation
 
-Use SwiftData for the iOS 18 native app, with separate persistence records and domain mapping where that prevents framework leakage. Phase 0 still runs a focused technical spike and may reject SwiftData only if it demonstrates a concrete blocker in the hardest relationships: ordered nested exercise/set snapshots, unique `LocalDay` enforcement, transactional plan materialization, backup restore into an empty container, or schema migration fixtures.
+Use SwiftData for the iOS 18 native app, with separate persistence records and domain mapping where that prevents framework leakage. Phase 0 still runs a focused technical spike and may reject SwiftData only if it demonstrates a concrete blocker in the hardest relationships: ordered nested exercise/set snapshots, deterministic same-day workout ordering, transactional plan materialization, backup restore into an empty container, or schema migration fixtures.
 
 Store normalized top-level records for catalog definitions, templates, scheduled workouts and plans. Child template exercises, prescriptions, scheduled exercises and logged sets should be explicit related records with stable IDs and positions, not opaque blobs, so history/performance queries remain efficient. Small value types such as `LocalDay` and `Weight` can use transformable/Codable storage only after query requirements are known.
 
@@ -530,7 +527,7 @@ GRDB remains a contingency only if that spike proves a concrete SwiftData blocke
 
 ### Local-first account model and authentication
 
-Authentication does not gate launch. `EquilibriumApp` opens the persistent local SwiftData store and Schedule immediately. An anonymous/local user has the full core workout product, and that data survives relaunch exactly like authenticated data. Settings → Account / Cloud Backup offers optional sign-in; signing in enables Supabase Backup/Restore.
+Authentication does not gate launch. `EquilibriumApp` opens the persistent local SwiftData store and Home / Workout of the day immediately. An anonymous/local user has the full core workout product, and that data survives relaunch exactly like authenticated data. Settings → Account / Cloud Backup offers optional sign-in; signing in enables Supabase Backup/Restore.
 
 - Use `AuthenticationServices.SignInWithAppleButton`/`ASAuthorizationAppleIDProvider` with a cryptographically random nonce and SHA-256 hash.
 - Exchange Apple’s identity token through the Supabase Swift client’s native `signInWithIdToken` Apple provider flow. Supabase documents native ID-token sign-in for Swift and an auth-state async stream.
@@ -571,7 +568,7 @@ For v1 this is strictly **Cloud Backup / Restore**, not real-time or multi-devic
 
 1. Authenticate and fetch metadata before payload.
 2. Decode by `schemaVersion`; reject future unsupported versions without changing local data.
-3. Validate IDs, referential integrity, array positions, status/timestamps, limits, and uniqueness of `ScheduledWorkout.day` across the payload.
+3. Validate IDs, referential integrity, array and same-day carousel ordering, status/timestamps, limits, and other domain invariants. Multiple `ScheduledWorkout` values sharing a `LocalDay` are valid and must be preserved.
 4. Restore into a temporary/in-memory or staging SwiftData container.
 5. Run domain validation and counts/checksum.
 6. Ask for confirmation if replacement is destructive.
@@ -605,7 +602,7 @@ The importer reads a frozen export/Supabase legacy payload; it never mutates RN 
 | `workoutProgress` | no separate model | Use only as completion evidence/fallback set-index evidence when detailed logs are absent. Never persist it independently. | Conditional evidence |
 | `sessions` / `WorkoutSession.sets` | canonical scheduled workout logged sets or synthesized historical `ScheduledWorkout` | Merge by scheduled ID/template/date/exercise/set identity. Synthesize a completed manual workout only when no scheduled candidate exists and session has valid completed sets. | Yes, reconciled |
 | `exercisePRs` | none | Compare to PRs derived after import; report discrepancies. Never override canonical logged sets or persist as authority. | Validation only |
-| current `cyclePlans` | `CyclePlan` | Preserve name/start/weeks/weekday mapping/status lifecycle; translate template IDs; canonicalize all scheduled references to `planID`. Drop share source unless Import Plan review needs it. | Yes |
+| current `cyclePlans` | `CyclePlan` | Preserve name/start/weeks/weekday mapping/status lifecycle; translate template IDs; canonicalize all scheduled references to `planID`. Drop share source unless Paste workout review needs it. | Yes |
 | old `Cycle` | none | Historical generation excluded. | No |
 | `workoutAssignments` | none | Excluded old scheduling generation. Use only in diagnostic report if a selected scheduled/history record cannot otherwise be found; do not import automatically. | No |
 | `SavedCycle`, old `CycleDraft`, onboarding state, `ManualCycle` | none | Excluded generations/drafts. | No |
@@ -648,17 +645,17 @@ Authority is field-specific:
 9. **Apply `workoutProgress` evidence.** For a matched workout/exercise/set lacking detailed/session completion, mark completion only when the record explicitly names that set. Do not create numeric performance values. Do not mark an entire workout completed from a percentage alone.
 10. **Reconcile status.** Explicit scheduled `completedAt/status=completed` wins if structurally plausible. Otherwise a workout becomes completed only if a session has `endTime` or every non-skipped prescribed set is complete. `startedAt` uses scheduled value, else session `startTime`, else earliest logged-set time. `completedAt` uses scheduled value, else session `endTime`, else latest logged-set time. Never use import time.
 11. **Deduplicate synthesized/canonical workouts.** Do not collapse separate scheduled IDs merely because their content matches. For orphan sessions only, identify likely duplicate evidence when template ID, local day, exercise/set fingerprints and timestamps agree; report it for converter policy/review.
-12. **Resolve same-day multiplicity before commit.** Group provisional workouts by `LocalDay`. A group of zero/one passes. Any group with multiple scheduled IDs is an `ImportReport` conflict and remains preserved in the immutable conversion artifact. Apply a deterministic developer-approved resolution—select one canonical workout, deliberately move one to another `LocalDay`, or exclude one after review. Never silently merge, drop, or insert two. Completed records receive no automatic preference unless the reviewed migration policy explicitly says so.
-13. **Validate and derive.** Enforce model invariants including unique `LocalDay`, rebuild performance index and PRs from canonical logs, compare derived PRs with RN `exercisePRs`, and report missing/excess values without altering logs.
-14. **Commit atomically.** Import into staging; present counts, same-day conflicts, warnings, abandoned domains and checksum; commit only after validation and all same-day conflicts are resolved. Store import manifest (`sourceBackupHash`, importer version, timestamp, entity ID map) outside the user-domain backup so reruns are detected.
+12. **Preserve same-day multiplicity.** Import every distinct scheduled ID on its source `LocalDay`; retain deterministically available source order. Do not merge workouts because they share a day or template. Only genuine duplicate evidence enters duplicate reconciliation.
+13. **Validate and derive.** Enforce identity, relationship, snapshot, and execution invariants, rebuild performance index and PRs from canonical logs, compare derived PRs with RN `exercisePRs`, and report missing/excess values without altering logs.
+14. **Commit atomically.** Import into staging; present counts, genuine duplicate warnings, other warnings, abandoned domains and checksum; commit after validation. Store import manifest (`sourceBackupHash`, importer version, timestamp, entity ID map) outside the user-domain backup so reruns are detected.
 
-### Conflict examples
+### Reconciliation examples
 
 - Detailed progress says 100 lb × 8; session says 95 lb × 8: import 100 × 8 and report disagreement.
 - Detailed set exists but is incomplete; session has a completed value: session fills and completes that set.
 - Scheduled workout says completed but has no logs anywhere: retain completed workout shell for history only if it was explicitly completed; report zero performance sets.
 - PR says 225 lb but no canonical log supports it: do not synthesize a set; report that the legacy PR was not imported.
-- Two RN scheduled workouts share a day: preserve both in the frozen conversion artifact, report the conflict, and require deterministic developer review before choosing/moving/excluding records. The canonical SwiftData store never contains both on that `LocalDay`.
+- Two RN scheduled workouts share a day: import both as distinct canonical instances, preserving IDs and deterministic source order; no warning exists solely for same-day cardinality.
 
 ## 10. Vertical migration phases
 
@@ -669,33 +666,33 @@ Each phase is independently demonstrable and retains the RN app unchanged as ref
 - **Objective:** Prepare an implementation-ready native foundation with the locked iOS 18/product decisions, domain/backup schemas, persistence feasibility, dependency policy, design foundations and migration fixtures. The only external identity task is verifying `com.tsunamichi.equilibrium` availability/configuration.
 - **User-visible result:** None; runnable preview/test harness with fixture cards is acceptable, not a product feature.
 - **Likely Swift files/modules:** `Domain/Models`, `Domain/Validation`, repository protocols, `PersistenceController`, SwiftData record spike, `AppEnvironment`, design tokens, fixture factories, `EquilibriumBackupV1` codec.
-- **RN references:** all audit docs; `src/types/index.ts`, `training.ts`, `progression.ts`; Schedule/execution screenshots and baseline commit.
+- **RN references:** all audit docs; `src/types/index.ts`, `training.ts`, `progression.ts`; Home workout-deck/execution screenshots and baseline commit.
 - **Data required:** anonymized empty, planned, in-progress, completed, duplicate-history and current-plan fixtures captured without mutating RN.
-- **Automated tests:** Codable golden files; ID/local-day tests; zero-or-one-workout-per-day constraint/conflict tests; reps/duration prescription invariants; SwiftData relationship/transaction prototype; backup round trip; fixture decoding.
+- **Automated tests:** Codable golden files; ID/local-day tests; same-day multiplicity and deterministic-order tests; reps/duration prescription invariants; SwiftData relationship/transaction prototype; backup round trip; fixture decoding.
 - **Manual regression:** compare typography/colors/card geometry against known-good RN on representative iPhone sizes and Dynamic Type sizes.
 - **Dependencies/frameworks:** iOS 18 SwiftUI, Observation, Foundation and SwiftData; XCTest/Swift Testing choice. No Supabase runtime yet.
 - **Risks:** premature schema abstraction; a concrete SwiftData relationship/transaction blocker; Apple Developer/App Store Connect bundle-ID availability.
-- **Exit criteria:** iOS 18 deployment target locked; Equilibrium name selected; `com.tsunamichi.equilibrium` availability marked verified or assigned a verified equivalent; dark-only/local-first/no-tabs scope locked; SwiftData spike passes or documents a concrete blocker and approved contingency; canonical types locked; unique `LocalDay`, reps+duration-only execution scope, Supabase Backup/Restore scope, RN fixture/import strategy and Import Plan naming locked; schema-v1 fixture passes; no product-scope question remains before creating the SwiftUI project.
+- **Exit criteria:** iOS 18 deployment target locked; Equilibrium name selected; `com.tsunamichi.equilibrium` availability marked verified or assigned a verified equivalent; dark-only/local-first/no-tabs scope locked; SwiftData spike passes or documents a concrete blocker and approved contingency; canonical types locked; same-day multiplicity, reps+duration-only execution scope, Supabase Backup/Restore scope, RN fixture/import strategy and Paste workout naming locked; schema-v1 fixture passes; no product-scope question remains before creating the SwiftUI project.
 
-### Phase 1 — Schedule shell
+### Phase 1 — Home shell
 
-- **Objective:** Establish native visual quality, navigation and date semantics with fixtures.
-- **User-visible result:** Schedule launches, selects days/weeks, shows workout/rest states, and opens placeholder Settings/history/add destinations.
-- **Likely files/modules:** `ScheduleView`, `ScheduleModel`, `WeekStrip`, `WorkoutCard`, `RestDayView`, typed routes/coordinator, Settings shell, design components.
-- **RN references:** `TodayScreen.tsx`, calendar components, `ScheduleWorkoutDeckV3.tsx`, theme/tokens and baseline screenshots.
+- **Objective:** Establish the current-day Home lens, navigation and local-day semantics with fixtures.
+- **User-visible result:** Home launches into an ordered current-day workout carousel whose final/only empty page is Add Workout, and opens placeholder Settings/history plus Timer.
+- **Likely files/modules:** `HomeView`, `HomeModel`, `WorkoutCard`, `AddWorkoutCard`, typed routes/coordinator, Settings shell, design components.
+- **RN references:** `TodayScreen.tsx`, `ScheduleWorkoutDeckV3.tsx`, theme/tokens and baseline screenshots. Calendar components are historical negative references only; Home has no date-navigation UI.
 - **Data required:** fixture repository only; no migration.
-- **Automated tests:** week/day calculations across DST/year boundaries; Schedule query/state tests; route tests; snapshot/image tests for key states where stable.
-- **Manual regression:** gestures, week navigation, safe areas, iPad behavior, VoiceOver order, Dynamic Type, reduced motion, dark appearance.
+- **Automated tests:** injected current-local-day calculations across DST/year boundaries; bounded ordered current-day query/state tests; rollover tests; Home route tests; zero/one/many/completed/Add Workout snapshots where stable.
+- **Manual regression:** horizontal carousel gestures and card peeking, Add Workout final/only-page behavior, safe areas, iPad behavior, VoiceOver order, Dynamic Type, reduced motion, dark appearance, and absence of date navigation or a Rest Day state.
 - **Dependencies/frameworks:** SwiftUI navigation/scrolling; native haptics abstraction.
-- **Risks:** over-copying deck animation; local-day/time-zone bugs; bespoke calendar accessibility.
-- **Exit criteria:** fixture schedule is production-quality, accessible and navigable with no custom navigation framework.
+- **Risks:** over-copying deck animation; local-day/time-zone rollover bugs; unstable same-day ordering.
+- **Exit criteria:** fixture Home is production-quality, accessible, and navigable with a current-day ordered carousel, final Add Workout page, Timer/History/Settings routes, and no custom navigation framework.
 
 ### Phase 2 — First vertical slice
 
 - **Objective:** Prove the canonical log model end to end.
-- **User-visible result:** Schedule → workout card → ordered Exercises → log sets → complete → Schedule/history state updates; relaunch resumes persisted in-progress work.
+- **User-visible result:** Home → workout card → ordered Exercises → log sets → complete → Home/history state updates; the completed card remains in today's carousel, and relaunch resumes persisted in-progress work.
 - **Likely files/modules:** scheduled-workout repository, `WorkoutExecutionView/Model`, exercise/set cards, log/complete commands, completion presentation, performance query seed, transition source.
-- **RN references:** `ExerciseExecutionScreen.tsx`, Explore V2 components/tokens, `completeWorkout`, celebration data builder, current schedule transition.
+- **RN references:** `ExerciseExecutionScreen.tsx`, Explore V2 components/tokens, `completeWorkout`, celebration data builder, current Home workout-card transition.
 - **Data required:** one fixture/template materialized into SwiftData.
 - **Automated tests:** log/update set transactions; status invariants; completion percentage/state derivation; relaunch recovery; completed immutability; history query; transition route identity.
 - **Manual regression:** set entry/keyboard, current/upcoming/completed animations, interruption/relaunch, back/dismiss behavior, completion and card return, reduced motion.
@@ -705,13 +702,13 @@ Each phase is independently demonstrable and retains the RN app unchanged as ref
 
 ### Phase 3 — Workout creation
 
-- **Objective:** Create and schedule canonical workouts through useful entry paths.
-- **User-visible result:** blank builder, exercise selection/custom exercise, reusable save, schedule existing, clone recent, and **Import Plan** for formatted plan/workout text.
-- **Likely files/modules:** `WorkoutBuilderView/Model`, `ExercisePicker`, prescription editor, template repository, schedule command, recent picker, `ImportPlanView/Model`, `PlanTextParser` and review UI.
+- **Objective:** Create and add current-day canonical workouts through the three Home entry paths.
+- **User-visible result:** Create from scratch, exercise selection/custom exercise, reusable internal save, multi-select **Use recent workout**, and **Paste workout** for formatted workout text; every Home creation path targets today.
+- **Likely files/modules:** `WorkoutBuilderView/Model`, `ExercisePicker`, prescription editor, template repository, current-day add command, recent multi-select picker, `PasteWorkoutView/Model`, `PlanTextParser` and review UI.
 - **RN references:** `WorkoutBuilderScreen`, `RecentWorkoutPickerScreen`, builder utilities, `AIWorkoutCreationScreen`, personal catalog utilities.
 - **Data required:** catalog/template/log fixtures.
-- **Automated tests:** builder validation; catalog dedupe; ordered prescriptions; template snapshot isolation; recent clone new IDs; parser golden cases/invalid input; scheduling conflict.
-- **Manual regression:** paste/import, search/create exercise, reorder/delete, unsaved-change dismissal, keyboard/focus, schedule result.
+- **Automated tests:** builder validation; catalog dedupe; ordered prescriptions; template snapshot isolation; recent multi-select clones with new IDs in tap order; parser golden cases/invalid input; multiple same-day creation.
+- **Manual regression:** Paste workout, search/create exercise, reorder/delete, unsaved-change dismissal, keyboard/focus, Create from scratch result, and one/many Use recent workout results appended to today's Home carousel.
 - **Dependencies/frameworks:** native searchable/navigation/forms/clipboard. No AI/OpenAI SDK or client API key.
 - **Risks:** ambiguous exercise matching; accidental mutation of history/template; parser error review.
 - **Exit criteria:** all retained creation paths write only canonical models and survive relaunch.
@@ -732,14 +729,14 @@ Each phase is independently demonstrable and retains the RN app unchanged as ref
 ### Phase 5 — Plans
 
 - **Objective:** Implement only current useful `CyclePlan` behavior against canonical templates/snapshots.
-- **User-visible result:** create/review/apply plan, conflicts, current plan status and approved lifecycle actions.
-- **Likely files/modules:** plan repository/commands, `PlanBuilder`, day editor, review/detail, conflict resolver, materialization/status calculator.
-- **RN references:** `CreateCycleFlow`, day editor, `CycleConflictsScreen`, `CyclePlanDetailScreen`, plan actions in `src/store/index.ts`, Schedule plan sheets.
-- **Data required:** templates; active/paused/ended/repeated plans; conflicts including completed workouts.
-- **Automated tests:** weekday generation across DST; atomic apply; keep/replace; completed lock; pause/shift; end/repeat; planID provenance; natural completion.
-- **Manual regression:** create/apply, conflicts, plan visibility on Schedule, pause/end/repeat if retained, error recovery.
+- **User-visible result:** create/review/apply plan, current plan status and approved lifecycle actions. Plan-generated workouts coexist with any other workouts already assigned to the same day.
+- **Likely files/modules:** plan repository/commands, `PlanBuilder`, day editor, review/detail, materialization/status calculator.
+- **RN references:** `CreateCycleFlow`, day editor, `CyclePlanDetailScreen`, plan actions in `src/store/index.ts`, and Home plan entry points. `CycleConflictsScreen` is a negative reference for obsolete day-occupancy behavior.
+- **Data required:** templates; active/paused/ended/repeated plans; days containing zero, one, and several existing workouts, including completed workouts.
+- **Automated tests:** weekday generation across DST; atomic apply with same-day coexistence; completed-record lock; pause/shift; end/repeat; planID provenance; natural completion.
+- **Manual regression:** create/apply onto empty and already-populated days, plan visibility from Home, pause/end/repeat if retained, genuine validation-error recovery, and unchanged existing/completed same-day workouts.
 - **Dependencies/frameworks:** Foundation Calendar, SwiftData transactions, native date picker/sheets.
-- **Risks:** copying legacy lifecycle quirks; date ambiguity; failing to apply unique-day conflicts atomically.
+- **Risks:** copying legacy lifecycle quirks; date ambiguity; losing deterministic order during atomic same-day materialization; treating ordinary day occupancy as an error.
 - **Exit criteria:** plan workflows create only canonical scheduled snapshots with `planID`; no compatibility aliases/generations.
 
 ### Phase 6 — Progression and timer
@@ -758,7 +755,7 @@ Each phase is independently demonstrable and retains the RN app unchanged as ref
 ### Phase 7 — Optional account and Supabase Cloud Backup
 
 - **Objective:** Add optional secure native identity and authoritative versioned Cloud Backup/Restore without changing local-first behavior.
-- **User-visible result:** the app still launches directly to Schedule; Settings offers Apple Sign In, durable account session, Last Backup, Back Up Now, Restore Backup and logout while local history remains intact.
+- **User-visible result:** the app still launches directly to Home / Workout of the day; Settings offers Apple Sign In, durable account session, Last Backup, Back Up Now, Restore Backup and logout while local history remains intact.
 - **Likely files/modules:** auth service/AccountModel, Keychain storage, Supabase client, backup DTO/service, Settings account/backup UI, RLS/schema migration outside app code.
 - **RN references:** `LoginScreen`, `authService.ts`, `supabase.ts`, `cloudSync.ts`, `ProfileScreen`; `cloudBackup.ts` only to verify retirement.
 - **Data required:** test Supabase project/users, backup fixtures v1, corrupt/future/conflict payloads.
@@ -771,15 +768,15 @@ Each phase is independently demonstrable and retains the RN app unchanged as ref
 ### Phase 8 — Real-data migration
 
 - **Objective:** Run the required one-time developer/TestFlight import of selected RN development data after the native schema is stable.
-- **User-visible result:** selected catalog/templates/schedule/history/plan/progression appear natively with an import summary; excluded domains remain in RN archive only.
+- **User-visible result:** selected catalog/templates/dated workouts/history/plan/progression appear natively with an import summary; excluded domains remain in RN archive only.
 - **Likely files/modules:** development-only legacy DTOs, versioned JSON exporter contract, optional frozen Supabase legacy reader, deterministic reconciliation engine, ID mapper, import report/review, staging transaction.
 - **RN references:** storage/types, history builders, migration utilities, cloud schema and baseline data.
 - **Data required:** checkpointed real/anonymized RN exports covering all known shapes and disagreements.
 - **Automated tests:** every Section 9 precedence rule; idempotence; golden converted backup; malformed/ambiguous data; excluded-key assertions; rollback.
 - **Manual regression:** compare counts and representative workouts/sets/PRs/plans side-by-side with RN; inspect warnings; relaunch and backup restored import.
 - **Dependencies/frameworks:** Foundation Codable/CryptoKit; existing native repositories. No RN runtime in shipped target.
-- **Risks:** ambiguous identifiers; same-day legacy conflicts; accidental section import; development importer leaking into the production target.
-- **Exit criteria:** exercise catalog, reusable templates, scheduled/completed workout history, current CyclePlans, progression and relevant settings import deterministically with zero invariant violations; same-day conflicts are explicitly resolved; converted `EquilibriumBackupV1` restores correctly; legacy importer is excluded from the production App Store target unless actual users later require it.
+- **Risks:** ambiguous identifiers; genuine duplicate evidence; accidental section import; development importer leaking into the production target.
+- **Exit criteria:** exercise catalog, reusable templates, all distinct scheduled/completed workout history including same-day multiplicity, current CyclePlans, progression and relevant settings import deterministically with zero invariant violations; converted `EquilibriumBackupV1` restores correctly; legacy importer is excluded from the production App Store target unless actual users later require it.
 
 ### Phase 9 — Feature parity and RN retirement
 
@@ -789,7 +786,7 @@ Each phase is independently demonstrable and retains the RN app unchanged as ref
 - **RN references:** known-good commit run on reference device/simulator; no RN refactor.
 - **Data required:** parity scenarios across empty/new/existing/plan/history accounts.
 - **Automated tests:** complete retained-flow suite; migration and backup regression; performance baselines.
-- **Manual regression:** side-by-side Schedule, builder, execution, completion, history, performance, plans, progression, timer, settings/auth.
+- **Manual regression:** side-by-side Home workout carousel, builder, execution, completion, history, performance, plans, progression, timer, settings/auth.
 - **Dependencies/frameworks:** existing only; dependency freeze begins.
 - **Risks:** visual pixel-copying over native behavior; hidden RN edge cases mistaken for scope; premature archive.
 - **Exit criteria:** signed parity matrix; no critical/high defects; native iOS build used for ongoing TestFlight; frozen RN retained only for reference/migration/rollback, not Android/web maintenance; rollback artifact retained.
@@ -833,9 +830,9 @@ Removed data remains preserved in the frozen RN backup/archive during the agreed
 
 ## 12. Native transition opportunities
 
-### Schedule card → execution
+### Home workout card → execution
 
-On the iOS 18 baseline, mark the Schedule workout card with `.matchedTransitionSource(id:in:)` and apply `.navigationTransition(.zoom(sourceID:in:))` to Workout Execution where the card and destination have a clear one-to-one relationship. This is the native source-to-detail continuity the current deck transition custom infrastructure approximates. Keep the scheduled-workout ID stable through the transition; update status after destination activation so the source does not disappear mid-animation. Do not build an iOS 17 fallback transition architecture.
+On the iOS 18 baseline, mark each Home workout card with `.matchedTransitionSource(id:in:)` and apply `.navigationTransition(.zoom(sourceID:in:))` to Workout Execution where the card and destination have a clear one-to-one relationship. This is the native source-to-detail continuity the current deck transition custom infrastructure approximates. Keep the `ScheduledWorkoutID` stable through the transition; status changes must not reorder or remove today's source card. Do not build an iOS 17 fallback transition architecture.
 
 ### Exercise states
 
@@ -845,7 +842,7 @@ On the iOS 18 baseline, mark the Schedule workout card with `.matchedTransitionS
 
 ### Completion
 
-Use a native overlay/full-screen cover with a short phase animation, haptic and optional lightweight particles. Dismiss/return through standard navigation so the card settles into its completed Schedule appearance. Do not port accelerometer-dependent confetti unless explicitly justified; motion permission should disappear.
+Use a native overlay/full-screen cover with a short phase animation, haptic and optional lightweight particles. Dismiss/return through standard navigation so the card settles into its completed Home appearance and remains in today's carousel until rollover. Do not port accelerometer-dependent confetti unless explicitly justified; motion permission should disappear.
 
 ### Sheets and drawers
 
@@ -853,7 +850,7 @@ Replace `BottomDrawer`/custom editor sheets with native `.sheet`, presentation d
 
 ### Plan/workout detail
 
-Use native navigation pushes for information hierarchy and sheets for selection/creation. Apply matched/zoom source only where a visible source card maps one-to-one to the destination. Avoid animation across conflict resolution or destructive state changes where clarity matters more than flourish.
+Use native navigation pushes for information hierarchy and sheets for selection/creation. Apply matched/zoom source only where a visible source card maps one-to-one to the destination. Avoid animation across validation resolution or destructive state changes where clarity matters more than flourish.
 
 ### OS availability baseline
 
@@ -892,7 +889,7 @@ Do not make the native app read AsyncStorage directly or embed a React Native ru
 ### Supabase/iCloud retirement validation
 
 - Inventory RN Supabase backups and prove they contain the expected legacy keys.
-- Convert at least empty, typical, large and conflicting backups.
+- Convert at least empty, typical, large, corrupt, and genuinely ambiguous backups, including valid same-day multiplicity fixtures.
 - Prove native backup/restore checksum and counts across fresh install.
 - Retain raw RN Supabase/iCloud snapshots for the agreed rollback period.
 - Stop relying on iCloud only after every data owner has either validated native restore, exported, or chosen clean reset. Do not port iCloud code into Swift.
@@ -921,11 +918,13 @@ Do not delete RN at feature-code completion alone. Data rollback, visual referen
 ### Core workflow gates
 
 - Fresh install and relaunch persistence.
-- Schedule day/week/rest/workout states.
-- Blank, recent, existing and retained import creation flows.
-- Create/schedule/start/resume/log/complete workout.
+- Home current-day carousel with zero, one, and many same-day workout states.
+- Completed cards remain in today's carousel; local-day rollover removes yesterday from Home without deleting canonical history.
+- Add Workout is the final carousel page and the only primary page when today has no workouts; no Rest Day state exists.
+- Create from scratch, Paste workout, and Use recent workout multi-select are the only Home creation entries.
+- Create/add/start/resume/log/complete current-day workouts; past and future workouts remain read-only.
 - Completed workout history/detail and exercise performance/derived PRs.
-- Plan create/apply/conflict/status/lifecycle workflows.
+- Plan create/apply/status/lifecycle workflows, including atomic same-day coexistence with existing workouts and rejection only for genuine identity/referential/domain errors.
 - Progression configuration and suggestion correctness.
 - Simple timer foreground/background/interruption behavior.
 
@@ -940,7 +939,7 @@ Do not delete RN at feature-code completion alone. Data rollback, visual referen
 
 ### Platform quality
 
-- VoiceOver labels/order/actions for calendar, workout/exercise cards, set controls, charts and timer.
+- VoiceOver labels/order/actions for the Home carousel, Add Workout page, workout/exercise cards, set controls, charts and timer.
 - Dynamic Type without globally disabled scaling; keyboard/focus and hardware keyboard behavior.
 - Reduce Motion/Increase Contrast, haptic/sound accessibility, and sufficiently large targets.
 - Dark-only appearance matches the Equilibrium reference; there is no light/system appearance setting, while semantic colors and accessibility contrast remain correct.
@@ -972,12 +971,19 @@ One external technical verification remains: confirm that `com.tsunamichi.equili
 | Minimum iOS | iOS 18 |
 | Platform | iOS only |
 | Product identity | Equilibrium; planned bundle ID `com.tsunamichi.equilibrium`, pending external availability verification |
-| Home | Schedule |
 | Navigation | No tab bar |
 | Workout structure | One ordered exercise list |
 | Exercise targets | Repetitions + duration; prescription-owned semantics |
 | Catalog metadata | Preserve aliases, equipment, category, and custom/system status |
-| Same-day workouts | Maximum one `ScheduledWorkout` per `LocalDay` |
+| Home | Workout of the day |
+| Home scope | Current local day only |
+| Home workouts | Zero or more, in stable deterministic carousel order |
+| Date navigation | None on Home |
+| Completed workout | Remains in today's carousel; canonical history thereafter |
+| Empty day | Add Workout; no Rest Day state |
+| Add Workout | Create from scratch / Paste workout / Use recent workout |
+| Use recent workout | Multi-select previous completed workouts in tap order |
+| Execution eligibility | Current local day only |
 | Timer | Simple rest/duration timer |
 | Warmup/Core/Accessories | Removed as domains |
 | HIIT | Removed |
@@ -991,7 +997,7 @@ One external technical verification remains: confirm that `com.tsunamichi.equili
 | Cloud | Supabase Cloud Backup/Restore, not multi-device synchronization |
 | iCloud backup | Removed |
 | Plans | Current `CyclePlan` behavior only; canonical `planID` |
-| AI | No AI in v1; current parser becomes Import Plan |
+| AI | No AI in v1; current deterministic local parser is Paste workout |
 | RN history | One-time development/TestFlight JSON migration with deterministic reconciliation |
 | Legacy importer | Excluded from production App Store target after validated cutover unless actual users require it |
 | RN app | Frozen behavioral/migration/rollback reference, then archived; no Android/web maintenance |

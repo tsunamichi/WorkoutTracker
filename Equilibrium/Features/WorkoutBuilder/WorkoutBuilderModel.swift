@@ -67,15 +67,13 @@ final class WorkoutBuilderModel {
             try await templates.saveTemplate(value); draft.sourceTemplateID = value.id; errorMessage = nil; return value
         } catch { errorMessage = "The reusable workout could not be saved."; return nil }
     }
-    func schedule(replacing: Bool = false, now: Date = .now) async -> ScheduledWorkout? {
+    func schedule(now: Date = .now) async -> ScheduledWorkout? {
         guard canCommit else { errorMessage = "Add a workout name, exercise, and set."; return nil }
         let value = makeScheduled(now: now)
         do {
-            if replacing { try await workouts.replaceScheduledWorkout(value) } else { try await workouts.schedule(value) }
+            try await workouts.schedule(value)
             errorMessage = nil; return value
-        } catch RepositoryError.workoutDayConflict { errorMessage = "A workout is already scheduled for this day." }
-        catch RepositoryError.immutableCompletedWorkout { errorMessage = "A completed workout cannot be replaced." }
-        catch { errorMessage = "The workout could not be scheduled." }
+        } catch { errorMessage = "The workout could not be added." }
         return nil
     }
     func makeScheduled(now: Date = .now) -> ScheduledWorkout {

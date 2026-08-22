@@ -8,27 +8,27 @@ final class PersistenceSpikeTests: XCTestCase {
         let repository = SwiftDataRepository(container: try PersistenceController.makeContainer(inMemory: true))
         let fixture = EquilibriumFixtures.mixed()
         try await repository.schedule(fixture)
-        let result = try await repository.workout(on: fixture.day)
-        let loaded = try XCTUnwrap(result)
+        let result = try await repository.workouts(on: fixture.day)
+        let loaded = try XCTUnwrap(result.first)
         XCTAssertEqual(loaded, fixture)
         XCTAssertEqual(loaded.exercises.map(\.nameSnapshot), ["Back Squat", "Plank"])
     }
 
-    func testOneWorkoutPerDayReturnsDomainConflict() async throws {
+    func testSeveralWorkoutsPerDayRemainDistinctAndOrdered() async throws {
         let repository = SwiftDataRepository(container: try PersistenceController.makeContainer(inMemory: true))
         let first = EquilibriumFixtures.planned()
         try await repository.schedule(first)
-        do { try await repository.schedule(EquilibriumFixtures.mixed(day: first.day.iso8601)); XCTFail("Expected conflict") }
-        catch { XCTAssertEqual(error as? RepositoryError, .workoutDayConflict(first.day)) }
-        let count = try await repository.allWorkouts().count
-        XCTAssertEqual(count, 1)
+        var second = EquilibriumFixtures.mixed(day: first.day.iso8601); second.createdAt = first.createdAt.addingTimeInterval(1)
+        try await repository.schedule(second)
+        let sameDay = try await repository.workouts(on: first.day)
+        XCTAssertEqual(sameDay.map(\.id), [first.id, second.id])
     }
 
-    func testPlanMaterializationIsAtomicWhenAnyDayConflicts() async throws {
+    func testBatchMaterializationAllowsSameDayAndRemainsAtomicForDuplicateIdentity() async throws {
         let repository = SwiftDataRepository(container: try PersistenceController.makeContainer(inMemory: true))
         try await repository.schedule(EquilibriumFixtures.planned(day: "2025-02-03", id: "occupied"))
-        let incoming = [EquilibriumFixtures.planned(day: "2025-02-04", id: "incoming-1"), EquilibriumFixtures.planned(day: "2025-02-03", id: "incoming-2")]
-        do { try await repository.materializeAtomically(incoming); XCTFail("Expected conflict") } catch { }
+        let incoming = [EquilibriumFixtures.planned(day: "2025-02-03", id: "incoming-1"), EquilibriumFixtures.planned(day: "2025-02-03", id: "occupied")]
+        do { try await repository.materializeAtomically(incoming); XCTFail("Expected duplicate") } catch { XCTAssertEqual(error as? RepositoryError, .duplicateIdentifier) }
         let identifiers = try await repository.allWorkouts().map(\.id.rawValue)
         XCTAssertEqual(identifiers, ["occupied"])
     }

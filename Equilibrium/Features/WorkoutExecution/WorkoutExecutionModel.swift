@@ -16,6 +16,7 @@ final class WorkoutExecutionModel {
     let workoutID: ScheduledWorkoutID
     private let repository: any ScheduledWorkoutRepository
     private let now: () -> Date
+    private let currentDayProvider: any CurrentDayProviding
     private let didPersist: (ScheduledWorkout) -> Void
 
     private(set) var workout: ScheduledWorkout?
@@ -29,15 +30,16 @@ final class WorkoutExecutionModel {
     @ObservationIgnored private var restTask: Task<Void, Never>?
     let weightUnit: WeightUnit
 
-    init(workoutID: ScheduledWorkoutID, repository: any ScheduledWorkoutRepository, weightUnit: WeightUnit = .pounds, now: @escaping () -> Date = Date.init, didPersist: @escaping (ScheduledWorkout) -> Void = { _ in }) {
+    init(workoutID: ScheduledWorkoutID, repository: any ScheduledWorkoutRepository, weightUnit: WeightUnit = .pounds, now: @escaping () -> Date = Date.init, currentDayProvider: any CurrentDayProviding = SystemCurrentDayProvider(), didPersist: @escaping (ScheduledWorkout) -> Void = { _ in }) {
         self.workoutID = workoutID
         self.repository = repository
         self.weightUnit = weightUnit
         self.now = now
+        self.currentDayProvider = currentDayProvider
         self.didPersist = didPersist
     }
 
-    var isReadOnly: Bool { workout?.status == .completed }
+    var isReadOnly: Bool { workout.map { $0.status == .completed || (try? currentDayProvider.currentDay()) != $0.day } ?? true }
     var progress: WorkoutProgress { workout.map(WorkoutExecutionQuery.progress) ?? .init(completedSetCount: 0, requiredSetCount: 0) }
     var states: [ScheduledExerciseID: ExerciseState] { workout.map { WorkoutExecutionQuery.states(in: $0, focusedExerciseID: focusedExerciseID) } ?? [:] }
     var canComplete: Bool { workout.map { $0.status == .inProgress && WorkoutExecutionQuery.canComplete($0) } ?? false }
@@ -146,6 +148,7 @@ final class WorkoutExecutionModel {
         switch error as? RepositoryError {
         case .incompleteWorkout: return "Complete every required set before finishing."
         case .immutableCompletedWorkout: return "Completed workouts are read-only."
+        case .workoutNotCurrentDay: return "Only today's workout can be updated."
         case .invalidSetInput: return "Enter a valid set value."
         default: return "The workout could not be updated."
         }

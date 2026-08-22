@@ -20,7 +20,21 @@ final class BackupTests: XCTestCase {
         try await fresh.restoreBackup(backup)
         let exported = try await fresh.exportBackup(exportedAt: backup.exportedAt, sourceDeviceID: backup.sourceDeviceID)
         XCTAssertEqual(exported.exercises, backup.exercises); XCTAssertEqual(exported.workoutTemplates, backup.workoutTemplates)
-        XCTAssertEqual(exported.scheduledWorkouts, backup.scheduledWorkouts); XCTAssertEqual(exported.cyclePlans, backup.cyclePlans)
+        let expectedWorkouts = backup.scheduledWorkouts.sorted { lhs, rhs in lhs.day == rhs.day ? (lhs.createdAt == rhs.createdAt ? lhs.id.rawValue < rhs.id.rawValue : lhs.createdAt < rhs.createdAt) : lhs.day < rhs.day }
+        XCTAssertEqual(exported.scheduledWorkouts, expectedWorkouts); XCTAssertEqual(exported.cyclePlans, backup.cyclePlans)
         XCTAssertEqual(exported.settings, backup.settings); XCTAssertEqual(exported.progression, backup.progression)
+    }
+
+    func testBackupRoundTripPreservesSameDayMultiplicityAndOrder() async throws {
+        let original = try EquilibriumFixtures.backup()
+        let day = try LocalDay("2026-08-22")
+        var first = EquilibriumFixtures.planned(day: day.iso8601, id: "backup-a")
+        var second = EquilibriumFixtures.completed(day: day.iso8601, id: "backup-b")
+        first.createdAt = .init(timeIntervalSince1970: 10); second.createdAt = .init(timeIntervalSince1970: 20)
+        let backup = try EquilibriumBackupV1(exportedAt: original.exportedAt, sourceDeviceID: original.sourceDeviceID, exercises: original.exercises, workoutTemplates: original.workoutTemplates, scheduledWorkouts: [first, second], cyclePlans: original.cyclePlans, settings: original.settings, progression: original.progression)
+        let fresh = SwiftDataRepository(container: try PersistenceController.makeContainer(inMemory: true))
+        try await fresh.restoreBackup(backup)
+        let restored = try await fresh.workouts(on: day)
+        XCTAssertEqual(restored.map(\.id), [first.id, second.id])
     }
 }

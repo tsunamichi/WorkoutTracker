@@ -12,14 +12,20 @@ struct EquilibriumApp: App {
                 let container = try PersistenceController.makeContainer(inMemory: true)
                 let calendar = Calendar.autoupdatingCurrent
                 let day = try LocalDay(date: .now, calendar: calendar).iso8601
-                let workout: ScheduledWorkout?
+                let workouts: [ScheduledWorkout]
                 switch arguments[flag + 1] {
-                case "planned": workout = EquilibriumFixtures.planned(day: day, id: "launch-planned")
-                case "inProgress": workout = EquilibriumFixtures.inProgress(day: day, id: "launch-progress")
-                case "completed": workout = EquilibriumFixtures.completed(day: day, id: "launch-completed")
-                default: workout = nil
+                case "planned": workouts = [EquilibriumFixtures.planned(day: day, id: "launch-planned")]
+                case "inProgress": workouts = [EquilibriumFixtures.inProgress(day: day, id: "launch-progress")]
+                case "completed": workouts = [EquilibriumFixtures.completed(day: day, id: "launch-completed")]
+                case "carousel":
+                    var a = EquilibriumFixtures.planned(day: day, id: "launch-a")
+                    var b = EquilibriumFixtures.inProgress(day: day, id: "launch-b")
+                    var c = EquilibriumFixtures.completed(day: day, id: "launch-c")
+                    a.createdAt = .init(timeIntervalSince1970: 1); b.createdAt = .init(timeIntervalSince1970: 2); c.createdAt = .init(timeIntervalSince1970: 3)
+                    workouts = [a, b, c]
+                default: workouts = []
                 }
-                if let workout { container.mainContext.insert(WorkoutMapper.record(from: workout)); try container.mainContext.save() }
+                for workout in workouts { container.mainContext.insert(WorkoutMapper.record(from: workout)) }; try container.mainContext.save()
                 environment = AppEnvironment(container: container)
                 return
             }
@@ -29,7 +35,7 @@ struct EquilibriumApp: App {
         catch { fatalError("Unable to initialize Equilibrium persistence: \(error)") }
     }
     var body: some Scene {
-        WindowGroup { ScheduleView(repository: environment.workoutRepository, exerciseRepository: environment.exerciseRepository, templateRepository: environment.templateRepository).environment(environment).preferredColorScheme(.dark) }
+        WindowGroup { HomeView(repository: environment.workoutRepository, exerciseRepository: environment.exerciseRepository, templateRepository: environment.templateRepository).environment(environment).preferredColorScheme(.dark) }
             .modelContainer(environment.container)
     }
 }

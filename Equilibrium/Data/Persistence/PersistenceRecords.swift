@@ -41,7 +41,7 @@ import SwiftData
 
 @Model final class ScheduledWorkoutRecord {
     @Attribute(.unique) var id: String
-    @Attribute(.unique) var localDay: String
+    var localDay: String
     var titleSnapshot: String; var templateID: String?; var planID: String?; var sourceRaw: String; var statusRaw: String
     var startedAt: Date?; var completedAt: Date?; var createdAt: Date; var updatedAt: Date
     @Relationship(deleteRule: .cascade, inverse: \ScheduledExerciseRecord.workout) var exercises: [ScheduledExerciseRecord]

@@ -35,7 +35,7 @@ final class WorkoutCreationPhase3ATests: XCTestCase {
         let activeTemplates = try await repository.allTemplates(); XCTAssertTrue(activeTemplates.isEmpty)
     }
 
-    func testBuilderMutationFreshIDsSchedulingConflictAndCompletedProtection() async throws {
+    func testBuilderMutationFreshIDsAndMultipleSameDayScheduling() async throws {
         let repository = makeRepository(); let day = try LocalDay("2026-08-23")
         let model = WorkoutBuilderModel(day: day, templates: repository, workouts: repository)
         XCTAssertFalse(model.canCommit)
@@ -47,11 +47,8 @@ final class WorkoutCreationPhase3ATests: XCTestCase {
         let scheduledResult = await model.schedule(); let scheduled = try XCTUnwrap(scheduledResult)
         XCTAssertEqual(scheduled.day, day); XCTAssertEqual(Set(scheduled.exercises.map(\.id)).count, 2)
         XCTAssertEqual(Set(scheduled.exercises.flatMap(\.prescriptions).map(\.id)).count, scheduled.exercises.flatMap(\.prescriptions).count)
-        let conflict = await model.schedule(); XCTAssertNil(conflict)
-        var completed = EquilibriumFixtures.completed(day: "2026-08-24", id: "protected")
-        try await repository.schedule(completed)
-        completed = model.makeScheduled(); completed.day = try LocalDay("2026-08-24")
-        do { try await repository.replaceScheduledWorkout(completed); XCTFail("Expected protection") } catch { XCTAssertEqual(error as? RepositoryError, .immutableCompletedWorkout) }
+        let another = await model.schedule(); XCTAssertNotNil(another)
+        let sameDay = try await repository.workouts(on: day); XCTAssertEqual(sameDay.count, 2)
     }
 
     func testRecentDraftUsesPrescriptionsWithoutExecutionIdentity() async throws {

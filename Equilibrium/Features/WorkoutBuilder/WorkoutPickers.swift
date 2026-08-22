@@ -59,9 +59,33 @@ struct WorkoutTemplatePicker: View {
 }
 
 struct RecentWorkoutPicker: View {
-    let repository: any ScheduledWorkoutRepository; let selection: (ScheduledWorkout) -> Void
-    @State private var values: [ScheduledWorkout] = []; @State private var failed = false
-    var body: some View { List(values) { value in Button { selection(value) } label: { VStack(alignment: .leading) { Text(value.titleSnapshot); Text(value.day.iso8601).font(EQTypography.caption).foregroundStyle(EQColor.secondaryText) }.frame(minHeight: EQDimension.minimumTouch) } }.overlay { if values.isEmpty { ContentUnavailableView("No recent workouts", systemImage: "clock.arrow.circlepath", description: Text(failed ? "Recent workouts could not be loaded." : "Completed workouts appear here.")) } }.scrollContentBackground(.hidden).background(EQColor.canvas).navigationTitle("Recent Workout").task { do { values = try await repository.recentCompletedWorkouts(limit: 20) } catch { failed = true } } }
+    let repository: any ScheduledWorkoutRepository; let day: LocalDay; let selection: ([ScheduledWorkout]) -> Void
+    @State private var values: [ScheduledWorkout] = []; @State private var selectedIDs: [ScheduledWorkoutID] = []; @State private var failed = false; @State private var saving = false
+    var body: some View {
+        List(values) { value in
+            Button { if selectedIDs.contains(value.id) { selectedIDs.removeAll { $0 == value.id } } else { selectedIDs.append(value.id) } } label: {
+                HStack { VStack(alignment: .leading) { Text(value.titleSnapshot); Text(value.day.iso8601).font(EQTypography.caption).foregroundStyle(EQColor.secondaryText) }; Spacer(); Image(systemName: selectedIDs.contains(value.id) ? "checkmark.circle.fill" : "circle").foregroundStyle(EQColor.accent) }.frame(minHeight: EQDimension.minimumTouch)
+            }
+        }
+        .overlay { if values.isEmpty { ContentUnavailableView("No recent workouts", systemImage: "clock.arrow.circlepath", description: Text(failed ? "Recent workouts could not be loaded." : "Completed workouts appear here.")) } }
+        .scrollContentBackground(.hidden).background(EQColor.canvas).navigationTitle("Use recent workout")
+        .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Add \(selectedIDs.count) workouts") { Task { await addSelected() } }.disabled(selectedIDs.isEmpty || saving) } }
+        .task { do { values = try await repository.recentCompletedWorkouts(limit: 20) } catch { failed = true } }
+    }
+    private func addSelected(now: Date = .now) async {
+        saving = true; defer { saving = false }
+        let chosen = selectedIDs.compactMap { id in values.first { $0.id == id } }
+        let fresh = chosen.enumerated().map { index, historical in historical.freshCopy(on: day, createdAt: now.addingTimeInterval(Double(index) / 1_000)) }
+        do { try await repository.materializeAtomically(fresh); selection(fresh) } catch { failed = true }
+    }
+}
+
+extension ScheduledWorkout {
+    func freshCopy(on day: LocalDay, createdAt: Date) -> ScheduledWorkout {
+        .init(id: .new(), day: day, titleSnapshot: titleSnapshot, templateID: templateID, planID: nil, source: .manual, exercises: exercises.map { exercise in
+            .init(id: .new(), exerciseID: exercise.exerciseID, nameSnapshot: exercise.nameSnapshot, prescriptions: exercise.prescriptions.map { .init(id: .new(), target: $0.target, suggestedWeight: $0.suggestedWeight) }, loggedSets: [], restDuration: exercise.restDuration, skippedAt: nil)
+        }, status: .planned, startedAt: nil, completedAt: nil, createdAt: createdAt, updatedAt: createdAt)
+    }
 }
 
 private extension String { var nilIfBlank: String? { let value = trimmingCharacters(in: .whitespacesAndNewlines); return value.isEmpty ? nil : value } }
@@ -75,5 +99,5 @@ private extension String { var nilIfBlank: String? { let value = trimmingCharact
 }
 #Preview("Exercise Picker") { ExercisePickerView(repository: pickerPreviewRepository) { _ in } }
 #Preview("Existing Workout") { NavigationStack { WorkoutTemplatePicker(repository: pickerPreviewRepository) { _ in } }.preferredColorScheme(.dark) }
-#Preview("Recent Workout") { NavigationStack { RecentWorkoutPicker(repository: pickerPreviewRepository) { _ in } }.preferredColorScheme(.dark) }
+#Preview("Recent Workout") { NavigationStack { RecentWorkoutPicker(repository: pickerPreviewRepository, day: try! LocalDay("2026-08-22")) { _ in } }.preferredColorScheme(.dark) }
 #endif

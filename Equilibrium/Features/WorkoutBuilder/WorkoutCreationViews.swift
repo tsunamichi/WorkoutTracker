@@ -5,26 +5,24 @@ struct AddWorkoutSheet: View {
     let exercises: any ExerciseRepository
     let templates: any WorkoutTemplateRepository
     let workouts: any ScheduledWorkoutRepository
-    let scheduled: (ScheduledWorkout) -> Void
+    let scheduled: ([ScheduledWorkout]) -> Void
     @Environment(\.dismiss) private var dismiss
     @State private var path: [CreationRoute] = []
     var body: some View {
         NavigationStack(path: $path) {
             List {
-                Button { path.append(.templates) } label: { Label("Existing Workout", systemImage: "rectangle.stack").frame(minHeight: EQDimension.minimumTouch) }
-                Button { path.append(.recent) } label: { Label("Recent Workout", systemImage: "clock.arrow.circlepath").frame(minHeight: EQDimension.minimumTouch) }
-                Button { path.append(.builder(.init())) } label: { Label("Blank Workout", systemImage: "plus.square").frame(minHeight: EQDimension.minimumTouch) }
-                Button { path.append(.importPlan) } label: { Label("Import Plan", systemImage: "doc.on.clipboard").frame(minHeight: EQDimension.minimumTouch) }
-                    .accessibilityHint("Paste and review a structured workout plan")
+                Button { path.append(.builder(.init())) } label: { Label("Create from scratch", systemImage: "plus.square").frame(minHeight: EQDimension.minimumTouch) }
+                Button { path.append(.pasteWorkout) } label: { Label("Paste workout", systemImage: "doc.on.clipboard").frame(minHeight: EQDimension.minimumTouch) }
+                    .accessibilityHint("Paste and review a structured workout")
+                Button { path.append(.recent) } label: { Label("Use recent workout", systemImage: "clock.arrow.circlepath").frame(minHeight: EQDimension.minimumTouch) }
             }
             .scrollContentBackground(.hidden).background(EQColor.canvas).navigationTitle("Add Workout")
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } } }
             .navigationDestination(for: CreationRoute.self) { route in
                 switch route {
-                case .builder(let draft): WorkoutBuilderView(model: .init(day: day, draft: draft, templates: templates, workouts: workouts), exercises: exercises) { value in scheduled(value); dismiss() }
-                case .templates: WorkoutTemplatePicker(repository: templates) { path.append(.builder(.init(template: $0))) }
-                case .recent: RecentWorkoutPicker(repository: workouts) { path.append(.builder(.init(recent: $0))) }
-                case .importPlan: PlanImportInputView { path.append(.importReview($0)) }
+                case .builder(let draft): WorkoutBuilderView(model: .init(day: day, draft: draft, templates: templates, workouts: workouts), exercises: exercises) { value in scheduled([value]); dismiss() }
+                case .recent: RecentWorkoutPicker(repository: workouts, day: day) { values in scheduled(values); dismiss() }
+                case .pasteWorkout: PlanImportInputView { path.append(.importReview($0)) }
                 case .importReview(let result): PlanImportReviewView(model: .init(result: result, repository: exercises), exercises: exercises) { path.append(.builder($0)) }
                 }
             }
@@ -33,7 +31,7 @@ struct AddWorkoutSheet: View {
 }
 
 enum CreationRoute: Hashable {
-    case builder(WorkoutDraft), templates, recent, importPlan, importReview(PlanParseResult)
+    case builder(WorkoutDraft), recent, pasteWorkout, importReview(PlanParseResult)
 }
 
 struct WorkoutBuilderView: View {
@@ -42,7 +40,6 @@ struct WorkoutBuilderView: View {
     let scheduled: (ScheduledWorkout) -> Void
     @State private var pickerPresented = false
     @State private var discardPresented = false
-    @State private var conflictPresented = false
     @Environment(\.dismiss) private var dismiss
     @AppStorage(EQPreferenceKey.weightUnit) private var unitRaw = WeightUnit.pounds.rawValue
     var body: some View {
@@ -63,12 +60,11 @@ struct WorkoutBuilderView: View {
             if model.draft.isMeaningful { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { discardPresented = true } } }
             ToolbarItemGroup(placement: .confirmationAction) {
                 Button("Save") { Task { _ = await model.saveTemplate() } }.disabled(!model.canCommit || model.isSaving)
-                Button("Schedule") { Task { if let value = await model.schedule() { scheduled(value) } else if model.errorMessage?.contains("already") == true { conflictPresented = true } } }.disabled(!model.canCommit)
+                Button("Add Workout") { Task { if let value = await model.schedule() { scheduled(value) } } }.disabled(!model.canCommit)
             }
         }
         .sheet(isPresented: $pickerPresented) { ExercisePickerView(repository: exercises) { model.add($0); pickerPresented = false } }
         .confirmationDialog("Discard this workout?", isPresented: $discardPresented) { Button("Discard Changes", role: .destructive) { dismiss() }; Button("Keep Editing", role: .cancel) {} } message: { Text("Your unsaved builder changes will be lost.") }
-        .confirmationDialog("Replace scheduled workout?", isPresented: $conflictPresented) { Button("Replace Workout", role: .destructive) { Task { if let value = await model.schedule(replacing: true) { scheduled(value) } } }; Button("Keep Existing", role: .cancel) {} } message: { Text("This day already contains a workout. Completed workouts cannot be replaced.") }
     }
 }
 
