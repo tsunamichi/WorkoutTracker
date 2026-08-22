@@ -11,6 +11,7 @@ public protocol WorkoutTemplateRepository: Sendable {
 }
 public protocol ScheduledWorkoutRepository: Sendable {
     func workout(on day: LocalDay) async throws -> ScheduledWorkout?
+    func workouts(from startDay: LocalDay, through endDay: LocalDay) async throws -> [ScheduledWorkout]
     func workout(id: ScheduledWorkoutID) async throws -> ScheduledWorkout?
     func allWorkouts() async throws -> [ScheduledWorkout]
     func schedule(_ workout: ScheduledWorkout) async throws

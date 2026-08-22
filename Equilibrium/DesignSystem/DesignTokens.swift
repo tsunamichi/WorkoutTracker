@@ -13,4 +13,4 @@ enum EQColor {
 }
 enum EQSpacing { static let xxs: CGFloat = 4; static let xs: CGFloat = 8; static let sm: CGFloat = 12; static let md: CGFloat = 16; static let lg: CGFloat = 24; static let xl: CGFloat = 32 }
 enum EQRadius { static let compact: CGFloat = 8; static let control: CGFloat = 12; static let card: CGFloat = 20; static let hero: CGFloat = 28 }
-enum EQTypography { static let title: Font = .title.bold(); static let cardTitle: Font = .headline; static let body: Font = .body; static let caption: Font = .caption }
+enum EQTypography { static let display: Font = .largeTitle.bold(); static let title: Font = .title.bold(); static let sectionTitle: Font = .title2.weight(.semibold); static let cardHero: Font = .title.bold(); static let cardTitle: Font = .headline; static let body: Font = .body; static let caption: Font = .caption }

@@ -8,9 +8,26 @@ public final class SwiftDataRepository: ScheduledWorkoutRepository, BackupReposi
 
     public func workout(on day: LocalDay) async throws -> ScheduledWorkout? {
         let key = day.iso8601
-        var descriptor = FetchDescriptor<ScheduledWorkoutRecord>(predicate: #Predicate { $0.localDay == key })
-        descriptor.fetchLimit = 1
-        return try context.fetch(descriptor).first.map { try WorkoutMapper.domain(from: $0) }
+        let records = try context.fetch(FetchDescriptor<ScheduledWorkoutRecord>(predicate: #Predicate { $0.localDay == key }))
+        guard records.count <= 1 else {
+            assertionFailure("More than one scheduled workout exists for \(key)")
+            throw RepositoryError.workoutDayConflict(day)
+        }
+        return try records.first.map { try WorkoutMapper.domain(from: $0) }
+    }
+    public func workouts(from startDay: LocalDay, through endDay: LocalDay) async throws -> [ScheduledWorkout] {
+        let lower = startDay.iso8601, upper = endDay.iso8601
+        let descriptor = FetchDescriptor<ScheduledWorkoutRecord>(
+            predicate: #Predicate { $0.localDay >= lower && $0.localDay <= upper },
+            sortBy: [SortDescriptor(\.localDay)]
+        )
+        let workouts = try context.fetch(descriptor).map { try WorkoutMapper.domain(from: $0) }
+        let duplicate = Dictionary(grouping: workouts, by: \.day).first { $0.value.count > 1 }
+        if let duplicate {
+            assertionFailure("More than one scheduled workout exists for \(duplicate.key)")
+            throw RepositoryError.workoutDayConflict(duplicate.key)
+        }
+        return workouts
     }
     public func workout(id: ScheduledWorkoutID) async throws -> ScheduledWorkout? {
         let key = id.rawValue
