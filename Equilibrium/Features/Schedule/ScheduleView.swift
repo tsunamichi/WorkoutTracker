@@ -2,10 +2,13 @@ import SwiftUI
 
 struct ScheduleView: View {
     @State private var model: ScheduleModel
+    private let repository: any ScheduledWorkoutRepository
     @Namespace private var workoutTransition
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @AppStorage(EQPreferenceKey.weightUnit) private var weightUnitRaw = WeightUnit.pounds.rawValue
 
     init(repository: any ScheduledWorkoutRepository) {
+        self.repository = repository
         _model = State(initialValue: ScheduleModel(repository: repository))
     }
 
@@ -75,7 +78,8 @@ struct ScheduleView: View {
     @ViewBuilder private func destination(_ route: ScheduleRoute) -> some View {
         switch route {
         case .workout(let id):
-            WorkoutPlaceholderView(id: id, workout: model.workoutsByDay.values.first { $0.id == id })
+            WorkoutExecutionView(id: id, repository: repository, weightUnit: WeightUnit(rawValue: weightUnitRaw) ?? .pounds) { model.applyPersistedWorkout($0) }
+                .onDisappear { Task { await model.load() } }
                 .modifier(ScheduleZoomModifier(id: id.rawValue, namespace: workoutTransition, reduceMotion: reduceMotion))
         case .settings: SettingsShellView()
         case .history: HistoryShellView(workouts: Array(model.workoutsByDay.values))

@@ -53,13 +53,72 @@ public final class SwiftDataRepository: ScheduledWorkoutRepository, BackupReposi
         let dayKey = workout.day.iso8601
         let conflicts = try context.fetch(FetchDescriptor<ScheduledWorkoutRecord>(predicate: #Predicate { $0.localDay == dayKey && $0.id != key }))
         guard conflicts.isEmpty else { throw RepositoryError.workoutDayConflict(workout.day) }
-        if existing.statusRaw == WorkoutStatus.completed.rawValue && workout.status != .completed { throw RepositoryError.immutableCompletedWorkout }
+        if existing.statusRaw == WorkoutStatus.completed.rawValue { throw RepositoryError.immutableCompletedWorkout }
         existing.localDay = dayKey; existing.titleSnapshot = workout.titleSnapshot; existing.templateID = workout.templateID?.rawValue; existing.planID = workout.planID?.rawValue
         existing.sourceRaw = workout.source.rawValue; existing.statusRaw = workout.status.rawValue; existing.startedAt = workout.startedAt; existing.completedAt = workout.completedAt; existing.updatedAt = workout.updatedAt
         for child in existing.exercises { context.delete(child) }
         let replacement = WorkoutMapper.record(from: workout)
         existing.exercises = replacement.exercises
         do { try context.save() } catch { context.rollback(); throw error }
+    }
+
+    public func startWorkout(id: ScheduledWorkoutID, at date: Date = .now) async throws -> ScheduledWorkout {
+        guard var workout = try await workout(id: id) else { throw RepositoryError.notFound }
+        if workout.status == .completed { throw RepositoryError.immutableCompletedWorkout }
+        if workout.status == .inProgress { return workout }
+        workout.status = .inProgress
+        workout.startedAt = date
+        workout.updatedAt = date
+        try await update(workout)
+        return workout
+    }
+
+    public func logSet(workoutID: ScheduledWorkoutID, exerciseID: ScheduledExerciseID, prescriptionID: SetID, input: SetLogInput, completed: Bool, at date: Date = .now) async throws -> ScheduledWorkout {
+        guard var workout = try await workout(id: workoutID) else { throw RepositoryError.notFound }
+        guard workout.status == .inProgress else {
+            if workout.status == .completed { throw RepositoryError.immutableCompletedWorkout }
+            throw RepositoryError.workoutNotInProgress
+        }
+        guard let exerciseIndex = workout.exercises.firstIndex(where: { $0.id == exerciseID }),
+              let prescription = workout.exercises[exerciseIndex].prescriptions.first(where: { $0.id == prescriptionID }) else {
+            throw RepositoryError.prescriptionNotFound
+        }
+
+        let values: (Weight?, Int?, TimeInterval?)
+        switch (prescription.target, input) {
+        case (.repetitions, .repetitions(let weight, let repetitions)) where repetitions > 0 && (weight?.pounds ?? 0) >= 0:
+            values = (weight, repetitions, nil)
+        case (.duration, .duration(let seconds)) where seconds.isFinite && seconds > 0:
+            values = (nil, nil, seconds)
+        default: throw RepositoryError.invalidSetInput
+        }
+
+        let existingIndex = workout.exercises[exerciseIndex].loggedSets.firstIndex { $0.prescriptionID == prescriptionID }
+        let logged = LoggedSet(
+            id: existingIndex.map { workout.exercises[exerciseIndex].loggedSets[$0].id } ?? SetID(rawValue: "logged-\(UUID().uuidString.lowercased())"),
+            prescriptionID: prescriptionID,
+            weight: values.0,
+            repetitions: values.1,
+            duration: values.2,
+            completedAt: completed ? date : nil
+        )
+        if let existingIndex { workout.exercises[exerciseIndex].loggedSets[existingIndex] = logged }
+        else { workout.exercises[exerciseIndex].loggedSets.append(logged) }
+        workout.updatedAt = date
+        try await update(workout)
+        return workout
+    }
+
+    public func completeWorkout(id: ScheduledWorkoutID, at date: Date = .now) async throws -> ScheduledWorkout {
+        guard var workout = try await workout(id: id) else { throw RepositoryError.notFound }
+        if workout.status == .completed { return workout }
+        guard workout.status == .inProgress else { throw RepositoryError.workoutNotInProgress }
+        guard WorkoutExecutionQuery.canComplete(workout) else { throw RepositoryError.incompleteWorkout }
+        workout.status = .completed
+        workout.completedAt = date
+        workout.updatedAt = date
+        try await update(workout)
+        return workout
     }
     public func materializeAtomically(_ workouts: [ScheduledWorkout]) async throws {
         let days = workouts.map(\.day)

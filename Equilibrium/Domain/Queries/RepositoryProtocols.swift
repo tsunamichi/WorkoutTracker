@@ -17,6 +17,9 @@ public protocol ScheduledWorkoutRepository: Sendable {
     func schedule(_ workout: ScheduledWorkout) async throws
     func update(_ workout: ScheduledWorkout) async throws
     func materializeAtomically(_ workouts: [ScheduledWorkout]) async throws
+    func startWorkout(id: ScheduledWorkoutID, at date: Date) async throws -> ScheduledWorkout
+    func logSet(workoutID: ScheduledWorkoutID, exerciseID: ScheduledExerciseID, prescriptionID: SetID, input: SetLogInput, completed: Bool, at date: Date) async throws -> ScheduledWorkout
+    func completeWorkout(id: ScheduledWorkoutID, at date: Date) async throws -> ScheduledWorkout
 }
 public protocol CyclePlanRepository: Sendable {
     func allPlans() async throws -> [CyclePlan]
@@ -30,4 +33,4 @@ public protocol BackupRepository: Sendable {
     func exportBackup(exportedAt: Date, sourceDeviceID: String) async throws -> EquilibriumBackupV1
     func restoreBackup(_ backup: EquilibriumBackupV1) async throws
 }
-public enum RepositoryError: Error, Equatable { case workoutDayConflict(LocalDay), notFound, immutableCompletedWorkout, duplicateIdentifier, invalidBackup }
+public enum RepositoryError: Error, Equatable { case workoutDayConflict(LocalDay), notFound, immutableCompletedWorkout, workoutNotInProgress, prescriptionNotFound, invalidSetInput, incompleteWorkout, duplicateIdentifier, invalidBackup }

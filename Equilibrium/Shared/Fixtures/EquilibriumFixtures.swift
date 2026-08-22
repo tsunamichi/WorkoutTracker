@@ -28,6 +28,18 @@ public enum EquilibriumFixtures {
         exercise.loggedSets = [LoggedSet(id: .init(rawValue: "logged-progress-1"), prescriptionID: prescription.id, weight: .init(pounds: 135), repetitions: 8, duration: nil, completedAt: timestamp)]
         return workout(id: id, day: day, title: "In Progress", exercises: [exercise], status: .inProgress, startedAt: timestamp)
     }
+    public static func midWorkout(day: String = "2025-01-17", id: String = "workout-mid") -> ScheduledWorkout {
+        var first = scheduledRepExercise(prefix: "\(id)-first")
+        first.loggedSets = first.prescriptions.enumerated().map { index, prescription in
+            LoggedSet(id: .init(rawValue: "\(id)-logged-first-\(index)"), prescriptionID: prescription.id, weight: .init(pounds: 135), repetitions: 10, duration: nil, completedAt: timestamp.addingTimeInterval(Double(index)))
+        }
+        var current = scheduledRepExercise(prefix: "\(id)-current")
+        current.nameSnapshot = "Romanian Deadlift"
+        current.loggedSets = [LoggedSet(id: .init(rawValue: "\(id)-logged-current"), prescriptionID: current.prescriptions[0].id, weight: .init(pounds: 115), repetitions: 8, duration: nil, completedAt: timestamp)]
+        var upcoming = scheduledRepExercise(prefix: "\(id)-upcoming")
+        upcoming.nameSnapshot = "Single-Leg Rear-Foot-Elevated Split Squat With Controlled Tempo"
+        return workout(id: id, day: day, title: "Lower Body Strength", exercises: [first, current, upcoming, scheduledDurationExercise(prefix: id)], status: .inProgress, startedAt: timestamp)
+    }
     public static func completed(day: String = "2025-01-18", id: String = "workout-completed") -> ScheduledWorkout {
         var exercise = scheduledRepExercise(prefix: id)
         exercise.loggedSets = exercise.prescriptions.enumerated().map { index, prescription in

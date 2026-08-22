@@ -47,6 +47,10 @@ final class ScheduleModel {
         do { selectedDay = try calendar.today(); await load() }
         catch { errorMessage = "Today could not be selected." }
     }
+
+    func applyPersistedWorkout(_ workout: ScheduledWorkout) {
+        workoutsByDay[workout.day] = workout
+    }
 }
 
 enum ScheduleCardAction: Equatable { case start, resume, view }

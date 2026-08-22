@@ -1,21 +1,5 @@
 import SwiftUI
 
-struct WorkoutPlaceholderView: View {
-    let id: ScheduledWorkoutID
-    let workout: ScheduledWorkout?
-    var body: some View {
-        ZStack {
-            EQColor.canvas.ignoresSafeArea()
-            VStack(alignment: .leading, spacing: EQSpacing.md) {
-                Text(workout?.titleSnapshot ?? "Workout").font(EQTypography.title)
-                Text("Workout Execution arrives in Phase 2.").foregroundStyle(EQColor.secondaryText)
-                LabeledContent("Scheduled workout ID", value: id.rawValue).font(.caption)
-                Spacer()
-            }.padding(EQSpacing.lg)
-        }.foregroundStyle(EQColor.primaryText).navigationTitle("Workout").navigationBarTitleDisplayMode(.inline)
-    }
-}
-
 struct AddWorkoutSheet: View {
     let day: LocalDay
     @Environment(\.dismiss) private var dismiss
@@ -37,9 +21,24 @@ struct AddWorkoutSheet: View {
 struct SettingsShellView: View {
     var body: some View {
         List {
-            Section { NavigationLink("Units") { PlaceholderSetting(title: "Units") }; NavigationLink("Timer") { PlaceholderSetting(title: "Timer") }; NavigationLink("Progression") { PlaceholderSetting(title: "Progression") } }
+            Section { NavigationLink("Units") { UnitsSettingView() }; NavigationLink("Timer") { PlaceholderSetting(title: "Timer") }; NavigationLink("Progression") { PlaceholderSetting(title: "Progression") } }
             Section { NavigationLink("Account / Cloud Backup") { PlaceholderSetting(title: "Account / Cloud Backup") } }
         }.scrollContentBackground(.hidden).background(EQColor.canvas).navigationTitle("Settings").preferredColorScheme(.dark)
+    }
+}
+
+private struct UnitsSettingView: View {
+    @AppStorage(EQPreferenceKey.weightUnit) private var unitRaw = WeightUnit.pounds.rawValue
+    var body: some View {
+        Form {
+            Picker("Weight unit", selection: $unitRaw) {
+                Text("Pounds (lb)").tag(WeightUnit.pounds.rawValue)
+                Text("Kilograms (kg)").tag(WeightUnit.kilograms.rawValue)
+            }
+            .pickerStyle(.inline)
+            Section { Text("Workout entries use this unit. Canonical weight remains stored in pounds.").font(EQTypography.caption).foregroundStyle(EQColor.secondaryText) }
+        }
+        .scrollContentBackground(.hidden).background(EQColor.canvas).navigationTitle("Units").preferredColorScheme(.dark)
     }
 }
 
