@@ -356,15 +356,15 @@ export function ExploreV2CompleteCard({
             {completedExerciseCount}/{totalExerciseCount}
           </Animated.Text>
           <Svg height="14" width="14" viewBox="0 0 16 16" pointerEvents="none">
-            <Circle cx="8" cy="8" r="8" fill={themeColors.containerPrimaryDark} />
+            <Circle cx="8" cy="8" r="8" fill={themeColors.containerPrimary} />
             {completionProgress >= 0.999 ? (
-              <Circle cx="8" cy="8" r="8" fill={themeColors.containerTertiary} />
+              <Circle cx="8" cy="8" r="8" fill={themeColors.textMeta} />
             ) : completionProgress > 0 ? (
               <Path
                 d={`M 8 8 L 8 0 A 8 8 0 ${completionProgress > 0.5 ? 1 : 0} 1 ${
                   8 + 8 * Math.sin(2 * Math.PI * completionProgress)
                 } ${8 - 8 * Math.cos(2 * Math.PI * completionProgress)} Z`}
-                fill={themeColors.containerTertiary}
+                fill={themeColors.textMeta}
               />
             ) : null}
           </Svg>
