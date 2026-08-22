@@ -81,8 +81,14 @@ final class WorkoutBuilderModel {
                     try await exercises.saveExercise(definition)
                 }
             }
-            let latest = try await history.latestExerciseLog(exerciseID: definition.id)
-            scheduledExercises.append(.init(id: .new(), exerciseID: definition.id, nameSnapshot: definition.name, prescriptions: latest?.sets.map(Self.inheritedPrescription) ?? [], loggedSets: [], restDuration: nil, skippedAt: nil))
+            let prescriptions: [SetPrescription]
+            if draftExercise.prescriptions.isEmpty {
+                let latest = try await history.latestExerciseLog(exerciseID: definition.id)
+                prescriptions = latest?.sets.map(Self.inheritedPrescription) ?? []
+            } else {
+                prescriptions = draftExercise.prescriptions.map(Self.prescription)
+            }
+            scheduledExercises.append(.init(id: .new(), exerciseID: definition.id, nameSnapshot: definition.name, prescriptions: prescriptions, loggedSets: [], restDuration: draftExercise.restDuration, skippedAt: nil))
         }
         return .init(id: .new(), day: day, titleSnapshot: draft.name.trimmingCharacters(in: .whitespacesAndNewlines), templateID: nil, planID: nil, source: .manual, exercises: scheduledExercises, status: .planned, startedAt: nil, completedAt: nil, createdAt: now, updatedAt: now)
     }

@@ -33,13 +33,13 @@ struct WorkoutExecutionView: View {
                 .accessibilityHint("Returns to Schedule")
         }
         ToolbarItem(placement: .topBarTrailing) {
-            if !model.isReadOnly {
+            if model.showsExecutionOptions {
                 Menu("Options", systemImage: "ellipsis") {
-                    if model.canComplete {
-                        Button("Mark as complete", systemImage: "checkmark.circle") { completeWorkout() }
-                    }
+                    Button("Mark as complete", systemImage: "checkmark.circle") { completeWorkout() }
+                        .disabled(!model.canComplete)
                 }
                 .accessibilityLabel("Workout options")
+                .accessibilityHint(model.canComplete ? "Contains available workout actions" : "Workout completion becomes available after every required set is logged")
             }
         }
     }
@@ -51,7 +51,8 @@ struct WorkoutExecutionView: View {
                 if model.isReadOnly {
                     Text("Completed · Read-only").font(EQTypography.caption).foregroundStyle(EQColor.success).padding(.horizontal, EQSpacing.lg)
                 }
-                executionStack(workout)
+                exercisesCard(workout)
+                activeExerciseCard
                 if let error = model.errorMessage {
                     Label(error, systemImage: "exclamationmark.triangle").font(EQTypography.caption).foregroundStyle(EQColor.warning).padding(.horizontal, EQSpacing.lg)
                 }
@@ -62,99 +63,72 @@ struct WorkoutExecutionView: View {
         .scrollIndicators(.hidden)
     }
 
-    private func executionStack(_ workout: ScheduledWorkout) -> some View {
-        VStack(spacing: -EQSpacing.xs) {
-            ExecutionPanelCard(title: "COMPLETED", count: model.completedExercises.count, panel: .completed, expanded: model.expandedPanel == .completed) {
-                model.expand(.completed)
-            } content: {
-                completedContent(workout)
+    private func exercisesCard(_ workout: ScheduledWorkout) -> some View {
+        VStack(alignment: .leading, spacing: EQSpacing.sm) {
+            HStack {
+                Text("EXERCISES").font(EQTypography.caption.weight(.bold))
+                Spacer()
+                Text("\(model.progress.completedSetCount) of \(model.progress.requiredSetCount) sets")
+                    .font(EQTypography.caption).foregroundStyle(EQColor.secondaryText)
             }
-            ExecutionPanelCard(title: "UP NEXT", count: model.upNextExercises.count, panel: .upNext, expanded: model.expandedPanel == .upNext) {
-                model.expand(.upNext)
-            } content: {
-                upNextContent
-            }
-            ExecutionPanelCard(title: "CURRENT", count: nil, panel: .current, expanded: model.expandedPanel == .current) {
-                model.expand(.current)
-            } content: {
-                currentContent
-            }
-        }
-        .padding(.horizontal, EQSpacing.md)
-        .animation(reduceMotion ? nil : .easeInOut(duration: EQMotion.standard), value: model.expandedPanel)
-        .animation(reduceMotion ? nil : .easeInOut(duration: EQMotion.standard), value: model.restState != nil)
-    }
-
-    @ViewBuilder private func completedContent(_ workout: ScheduledWorkout) -> some View {
-        if model.completedExercises.isEmpty {
-            Text("Logged exercises will collect here.").font(EQTypography.body).foregroundStyle(EQColor.secondaryText)
-        } else {
-            ForEach(model.completedExercises) { exercise in
+            ForEach(workout.exercises) { exercise in
+                let state = model.states[exercise.id] ?? .upcoming
                 Button {
                     if workout.status == .inProgress { model.focus(exercise.id) }
                 } label: {
-                    ExerciseListRow(exercise: exercise, detail: "\(WorkoutExecutionQuery.completedPrescriptionIDs(in: exercise).count) sets logged", completed: true)
-                }
-                .buttonStyle(.plain).disabled(workout.status == .completed)
-                .accessibilityHint(workout.status == .inProgress ? "Focuses this completed exercise for review or editing" : "Completed workout is read-only")
-            }
-            if workout.status == .completed { ReadOnlySetReview(exercises: model.completedExercises, weightUnit: model.weightUnit) }
-        }
-    }
-
-    @ViewBuilder private var upNextContent: some View {
-        if model.upNextExercises.isEmpty {
-            Text("No exercises remaining.").font(EQTypography.body).foregroundStyle(EQColor.secondaryText)
-        } else {
-            ForEach(model.upNextExercises) { exercise in
-                Button { model.focus(exercise.id) } label: {
-                    ExerciseListRow(exercise: exercise, detail: prescriptionSummary(exercise), completed: false)
+                    ExerciseListRow(exercise: exercise, detail: exerciseDetail(exercise, state: state), state: state)
                 }
                 .buttonStyle(.plain)
-                .accessibilityHint("Makes this the current exercise without changing workout order")
+                .disabled(workout.status == .completed)
+                .accessibilityHint(workout.status == .inProgress ? "Makes this the active exercise without changing workout order" : "Completed workout is read-only")
             }
+            if workout.status == .completed { ReadOnlySetReview(exercises: workout.exercises, weightUnit: model.weightUnit) }
         }
+        .eqCard()
+        .padding(.horizontal, EQSpacing.md)
     }
 
-    @ViewBuilder private var currentContent: some View {
-        if let rest = model.restState {
-            RestModeView(state: rest, skip: model.skipRest)
-        } else if let exercise = model.currentExercise, let prescription = model.currentPrescription {
-            FocusedSetView(
-                exercise: exercise,
-                prescription: prescription,
-                selectedIndex: model.selectedSetIndex,
-                isReadOnly: model.isReadOnly,
-                weightUnit: model.weightUnit,
-                select: model.selectSet,
-                log: { input in await model.log(exerciseID: exercise.id, prescriptionID: prescription.id, input: input) }
-            )
-            .id("\(exercise.id.rawValue)-\(prescription.id.rawValue)")
-            if !model.isReadOnly {
-                HStack {
-                    Button("Add set") { Task { await model.addSet(exerciseID: exercise.id) } }
-                    Spacer()
-                    if !exercise.loggedSets.contains(where: { $0.prescriptionID == prescription.id && $0.completedAt != nil }) {
-                        Button("Remove set", role: .destructive) { Task { await model.removeCurrentSet(exerciseID: exercise.id, prescriptionID: prescription.id) } }
+    private var activeExerciseCard: some View {
+        VStack(alignment: .leading, spacing: EQSpacing.md) {
+            Text(model.restState == nil ? "ACTIVE EXERCISE" : "REST")
+                .font(EQTypography.caption.weight(.bold))
+            Group {
+                if let rest = model.restState {
+                    RestModeView(state: rest, skip: model.skipRest)
+                } else if let exercise = model.currentExercise, let prescription = model.currentPrescription {
+                    FocusedSetView(
+                        exercise: exercise,
+                        prescription: prescription,
+                        selectedIndex: model.selectedSetIndex,
+                        isReadOnly: model.isReadOnly,
+                        weightUnit: model.weightUnit,
+                        select: model.selectSet,
+                        log: { input in await model.log(exerciseID: exercise.id, prescriptionID: prescription.id, input: input) }
+                    )
+                    .id("\(exercise.id.rawValue)-\(prescription.id.rawValue)")
+                    if !model.isReadOnly {
+                        HStack {
+                            Button("Add set") { Task { await model.addSet(exerciseID: exercise.id) } }
+                            Spacer()
+                            if !exercise.loggedSets.contains(where: { $0.prescriptionID == prescription.id && $0.completedAt != nil }) {
+                                Button("Remove set", role: .destructive) { Task { await model.removeCurrentSet(exerciseID: exercise.id, prescriptionID: prescription.id) } }
+                            }
+                        }.frame(minHeight: EQDimension.minimumTouch)
                     }
-                }.frame(minHeight: EQDimension.minimumTouch)
-            }
-            if model.canComplete {
-                Button { completeWorkout() } label: {
-                    Label("Complete workout", systemImage: "checkmark.circle.fill").frame(maxWidth: .infinity, minHeight: EQDimension.minimumTouch)
+                } else if let exercise = model.currentExercise, !model.isReadOnly {
+                    FirstSetView(exercise: exercise, weightUnit: model.weightUnit) { input in await model.logFirstSet(exerciseID: exercise.id, input: input) }
+                } else {
+                    Text(model.isReadOnly ? "Workout complete." : "Every required set is logged.").font(EQTypography.sectionTitle)
                 }
-                .buttonStyle(.borderedProminent).buttonBorderShape(.roundedRectangle(radius: EQRadius.control))
             }
-        } else if let exercise = model.currentExercise, !model.isReadOnly {
-            FirstSetView(exercise: exercise, weightUnit: model.weightUnit) { input in await model.logFirstSet(exerciseID: exercise.id, input: input) }
-        } else {
-            Text(model.isReadOnly ? "Workout complete." : "Every required set is logged.")
-                .font(EQTypography.sectionTitle)
             if model.canComplete {
-                Button { completeWorkout() } label: { Text("Complete workout").frame(maxWidth: .infinity, minHeight: EQDimension.minimumTouch) }
+                Button { completeWorkout() } label: { Label("Complete workout", systemImage: "checkmark.circle.fill").frame(maxWidth: .infinity, minHeight: EQDimension.minimumTouch) }
                     .buttonStyle(.borderedProminent).buttonBorderShape(.roundedRectangle(radius: EQRadius.control))
             }
         }
+        .eqCard(elevated: true)
+        .padding(.horizontal, EQSpacing.md)
+        .animation(reduceMotion ? nil : .easeInOut(duration: EQMotion.standard), value: model.restState != nil)
     }
 
     private func completeWorkout() {
@@ -166,6 +140,14 @@ struct WorkoutExecutionView: View {
         switch first.target {
         case .repetitions(let range): return "\(exercise.prescriptions.count) sets · \(range.lowerBound)–\(range.upperBound) reps"
         case .duration(let seconds): return "\(exercise.prescriptions.count) sets · \(Int(seconds)) seconds"
+        }
+    }
+
+    private func exerciseDetail(_ exercise: ScheduledExercise, state: ExerciseState) -> String {
+        switch state {
+        case .completed: return "\(WorkoutExecutionQuery.completedPrescriptionIDs(in: exercise).count) sets logged"
+        case .current: return "Current · \(prescriptionSummary(exercise))"
+        case .upcoming: return prescriptionSummary(exercise)
         }
     }
 
@@ -203,45 +185,10 @@ private struct FirstSetView: View {
     }
 }
 
-private struct ExecutionPanelCard<Content: View>: View {
-    let title: String
-    let count: Int?
-    let panel: ExecutionPanel
-    let expanded: Bool
-    let toggle: () -> Void
-    @ViewBuilder let content: Content
-
-    init(title: String, count: Int?, panel: ExecutionPanel, expanded: Bool, toggle: @escaping () -> Void, @ViewBuilder content: () -> Content) {
-        self.title = title; self.count = count; self.panel = panel; self.expanded = expanded; self.toggle = toggle; self.content = content()
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: EQSpacing.md) {
-            Button(action: toggle) {
-                HStack {
-                    Text(title).font(EQTypography.caption.weight(.bold))
-                    if let count { Text("\(count)").font(EQTypography.caption).foregroundStyle(EQColor.secondaryText) }
-                    Spacer()
-                    Image(systemName: expanded ? "chevron.down" : "chevron.right")
-                }.frame(minHeight: EQDimension.minimumTouch)
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("\(title.capitalized) panel")
-            .accessibilityValue(expanded ? "Expanded" : "Collapsed")
-            if expanded { content.transition(.opacity.combined(with: .move(edge: .bottom))) }
-        }
-        .padding(EQSpacing.md)
-        .frame(maxWidth: .infinity, maxHeight: expanded && panel == .current ? .infinity : nil, alignment: .topLeading)
-        .background(expanded ? EQColor.elevatedSurface : EQColor.surface, in: RoundedRectangle(cornerRadius: EQRadius.card, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: EQRadius.card, style: .continuous).stroke(EQColor.separator))
-        .zIndex(expanded ? 1 : 0)
-    }
-}
-
 private struct ExerciseListRow: View {
     let exercise: ScheduledExercise
     let detail: String
-    let completed: Bool
+    let state: ExerciseState
     var body: some View {
         HStack {
             VStack(alignment: .leading, spacing: EQSpacing.xxs) {
@@ -249,8 +196,8 @@ private struct ExerciseListRow: View {
                 Text(detail).font(EQTypography.caption).foregroundStyle(EQColor.secondaryText)
             }
             Spacer()
-            Image(systemName: completed ? "checkmark.circle.fill" : "arrow.down.right")
-                .foregroundStyle(completed ? EQColor.success : EQColor.accent)
+            Image(systemName: state == .completed ? "checkmark.circle.fill" : state == .current ? "scope" : "circle")
+                .foregroundStyle(state == .completed ? EQColor.success : state == .current ? EQColor.accent : EQColor.secondaryText)
         }.frame(minHeight: EQDimension.minimumTouch).contentShape(Rectangle())
     }
 }

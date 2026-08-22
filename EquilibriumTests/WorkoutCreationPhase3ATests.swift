@@ -4,6 +4,50 @@ import SwiftData
 
 @MainActor
 final class WorkoutCreationPhase3ATests: XCTestCase {
+    func testExplicitTemplatePrescriptionsSurviveSchedulingAndOverrideHistory() async throws {
+        let repository = makeRepository()
+        for exercise in EquilibriumFixtures.exercises { try await repository.saveExercise(exercise) }
+
+        let repID = SetID(rawValue: "template-explicit-reps")
+        let durationID = SetID(rawValue: "template-explicit-duration")
+        let template = WorkoutTemplate(
+            id: .init(rawValue: "template-explicit"),
+            name: "Explicit targets",
+            exercises: [
+                .init(id: .new(), exerciseID: EquilibriumFixtures.squatID, exerciseNameSnapshot: "Back Squat", prescriptions: [.init(id: repID, target: .repetitions(range: 6...10), suggestedWeight: .init(pounds: 142.5))], restDuration: 75, progressionRuleID: nil),
+                .init(id: .new(), exerciseID: EquilibriumFixtures.plankID, exerciseNameSnapshot: "Plank", prescriptions: [.init(id: durationID, target: .duration(seconds: 47), suggestedWeight: .init(pounds: 25))], restDuration: 30, progressionRuleID: nil)
+            ],
+            createdAt: .now,
+            updatedAt: .now,
+            archivedAt: nil
+        )
+
+        // Competing completed history must not replace explicit draft targets.
+        try await repository.schedule(EquilibriumFixtures.completed(id: "competing-history"))
+        let draft = WorkoutDraft(template: template)
+        let model = WorkoutBuilderModel(day: try LocalDay("2026-08-22"), draft: draft, exercises: repository, workouts: repository, history: repository)
+        let scheduled = try await model.makeScheduled(now: Date(timeIntervalSince1970: 500))
+
+        XCTAssertEqual(scheduled.templateID, nil)
+        XCTAssertEqual(scheduled.source, .manual)
+        XCTAssertEqual(scheduled.exercises.map(\.restDuration), [75, 30])
+        XCTAssertTrue(scheduled.exercises.allSatisfy { $0.loggedSets.isEmpty })
+
+        let repetitions = try XCTUnwrap(scheduled.exercises[0].prescriptions.first)
+        guard case .repetitions(let range) = repetitions.target else { return XCTFail("Expected repetition target") }
+        XCTAssertEqual(range, 6...10)
+        XCTAssertEqual(repetitions.suggestedWeight?.pounds, 142.5)
+
+        let duration = try XCTUnwrap(scheduled.exercises[1].prescriptions.first)
+        guard case .duration(let seconds) = duration.target else { return XCTFail("Expected duration target") }
+        XCTAssertEqual(seconds, 47)
+        XCTAssertEqual(duration.suggestedWeight?.pounds, 25)
+
+        let scheduledIDs = Set(scheduled.exercises.flatMap(\.prescriptions).map(\.id))
+        XCTAssertEqual(scheduledIDs.count, 2)
+        XCTAssertTrue(scheduledIDs.isDisjoint(with: [repID, durationID]))
+    }
+
     func testExerciseCreateSearchDuplicateArchiveAndMetadata() async throws {
         let repository = makeRepository()
         let exercise = ExerciseDefinition(id: .new(), name: "Café Press", normalizedName: "ignored", aliases: ["Coffee press"], equipment: "Dumbbell", category: "Shoulders", isCustom: true, archivedAt: nil)
@@ -29,6 +73,7 @@ final class WorkoutCreationPhase3ATests: XCTestCase {
         for exercise in EquilibriumFixtures.exercises { try await repository.saveExercise(exercise) }
         let model = WorkoutBuilderModel(day: day, draft: .init(template: loaded), exercises: repository, workouts: repository, history: repository)
         let scheduledValue = await model.schedule(); let snapshot = try XCTUnwrap(scheduledValue)
+        XCTAssertEqual(snapshot.exercises.map(\.restDuration), [120, 30])
         template.name = "Edited"; template.exercises.removeLast(); template.updatedAt = .now
         try await repository.saveTemplate(template)
         let storedSnapshot = try await repository.workout(id: snapshot.id); XCTAssertEqual(storedSnapshot?.exercises.count, 2)

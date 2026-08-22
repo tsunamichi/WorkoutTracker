@@ -8,22 +8,26 @@ struct AddWorkoutSheet: View {
     let history: any ExerciseHistoryRepository
     let scheduled: ([ScheduledWorkout]) -> Void
     @Environment(\.dismiss) private var dismiss
-    @State private var path: [CreationRoute]
+    @State private var path: [CreationRoute] = []
     init(initialRoute: CreationRoute, day: LocalDay, exercises: any ExerciseRepository, workouts: any ScheduledWorkoutRepository, history: any ExerciseHistoryRepository, scheduled: @escaping ([ScheduledWorkout]) -> Void) {
         self.initialRoute = initialRoute; self.day = day; self.exercises = exercises; self.workouts = workouts; self.history = history; self.scheduled = scheduled
-        _path = State(initialValue: [initialRoute])
     }
     var body: some View {
         NavigationStack(path: $path) {
-            Color.clear
-            .navigationDestination(for: CreationRoute.self) { route in
-                switch route {
-                case .builder(let draft): WorkoutBuilderView(model: .init(day: day, draft: draft, exercises: exercises, workouts: workouts, history: history), exercises: exercises, history: history) { value in scheduled([value]); dismiss() }
-                case .recent: RecentWorkoutPicker(repository: workouts, history: history, day: day) { values in scheduled(values); dismiss() }
-                case .pasteWorkout: ClipboardWorkoutImportView(repository: exercises) { path.append(.builder($0)) }
-                }
-            }
+            creationDestination(initialRoute)
+                .navigationDestination(for: CreationRoute.self) { creationDestination($0) }
         }.presentationDetents([.large]).preferredColorScheme(.dark)
+    }
+
+    @ViewBuilder private func creationDestination(_ route: CreationRoute) -> some View {
+        switch route {
+        case .builder(let draft):
+            WorkoutBuilderView(model: .init(day: day, draft: draft, exercises: exercises, workouts: workouts, history: history), exercises: exercises, history: history) { value in scheduled([value]); dismiss() }
+        case .recent:
+            RecentWorkoutPicker(repository: workouts, history: history, day: day) { values in scheduled(values); dismiss() }
+        case .pasteWorkout:
+            ClipboardWorkoutImportView(repository: exercises) { path.append(.builder($0)) }
+        }
     }
 }
 
