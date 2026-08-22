@@ -1,0 +1,33 @@
+{
+  "exercises": [
+    {"id":"legacy-exercise-1","name":"Back Squat","aliases":["Squat"],"equipment":"barbell","category":"legs","isCustom":false}
+  ],
+  "workoutTemplates": [
+    {"id":"legacy-template-1","name":"Lower A","exercises":[{"id":"legacy-item-1","exerciseId":"legacy-exercise-1","sets":3,"reps":8,"weight":135}]}
+  ],
+  "scheduledWorkouts": [
+    {"id":"sw-legacy-1","date":"2025-01-15","workoutTemplateId":"legacy-template-1","status":"in_progress","source":"manual","exercisesSnapshot":[{"id":"legacy-item-1","exerciseId":"legacy-exercise-1","nameSnapshot":"Back Squat","sets":3,"reps":8}]}
+  ],
+  "detailedWorkoutProgress": {
+    "sw-legacy-1":{"exercises":{"legacy-item-1":{"sets":[{"setNumber":1,"weight":135,"reps":8,"completed":true}]}}}
+  },
+  "workoutProgress": {
+    "sw-legacy-1":{"legacy-item-1":{"completedSets":[1]}}
+  },
+  "sessions": [
+    {"id":"legacy-session-1","scheduledWorkoutId":"sw-legacy-1","workoutTemplateId":"legacy-template-1","startTime":"2025-01-15T17:00:00.000Z","sets":[{"exerciseId":"legacy-exercise-1","setNumber":1,"weight":135,"reps":8,"completed":true}]}
+  ],
+  "exercisePRs": [
+    {"exerciseId":"legacy-exercise-1","weight":135,"reps":8,"achievedAt":"2025-01-15T17:05:00.000Z"}
+  ],
+  "cyclePlans": [
+    {"id":"legacy-plan-1","name":"Foundation","startDate":"2025-01-13","numberOfWeeks":2,"status":"active","days":[{"weekday":2,"workoutTemplateId":"legacy-template-1"}]}
+  ],
+  "progression": {
+    "enabled":true,
+    "defaults":{"repRangeMin":8,"repRangeMax":12,"weightIncrement":5,"progressionMode":"double"},
+    "groups":[{"id":"legacy-group-1","name":"Compound lifts","exerciseIds":["legacy-exercise-1"],"repRangeMin":5,"repRangeMax":8,"weightIncrement":5,"progressionMode":"double"}],
+    "rules":[]
+  },
+  "retainedSettings": {"useKg":false,"defaultRestTimer":90,"progressionSuggestionsEnabled":true}
+}

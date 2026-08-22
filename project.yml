@@ -1,0 +1,53 @@
+name: Equilibrium
+options:
+  bundleIdPrefix: com.tsunamichi
+  deploymentTarget:
+    iOS: "18.0"
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    IPHONEOS_DEPLOYMENT_TARGET: "18.0"
+targets:
+  Equilibrium:
+    type: application
+    platform: iOS
+    sources:
+      - path: Equilibrium
+        excludes:
+          - Shared/TestSupport
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.tsunamichi.equilibrium
+        PRODUCT_NAME: Equilibrium
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_UIApplicationSceneManifest_Generation: YES
+        INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents: YES
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        TARGETED_DEVICE_FAMILY: "1,2"
+        SUPPORTS_MACCATALYST: NO
+  EquilibriumTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: EquilibriumTests
+      - path: Equilibrium/Shared/TestSupport
+      - path: fixtures/equilibrium-backup-v1.golden.json
+        buildPhase: resources
+    dependencies:
+      - target: Equilibrium
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.tsunamichi.equilibrium.tests
+        GENERATE_INFOPLIST_FILE: YES
+        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/Equilibrium.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Equilibrium"
+        BUNDLE_LOADER: "$(TEST_HOST)"
+schemes:
+  Equilibrium:
+    build:
+      targets:
+        Equilibrium: all
+        EquilibriumTests: [test]
+    test:
+      targets:
+        - EquilibriumTests
