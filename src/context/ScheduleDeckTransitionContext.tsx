@@ -46,7 +46,8 @@ export const SCHEDULE_DECK_T = {
 
 type ScheduleDeckTransitionContextValue = {
   progress: Animated.SharedValue<number>;
-  startTransition: () => void;
+  cardMorphActive: Animated.SharedValue<number>;
+  startTransition: (cardMorph?: boolean) => void;
   /** Exercise → Home: animates `progress` 1 → 0 (inverse of forward). Same duration as `startTransition`. */
   startReverseTransition: (onComplete?: (finished: boolean) => void) => void;
   reset: () => void;
@@ -63,6 +64,7 @@ const ScheduleDeckTransitionContext = createContext<ScheduleDeckTransitionContex
 
 export function ScheduleDeckTransitionProvider({ children }: { children: React.ReactNode }) {
   const progress = useSharedValue(0);
+  const cardMorphActive = useSharedValue(0);
   const primeRecentPickerIncomingRef = useRef<(() => void) | null>(null);
 
   const registerPrimeRecentPickerIncoming = useCallback((fn: (() => void) | null) => {
@@ -73,11 +75,12 @@ export function ScheduleDeckTransitionProvider({ children }: { children: React.R
     primeRecentPickerIncomingRef.current?.();
   }, []);
 
-  const startTransition = useCallback(() => {
+  const startTransition = useCallback((cardMorph = false) => {
     cancelAnimation(progress);
+    cardMorphActive.value = cardMorph ? 1 : 0;
     progress.value = 0;
     progress.value = withTiming(1, SCHEDULE_DECK_WITH_TIMING_CONFIG);
-  }, [progress]);
+  }, [cardMorphActive, progress]);
 
   const startReverseTransition = useCallback(
     (onComplete?: (finished: boolean) => void) => {
@@ -95,18 +98,20 @@ export function ScheduleDeckTransitionProvider({ children }: { children: React.R
   const reset = useCallback(() => {
     cancelAnimation(progress);
     progress.value = 0;
-  }, [progress]);
+    cardMorphActive.value = 0;
+  }, [cardMorphActive, progress]);
 
   const value = useMemo(
     () => ({
       progress,
+      cardMorphActive,
       startTransition,
       startReverseTransition,
       reset,
       registerPrimeRecentPickerIncoming,
       primeRecentPickerIncomingParallel,
     }),
-    [progress, startTransition, startReverseTransition, reset, registerPrimeRecentPickerIncoming, primeRecentPickerIncomingParallel],
+    [progress, cardMorphActive, startTransition, startReverseTransition, reset, registerPrimeRecentPickerIncoming, primeRecentPickerIncomingParallel],
   );
 
   return (

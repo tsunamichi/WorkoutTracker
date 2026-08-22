@@ -43,7 +43,8 @@ import * as Haptics from 'expo-haptics';
 import { useStore } from '../store';
 import { useAppTheme } from '../theme/useAppTheme';
 import { SPACING, TYPOGRAPHY, BORDER_RADIUS, CARDS } from '../constants';
-import { IconCheck, IconCheckmark, IconAddLine, IconMinusLine, IconTrash, IconEdit, IconMenu, IconHistory, IconRestart, IconSkip, IconSwap, IconArrowRight, IconAdd, IconPause, IconPlay, IconAddTime, IconChevronDown, IconSettings } from '../components/icons';
+import { outfitNumericStyle } from '../constants/fonts';
+import { IconCheck, IconCheckmark, IconAddLine, IconMinusLine, IconTrash, IconEdit, IconMenu, IconHistory, IconRestart, IconSkip, IconSwap, IconArrowRight, IconArrowDiagonal, IconAdd, IconPause, IconPlay, IconAddTime, IconChevronDown, IconSettings } from '../components/icons';
 import { BottomDrawer } from '../components/common/BottomDrawer';
 import { NextLabel } from '../components/common/NextLabel';
 import { SetTimerSheet } from '../components/timer/SetTimerSheet';
@@ -75,7 +76,6 @@ import dayjs from 'dayjs';
 import { getAppThemeFromStore } from '../theme/getAppThemeFromStore';
 import { ExerciseSearchPickModal } from '../components/workoutBuilder/ExerciseSearchPickModal';
 import {
-  SCHEDULE_DECK_EXECUTION_INCOMING_SCALE_START,
   SCHEDULE_DECK_T,
   useScheduleDeckTransition,
 } from '../context/ScheduleDeckTransitionContext';
@@ -188,6 +188,7 @@ type RouteParams = {
     type: ExecutionType;
     transitionSource?: 'scheduleDeck';
     transitionOrigin?: { x: number; y: number; width: number; height: number; borderRadius: number };
+    transitionCard?: { title: string; subtitle?: string; exerciseCount: number; positionLabel: string };
   };
 };
 
@@ -222,22 +223,38 @@ export function ExerciseExecutionScreen() {
   const insets = useSafeAreaInsets();
   const { t } = useTranslation();
   
-  const { workoutKey, workoutTemplateId, type, bonusLogId } = route.params as {
+  const { workoutKey, workoutTemplateId, type, bonusLogId, transitionOrigin, transitionCard } = route.params as {
     workoutKey: string;
     workoutTemplateId: string;
     type: 'warmup' | 'main' | 'core';
     bonusLogId?: string;
     transitionSource?: 'scheduleDeck';
     transitionOrigin?: { x: number; y: number; width: number; height: number; borderRadius: number };
+    transitionCard?: { title: string; subtitle?: string; exerciseCount: number; positionLabel: string };
   };
   const transitionSource = (route.params as any)?.transitionSource;
   const isScheduleOriginTransition = transitionSource === 'scheduleDeck';
   const isClosingFromHeaderRef = useRef(false);
   const {
     progress: scheduleDeckProgressSV,
+    startTransition: startScheduleDeckTransition,
     reset: resetScheduleDeckTransition,
     startReverseTransition: startScheduleDeckReverseTransition,
   } = useScheduleDeckTransition();
+  const walletTransitionTargetRef = useRef<any>(null);
+  const transitionStartedRef = useRef(false);
+  const [transitionWalletTarget, setTransitionWalletTarget] = useState<{
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  } | null>(null);
+  const [transitionWalletLocalLayout, setTransitionWalletLocalLayout] = useState<{
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  } | null>(null);
   const scheduleDeckTransitionActiveSV = useSharedValue(isScheduleOriginTransition ? 1 : 0);
   /** Lets the next `goBack` / `beforeRemove` pop through after the reverse handoff animation. */
   const allowScheduleDeckPopRef = useRef(false);
@@ -310,15 +327,38 @@ export function ExerciseExecutionScreen() {
       return {};
     }
     const p = scheduleDeckProgressSV.value;
-    const opacity = interpolate(p, [SCHEDULE_DECK_T.inStart, SCHEDULE_DECK_T.inOpacityEnd], [0, 1], Extrapolation.CLAMP);
-    const scale = interpolate(
-      p,
-      [SCHEDULE_DECK_T.inStart, SCHEDULE_DECK_T.inEnd],
-      [SCHEDULE_DECK_EXECUTION_INCOMING_SCALE_START, 1],
-      Extrapolation.CLAMP,
-    );
-    return { opacity, transform: [{ scale }] };
-  });
+    if (!transitionOrigin) {
+      const opacity = interpolate(p, [SCHEDULE_DECK_T.inStart, SCHEDULE_DECK_T.inOpacityEnd], [0, 1], Extrapolation.CLAMP);
+      const scale = interpolate(p, [SCHEDULE_DECK_T.inStart, SCHEDULE_DECK_T.inEnd], [0.8, 1], Extrapolation.CLAMP);
+      return { opacity, transform: [{ scale }] };
+    }
+
+    return {
+      opacity: p >= 0.74 ? 1 : 0,
+    };
+  }, [transitionOrigin]);
+
+  const scheduleDeckExpandingCardStyle = useAnimatedStyle(() => {
+    if (!transitionOrigin || !transitionWalletTarget || scheduleDeckTransitionActiveSV.value === 0) return { opacity: 0 };
+    const p = scheduleDeckProgressSV.value;
+    return {
+      left: interpolate(p, [0, 0.6], [transitionOrigin.x, transitionWalletTarget.x], Extrapolation.CLAMP),
+      top: interpolate(p, [0, 0.6], [transitionOrigin.y, transitionWalletTarget.y], Extrapolation.CLAMP),
+      width: interpolate(p, [0, 0.6], [transitionOrigin.width, transitionWalletTarget.width], Extrapolation.CLAMP),
+      height: interpolate(p, [0, 0.6], [transitionOrigin.height, transitionWalletTarget.height], Extrapolation.CLAMP),
+      borderRadius: transitionOrigin.borderRadius,
+      backgroundColor: interpolateColor(
+        p,
+        [0, 0.6, 0.74],
+        [themeColors.containerSecondary, themeColors.containerSecondary, themeColors.canvasLight],
+      ),
+      opacity: 1,
+    };
+  }, [themeColors.canvasLight, themeColors.containerSecondary, transitionOrigin, transitionWalletTarget]);
+
+  const scheduleDeckExpandingCardContentStyle = useAnimatedStyle(() => ({
+    opacity: scheduleDeckProgressSV.value < 0.12 ? 1 : 0,
+  }));
 
   const runCloseToScheduleCard = useCallback(() => {
     if (!isScheduleOriginTransition) {
@@ -826,6 +866,35 @@ export function ExerciseExecutionScreen() {
     },
     [exploreV2RootHeight],
   );
+  const onTransitionWalletLayout = useCallback(() => {
+    if (!isScheduleOriginTransition || !transitionOrigin || !transitionWalletLocalLayout || transitionWalletTarget) return;
+    requestAnimationFrame(() => {
+      walletTransitionTargetRef.current?.measureInWindow((x, y, width, height) => {
+        if (width <= 0 || height <= 0) return;
+        setTransitionWalletTarget({
+          x: x + transitionWalletLocalLayout.x,
+          y: y + transitionWalletLocalLayout.y,
+          width: transitionWalletLocalLayout.width,
+          height: transitionWalletLocalLayout.height,
+        });
+      });
+    });
+  }, [isScheduleOriginTransition, transitionOrigin, transitionWalletLocalLayout, transitionWalletTarget]);
+
+  useEffect(() => {
+    onTransitionWalletLayout();
+  }, [onTransitionWalletLayout]);
+
+  useEffect(() => {
+    if (!transitionWalletTarget || transitionStartedRef.current) return;
+    // The measured target must first be committed into the proxy's animated
+    // style. Starting on the next frame avoids a one-frame source/proxy gap.
+    const frame = requestAnimationFrame(() => {
+      transitionStartedRef.current = true;
+      startScheduleDeckTransition(true);
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [startScheduleDeckTransition, transitionWalletTarget]);
   const onExploreV2WarmupCtaLayout = useCallback((e: any) => {
     const h = e?.nativeEvent?.layout?.height ?? 0;
     exploreV2WarmupCtaMeasuredHeight.value = h > 0 ? h : 0;
@@ -3588,12 +3657,14 @@ export function ExerciseExecutionScreen() {
   // (I'll keep this abbreviated for now, but it will include all the card rendering, drawer, timer, etc.)
   
   return (
+    <>
     <AnimatedReanimated.View
       style={[
         styles.container,
         { paddingTop: insets.top, backgroundColor: schedulePageBg },
         exploreV2PageBgAnimatedStyle,
         isScheduleOriginTransition && scheduleDeckIncomingShellStyle,
+        isScheduleOriginTransition && styles.scheduleDeckDestinationLayer,
       ]}
     >
       <ShapeConfetti active={showConfetti} />
@@ -3719,8 +3790,14 @@ export function ExerciseExecutionScreen() {
             ) : null}
             <AnimatedReanimated.View style={[styles.exploreV2BandsColumn, exploreV2BandsOffsetStyle]}>
               <AnimatedReanimated.View style={[styles.exploreV2TimerBand, exploreV2TimerBandAnimatedStyle]} />
-              <AnimatedReanimated.View style={[styles.exploreV2WalletBand, exploreV2WalletBandAnimatedStyle]}>
+              <AnimatedReanimated.View
+                ref={walletTransitionTargetRef}
+                onLayout={onTransitionWalletLayout}
+                style={[styles.exploreV2WalletBand, exploreV2WalletBandAnimatedStyle]}
+              >
                 <ExploreV2ExecutionRoot
+                scheduleEntryProgress={isScheduleOriginTransition ? scheduleDeckProgressSV : undefined}
+                onWalletLayout={setTransitionWalletLocalLayout}
                 exerciseGroups={exerciseGroups}
                 exploreCurrentGroupIndex={exploreCurrentGroupIndex}
                 upNextExercises={upNextExercises}
@@ -5600,6 +5677,39 @@ export function ExerciseExecutionScreen() {
         }}
       />
     </AnimatedReanimated.View>
+    {isScheduleOriginTransition && transitionOrigin ? (
+      <AnimatedReanimated.View
+        pointerEvents="none"
+        style={[
+          styles.scheduleDeckExpandingCard,
+          { backgroundColor: themeColors.containerSecondary, borderColor: themeColors.canvasLight },
+          scheduleDeckExpandingCardStyle,
+        ]}
+      >
+        <AnimatedReanimated.View style={[styles.scheduleDeckExpandingCardContent, scheduleDeckExpandingCardContentStyle]}>
+          <Text style={[styles.scheduleDeckExpandingCardTitle, { color: themeColors.containerPrimary }]}>
+            {transitionCard?.title ?? ''}
+          </Text>
+          <Text style={[styles.scheduleDeckExpandingCardMeta, { color: themeColors.containerPrimary }]}>
+            {transitionCard ? `${transitionCard.exerciseCount} exercises` : ''}
+          </Text>
+          {transitionCard?.subtitle ? (
+            <Text style={[styles.scheduleDeckExpandingCardSubtitle, { color: themeColors.textMeta }]}>
+              {transitionCard.subtitle}
+            </Text>
+          ) : null}
+          {transitionCard ? (
+            <Text style={[styles.scheduleDeckExpandingCardPosition, { color: themeColors.containerPrimary }]}>
+              {transitionCard.positionLabel}
+            </Text>
+          ) : null}
+          <View style={styles.scheduleDeckExpandingCardArrow}>
+            <IconArrowDiagonal size={24} color={themeColors.containerPrimary} />
+          </View>
+        </AnimatedReanimated.View>
+      </AnimatedReanimated.View>
+    ) : null}
+    </>
   );
 }
 
@@ -5672,6 +5782,48 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: EXPLORE_V2.colors.pageBg,
+  },
+  scheduleDeckExpandingCard: {
+    position: 'absolute',
+    zIndex: 0,
+    overflow: 'hidden',
+    borderWidth: 2,
+  },
+  scheduleDeckDestinationLayer: {
+    zIndex: 1,
+  },
+  scheduleDeckExpandingCardContent: {
+    paddingTop: 20,
+    paddingHorizontal: 24,
+  },
+  scheduleDeckExpandingCardTitle: {
+    ...TYPOGRAPHY.displayLarge,
+  },
+  scheduleDeckExpandingCardMeta: {
+    ...TYPOGRAPHY.body,
+    fontWeight: '500',
+    marginTop: 10,
+  },
+  scheduleDeckExpandingCardSubtitle: {
+    ...TYPOGRAPHY.body,
+    fontWeight: '500',
+    marginTop: 12,
+  },
+  scheduleDeckExpandingCardPosition: {
+    ...outfitNumericStyle,
+    position: 'absolute',
+    right: -34,
+    bottom: -94,
+    width: 240,
+    fontSize: 300,
+    lineHeight: 300,
+    includeFontPadding: false,
+    textAlign: 'right',
+  },
+  scheduleDeckExpandingCardArrow: {
+    position: 'absolute',
+    left: 24,
+    bottom: 24,
   },
   header: {
     paddingBottom: 0,

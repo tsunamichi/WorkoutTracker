@@ -108,6 +108,7 @@ export type RootStackParamList = {
     bonusLogId?: string;
     transitionSource?: 'scheduleDeck';
     transitionOrigin?: { x: number; y: number; width: number; height: number; borderRadius: number };
+    transitionCard?: { title: string; subtitle?: string; exerciseCount: number; positionLabel: string };
   };
   DesignSystem: undefined;
   CycleDetail: { cycleId: string };
@@ -946,4 +947,3 @@ export default function AppNavigator() {
     </View>
   );
 }
-

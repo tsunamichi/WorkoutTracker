@@ -18,6 +18,7 @@ import Animated, {
   runOnJS,
   runOnUI,
   Easing,
+  Extrapolation,
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { useAppTheme } from '../../theme/useAppTheme';
@@ -85,6 +86,9 @@ function groupHasEverySetLogged(group: ExploreV2Group, completedSets: Set<string
 }
 
 export type ExploreV2ExecutionRootProps = {
+  /** Home-card handoff timeline; Current enters last after the wallet shell settles. */
+  scheduleEntryProgress?: SharedValue<number>;
+  onWalletLayout?: (layout: { x: number; y: number; width: number; height: number }) => void;
   exerciseGroups: ExploreV2Group[];
   exploreCurrentGroupIndex: number | null;
   upNextExercises: number[];
@@ -160,6 +164,8 @@ function ExploreV2ExecutionRootComponent(props: ExploreV2ExecutionRootProps) {
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const {
+    scheduleEntryProgress,
+    onWalletLayout,
     exerciseGroups,
     exploreCurrentGroupIndex,
     upNextExercises,
@@ -426,6 +432,14 @@ function ExploreV2ExecutionRootComponent(props: ExploreV2ExecutionRootProps) {
   const preStart = Boolean(displayCurrentGroup) && currentHasNoLogsInGroup;
   const currentIsCollapsedSecondary =
     shouldShowCurrentLayer && visibleCurrentHasLoggedSets && primaryRevealed !== 'current';
+  const scheduleCurrentEntryStyle = useAnimatedStyle(() => {
+    if (!scheduleEntryProgress || !currentIsCollapsedSecondary) return {};
+    const p = scheduleEntryProgress.value;
+    return {
+      opacity: p >= 0.84 ? 1 : 0,
+      transform: [{ translateY: interpolate(p, [0.84, 1], [56, 0], Extrapolation.CLAMP) }],
+    };
+  }, [currentIsCollapsedSecondary, scheduleEntryProgress]);
 
   /** Tracks `completedSets.size` so we only auto-front Current when new set(s) are logged — not when the user reveals Up Next (which would otherwise re-run this effect and snap Current back). */
   const prevLoggedSetCountRef = useRef<number | null>(null);
@@ -744,6 +758,7 @@ function ExploreV2ExecutionRootComponent(props: ExploreV2ExecutionRootProps) {
       <Animated.View
         style={[
           aCurrent,
+          scheduleCurrentEntryStyle,
           { zIndex: zCurrent },
           EXPLORE_V2_DEBUG_CLIP && styles.debugCurrentFrame,
           EXPLORE_V2_DEBUG_CLIP &&
@@ -932,9 +947,10 @@ function ExploreV2ExecutionRootComponent(props: ExploreV2ExecutionRootProps) {
     <Animated.View
       style={[styles.root, walletShellRadii]}
       onLayout={e => {
-        const h = e.nativeEvent.layout.height;
+        const { x, y, width, height: h } = e.nativeEvent.layout;
         setStackShellHeight(h);
         stackShellHeightSV.value = h;
+        onWalletLayout?.({ x, y, width, height: h });
       }}
     >
       <Animated.View style={[styles.rootFill, rootFillAnimatedStyle]}>

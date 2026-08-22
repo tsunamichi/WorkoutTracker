@@ -252,7 +252,7 @@ export function TodayScreen({ onDateChange, onOpenAddWorkout, onOpenBonusDrawer 
     mode: null,
   });
   const launchToExecutionLockRef = useRef(false);
-  const { progress: scheduleDeckTransitionProgress, startTransition: startScheduleDeckTransition, reset: resetScheduleDeckTransition } =
+  const { progress: scheduleDeckTransitionProgress, cardMorphActive: scheduleDeckCardMorphActive, startTransition: startScheduleDeckTransition, reset: resetScheduleDeckTransition } =
     useScheduleDeckTransition();
   /** Keeps the newly created workout card last in the deck (before the create tile). */
   const [deckTailSwId, setDeckTailSwId] = useState<string | null>(null);
@@ -813,8 +813,11 @@ export function TodayScreen({ onDateChange, onOpenAddWorkout, onOpenBonusDrawer 
   /** Coordinated Home → Execution: whole schedule layer recedes (shared timeline). */
   const scheduleHomeOutgoingLayerStyle = useAnimatedStyle(() => {
     const p = scheduleDeckTransitionProgress.value;
+    const opacityEnd = scheduleDeckCardMorphActive.value === 1 ? 0.025 : SCHEDULE_DECK_T.homeOpacityEnd;
     return {
-      opacity: interpolate(p, [0, SCHEDULE_DECK_T.homeOpacityEnd], [1, 0], Extrapolation.CLAMP),
+      opacity: scheduleDeckCardMorphActive.value === 1
+        ? (p <= 0.001 ? 1 : 0)
+        : interpolate(p, [0, opacityEnd], [1, 0], Extrapolation.CLAMP),
       transform: [
         {
           scale: interpolate(p, [0, SCHEDULE_DECK_T.homeScaleEnd], [1, 1.25], Extrapolation.CLAMP),
@@ -914,7 +917,11 @@ export function TodayScreen({ onDateChange, onOpenAddWorkout, onOpenBonusDrawer 
   );
 
   const navigateToWorkoutExecution = useCallback(
-    (sw: ScheduledWorkout) => {
+    (
+      sw: ScheduledWorkout,
+      transitionOrigin?: { x: number; y: number; width: number; height: number; borderRadius: number },
+      transitionCard?: { title: string; subtitle?: string; exerciseCount: number; positionLabel: string },
+    ) => {
       const mainCompletion = getMainCompletion(sw.id);
       const isCompleted = sw.isLocked || mainCompletion.percentage === 100;
       if (isInPastCycle && !isCompleted) return;
@@ -925,9 +932,8 @@ export function TodayScreen({ onDateChange, onOpenAddWorkout, onOpenBonusDrawer 
         workoutTemplateId: sw.templateId,
         type: 'main',
         transitionSource: 'scheduleDeck',
-      });
-      requestAnimationFrame(() => {
-        startScheduleDeckTransition();
+        transitionOrigin,
+        transitionCard,
       });
     },
     [getMainCompletion, isInPastCycle, navigation, startScheduleDeckTransition],
@@ -955,7 +961,7 @@ export function TodayScreen({ onDateChange, onOpenAddWorkout, onOpenBonusDrawer 
 
   const deckItems: ScheduleDeckV3Item[] = useMemo(
     () =>
-      remainingWorkoutsQueueForDeck.map(sw => {
+      remainingWorkoutsQueueForDeck.map((sw, index) => {
         const ordered = [...(sw.exercisesSnapshot ?? [])].sort((a, b) => a.order - b.order);
         const exerciseCount = ordered.length;
         const categories = ordered
@@ -973,7 +979,7 @@ export function TodayScreen({ onDateChange, onOpenAddWorkout, onOpenBonusDrawer 
           title: sw.titleSnapshot,
           subtitle,
           exerciseCount,
-          onPress: () => navigateToWorkoutExecution(sw),
+          onPress: origin => navigateToWorkoutExecution(sw, origin, { title: sw.titleSnapshot, subtitle, exerciseCount, positionLabel: String(index + 1) }),
         };
       }),
     [remainingWorkoutsQueueForDeck, exercises, navigateToWorkoutExecution],
@@ -1002,7 +1008,7 @@ export function TodayScreen({ onDateChange, onOpenAddWorkout, onOpenBonusDrawer 
       cardBackgroundColor: textMetaForHistoryCalendarFutureFace(themeColors.textMeta),
       cardTextColor: themeColors.textMeta,
       footerLabel: 'Completed',
-      onPress: () => navigateToWorkoutExecution(sw),
+      onPress: origin => navigateToWorkoutExecution(sw, origin, { title: sw.titleSnapshot, subtitle, exerciseCount, positionLabel: '1' }),
     };
   }, [completedWorkoutsForSelectedDay, themeColors.textMeta, exercises, navigateToWorkoutExecution]);
 
@@ -2342,6 +2348,3 @@ const styles = StyleSheet.create({
     color: themeColors.textMeta,
   },
 });
-
-
-
