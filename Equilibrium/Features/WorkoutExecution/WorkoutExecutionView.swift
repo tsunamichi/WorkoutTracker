@@ -130,12 +130,23 @@ struct WorkoutExecutionView: View {
                 log: { input in await model.log(exerciseID: exercise.id, prescriptionID: prescription.id, input: input) }
             )
             .id("\(exercise.id.rawValue)-\(prescription.id.rawValue)")
+            if !model.isReadOnly {
+                HStack {
+                    Button("Add set") { Task { await model.addSet(exerciseID: exercise.id) } }
+                    Spacer()
+                    if !exercise.loggedSets.contains(where: { $0.prescriptionID == prescription.id && $0.completedAt != nil }) {
+                        Button("Remove set", role: .destructive) { Task { await model.removeCurrentSet(exerciseID: exercise.id, prescriptionID: prescription.id) } }
+                    }
+                }.frame(minHeight: EQDimension.minimumTouch)
+            }
             if model.canComplete {
                 Button { completeWorkout() } label: {
                     Label("Complete workout", systemImage: "checkmark.circle.fill").frame(maxWidth: .infinity, minHeight: EQDimension.minimumTouch)
                 }
                 .buttonStyle(.borderedProminent).buttonBorderShape(.roundedRectangle(radius: EQRadius.control))
             }
+        } else if let exercise = model.currentExercise, !model.isReadOnly {
+            FirstSetView(exercise: exercise, weightUnit: model.weightUnit) { input in await model.logFirstSet(exerciseID: exercise.id, input: input) }
         } else {
             Text(model.isReadOnly ? "Workout complete." : "Every required set is logged.")
                 .font(EQTypography.sectionTitle)
@@ -172,6 +183,23 @@ struct WorkoutExecutionView: View {
         .transition(reduceMotion ? .opacity : .scale.combined(with: .opacity))
         .animation(reduceMotion ? nil : .easeOut(duration: EQMotion.completion), value: model.showsCompletion)
         .accessibilityAddTraits(.isModal)
+    }
+}
+
+private struct FirstSetView: View {
+    let exercise: ScheduledExercise; let weightUnit: WeightUnit; let log: (SetLogInput) async -> Void
+    @State private var weight = ""; @State private var repetitions = ""
+    var body: some View {
+        VStack(alignment: .leading, spacing: EQSpacing.lg) {
+            Text(exercise.nameSnapshot).font(EQTypography.exerciseTitle)
+            Text("No previous working sets").font(EQTypography.caption).foregroundStyle(EQColor.secondaryText)
+            HStack(spacing: EQSpacing.lg) {
+                HeroValueField(value: $weight, label: weightUnit == .pounds ? "lb" : "kg", accessibilityLabel: "Weight", keyboard: .decimalPad)
+                HeroValueField(value: $repetitions, label: "reps", accessibilityLabel: "Repetitions", keyboard: .numberPad)
+            }
+            Button("Log first set") { guard let reps = Int(repetitions), reps > 0 else { return }; Task { await log(.repetitions(weight: WeightText.weight(from: weight, unit: weightUnit), repetitions: reps)) } }
+                .frame(maxWidth: .infinity, minHeight: EQDimension.minimumTouch).buttonStyle(.borderedProminent).buttonBorderShape(.roundedRectangle(radius: EQRadius.control))
+        }
     }
 }
 

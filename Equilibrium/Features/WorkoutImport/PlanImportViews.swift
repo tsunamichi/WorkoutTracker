@@ -1,5 +1,38 @@
 import Observation
 import SwiftUI
+import UIKit
+
+struct ClipboardWorkoutImportView: View {
+    let repository: any ExerciseRepository
+    let ready: (WorkoutDraft) -> Void
+    @State private var fallback = false
+    @State private var initialText = ""
+    @State private var fallbackMessage: String?
+    var body: some View {
+        Group {
+            if fallback {
+                PlanImportInputView(initialText: initialText) { result in Task { await open(result) } }
+                    .safeAreaInset(edge: .top) { if let fallbackMessage { Text(fallbackMessage).font(EQTypography.caption).foregroundStyle(EQColor.warning).padding(.horizontal, EQSpacing.lg) } }
+            } else { ProgressView("Reading clipboard") }
+        }
+        .task { await readClipboard() }
+    }
+    private func readClipboard() async {
+        let value = UIPasteboard.general.string ?? ""
+        initialText = value
+        let result = PlanTextParser().parse(value)
+        guard !result.hasBlockingIssues, result.workouts.count == 1 else {
+            fallbackMessage = value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "The clipboard is empty. Enter workout text below." : "The clipboard workout needs correction."
+            fallback = true; return
+        }
+        await open(result)
+    }
+    private func open(_ result: PlanParseResult) async {
+        guard let workout = result.workouts.first else { fallback = true; return }
+        do { ready(PlanImportDraftConverter.lightweightDraft(from: workout, catalog: try await repository.allExercises())) }
+        catch { fallbackMessage = "Exercises could not be loaded."; fallback = true }
+    }
+}
 
 struct PlanImportInputView: View {
     private let editorMinimumHeight: CGFloat = 220
@@ -121,7 +154,7 @@ struct PlanImportReviewView: View {
         .scrollContentBackground(.hidden).background(EQColor.canvas).navigationTitle("Review Import")
         .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Continue") { if let workout = model.selected, let draft = PlanImportDraftConverter.draft(from: workout) { continueToBuilder(draft) } }.disabled(model.selected == nil || model.selectedUnresolvedCount > 0) } }
         .sheet(isPresented: .init(get: { replacementID != nil }, set: { if !$0 { replacementID = nil } })) {
-            ExercisePickerView(repository: exercises) { definition in if let id = replacementID { model.replace(exerciseID: id, with: definition) }; replacementID = nil }
+            Text("Exercise mapping is no longer part of the Home creation flow.")
         }
         .task { if model.workouts.isEmpty { await model.load() } }
     }

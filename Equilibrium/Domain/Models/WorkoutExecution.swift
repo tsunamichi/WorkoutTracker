@@ -24,7 +24,9 @@ public enum WorkoutExecutionQuery {
     }
 
     public static func isComplete(_ exercise: ScheduledExercise) -> Bool {
-        exercise.skippedAt != nil || Set(exercise.prescriptions.map(\.id)).isSubset(of: completedPrescriptionIDs(in: exercise))
+        if exercise.skippedAt != nil { return true }
+        guard !exercise.prescriptions.isEmpty else { return false }
+        return Set(exercise.prescriptions.map(\.id)).isSubset(of: completedPrescriptionIDs(in: exercise))
     }
 
     public static func states(in workout: ScheduledWorkout, focusedExerciseID: ScheduledExerciseID? = nil) -> [ScheduledExerciseID: ExerciseState] {
@@ -44,7 +46,7 @@ public enum WorkoutExecutionQuery {
 
     public static func progress(in workout: ScheduledWorkout) -> WorkoutProgress {
         let included = workout.exercises.filter { $0.skippedAt == nil }
-        let required = included.reduce(0) { $0 + $1.prescriptions.count }
+        let required = included.reduce(0) { $0 + max(1, $1.prescriptions.count) }
         let completed = included.reduce(0) { $0 + completedPrescriptionIDs(in: $1).intersection(Set($1.prescriptions.map(\.id))).count }
         return WorkoutProgress(completedSetCount: completed, requiredSetCount: required)
     }

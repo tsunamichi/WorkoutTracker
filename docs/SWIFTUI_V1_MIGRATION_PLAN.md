@@ -2,6 +2,8 @@
 
 Status: planning only. This document does not authorize React Native cleanup, Swift implementation, Xcode project creation, configuration changes, dependency changes, or data migration.
 
+Product Model Correction 2 is locked: Home creation defines a workout name plus an ordered exercise list. Sets, weight and repetitions are inherited from the latest completed canonical exercise occurrence and edited only during Workout Execution. `ExerciseDefinition` is the user's personal exercise vocabulary, not a curated library; production starts with zero definitions and never seeds a system catalog. This correction supersedes older creation/catalog language elsewhere in historical phase result documents.
+
 Reference points:
 
 - Behavioral and visual baseline: `19c56a9 — Checkpoint current Equilibrium UI`
@@ -53,11 +55,10 @@ EQUILIBRIUM
     ├── Add Workout (final carousel page)
     │   ├── Create from scratch
     │   │   ├── Exercise picker/search
-    │   │   └── Exercise/set prescription editor
+    │   │   └── Inline name-only exercise creation
     │   ├── Paste workout
-    │   │   ├── Paste formatted text
-    │   │   ├── Parse and match exercises
-    │   │   └── Review → create current-day workout
+    │   │   ├── Read clipboard and parse immediately
+    │   │   └── Fallback editor only when empty/invalid
     │   └── Use recent workout (multi-select completed history)
     ├── Plans
     │   ├── Create
@@ -94,11 +95,11 @@ EQUILIBRIUM
 |---|---|---|
 | Account / Cloud Backup | Settings destination | Optional Apple identity, Supabase session, backup/restore and logout. Local use never depends on it. |
 | Home | Root `NavigationStack` | Current local day, ordered workout carousel, history/settings/add entry points and Timer affordance. No date navigation or Rest Day state. |
-| Add Workout | Final carousel page/sheet | Exactly Create from scratch, Paste workout, and Use recent workout. |
-| Workout Builder | Push or full-screen sheet | Edit one reusable workout definition and optionally schedule a snapshot. |
-| Exercise Picker | Searchable sheet | Select/create canonical catalog exercises. |
-| Use recent workout | Sheet/push | Multi-select completed canonical logs and create fresh current-day snapshots in tap order without linking history. |
-| Paste workout | Sheet/push | Paste, parse, match, review and create a current-day workout. It is explicitly local and not AI-backed. |
+| Add Workout | Final carousel page | Direct buttons for Create from scratch, Paste workout, and Use recent workout; no duplicate menu destination. |
+| Workout Builder | Push or full-screen sheet | Edit workout title and ordered exercise identity list; no set/weight/reps/rest/template-save controls. |
+| Exercise Picker | Searchable sheet | Search personal exercises with latest-use context; create a normalized name inline when absent. |
+| Use recent workout | Sheet/push | Multi-select completed workouts, retain selected structure/order, and seed every exercise from its latest completed canonical occurrence using fresh IDs. |
+| Paste workout | Direct clipboard action / fallback editor | Read and parse clipboard immediately; valid input opens the lightweight Builder, while empty/invalid input opens the editor. Unknown names remain transient until commit. |
 | Plan Builder/Review | Push flow | Create one `CyclePlan`, map weekdays to reusable templates, apply atomically. |
 | Workout Execution | Push with optional native zoom | Mutate one `ScheduledWorkout`; derive current/upcoming/completed presentation. |
 | Exercise Performance | Push/sheet from execution/history | Previous working sets, trend, derived PR, progression rationale. |
@@ -160,7 +161,7 @@ struct LocalDay: Hashable, Codable, Sendable {
 }
 ```
 
-### Exercises and prescriptions
+### Personal exercises and execution prescriptions
 
 ```swift
 struct ExerciseDefinition: Identifiable, Codable, Hashable, Sendable {
@@ -201,7 +202,9 @@ struct Weight: Codable, Hashable, Sendable {
 
 Decisions encoded here:
 
-- The catalog describes movement identity and lightweight discovery metadata, not execution semantics. The same exercise may be prescribed for repetitions in one workout and duration in another.
+- `ExerciseDefinition` is stable identity for exercises the user has created, used, or migrated. It is not a system catalog or browsable taxonomy. Production does not seed definitions. Search matches normalized personal names/aliases and presents latest completed performance context; equipment/category remain optional migration-only fields and are absent from creation UI.
+- Creation owns only workout name and ordered exercise identity. It never asks for set count, rep range, weight, duration, or rest. A known exercise receives fresh prescriptions derived set-for-set from `latestExerciseLog(exerciseID)` when the workout is committed. An exercise with no completed history receives no prescriptions or logged sets.
+- Execution owns working-set mutation. It creates the first prescription/log transactionally, can append a fresh set slot, edits an existing log without replacing its identity, and may remove an unlogged slot. There is no second working-set store.
 - Equipment, category, aliases, and custom/system status are retained where available because they are inexpensive, portable, and useful for workout creation/search. They remain lightweight strings rather than an over-modeled taxonomy.
 - Rep ranges and durations are the only first-class set targets because reachable RN builder/import/execution behavior uses both (`WorkoutBuilderScreen`, current `AIWorkoutCreationScreen`, and `ExerciseExecutionScreen`).
 - Weight is optional; bodyweight is `nil`, never zero-by-convention.
@@ -266,11 +269,13 @@ struct ScheduledWorkout: Identifiable, Codable, Hashable, Sendable {
 }
 ```
 
-`ScheduledWorkout` is both plan and log. It owns frozen exercise names/prescriptions and actual logged sets. Editing/deleting a catalog exercise or template never changes historical meaning. A planned workout is created by snapshotting a template; a recent-workout reuse creates a new template draft or scheduled snapshot with new entity IDs.
+`ScheduledWorkout` is both plan and log. It owns frozen exercise names/prescriptions and actual logged sets. Editing/deleting a personal exercise or internal template never changes historical meaning. Home manual/paste creation writes a scheduled snapshot directly; recent reuse writes a fresh snapshot with new workout, exercise and prescription IDs.
+
+`latestExerciseLog(exerciseID)` reads only `ScheduledWorkout → ScheduledExercise → LoggedSet`. Candidates must be completed workouts and contain at least one valid completed set for that exercise. Sort by `completedAt` (falling back to canonical `updatedAt` only for legacy completed records), descending, then stable workout ID as the deterministic tie-breaker. Abandoned/in-progress workouts never seed creation. Preserve canonical prescription order and each latest occurrence's actual weight/reps/duration per set; do not average or progress values.
 
 ### Derivation invariants
 
-- A logged set is complete only when `completedAt != nil` and its values satisfy the associated prescription target: repetitions for a repetition target, duration for a duration target. Zero weight is allowed only as an actual load; absence is `nil`.
+- A logged set is complete only when `completedAt != nil` and its values satisfy the associated prescription target: repetitions for a repetition target, duration for a duration target. Zero weight is allowed only as an actual load; absence is `nil`. An unskipped exercise with zero prescriptions is incomplete, so an empty array never completes vacuously; its first actual set creates the first canonical slot/log.
 - `planned` requires `startedAt == nil && completedAt == nil`; `inProgress` requires `startedAt != nil && completedAt == nil`; `completed` requires both timestamps. Repository validation repairs invalid combinations.
 - A completed workout is immutable through normal UI. An explicit “reopen” command, if retained, records the transition and clears `completedAt`; history never silently edits it.
 - Completion percentage is derived from completed required logged sets plus skipped exercises according to one documented policy. No completion map is stored.
@@ -460,7 +465,7 @@ Dependency direction is Features → Domain protocols/models; Data and Services 
 Recommended repository protocols:
 
 ```swift
-protocol ExerciseRepository { /* query/upsert/archive catalog */ }
+protocol ExerciseRepository { /* query/upsert/archive personal vocabulary */ }
 protocol WorkoutTemplateRepository { /* CRUD reusable definitions */ }
 protocol ScheduledWorkoutRepository { /* bounded ordered LocalDay queries + identity-safe transactional mutation */ }
 protocol CyclePlanRepository { /* plan lifecycle + materialization commands */ }
@@ -703,15 +708,15 @@ Each phase is independently demonstrable and retains the RN app unchanged as ref
 ### Phase 3 — Workout creation
 
 - **Objective:** Create and add current-day canonical workouts through the three Home entry paths.
-- **User-visible result:** Create from scratch, exercise selection/custom exercise, reusable internal save, multi-select **Use recent workout**, and **Paste workout** for formatted workout text; every Home creation path targets today.
-- **Likely files/modules:** `WorkoutBuilderView/Model`, `ExercisePicker`, prescription editor, template repository, current-day add command, recent multi-select picker, `PasteWorkoutView/Model`, `PlanTextParser` and review UI.
-- **RN references:** `WorkoutBuilderScreen`, `RecentWorkoutPickerScreen`, builder utilities, `AIWorkoutCreationScreen`, personal catalog utilities.
-- **Data required:** catalog/template/log fixtures.
-- **Automated tests:** builder validation; catalog dedupe; ordered prescriptions; template snapshot isolation; recent multi-select clones with new IDs in tap order; parser golden cases/invalid input; multiple same-day creation.
-- **Manual regression:** Paste workout, search/create exercise, reorder/delete, unsaved-change dismissal, keyboard/focus, Create from scratch result, and one/many Use recent workout results appended to today's Home carousel.
+- **User-visible result:** The final Add Workout carousel card directly launches lightweight Create from scratch, immediate-clipboard Paste workout, or multi-select Use recent workout. Builder is title plus ordered exercises only. Exercise search is personal/history-first with inline name-only creation. Templates remain internal and are absent from Home creation.
+- **Likely files/modules:** `WorkoutBuilderView/Model`, personal `ExercisePicker`, `latestExerciseLog`, current-day add command, execution set mutation commands, recent multi-select picker, clipboard adapter, `PlanTextParser`, and fallback editor.
+- **RN references:** `WorkoutBuilderScreen`, `RecentWorkoutPickerScreen`, `TodayScreen` clipboard entry, `workoutBuilderPaste`, `ExerciseSearchPickModal`, `getLatestExerciseLog`, `lastExerciseRecord`, `ExerciseExecutionScreen`, and Explore V2 Add/Remove set controls.
+- **Data required:** empty-account, personal exercise, completed canonical log, zero-history, paste and recent fixtures. System catalog fixtures are preview/test-only.
+- **Automated tests:** empty production vocabulary; normalized name dedupe; latest completed occurrence ordering/context; history-set inheritance with fresh IDs; lightweight Builder validation/order/removal; zero-history completion; first/add/edit/remove set mutation; parser/fallback strategy; transient unknown paste names; recent multi-select/latest-context clones.
+- **Manual regression:** direct Add Workout actions; previous exercise context; inline unknown creation; title/order-only Builder; inherited and empty execution states; log first/add set; immediate valid clipboard parse with invalid/empty fallback; and multi-select recent workouts using latest per-exercise context.
 - **Dependencies/frameworks:** native searchable/navigation/forms/clipboard. No AI/OpenAI SDK or client API key.
-- **Risks:** ambiguous exercise matching; accidental mutation of history/template; parser error review.
-- **Exit criteria:** all retained creation paths write only canonical models and survive relaunch.
+- **Risks:** accidental duplicate personal identity, vacuous completion, copying historical child IDs/state, or persisting unknown paste names before commit.
+- **Exit criteria:** all retained creation paths write only canonical models, use latest completed canonical exercise history, support zero-history execution, and survive relaunch without production seed data or Home template UX.
 
 ### Phase 4 — History and performance
 
@@ -883,7 +888,7 @@ Do not make the native app read AsyncStorage directly or embed a React Native ru
 
 - The standard development cutover imports catalog, reusable templates, scheduled/completed workout history, current CyclePlans, progression and relevant v1 settings.
 - A reduced catalog/templates-only profile may exist for diagnostic use, but it is not the approved primary cutover.
-- A deliberate clean reset starts with seed catalog/default settings and no history only when explicitly selected after preserving the frozen export.
+- A deliberate clean reset starts with zero exercises, default settings and no history only when explicitly selected after preserving the frozen export. Production never seeds an exercise catalog.
 - Because migration precedes public App Store release, the importer is a developer/TestFlight tool and is excluded from the production binary after validated cutover unless actual users later require it.
 
 ### Supabase/iCloud retirement validation
@@ -973,16 +978,26 @@ One external technical verification remains: confirm that `com.tsunamichi.equili
 | Product identity | Equilibrium; planned bundle ID `com.tsunamichi.equilibrium`, pending external availability verification |
 | Navigation | No tab bar |
 | Workout structure | One ordered exercise list |
-| Exercise targets | Repetitions + duration; prescription-owned semantics |
-| Catalog metadata | Preserve aliases, equipment, category, and custom/system status |
+| Exercise discovery | Personal exercises used previously, ordered/presented with latest performance context |
+| New exercise | Create inline from search when no normalized match exists; name only |
+| System exercise library | None |
+| Seed catalog | None in production |
+| Exercise migration metadata | Preserve aliases and optional equipment/category/custom flags internally where inexpensive; do not expose taxonomy in creation |
+| Creation scope | Workout name + ordered exercise list |
+| Sets/weight/reps | Seed per set from latest completed canonical exercise occurrence |
+| New exercise values | No historical prescriptions/logs; present zero/empty state without a fake `0 × 0` log |
+| Working-value editing | Workout Execution only |
 | Home | Workout of the day |
 | Home scope | Current local day only |
 | Home workouts | Zero or more, in stable deterministic carousel order |
 | Date navigation | None on Home |
 | Completed workout | Remains in today's carousel; canonical history thereafter |
 | Empty day | Add Workout; no Rest Day state |
-| Add Workout | Create from scratch / Paste workout / Use recent workout |
-| Use recent workout | Multi-select previous completed workouts in tap order |
+| Add Workout | Final carousel card directly launches Create from scratch / Paste workout / Use recent workout |
+| Paste workout | Read clipboard immediately; editor only for empty/unavailable/invalid input |
+| Paste unknown exercises | Keep transient until Builder commit, then normalize/resolve/create with name only |
+| Use recent workout | Multi-select previous completed workouts in tap order; selected structure plus latest per-exercise canonical context |
+| Templates | Internal where required for Plans/migration; absent from Home creation UX |
 | Execution eligibility | Current local day only |
 | Timer | Simple rest/duration timer |
 | Warmup/Core/Accessories | Removed as domains |

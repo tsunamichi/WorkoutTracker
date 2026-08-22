@@ -36,6 +36,15 @@ struct ResolvedParsedWorkout: Identifiable, Hashable, Sendable {
 }
 
 enum PlanImportDraftConverter {
+    static func lightweightDraft(from workout: ParsedWorkout, catalog: [ExerciseDefinition]) -> WorkoutDraft {
+        let matcher = PlanExerciseMatcher()
+        return .init(name: workout.name, exercises: workout.exercises.map { parsed in
+            if case .matched(let definition) = matcher.match(name: parsed.name, catalog: catalog) {
+                return .init(exerciseID: definition.id, name: definition.name)
+            }
+            return .init(exerciseID: nil, name: parsed.name.trimmingCharacters(in: .whitespacesAndNewlines))
+        }, sourceTemplateID: nil)
+    }
     static func draft(from workout: ResolvedParsedWorkout) -> WorkoutDraft? {
         var exercises: [DraftExercise] = []
         for value in workout.exercises {

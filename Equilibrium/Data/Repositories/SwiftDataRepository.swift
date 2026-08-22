@@ -2,7 +2,7 @@ import Foundation
 import SwiftData
 
 @MainActor
-public final class SwiftDataRepository: ExerciseRepository, WorkoutTemplateRepository, ScheduledWorkoutRepository, BackupRepository {
+public final class SwiftDataRepository: ExerciseRepository, WorkoutTemplateRepository, ScheduledWorkoutRepository, ExerciseHistoryRepository, BackupRepository {
     private let context: ModelContext
     private let currentDayProvider: any CurrentDayProviding
     public init(container: ModelContainer, currentDayProvider: any CurrentDayProviding = SystemCurrentDayProvider()) {
@@ -16,8 +16,21 @@ public final class SwiftDataRepository: ExerciseRepository, WorkoutTemplateRepos
         let needle = Self.normalizeExerciseName(query)
         guard !needle.isEmpty else { return try await allExercises() }
         return try await allExercises().filter { exercise in
-            exercise.normalizedName.contains(needle) || exercise.aliases.contains { Self.normalizeExerciseName($0).contains(needle) } || exercise.equipment.map { Self.normalizeExerciseName($0).contains(needle) } == true || exercise.category.map { Self.normalizeExerciseName($0).contains(needle) } == true
+            exercise.normalizedName.contains(needle) || exercise.aliases.contains { Self.normalizeExerciseName($0).contains(needle) }
         }
+    }
+    public func latestExerciseLog(exerciseID: ExerciseID) async throws -> LatestExerciseLog? {
+        let candidates = try await allWorkouts().filter { $0.status == .completed }.compactMap { workout -> LatestExerciseLog? in
+            guard let exercise = workout.exercises.last(where: { $0.exerciseID == exerciseID }) else { return nil }
+            let completedByPrescription = Dictionary(uniqueKeysWithValues: exercise.loggedSets.filter { $0.completedAt != nil }.compactMap { log in log.prescriptionID.map { ($0, log) } })
+            let completed = exercise.prescriptions.compactMap { completedByPrescription[$0.id] }
+            guard !completed.isEmpty else { return nil }
+            return .init(exerciseID: exerciseID, workoutID: workout.id, occurredAt: workout.completedAt ?? workout.updatedAt, sets: completed)
+        }
+        return candidates.sorted {
+            if $0.occurredAt != $1.occurredAt { return $0.occurredAt > $1.occurredAt }
+            return $0.workoutID.rawValue > $1.workoutID.rawValue
+        }.first
     }
     public func exercise(id: ExerciseID) async throws -> ExerciseDefinition? {
         let key = id.rawValue; var descriptor = FetchDescriptor<ExerciseDefinitionRecord>(predicate: #Predicate { $0.id == key }); descriptor.fetchLimit = 1
@@ -153,6 +166,39 @@ public final class SwiftDataRepository: ExerciseRepository, WorkoutTemplateRepos
         )
         if let existingIndex { workout.exercises[exerciseIndex].loggedSets[existingIndex] = logged }
         else { workout.exercises[exerciseIndex].loggedSets.append(logged) }
+        workout.updatedAt = date
+        try await update(workout)
+        return workout
+    }
+
+    public func appendSet(workoutID: ScheduledWorkoutID, exerciseID: ScheduledExerciseID, seed: SetLogInput? = nil, at date: Date = .now) async throws -> ScheduledWorkout {
+        guard var workout = try await workout(id: workoutID) else { throw RepositoryError.notFound }
+        try requireCurrentDay(workout)
+        guard workout.status == .inProgress else { throw workout.status == .completed ? RepositoryError.immutableCompletedWorkout : RepositoryError.workoutNotInProgress }
+        guard let index = workout.exercises.firstIndex(where: { $0.id == exerciseID }) else { throw RepositoryError.notFound }
+        let prescription: SetPrescription
+        switch seed {
+        case .duration(let seconds): prescription = .init(id: .new(), target: .duration(seconds: max(1, seconds)), suggestedWeight: nil)
+        case .repetitions(let weight, let repetitions): prescription = .init(id: .new(), target: .repetitions(range: max(1, repetitions)...max(1, repetitions)), suggestedWeight: weight)
+        case nil:
+            if let previous = workout.exercises[index].prescriptions.last {
+                prescription = .init(id: .new(), target: previous.target, suggestedWeight: previous.suggestedWeight)
+            } else { prescription = .init(id: .new(), target: .repetitions(range: 1...1), suggestedWeight: nil) }
+        }
+        workout.exercises[index].prescriptions.append(prescription)
+        workout.updatedAt = date
+        try await update(workout)
+        return workout
+    }
+
+    public func removeSet(workoutID: ScheduledWorkoutID, exerciseID: ScheduledExerciseID, prescriptionID: SetID, at date: Date = .now) async throws -> ScheduledWorkout {
+        guard var workout = try await workout(id: workoutID) else { throw RepositoryError.notFound }
+        try requireCurrentDay(workout)
+        guard workout.status == .inProgress else { throw workout.status == .completed ? RepositoryError.immutableCompletedWorkout : RepositoryError.workoutNotInProgress }
+        guard let index = workout.exercises.firstIndex(where: { $0.id == exerciseID }), workout.exercises[index].prescriptions.contains(where: { $0.id == prescriptionID }) else { throw RepositoryError.prescriptionNotFound }
+        guard !workout.exercises[index].loggedSets.contains(where: { $0.prescriptionID == prescriptionID && $0.completedAt != nil }) else { throw RepositoryError.cannotRemoveCompletedSet }
+        workout.exercises[index].prescriptions.removeAll { $0.id == prescriptionID }
+        workout.exercises[index].loggedSets.removeAll { $0.prescriptionID == prescriptionID }
         workout.updatedAt = date
         try await update(workout)
         return workout

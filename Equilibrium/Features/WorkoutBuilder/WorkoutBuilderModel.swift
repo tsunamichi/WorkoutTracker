@@ -10,11 +10,11 @@ struct WorkoutDraft: Hashable, Sendable {
 
 struct DraftExercise: Identifiable, Hashable, Sendable {
     let id: UUID
-    let exerciseID: ExerciseID
+    var exerciseID: ExerciseID?
     var name: String
     var prescriptions: [DraftSet]
     var restDuration: TimeInterval?
-    init(id: UUID = UUID(), exerciseID: ExerciseID, name: String, prescriptions: [DraftSet] = [.repetitions()], restDuration: TimeInterval? = nil) {
+    init(id: UUID = UUID(), exerciseID: ExerciseID?, name: String, prescriptions: [DraftSet] = [], restDuration: TimeInterval? = nil) {
         self.id = id; self.exerciseID = exerciseID; self.name = name; self.prescriptions = prescriptions; self.restDuration = restDuration
     }
 }
@@ -34,13 +34,14 @@ final class WorkoutBuilderModel {
     private(set) var errorMessage: String?
     private(set) var isSaving = false
     let day: LocalDay
-    private let templates: any WorkoutTemplateRepository
+    private let exercises: any ExerciseRepository
     private let workouts: any ScheduledWorkoutRepository
+    private let history: any ExerciseHistoryRepository
 
-    init(day: LocalDay, draft: WorkoutDraft = .init(), templates: any WorkoutTemplateRepository, workouts: any ScheduledWorkoutRepository) {
-        self.day = day; self.draft = draft; self.templates = templates; self.workouts = workouts
+    init(day: LocalDay, draft: WorkoutDraft = .init(), exercises: any ExerciseRepository, workouts: any ScheduledWorkoutRepository, history: any ExerciseHistoryRepository) {
+        self.day = day; self.draft = draft; self.exercises = exercises; self.workouts = workouts; self.history = history
     }
-    var canCommit: Bool { !draft.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !draft.exercises.isEmpty && draft.exercises.allSatisfy { !$0.prescriptions.isEmpty } }
+    var canCommit: Bool { !draft.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !draft.exercises.isEmpty }
     func add(_ exercise: ExerciseDefinition) { draft.exercises.append(.init(exerciseID: exercise.id, name: exercise.name)) }
     func remove(at offsets: IndexSet) { draft.exercises.remove(atOffsets: offsets) }
     func move(from offsets: IndexSet, to destination: Int) { draft.exercises.move(fromOffsets: offsets, toOffset: destination) }
@@ -57,34 +58,38 @@ final class WorkoutBuilderModel {
         guard let index = draft.exercises.firstIndex(where: { $0.id == exerciseID }), draft.exercises[index].prescriptions.count > 1 else { return }
         draft.exercises[index].prescriptions.removeAll { $0.id == setID }
     }
-    func saveTemplate(now: Date = .now) async -> WorkoutTemplate? {
-        guard canCommit else { errorMessage = "Add a workout name, exercise, and set."; return nil }
+    func schedule(now: Date = .now) async -> ScheduledWorkout? {
+        guard canCommit else { errorMessage = "Add a workout name and exercise."; return nil }
         isSaving = true; defer { isSaving = false }
         do {
-            let existing: WorkoutTemplate?
-            if let id = draft.sourceTemplateID { existing = try await templates.template(id: id) } else { existing = nil }
-            let value = makeTemplate(id: existing?.id ?? .new(), createdAt: existing?.createdAt ?? now, now: now)
-            try await templates.saveTemplate(value); draft.sourceTemplateID = value.id; errorMessage = nil; return value
-        } catch { errorMessage = "The reusable workout could not be saved."; return nil }
-    }
-    func schedule(now: Date = .now) async -> ScheduledWorkout? {
-        guard canCommit else { errorMessage = "Add a workout name, exercise, and set."; return nil }
-        let value = makeScheduled(now: now)
-        do {
+            let value = try await makeScheduled(now: now)
             try await workouts.schedule(value)
             errorMessage = nil; return value
         } catch { errorMessage = "The workout could not be added." }
         return nil
     }
-    func makeScheduled(now: Date = .now) -> ScheduledWorkout {
-        .init(id: .new(), day: day, titleSnapshot: draft.name.trimmingCharacters(in: .whitespacesAndNewlines), templateID: draft.sourceTemplateID, planID: nil, source: .manual, exercises: draft.exercises.map { exercise in
-            .init(id: .new(), exerciseID: exercise.exerciseID, nameSnapshot: exercise.name, prescriptions: exercise.prescriptions.map(Self.prescription), loggedSets: [], restDuration: exercise.restDuration, skippedAt: nil)
-        }, status: .planned, startedAt: nil, completedAt: nil, createdAt: now, updatedAt: now)
+    func makeScheduled(now: Date = .now) async throws -> ScheduledWorkout {
+        var scheduledExercises: [ScheduledExercise] = []
+        for draftExercise in draft.exercises {
+            let definition: ExerciseDefinition
+            if let id = draftExercise.exerciseID, let existing = try await exercises.exercise(id: id) { definition = existing }
+            else {
+                let clean = draftExercise.name.trimmingCharacters(in: .whitespacesAndNewlines)
+                if let existing = try await exercises.searchExercises(clean).first(where: { $0.normalizedName == SwiftDataRepository.normalizeExerciseName(clean) }) { definition = existing }
+                else {
+                    definition = .init(id: .new(), name: clean, normalizedName: SwiftDataRepository.normalizeExerciseName(clean), aliases: [], equipment: nil, category: nil, isCustom: true, archivedAt: nil)
+                    try await exercises.saveExercise(definition)
+                }
+            }
+            let latest = try await history.latestExerciseLog(exerciseID: definition.id)
+            scheduledExercises.append(.init(id: .new(), exerciseID: definition.id, nameSnapshot: definition.name, prescriptions: latest?.sets.map(Self.inheritedPrescription) ?? [], loggedSets: [], restDuration: nil, skippedAt: nil))
+        }
+        return .init(id: .new(), day: day, titleSnapshot: draft.name.trimmingCharacters(in: .whitespacesAndNewlines), templateID: nil, planID: nil, source: .manual, exercises: scheduledExercises, status: .planned, startedAt: nil, completedAt: nil, createdAt: now, updatedAt: now)
     }
-    private func makeTemplate(id: WorkoutTemplateID, createdAt: Date, now: Date) -> WorkoutTemplate {
-        .init(id: id, name: draft.name.trimmingCharacters(in: .whitespacesAndNewlines), exercises: draft.exercises.map { exercise in
-            .init(id: .new(), exerciseID: exercise.exerciseID, exerciseNameSnapshot: exercise.name, prescriptions: exercise.prescriptions.map(Self.prescription), restDuration: exercise.restDuration, progressionRuleID: nil)
-        }, createdAt: createdAt, updatedAt: now, archivedAt: nil)
+    private static func inheritedPrescription(_ set: LoggedSet) -> SetPrescription {
+        if let duration = set.duration { return .init(id: .new(), target: .duration(seconds: duration), suggestedWeight: nil) }
+        let reps = max(1, set.repetitions ?? 1)
+        return .init(id: .new(), target: .repetitions(range: reps...reps), suggestedWeight: set.weight)
     }
     private static func prescription(_ set: DraftSet) -> SetPrescription {
         let target: SetTarget

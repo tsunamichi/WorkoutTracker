@@ -8,7 +8,7 @@ final class HomeModel {
     private(set) var today: LocalDay
     private(set) var workouts: [ScheduledWorkout] = []
     private(set) var errorMessage: String?
-    var isAddWorkoutPresented = false
+    var creationRoute: CreationRoute?
     var isTimerPresented = false
     let calendar: ScheduleCalendar
 

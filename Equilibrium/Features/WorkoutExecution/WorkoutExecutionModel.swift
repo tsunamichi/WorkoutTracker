@@ -93,6 +93,29 @@ final class WorkoutExecutionModel {
         } catch { errorMessage = message(for: error) }
     }
 
+    func logFirstSet(exerciseID: ScheduledExerciseID, input: SetLogInput) async {
+        do {
+            let appended = try await repository.appendSet(workoutID: workoutID, exerciseID: exerciseID, seed: input, at: now())
+            guard let prescriptionID = appended.exercises.first(where: { $0.id == exerciseID })?.prescriptions.last?.id else { throw RepositoryError.prescriptionNotFound }
+            let updated = try await repository.logSet(workoutID: workoutID, exerciseID: exerciseID, prescriptionID: prescriptionID, input: input, completed: true, at: now())
+            accept(updated); focusedExerciseID = nil; selectFirstIncompleteSet(); errorMessage = nil
+        } catch { errorMessage = message(for: error) }
+    }
+
+    func addSet(exerciseID: ScheduledExerciseID) async {
+        do {
+            let updated = try await repository.appendSet(workoutID: workoutID, exerciseID: exerciseID, seed: nil, at: now())
+            accept(updated); focusedExerciseID = exerciseID
+            selectedSetIndex = max(0, (updated.exercises.first { $0.id == exerciseID }?.prescriptions.count ?? 1) - 1)
+            errorMessage = nil
+        } catch { errorMessage = message(for: error) }
+    }
+
+    func removeCurrentSet(exerciseID: ScheduledExerciseID, prescriptionID: SetID) async {
+        do { let updated = try await repository.removeSet(workoutID: workoutID, exerciseID: exerciseID, prescriptionID: prescriptionID, at: now()); accept(updated); selectFirstIncompleteSet(); errorMessage = nil }
+        catch { errorMessage = message(for: error) }
+    }
+
     func focus(_ id: ScheduledExerciseID) {
         guard let workout, workout.status == .inProgress, let exercise = workout.exercises.first(where: { $0.id == id }) else { return }
         focusedExerciseID = id

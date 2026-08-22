@@ -4,20 +4,20 @@ struct HomeView: View {
     @State private var model: HomeModel
     private let repository: any ScheduledWorkoutRepository
     private let exerciseRepository: any ExerciseRepository
-    private let templateRepository: any WorkoutTemplateRepository
+    private let historyRepository: any ExerciseHistoryRepository
     @Namespace private var workoutTransition
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.scenePhase) private var scenePhase
     @AppStorage(EQPreferenceKey.weightUnit) private var weightUnitRaw = WeightUnit.pounds.rawValue
 
-    init(repository: any ScheduledWorkoutRepository, exerciseRepository: (any ExerciseRepository)? = nil, templateRepository: (any WorkoutTemplateRepository)? = nil) {
+    init(repository: any ScheduledWorkoutRepository, exerciseRepository: (any ExerciseRepository)? = nil, historyRepository: (any ExerciseHistoryRepository)? = nil) {
         self.repository = repository
         guard let shared = repository as? SwiftDataRepository else {
-            precondition(exerciseRepository != nil && templateRepository != nil, "Creation repositories are required")
-            self.exerciseRepository = exerciseRepository!; self.templateRepository = templateRepository!
+            precondition(exerciseRepository != nil && historyRepository != nil, "Creation repositories are required")
+            self.exerciseRepository = exerciseRepository!; self.historyRepository = historyRepository!
             _model = State(initialValue: HomeModel(repository: repository)); return
         }
-        self.exerciseRepository = exerciseRepository ?? shared; self.templateRepository = templateRepository ?? shared
+        self.exerciseRepository = exerciseRepository ?? shared; self.historyRepository = historyRepository ?? shared
         _model = State(initialValue: HomeModel(repository: repository))
     }
 
@@ -32,8 +32,8 @@ struct HomeView: View {
             }
             .toolbar(.hidden, for: .navigationBar)
             .navigationDestination(for: HomeRoute.self) { destination($0) }
-            .sheet(isPresented: $model.isAddWorkoutPresented) {
-                AddWorkoutSheet(day: model.today, exercises: exerciseRepository, templates: templateRepository, workouts: repository) {
+            .sheet(item: $model.creationRoute) { route in
+                AddWorkoutSheet(initialRoute: route, day: model.today, exercises: exerciseRepository, workouts: repository, history: historyRepository) {
                     model.applyPersistedWorkouts($0)
                 }
             }
@@ -65,8 +65,8 @@ struct HomeView: View {
                         .matchedTransitionSource(id: workout.id.rawValue, in: workoutTransition)
                         .containerRelativeFrame(.horizontal, count: 1, spacing: EQSpacing.md)
                 }
-                Button { model.isAddWorkoutPresented = true } label: { AddWorkoutCard() }
-                    .buttonStyle(.plain).containerRelativeFrame(.horizontal, count: 1, spacing: EQSpacing.md)
+                AddWorkoutCard { model.creationRoute = $0 }
+                    .containerRelativeFrame(.horizontal, count: 1, spacing: EQSpacing.md)
             }.scrollTargetLayout().padding(.horizontal, EQSpacing.lg)
         }
         .scrollTargetBehavior(.viewAligned(limitBehavior: .always))
@@ -119,11 +119,16 @@ private struct WorkoutCard: View {
 }
 
 private struct AddWorkoutCard: View {
+    let select: (CreationRoute) -> Void
     var body: some View {
         VStack(alignment: .leading, spacing: EQSpacing.md) {
             Image(systemName: "plus.circle.fill").font(.title).foregroundStyle(EQColor.accent)
             Text("ADD WORKOUT").font(EQTypography.cardHero)
-            Text("Create from scratch\nPaste workout\nUse recent workout").font(EQTypography.body).foregroundStyle(EQColor.secondaryText)
+            VStack(alignment: .leading, spacing: EQSpacing.xs) {
+                Button("Create from scratch") { select(.builder(.init())) }
+                Button("Paste workout") { select(.pasteWorkout) }
+                Button("Use recent workout") { select(.recent) }
+            }.font(EQTypography.body).buttonStyle(.plain).foregroundStyle(EQColor.secondaryText)
         }.foregroundStyle(EQColor.primaryText).padding(EQSpacing.lg)
             .frame(maxWidth: .infinity, minHeight: EQDimension.workoutCardHeight, alignment: .topLeading)
             .background(EQColor.surface, in: RoundedRectangle(cornerRadius: EQRadius.hero, style: .continuous))

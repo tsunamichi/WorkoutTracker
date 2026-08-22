@@ -31,6 +31,7 @@ public enum DomainValidator {
                 if logged.completedAt != nil { try validateCompleted(logged, target: target) }
             }
             if workout.status == .completed && exercise.skippedAt == nil {
+                guard !exercise.prescriptions.isEmpty else { throw DomainValidationError.incompleteCompletedWorkout }
                 let completedIDs = Set(exercise.loggedSets.filter { $0.completedAt != nil }.compactMap(\.prescriptionID))
                 guard Set(exercise.prescriptions.map(\.id)).isSubset(of: completedIDs) else { throw DomainValidationError.incompleteCompletedWorkout }
             }

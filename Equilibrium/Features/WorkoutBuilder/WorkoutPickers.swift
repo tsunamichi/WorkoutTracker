@@ -2,10 +2,11 @@ import SwiftUI
 
 struct ExercisePickerView: View {
     let repository: any ExerciseRepository
+    let history: any ExerciseHistoryRepository
     let selection: (ExerciseDefinition) -> Void
     @State private var results: [ExerciseDefinition] = []
     @State private var query = ""
-    @State private var customPresented = false
+    @State private var contexts: [ExerciseID: LatestExerciseLog] = [:]
     @State private var errorMessage: String?
     @Environment(\.dismiss) private var dismiss
     var body: some View {
@@ -15,40 +16,46 @@ struct ExercisePickerView: View {
                     Button { selection(exercise); dismiss() } label: {
                         VStack(alignment: .leading, spacing: EQSpacing.xxs) {
                             Text(exercise.name).font(EQTypography.cardTitle).foregroundStyle(EQColor.primaryText)
-                            let metadata = [exercise.equipment, exercise.category].compactMap { $0 }.joined(separator: " · ")
-                            if !metadata.isEmpty { Text(metadata).font(EQTypography.caption).foregroundStyle(EQColor.secondaryText) }
+                            if let context = contexts[exercise.id], let set = context.sets.last {
+                                Text(contextText(set, date: context.occurredAt)).font(EQTypography.caption).foregroundStyle(EQColor.secondaryText)
+                            }
                         }.frame(maxWidth: .infinity, minHeight: EQDimension.minimumTouch, alignment: .leading)
-                    }.accessibilityLabel([exercise.name, exercise.equipment, exercise.category].compactMap { $0 }.joined(separator: ", "))
+                    }.accessibilityLabel(exercise.name)
                 }
+                if canCreate { Button { Task { await createInline() } } label: { Label("Create \"\(cleanQuery)\"", systemImage: "plus.circle") }.frame(minHeight: EQDimension.minimumTouch) }
             }
             .overlay { if results.isEmpty { ContentUnavailableView.search(text: query) } }
-            .searchable(text: $query, prompt: "Name, alias, equipment, or category")
+            .searchable(text: $query, prompt: "Search your exercises")
             .onChange(of: query) { _, _ in Task { await load() } }.task { await load() }
-            .scrollContentBackground(.hidden).background(EQColor.canvas).navigationTitle("Exercises")
-            .toolbar { ToolbarItem(placement: .primaryAction) { Button { customPresented = true } label: { Label("New exercise", systemImage: "plus") } }; ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } } }
-            .sheet(isPresented: $customPresented) { CustomExerciseView(repository: repository) { value in Task { await load() }; selection(value); dismiss() } }
+            .scrollContentBackground(.hidden).background(EQColor.canvas).navigationTitle("Your Exercises")
+            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } } }
             .alert("Exercise unavailable", isPresented: .init(get: { errorMessage != nil }, set: { if !$0 { errorMessage = nil } })) { Button("OK") {} } message: { Text(errorMessage ?? "") }
         }.preferredColorScheme(.dark)
     }
-    private func load() async { do { results = try await repository.searchExercises(query) } catch { errorMessage = "Exercises could not be loaded." } }
-}
-
-private struct CustomExerciseView: View {
-    let repository: any ExerciseRepository; let created: (ExerciseDefinition) -> Void
-    @State private var name = ""; @State private var equipment = ""; @State private var category = ""; @State private var errorMessage: String?
-    @Environment(\.dismiss) private var dismiss
-    var body: some View {
-        NavigationStack { Form { TextField("Exercise name", text: $name); TextField("Equipment (optional)", text: $equipment); TextField("Category (optional)", text: $category); if let errorMessage { Text(errorMessage).foregroundStyle(EQColor.warning) } }
-            .scrollContentBackground(.hidden).background(EQColor.canvas).navigationTitle("Custom Exercise")
-            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }; ToolbarItem(placement: .confirmationAction) { Button("Create") { Task { await save() } }.disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) } }
-        }.preferredColorScheme(.dark)
+    private var cleanQuery: String { query.trimmingCharacters(in: .whitespacesAndNewlines) }
+    private var canCreate: Bool { !cleanQuery.isEmpty && !results.contains { $0.normalizedName == SwiftDataRepository.normalizeExerciseName(cleanQuery) } }
+    private func load() async {
+        do {
+            results = try await repository.searchExercises(query)
+            var loaded: [ExerciseID: LatestExerciseLog] = [:]
+            for result in results { if let value = try await history.latestExerciseLog(exerciseID: result.id) { loaded[result.id] = value } }
+            contexts = loaded
+        } catch { errorMessage = "Exercises could not be loaded." }
     }
-    private func save() async {
-        let clean = name.trimmingCharacters(in: .whitespacesAndNewlines)
-        let value = ExerciseDefinition(id: .new(), name: clean, normalizedName: SwiftDataRepository.normalizeExerciseName(clean), aliases: [], equipment: equipment.nilIfBlank, category: category.nilIfBlank, isCustom: true, archivedAt: nil)
-        do { try await repository.saveExercise(value); created(value); dismiss() }
-        catch RepositoryError.duplicateExerciseName { errorMessage = "An exercise with this name or alias already exists." }
-        catch { errorMessage = "The exercise could not be created." }
+    private func createInline() async {
+        let normalized = SwiftDataRepository.normalizeExerciseName(cleanQuery)
+        do {
+            if let existing = try await repository.searchExercises(cleanQuery).first(where: { $0.normalizedName == normalized }) { selection(existing); dismiss(); return }
+            let value = ExerciseDefinition(id: .new(), name: cleanQuery, normalizedName: normalized, aliases: [], equipment: nil, category: nil, isCustom: true, archivedAt: nil)
+            try await repository.saveExercise(value); selection(value); dismiss()
+        } catch RepositoryError.duplicateExerciseName {
+            if let existing = try? await repository.searchExercises(cleanQuery).first(where: { $0.normalizedName == normalized }) { selection(existing); dismiss() }
+        } catch { errorMessage = "The exercise could not be created." }
+    }
+    private func contextText(_ set: LoggedSet, date: Date) -> String {
+        let formatter = DateFormatter(); formatter.dateFormat = "MMM d"
+        if let reps = set.repetitions { return "\(WeightText.value(set.weight, unit: .pounds)) lb × \(reps) · \(formatter.string(from: date))" }
+        return "\(Int(set.duration ?? 0)) sec · \(formatter.string(from: date))"
     }
 }
 
@@ -60,6 +67,8 @@ struct WorkoutTemplatePicker: View {
 
 struct RecentWorkoutPicker: View {
     let repository: any ScheduledWorkoutRepository; let day: LocalDay; let selection: ([ScheduledWorkout]) -> Void
+    let history: any ExerciseHistoryRepository
+    init(repository: any ScheduledWorkoutRepository, history: any ExerciseHistoryRepository, day: LocalDay, selection: @escaping ([ScheduledWorkout]) -> Void) { self.repository = repository; self.history = history; self.day = day; self.selection = selection }
     @State private var values: [ScheduledWorkout] = []; @State private var selectedIDs: [ScheduledWorkoutID] = []; @State private var failed = false; @State private var saving = false
     var body: some View {
         List(values) { value in
@@ -75,16 +84,25 @@ struct RecentWorkoutPicker: View {
     private func addSelected(now: Date = .now) async {
         saving = true; defer { saving = false }
         let chosen = selectedIDs.compactMap { id in values.first { $0.id == id } }
-        let fresh = chosen.enumerated().map { index, historical in historical.freshCopy(on: day, createdAt: now.addingTimeInterval(Double(index) / 1_000)) }
-        do { try await repository.materializeAtomically(fresh); selection(fresh) } catch { failed = true }
+        do {
+            var fresh: [ScheduledWorkout] = []
+            for (index, historical) in chosen.enumerated() { fresh.append(try await historical.freshCopy(on: day, createdAt: now.addingTimeInterval(Double(index) / 1_000), history: history)) }
+            try await repository.materializeAtomically(fresh); selection(fresh)
+        } catch { failed = true }
     }
 }
 
 extension ScheduledWorkout {
-    func freshCopy(on day: LocalDay, createdAt: Date) -> ScheduledWorkout {
-        .init(id: .new(), day: day, titleSnapshot: titleSnapshot, templateID: templateID, planID: nil, source: .manual, exercises: exercises.map { exercise in
-            .init(id: .new(), exerciseID: exercise.exerciseID, nameSnapshot: exercise.nameSnapshot, prescriptions: exercise.prescriptions.map { .init(id: .new(), target: $0.target, suggestedWeight: $0.suggestedWeight) }, loggedSets: [], restDuration: exercise.restDuration, skippedAt: nil)
-        }, status: .planned, startedAt: nil, completedAt: nil, createdAt: createdAt, updatedAt: createdAt)
+    func freshCopy(on day: LocalDay, createdAt: Date, history: any ExerciseHistoryRepository) async throws -> ScheduledWorkout {
+        var copied: [ScheduledExercise] = []
+        for exercise in exercises {
+            let latest = try await history.latestExerciseLog(exerciseID: exercise.exerciseID)
+            copied.append(.init(id: .new(), exerciseID: exercise.exerciseID, nameSnapshot: exercise.nameSnapshot, prescriptions: latest?.sets.map { set in
+                if let duration = set.duration { return .init(id: .new(), target: .duration(seconds: duration), suggestedWeight: nil) }
+                let reps = max(1, set.repetitions ?? 1); return .init(id: .new(), target: .repetitions(range: reps...reps), suggestedWeight: set.weight)
+            } ?? [], loggedSets: [], restDuration: nil, skippedAt: nil))
+        }
+        return .init(id: .new(), day: day, titleSnapshot: titleSnapshot, templateID: templateID, planID: nil, source: .manual, exercises: copied, status: .planned, startedAt: nil, completedAt: nil, createdAt: createdAt, updatedAt: createdAt)
     }
 }
 
@@ -97,7 +115,7 @@ private extension String { var nilIfBlank: String? { let value = trimmingCharact
     container.mainContext.insert(DefinitionMapper.record(from: EquilibriumFixtures.template)); container.mainContext.insert(WorkoutMapper.record(from: EquilibriumFixtures.completed()))
     try! container.mainContext.save(); return SwiftDataRepository(container: container)
 }
-#Preview("Exercise Picker") { ExercisePickerView(repository: pickerPreviewRepository) { _ in } }
+#Preview("Exercise Picker") { ExercisePickerView(repository: pickerPreviewRepository, history: pickerPreviewRepository) { _ in } }
 #Preview("Existing Workout") { NavigationStack { WorkoutTemplatePicker(repository: pickerPreviewRepository) { _ in } }.preferredColorScheme(.dark) }
-#Preview("Recent Workout") { NavigationStack { RecentWorkoutPicker(repository: pickerPreviewRepository, day: try! LocalDay("2026-08-22")) { _ in } }.preferredColorScheme(.dark) }
+#Preview("Recent Workout") { NavigationStack { RecentWorkoutPicker(repository: pickerPreviewRepository, history: pickerPreviewRepository, day: try! LocalDay("2026-08-22")) { _ in } }.preferredColorScheme(.dark) }
 #endif

@@ -23,8 +23,20 @@ public protocol ScheduledWorkoutRepository: Sendable {
     func materializeAtomically(_ workouts: [ScheduledWorkout]) async throws
     func startWorkout(id: ScheduledWorkoutID, at date: Date) async throws -> ScheduledWorkout
     func logSet(workoutID: ScheduledWorkoutID, exerciseID: ScheduledExerciseID, prescriptionID: SetID, input: SetLogInput, completed: Bool, at date: Date) async throws -> ScheduledWorkout
+    func appendSet(workoutID: ScheduledWorkoutID, exerciseID: ScheduledExerciseID, seed: SetLogInput?, at date: Date) async throws -> ScheduledWorkout
+    func removeSet(workoutID: ScheduledWorkoutID, exerciseID: ScheduledExerciseID, prescriptionID: SetID, at date: Date) async throws -> ScheduledWorkout
     func completeWorkout(id: ScheduledWorkoutID, at date: Date) async throws -> ScheduledWorkout
     func recentCompletedWorkouts(limit: Int) async throws -> [ScheduledWorkout]
+}
+public struct LatestExerciseLog: Equatable, Sendable {
+    public let exerciseID: ExerciseID
+    public let workoutID: ScheduledWorkoutID
+    public let occurredAt: Date
+    public let sets: [LoggedSet]
+}
+
+public protocol ExerciseHistoryRepository: Sendable {
+    func latestExerciseLog(exerciseID: ExerciseID) async throws -> LatestExerciseLog?
 }
 public protocol CyclePlanRepository: Sendable {
     func allPlans() async throws -> [CyclePlan]
@@ -38,7 +50,7 @@ public protocol BackupRepository: Sendable {
     func exportBackup(exportedAt: Date, sourceDeviceID: String) async throws -> EquilibriumBackupV1
     func restoreBackup(_ backup: EquilibriumBackupV1) async throws
 }
-public enum RepositoryError: Error, Equatable { case notFound, immutableCompletedWorkout, workoutNotCurrentDay, workoutNotInProgress, prescriptionNotFound, invalidSetInput, incompleteWorkout, duplicateIdentifier, duplicateExerciseName, invalidBackup }
+public enum RepositoryError: Error, Equatable { case notFound, immutableCompletedWorkout, workoutNotCurrentDay, workoutNotInProgress, prescriptionNotFound, cannotRemoveCompletedSet, invalidSetInput, incompleteWorkout, duplicateIdentifier, duplicateExerciseName, invalidBackup }
 
 public extension ScheduledWorkoutRepository {
     func recentCompletedWorkouts(limit: Int) async throws -> [ScheduledWorkout] {

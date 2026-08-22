@@ -26,7 +26,8 @@ final class WorkoutCreationPhase3ATests: XCTestCase {
         XCTAssertEqual(loaded.exercises.map(\.exerciseNameSnapshot), ["Back Squat", "Plank"])
         if case .duration(let seconds) = loaded.exercises[1].prescriptions[0].target { XCTAssertEqual(seconds, 45) } else { XCTFail("Expected duration") }
         let day = try LocalDay("2026-08-22")
-        let model = WorkoutBuilderModel(day: day, draft: .init(template: loaded), templates: repository, workouts: repository)
+        for exercise in EquilibriumFixtures.exercises { try await repository.saveExercise(exercise) }
+        let model = WorkoutBuilderModel(day: day, draft: .init(template: loaded), exercises: repository, workouts: repository, history: repository)
         let scheduledValue = await model.schedule(); let snapshot = try XCTUnwrap(scheduledValue)
         template.name = "Edited"; template.exercises.removeLast(); template.updatedAt = .now
         try await repository.saveTemplate(template)
@@ -37,13 +38,12 @@ final class WorkoutCreationPhase3ATests: XCTestCase {
 
     func testBuilderMutationFreshIDsAndMultipleSameDayScheduling() async throws {
         let repository = makeRepository(); let day = try LocalDay("2026-08-23")
-        let model = WorkoutBuilderModel(day: day, templates: repository, workouts: repository)
+        for exercise in EquilibriumFixtures.exercises { try await repository.saveExercise(exercise) }
+        let model = WorkoutBuilderModel(day: day, exercises: repository, workouts: repository, history: repository)
         XCTAssertFalse(model.canCommit)
         model.draft.name = "Mixed"; model.add(EquilibriumFixtures.exercises[0]); model.add(EquilibriumFixtures.exercises[1])
         model.moveExercise(id: model.draft.exercises[1].id, direction: -1)
         XCTAssertEqual(model.draft.exercises.first?.exerciseID, EquilibriumFixtures.plankID)
-        model.draft.exercises[0].prescriptions[0].target = .duration(seconds: 40)
-        model.addSet(to: model.draft.exercises[1].id); model.removeSet(model.draft.exercises[1].prescriptions[0].id, from: model.draft.exercises[1].id)
         let scheduledResult = await model.schedule(); let scheduled = try XCTUnwrap(scheduledResult)
         XCTAssertEqual(scheduled.day, day); XCTAssertEqual(Set(scheduled.exercises.map(\.id)).count, 2)
         XCTAssertEqual(Set(scheduled.exercises.flatMap(\.prescriptions).map(\.id)).count, scheduled.exercises.flatMap(\.prescriptions).count)
@@ -51,12 +51,12 @@ final class WorkoutCreationPhase3ATests: XCTestCase {
         let sameDay = try await repository.workouts(on: day); XCTAssertEqual(sameDay.count, 2)
     }
 
-    func testRecentDraftUsesPrescriptionsWithoutExecutionIdentity() async throws {
+    func testRecentDraftRetainsOnlyStructureWithFreshDraftIdentity() async throws {
         let recent = EquilibriumFixtures.completed()
         let first = WorkoutDraft(recent: recent), second = WorkoutDraft(recent: recent)
         XCTAssertEqual(first.exercises.map(\.exerciseID), recent.exercises.map(\.exerciseID))
         XCTAssertNotEqual(first.exercises.map(\.id), second.exercises.map(\.id))
-        XCTAssertEqual(first.exercises[0].prescriptions.count, recent.exercises[0].prescriptions.count)
+        XCTAssertEqual(first.exercises[0].name, recent.exercises[0].nameSnapshot)
     }
 
     func testExerciseTemplateDiskPersistenceAndBackupRepositoryQueries() async throws {
