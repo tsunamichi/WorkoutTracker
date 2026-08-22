@@ -28,7 +28,7 @@ import { useAppTheme } from '../../theme/useAppTheme';
 import { formatWeightForLoad } from '../../utils/weight';
 import type { ExploreV2Exercise } from './exploreV2Types';
 import { useTranslation } from '../../i18n/useTranslation';
-import Svg, { Line, Rect } from 'react-native-svg';
+import Svg, { Circle, Defs, Line, LinearGradient as SvgLinearGradient, Path, Stop, Text as SvgText } from 'react-native-svg';
 
 const DRAWER_TOP_DIVIDER_H = 1;
 /** Settings header row (Settings + chevron) */
@@ -94,7 +94,10 @@ function consolidateSetsForDisplay(
 
 function HistoryMiniChart({
   values,
+  dates,
+  unit,
   color,
+  indicatorBorderColor,
   variant = 'compact',
   interactive = false,
   heldIndex = null,
@@ -104,7 +107,10 @@ function HistoryMiniChart({
   onInteractionEnd,
 }: {
   values: number[];
+  dates?: string[];
+  unit?: string;
   color: string;
+  indicatorBorderColor?: string;
   variant?: 'compact' | 'hero';
   interactive?: boolean;
   heldIndex?: number | null;
@@ -116,22 +122,42 @@ function HistoryMiniChart({
   if (values.length === 0) return null;
   const isHero = variant === 'hero';
   const W = isHero ? 640 : 320;
-  const H = 92;
-  const padX = 2;
+  const H = isHero ? 128 : 92;
+  const padLeft = 2;
+  const padRight = isHero ? 48 : 2;
   const padTop = isHero ? 10 : 8;
-  const gap = 1;
+  const padBottom = isHero && dates?.length ? 24 : 2;
   const min = Math.min(...values);
   const max = Math.max(...values);
-  const range = Math.max(1, max - min);
+  const tickStep = Math.max(5, Math.ceil((max - min) / 20) * 5);
+  let scaleMin = Math.max(0, Math.floor(min / tickStep) * tickStep);
+  let scaleMax = scaleMin + tickStep * 4;
+  if (max > scaleMax) {
+    scaleMax = Math.ceil(max / tickStep) * tickStep;
+    scaleMin = Math.max(0, scaleMax - tickStep * 4);
+  }
+  const range = scaleMax - scaleMin;
   const [chartWidth, setChartWidth] = useState(0);
   const resolvedW = chartWidth > 0 ? chartWidth : W;
-  const drawableW = resolvedW - padX * 2;
-  const colW = Math.max(1, (drawableW - gap * (values.length - 1)) / values.length);
-  const columnStride = colW + gap;
+  const plotRight = resolvedW - padRight;
+  const drawableW = Math.max(1, plotRight - padLeft);
+  const plotBottom = H - padBottom;
+  const drawableH = Math.max(1, plotBottom - padTop);
+  const pointX = (index: number) =>
+    values.length === 1 ? padLeft + drawableW / 2 : padLeft + (index / (values.length - 1)) * drawableW;
+  const pointY = (value: number) => padTop + (1 - (value - scaleMin) / range) * drawableH;
+  const points = values.map((value, index) => ({ x: pointX(index), y: pointY(value) }));
+  const linePath = points.map((point, index) => `${index === 0 ? 'M' : 'L'}${point.x} ${point.y}`).join(' ');
+  const areaPath = points.length
+    ? `${linePath} L${points[points.length - 1].x} ${plotBottom} L${points[0].x} ${plotBottom} Z`
+    : '';
+  const areaGradientId = `history-area-${variant}`;
+  const yTicks = Array.from({ length: 5 }, (_value, index) => scaleMax - index * tickStep);
+  const dateTickIndexes = values.map((_value, index) => index);
   const handleTouch = (locationX: number) => {
     if (!interactive || !onHoldIndexChange || values.length === 0) return;
-    const x = Math.max(padX, Math.min(resolvedW - padX, locationX));
-    const rawIndex = Math.floor((x - padX) / columnStride);
+    const x = Math.max(padLeft, Math.min(plotRight, locationX));
+    const rawIndex = values.length === 1 ? 0 : Math.round(((x - padLeft) / drawableW) * (values.length - 1));
     const index = Math.max(0, Math.min(values.length - 1, rawIndex));
     onHoldIndexChange(index);
   };
@@ -163,33 +189,57 @@ function HistoryMiniChart({
       }}
     >
       <Svg width={resolvedW} height={H}>
-        {values.map((v, i) => {
-          const left = padX + i * columnStride;
-          const top = padTop + (1 - (v - min) / range) * (H - padTop);
-          const isHeldMode = heldIndex != null;
-          const columnOpacity = isHeldMode && i !== heldIndex ? 0.6 : 1;
-          return (
-            <React.Fragment key={`hbar-${i}`}>
-              <Rect
-                x={left}
-                y={top}
-                width={colW}
-                height={Math.max(0, H - top)}
-                fill={color}
-                opacity={(isHero ? 0.16 : 0.14) * columnOpacity}
-              />
-              <Line
-                x1={left}
-                y1={top}
-                x2={left + colW}
-                y2={top}
-                stroke={color}
-                strokeWidth={isHero ? 2 : 1.5}
-                opacity={columnOpacity}
-              />
-            </React.Fragment>
-          );
-        })}
+        <Defs>
+          <SvgLinearGradient id={areaGradientId} x1="0%" y1="0%" x2="0%" y2="100%">
+            <Stop offset="0%" stopColor={color} stopOpacity={isHero ? 0.1 : 0.08} />
+            <Stop offset="100%" stopColor={color} stopOpacity={0} />
+          </SvgLinearGradient>
+        </Defs>
+        {isHero
+          ? yTicks.map((tick, index) => {
+              const y = pointY(tick);
+              return (
+                <React.Fragment key={`ytick-${index}`}>
+                  <Line x1={padLeft} y1={y} x2={plotRight} y2={y} stroke={color} strokeWidth={1} opacity={0.12} />
+                  <SvgText x={resolvedW - 2} y={y + 4} fill={color} opacity={0.58} fontSize={10} textAnchor="end">
+                    {`${Math.round(tick)}${unit ? ` ${unit}` : ''}`}
+                  </SvgText>
+                </React.Fragment>
+              );
+            })
+          : null}
+        {areaPath ? <Path d={areaPath} fill={`url(#${areaGradientId})`} /> : null}
+        {linePath ? <Path d={linePath} fill="none" stroke={color} strokeWidth={isHero ? 2 : 1.5} /> : null}
+        {heldIndex != null && points[heldIndex] ? (
+          <>
+            <Circle
+              cx={points[heldIndex].x}
+              cy={points[heldIndex].y}
+              r={6}
+              fill={indicatorBorderColor ?? color}
+            />
+            <Circle cx={points[heldIndex].x} cy={points[heldIndex].y} r={4} fill={color} />
+          </>
+        ) : null}
+        {isHero && dates?.length
+          ? dateTickIndexes.map((index, tickPosition) => {
+              const date = dates[index];
+              if (!date) return null;
+              return (
+                <SvgText
+                  key={`date-${index}`}
+                  x={pointX(index)}
+                  y={H - 4}
+                  fill={color}
+                  opacity={0.58}
+                  fontSize={10}
+                  textAnchor={tickPosition === 0 ? 'start' : tickPosition === dateTickIndexes.length - 1 ? 'end' : 'middle'}
+                >
+                  {dayjs(date).format('MM/DD')}
+                </SvgText>
+              );
+            })
+          : null}
       </Svg>
     </View>
   );
@@ -347,10 +397,13 @@ export function ExploreV2CurrentOverflowPanel({
     [latestWorkoutForDisplay],
   );
   const historyTrendPoints = useMemo(() => {
-    const points = historyForDisplay.flatMap(entry =>
-      consolidateSetsForDisplay(entry.sets).map(set => ({ date: entry.date, set })),
-    );
-    return points.slice(-7);
+    const points = historyForDisplay.flatMap(entry => {
+      const sets = consolidateSetsForDisplay(entry.sets);
+      if (sets.length === 0) return [];
+      const strongestSet = sets.reduce((best, set) => (set.weight > best.weight ? set : best));
+      return [{ date: entry.date, set: strongestSet }];
+    });
+    return points.slice(-5);
   }, [historyForDisplay]);
   const historyTrendValues = useMemo(() => {
     return historyTrendPoints.map(point => Number(point.set.weight) || 0).filter(v => v > 0);
@@ -632,10 +685,6 @@ export function ExploreV2CurrentOverflowPanel({
         ? latestWorkoutConsolidatedSets[latestWorkoutConsolidatedSets.length - 1]
         : null;
     const liveHistorySet = liveHistoryPoint?.set ?? fallbackSet;
-    const liveHistoryDateIso = liveHistoryPoint?.date ?? latestWorkoutForDisplay?.date ?? null;
-    const liveHistoryDateLabel = liveHistoryDateIso
-      ? `${dayjs(liveHistoryDateIso).format('MMMM D')}${getOrdinalSuffix(dayjs(liveHistoryDateIso).date())}`
-      : null;
     const liveHistoryWeightLabel = liveHistorySet
       ? formatWeightForLoad(liveHistorySet.weight, useKg)
       : null;
@@ -650,44 +699,28 @@ export function ExploreV2CurrentOverflowPanel({
           keyboardShouldPersistTaps="always"
           scrollEnabled={!isHistoryChartInteracting}
         >
-          <View style={[styles.embeddedSection, { borderTopColor: accentSecondary20 }]}>
-            <View style={styles.embeddedRow}>
-              <Text style={styles.embeddedLabel}>History</Text>
-            </View>
+          <View style={[styles.embeddedSection, styles.embeddedHistorySection]}>
             {liveHistorySet ? (
               <View style={styles.embeddedHistoryHeroRow}>
-                <View style={styles.embeddedHistoryMetricGroup}>
-                  <Text style={[styles.embeddedHistoryHeroValue, { color: settingsValueInk }]}>
-                    {liveHistoryWeightLabel}
-                  </Text>
-                  <Text style={[styles.embeddedHistoryHeroValue, { color: historyUnitInk }]}>
-                    {weightUnit}
-                  </Text>
-                </View>
-                <View style={styles.embeddedHistoryMetricGroup}>
-                  <Text style={[styles.embeddedHistoryHeroValue, { color: settingsValueInk }]}>
-                    {liveHistorySet?.reps}
-                  </Text>
-                  <Text style={[styles.embeddedHistoryHeroValue, { color: historyUnitInk }]}>
-                    {timeBased ? 'sec' : 'reps'}
-                  </Text>
-                </View>
+                <Text style={[styles.embeddedHistoryHeroValue, { color: settingsValueInk }]}>
+                  {liveHistorySet.reps}
+                  <Text style={{ color: hexToRgba(settingsValueInk, 0.58) }}>×</Text>
+                  {liveHistoryWeightLabel}
+                </Text>
               </View>
             ) : (
               <Text style={[styles.embeddedHistoryValue, { color: settingsValueInk }]}>{t('noHistoryRecordedYet')}</Text>
             )}
-            {liveHistoryDateLabel ? (
-              <Text style={[styles.embeddedHistoryDate, { color: settingsValueInk }]}>
-                {liveHistoryDateLabel}
-              </Text>
-            ) : null}
             {historyTrendValues.length > 0 ? (
               <HistoryMiniChart
                 values={historyTrendValues}
+                dates={historyTrendPoints.map(point => point.date)}
+                unit={weightUnit}
                 color={settingsValueInk}
+                indicatorBorderColor={explore.surfaceCurrentCard}
                 variant="hero"
                 interactive
-                heldIndex={heldHistoryIndex}
+                heldIndex={liveHistoryIndex}
                 onHoldIndexChange={setHeldHistoryIndex}
                 onHoldEnd={() => setHeldHistoryIndex(null)}
                 onInteractionStart={() => setIsHistoryChartInteracting(true)}
@@ -1017,10 +1050,13 @@ const styles = StyleSheet.create({
     paddingTop: 16,
     marginBottom: 56,
   },
+  embeddedHistorySection: {
+    borderTopWidth: 0,
+  },
   embeddedTwoColumnRow: {
     flexDirection: 'row',
     gap: 24,
-    marginBottom: 32,
+    marginBottom: 56,
   },
   embeddedSplitModule: {
     flex: 1,
@@ -1065,19 +1101,9 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     gap: 14,
   },
-  embeddedHistoryMetricGroup: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 2,
-  },
   embeddedHistoryHeroValue: {
-    ...TYPOGRAPHY.metricDisplay,
-    lineHeight: TYPOGRAPHY.metricDisplay.lineHeight,
+    ...TYPOGRAPHY.h1,
     includeFontPadding: false,
-  },
-  embeddedHistoryDate: {
-    ...TYPOGRAPHY.meta,
-    marginTop: 4,
   },
   embeddedHistoryHeroUnit: {
     ...TYPOGRAPHY.h1,

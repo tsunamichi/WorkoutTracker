@@ -9,7 +9,8 @@ import {
   InputAccessoryView,
   Platform,
   TextInput,
-  ScrollView,
+  Animated,
+  Easing as NativeEasing,
   type NativeSyntheticEvent,
   type NativeScrollEvent,
   type TextStyle,
@@ -148,6 +149,8 @@ type SetHeroPageProps = {
   heroPlaceholderColor?: string;
   /** Shown on the reps/sec row (e.g. Remove set) — bottom-aligned with the hero numeral (not the TextInput view). */
   removeSetTrailing?: React.ReactNode;
+  weightRowTransitionStyle?: React.ComponentProps<typeof Animated.View>['style'];
+  repsRowTransitionStyle?: React.ComponentProps<typeof Animated.View>['style'];
 };
 
 /** Exported for Completed-card inline editor (same hero inputs as Current). */
@@ -173,6 +176,8 @@ export function CurrentSetHeroPage({
   unitLabelAnimatedStyle,
   heroPlaceholderColor,
   removeSetTrailing,
+  weightRowTransitionStyle,
+  repsRowTransitionStyle,
 }: SetHeroPageProps) {
   const heroEx = group.exercises[slot.exerciseIndex];
   const heroRound = slot.round;
@@ -406,7 +411,7 @@ export function CurrentSetHeroPage({
   return (
     <View style={[styles.carouselPage, pageWidth > 0 ? { width: pageWidth } : { flex: 1 }]}>
       <View style={styles.valuesBlock}>
-        <View style={styles.valueRow}>
+        <Animated.View style={[styles.valueRow, weightRowTransitionStyle]}>
           <WeightField
             ref={weightInputRef as React.Ref<TextInput>}
             key={`${setId}-weight`}
@@ -439,9 +444,13 @@ export function CurrentSetHeroPage({
               <Text style={[styles.perSideSingleLine, { color: perSideLabelColor }]}>{perSideText}</Text>
             ) : null}
           </View>
-        </View>
-        <View
-          style={[styles.valueRow, removeSetTrailing ? styles.valueRowRepsWithRemove : null]}
+        </Animated.View>
+        <Animated.View
+          style={[
+            styles.valueRow,
+            removeSetTrailing ? styles.valueRowRepsWithRemove : null,
+            repsRowTransitionStyle,
+          ]}
         >
           <View style={styles.valueRowRepsMain}>
             <RepsField
@@ -475,7 +484,7 @@ export function CurrentSetHeroPage({
             </View>
           </View>
           {removeSetTrailing ? <View style={styles.heroRemoveEnd}>{removeSetTrailing}</View> : null}
-        </View>
+        </Animated.View>
       </View>
     </View>
   );
@@ -558,7 +567,13 @@ export function ExploreV2CurrentCard({
   const [carouselIndex, setCarouselIndex] = useState(0);
   const [pageWidth, setPageWidth] = useState(0);
   const carouselViewportWidth = Math.max(0, pageWidth);
-  const scrollRef = useRef<ScrollView>(null);
+  const scrollRef = useRef<any>(null);
+  const carouselScrollX = useRef(new Animated.Value(0)).current;
+  const carouselTapProgress = useRef(new Animated.Value(0)).current;
+  const weightRowProgress = useRef(new Animated.Value(1)).current;
+  const repsRowProgress = useRef(new Animated.Value(1)).current;
+  const [carouselTapDirection, setCarouselTapDirection] = useState<1 | -1>(1);
+  const [carouselTapAnimating, setCarouselTapAnimating] = useState(false);
   const commitsRef = useRef<Record<string, () => { weight: number; reps: number } | void>>({});
   const prevIncompleteKeyRef = useRef<string | null>(null);
   /** After removing the last set, scroll to this index (usually previous set). Consumed in carousel sync effect. */
@@ -631,14 +646,15 @@ export function ExploreV2CurrentCard({
   const allSetsLoggedInGroup = nextIncomplete === null && orderedSlots.length > 0;
   const metricsEditable = isPrimary && !heroTimerActive;
   const onRemoveSetPress = useCallback(() => {
-    carouselAfterRemoveRef.current = Math.max(0, carouselIndex - 1);
+    carouselAfterRemoveRef.current = Math.max(0, Math.min(carouselIndex, orderedSlots.length - 2));
     void onAdjustGroupSets?.(-1);
-  }, [carouselIndex, onAdjustGroupSets]);
+  }, [carouselIndex, onAdjustGroupSets, orderedSlots.length]);
   const showRemoveSetRow =
     Boolean(onAdjustGroupSets) &&
     metricsEditable &&
     orderedSlots.length > 0 &&
-    carouselIndex === orderedSlots.length - 1 &&
+    nextIncompleteIndex >= 0 &&
+    carouselIndex > nextIncompleteIndex &&
     group.totalRounds > 1;
   const ctaLabel =
     showRemoveSetRow
@@ -788,13 +804,91 @@ export function ExploreV2CurrentCard({
 
   const scrollToSetIndex = useCallback(
     (i: number) => {
-      if (carouselViewportWidth <= 0) return;
+      if (carouselViewportWidth <= 0 || carouselTapAnimating) return;
       const clamped = Math.max(0, Math.min(i, orderedSlots.length - 1));
-      setCarouselIndex(clamped);
-      scrollRef.current?.scrollTo({ x: clamped * carouselViewportWidth, animated: true });
+      if (clamped === carouselIndex) return;
+      const direction: 1 | -1 = clamped > carouselIndex ? 1 : -1;
+      setCarouselTapDirection(direction);
+      setCarouselTapAnimating(true);
+      // Hide the selected set's values immediately. The destination rows then
+      // reveal independently after the non-animated page jump below.
+      carouselTapProgress.setValue(1);
+      weightRowProgress.setValue(0);
+      repsRowProgress.setValue(0);
+      requestAnimationFrame(() => {
+        const targetX = clamped * carouselViewportWidth;
+        scrollRef.current?.scrollTo({ x: targetX, animated: false });
+        carouselScrollX.setValue(targetX);
+        setCarouselIndex(clamped);
+        carouselTapProgress.setValue(1.001);
+        const rowTiming = (progress: Animated.Value) => Animated.timing(progress, {
+          toValue: 1,
+          duration: 320,
+          easing: NativeEasing.bezier(0.16, 1, 0.3, 1),
+          useNativeDriver: true,
+        });
+        const firstRowProgress = direction === 1 ? weightRowProgress : repsRowProgress;
+        const secondRowProgress = direction === 1 ? repsRowProgress : weightRowProgress;
+        Animated.parallel([
+          Animated.timing(carouselTapProgress, {
+            toValue: 2,
+            duration: 410,
+            easing: NativeEasing.bezier(0.16, 1, 0.3, 1),
+            useNativeDriver: true,
+          }),
+          rowTiming(firstRowProgress),
+          Animated.sequence([
+            Animated.delay(90),
+            rowTiming(secondRowProgress),
+          ]),
+        ]).start(() => {
+          carouselTapProgress.setValue(0);
+          setCarouselTapAnimating(false);
+        });
+      });
     },
-    [carouselViewportWidth, orderedSlots.length],
+    [carouselViewportWidth, carouselTapAnimating, carouselIndex, orderedSlots.length, carouselTapProgress, carouselScrollX, weightRowProgress, repsRowProgress],
   );
+
+  const carouselTapAnimatedStyle = {
+    opacity: carouselTapProgress.interpolate({
+      inputRange: [0, 0.999, 1, 1.001, 2],
+      // The outgoing page fades as a unit. On entry, the metric rows own the
+      // fade so their directional stagger remains visible.
+      outputRange: [1, 0, 0, 1, 1],
+      extrapolate: 'clamp' as const,
+    }),
+    transform: [{
+      translateX: carouselTapProgress.interpolate({
+        inputRange: [0, 0.999, 1, 1.001, 2],
+        outputRange: [
+          0,
+          -carouselTapDirection * carouselViewportWidth * 0.12,
+          -carouselTapDirection * carouselViewportWidth * 0.12,
+          carouselTapDirection * carouselViewportWidth * 0.12,
+          0,
+        ],
+        extrapolate: 'clamp',
+      }),
+    }],
+  };
+
+  const makeRowTransitionStyle = (progress: Animated.Value) => ({
+    opacity: progress.interpolate({
+      inputRange: [0, 1],
+      outputRange: [0, 1],
+      extrapolate: 'clamp' as const,
+    }),
+    transform: [{
+      translateX: progress.interpolate({
+        inputRange: [0, 1],
+        outputRange: [carouselTapDirection * 16, 0],
+        extrapolate: 'clamp' as const,
+      }),
+    }],
+  });
+  const weightRowTransitionStyle = makeRowTransitionStyle(weightRowProgress);
+  const repsRowTransitionStyle = makeRowTransitionStyle(repsRowProgress);
 
   const EXPLORE_V2_MAX_GROUP_SETS = 30;
   const canAddSet = group.totalRounds < EXPLORE_V2_MAX_GROUP_SETS;
@@ -973,37 +1067,79 @@ export function ExploreV2CurrentCard({
                       }}
                     >
                       {orderedSlots.length > 0 && carouselViewportWidth > 0 ? (
-                        <ScrollView
+                        <Animated.ScrollView
                           ref={scrollRef}
+                          style={carouselTapAnimatedStyle}
                           horizontal
                           pagingEnabled
+                          scrollEnabled={!carouselTapAnimating}
                           showsHorizontalScrollIndicator={false}
                           keyboardShouldPersistTaps="handled"
                           onMomentumScrollEnd={onCarouselScrollEnd}
+                          onScroll={Animated.event(
+                            [{ nativeEvent: { contentOffset: { x: carouselScrollX } } }],
+                            { useNativeDriver: true },
+                          )}
                           scrollEventThrottle={16}
                         >
-                          {orderedSlots.map((slot, slotIndex) => (
-                            <CurrentSetHeroPage
-                              key={slotKey(slot)}
-                              slot={slot}
-                              group={group}
-                              completedSets={completedSets}
-                              getSetDisplayValues={getSetDisplayValues}
-                              localValues={localValues}
-                              setLocalValues={setLocalValues}
-                              useKg={useKg}
-                              weightUnit={weightUnit}
-                              getBarbellMode={getBarbellMode}
-                              metricsEditable={metricsEditable}
-                              heroValueColor={heroValueColor}
-                              unitLabelColor={heroUnitColor}
-                              perSideLabelColor={perSideLabelColor}
-                              pageWidth={carouselViewportWidth}
-                              commitsRef={commitsRef}
-                              progressionValuesByItemId={progressionValuesByItemId}
-                            />
-                          ))}
-                        </ScrollView>
+                          {orderedSlots.map((slot, slotIndex) => {
+                            const pagePosition = slotIndex * carouselViewportWidth;
+                            const inputRange = [
+                              pagePosition - carouselViewportWidth,
+                              pagePosition - carouselViewportWidth * 0.2,
+                              pagePosition,
+                              pagePosition + carouselViewportWidth * 0.2,
+                              pagePosition + carouselViewportWidth,
+                            ];
+                            return (
+                              <Animated.View
+                                key={slotKey(slot)}
+                                style={{
+                                  width: carouselViewportWidth,
+                                  opacity: carouselScrollX.interpolate({
+                                    inputRange,
+                                    outputRange: [0, 0.12, 1, 0.12, 0],
+                                    extrapolate: 'clamp',
+                                  }),
+                                  transform: [{
+                                    translateX: carouselScrollX.interpolate({
+                                      inputRange,
+                                      outputRange: [
+                                        carouselViewportWidth * 0.34,
+                                        carouselViewportWidth * 0.12,
+                                        0,
+                                        -carouselViewportWidth * 0.12,
+                                        -carouselViewportWidth * 0.34,
+                                      ],
+                                      extrapolate: 'clamp',
+                                    }),
+                                  }],
+                                }}
+                              >
+                                <CurrentSetHeroPage
+                                  slot={slot}
+                                  group={group}
+                                  completedSets={completedSets}
+                                  getSetDisplayValues={getSetDisplayValues}
+                                  localValues={localValues}
+                                  setLocalValues={setLocalValues}
+                                  useKg={useKg}
+                                  weightUnit={weightUnit}
+                                  getBarbellMode={getBarbellMode}
+                                  metricsEditable={metricsEditable}
+                                  heroValueColor={heroValueColor}
+                                  unitLabelColor={heroUnitColor}
+                                  perSideLabelColor={perSideLabelColor}
+                                  pageWidth={carouselViewportWidth}
+                                  commitsRef={commitsRef}
+                                  progressionValuesByItemId={progressionValuesByItemId}
+                                  weightRowTransitionStyle={weightRowTransitionStyle}
+                                  repsRowTransitionStyle={repsRowTransitionStyle}
+                                />
+                              </Animated.View>
+                            );
+                          })}
+                        </Animated.ScrollView>
                       ) : null}
                     </View>
 
@@ -1060,37 +1196,79 @@ export function ExploreV2CurrentCard({
                     }}
                   >
                     {orderedSlots.length > 0 && carouselViewportWidth > 0 ? (
-                      <ScrollView
+                      <Animated.ScrollView
                         ref={scrollRef}
+                        style={carouselTapAnimatedStyle}
                         horizontal
                         pagingEnabled
+                        scrollEnabled={!carouselTapAnimating}
                         showsHorizontalScrollIndicator={false}
                         keyboardShouldPersistTaps="handled"
                         onMomentumScrollEnd={onCarouselScrollEnd}
+                        onScroll={Animated.event(
+                          [{ nativeEvent: { contentOffset: { x: carouselScrollX } } }],
+                          { useNativeDriver: true },
+                        )}
                         scrollEventThrottle={16}
                       >
-                        {orderedSlots.map((slot, slotIndex) => (
-                          <CurrentSetHeroPage
-                            key={slotKey(slot)}
-                            slot={slot}
-                            group={group}
-                            completedSets={completedSets}
-                            getSetDisplayValues={getSetDisplayValues}
-                            localValues={localValues}
-                            setLocalValues={setLocalValues}
-                            useKg={useKg}
-                            weightUnit={weightUnit}
-                            getBarbellMode={getBarbellMode}
-                            metricsEditable={metricsEditable}
-                            heroValueColor={heroValueColor}
-                            unitLabelColor={heroUnitColor}
-                            perSideLabelColor={perSideLabelColor}
-                            pageWidth={carouselViewportWidth}
-                            commitsRef={commitsRef}
-                            progressionValuesByItemId={progressionValuesByItemId}
-                          />
-                        ))}
-                      </ScrollView>
+                        {orderedSlots.map((slot, slotIndex) => {
+                          const pagePosition = slotIndex * carouselViewportWidth;
+                          const inputRange = [
+                            pagePosition - carouselViewportWidth,
+                            pagePosition - carouselViewportWidth * 0.2,
+                            pagePosition,
+                            pagePosition + carouselViewportWidth * 0.2,
+                            pagePosition + carouselViewportWidth,
+                          ];
+                          return (
+                            <Animated.View
+                              key={slotKey(slot)}
+                              style={{
+                                width: carouselViewportWidth,
+                                opacity: carouselScrollX.interpolate({
+                                  inputRange,
+                                  outputRange: [0, 0.12, 1, 0.12, 0],
+                                  extrapolate: 'clamp',
+                                }),
+                                transform: [{
+                                  translateX: carouselScrollX.interpolate({
+                                    inputRange,
+                                    outputRange: [
+                                      carouselViewportWidth * 0.34,
+                                      carouselViewportWidth * 0.12,
+                                      0,
+                                      -carouselViewportWidth * 0.12,
+                                      -carouselViewportWidth * 0.34,
+                                    ],
+                                    extrapolate: 'clamp',
+                                  }),
+                                }],
+                              }}
+                            >
+                              <CurrentSetHeroPage
+                                slot={slot}
+                                group={group}
+                                completedSets={completedSets}
+                                getSetDisplayValues={getSetDisplayValues}
+                                localValues={localValues}
+                                setLocalValues={setLocalValues}
+                                useKg={useKg}
+                                weightUnit={weightUnit}
+                                getBarbellMode={getBarbellMode}
+                                metricsEditable={metricsEditable}
+                                heroValueColor={heroValueColor}
+                                unitLabelColor={heroUnitColor}
+                                perSideLabelColor={perSideLabelColor}
+                                pageWidth={carouselViewportWidth}
+                                commitsRef={commitsRef}
+                                progressionValuesByItemId={progressionValuesByItemId}
+                                weightRowTransitionStyle={weightRowTransitionStyle}
+                                repsRowTransitionStyle={repsRowTransitionStyle}
+                              />
+                            </Animated.View>
+                          );
+                        })}
+                      </Animated.ScrollView>
                     ) : null}
                   </View>
 
