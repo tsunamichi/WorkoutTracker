@@ -34,6 +34,8 @@ import { getExploreV2RadiusTokens } from './exploreV2Geometry';
 
 const EXIT_EASE = Easing.bezier(...EXPLORE_V2.motion.easing.smoothExit);
 const ENTER_EASE = Easing.bezier(...EXPLORE_V2.motion.easing.smoothEnter);
+const CURRENT_OPEN_EASE = Easing.bezier(0.27, 0.54, 0, 1);
+const CURRENT_CLOSE_EASE = Easing.bezier(0.54, 0.27, 0, 1);
 const EXIT_ANTICIPATION_EASE = Easing.out(Easing.cubic);
 const PEEK = EXPLORE_V2.peekHeaderHeight;
 const STACK_BOTTOM_GAP = 0;
@@ -47,10 +49,10 @@ const EXIT_ANTICIPATION_PX = EXPLORE_V2.motion.anticipation.subtleOffset;
 const EXIT_ANTICIPATION_MS = EXPLORE_V2.motion.anticipation.subtleDuration;
 const MOTION_EXIT_MS = EXPLORE_V2.motion.duration.exit;
 const MOTION_ENTER_MS = EXPLORE_V2.motion.duration.cardEnter;
-const CURRENT_OPEN_MS = EXPLORE_V2.motion.duration.standard;
-const CURRENT_CLOSE_MS = EXPLORE_V2.motion.duration.quick;
-const UP_NEXT_HIDE_MS = EXPLORE_V2.motion.duration.quick;
-const UP_NEXT_SHOW_MS = EXPLORE_V2.motion.duration.standard;
+const CURRENT_OPEN_MS = 556;
+const CURRENT_CLOSE_MS = 480;
+const UP_NEXT_HIDE_MS = CURRENT_CLOSE_MS;
+const UP_NEXT_SHOW_MS = CURRENT_OPEN_MS;
 const CELEBRATION_ENTER_MS = EXPLORE_V2.motion.duration.page;
 const CELEBRATION_EXIT_MS = EXPLORE_V2.motion.duration.quick;
 const EXPLORE_V2_DEBUG_LAYOUT = false;
@@ -527,7 +529,7 @@ function ExploreV2ExecutionRootComponent(props: ExploreV2ExecutionRootProps) {
         if (Math.abs(currentSlideY.value - target) > 0.5) {
           currentSlideY.value = withTiming(target, {
             duration: isEntering ? CURRENT_OPEN_MS : CURRENT_CLOSE_MS,
-            easing: isEntering ? ENTER_EASE : EXIT_EASE,
+            easing: isEntering ? CURRENT_OPEN_EASE : CURRENT_CLOSE_EASE,
           });
         }
       }
@@ -545,7 +547,7 @@ function ExploreV2ExecutionRootComponent(props: ExploreV2ExecutionRootProps) {
       if (Math.abs(upNextSlideY.value - upNextTarget) > 0.5) {
         upNextSlideY.value = withTiming(upNextTarget, {
           duration: revealingComplete ? UP_NEXT_HIDE_MS : UP_NEXT_SHOW_MS,
-          easing: revealingComplete ? EXIT_EASE : ENTER_EASE,
+          easing: revealingComplete ? CURRENT_CLOSE_EASE : CURRENT_OPEN_EASE,
         });
       }
     },

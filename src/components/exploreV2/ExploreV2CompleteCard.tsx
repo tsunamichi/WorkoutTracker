@@ -2,11 +2,11 @@ import React, { useCallback, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Pressable, Keyboard } from 'react-native';
 import { Platform } from 'react-native';
 import Animated, { useAnimatedStyle, interpolateColor, type SharedValue } from 'react-native-reanimated';
+import Svg, { Circle, Path } from 'react-native-svg';
 import { EXPLORE_V2, COMPLETED_EXERCISE_LIST_LAYOUT } from './exploreV2Tokens';
 import { exploreV2CardBorderColor } from './exploreV2TimerBorderColor';
 import { TYPOGRAPHY } from '../../constants';
 import { useAppTheme } from '../../theme/useAppTheme';
-import { IconChevronDown } from '../icons';
 import { formatWeightForLoad } from '../../utils/weight';
 import type { ExploreV2Group } from './exploreV2Types';
 import {
@@ -130,15 +130,14 @@ export function ExploreV2CompleteCard({
       color: interpolateColor(menuToneProgress.value, [0, 1], [baseColor, menuMutedInk]),
     };
   }, [containerPrimary, accentPrimaryDark, currentCardSurface, menuMutedInk, menuToneProgress]);
-  const chevronIdleOpacityStyle = useAnimatedStyle(() => ({
-    opacity: 1 - restThemeProgress.value * (1 - exploreV2WorkBlueProgress.value),
-  }));
-  const chevronTimerOpacityStyle = useAnimatedStyle(() => ({
-    opacity: restThemeProgress.value * (1 - exploreV2WorkBlueProgress.value),
-  }));
-  const chevronWorkOpacityStyle = useAnimatedStyle(() => ({
-    opacity: restThemeProgress.value * exploreV2WorkBlueProgress.value,
-  }));
+  const completedExerciseCount = completedGroupIndexes.reduce(
+    (count, groupIndex) => count + (exerciseGroups[groupIndex]?.exercises.length ?? 0),
+    0,
+  );
+  const totalExerciseCount = exerciseGroups.reduce((count, group) => count + group.exercises.length, 0);
+  const completionProgress = totalExerciseCount > 0
+    ? Math.min(1, completedExerciseCount / totalExerciseCount)
+    : 0;
 
   const bottomCornerRadius = isExpanded ? frontBottomRadius : coveredBottomRadius;
   const shellAnimatedStyle = useAnimatedStyle(() => {
@@ -325,16 +324,23 @@ export function ExploreV2CompleteCard({
         <Pressable style={styles.headerTitlePress} onPress={onHeaderPress}>
           <Animated.Text style={[styles.headerLabel, headerChromeAnimatedStyle]}>Completed</Animated.Text>
         </Pressable>
-        <Pressable onPress={onHeaderPress} style={styles.countOrPlusSlot}>
-          <Animated.View style={[styles.chevronLayer, chevronIdleOpacityStyle]} pointerEvents="none">
-            <IconChevronDown size={18} color={menuThemeActive ? menuMutedInk : themeColors.containerPrimary} />
-          </Animated.View>
-          <Animated.View style={[styles.chevronLayer, chevronTimerOpacityStyle]} pointerEvents="none">
-            <IconChevronDown size={18} color={menuThemeActive ? menuMutedInk : themeColors.containerPrimary} />
-          </Animated.View>
-          <Animated.View style={[styles.chevronLayer, chevronWorkOpacityStyle]} pointerEvents="none">
-            <IconChevronDown size={18} color={menuThemeActive ? menuMutedInk : themeColors.containerPrimary} />
-          </Animated.View>
+        <Pressable onPress={onHeaderPress} style={styles.completionSummary}>
+          <Animated.Text style={[styles.headerCount, headerChromeAnimatedStyle]}>
+            {completedExerciseCount}/{totalExerciseCount}
+          </Animated.Text>
+          <Svg height="14" width="14" viewBox="0 0 16 16" pointerEvents="none">
+            <Circle cx="8" cy="8" r="8" fill={themeColors.containerPrimaryDark} />
+            {completionProgress >= 0.999 ? (
+              <Circle cx="8" cy="8" r="8" fill={themeColors.containerTertiary} />
+            ) : completionProgress > 0 ? (
+              <Path
+                d={`M 8 8 L 8 0 A 8 8 0 ${completionProgress > 0.5 ? 1 : 0} 1 ${
+                  8 + 8 * Math.sin(2 * Math.PI * completionProgress)
+                } ${8 - 8 * Math.cos(2 * Math.PI * completionProgress)} Z`}
+                fill={themeColors.containerTertiary}
+              />
+            ) : null}
+          </Svg>
         </Pressable>
       </View>
       <Animated.ScrollView
@@ -425,10 +431,20 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
   },
   headerCount: {
-    fontSize: 15,
-    fontWeight: '600',
+    ...TYPOGRAPHY.legal,
+    fontWeight: '500',
+    letterSpacing: 0,
     fontVariant: ['tabular-nums'],
     textAlign: 'center',
+  },
+  completionSummary: {
+    minWidth: 54,
+    height: 32,
+    paddingHorizontal: 4,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    gap: 8,
   },
   scroll: {
     flex: 1,

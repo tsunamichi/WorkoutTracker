@@ -572,6 +572,7 @@ export function ExploreV2CurrentCard({
   const carouselTapProgress = useRef(new Animated.Value(0)).current;
   const weightRowProgress = useRef(new Animated.Value(1)).current;
   const repsRowProgress = useRef(new Animated.Value(1)).current;
+  const ctaTransitionProgress = useRef(new Animated.Value(1)).current;
   const [carouselTapDirection, setCarouselTapDirection] = useState<1 | -1>(1);
   const [carouselTapAnimating, setCarouselTapAnimating] = useState(false);
   const commitsRef = useRef<Record<string, () => { weight: number; reps: number } | void>>({});
@@ -677,14 +678,10 @@ export function ExploreV2CurrentCard({
   const v2DisabledInk = hexToRgba(containerTertiary, 0.2);
   const heroValueColor = menuThemeActive
     ? menuMutedInk
-    : (isV2Theme && useDisabledHeroPalette
-      ? v2DisabledInk
-      : (useDisabledHeroPalette ? accentSecondaryDisabled : accentPrimary));
+    : (useDisabledHeroPalette ? themeColors.containerPrimaryDark : accentPrimary);
   const heroUnitColor = menuThemeActive
     ? menuMutedInk
-    : (isV2Theme && useDisabledHeroPalette
-      ? v2DisabledInk
-      : (useDisabledHeroPalette ? accentSecondaryDisabled : accentPrimary));
+    : (useDisabledHeroPalette ? themeColors.containerPrimaryDark : accentPrimary);
   const settingsDisabledTone = settingsTimerBlocksChrome ? accentSecondaryDisabled : accentSecondarySoft;
   const currentHeaderInk = menuThemeActive ? menuMutedInk : (isV2Theme ? containerTertiary : accentSecondarySoft);
   const settingsInk = menuThemeActive
@@ -815,6 +812,7 @@ export function ExploreV2CurrentCard({
       carouselTapProgress.setValue(1);
       weightRowProgress.setValue(0);
       repsRowProgress.setValue(0);
+      ctaTransitionProgress.setValue(0);
       requestAnimationFrame(() => {
         const targetX = clamped * carouselViewportWidth;
         scrollRef.current?.scrollTo({ x: targetX, animated: false });
@@ -829,6 +827,10 @@ export function ExploreV2CurrentCard({
         });
         const firstRowProgress = direction === 1 ? weightRowProgress : repsRowProgress;
         const secondRowProgress = direction === 1 ? repsRowProgress : weightRowProgress;
+        const delayedRowTiming = (delay: number, progress: Animated.Value) =>
+          delay === 0
+            ? rowTiming(progress)
+            : Animated.sequence([Animated.delay(delay), rowTiming(progress)]);
         Animated.parallel([
           Animated.timing(carouselTapProgress, {
             toValue: 2,
@@ -836,18 +838,16 @@ export function ExploreV2CurrentCard({
             easing: NativeEasing.bezier(0.16, 1, 0.3, 1),
             useNativeDriver: true,
           }),
-          rowTiming(firstRowProgress),
-          Animated.sequence([
-            Animated.delay(90),
-            rowTiming(secondRowProgress),
-          ]),
+          delayedRowTiming(direction === 1 ? 0 : 90, firstRowProgress),
+          delayedRowTiming(direction === 1 ? 90 : 180, secondRowProgress),
+          delayedRowTiming(direction === 1 ? 180 : 0, ctaTransitionProgress),
         ]).start(() => {
           carouselTapProgress.setValue(0);
           setCarouselTapAnimating(false);
         });
       });
     },
-    [carouselViewportWidth, carouselTapAnimating, carouselIndex, orderedSlots.length, carouselTapProgress, carouselScrollX, weightRowProgress, repsRowProgress],
+    [carouselViewportWidth, carouselTapAnimating, carouselIndex, orderedSlots.length, carouselTapProgress, carouselScrollX, weightRowProgress, repsRowProgress, ctaTransitionProgress],
   );
 
   const carouselTapAnimatedStyle = {
@@ -889,6 +889,7 @@ export function ExploreV2CurrentCard({
   });
   const weightRowTransitionStyle = makeRowTransitionStyle(weightRowProgress);
   const repsRowTransitionStyle = makeRowTransitionStyle(repsRowProgress);
+  const ctaTransitionStyle = makeRowTransitionStyle(ctaTransitionProgress);
 
   const EXPLORE_V2_MAX_GROUP_SETS = 30;
   const canAddSet = group.totalRounds < EXPLORE_V2_MAX_GROUP_SETS;
@@ -1145,18 +1146,20 @@ export function ExploreV2CurrentCard({
 
                     {!hideHeroFooterForKeyboard ? (
                       <View style={styles.footerRow}>
-                        <AnimatedTouchableOpacity
-                          style={[
-                            styles.ctaPill,
-                            ctaBgStyle,
-                            !logPressable && !inactiveSetPreview && styles.ctaPillDisabled,
-                          ]}
-                          onPress={onLogPress}
-                          disabled={!logPressable}
-                          activeOpacity={0.88}
-                        >
-                          <Reanimated.Text style={[styles.ctaPillText, ctaLabelStyle]}>{ctaLabel}</Reanimated.Text>
-                        </AnimatedTouchableOpacity>
+                        <Animated.View style={ctaTransitionStyle}>
+                          <AnimatedTouchableOpacity
+                            style={[
+                              styles.ctaPill,
+                              ctaBgStyle,
+                              !logPressable && !inactiveSetPreview && styles.ctaPillDisabled,
+                            ]}
+                            onPress={onLogPress}
+                            disabled={!logPressable}
+                            activeOpacity={0.88}
+                          >
+                            <Reanimated.Text style={[styles.ctaPillText, ctaLabelStyle]}>{ctaLabel}</Reanimated.Text>
+                          </AnimatedTouchableOpacity>
+                        </Animated.View>
 
                         {renderPaginationColumn()}
                       </View>
@@ -1274,18 +1277,20 @@ export function ExploreV2CurrentCard({
 
                   {!hideHeroFooterForKeyboard ? (
                     <View style={styles.footerRow}>
-                      <AnimatedTouchableOpacity
-                        style={[
-                          styles.ctaPill,
-                          ctaBgStyle,
-                          !logPressable && !inactiveSetPreview && styles.ctaPillDisabled,
-                        ]}
-                        onPress={onLogPress}
-                        disabled={!logPressable}
-                        activeOpacity={0.88}
-                      >
-                        <Reanimated.Text style={[styles.ctaPillText, ctaLabelStyle]}>{ctaLabel}</Reanimated.Text>
-                      </AnimatedTouchableOpacity>
+                      <Animated.View style={ctaTransitionStyle}>
+                        <AnimatedTouchableOpacity
+                          style={[
+                            styles.ctaPill,
+                            ctaBgStyle,
+                            !logPressable && !inactiveSetPreview && styles.ctaPillDisabled,
+                          ]}
+                          onPress={onLogPress}
+                          disabled={!logPressable}
+                          activeOpacity={0.88}
+                        >
+                          <Reanimated.Text style={[styles.ctaPillText, ctaLabelStyle]}>{ctaLabel}</Reanimated.Text>
+                        </AnimatedTouchableOpacity>
+                      </Animated.View>
 
                       {renderPaginationColumn()}
                     </View>

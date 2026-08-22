@@ -13,7 +13,7 @@ import { TYPOGRAPHY } from '../../constants';
 import { EXECUTION_CTA_HEIGHT } from '../execution/executionCtaTokens';
 import { useAppTheme } from '../../theme/useAppTheme';
 import { useTranslation } from '../../i18n/useTranslation';
-import { IconChevronDown, IconTrash } from '../icons';
+import { IconTrash } from '../icons';
 import { TertiaryButton } from '../common/UnderlinedActionButton';
 import type { ExploreV2Group } from './exploreV2Types';
 
@@ -108,22 +108,19 @@ function UpNextQueueRow({
   const { colors: themeColors } = useAppTheme();
   const pageBg = themeColors.canvasLight;
   const menuMutedInk = themeColors.textMeta;
-  const textMeta = themeColors.textMeta;
-  const accentPrimaryDark = themeColors.accentPrimaryDark;
-  const textMetaTimer = themeColors.textMetaTimer;
   const [roundAnchor, setRoundAnchor] = useState({ top: 0, left: 0 });
   const roundsColorStyle = useAnimatedStyle(() => {
-    const b = restThemeProgress.value;
-    const w = exploreV2WorkBlueProgress.value;
-    const g = restChromeGateSV.value;
-    const pRest = b * g * (1 - w);
-    const pWork = b * w;
-    const restCol = interpolateColor(pRest, [0, 1], [textMeta, accentPrimaryDark]);
-    const base = interpolateColor(pWork, [0, 1], [restCol, textMetaTimer]);
     return {
-      color: interpolateColor(menuToneProgress.value, [0, 1], [base, menuMutedInk]),
+      color: interpolateColor(
+        menuToneProgress.value,
+        [0, 1],
+        [
+          interpolateColor(exploreV2WorkBlueProgress.value, [0, 1], [themeColors.containerPrimary, pageBg]),
+          menuMutedInk,
+        ],
+      ),
     };
-  }, [textMeta, accentPrimaryDark, textMetaTimer, menuToneProgress, menuMutedInk, pageBg]);
+  }, [pageBg, themeColors.containerPrimary, menuMutedInk, exploreV2WorkBlueProgress, menuToneProgress]);
   const rowNameInkStyle = useAnimatedStyle(() => ({
     color: interpolateColor(
       menuToneProgress.value,
@@ -140,7 +137,7 @@ function UpNextQueueRow({
     const lines = e?.nativeEvent?.lines;
     if (!Array.isArray(lines) || lines.length === 0) return;
     const last = lines[lines.length - 1];
-    const fallbackLineHeight = TYPOGRAPHY.h2.lineHeight ?? 32;
+    const fallbackLineHeight = 32;
     const nextTop =
       typeof last?.y === 'number'
         ? last.y
@@ -310,15 +307,6 @@ export function ExploreV2UpNextCard({
   }, [containerPrimary, accentPrimaryDark, currentCardSurface, menuMutedInk, menuToneProgress]);
   /** Add / Remove footer links — `containerPrimary` ink (menu open: muted). */
   const tertiaryActionInk = menuThemeActive ? menuMutedInk : containerPrimary;
-  const chevronIdleOpacityStyle = useAnimatedStyle(() => ({
-    opacity: 1 - restThemeProgress.value * (1 - exploreV2WorkBlueProgress.value),
-  }));
-  const chevronTimerOpacityStyle = useAnimatedStyle(() => ({
-    opacity: restThemeProgress.value * (1 - exploreV2WorkBlueProgress.value),
-  }));
-  const chevronWorkOpacityStyle = useAnimatedStyle(() => ({
-    opacity: restThemeProgress.value * exploreV2WorkBlueProgress.value,
-  }));
 
   const bottomCornerRadius = isExpanded ? frontBottomRadius : coveredBottomRadius;
   const shellAnimatedStyle = useAnimatedStyle(() => {
@@ -370,17 +358,6 @@ export function ExploreV2UpNextCard({
       ) : null}
       <Pressable style={[styles.headerRow, !hasCompletePresent && styles.headerRowNoComplete]} onPress={onHeaderPress}>
         <Reanimated.Text style={[styles.headerLabel, headerChromeAnimatedStyle]}>Up Next</Reanimated.Text>
-        <View style={styles.countOrPlusSlot}>
-          <Reanimated.View style={[styles.chevronLayer, chevronIdleOpacityStyle]} pointerEvents="none">
-            <IconChevronDown size={18} color={menuThemeActive ? menuMutedInk : themeColors.containerPrimary} />
-          </Reanimated.View>
-          <Reanimated.View style={[styles.chevronLayer, chevronTimerOpacityStyle]} pointerEvents="none">
-            <IconChevronDown size={18} color={menuThemeActive ? menuMutedInk : themeColors.containerPrimary} />
-          </Reanimated.View>
-          <Reanimated.View style={[styles.chevronLayer, chevronWorkOpacityStyle]} pointerEvents="none">
-            <IconChevronDown size={18} color={menuThemeActive ? menuMutedInk : themeColors.containerPrimary} />
-          </Reanimated.View>
-        </View>
       </Pressable>
       <View style={styles.scrollOuter}>
         <Reanimated.ScrollView
@@ -641,8 +618,8 @@ const styles = StyleSheet.create({
   },
   /** Inline rounds count, rendered as regular text (not superscript). */
   roundsInline: {
-    ...TYPOGRAPHY.body,
-    fontWeight: '400',
+    fontSize: 14,
+    fontWeight: '500',
     includeFontPadding: false,
     position: 'absolute',
   },
