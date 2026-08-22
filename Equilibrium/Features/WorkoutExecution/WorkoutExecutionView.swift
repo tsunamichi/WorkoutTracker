@@ -6,8 +6,13 @@ struct WorkoutExecutionView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.scenePhase) private var scenePhase
     @State private var completionFeedback = 0
+    @State private var confirmsReset = false
+    @State private var confirmsDelete = false
+    @State private var editsRestDuration = false
+    private let historyRepository: (any ExerciseHistoryRepository)?
 
-    init(id: ScheduledWorkoutID, repository: any ScheduledWorkoutRepository, weightUnit: WeightUnit = .pounds, didPersist: @escaping (ScheduledWorkout) -> Void = { _ in }) {
+    init(id: ScheduledWorkoutID, repository: any ScheduledWorkoutRepository, historyRepository: (any ExerciseHistoryRepository)? = nil, weightUnit: WeightUnit = .pounds, didPersist: @escaping (ScheduledWorkout) -> Void = { _ in }) {
+        self.historyRepository = historyRepository ?? (repository as? SwiftDataRepository)
         _model = State(initialValue: WorkoutExecutionModel(workoutID: id, repository: repository, weightUnit: weightUnit, didPersist: didPersist))
     }
 
@@ -25,6 +30,17 @@ struct WorkoutExecutionView: View {
         .task { await model.activate() }
         .onChange(of: scenePhase) { _, phase in if phase == .active { model.refreshRest() } }
         .sensoryFeedback(.success, trigger: completionFeedback)
+        .alert("Reset workout?", isPresented: $confirmsReset) {
+            Button("Cancel", role: .cancel) {}
+            Button("Reset", role: .destructive) { Task { _ = await model.resetWorkout() } }
+        } message: { Text("Clear all logged progress for this workout? This cannot be undone.") }
+        .alert("Delete workout?", isPresented: $confirmsDelete) {
+            Button("Cancel", role: .cancel) {}
+            Button("Delete", role: .destructive) { Task { if await model.deleteWorkout() { dismiss() } } }
+        } message: { Text("Remove this scheduled workout? Exercise definitions and templates are not affected.") }
+        .sheet(isPresented: $editsRestDuration) {
+            RestDurationEditor(initialSeconds: model.configuredRestDuration) { seconds in await model.setRestDuration(seconds) }
+        }
     }
 
     @ToolbarContentBuilder private var workoutToolbar: some ToolbarContent {
@@ -35,8 +51,18 @@ struct WorkoutExecutionView: View {
         ToolbarItem(placement: .topBarTrailing) {
             if model.showsExecutionOptions {
                 Menu("Options", systemImage: "ellipsis") {
+                    if model.canEditRestDuration {
+                        Button("Rest duration", systemImage: "timer") { editsRestDuration = true }
+                    }
+                    if let shareText = model.shareText {
+                        ShareLink(item: shareText, subject: Text(model.workout?.titleSnapshot ?? "Workout")) {
+                            Label("Share workout", systemImage: "square.and.arrow.up")
+                        }
+                    }
                     Button("Mark as complete", systemImage: "checkmark.circle") { completeWorkout() }
                         .disabled(!model.canComplete)
+                    Button("Reset workout", systemImage: "arrow.counterclockwise", role: .destructive) { confirmsReset = true }
+                    Button("Delete workout", systemImage: "trash", role: .destructive) { confirmsDelete = true }
                 }
                 .accessibilityLabel("Workout options")
                 .accessibilityHint(model.canComplete ? "Contains available workout actions" : "Workout completion becomes available after every required set is logged")
@@ -121,6 +147,12 @@ struct WorkoutExecutionView: View {
                     Text(model.isReadOnly ? "Workout complete." : "Every required set is logged.").font(EQTypography.sectionTitle)
                 }
             }
+            if let exercise = model.performanceExercise, let historyRepository {
+                NavigationLink {
+                    ExercisePerformanceView(exerciseID: exercise.exerciseID, fallbackName: exercise.nameSnapshot, repository: historyRepository, weightUnit: model.weightUnit)
+                } label: { Label("Previous performance", systemImage: "chart.xyaxis.line").frame(minHeight: EQDimension.minimumTouch) }
+                .accessibilityHint("Shows completed working sets, trend, and personal record")
+            }
             if model.canComplete {
                 Button { completeWorkout() } label: { Label("Complete workout", systemImage: "checkmark.circle.fill").frame(maxWidth: .infinity, minHeight: EQDimension.minimumTouch) }
                     .buttonStyle(.borderedProminent).buttonBorderShape(.roundedRectangle(radius: EQRadius.control))
@@ -166,6 +198,32 @@ struct WorkoutExecutionView: View {
         .animation(reduceMotion ? nil : .easeOut(duration: EQMotion.completion), value: model.showsCompletion)
         .accessibilityAddTraits(.isModal)
     }
+}
+
+private struct RestDurationEditor: View {
+    @Environment(\.dismiss) private var dismiss
+    @State private var seconds: Double
+    let save: (TimeInterval) async -> Bool
+    init(initialSeconds: TimeInterval, save: @escaping (TimeInterval) async -> Bool) {
+        _seconds = State(initialValue: min(300, max(15, (initialSeconds / 5).rounded() * 5))); self.save = save
+    }
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("Rest time") {
+                    Text(durationText).font(EQTypography.metric).monospacedDigit()
+                    Slider(value: $seconds, in: 15...300, step: 5).accessibilityValue(durationText)
+                }
+                Section { Text("Applies to subsequent rests for the active exercise. An active countdown is unchanged.").font(EQTypography.caption).foregroundStyle(EQColor.secondaryText) }
+            }
+            .scrollContentBackground(.hidden).background(EQColor.canvas).navigationTitle("Rest duration").navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+                ToolbarItem(placement: .confirmationAction) { Button("Save") { Task { if await save(seconds) { dismiss() } } } }
+            }
+        }.presentationDetents([.medium])
+    }
+    private var durationText: String { String(format: "%d:%02d", Int(seconds) / 60, Int(seconds) % 60) }
 }
 
 private struct FirstSetView: View {

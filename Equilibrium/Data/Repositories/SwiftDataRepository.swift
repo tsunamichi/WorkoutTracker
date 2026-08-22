@@ -20,17 +20,11 @@ public final class SwiftDataRepository: ExerciseRepository, WorkoutTemplateRepos
         }
     }
     public func latestExerciseLog(exerciseID: ExerciseID) async throws -> LatestExerciseLog? {
-        let candidates = try await allWorkouts().filter { $0.status == .completed }.compactMap { workout -> LatestExerciseLog? in
-            guard let exercise = workout.exercises.last(where: { $0.exerciseID == exerciseID }) else { return nil }
-            let completedByPrescription = Dictionary(uniqueKeysWithValues: exercise.loggedSets.filter { $0.completedAt != nil }.compactMap { log in log.prescriptionID.map { ($0, log) } })
-            let completed = exercise.prescriptions.compactMap { completedByPrescription[$0.id] }
-            guard !completed.isEmpty else { return nil }
-            return .init(exerciseID: exerciseID, workoutID: workout.id, occurredAt: workout.completedAt ?? workout.updatedAt, sets: completed)
-        }
-        return candidates.sorted {
-            if $0.occurredAt != $1.occurredAt { return $0.occurredAt > $1.occurredAt }
-            return $0.workoutID.rawValue > $1.workoutID.rawValue
-        }.first
+        guard let occurrence = try await exercisePerformance(exerciseID: exerciseID).latestOccurrence else { return nil }
+        return .init(exerciseID: exerciseID, workoutID: occurrence.workoutID, occurredAt: occurrence.occurredAt, sets: occurrence.sets)
+    }
+    public func exercisePerformance(exerciseID: ExerciseID) async throws -> ExercisePerformance {
+        ExercisePerformanceQuery.performance(exerciseID: exerciseID, workouts: try await allWorkouts())
     }
     public func exercise(id: ExerciseID) async throws -> ExerciseDefinition? {
         let key = id.rawValue; var descriptor = FetchDescriptor<ExerciseDefinitionRecord>(predicate: #Predicate { $0.id == key }); descriptor.fetchLimit = 1
@@ -212,6 +206,40 @@ public final class SwiftDataRepository: ExerciseRepository, WorkoutTemplateRepos
         guard WorkoutExecutionQuery.canComplete(workout) else { throw RepositoryError.incompleteWorkout }
         workout.status = .completed
         workout.completedAt = date
+        workout.updatedAt = date
+        try await update(workout)
+        return workout
+    }
+    public func resetWorkout(id: ScheduledWorkoutID, at date: Date = .now) async throws -> ScheduledWorkout {
+        guard var workout = try await workout(id: id) else { throw RepositoryError.notFound }
+        try requireCurrentDay(workout)
+        guard workout.status == .inProgress else { throw workout.status == .completed ? RepositoryError.immutableCompletedWorkout : RepositoryError.workoutNotInProgress }
+        for index in workout.exercises.indices {
+            workout.exercises[index].loggedSets = []
+            workout.exercises[index].skippedAt = nil
+        }
+        workout.updatedAt = date
+        try await update(workout)
+        return workout
+    }
+    public func deleteWorkout(id: ScheduledWorkoutID) async throws {
+        guard let workout = try await workout(id: id) else { throw RepositoryError.notFound }
+        try requireCurrentDay(workout)
+        guard workout.status != .completed else { throw RepositoryError.immutableCompletedWorkout }
+        let key = id.rawValue
+        var descriptor = FetchDescriptor<ScheduledWorkoutRecord>(predicate: #Predicate { $0.id == key }); descriptor.fetchLimit = 1
+        guard let record = try context.fetch(descriptor).first else { throw RepositoryError.notFound }
+        context.delete(record)
+        try saveOrRollback()
+    }
+    public func setRestDuration(workoutID: ScheduledWorkoutID, exerciseID: ScheduledExerciseID, seconds: TimeInterval, at date: Date = .now) async throws -> ScheduledWorkout {
+        guard seconds.isFinite, seconds >= 15, seconds <= 300, seconds.rounded() == seconds,
+              Int(seconds) % 5 == 0 else { throw RepositoryError.invalidRestDuration }
+        guard var workout = try await workout(id: workoutID) else { throw RepositoryError.notFound }
+        try requireCurrentDay(workout)
+        guard workout.status == .inProgress else { throw workout.status == .completed ? RepositoryError.immutableCompletedWorkout : RepositoryError.workoutNotInProgress }
+        guard let index = workout.exercises.firstIndex(where: { $0.id == exerciseID }) else { throw RepositoryError.notFound }
+        workout.exercises[index].restDuration = seconds
         workout.updatedAt = date
         try await update(workout)
         return workout

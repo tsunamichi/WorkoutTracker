@@ -57,6 +57,13 @@ final class WorkoutExecutionModel {
         guard let exercise = currentExercise, exercise.prescriptions.indices.contains(selectedSetIndex) else { return nil }
         return exercise.prescriptions[selectedSetIndex]
     }
+    var performanceExercise: ScheduledExercise? { restState == nil ? currentExercise : nil }
+    var restEditableExercise: ScheduledExercise? { restState == nil ? currentExercise : nil }
+    var canEditRestDuration: Bool { restEditableExercise != nil && showsExecutionOptions }
+    var shareText: String? { workout.map { WorkoutShareText.build(workout: $0, unit: weightUnit) } }
+    var configuredRestDuration: TimeInterval {
+        restEditableExercise?.restDuration ?? defaultRestDuration
+    }
 
     func activate() async {
         guard !isActivated else { return }
@@ -146,6 +153,25 @@ final class WorkoutExecutionModel {
         } catch { errorMessage = message(for: error) }
     }
 
+    func resetWorkout() async -> Bool {
+        do {
+            let reset = try await repository.resetWorkout(id: workoutID, at: now())
+            stopRest(); focusedExerciseID = nil; selectedSetIndex = 0; accept(reset); selectFirstIncompleteSet(); errorMessage = nil
+            return true
+        } catch { errorMessage = message(for: error); return false }
+    }
+
+    func deleteWorkout() async -> Bool {
+        do { try await repository.deleteWorkout(id: workoutID); stopRest(); errorMessage = nil; return true }
+        catch { errorMessage = message(for: error); return false }
+    }
+
+    func setRestDuration(_ seconds: TimeInterval) async -> Bool {
+        guard let exerciseID = restEditableExercise?.id else { return false }
+        do { accept(try await repository.setRestDuration(workoutID: workoutID, exerciseID: exerciseID, seconds: seconds, at: now())); errorMessage = nil; return true }
+        catch { errorMessage = message(for: error); return false }
+    }
+
     private func accept(_ value: ScheduledWorkout) { workout = value; didPersist(value) }
     private func selectFirstIncompleteSet() {
         guard let exercise = currentExercise else { selectedSetIndex = 0; return }
@@ -177,6 +203,7 @@ final class WorkoutExecutionModel {
         case .immutableCompletedWorkout: return "Completed workouts are read-only."
         case .workoutNotCurrentDay: return "Only today's workout can be updated."
         case .invalidSetInput: return "Enter a valid set value."
+        case .invalidRestDuration: return "Choose a rest duration from 15 seconds to 5 minutes."
         default: return "The workout could not be updated."
         }
     }

@@ -84,11 +84,11 @@ struct HomeView: View {
     @ViewBuilder private func destination(_ route: HomeRoute) -> some View {
         switch route {
         case .workout(let id):
-            WorkoutExecutionView(id: id, repository: repository, weightUnit: WeightUnit(rawValue: weightUnitRaw) ?? .pounds) { model.applyPersistedWorkout($0) }
+            WorkoutExecutionView(id: id, repository: repository, historyRepository: historyRepository, weightUnit: WeightUnit(rawValue: weightUnitRaw) ?? .pounds) { model.applyPersistedWorkout($0) }
                 .onDisappear { Task { await model.load() } }
                 .modifier(HomeZoomModifier(id: id.rawValue, namespace: workoutTransition, reduceMotion: reduceMotion))
         case .settings: SettingsShellView()
-        case .history: HistoryShellView(workouts: model.workouts)
+        case .history: WorkoutHistoryView(repository: repository, historyRepository: historyRepository)
         }
     }
 }
