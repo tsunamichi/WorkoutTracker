@@ -21,6 +21,9 @@ type Props = {
   useKg: boolean;
   weightUnit: string;
   onOpenExercise: (groupIndex: number, exerciseIndex: number) => void;
+  onSelectIncompleteGroup?: (groupIndex: number) => void;
+  /** Space occupied by a card peeking above this card's lower edge. */
+  scrollBottomInset?: number;
   onHeaderPress: () => void;
   /** Card is expanded (primary) — show plus instead of row count */
   isExpanded: boolean;
@@ -60,6 +63,8 @@ export function ExploreV2CompleteCard({
   useKg,
   weightUnit,
   onOpenExercise,
+  onSelectIncompleteGroup,
+  scrollBottomInset = 0,
   onHeaderPress,
   isExpanded,
   frontBottomRadius,
@@ -145,24 +150,26 @@ export function ExploreV2CompleteCard({
     const w = exploreV2WorkBlueProgress.value;
     const whenUpBg = interpolateColor(w, [0, 1], [amberBand, workUpNextBg]);
     const baseBg = interpolateColor(b, [0, 1], [upNextBaseBg, whenUpBg]);
+    const resolvedBg = editValid ? currentCardSurface : baseBg;
     return {
-      backgroundColor: interpolateColor(menuToneProgress.value, [0, 1], [baseBg, menuMutedBg]),
+      backgroundColor: interpolateColor(menuToneProgress.value, [0, 1], [resolvedBg, menuMutedBg]),
       borderColor: exploreV2CardBorderColor(b, w, {
         pageIdle: themeColors.canvasLight,
         pageRest: accentPrimary,
         pageWork: themeColors.backgroundTimer,
       }),
     };
-  }, [upNextBaseBg, amberBand, workUpNextBg, themeColors.canvasLight, themeColors.backgroundTimer, accentPrimary, menuMutedBg, menuToneProgress]);
+  }, [editValid, currentCardSurface, upNextBaseBg, amberBand, workUpNextBg, themeColors.canvasLight, themeColors.backgroundTimer, accentPrimary, menuMutedBg, menuToneProgress]);
   const scrollContentAnimatedStyle = useAnimatedStyle(() => {
     const b = restThemeProgress.value;
     const w = exploreV2WorkBlueProgress.value;
     const whenUpBg = interpolateColor(w, [0, 1], [amberBand, workUpNextBg]);
     const baseBg = interpolateColor(b, [0, 1], [upNextBaseBg, whenUpBg]);
+    const resolvedBg = editValid ? currentCardSurface : baseBg;
     return {
-      backgroundColor: interpolateColor(menuToneProgress.value, [0, 1], [baseBg, menuMutedBg]),
+      backgroundColor: interpolateColor(menuToneProgress.value, [0, 1], [resolvedBg, menuMutedBg]),
     };
-  }, [upNextBaseBg, amberBand, workUpNextBg, menuMutedBg, menuToneProgress]);
+  }, [editValid, currentCardSurface, upNextBaseBg, amberBand, workUpNextBg, menuMutedBg, menuToneProgress]);
   const rowTitleInkStyle = useAnimatedStyle(() => ({
     color: interpolateColor(
       menuToneProgress.value,
@@ -173,25 +180,37 @@ export function ExploreV2CompleteCard({
       ],
     ),
   }), [containerPrimary, pageBgChrome, menuMutedInk, exploreV2WorkBlueProgress, menuToneProgress]);
-  const rows = completedGroupIndexes.flatMap(gi => {
-    const g = exerciseGroups[gi];
-    if (!g) return [];
-    return g.exercises.map(ex => ({ gi, g, ex }));
-  });
+  const rows = exerciseGroups
+    .flatMap((g, gi) => g.exercises.map(ex => ({
+      gi,
+      g,
+      ex,
+      hasLogs: Array.from({ length: g.totalRounds }).some((_, roundIdx) =>
+        completedSets.has(`${ex.id}-set-${roundIdx}`)),
+    })))
+    .sort((a, b) => Number(a.hasLogs) - Number(b.hasLogs));
+  const hasCompletedRows = rows.some(row => row.hasLogs);
+  const firstCompletedRowIndex = rows.findIndex(row => row.hasLogs);
 
   const rowsContent = (
     <>
-        {rows.map(({ gi, g, ex }, index) => (
+        {rows.map(({ gi, g, ex, hasLogs }, index) => (
+          <React.Fragment key={`${g.id}-${ex.id}`}>
+          {hasCompletedRows && hasLogs && index === firstCompletedRowIndex ? (
+            <View style={styles.sectionHeadingRow}>
+              <Animated.Text style={[styles.sectionLabel, { color: themeColors.textMeta }]}>Completed</Animated.Text>
+              <View style={[styles.sectionDivider, { backgroundColor: themeColors.textMeta }]} />
+            </View>
+          ) : null}
           <TouchableOpacity
-            key={`${g.id}-${ex.id}`}
-            style={[
-              styles.row,
-              index < rows.length - 1 && styles.rowWithDivider,
-              index < rows.length - 1 && { borderBottomColor: themeColors.border },
-            ]}
+            style={[styles.row, index < rows.length - 1 && styles.rowSpacing]}
             onPress={() => {
               const exIdx = g.exercises.findIndex(e => e.id === ex.id);
-              onOpenExercise(gi, exIdx);
+              if (completedGroupIndexes.includes(gi)) {
+                onOpenExercise(gi, exIdx);
+              } else {
+                onSelectIncompleteGroup?.(gi);
+              }
             }}
             activeOpacity={0.75}
           >
@@ -202,6 +221,7 @@ export function ExploreV2CompleteCard({
             </View>
             <View style={styles.valCol}>
               {Array.from({ length: g.totalRounds }).map((_, roundIdx) => {
+                if (!completedSets.has(`${ex.id}-set-${roundIdx}`)) return null;
                 const vals = getSetDisplayValues(ex.id, roundIdx, ex.weight ?? 0, ex.reps ?? 0);
                 return (
                   <View
@@ -236,10 +256,8 @@ export function ExploreV2CompleteCard({
               })}
             </View>
           </TouchableOpacity>
+          </React.Fragment>
         ))}
-        {rows.length === 0 && !editValid && (
-          <Text style={[styles.empty, { color: menuThemeActive ? menuMutedInk : textMeta }]}>Nothing completed yet.</Text>
-        )}
     </>
   );
 
@@ -258,6 +276,7 @@ export function ExploreV2CompleteCard({
         getBarbellMode={getBarbellMode}
         progressionValuesByItemId={progressionValuesByItemId}
         showExerciseTitle={!contentOnly}
+        currentCardMode
         restThemeProgress={restThemeProgress}
         exploreV2WorkBlueProgress={exploreV2WorkBlueProgress}
         menuToneProgress={menuToneProgress}
@@ -277,7 +296,7 @@ export function ExploreV2CompleteCard({
   if (contentOnly) {
     return (
       <Animated.ScrollView
-        style={styles.scroll}
+        style={[styles.scroll, scrollBottomInset > 0 && { marginBottom: scrollBottomInset }]}
         contentContainerStyle={[
           styles.scrollInner,
           styles.scrollInnerContentOnly,
@@ -322,9 +341,17 @@ export function ExploreV2CompleteCard({
       ) : null}
       <View style={styles.headerRow}>
         <Pressable style={styles.headerTitlePress} onPress={onHeaderPress}>
-          <Animated.Text style={[styles.headerLabel, headerChromeAnimatedStyle]}>Completed</Animated.Text>
+          <Animated.Text
+            style={[
+              styles.headerLabel,
+              headerChromeAnimatedStyle,
+              editValid && { color: containerTertiary },
+            ]}
+          >
+            {editValid ? 'Current (Editing)' : 'Exercises'}
+          </Animated.Text>
         </Pressable>
-        <Pressable onPress={onHeaderPress} style={styles.completionSummary}>
+        {!editValid ? <Pressable onPress={onHeaderPress} style={styles.completionSummary}>
           <Animated.Text style={[styles.headerCount, headerChromeAnimatedStyle]}>
             {completedExerciseCount}/{totalExerciseCount}
           </Animated.Text>
@@ -341,10 +368,10 @@ export function ExploreV2CompleteCard({
               />
             ) : null}
           </Svg>
-        </Pressable>
+        </Pressable> : null}
       </View>
       <Animated.ScrollView
-        style={styles.scroll}
+        style={[styles.scroll, scrollBottomInset > 0 && { marginBottom: scrollBottomInset }]}
         contentContainerStyle={[
           styles.scrollInner,
           scrollContentAnimatedStyle,
@@ -430,6 +457,24 @@ const styles = StyleSheet.create({
     letterSpacing: 0,
     textTransform: 'uppercase',
   },
+  sectionLabel: {
+    ...TYPOGRAPHY.legal,
+    fontSize: 10,
+    fontWeight: '500',
+    letterSpacing: 0,
+    textTransform: 'uppercase',
+  },
+  sectionHeadingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginTop: 48,
+    marginBottom: 16,
+  },
+  sectionDivider: {
+    flex: 1,
+    height: StyleSheet.hairlineWidth,
+  },
   headerCount: {
     ...TYPOGRAPHY.legal,
     fontWeight: '500',
@@ -452,7 +497,7 @@ const styles = StyleSheet.create({
   },
   scrollInner: {
     paddingHorizontal: pad.horizontal,
-    paddingTop: EXPLORE_V2.headerToContentGap,
+    paddingTop: EXPLORE_V2.headerToContentGap - 32,
     paddingBottom: pad.bottom,
   },
   /** Lets inline completed editor fill card height so metrics + Save pin to the bottom (matches Current card). */
@@ -475,13 +520,16 @@ const styles = StyleSheet.create({
   row: {
     flexDirection: 'row',
     alignItems: 'baseline',
-    paddingVertical: 0,
+    paddingVertical: 8,
   },
   rowWithDivider: {
     borderBottomWidth: 1,
     borderBottomColor: 'transparent',
     paddingBottom: COMPLETED_EXERCISE_LIST_LAYOUT.rowDividerPadBottom,
     marginBottom: COMPLETED_EXERCISE_LIST_LAYOUT.rowDividerMarginBottom,
+  },
+  rowSpacing: {
+    marginBottom: 4,
   },
   nameCol: { flex: 1, paddingRight: COMPLETED_EXERCISE_LIST_LAYOUT.nameColPaddingRight },
   name: {

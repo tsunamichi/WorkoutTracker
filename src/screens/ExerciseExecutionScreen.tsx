@@ -1235,10 +1235,11 @@ export function ExerciseExecutionScreen() {
     const end = inlineRestEndTimeRef.current;
     const remaining = Math.max(0, Math.ceil((end - Date.now()) / 1000));
     setExploreV2RestSkipDisplayHoldSec(remaining);
-    runRestStaggerOut(() => {
-      inlineRestDismissRef.current();
-      setTimeout(() => setExploreV2RestSkipDisplayHoldSec(null), REST_MS);
-    });
+    // Start the timer chrome exit and card-stack handoff on the same frame.
+    // Waiting for the control stagger made Current pause before sliding away.
+    runRestStaggerOut(() => {});
+    inlineRestDismissRef.current();
+    setTimeout(() => setExploreV2RestSkipDisplayHoldSec(null), REST_MS);
   };
 
   /** Countdown from wall-clock end time so the hero never flashes 0:00 before the first tick */
@@ -2562,6 +2563,11 @@ export function ExerciseExecutionScreen() {
         // This group is complete — currentRounds will update automatically via derived state
         const updatedRounds = { ...currentRoundsRef.current, [currentGroup.id]: completedRounds };
         setCompletionTimestamps(prev => ({ ...prev, [currentGroup.id]: Date.now() }));
+        // Remove Current immediately so its exit, the timer dismissal, and the
+        // Exercises reveal start together. Persistence can finish in parallel.
+        setExpandedGroupIndex(-1);
+        setActiveExerciseIndex(0);
+        setHasLoggedAnySet(false);
         
         // Find the next incomplete group - first look after current, then wrap around to before
         // Use updatedRounds to check completion, not the old currentRounds state
@@ -2593,9 +2599,6 @@ export function ExerciseExecutionScreen() {
           await saveSession(newCompletedSets);
           LayoutAnimation.configureNext(CARD_TRANSITION);
           // Don't auto-expand the next group - let the user choose freely
-          setExpandedGroupIndex(-1);
-          setActiveExerciseIndex(0);
-          setHasLoggedAnySet(false); // Unlock flow for next exercise selection
         } else {
           // All groups in this section complete!
           console.log('🔴 [ExerciseExecution] COLLAPSE: all groups complete. setExpandedGroupIndex(-1)');

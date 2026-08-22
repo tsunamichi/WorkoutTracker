@@ -90,6 +90,8 @@ type Props = {
   celebrationActive?: boolean;
   /** When set (main workouts), add/remove rounds for this group — UI gated to last carousel slot + editable metrics. */
   onAdjustGroupSets?: (delta: 1 | -1) => void | Promise<void>;
+  editingLoggedExercise?: boolean;
+  onSaveLoggedExercise?: () => void;
 };
 
 type SetSlot = { round: number; exerciseIndex: number };
@@ -521,6 +523,8 @@ export function ExploreV2CurrentCard({
   celebrationProgress,
   celebrationActive = false,
   onAdjustGroupSets,
+  editingLoggedExercise = false,
+  onSaveLoggedExercise,
 }: Props) {
   const { t } = useTranslation();
   const [keyboardBottomInset, setKeyboardBottomInset] = useState(0);
@@ -658,7 +662,9 @@ export function ExploreV2CurrentCard({
     carouselIndex > nextIncompleteIndex &&
     group.totalRounds > 1;
   const ctaLabel =
-    showRemoveSetRow
+    editingLoggedExercise
+      ? 'Save'
+      : showRemoveSetRow
       ? 'Remove set'
       : exploreV2TimerPhase === 'rest'
       ? 'Skip rest time'
@@ -706,7 +712,7 @@ export function ExploreV2CurrentCard({
       ? (useDisabledHeroPalette ? v2DisabledInk : containerTertiary)
       : accentSecondaryDisabled);
   const logPressable =
-    showRemoveSetRow || heroTimerActive || (showPrimaryCta && logEnabledForSlot);
+    editingLoggedExercise || showRemoveSetRow || heroTimerActive || (showPrimaryCta && logEnabledForSlot);
 
   const settingsDrawerOpen = Boolean(settingsOverflow?.visible && isPrimary);
   const settingsSurfaceActive = settingsDrawerOpen && settingsSurfaceOpen;
@@ -961,7 +967,7 @@ export function ExploreV2CurrentCard({
             accessibilityLabel={t('add')}
             accessibilityState={{ disabled: !addSetPressable }}
           >
-            <IconAddLine size={24} color={addSetPlusIconInk} />
+            <IconAddLine size={20} color={addSetPlusIconInk} />
           </TouchableOpacity>
         ) : null}
       </View>
@@ -969,6 +975,12 @@ export function ExploreV2CurrentCard({
   );
 
   const onLogPress = useCallback(() => {
+    if (editingLoggedExercise) {
+      if (activeSetId) commitsRef.current[activeSetId]?.();
+      Keyboard.dismiss();
+      onSaveLoggedExercise?.();
+      return;
+    }
     if (showRemoveSetRow) {
       onRemoveSetPress();
       return;
@@ -980,7 +992,7 @@ export function ExploreV2CurrentCard({
     const committedValues = activeSetId ? commitsRef.current[activeSetId]?.() : undefined;
     const values = committedValues ?? activeSetValues;
     void onLogNextSet(activeSetId && values ? { setId: activeSetId, values } : undefined);
-  }, [showRemoveSetRow, onRemoveSetPress, heroTimerActive, onSkipRest, activeSetId, onLogNextSet, activeSetValues, carouselIndex, nextIncompleteIndex]);
+  }, [editingLoggedExercise, onSaveLoggedExercise, showRemoveSetRow, onRemoveSetPress, heroTimerActive, onSkipRest, activeSetId, onLogNextSet, activeSetValues, carouselIndex, nextIncompleteIndex]);
   const celebrationContentFadeStyle = useAnimatedStyle(() => ({
     opacity: 1 - (celebrationProgress?.value ?? 0),
   }), [celebrationProgress]);
@@ -1016,7 +1028,7 @@ export function ExploreV2CurrentCard({
                   currentLabelAnimatedStyle,
                 ]}
               >
-                Current
+                {editingLoggedExercise ? 'Editing' : 'Current'}
               </Reanimated.Text>
               {settingsOverflow && isPrimary ? (
                 <TouchableOpacity
@@ -1029,7 +1041,7 @@ export function ExploreV2CurrentCard({
                   {settingsDrawerOpen ? (
                     <IconClose size={24} color={settingsInk} />
                   ) : (
-                    <IconFilters size={24} color={settingsInk} />
+                    <IconFilters size={20} color={settingsInk} />
                   )}
                 </TouchableOpacity>
               ) : null}
@@ -1353,7 +1365,8 @@ export function ExploreV2CurrentCard({
                     accessibilityRole="button"
                     accessibilityLabel={t('exploreV2AddSet')}
                   >
-                    <IconAddLine size={24} color={currentHeaderInk} />
+                    <Text style={[styles.collapsedAddSetLabel, { color: currentHeaderInk }]}>Add set</Text>
+                    <IconAddLine size={20} color={currentHeaderInk} />
                   </TouchableOpacity>
                 </View>
               </>
@@ -1463,8 +1476,15 @@ const styles = StyleSheet.create({
     minHeight: EXPLORE_V2.cardHeader.rowHeight,
   },
   collapsedAddSetBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
     paddingVertical: 4,
     paddingLeft: 8,
+  },
+  collapsedAddSetLabel: {
+    ...TYPOGRAPHY.meta,
+    fontWeight: '400',
   },
   topBlock: {
     position: 'relative',

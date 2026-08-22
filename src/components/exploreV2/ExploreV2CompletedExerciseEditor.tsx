@@ -64,6 +64,7 @@ type Props = {
   >;
   /** When false, omit the exercise name heading (e.g. content-only layout shows it in the top bar). */
   showExerciseTitle?: boolean;
+  currentCardMode?: boolean;
   /** Same shared values as `ExploreV2CompleteCard` so hero colors track the list row + unit tokens. */
   restThemeProgress: SharedValue<number>;
   exploreV2WorkBlueProgress: SharedValue<number>;
@@ -92,6 +93,7 @@ export const ExploreV2CompletedExerciseEditor = forwardRef<ExploreV2CompletedExe
       getBarbellMode,
       progressionValuesByItemId,
       showExerciseTitle = true,
+      currentCardMode = false,
       restThemeProgress,
       exploreV2WorkBlueProgress,
       menuToneProgress,
@@ -107,6 +109,7 @@ export const ExploreV2CompletedExerciseEditor = forwardRef<ExploreV2CompletedExe
     const { explore: ex, colors: themeColors } = theme;
     const containerPrimary = themeColors.containerPrimary;
     const containerTertiary = themeColors.containerTertiary;
+    const accentPrimary = themeColors.accentPrimary;
     const menuMutedInk = themeColors.textMeta;
     const pageBgChrome = themeColors.canvasLight;
     const textMetaPlaceholder = themeColors.textMeta;
@@ -259,7 +262,7 @@ export const ExploreV2CompletedExerciseEditor = forwardRef<ExploreV2CompletedExe
                     style={[
                       styles.paginationDigit,
                       isView && styles.paginationInView,
-                      { color: isView ? containerPrimary : menuMutedInk },
+                      { color: isView ? (currentCardMode ? accentPrimary : containerPrimary) : menuMutedInk },
                     ]}
                   >
                     {i + 1}
@@ -306,12 +309,21 @@ export const ExploreV2CompletedExerciseEditor = forwardRef<ExploreV2CompletedExe
           menuToneProgress.value,
           [0, 1],
           [
-            interpolateColor(exploreV2WorkBlueProgress.value, [0, 1], [containerPrimary, pageBgChrome]),
+            currentCardMode
+              ? containerTertiary
+              : interpolateColor(exploreV2WorkBlueProgress.value, [0, 1], [containerPrimary, pageBgChrome]),
             menuMutedInk,
           ],
         ),
       }),
-      [containerPrimary, pageBgChrome, menuMutedInk],
+      [currentCardMode, containerPrimary, containerTertiary, pageBgChrome, menuMutedInk],
+    );
+
+    const heroValueInkAnimatedStyle = useAnimatedStyle(
+      () => ({
+        color: interpolateColor(menuToneProgress.value, [0, 1], [accentPrimary, menuMutedInk]),
+      }),
+      [accentPrimary, menuMutedInk],
     );
 
     /** Save pill fill: same color pipeline as completed **value** numerals (`rowTitleInkStyle`). */
@@ -321,12 +333,14 @@ export const ExploreV2CompletedExerciseEditor = forwardRef<ExploreV2CompletedExe
           menuToneProgress.value,
           [0, 1],
           [
-            interpolateColor(exploreV2WorkBlueProgress.value, [0, 1], [containerPrimary, pageBgChrome]),
+            currentCardMode
+              ? accentPrimary
+              : interpolateColor(exploreV2WorkBlueProgress.value, [0, 1], [containerPrimary, pageBgChrome]),
             menuMutedInk,
           ],
         ),
       }),
-      [containerPrimary, pageBgChrome, menuMutedInk],
+      [currentCardMode, accentPrimary, containerPrimary, pageBgChrome, menuMutedInk],
     );
 
     /** Save label: same color pipeline as completed **card** scroll fill (`scrollContentAnimatedStyle`). */
@@ -335,12 +349,14 @@ export const ExploreV2CompletedExerciseEditor = forwardRef<ExploreV2CompletedExe
         const b = restThemeProgress.value;
         const w = exploreV2WorkBlueProgress.value;
         const whenUpBg = interpolateColor(w, [0, 1], [amberBand, workUpNextBg]);
-        const baseBg = interpolateColor(b, [0, 1], [upNextBaseBg, whenUpBg]);
+        const baseBg = currentCardMode
+          ? containerPrimary
+          : interpolateColor(b, [0, 1], [upNextBaseBg, whenUpBg]);
         return {
           color: interpolateColor(menuToneProgress.value, [0, 1], [baseBg, menuMutedBg]),
         };
       },
-      [upNextBaseBg, amberBand, workUpNextBg, menuMutedBg],
+      [currentCardMode, containerPrimary, upNextBaseBg, amberBand, workUpNextBg, menuMutedBg],
     );
 
     /** Bottom inset for completed-card edit shell (`48 + keyboard` when metrics are focused). */
@@ -392,9 +408,9 @@ export const ExploreV2CompletedExerciseEditor = forwardRef<ExploreV2CompletedExe
                         weightUnit={weightUnit}
                         getBarbellMode={getBarbellMode}
                         metricsEditable
-                        heroValueColor={containerPrimary}
-                        unitLabelColor={themeColors.textMeta}
-                        heroValueAnimatedStyle={rowTitleInkAnimatedStyle}
+                        heroValueColor={currentCardMode ? accentPrimary : containerPrimary}
+                        unitLabelColor={currentCardMode ? accentPrimary : themeColors.textMeta}
+                        heroValueAnimatedStyle={currentCardMode ? heroValueInkAnimatedStyle : rowTitleInkAnimatedStyle}
                         heroPlaceholderColor={textMetaPlaceholder}
                         perSideLabelColor={containerTertiary}
                         pageWidth={carouselViewportWidth}

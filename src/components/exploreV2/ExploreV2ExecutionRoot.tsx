@@ -74,6 +74,16 @@ function groupHasAnyLoggedSet(group: ExploreV2Group, completedSets: Set<string>)
   return false;
 }
 
+function groupHasEverySetLogged(group: ExploreV2Group, completedSets: Set<string>): boolean {
+  if (group.exercises.length === 0 || group.totalRounds <= 0) return false;
+  for (let round = 0; round < group.totalRounds; round++) {
+    for (const exercise of group.exercises) {
+      if (!completedSets.has(`${exercise.id}-set-${round}`)) return false;
+    }
+  }
+  return true;
+}
+
 export type ExploreV2ExecutionRootProps = {
   exerciseGroups: ExploreV2Group[];
   exploreCurrentGroupIndex: number | null;
@@ -217,20 +227,29 @@ function ExploreV2ExecutionRootComponent(props: ExploreV2ExecutionRootProps) {
     [radius.frontBottomRadius],
   );
 
-  const [primaryRevealed, setPrimaryRevealed] = useState<PrimaryRevealedCard>('up_next');
-  /** Completed tab: tap row → edit metrics inline (Current-style hero) without switching to Current card. */
+  const [primaryRevealed, setPrimaryRevealed] = useState<PrimaryRevealedCard>('complete');
+  useEffect(() => {
+    // Up Next no longer has its own card. Normalize preserved Fast Refresh or
+    // restored stack state so Exercises is interactive and scrollable.
+    if (primaryRevealed === 'up_next') setPrimaryRevealed('complete');
+  }, [primaryRevealed]);
+  /** Logged exercise opened in the existing Current card. */
   const [completedExerciseEdit, setCompletedExerciseEdit] = useState<{
     groupIndex: number;
     exerciseIndex: number;
   } | null>(null);
+
+  useEffect(() => {
+    // Editing is an expanded-only Current state. Any navigation away dismisses
+    // the editor instead of leaving it behind as a collapsed Current card.
+    if (completedExerciseEdit != null && primaryRevealed !== 'current') {
+      setCompletedExerciseEdit(null);
+    }
+  }, [completedExerciseEdit, primaryRevealed]);
+
   const onCloseCompletedExerciseEdit = useCallback(() => {
     setCompletedExerciseEdit(null);
   }, []);
-  useEffect(() => {
-    if (primaryRevealed !== 'complete') {
-      setCompletedExerciseEdit(null);
-    }
-  }, [primaryRevealed]);
   const [overflowOpen, setOverflowOpen] = useState(false);
   const overflowOpenSV = useSharedValue(false);
   const settingsExpandProgress = useSharedValue(0);
@@ -241,10 +260,17 @@ function ExploreV2ExecutionRootComponent(props: ExploreV2ExecutionRootProps) {
   const lastCurrentGroupRef = useRef<ExploreV2Group | null>(null);
   const exitAnimStartedRef = useRef(false);
   const [exitTick, setExitTick] = useState(0);
-  const hasCompletePresent = completedExerciseIndexes.length > 0;
+  // The combined exercise/log card is always present, even before the first set is logged.
+  const hasCompletePresent = exerciseGroups.length > 0;
   const currentGroupIndex = exploreCurrentGroupIndex;
-  const hasCurrent = currentGroupIndex !== null;
-  const currentGroup = currentGroupIndex !== null ? exerciseGroups[currentGroupIndex] : null;
+  const loggedEditGroup = useMemo(() => {
+    if (!completedExerciseEdit) return null;
+    const source = exerciseGroups[completedExerciseEdit.groupIndex];
+    const exercise = source?.exercises[completedExerciseEdit.exerciseIndex];
+    return source && exercise ? { ...source, exercises: [exercise] } : null;
+  }, [completedExerciseEdit, exerciseGroups]);
+  const hasCurrent = currentGroupIndex !== null || loggedEditGroup !== null;
+  const currentGroup = loggedEditGroup ?? (currentGroupIndex !== null ? exerciseGroups[currentGroupIndex] : null);
 
   useEffect(() => {
     if (primaryRevealed !== 'current') {
@@ -267,7 +293,7 @@ function ExploreV2ExecutionRootComponent(props: ExploreV2ExecutionRootProps) {
 
   /** Mirrors for worklets — synced in useLayoutEffect before paint */
   const hasCurrentSV = useSharedValue(false);
-  const primaryRevealedSV = useSharedValue<'up_next' | 'current' | 'complete'>('up_next');
+  const primaryRevealedSV = useSharedValue<'up_next' | 'current' | 'complete'>('complete');
   const hasCompletePresentSV = useSharedValue(false);
   const currentGroupHasLoggedSetsSV = useSharedValue(false);
   /** Mirrors exitCompleteRef for UI-thread slide logic (avoids runOnUI + module worklets). */
@@ -305,23 +331,15 @@ function ExploreV2ExecutionRootComponent(props: ExploreV2ExecutionRootProps) {
   const runExitSlideSequence = useCallback(
     (slideY: SharedValue<number>, targetSlideY: number, onFinished: () => void) => {
       'worklet';
-      const start = slideY.value;
-      const pullBack = start - EXIT_ANTICIPATION_PX;
-      slideY.value = withSequence(
-        withTiming(pullBack, {
-          duration: EXIT_ANTICIPATION_MS,
-          easing: EXIT_ANTICIPATION_EASE,
-        }),
-        withTiming(
-          targetSlideY,
-          {
-            duration: MOTION_EXIT_MS,
-            easing: EXIT_EASE,
-          },
-          finished => {
-            if (finished) runOnJS(onFinished)();
-          },
-        ),
+      slideY.value = withTiming(
+        targetSlideY,
+        {
+          duration: CURRENT_CLOSE_MS,
+          easing: CURRENT_CLOSE_EASE,
+        },
+        finished => {
+          if (finished) runOnJS(onFinished)();
+        },
       );
     },
     [],
@@ -340,7 +358,9 @@ function ExploreV2ExecutionRootComponent(props: ExploreV2ExecutionRootProps) {
       duration: celebrateCompletion ? CELEBRATION_ENTER_MS : CELEBRATION_EXIT_MS,
       easing: Easing.bezier(...EXPLORE_V2.motion.easing.smoothEnter),
     });
-    if (celebrateCompletion) setPrimaryRevealed('current');
+    // Keep Current collapsed at the end of the final rest so it can slide
+    // directly off the stack instead of expanding immediately before exit.
+    if (celebrateCompletion) setPrimaryRevealed('complete');
   }, [celebrateCompletion, completionCelebrateProgress]);
 
   if (hasCurrent && currentGroup) {
@@ -394,6 +414,15 @@ function ExploreV2ExecutionRootComponent(props: ExploreV2ExecutionRootProps) {
     return groupHasAnyLoggedSet(displayCurrentGroup, completedSets);
   }, [displayCurrentGroup, completedSets]);
 
+  const visibleCurrentIsComplete = useMemo(
+    () => Boolean(displayCurrentGroup && groupHasEverySetLogged(displayCurrentGroup, completedSets)),
+    [displayCurrentGroup, completedSets],
+  );
+
+  useEffect(() => {
+    if (visibleCurrentIsComplete && completedExerciseEdit == null) setPrimaryRevealed('complete');
+  }, [visibleCurrentIsComplete, completedExerciseEdit]);
+
   const preStart = Boolean(displayCurrentGroup) && currentHasNoLogsInGroup;
   const currentIsCollapsedSecondary =
     shouldShowCurrentLayer && visibleCurrentHasLoggedSets && primaryRevealed !== 'current';
@@ -407,7 +436,7 @@ function ExploreV2ExecutionRootComponent(props: ExploreV2ExecutionRootProps) {
         // No Current (e.g. v2 pre-pick) but user may be on Completed inline edit — do not yank primary to Up Next
         // on every `completedSets` tick (Add set on Completed would collapse the stack).
         if (primaryRevealed !== 'complete' && completedExerciseEdit == null) {
-          setPrimaryRevealed('up_next');
+          setPrimaryRevealed('complete');
         }
       }
       prevLoggedSetCountRef.current = null;
@@ -423,6 +452,7 @@ function ExploreV2ExecutionRootComponent(props: ExploreV2ExecutionRootProps) {
       // Restored session: surface Current when progress already exists (one-time per `hasCurrent` cycle).
       if (
         completedSets.size > 0 &&
+        !visibleCurrentIsComplete &&
         primaryRevealed !== 'complete' &&
         completedExerciseEdit == null
       ) {
@@ -439,8 +469,8 @@ function ExploreV2ExecutionRootComponent(props: ExploreV2ExecutionRootProps) {
     if (primaryRevealed === 'complete' || completedExerciseEdit != null) {
       return;
     }
-    setPrimaryRevealed('current');
-  }, [hasCurrent, isExitAnimating, completedSets.size, primaryRevealed, completedExerciseEdit]);
+    if (!visibleCurrentIsComplete) setPrimaryRevealed('current');
+  }, [hasCurrent, isExitAnimating, completedSets.size, primaryRevealed, completedExerciseEdit, visibleCurrentIsComplete]);
 
   useEffect(() => {
     if (!EXPLORE_V2_DEBUG_LAYOUT || !__DEV__) return;
@@ -513,7 +543,7 @@ function ExploreV2ExecutionRootComponent(props: ExploreV2ExecutionRootProps) {
       const primaryCode = pr === 'up_next' ? 0 : pr === 'current' ? 1 : 2;
 
       /** Stack overlap geometry — layer boxes stay tall; collapse is translateY + isExpanded on cards */
-      const currentH = Math.max(PEEK, sw - (hasCompleteW ? 2 * PEEK : PEEK));
+      const currentH = Math.max(PEEK, sw - PEEK);
 
       if (!hasCurrentW) {
         if (exitComplete) {
@@ -521,9 +551,7 @@ function ExploreV2ExecutionRootComponent(props: ExploreV2ExecutionRootProps) {
         }
       } else {
         currentExitLayerHeightSV.value = currentH;
-        const hiddenTarget = logged
-          ? Math.max(0, currentH - CURRENT_IN_PROGRESS_PEEK_VISIBLE_HEIGHT)
-          : currentH;
+        const hiddenTarget = Math.max(0, currentH - CURRENT_IN_PROGRESS_PEEK_VISIBLE_HEIGHT);
         const target = primaryCode === 1 ? 0 : hiddenTarget;
         const isEntering = primaryCode === 1;
         if (Math.abs(currentSlideY.value - target) > 0.5) {
@@ -571,7 +599,7 @@ function ExploreV2ExecutionRootComponent(props: ExploreV2ExecutionRootProps) {
 
   const aCurrent = useAnimatedStyle(() => {
     const sw = structuralWalletH.value;
-    const normal = Math.max(PEEK, sw - (hasCompletePresentSV.value ? 2 * PEEK : PEEK));
+    const normal = Math.max(PEEK, sw - PEEK);
     const expandP = settingsExpandProgress.value;
     const live = interpolate(expandP, [0, 1], [normal, sw], 'clamp');
     const height = hasCurrentSV.value ? live : currentExitLayerHeightSV.value;
@@ -597,10 +625,8 @@ function ExploreV2ExecutionRootComponent(props: ExploreV2ExecutionRootProps) {
       if (prev == null) return;
       if (!hasCurrentSV.value) return;
       if (primaryRevealedSV.value === 'current') return;
-      const currentH = Math.max(PEEK, s - (hasCompletePresentSV.value ? 2 * PEEK : PEEK));
-      const hiddenTarget = currentGroupHasLoggedSetsSV.value
-        ? Math.max(0, currentH - CURRENT_IN_PROGRESS_PEEK_VISIBLE_HEIGHT)
-        : currentH;
+      const currentH = Math.max(PEEK, s - PEEK);
+      const hiddenTarget = Math.max(0, currentH - CURRENT_IN_PROGRESS_PEEK_VISIBLE_HEIGHT);
       currentSlideY.value = hiddenTarget;
     },
   );
@@ -650,6 +676,10 @@ function ExploreV2ExecutionRootComponent(props: ExploreV2ExecutionRootProps) {
     (gi: number) => {
       const g = exerciseGroups[gi];
       if (!g) return;
+      if (currentGroupIndex === gi) {
+        setPrimaryRevealed('current');
+        return;
+      }
       if (groupHasAnyLoggedSet(g, completedSets)) return;
       if (currentGroupHasLoggedSets) {
         triggerCurrentBlockNudge();
@@ -663,6 +693,7 @@ function ExploreV2ExecutionRootComponent(props: ExploreV2ExecutionRootProps) {
     },
     [
       exerciseGroups,
+      currentGroupIndex,
       completedSets,
       currentGroupHasLoggedSets,
       setExpandedGroupIndex,
@@ -674,6 +705,12 @@ function ExploreV2ExecutionRootComponent(props: ExploreV2ExecutionRootProps) {
   const onSelectCompletedExercise = useCallback((groupIndex: number, exerciseIndex: number) => {
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setCompletedExerciseEdit({ groupIndex, exerciseIndex });
+    setPrimaryRevealed('current');
+  }, []);
+
+  const onRevealExercises = useCallback(() => {
+    void Haptics.selectionAsync();
+    setCompletedExerciseEdit(null);
     setPrimaryRevealed('complete');
   }, []);
 
@@ -736,11 +773,12 @@ function ExploreV2ExecutionRootComponent(props: ExploreV2ExecutionRootProps) {
           exploreV2WorkBlueProgress={exploreV2WorkBlueProgress}
           preStart={preStart}
           onCollapsedPress={() => {
+            if (completedExerciseEdit != null) return;
             Haptics.selectionAsync();
             setPrimaryRevealed('current');
           }}
           showPrimaryCta={showPrimaryCta}
-          showCollapsedWhenSecondary={visibleCurrentHasLoggedSets}
+          showCollapsedWhenSecondary={hasCurrent && completedExerciseEdit == null}
           frontBottomRadius={radius.frontBottomRadius}
           coveredBottomRadius={radius.frontBottomRadius}
           timerThemeActive={timerThemeActive}
@@ -815,7 +853,16 @@ function ExploreV2ExecutionRootComponent(props: ExploreV2ExecutionRootProps) {
           }
           celebrationProgress={completionCelebrateProgress}
           celebrationActive={celebrateCompletion}
-          onAdjustGroupSets={onAdjustCurrentGroupSets}
+          onAdjustGroupSets={
+            completedExerciseEdit && onAdjustCompletedGroupSets
+              ? d => onAdjustCompletedGroupSets(completedExerciseEdit.groupIndex, d)
+              : onAdjustCurrentGroupSets
+          }
+          editingLoggedExercise={completedExerciseEdit != null}
+          onSaveLoggedExercise={() => {
+            setCompletedExerciseEdit(null);
+            setPrimaryRevealed('complete');
+          }}
         />
       </Animated.View>
     ) : null;
@@ -837,6 +884,8 @@ function ExploreV2ExecutionRootComponent(props: ExploreV2ExecutionRootProps) {
               useKg={useKg}
               weightUnit={weightUnit}
               onOpenExercise={onSelectCompletedExercise}
+              onSelectIncompleteGroup={onSelectUpNext}
+              scrollBottomInset={0}
               onHeaderPress={() => {}}
               isExpanded
               frontBottomRadius={radius.frontBottomRadius}
@@ -847,7 +896,7 @@ function ExploreV2ExecutionRootComponent(props: ExploreV2ExecutionRootProps) {
               menuThemeActive={menuThemeActive}
               menuToneProgress={menuToneProgress}
               contentOnly
-              completedExerciseEdit={completedExerciseEdit}
+              completedExerciseEdit={null}
               onCloseCompletedExerciseEdit={onCloseCompletedExerciseEdit}
               completedSets={completedSets}
               localValues={localValues}
@@ -952,11 +1001,14 @@ function ExploreV2ExecutionRootComponent(props: ExploreV2ExecutionRootProps) {
               useKg={useKg}
               weightUnit={weightUnit}
               onOpenExercise={onSelectCompletedExercise}
-              onHeaderPress={() => {
-                Haptics.selectionAsync();
-                setPrimaryRevealed('complete');
-              }}
-              isExpanded={!celebrateCompletion && primaryRevealed === 'complete'}
+              onSelectIncompleteGroup={onSelectUpNext}
+              scrollBottomInset={
+                completedExerciseEdit == null && shouldShowCurrentLayer && primaryRevealed !== 'current'
+                  ? CURRENT_IN_PROGRESS_PEEK_VISIBLE_HEIGHT
+                  : 0
+              }
+              onHeaderPress={onRevealExercises}
+              isExpanded={!celebrateCompletion && primaryRevealed !== 'current'}
               frontBottomRadius={radius.frontBottomRadius}
               coveredBottomRadius={radius.frontBottomRadius}
               timerThemeActive={timerThemeActive}
@@ -964,7 +1016,7 @@ function ExploreV2ExecutionRootComponent(props: ExploreV2ExecutionRootProps) {
               exploreV2WorkBlueProgress={exploreV2WorkBlueProgress}
               menuThemeActive={menuThemeActive}
               menuToneProgress={menuToneProgress}
-              completedExerciseEdit={completedExerciseEdit}
+              completedExerciseEdit={null}
               onCloseCompletedExerciseEdit={onCloseCompletedExerciseEdit}
               completedSets={completedSets}
               localValues={localValues}
@@ -972,41 +1024,6 @@ function ExploreV2ExecutionRootComponent(props: ExploreV2ExecutionRootProps) {
               getBarbellMode={getBarbellMode}
               progressionValuesByItemId={progressionValuesByItemId}
               onAdjustCompletedGroupSets={onAdjustCompletedGroupSets}
-            />
-          </Animated.View>
-          <Animated.View
-            style={[
-              styles.layerBottom,
-              aUpNextLayerHeight,
-              aUpNext,
-              {
-                bottom: STACK_BOTTOM_GAP,
-                zIndex: zUpNextTwo,
-              },
-            ]}
-          >
-            <ExploreV2UpNextCard
-              upNextGroupIndexes={upNextExercises}
-              exerciseGroups={exerciseGroups}
-              completedSets={completedSets}
-              onSelectGroup={onSelectUpNext}
-              onHeaderPress={() => {
-                Haptics.selectionAsync();
-                setPrimaryRevealed('up_next');
-              }}
-              onOpenAddExercise={onOpenAddExercise}
-              onRemoveGroupFromUpNext={onRemoveGroupFromUpNext}
-              allowAddExercise={allowAddExercise}
-              hasCurrentExercise={shouldShowCurrentLayer}
-              hasCompletePresent={hasCompletePresent}
-              isExpanded={!celebrateCompletion && primaryRevealed === 'up_next'}
-              frontBottomRadius={radius.frontBottomRadius}
-              coveredBottomRadius={radius.frontBottomRadius}
-              timerThemeActive={timerThemeActive}
-              restThemeProgress={restThemeProgress}
-              exploreV2WorkBlueProgress={exploreV2WorkBlueProgress}
-              menuThemeActive={menuThemeActive}
-              menuToneProgress={menuToneProgress}
             />
           </Animated.View>
           {currentExerciseLayer}
@@ -1036,11 +1053,14 @@ function ExploreV2ExecutionRootComponent(props: ExploreV2ExecutionRootProps) {
                 useKg={useKg}
                 weightUnit={weightUnit}
                 onOpenExercise={onSelectCompletedExercise}
-                onHeaderPress={() => {
-                  Haptics.selectionAsync();
-                  setPrimaryRevealed('complete');
-                }}
-                isExpanded={!celebrateCompletion && primaryRevealed === 'complete'}
+                onSelectIncompleteGroup={onSelectUpNext}
+                scrollBottomInset={
+                  completedExerciseEdit == null && shouldShowCurrentLayer && primaryRevealed !== 'current'
+                    ? CURRENT_IN_PROGRESS_PEEK_VISIBLE_HEIGHT
+                    : 0
+                }
+                onHeaderPress={onRevealExercises}
+                isExpanded={!celebrateCompletion && primaryRevealed !== 'current'}
                 frontBottomRadius={radius.frontBottomRadius}
                 coveredBottomRadius={radius.frontBottomRadius}
                 timerThemeActive={timerThemeActive}
@@ -1048,7 +1068,7 @@ function ExploreV2ExecutionRootComponent(props: ExploreV2ExecutionRootProps) {
                 exploreV2WorkBlueProgress={exploreV2WorkBlueProgress}
                 menuThemeActive={menuThemeActive}
                 menuToneProgress={menuToneProgress}
-                completedExerciseEdit={completedExerciseEdit}
+                completedExerciseEdit={null}
                 onCloseCompletedExerciseEdit={onCloseCompletedExerciseEdit}
                 completedSets={completedSets}
                 localValues={localValues}
@@ -1059,42 +1079,6 @@ function ExploreV2ExecutionRootComponent(props: ExploreV2ExecutionRootProps) {
               />
             </Animated.View>
           ) : null}
-          <Animated.View
-            style={[
-              styles.layerBottom,
-              aUpNextLayerHeight,
-              aUpNext,
-              celebrationRecedeStyle,
-              {
-                bottom: STACK_BOTTOM_GAP,
-                zIndex: zUpNext,
-              },
-            ]}
-          >
-            <ExploreV2UpNextCard
-              upNextGroupIndexes={upNextExercises}
-              exerciseGroups={exerciseGroups}
-              completedSets={completedSets}
-              onSelectGroup={onSelectUpNext}
-              onHeaderPress={() => {
-                Haptics.selectionAsync();
-                setPrimaryRevealed('up_next');
-              }}
-              onOpenAddExercise={onOpenAddExercise}
-              onRemoveGroupFromUpNext={onRemoveGroupFromUpNext}
-              allowAddExercise={allowAddExercise}
-              hasCurrentExercise={shouldShowCurrentLayer}
-              hasCompletePresent={hasCompletePresent}
-              isExpanded={!celebrateCompletion && primaryRevealed === 'up_next'}
-              frontBottomRadius={radius.frontBottomRadius}
-              coveredBottomRadius={radius.frontBottomRadius}
-              timerThemeActive={timerThemeActive}
-              restThemeProgress={restThemeProgress}
-              exploreV2WorkBlueProgress={exploreV2WorkBlueProgress}
-              menuThemeActive={menuThemeActive}
-              menuToneProgress={menuToneProgress}
-            />
-          </Animated.View>
           {currentExerciseLayer}
         </View>
       )}

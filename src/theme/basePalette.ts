@@ -84,7 +84,7 @@ export const basePalette = {
   textPrimary: '#1F1F1F', // Primary text
   textSecondary: '#AEAEB2', // Secondary text
   /** Spec text-meta (light canvas) */
-  textMeta: '#685456',
+  textMeta: '#787172',
   textMetaSoft: '#48484A', // Soft metadata/dividers
   textDisabled: '#48484A', // Disabled text
 
