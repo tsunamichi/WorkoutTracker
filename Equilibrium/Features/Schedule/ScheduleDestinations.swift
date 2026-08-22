@@ -1,23 +1,5 @@
 import SwiftUI
 
-struct AddWorkoutSheet: View {
-    let day: LocalDay
-    @Environment(\.dismiss) private var dismiss
-    private let options = [("Existing Workout", "rectangle.stack"), ("Recent Workout", "clock.arrow.circlepath"), ("Blank Workout", "plus.square"), ("Import Plan", "doc.on.clipboard")]
-    var body: some View {
-        NavigationStack {
-            List(options, id: \.0) { option in
-                Button { } label: { Label(option.0, systemImage: option.1).frame(minHeight: 44) }
-                    .accessibilityHint("Available in a later phase")
-            }
-            .scrollContentBackground(.hidden).background(EQColor.canvas)
-            .navigationTitle("Add Workout")
-            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
-            .safeAreaInset(edge: .bottom) { Text("For \(day.iso8601) · Workflows arrive in Phase 3").font(.caption).foregroundStyle(EQColor.secondaryText).padding() }
-        }.presentationDetents([.medium, .large]).preferredColorScheme(.dark)
-    }
-}
-
 struct SettingsShellView: View {
     var body: some View {
         List {

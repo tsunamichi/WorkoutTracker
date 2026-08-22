@@ -1,6 +1,44 @@
 import Foundation
 import SwiftData
 
+@Model final class ExerciseDefinitionRecord {
+    @Attribute(.unique) var id: String
+    var name: String; var normalizedName: String; var aliases: [String]
+    var equipment: String?; var category: String?; var isCustom: Bool; var archivedAt: Date?
+    init(id: String, name: String, normalizedName: String, aliases: [String], equipment: String?, category: String?, isCustom: Bool, archivedAt: Date?) {
+        self.id = id; self.name = name; self.normalizedName = normalizedName; self.aliases = aliases
+        self.equipment = equipment; self.category = category; self.isCustom = isCustom; self.archivedAt = archivedAt
+    }
+}
+
+@Model final class WorkoutTemplateRecord {
+    @Attribute(.unique) var id: String
+    var name: String; var createdAt: Date; var updatedAt: Date; var archivedAt: Date?
+    @Relationship(deleteRule: .cascade, inverse: \TemplateExerciseRecord.template) var exercises: [TemplateExerciseRecord]
+    init(id: String, name: String, createdAt: Date, updatedAt: Date, archivedAt: Date?, exercises: [TemplateExerciseRecord]) {
+        self.id = id; self.name = name; self.createdAt = createdAt; self.updatedAt = updatedAt; self.archivedAt = archivedAt; self.exercises = exercises
+    }
+}
+
+@Model final class TemplateExerciseRecord {
+    @Attribute(.unique) var id: String
+    var exerciseID: String; var nameSnapshot: String; var position: Int; var restDuration: Double?; var progressionRuleID: String?
+    var template: WorkoutTemplateRecord?
+    @Relationship(deleteRule: .cascade, inverse: \TemplatePrescriptionRecord.exercise) var prescriptions: [TemplatePrescriptionRecord]
+    init(id: String, exerciseID: String, nameSnapshot: String, position: Int, restDuration: Double?, progressionRuleID: String?, prescriptions: [TemplatePrescriptionRecord]) {
+        self.id = id; self.exerciseID = exerciseID; self.nameSnapshot = nameSnapshot; self.position = position; self.restDuration = restDuration; self.progressionRuleID = progressionRuleID; self.prescriptions = prescriptions
+    }
+}
+
+@Model final class TemplatePrescriptionRecord {
+    @Attribute(.unique) var id: String
+    var position: Int; var targetKind: String; var lowerRepetitions: Int?; var upperRepetitions: Int?; var duration: Double?; var suggestedPounds: Double?
+    var exercise: TemplateExerciseRecord?
+    init(id: String, position: Int, targetKind: String, lowerRepetitions: Int?, upperRepetitions: Int?, duration: Double?, suggestedPounds: Double?) {
+        self.id = id; self.position = position; self.targetKind = targetKind; self.lowerRepetitions = lowerRepetitions; self.upperRepetitions = upperRepetitions; self.duration = duration; self.suggestedPounds = suggestedPounds
+    }
+}
+
 @Model final class ScheduledWorkoutRecord {
     @Attribute(.unique) var id: String
     @Attribute(.unique) var localDay: String

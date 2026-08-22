@@ -2,9 +2,64 @@ import Foundation
 import SwiftData
 
 @MainActor
-public final class SwiftDataRepository: ScheduledWorkoutRepository, BackupRepository {
+public final class SwiftDataRepository: ExerciseRepository, WorkoutTemplateRepository, ScheduledWorkoutRepository, BackupRepository {
     private let context: ModelContext
     public init(container: ModelContainer) { context = ModelContext(container); context.autosaveEnabled = false }
+
+    public func allExercises() async throws -> [ExerciseDefinition] {
+        try context.fetch(FetchDescriptor<ExerciseDefinitionRecord>(sortBy: [SortDescriptor(\.name)])).map(DefinitionMapper.domain).filter { $0.archivedAt == nil }
+    }
+    public func searchExercises(_ query: String) async throws -> [ExerciseDefinition] {
+        let needle = Self.normalizeExerciseName(query)
+        guard !needle.isEmpty else { return try await allExercises() }
+        return try await allExercises().filter { exercise in
+            exercise.normalizedName.contains(needle) || exercise.aliases.contains { Self.normalizeExerciseName($0).contains(needle) } || exercise.equipment.map { Self.normalizeExerciseName($0).contains(needle) } == true || exercise.category.map { Self.normalizeExerciseName($0).contains(needle) } == true
+        }
+    }
+    public func exercise(id: ExerciseID) async throws -> ExerciseDefinition? {
+        let key = id.rawValue; var descriptor = FetchDescriptor<ExerciseDefinitionRecord>(predicate: #Predicate { $0.id == key }); descriptor.fetchLimit = 1
+        return try context.fetch(descriptor).first.map(DefinitionMapper.domain)
+    }
+    public func saveExercise(_ exercise: ExerciseDefinition) async throws {
+        let normalized = Self.normalizeExerciseName(exercise.name)
+        guard !normalized.isEmpty else { throw RepositoryError.invalidBackup }
+        let records = try context.fetch(FetchDescriptor<ExerciseDefinitionRecord>())
+        if records.contains(where: { $0.id != exercise.id.rawValue && ($0.normalizedName == normalized || $0.aliases.contains(where: { Self.normalizeExerciseName($0) == normalized })) }) { throw RepositoryError.duplicateExerciseName }
+        if let existing = records.first(where: { $0.id == exercise.id.rawValue }) {
+            existing.name = exercise.name; existing.normalizedName = normalized; existing.aliases = exercise.aliases; existing.equipment = exercise.equipment; existing.category = exercise.category; existing.isCustom = exercise.isCustom; existing.archivedAt = exercise.archivedAt
+        } else { var value = exercise; value.normalizedName = normalized; context.insert(DefinitionMapper.record(from: value)) }
+        try saveOrRollback()
+    }
+    public func archiveExercise(id: ExerciseID, at date: Date) async throws {
+        let key = id.rawValue; var descriptor = FetchDescriptor<ExerciseDefinitionRecord>(predicate: #Predicate { $0.id == key }); descriptor.fetchLimit = 1
+        guard let record = try context.fetch(descriptor).first else { throw RepositoryError.notFound }; record.archivedAt = date; try saveOrRollback()
+    }
+    public func allTemplates() async throws -> [WorkoutTemplate] {
+        try context.fetch(FetchDescriptor<WorkoutTemplateRecord>(sortBy: [SortDescriptor(\.updatedAt, order: .reverse)])).map(DefinitionMapper.domain).filter { $0.archivedAt == nil }
+    }
+    public func template(id: WorkoutTemplateID) async throws -> WorkoutTemplate? {
+        let key = id.rawValue; var descriptor = FetchDescriptor<WorkoutTemplateRecord>(predicate: #Predicate { $0.id == key }); descriptor.fetchLimit = 1
+        return try context.fetch(descriptor).first.map(DefinitionMapper.domain)
+    }
+    public func saveTemplate(_ template: WorkoutTemplate) async throws {
+        guard !template.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, !template.exercises.isEmpty else { throw RepositoryError.invalidBackup }
+        let childIDs = template.exercises.map(\.id.rawValue) + template.exercises.flatMap(\.prescriptions).map(\.id.rawValue)
+        guard Set(childIDs).count == childIDs.count else { throw RepositoryError.duplicateIdentifier }
+        let key = template.id.rawValue; var descriptor = FetchDescriptor<WorkoutTemplateRecord>(predicate: #Predicate { $0.id == key }); descriptor.fetchLimit = 1
+        if let existing = try context.fetch(descriptor).first {
+            let replacement = DefinitionMapper.record(from: template)
+            existing.name = template.name; existing.createdAt = template.createdAt; existing.updatedAt = template.updatedAt; existing.archivedAt = template.archivedAt
+            for child in existing.exercises { context.delete(child) }; existing.exercises = replacement.exercises
+        } else { context.insert(DefinitionMapper.record(from: template)) }
+        try saveOrRollback()
+    }
+    public func archiveTemplate(id: WorkoutTemplateID, at date: Date) async throws {
+        let key = id.rawValue; var descriptor = FetchDescriptor<WorkoutTemplateRecord>(predicate: #Predicate { $0.id == key }); descriptor.fetchLimit = 1
+        guard let record = try context.fetch(descriptor).first else { throw RepositoryError.notFound }; record.archivedAt = date; record.updatedAt = date; try saveOrRollback()
+    }
+    public static func normalizeExerciseName(_ value: String) -> String {
+        value.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: .current).lowercased().split(whereSeparator: { !$0.isLetter && !$0.isNumber }).joined(separator: " ")
+    }
 
     public func workout(on day: LocalDay) async throws -> ScheduledWorkout? {
         let key = day.iso8601
@@ -130,14 +185,25 @@ public final class SwiftDataRepository: ScheduledWorkoutRepository, BackupReposi
         for workout in workouts { context.insert(WorkoutMapper.record(from: workout)) }
         do { try context.save() } catch { context.rollback(); throw error }
     }
+    public func replaceScheduledWorkout(_ workout: ScheduledWorkout) async throws {
+        try DomainValidator.validate(workout)
+        let day = workout.day.iso8601
+        let matches = try context.fetch(FetchDescriptor<ScheduledWorkoutRecord>(predicate: #Predicate { $0.localDay == day }))
+        guard matches.count <= 1 else { throw RepositoryError.workoutDayConflict(workout.day) }
+        if let existing = matches.first {
+            guard existing.statusRaw != WorkoutStatus.completed.rawValue else { throw RepositoryError.immutableCompletedWorkout }
+            context.delete(existing)
+        }
+        context.insert(WorkoutMapper.record(from: workout)); try saveOrRollback()
+    }
 
     public func exportBackup(exportedAt: Date, sourceDeviceID: String) async throws -> EquilibriumBackupV1 {
         let stored = try loadCollection()
-        return try EquilibriumBackupV1(exportedAt: exportedAt, sourceDeviceID: sourceDeviceID, exercises: stored?.exercises ?? [], workoutTemplates: stored?.workoutTemplates ?? [], scheduledWorkouts: try await allWorkouts(), cyclePlans: stored?.cyclePlans ?? [], settings: stored?.settings ?? .init(weightUnit: .pounds, defaultRestDuration: 90), progression: stored?.progression ?? FixtureDefaults.progression)
+        return try EquilibriumBackupV1(exportedAt: exportedAt, sourceDeviceID: sourceDeviceID, exercises: try await allExercises(), workoutTemplates: try await allTemplates(), scheduledWorkouts: try await allWorkouts(), cyclePlans: stored?.cyclePlans ?? [], settings: stored?.settings ?? .init(weightUnit: .pounds, defaultRestDuration: 90), progression: stored?.progression ?? FixtureDefaults.progression)
     }
     public func restoreBackup(_ backup: EquilibriumBackupV1) async throws {
         guard backup.schemaVersion == 1 else { throw BackupError.unsupportedSchemaVersion(backup.schemaVersion) }
-        guard try await allWorkouts().isEmpty else { throw RepositoryError.invalidBackup }
+        guard try await allWorkouts().isEmpty, try await allExercises().isEmpty, try await allTemplates().isEmpty else { throw RepositoryError.invalidBackup }
         let days = backup.scheduledWorkouts.map(\.day)
         guard Set(days).count == days.count else { throw RepositoryError.workoutDayConflict(days.first!) }
         let exerciseIDs = backup.scheduledWorkouts.flatMap(\.exercises).map(\.id)
@@ -145,6 +211,8 @@ public final class SwiftDataRepository: ScheduledWorkoutRepository, BackupReposi
         let loggedSetIDs = backup.scheduledWorkouts.flatMap(\.exercises).flatMap(\.loggedSets).map(\.id)
         guard Set(exerciseIDs).count == exerciseIDs.count, Set(prescriptionIDs).count == prescriptionIDs.count, Set(loggedSetIDs).count == loggedSetIDs.count else { throw RepositoryError.duplicateIdentifier }
         for workout in backup.scheduledWorkouts { try DomainValidator.validate(workout) }
+        for exercise in backup.exercises { context.insert(DefinitionMapper.record(from: exercise)) }
+        for template in backup.workoutTemplates { context.insert(DefinitionMapper.record(from: template)) }
         for workout in backup.scheduledWorkouts { context.insert(WorkoutMapper.record(from: workout)) }
         let metadata = try BackupCodec.encode(backup)
         context.insert(BackupCollectionRecord(payload: metadata))
@@ -154,6 +222,7 @@ public final class SwiftDataRepository: ScheduledWorkoutRepository, BackupReposi
         guard let record = try context.fetch(FetchDescriptor<BackupCollectionRecord>()).first else { return nil }
         return try BackupCodec.decode(record.payload)
     }
+    private func saveOrRollback() throws { do { try context.save() } catch { context.rollback(); throw error } }
 }
 
 enum FixtureDefaults {

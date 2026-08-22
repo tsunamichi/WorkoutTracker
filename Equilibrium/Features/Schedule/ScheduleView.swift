@@ -3,12 +3,17 @@ import SwiftUI
 struct ScheduleView: View {
     @State private var model: ScheduleModel
     private let repository: any ScheduledWorkoutRepository
+    private let exerciseRepository: any ExerciseRepository
+    private let templateRepository: any WorkoutTemplateRepository
     @Namespace private var workoutTransition
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @AppStorage(EQPreferenceKey.weightUnit) private var weightUnitRaw = WeightUnit.pounds.rawValue
 
-    init(repository: any ScheduledWorkoutRepository) {
+    init(repository: any ScheduledWorkoutRepository, exerciseRepository: (any ExerciseRepository)? = nil, templateRepository: (any WorkoutTemplateRepository)? = nil) {
         self.repository = repository
+        guard let shared = repository as? SwiftDataRepository else { precondition(exerciseRepository != nil && templateRepository != nil, "Creation repositories are required") ; self.exerciseRepository = exerciseRepository!; self.templateRepository = templateRepository!; _model = State(initialValue: ScheduleModel(repository: repository)); return }
+        self.exerciseRepository = exerciseRepository ?? shared
+        self.templateRepository = templateRepository ?? shared
         _model = State(initialValue: ScheduleModel(repository: repository))
     }
 
@@ -29,7 +34,7 @@ struct ScheduleView: View {
             }
             .toolbar(.hidden, for: .navigationBar)
             .navigationDestination(for: ScheduleRoute.self) { route in destination(route) }
-            .sheet(isPresented: $model.isAddWorkoutPresented) { AddWorkoutSheet(day: model.selectedDay) }
+            .sheet(isPresented: $model.isAddWorkoutPresented) { AddWorkoutSheet(day: model.selectedDay, exercises: exerciseRepository, templates: templateRepository, workouts: repository) { model.applyPersistedWorkout($0) } }
             .task { await model.load() }
         }
         .tint(EQColor.accent)
@@ -46,13 +51,13 @@ struct ScheduleView: View {
                     .accessibilityLabel("Settings")
             }
             .font(.title3)
-            .frame(minHeight: 44)
+            .frame(minHeight: EQDimension.minimumTouch)
             Text(model.calendar.fullDate(model.selectedDay))
                 .font(EQTypography.sectionTitle)
                 .foregroundStyle(EQColor.secondaryText)
             if !model.isTodaySelected {
                 Button("Today") { Task { await model.selectToday() } }
-                    .font(.callout.weight(.semibold))
+                    .font(EQTypography.cardTitle)
                     .accessibilityHint("Returns to the current date")
             }
         }
@@ -103,14 +108,14 @@ private struct WeekStrip: View {
                 Spacer()
                 Button { Task { await model.moveWeek(1) } } label: { Image(systemName: "chevron.right") }
                     .accessibilityLabel("Next week")
-            }.frame(minHeight: 44)
+            }.frame(minHeight: EQDimension.minimumTouch)
             HStack(spacing: EQSpacing.xxs) {
                 ForEach(model.week, id: \.self) { day in
                     let workout = model.workoutsByDay[day]
                     Button {
                         model.select(day); feedback += 1
                     } label: {
-                        VStack(spacing: 6) {
+                        VStack(spacing: EQSpacing.xs) {
                             Text(shortWeekday(day)).font(.caption2.weight(.semibold))
                             Text("\(day.day)").font(.body.weight(day == model.selectedDay ? .bold : .medium)).monospacedDigit()
                             Image(systemName: marker(for: workout))
