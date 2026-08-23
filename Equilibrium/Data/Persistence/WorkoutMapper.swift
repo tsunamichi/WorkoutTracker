@@ -14,7 +14,7 @@ enum WorkoutMapper {
             let logged = exercise.loggedSets.enumerated().map { index, set in
                 LoggedSetRecord(id: set.id.rawValue, prescriptionID: set.prescriptionID?.rawValue, position: index, pounds: set.weight?.pounds, repetitions: set.repetitions, duration: set.duration, completedAt: set.completedAt)
             }
-            return WorkoutExerciseRecord(id: exercise.id.rawValue, exerciseID: exercise.exerciseID.rawValue, nameSnapshot: exercise.nameSnapshot, position: exerciseIndex, restDuration: exercise.restDuration, skippedAt: exercise.skippedAt, prescriptions: prescriptions, loggedSets: logged)
+            return WorkoutExerciseRecord(id: exercise.id.rawValue, exerciseID: exercise.exerciseID.rawValue, nameSnapshot: exercise.nameSnapshot, position: exerciseIndex, restDuration: exercise.restDuration, skippedAt: exercise.skippedAt, isTimeBased: exercise.isTimeBased, isTwoSided: exercise.isTwoSided, prescriptions: prescriptions, loggedSets: logged)
         }
         return WorkoutRecord(id: workout.id.rawValue, titleSnapshot: workout.titleSnapshot, statusRaw: workout.status.rawValue, startedAt: workout.startedAt, completedAt: workout.completedAt, createdAt: workout.createdAt, updatedAt: workout.updatedAt, exercises: exercises)
     }
@@ -31,7 +31,7 @@ enum WorkoutMapper {
             let sets = record.loggedSets.sorted { $0.position < $1.position }.map { item in
                 LoggedSet(id: SetID(rawValue: item.id), prescriptionID: item.prescriptionID.map(SetID.init(rawValue:)), weight: item.pounds.map(Weight.init(pounds:)), repetitions: item.repetitions, duration: item.duration, completedAt: item.completedAt)
             }
-            return WorkoutExercise(id: WorkoutExerciseID(rawValue: record.id), exerciseID: ExerciseID(rawValue: record.exerciseID), nameSnapshot: record.nameSnapshot, prescriptions: prescriptions, loggedSets: sets, restDuration: record.restDuration, skippedAt: record.skippedAt)
+            return WorkoutExercise(id: WorkoutExerciseID(rawValue: record.id), exerciseID: ExerciseID(rawValue: record.exerciseID), nameSnapshot: record.nameSnapshot, prescriptions: prescriptions, loggedSets: sets, restDuration: record.restDuration, skippedAt: record.skippedAt, isTimeBased: record.isTimeBased, isTwoSided: record.isTwoSided)
         }
         guard let status = WorkoutStatus(rawValue: record.statusRaw) else { throw RepositoryError.invalidBackup }
         return Workout(id: WorkoutID(rawValue: record.id), titleSnapshot: record.titleSnapshot, exercises: exercises, status: status, startedAt: record.startedAt, completedAt: record.completedAt, createdAt: record.createdAt, updatedAt: record.updatedAt)

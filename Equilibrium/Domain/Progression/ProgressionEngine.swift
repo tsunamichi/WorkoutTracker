@@ -5,7 +5,7 @@ public enum ProgressionValidator {
         guard isValid(configuration.defaults) else { return false }
         let groupIDs = configuration.groups.map(\.id)
         let overrideIDs = configuration.overrides.map(\.exerciseID)
-        guard Set(groupIDs).count == groupIDs.count, Set(overrideIDs).count == overrideIDs.count else { return false }
+        guard Set(groupIDs).count == groupIDs.count, Set(overrideIDs).count == overrideIDs.count, configuration.assignments.keys.allSatisfy(valid) else { return false }
         return configuration.groups.allSatisfy {
             !$0.id.rawValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
             !$0.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
@@ -31,13 +31,8 @@ public struct ResolvedProgressionRule: Equatable, Sendable {
 public enum ProgressionRuleResolver {
     public static func resolve(exerciseID: ExerciseID, configuration: ProgressionConfiguration) -> ResolvedProgressionRule? {
         guard configuration.isEnabled else { return nil }
-        if let override = configuration.overrides.first(where: { $0.exerciseID == exerciseID }) {
-            return override.parameters.mode == .disabled ? nil : .init(parameters: override.parameters, source: .exerciseOverride)
-        }
-        if let group = configuration.groups.first(where: { $0.exerciseIDs.contains(exerciseID) && ProgressionValidator.isValid($0.parameters) }) {
-            return group.parameters.mode == .disabled ? nil : .init(parameters: group.parameters, source: .group(group.id))
-        }
-        return configuration.defaults.mode == .disabled ? nil : .init(parameters: configuration.defaults, source: .defaults)
+        guard let parameters = (configuration.assignments[exerciseID] ?? .none).parameters else { return nil }
+        return .init(parameters: parameters, source: .exerciseOverride)
     }
 }
 

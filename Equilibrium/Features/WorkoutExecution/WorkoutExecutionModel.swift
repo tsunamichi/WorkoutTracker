@@ -20,6 +20,7 @@ final class WorkoutExecutionModel {
     private let audio: any AudioFeedbackClient
     private let historyRepository: (any ExerciseHistoryRepository)?
     private let progressionRepository: (any ProgressionRepository)?
+    private let exerciseRepository: (any ExerciseRepository)?
 
     private(set) var workout: Workout?
     private(set) var errorMessage: String?
@@ -32,7 +33,7 @@ final class WorkoutExecutionModel {
     @ObservationIgnored private var restTask: Task<Void, Never>?
     let weightUnit: WeightUnit
 
-    init(workoutID: WorkoutID, repository: any WorkoutRepository, historyRepository: (any ExerciseHistoryRepository)? = nil, progressionRepository: (any ProgressionRepository)? = nil, weightUnit: WeightUnit = .pounds, defaultRestDuration: TimeInterval = 90, now: @escaping () -> Date = Date.init, timer: CountdownTimer? = nil, haptics: (any HapticsClient)? = nil, audio: (any AudioFeedbackClient)? = nil, didPersist: @escaping (Workout) -> Void = { _ in }) {
+    init(workoutID: WorkoutID, repository: any WorkoutRepository, historyRepository: (any ExerciseHistoryRepository)? = nil, progressionRepository: (any ProgressionRepository)? = nil, exerciseRepository: (any ExerciseRepository)? = nil, weightUnit: WeightUnit = .pounds, defaultRestDuration: TimeInterval = 90, now: @escaping () -> Date = Date.init, timer: CountdownTimer? = nil, haptics: (any HapticsClient)? = nil, audio: (any AudioFeedbackClient)? = nil, didPersist: @escaping (Workout) -> Void = { _ in }) {
         self.workoutID = workoutID
         self.repository = repository
         self.weightUnit = weightUnit
@@ -43,6 +44,7 @@ final class WorkoutExecutionModel {
         self.haptics = haptics ?? NoopHapticsClient(); self.audio = audio ?? NoopAudioFeedbackClient()
         self.historyRepository = historyRepository
         self.progressionRepository = progressionRepository
+        self.exerciseRepository = exerciseRepository
     }
     var restState: WorkoutRestState? {
         guard let restingExercise, timer.state == .running || timer.state == .paused || timer.state == .completed else { return nil }
@@ -186,6 +188,29 @@ final class WorkoutExecutionModel {
         guard let exerciseID = restEditableExercise?.id else { return false }
         do { accept(try await repository.setRestDuration(workoutID: workoutID, exerciseID: exerciseID, seconds: seconds, at: now())); errorMessage = nil; return true }
         catch { errorMessage = message(for: error); return false }
+    }
+    func availableExercises() async -> [ExerciseDefinition] { (try? await exerciseRepository?.allExercises()) ?? [] }
+    func progressionProfile(for exercise: WorkoutExercise) async -> AutoProgressionProfile { (try? await progressionRepository?.progressionConfiguration().assignments[exercise.exerciseID]) ?? .none }
+    func updateExerciseSettings(exerciseID: WorkoutExerciseID, timeBased: Bool, twoSided: Bool, progression: AutoProgressionProfile) async -> Bool {
+        guard var value = workout, let index = value.exercises.firstIndex(where: { $0.id == exerciseID }) else { return false }
+        var occurrence = value.exercises[index]
+        if occurrence.isTimeBased != timeBased {
+            occurrence.prescriptions = occurrence.prescriptions.map { item in var result = item; switch (timeBased, item.target) { case (true, .repetitions(let range)): result.target = .duration(seconds: TimeInterval(range.lowerBound)); case (false, .duration(let seconds)): let reps = max(1, Int(seconds.rounded())); result.target = .repetitions(range: reps...reps); default: break }; return result }
+            occurrence.loggedSets = []
+        }
+        occurrence.isTimeBased = timeBased; occurrence.isTwoSided = twoSided; value.exercises[index] = occurrence; value.updatedAt = now()
+        do { try await repository.update(value); if var configuration = try await progressionRepository?.progressionConfiguration() { configuration.assign(progression, to: occurrence.exerciseID); try await progressionRepository?.saveProgressionConfiguration(configuration) }; accept(value); errorMessage = nil; return true } catch { errorMessage = message(for: error); return false }
+    }
+    func swapExercise(occurrenceID: WorkoutExerciseID, with definition: ExerciseDefinition) async -> Bool {
+        guard var value = workout, let index = value.exercises.firstIndex(where: { $0.id == occurrenceID }) else { return false }
+        let old = value.exercises[index]
+        value.exercises[index] = WorkoutExercise(id: old.id, exerciseID: definition.id, nameSnapshot: definition.name, prescriptions: old.prescriptions, loggedSets: [], restDuration: old.restDuration, skippedAt: nil, isTimeBased: old.isTimeBased, isTwoSided: old.isTwoSided); value.updatedAt = now()
+        do { try await repository.update(value); accept(value); focusedExerciseID = occurrenceID; errorMessage = nil; return true } catch { errorMessage = message(for: error); return false }
+    }
+    func removeExercise(_ occurrenceID: WorkoutExerciseID) async -> Bool {
+        guard var value = workout, value.exercises.contains(where: { $0.id == occurrenceID }) else { return false }
+        value.exercises.removeAll { $0.id == occurrenceID }; value.updatedAt = now()
+        do { try await repository.update(value); accept(value); focusedExerciseID = nil; selectFirstIncompleteSet(); errorMessage = nil; return true } catch { errorMessage = message(for: error); return false }
     }
 
     private func accept(_ value: Workout) { workout = value; didPersist(value) }

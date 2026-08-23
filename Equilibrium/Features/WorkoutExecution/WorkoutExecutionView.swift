@@ -9,11 +9,12 @@ struct WorkoutExecutionView: View {
     @State private var confirmsReset = false
     @State private var confirmsDelete = false
     @State private var editsRestDuration = false
+    @State private var settingsExercise: WorkoutExercise?
     private let historyRepository: (any ExerciseHistoryRepository)?
 
-    init(id: WorkoutID, repository: any WorkoutRepository, historyRepository: (any ExerciseHistoryRepository)? = nil, progressionRepository: (any ProgressionRepository)? = nil, weightUnit: WeightUnit = .pounds, defaultRestDuration: TimeInterval = 90, didPersist: @escaping (Workout) -> Void = { _ in }) {
+    init(id: WorkoutID, repository: any WorkoutRepository, historyRepository: (any ExerciseHistoryRepository)? = nil, progressionRepository: (any ProgressionRepository)? = nil, exerciseRepository: (any ExerciseRepository)? = nil, weightUnit: WeightUnit = .pounds, defaultRestDuration: TimeInterval = 90, didPersist: @escaping (Workout) -> Void = { _ in }) {
         self.historyRepository = historyRepository ?? (repository as? SwiftDataRepository)
-        _model = State(initialValue: WorkoutExecutionModel(workoutID: id, repository: repository, historyRepository: historyRepository ?? (repository as? SwiftDataRepository), progressionRepository: progressionRepository ?? (repository as? SwiftDataRepository), weightUnit: weightUnit, defaultRestDuration: defaultRestDuration, haptics: SystemHapticsClient(), audio: SystemAudioFeedbackClient(), didPersist: didPersist))
+        _model = State(initialValue: WorkoutExecutionModel(workoutID: id, repository: repository, historyRepository: historyRepository ?? (repository as? SwiftDataRepository), progressionRepository: progressionRepository ?? (repository as? SwiftDataRepository), exerciseRepository: exerciseRepository ?? (repository as? SwiftDataRepository), weightUnit: weightUnit, defaultRestDuration: defaultRestDuration, haptics: SystemHapticsClient(), audio: SystemAudioFeedbackClient(), didPersist: didPersist))
     }
 
     var body: some View {
@@ -41,6 +42,7 @@ struct WorkoutExecutionView: View {
         .sheet(isPresented: $editsRestDuration) {
             RestDurationEditor(initialSeconds: model.configuredRestDuration) { seconds in await model.setRestDuration(seconds) }
         }
+        .sheet(item: $settingsExercise) { exercise in ExerciseSettingsView(exercise: exercise, model: model) }
     }
 
     @ToolbarContentBuilder private var workoutToolbar: some ToolbarContent {
@@ -107,6 +109,7 @@ struct WorkoutExecutionView: View {
                 .buttonStyle(.plain)
                 .disabled(workout.status == .completed)
                 .accessibilityHint(workout.status == .inProgress ? "Makes this the active exercise without changing workout order" : "Completed workout is read-only")
+                .contextMenu { if workout.status == .inProgress { Button("Exercise Settings", systemImage: "gearshape") { settingsExercise = exercise } } }
             }
             if workout.status == .completed { ReadOnlySetReview(exercises: workout.exercises, weightUnit: model.weightUnit) }
         }
@@ -299,7 +302,6 @@ private struct FocusedSetView: View {
                     .focused($focusedField, equals: .value)
             }
             setSelector
-            if case .duration(let seconds) = prescription.target, !isReadOnly { DurationSetTimerView(duration: seconds) }
             if !isReadOnly {
                 Button { commit() } label: {
                     Label(isLogged ? "Update set" : "Log set", systemImage: "checkmark").frame(maxWidth: .infinity, minHeight: EQDimension.minimumTouch)
@@ -359,26 +361,21 @@ private struct ProgressionSuggestionView: View {
     private var rationale: String { switch suggestion.rationale { case .increaseWeight: "Increase weight"; case .addRepetitions: "Add repetitions"; case .repeatLast: "Repeat last performance" } }
 }
 
-private struct DurationSetTimerView: View {
-    let duration: TimeInterval
-    @State private var timer = CountdownTimer()
-    @State private var tick: Task<Void, Never>?
-    @State private var completionFeedback = 0
+private struct ExerciseSettingsView: View {
+    let exercise: WorkoutExercise; let model: WorkoutExecutionModel
+    @Environment(\.dismiss) private var dismiss
+    @State private var timeBased: Bool; @State private var twoSided: Bool; @State private var profile: AutoProgressionProfile = .none
+    @State private var choices: [ExerciseDefinition] = []; @State private var confirmsRemove = false
+    init(exercise: WorkoutExercise, model: WorkoutExecutionModel) { self.exercise = exercise; self.model = model; _timeBased = State(initialValue: exercise.isTimeBased); _twoSided = State(initialValue: exercise.isTwoSided) }
     var body: some View {
-        VStack(spacing: EQSpacing.sm) {
-            Text(time).font(EQTypography.metric).monospacedDigit().accessibilityLabel(accessibilityTime)
-            HStack {
-                Button(timer.state == .running ? "Pause" : timer.state == .paused ? "Resume" : "Start") { toggle() }.frame(minHeight: EQDimension.minimumTouch)
-                Button("Reset") { timer.reset() }.frame(minHeight: EQDimension.minimumTouch)
-                Button("Cancel") { timer.cancel() }.frame(minHeight: EQDimension.minimumTouch)
-            }.buttonStyle(.bordered)
-            Text("Timer completion does not log the set. Confirm the duration with Log set.").font(EQTypography.caption).foregroundStyle(EQColor.secondaryText)
-        }.onDisappear { tick?.cancel() }.onChange(of: timer.state) { _, _ in runTicksIfNeeded() }.sensoryFeedback(.success, trigger: completionFeedback)
+        NavigationStack { Form {
+            Section("Exercise Settings") { Toggle("Time-based exercise", isOn: $timeBased); Toggle("Two-sides exercise", isOn: $twoSided) }
+            Section("Auto Progression") { Picker("Auto Progression", selection: $profile) { ForEach(AutoProgressionProfile.allCases, id: \.self) { Text($0.title).tag($0) } } }
+            Section { Menu("Swap exercise") { ForEach(choices.filter { $0.id != exercise.exerciseID }) { definition in Button(definition.name) { Task { if await model.swapExercise(occurrenceID: exercise.id, with: definition) { dismiss() } } } } }; Button("Remove exercise", role: .destructive) { confirmsRemove = true } }
+        }.navigationTitle(exercise.nameSnapshot).toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }; ToolbarItem(placement: .confirmationAction) { Button("Save") { Task { if await model.updateExerciseSettings(exerciseID: exercise.id, timeBased: timeBased, twoSided: twoSided, progression: profile) { dismiss() } } } } } }
+        .task { choices = await model.availableExercises(); profile = await model.progressionProfile(for: exercise) }
+        .alert("Remove exercise?", isPresented: $confirmsRemove) { Button("Cancel", role: .cancel) {}; Button("Remove", role: .destructive) { Task { if await model.removeExercise(exercise.id) { dismiss() } } } } message: { Text("Remove this exercise from this workout?") }
     }
-    private var time: String { let value = max(0, Int(ceil(timer.state == .idle ? duration : timer.remainingDuration))); return String(format: "%d:%02d", value / 60, value % 60) }
-    private var accessibilityTime: String { "\(Int(ceil(timer.state == .idle ? duration : timer.remainingDuration))) seconds remaining" }
-    private func toggle() { switch timer.state { case .running: timer.pause(); case .paused: timer.resume(); case .idle, .completed: timer.start(duration: duration) } }
-    private func runTicksIfNeeded() { tick?.cancel(); guard timer.state == .running else { return }; tick = Task { while !Task.isCancelled && timer.state == .running { try? await Task.sleep(for: .milliseconds(200)); if timer.refresh() { completionFeedback += 1; SystemHapticsClient().timerCompleted(); SystemAudioFeedbackClient().timerCompleted() } } } }
 }
 
 private struct HeroValueField: View {

@@ -39,7 +39,6 @@ struct HomeView: View {
                     model.applyPersistedWorkouts(created)
                 }
             }
-            .sheet(isPresented: $model.isTimerPresented) { StandaloneTimerView() }
             .task { await model.load(); if let settings = try? await settingsRepository.settings() { appSettings = settings } }
         }.tint(EQColor.accent)
     }
@@ -75,8 +74,8 @@ struct HomeView: View {
     }
 
     private var timer: some View {
-        Button { model.isTimerPresented = true } label: {
-            HStack { Image(systemName: "timer"); Text("Timer"); Spacer(); Image(systemName: "chevron.up") }
+        NavigationLink(value: HomeRoute.timer) {
+            HStack { Image(systemName: "timer"); Text("Timer"); Spacer(); Image(systemName: "chevron.right") }
                 .frame(minHeight: EQDimension.minimumTouch)
         }.buttonStyle(.plain).padding(.horizontal, EQSpacing.lg).accessibilityHint("Opens a standalone countdown timer")
     }
@@ -84,16 +83,17 @@ struct HomeView: View {
     @ViewBuilder private func destination(_ route: HomeRoute) -> some View {
         switch route {
         case .workout(let id):
-            WorkoutExecutionView(id: id, repository: repository, historyRepository: historyRepository, progressionRepository: progressionRepository, weightUnit: appSettings.weightUnit, defaultRestDuration: appSettings.defaultRestDuration) { model.applyPersistedWorkout($0) }
+            WorkoutExecutionView(id: id, repository: repository, historyRepository: historyRepository, progressionRepository: progressionRepository, exerciseRepository: exerciseRepository, weightUnit: appSettings.weightUnit, defaultRestDuration: appSettings.defaultRestDuration) { model.applyPersistedWorkout($0) }
                 .onDisappear { Task { await model.load() } }
                 .modifier(HomeZoomModifier(id: id.rawValue, namespace: workoutTransition, reduceMotion: reduceMotion))
         case .settings: SettingsShellView(settingsRepository: settingsRepository, progressionRepository: progressionRepository, exerciseRepository: exerciseRepository).onDisappear { Task { if let settings = try? await settingsRepository.settings() { appSettings = settings } } }
         case .history: WorkoutHistoryView(repository: repository, historyRepository: historyRepository)
+        case .timer: StandaloneTimerView()
         }
     }
 }
 
-enum HomeRoute: Hashable { case workout(WorkoutID), settings, history }
+enum HomeRoute: Hashable { case workout(WorkoutID), settings, history, timer }
 
 private struct WorkoutCard: View {
     let workout: Workout; let sequence: Int

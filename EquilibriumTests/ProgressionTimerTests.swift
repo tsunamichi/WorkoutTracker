@@ -11,19 +11,14 @@ final class ProgressionTimerTests: XCTestCase {
         reps.enumerated().map { .init(id: .init(rawValue: "log-\($0.offset)"), prescriptionID: .init(rawValue: "set-\($0.offset)"), weight: weight.map(Weight.init(pounds:)), repetitions: $0.element, duration: nil, completedAt: .init(timeIntervalSince1970: Double($0.offset + 1))) }
     }
 
-    func testRulePrecedenceAndDisabledRules() {
-        let groupA = ProgressionGroup(id: .init(rawValue: "a"), name: "A", parameters: parameters(.weightOnly), exerciseIDs: [exerciseID])
-        let groupB = ProgressionGroup(id: .init(rawValue: "b"), name: "B", parameters: parameters(.repetitionsOnly), exerciseIDs: [exerciseID])
-        let override = ExerciseProgressionOverride(exerciseID: exerciseID, parameters: parameters(.doubleProgression))
-        var configuration = ProgressionConfiguration(isEnabled: true, defaults: parameters(), groups: [groupA, groupB], overrides: [override])
-        XCTAssertEqual(ProgressionRuleResolver.resolve(exerciseID: exerciseID, configuration: configuration)?.source, .exerciseOverride)
-        configuration.overrides = []
-        XCTAssertEqual(ProgressionRuleResolver.resolve(exerciseID: exerciseID, configuration: configuration)?.source, .group(groupA.id))
-        configuration.groups = []
-        XCTAssertEqual(ProgressionRuleResolver.resolve(exerciseID: exerciseID, configuration: configuration)?.source, .defaults)
+    func testCanonicalAssignmentAndDisabledRules() {
+        var configuration = ProgressionConfiguration(isEnabled: true, defaults: parameters(), groups: [], overrides: [])
+        XCTAssertNil(ProgressionRuleResolver.resolve(exerciseID: exerciseID, configuration: configuration))
+        configuration.assign(.upper, to: exerciseID)
+        XCTAssertEqual(ProgressionRuleResolver.resolve(exerciseID: exerciseID, configuration: configuration)?.parameters, AutoProgressionProfile.upper.parameters)
         configuration.isEnabled = false
         XCTAssertNil(ProgressionRuleResolver.resolve(exerciseID: exerciseID, configuration: configuration))
-        configuration.isEnabled = true; configuration.overrides = [.init(exerciseID: exerciseID, parameters: parameters(.disabled))]
+        configuration.isEnabled = true; configuration.assign(.none, to: exerciseID)
         XCTAssertNil(ProgressionRuleResolver.resolve(exerciseID: exerciseID, configuration: configuration))
     }
 
@@ -56,9 +51,9 @@ final class ProgressionTimerTests: XCTestCase {
             let exercise = WorkoutExercise(id: .init(rawValue: "we-\(id)"), exerciseID: exerciseID, nameSnapshot: id == "old" ? "Old Name" : "Renamed", prescriptions: [prescription], loggedSets: [.init(id: .init(rawValue: "l-\(id)"), prescriptionID: prescription.id, weight: .init(pounds: 100), repetitions: reps, duration: nil, completedAt: completed)], restDuration: nil, skippedAt: nil)
             return .init(id: .init(rawValue: id), titleSnapshot: id, exercises: [exercise], status: status, startedAt: status == .ready ? nil : .init(timeIntervalSince1970: 1), completedAt: completed, createdAt: .init(timeIntervalSince1970: 1), updatedAt: completed ?? .init(timeIntervalSince1970: 1))
         }
-        let configuration = ProgressionConfiguration(isEnabled: true, defaults: parameters(), groups: [], overrides: [])
+        let configuration = ProgressionConfiguration(isEnabled: true, defaults: parameters(), groups: [], overrides: [], assignments: [exerciseID: .upper])
         let suggestion = ProgressionEngine.suggestion(exerciseID: exerciseID, configuration: configuration, workouts: [workout("ready", status: .ready, reps: 12, completed: nil), workout("progress", status: .inProgress, reps: 12, completed: nil), workout("old", status: .completed, reps: 8, completed: .init(timeIntervalSince1970: 10)), workout("new", status: .completed, reps: 11, completed: .init(timeIntervalSince1970: 20))])
-        XCTAssertEqual(suggestion?.targetRepetitions, 12...12)
+        XCTAssertEqual(suggestion?.targetRepetitions, 5...8)
         var duration = workout("duration", status: .completed, reps: 10, completed: .init(timeIntervalSince1970: 30))
         duration.exercises[0].prescriptions[0].target = .duration(seconds: 30)
         XCTAssertNil(ProgressionEngine.suggestion(exerciseID: exerciseID, configuration: configuration, workouts: [duration]))

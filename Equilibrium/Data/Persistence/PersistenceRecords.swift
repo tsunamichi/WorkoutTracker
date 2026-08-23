@@ -24,12 +24,12 @@ import SwiftData
 
 @Model final class WorkoutExerciseRecord {
     @Attribute(.unique) var id: String
-    var exerciseID: String; var nameSnapshot: String; var position: Int; var restDuration: Double?; var skippedAt: Date?
+    var exerciseID: String; var nameSnapshot: String; var position: Int; var restDuration: Double?; var skippedAt: Date?; var isTimeBased: Bool = false; var isTwoSided: Bool = false
     var workout: WorkoutRecord?
     @Relationship(deleteRule: .cascade, inverse: \PrescriptionRecord.exercise) var prescriptions: [PrescriptionRecord]
     @Relationship(deleteRule: .cascade, inverse: \LoggedSetRecord.exercise) var loggedSets: [LoggedSetRecord]
-    init(id: String, exerciseID: String, nameSnapshot: String, position: Int, restDuration: Double?, skippedAt: Date?, prescriptions: [PrescriptionRecord], loggedSets: [LoggedSetRecord]) {
-        self.id = id; self.exerciseID = exerciseID; self.nameSnapshot = nameSnapshot; self.position = position; self.restDuration = restDuration; self.skippedAt = skippedAt
+    init(id: String, exerciseID: String, nameSnapshot: String, position: Int, restDuration: Double?, skippedAt: Date?, isTimeBased: Bool = false, isTwoSided: Bool = false, prescriptions: [PrescriptionRecord], loggedSets: [LoggedSetRecord]) {
+        self.id = id; self.exerciseID = exerciseID; self.nameSnapshot = nameSnapshot; self.position = position; self.restDuration = restDuration; self.skippedAt = skippedAt; self.isTimeBased = isTimeBased; self.isTwoSided = isTwoSided
         self.prescriptions = prescriptions; self.loggedSets = loggedSets
     }
 }
