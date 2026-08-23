@@ -5,18 +5,21 @@ struct HomeView: View {
     private let repository: any WorkoutRepository
     private let exerciseRepository: any ExerciseRepository
     private let historyRepository: any ExerciseHistoryRepository
+    private let settingsRepository: any SettingsRepository
+    private let progressionRepository: any ProgressionRepository
+    @State private var appSettings = AppSettings(weightUnit: .pounds, defaultRestDuration: 90)
     @Namespace private var workoutTransition
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @AppStorage(EQPreferenceKey.weightUnit) private var weightUnitRaw = WeightUnit.pounds.rawValue
-
-    init(repository: any WorkoutRepository, exerciseRepository: (any ExerciseRepository)? = nil, historyRepository: (any ExerciseHistoryRepository)? = nil) {
+    init(repository: any WorkoutRepository, exerciseRepository: (any ExerciseRepository)? = nil, historyRepository: (any ExerciseHistoryRepository)? = nil, settingsRepository: (any SettingsRepository)? = nil, progressionRepository: (any ProgressionRepository)? = nil) {
         self.repository = repository
         guard let shared = repository as? SwiftDataRepository else {
-            precondition(exerciseRepository != nil && historyRepository != nil, "Creation repositories are required")
+            precondition(exerciseRepository != nil && historyRepository != nil && settingsRepository != nil && progressionRepository != nil, "Feature repositories are required")
             self.exerciseRepository = exerciseRepository!; self.historyRepository = historyRepository!
+            self.settingsRepository = settingsRepository!; self.progressionRepository = progressionRepository!
             _model = State(initialValue: HomeModel(repository: repository)); return
         }
         self.exerciseRepository = exerciseRepository ?? shared; self.historyRepository = historyRepository ?? shared
+        self.settingsRepository = settingsRepository ?? shared; self.progressionRepository = progressionRepository ?? shared
         _model = State(initialValue: HomeModel(repository: repository))
     }
 
@@ -36,8 +39,8 @@ struct HomeView: View {
                     model.applyPersistedWorkouts(created)
                 }
             }
-            .sheet(isPresented: $model.isTimerPresented) { StandaloneTimerPlaceholder() }
-            .task { await model.load() }
+            .sheet(isPresented: $model.isTimerPresented) { StandaloneTimerView() }
+            .task { await model.load(); if let settings = try? await settingsRepository.settings() { appSettings = settings } }
         }.tint(EQColor.accent)
     }
 
@@ -75,16 +78,16 @@ struct HomeView: View {
         Button { model.isTimerPresented = true } label: {
             HStack { Image(systemName: "timer"); Text("Timer"); Spacer(); Image(systemName: "chevron.up") }
                 .frame(minHeight: EQDimension.minimumTouch)
-        }.buttonStyle(.plain).padding(.horizontal, EQSpacing.lg).accessibilityHint("Opens the standalone timer placeholder")
+        }.buttonStyle(.plain).padding(.horizontal, EQSpacing.lg).accessibilityHint("Opens a standalone countdown timer")
     }
 
     @ViewBuilder private func destination(_ route: HomeRoute) -> some View {
         switch route {
         case .workout(let id):
-            WorkoutExecutionView(id: id, repository: repository, historyRepository: historyRepository, weightUnit: WeightUnit(rawValue: weightUnitRaw) ?? .pounds) { model.applyPersistedWorkout($0) }
+            WorkoutExecutionView(id: id, repository: repository, historyRepository: historyRepository, progressionRepository: progressionRepository, weightUnit: appSettings.weightUnit, defaultRestDuration: appSettings.defaultRestDuration) { model.applyPersistedWorkout($0) }
                 .onDisappear { Task { await model.load() } }
                 .modifier(HomeZoomModifier(id: id.rawValue, namespace: workoutTransition, reduceMotion: reduceMotion))
-        case .settings: SettingsShellView()
+        case .settings: SettingsShellView(settingsRepository: settingsRepository, progressionRepository: progressionRepository, exerciseRepository: exerciseRepository).onDisappear { Task { if let settings = try? await settingsRepository.settings() { appSettings = settings } } }
         case .history: WorkoutHistoryView(repository: repository, historyRepository: historyRepository)
         }
     }
@@ -131,11 +134,6 @@ private struct AddWorkoutCard: View {
             .background(EQColor.surface, in: RoundedRectangle(cornerRadius: EQRadius.hero, style: .continuous))
             .overlay(RoundedRectangle(cornerRadius: EQRadius.hero, style: .continuous).stroke(EQColor.separator))
     }
-}
-
-private struct StandaloneTimerPlaceholder: View {
-    @Environment(\.dismiss) private var dismiss
-    var body: some View { NavigationStack { ContentUnavailableView("Timer", systemImage: "timer", description: Text("The standalone timer arrives in a later migration phase.")).toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } } }.presentationDetents([.medium]) }
 }
 
 private struct HomeZoomModifier: ViewModifier {

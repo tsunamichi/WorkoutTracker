@@ -11,9 +11,9 @@ struct WorkoutExecutionView: View {
     @State private var editsRestDuration = false
     private let historyRepository: (any ExerciseHistoryRepository)?
 
-    init(id: WorkoutID, repository: any WorkoutRepository, historyRepository: (any ExerciseHistoryRepository)? = nil, weightUnit: WeightUnit = .pounds, didPersist: @escaping (Workout) -> Void = { _ in }) {
+    init(id: WorkoutID, repository: any WorkoutRepository, historyRepository: (any ExerciseHistoryRepository)? = nil, progressionRepository: (any ProgressionRepository)? = nil, weightUnit: WeightUnit = .pounds, defaultRestDuration: TimeInterval = 90, didPersist: @escaping (Workout) -> Void = { _ in }) {
         self.historyRepository = historyRepository ?? (repository as? SwiftDataRepository)
-        _model = State(initialValue: WorkoutExecutionModel(workoutID: id, repository: repository, weightUnit: weightUnit, didPersist: didPersist))
+        _model = State(initialValue: WorkoutExecutionModel(workoutID: id, repository: repository, historyRepository: historyRepository ?? (repository as? SwiftDataRepository), progressionRepository: progressionRepository ?? (repository as? SwiftDataRepository), weightUnit: weightUnit, defaultRestDuration: defaultRestDuration, haptics: SystemHapticsClient(), audio: SystemAudioFeedbackClient(), didPersist: didPersist))
     }
 
     var body: some View {
@@ -122,6 +122,7 @@ struct WorkoutExecutionView: View {
                 if let rest = model.restState {
                     RestModeView(state: rest, skip: model.skipRest)
                 } else if let exercise = model.currentExercise, let prescription = model.currentPrescription {
+                    if let suggestion = model.suggestion(for: exercise) { ProgressionSuggestionView(suggestion: suggestion, unit: model.weightUnit) }
                     FocusedSetView(
                         exercise: exercise,
                         prescription: prescription,
@@ -298,6 +299,7 @@ private struct FocusedSetView: View {
                     .focused($focusedField, equals: .value)
             }
             setSelector
+            if case .duration(let seconds) = prescription.target, !isReadOnly { DurationSetTimerView(duration: seconds) }
             if !isReadOnly {
                 Button { commit() } label: {
                     Label(isLogged ? "Update set" : "Log set", systemImage: "checkmark").frame(maxWidth: .infinity, minHeight: EQDimension.minimumTouch)
@@ -338,6 +340,45 @@ private struct FocusedSetView: View {
         }
         Task { await log(input) }
     }
+}
+
+private struct ProgressionSuggestionView: View {
+    let suggestion: ProgressionSuggestion; let unit: WeightUnit
+    var body: some View {
+        VStack(alignment: .leading, spacing: EQSpacing.xxs) {
+            Text("SUGGESTED").font(EQTypography.caption.weight(.bold)).foregroundStyle(EQColor.accent)
+            Text(summary).font(EQTypography.sectionTitle)
+            Text(rationale).font(EQTypography.caption).foregroundStyle(EQColor.secondaryText)
+        }.accessibilityElement(children: .combine).accessibilityHint("Suggestion only. Workout values are not changed automatically.")
+    }
+    private var summary: String {
+        let weight = suggestion.suggestedWeight.map { "\(WeightText.value($0, unit: unit)) \(unit == .pounds ? "lb" : "kg") · " } ?? ""
+        let reps = suggestion.targetRepetitions.map { "\($0.lowerBound)–\($0.upperBound) reps" } ?? ""
+        return weight + reps
+    }
+    private var rationale: String { switch suggestion.rationale { case .increaseWeight: "Increase weight"; case .addRepetitions: "Add repetitions"; case .repeatLast: "Repeat last performance" } }
+}
+
+private struct DurationSetTimerView: View {
+    let duration: TimeInterval
+    @State private var timer = CountdownTimer()
+    @State private var tick: Task<Void, Never>?
+    @State private var completionFeedback = 0
+    var body: some View {
+        VStack(spacing: EQSpacing.sm) {
+            Text(time).font(EQTypography.metric).monospacedDigit().accessibilityLabel(accessibilityTime)
+            HStack {
+                Button(timer.state == .running ? "Pause" : timer.state == .paused ? "Resume" : "Start") { toggle() }.frame(minHeight: EQDimension.minimumTouch)
+                Button("Reset") { timer.reset() }.frame(minHeight: EQDimension.minimumTouch)
+                Button("Cancel") { timer.cancel() }.frame(minHeight: EQDimension.minimumTouch)
+            }.buttonStyle(.bordered)
+            Text("Timer completion does not log the set. Confirm the duration with Log set.").font(EQTypography.caption).foregroundStyle(EQColor.secondaryText)
+        }.onDisappear { tick?.cancel() }.onChange(of: timer.state) { _, _ in runTicksIfNeeded() }.sensoryFeedback(.success, trigger: completionFeedback)
+    }
+    private var time: String { let value = max(0, Int(ceil(timer.state == .idle ? duration : timer.remainingDuration))); return String(format: "%d:%02d", value / 60, value % 60) }
+    private var accessibilityTime: String { "\(Int(ceil(timer.state == .idle ? duration : timer.remainingDuration))) seconds remaining" }
+    private func toggle() { switch timer.state { case .running: timer.pause(); case .paused: timer.resume(); case .idle, .completed: timer.start(duration: duration) } }
+    private func runTicksIfNeeded() { tick?.cancel(); guard timer.state == .running else { return }; tick = Task { while !Task.isCancelled && timer.state == .running { try? await Task.sleep(for: .milliseconds(200)); if timer.refresh() { completionFeedback += 1; SystemHapticsClient().timerCompleted(); SystemAudioFeedbackClient().timerCompleted() } } } }
 }
 
 private struct HeroValueField: View {

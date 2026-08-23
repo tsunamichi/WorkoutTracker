@@ -2,7 +2,7 @@ import Foundation
 import SwiftData
 
 @MainActor
-public final class SwiftDataRepository: ExerciseRepository, WorkoutRepository, ExerciseHistoryRepository, BackupRepository {
+public final class SwiftDataRepository: ExerciseRepository, WorkoutRepository, ExerciseHistoryRepository, SettingsRepository, ProgressionRepository, BackupRepository {
     private let context: ModelContext
     public init(container: ModelContainer) {
         context = ModelContext(container); context.autosaveEnabled = false
@@ -207,12 +207,25 @@ public final class SwiftDataRepository: ExerciseRepository, WorkoutRepository, E
         for workout in workouts { context.insert(WorkoutMapper.record(from: workout)) }
         do { try context.save() } catch { context.rollback(); throw error }
     }
+    public func settings() async throws -> AppSettings { try loadConfiguration().settings }
+    public func saveSettings(_ settings: AppSettings) async throws {
+        guard Self.isValidRestDuration(settings.defaultRestDuration) else { throw RepositoryError.invalidSettings }
+        let current = try loadConfiguration()
+        try saveConfiguration(settings: settings, progression: current.progression)
+    }
+    public func progressionConfiguration() async throws -> ProgressionConfiguration { try loadConfiguration().progression }
+    public func saveProgressionConfiguration(_ configuration: ProgressionConfiguration) async throws {
+        guard ProgressionValidator.isValid(configuration) else { throw RepositoryError.invalidProgressionConfiguration }
+        let current = try loadConfiguration()
+        try saveConfiguration(settings: current.settings, progression: configuration)
+    }
     public func exportBackup(exportedAt: Date, sourceDeviceID: String) async throws -> EquilibriumBackupV2 {
-        let stored = try loadCollection()
-        return try EquilibriumBackupV2(exportedAt: exportedAt, sourceDeviceID: sourceDeviceID, exercises: try await allExercises(), workouts: try await allWorkouts(), settings: stored?.settings ?? .init(weightUnit: .pounds, defaultRestDuration: 90), progression: stored?.progression ?? FixtureDefaults.progression)
+        let stored = try loadConfiguration()
+        return try EquilibriumBackupV2(exportedAt: exportedAt, sourceDeviceID: sourceDeviceID, exercises: try await allExercises(), workouts: try await allWorkouts(), settings: stored.settings, progression: stored.progression)
     }
     public func restoreBackup(_ backup: EquilibriumBackupV2) async throws {
         guard backup.schemaVersion == 2 else { throw BackupError.unsupportedSchemaVersion(backup.schemaVersion) }
+        guard Self.isValidRestDuration(backup.settings.defaultRestDuration), ProgressionValidator.isValid(backup.progression) else { throw RepositoryError.invalidBackup }
         guard try await allWorkouts().isEmpty, try await allExercises().isEmpty else { throw RepositoryError.invalidBackup }
         let exerciseIDs = backup.workouts.flatMap(\.exercises).map(\.id)
         let prescriptionIDs = backup.workouts.flatMap(\.exercises).flatMap(\.prescriptions).map(\.id)
@@ -223,11 +236,29 @@ public final class SwiftDataRepository: ExerciseRepository, WorkoutRepository, E
         for workout in backup.workouts { context.insert(WorkoutMapper.record(from: workout)) }
         let metadata = try BackupCodec.encode(backup)
         context.insert(BackupCollectionRecord(payload: metadata))
+        context.insert(AppConfigurationRecord(settingsPayload: try Self.encoder.encode(backup.settings), progressionPayload: try Self.encoder.encode(backup.progression)))
         do { try context.save() } catch { context.rollback(); throw error }
     }
     private func loadCollection() throws -> EquilibriumBackupV2? {
         guard let record = try context.fetch(FetchDescriptor<BackupCollectionRecord>()).first else { return nil }
         return try BackupCodec.decode(record.payload)
+    }
+    private static let encoder = JSONEncoder()
+    private static let decoder = JSONDecoder()
+    private static func isValidRestDuration(_ value: TimeInterval) -> Bool { value.isFinite && value >= 15 && value <= 300 && value.rounded() == value && Int(value) % 5 == 0 }
+    private func loadConfiguration() throws -> (settings: AppSettings, progression: ProgressionConfiguration) {
+        if let record = try context.fetch(FetchDescriptor<AppConfigurationRecord>()).first {
+            return (try Self.decoder.decode(AppSettings.self, from: record.settingsPayload), try Self.decoder.decode(ProgressionConfiguration.self, from: record.progressionPayload))
+        }
+        if let backup = try loadCollection() { return (backup.settings, backup.progression) }
+        return (.init(weightUnit: .pounds, defaultRestDuration: 90), FixtureDefaults.progression)
+    }
+    private func saveConfiguration(settings: AppSettings, progression: ProgressionConfiguration) throws {
+        let settingsPayload = try Self.encoder.encode(settings), progressionPayload = try Self.encoder.encode(progression)
+        if let record = try context.fetch(FetchDescriptor<AppConfigurationRecord>()).first {
+            record.settingsPayload = settingsPayload; record.progressionPayload = progressionPayload
+        } else { context.insert(AppConfigurationRecord(settingsPayload: settingsPayload, progressionPayload: progressionPayload)) }
+        try saveOrRollback()
     }
     private func saveOrRollback() throws { do { try context.save() } catch { context.rollback(); throw error } }
 }

@@ -57,3 +57,12 @@ import SwiftData
     var payload: Data
     init(key: String = "canonical-v1", payload: Data) { self.key = key; self.payload = payload }
 }
+
+@Model final class AppConfigurationRecord {
+    @Attribute(.unique) var key: String
+    var settingsPayload: Data
+    var progressionPayload: Data
+    init(key: String = "app-configuration", settingsPayload: Data, progressionPayload: Data) {
+        self.key = key; self.settingsPayload = settingsPayload; self.progressionPayload = progressionPayload
+    }
+}

@@ -118,9 +118,12 @@ Completed and retained:
 
 The former “Phase 5 — Plans” is removed and is not part of the roadmap.
 
+Completed and retained in the next migration change set:
+
+6. Progression plus full Timer behavior: durable validated configuration and derived completed-history suggestions; one transient deadline-based countdown engine for rest, duration sets, and standalone Timer.
+
 Next, in a separate change set:
 
-6. Progression plus full Timer behavior.
 7. Authentication and versioned Supabase backup.
 8. Explicit React Native migration/import.
 9. Release hardening and retained-product regression.
@@ -142,4 +145,4 @@ Every retained phase must keep these invariants covered:
 - persistence and backup recreate equivalent canonical state;
 - the full XCTest suite, simulator build/install/launch, source terminology scan, and `git diff --check` pass.
 
-Progression/full Timer, authentication, Supabase, importer work, and visual polish remain outside this correction.
+Authentication, Supabase, importer work, and visual polish remain outside this phase.

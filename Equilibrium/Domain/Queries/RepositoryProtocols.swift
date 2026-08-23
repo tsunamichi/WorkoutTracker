@@ -41,11 +41,15 @@ public protocol SettingsRepository: Sendable {
     func settings() async throws -> AppSettings
     func saveSettings(_ settings: AppSettings) async throws
 }
+public protocol ProgressionRepository: Sendable {
+    func progressionConfiguration() async throws -> ProgressionConfiguration
+    func saveProgressionConfiguration(_ configuration: ProgressionConfiguration) async throws
+}
 public protocol BackupRepository: Sendable {
     func exportBackup(exportedAt: Date, sourceDeviceID: String) async throws -> EquilibriumBackupV2
     func restoreBackup(_ backup: EquilibriumBackupV2) async throws
 }
-public enum RepositoryError: Error, Equatable { case notFound, immutableCompletedWorkout, workoutNotInProgress, prescriptionNotFound, cannotRemoveCompletedSet, invalidSetInput, invalidRestDuration, incompleteWorkout, duplicateIdentifier, duplicateExerciseName, invalidBackup }
+public enum RepositoryError: Error, Equatable { case notFound, immutableCompletedWorkout, workoutNotInProgress, prescriptionNotFound, cannotRemoveCompletedSet, invalidSetInput, invalidRestDuration, invalidSettings, invalidProgressionConfiguration, incompleteWorkout, duplicateIdentifier, duplicateExerciseName, invalidBackup }
 
 public extension WorkoutRepository {
     func completedWorkouts() async throws -> [Workout] {
