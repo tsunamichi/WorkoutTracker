@@ -11,51 +11,21 @@ import SwiftData
     }
 }
 
-@Model final class WorkoutTemplateRecord {
+@Model final class WorkoutRecord {
     @Attribute(.unique) var id: String
-    var name: String; var createdAt: Date; var updatedAt: Date; var archivedAt: Date?
-    @Relationship(deleteRule: .cascade, inverse: \TemplateExerciseRecord.template) var exercises: [TemplateExerciseRecord]
-    init(id: String, name: String, createdAt: Date, updatedAt: Date, archivedAt: Date?, exercises: [TemplateExerciseRecord]) {
-        self.id = id; self.name = name; self.createdAt = createdAt; self.updatedAt = updatedAt; self.archivedAt = archivedAt; self.exercises = exercises
-    }
-}
-
-@Model final class TemplateExerciseRecord {
-    @Attribute(.unique) var id: String
-    var exerciseID: String; var nameSnapshot: String; var position: Int; var restDuration: Double?; var progressionRuleID: String?
-    var template: WorkoutTemplateRecord?
-    @Relationship(deleteRule: .cascade, inverse: \TemplatePrescriptionRecord.exercise) var prescriptions: [TemplatePrescriptionRecord]
-    init(id: String, exerciseID: String, nameSnapshot: String, position: Int, restDuration: Double?, progressionRuleID: String?, prescriptions: [TemplatePrescriptionRecord]) {
-        self.id = id; self.exerciseID = exerciseID; self.nameSnapshot = nameSnapshot; self.position = position; self.restDuration = restDuration; self.progressionRuleID = progressionRuleID; self.prescriptions = prescriptions
-    }
-}
-
-@Model final class TemplatePrescriptionRecord {
-    @Attribute(.unique) var id: String
-    var position: Int; var targetKind: String; var lowerRepetitions: Int?; var upperRepetitions: Int?; var duration: Double?; var suggestedPounds: Double?
-    var exercise: TemplateExerciseRecord?
-    init(id: String, position: Int, targetKind: String, lowerRepetitions: Int?, upperRepetitions: Int?, duration: Double?, suggestedPounds: Double?) {
-        self.id = id; self.position = position; self.targetKind = targetKind; self.lowerRepetitions = lowerRepetitions; self.upperRepetitions = upperRepetitions; self.duration = duration; self.suggestedPounds = suggestedPounds
-    }
-}
-
-@Model final class ScheduledWorkoutRecord {
-    @Attribute(.unique) var id: String
-    var localDay: String
-    var titleSnapshot: String; var templateID: String?; var planID: String?; var sourceRaw: String; var statusRaw: String
+    var titleSnapshot: String; var statusRaw: String
     var startedAt: Date?; var completedAt: Date?; var createdAt: Date; var updatedAt: Date
-    @Relationship(deleteRule: .cascade, inverse: \ScheduledExerciseRecord.workout) var exercises: [ScheduledExerciseRecord]
-    init(id: String, localDay: String, titleSnapshot: String, templateID: String?, planID: String?, sourceRaw: String, statusRaw: String, startedAt: Date?, completedAt: Date?, createdAt: Date, updatedAt: Date, exercises: [ScheduledExerciseRecord]) {
-        self.id = id; self.localDay = localDay; self.titleSnapshot = titleSnapshot; self.templateID = templateID; self.planID = planID
-        self.sourceRaw = sourceRaw; self.statusRaw = statusRaw; self.startedAt = startedAt; self.completedAt = completedAt
+    @Relationship(deleteRule: .cascade, inverse: \WorkoutExerciseRecord.workout) var exercises: [WorkoutExerciseRecord]
+    init(id: String, titleSnapshot: String, statusRaw: String, startedAt: Date?, completedAt: Date?, createdAt: Date, updatedAt: Date, exercises: [WorkoutExerciseRecord]) {
+        self.id = id; self.titleSnapshot = titleSnapshot; self.statusRaw = statusRaw; self.startedAt = startedAt; self.completedAt = completedAt
         self.createdAt = createdAt; self.updatedAt = updatedAt; self.exercises = exercises
     }
 }
 
-@Model final class ScheduledExerciseRecord {
+@Model final class WorkoutExerciseRecord {
     @Attribute(.unique) var id: String
     var exerciseID: String; var nameSnapshot: String; var position: Int; var restDuration: Double?; var skippedAt: Date?
-    var workout: ScheduledWorkoutRecord?
+    var workout: WorkoutRecord?
     @Relationship(deleteRule: .cascade, inverse: \PrescriptionRecord.exercise) var prescriptions: [PrescriptionRecord]
     @Relationship(deleteRule: .cascade, inverse: \LoggedSetRecord.exercise) var loggedSets: [LoggedSetRecord]
     init(id: String, exerciseID: String, nameSnapshot: String, position: Int, restDuration: Double?, skippedAt: Date?, prescriptions: [PrescriptionRecord], loggedSets: [LoggedSetRecord]) {
@@ -67,7 +37,7 @@ import SwiftData
 @Model final class PrescriptionRecord {
     @Attribute(.unique) var id: String
     var position: Int; var targetKind: String; var lowerRepetitions: Int?; var upperRepetitions: Int?; var duration: Double?; var suggestedPounds: Double?
-    var exercise: ScheduledExerciseRecord?
+    var exercise: WorkoutExerciseRecord?
     init(id: String, position: Int, targetKind: String, lowerRepetitions: Int?, upperRepetitions: Int?, duration: Double?, suggestedPounds: Double?) {
         self.id = id; self.position = position; self.targetKind = targetKind; self.lowerRepetitions = lowerRepetitions; self.upperRepetitions = upperRepetitions; self.duration = duration; self.suggestedPounds = suggestedPounds
     }
@@ -76,7 +46,7 @@ import SwiftData
 @Model final class LoggedSetRecord {
     @Attribute(.unique) var id: String
     var prescriptionID: String?; var position: Int; var pounds: Double?; var repetitions: Int?; var duration: Double?; var completedAt: Date?
-    var exercise: ScheduledExerciseRecord?
+    var exercise: WorkoutExerciseRecord?
     init(id: String, prescriptionID: String?, position: Int, pounds: Double?, repetitions: Int?, duration: Double?, completedAt: Date?) {
         self.id = id; self.prescriptionID = prescriptionID; self.position = position; self.pounds = pounds; self.repetitions = repetitions; self.duration = duration; self.completedAt = completedAt
     }

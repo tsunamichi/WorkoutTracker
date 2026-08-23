@@ -1,7 +1,7 @@
 import Foundation
 
 public enum WorkoutShareText {
-    public static func build(workout: ScheduledWorkout, unit: WeightUnit) -> String {
+    public static func build(workout: Workout, unit: WeightUnit) -> String {
         var lines = [workout.titleSnapshot.trimmingCharacters(in: .whitespacesAndNewlines), "⸻"]
         for exercise in workout.exercises {
             lines.append("- \(exercise.nameSnapshot) — \(exerciseSummary(exercise, unit: unit))")
@@ -9,7 +9,7 @@ public enum WorkoutShareText {
         return lines.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    private static func exerciseSummary(_ exercise: ScheduledExercise, unit: WeightUnit) -> String {
+    private static func exerciseSummary(_ exercise: WorkoutExercise, unit: WeightUnit) -> String {
         let completed = ExercisePerformanceQuery.validCompletedSets(in: exercise)
         if !completed.isEmpty { return completed.map { setSummary($0, unit: unit) }.joined(separator: ", ") }
         guard let first = exercise.prescriptions.first else { return "No sets logged" }

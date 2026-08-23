@@ -35,14 +35,14 @@ struct ParseIssue: Identifiable, Hashable, Sendable {
     }
 }
 
-struct PlanParseResult: Hashable, Sendable {
+struct WorkoutParseResult: Hashable, Sendable {
     var workouts: [ParsedWorkout]
     var issues: [ParseIssue]
     var hasBlockingIssues: Bool { workouts.isEmpty || issues.contains { $0.severity == .error } }
 }
 
-struct PlanTextParser: Sendable {
-    func parse(_ rawText: String) -> PlanParseResult {
+struct WorkoutTextParser: Sendable {
+    func parse(_ rawText: String) -> WorkoutParseResult {
         let source = rawText.replacingOccurrences(of: "\r\n", with: "\n")
         guard !source.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             return .init(workouts: [], issues: [.init(message: "Paste at least one workout and exercise.")])

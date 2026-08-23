@@ -7,27 +7,27 @@ final class PersistenceSpikeTests: XCTestCase {
     func testOrderedWorkoutPersistenceAndSnapshots() async throws {
         let repository = SwiftDataRepository(container: try PersistenceController.makeContainer(inMemory: true))
         let fixture = EquilibriumFixtures.mixed()
-        try await repository.schedule(fixture)
-        let result = try await repository.workouts(on: fixture.day)
-        let loaded = try XCTUnwrap(result.first)
+        try await repository.create(fixture)
+        let persisted = try await repository.workout(id: fixture.id)
+        let loaded = try XCTUnwrap(persisted)
         XCTAssertEqual(loaded, fixture)
         XCTAssertEqual(loaded.exercises.map(\.nameSnapshot), ["Back Squat", "Plank"])
     }
 
-    func testSeveralWorkoutsPerDayRemainDistinctAndOrdered() async throws {
+    func testSeveralIndependentWorkoutsRemainDistinctAndOrdered() async throws {
         let repository = SwiftDataRepository(container: try PersistenceController.makeContainer(inMemory: true))
-        let first = EquilibriumFixtures.planned()
-        try await repository.schedule(first)
-        var second = EquilibriumFixtures.mixed(day: first.day.iso8601); second.createdAt = first.createdAt.addingTimeInterval(1)
-        try await repository.schedule(second)
-        let sameDay = try await repository.workouts(on: first.day)
-        XCTAssertEqual(sameDay.map(\.id), [first.id, second.id])
+        let first = EquilibriumFixtures.ready()
+        try await repository.create(first)
+        var second = EquilibriumFixtures.mixed(); second.createdAt = first.createdAt.addingTimeInterval(1)
+        try await repository.create(second)
+        let active = try await repository.activeWorkouts()
+        XCTAssertEqual(active.map(\.id), [first.id, second.id])
     }
 
-    func testBatchMaterializationAllowsSameDayAndRemainsAtomicForDuplicateIdentity() async throws {
+    func testBatchCreationRemainsAtomicForDuplicateIdentity() async throws {
         let repository = SwiftDataRepository(container: try PersistenceController.makeContainer(inMemory: true))
-        try await repository.schedule(EquilibriumFixtures.planned(day: "2025-02-03", id: "occupied"))
-        let incoming = [EquilibriumFixtures.planned(day: "2025-02-03", id: "incoming-1"), EquilibriumFixtures.planned(day: "2025-02-03", id: "occupied")]
+        try await repository.create(EquilibriumFixtures.ready(id: "occupied"))
+        let incoming = [EquilibriumFixtures.ready(id: "incoming-1"), EquilibriumFixtures.ready(id: "occupied")]
         do { try await repository.materializeAtomically(incoming); XCTFail("Expected duplicate") } catch { XCTAssertEqual(error as? RepositoryError, .duplicateIdentifier) }
         let identifiers = try await repository.allWorkouts().map(\.id.rawValue)
         XCTAssertEqual(identifiers, ["occupied"])
@@ -38,7 +38,7 @@ final class PersistenceSpikeTests: XCTestCase {
         var container: SwiftData.ModelContainer? = try PersistenceController.makeContainer(storageURL: url)
         var repository: SwiftDataRepository? = SwiftDataRepository(container: container!)
         let fixture = EquilibriumFixtures.inProgress()
-        try await repository!.schedule(fixture)
+        try await repository!.create(fixture)
         repository = nil; container = nil
         let reopened = try PersistenceController.makeContainer(storageURL: url)
         let result = try await SwiftDataRepository(container: reopened).workout(id: fixture.id)
@@ -49,8 +49,8 @@ final class PersistenceSpikeTests: XCTestCase {
 
     func testUpdateInProgressWorkoutPersistsNewSet() async throws {
         let repository = SwiftDataRepository(container: try PersistenceController.makeContainer(inMemory: true))
-        var workout = EquilibriumFixtures.planned(); workout.status = .inProgress; workout.startedAt = EquilibriumFixtures.timestamp
-        try await repository.schedule(workout)
+        var workout = EquilibriumFixtures.ready(); workout.status = .inProgress; workout.startedAt = EquilibriumFixtures.timestamp
+        try await repository.create(workout)
         let prescription = workout.exercises[0].prescriptions[0]
         workout.exercises[0].loggedSets = [.init(id: .init(rawValue: "new-log"), prescriptionID: prescription.id, weight: .init(pounds: 155), repetitions: 9, duration: nil, completedAt: EquilibriumFixtures.timestamp)]
         try await repository.update(workout)

@@ -11,7 +11,7 @@ struct ClipboardWorkoutImportView: View {
     var body: some View {
         Group {
             if fallback {
-                PlanImportInputView(initialText: initialText) { result in Task { await open(result) } }
+                WorkoutImportInputView(initialText: initialText) { result in Task { await open(result) } }
                     .safeAreaInset(edge: .top) { if let fallbackMessage { Text(fallbackMessage).font(EQTypography.caption).foregroundStyle(EQColor.warning).padding(.horizontal, EQSpacing.lg) } }
             } else { ProgressView("Reading clipboard") }
         }
@@ -20,28 +20,28 @@ struct ClipboardWorkoutImportView: View {
     private func readClipboard() async {
         let value = UIPasteboard.general.string ?? ""
         initialText = value
-        let result = PlanTextParser().parse(value)
+        let result = WorkoutTextParser().parse(value)
         guard !result.hasBlockingIssues, result.workouts.count == 1 else {
             fallbackMessage = value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "The clipboard is empty. Enter workout text below." : "The clipboard workout needs correction."
             fallback = true; return
         }
         await open(result)
     }
-    private func open(_ result: PlanParseResult) async {
+    private func open(_ result: WorkoutParseResult) async {
         guard let workout = result.workouts.first else { fallback = true; return }
-        do { ready(PlanImportDraftConverter.lightweightDraft(from: workout, catalog: try await repository.allExercises())) }
+        do { ready(WorkoutImportDraftConverter.lightweightDraft(from: workout, catalog: try await repository.allExercises())) }
         catch { fallbackMessage = "Exercises could not be loaded."; fallback = true }
     }
 }
 
-struct PlanImportInputView: View {
+struct WorkoutImportInputView: View {
     private let editorMinimumHeight: CGFloat = 220
-    let parsed: (PlanParseResult) -> Void
+    let parsed: (WorkoutParseResult) -> Void
     @State private var text = ""
     @State private var issues: [ParseIssue] = []
     @FocusState private var editorFocused: Bool
 
-    init(initialText: String = "", parsed: @escaping (PlanParseResult) -> Void) {
+    init(initialText: String = "", parsed: @escaping (WorkoutParseResult) -> Void) {
         self.parsed = parsed
         _text = State(initialValue: initialText)
     }
@@ -49,12 +49,12 @@ struct PlanImportInputView: View {
     var body: some View {
         Form {
             Section {
-                Text("Paste a structured workout or weekly plan. Use one exercise per line with sets and repetitions or duration.")
+                Text("Paste one or more structured workouts. Use one exercise per line with sets and repetitions or duration.")
                     .font(EQTypography.body).foregroundStyle(EQColor.secondaryText)
                 TextEditor(text: $text)
                     .frame(minHeight: editorMinimumHeight)
                     .focused($editorFocused)
-                    .accessibilityLabel("Workout plan text")
+                    .accessibilityLabel("Workout text")
                     .accessibilityHint("Paste workout names and exercise prescriptions, one per line.")
                 Button("Parse and Review") { parse() }
                     .frame(maxWidth: .infinity, minHeight: EQDimension.minimumTouch)
@@ -73,22 +73,22 @@ struct PlanImportInputView: View {
         .toolbar { ToolbarItemGroup(placement: .keyboard) { Spacer(); Button("Done") { editorFocused = false } } }
     }
     private func parse() {
-        let result = PlanTextParser().parse(text)
+        let result = WorkoutTextParser().parse(text)
         if result.hasBlockingIssues { issues = result.issues; editorFocused = true } else { issues = []; parsed(result) }
     }
 }
 
 @MainActor @Observable
-final class PlanImportReviewModel {
+final class WorkoutImportReviewModel {
     var workouts: [ResolvedParsedWorkout] = []
     var issues: [ParseIssue]
     var selectedIndex = 0
     var errorMessage: String?
     private let parsed: [ParsedWorkout]
     private let repository: any ExerciseRepository
-    private let matcher = PlanExerciseMatcher()
+    private let matcher = WorkoutExerciseMatcher()
 
-    init(result: PlanParseResult, repository: any ExerciseRepository) {
+    init(result: WorkoutParseResult, repository: any ExerciseRepository) {
         parsed = result.workouts; issues = result.issues; self.repository = repository
     }
     func load() async {
@@ -113,8 +113,8 @@ final class PlanImportReviewModel {
     }
 }
 
-struct PlanImportReviewView: View {
-    @State var model: PlanImportReviewModel
+struct WorkoutImportReviewView: View {
+    @State var model: WorkoutImportReviewModel
     let exercises: any ExerciseRepository
     let continueToBuilder: (WorkoutDraft) -> Void
     @State private var replacementID: UUID?
@@ -135,7 +135,7 @@ struct PlanImportReviewView: View {
                             }.frame(minHeight: EQDimension.minimumTouch)
                         }
                     }
-                    Text("Each workout opens independently in Workout Builder. Phase 3B does not create or schedule a CyclePlan.")
+                    Text("Each workout opens independently in Workout Builder.")
                         .font(EQTypography.caption).foregroundStyle(EQColor.secondaryText)
                 }
             }
@@ -143,7 +143,7 @@ struct PlanImportReviewView: View {
                 Section("Workout") { TextField("Workout name", text: $model.workouts[model.selectedIndex].name) }
                 Section("Exercise matches") {
                     ForEach($model.workouts[model.selectedIndex].exercises, id: \.parsed.id) { $value in
-                        PlanMatchRow(value: $value, choose: { replacementID = value.parsed.id }, renamed: { name in Task { await model.rename(exerciseID: value.parsed.id, to: name) } })
+                        WorkoutMatchRow(value: $value, choose: { replacementID = value.parsed.id }, renamed: { name in Task { await model.rename(exerciseID: value.parsed.id, to: name) } })
                     }
                 }
             }
@@ -152,7 +152,7 @@ struct PlanImportReviewView: View {
         }
         .overlay { if model.workouts.isEmpty && model.errorMessage == nil { ProgressView("Matching exercises") } }
         .scrollContentBackground(.hidden).background(EQColor.canvas).navigationTitle("Review Import")
-        .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Continue") { if let workout = model.selected, let draft = PlanImportDraftConverter.draft(from: workout) { continueToBuilder(draft) } }.disabled(model.selected == nil || model.selectedUnresolvedCount > 0) } }
+        .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Continue") { if let workout = model.selected, let draft = WorkoutImportDraftConverter.draft(from: workout) { continueToBuilder(draft) } }.disabled(model.selected == nil || model.selectedUnresolvedCount > 0) } }
         .sheet(isPresented: .init(get: { replacementID != nil }, set: { if !$0 { replacementID = nil } })) {
             Text("Exercise mapping is no longer part of the Home creation flow.")
         }
@@ -160,7 +160,7 @@ struct PlanImportReviewView: View {
     }
 }
 
-private struct PlanMatchRow: View {
+private struct WorkoutMatchRow: View {
     @Binding var value: ResolvedParsedExercise
     let choose: () -> Void
     let renamed: (String) -> Void
@@ -203,7 +203,7 @@ struct ParseIssueRow: View {
 }
 
 #if DEBUG
-#Preview("Import Simple") { NavigationStack { PlanImportInputView(initialText: PlanImportFixtures.simple) { _ in } }.preferredColorScheme(.dark) }
-#Preview("Import Malformed") { NavigationStack { PlanImportInputView(initialText: PlanImportFixtures.malformed) { _ in } }.preferredColorScheme(.dark) }
-#Preview("Import Long Large Type") { NavigationStack { PlanImportInputView(initialText: PlanImportFixtures.longPlan) { _ in } }.dynamicTypeSize(.accessibility3).preferredColorScheme(.dark) }
+#Preview("Import Simple") { NavigationStack { WorkoutImportInputView(initialText: WorkoutImportFixtures.simple) { _ in } }.preferredColorScheme(.dark) }
+#Preview("Import Malformed") { NavigationStack { WorkoutImportInputView(initialText: WorkoutImportFixtures.malformed) { _ in } }.preferredColorScheme(.dark) }
+#Preview("Import Long Large Type") { NavigationStack { WorkoutImportInputView(initialText: WorkoutImportFixtures.longInput) { _ in } }.dynamicTypeSize(.accessibility3).preferredColorScheme(.dark) }
 #endif

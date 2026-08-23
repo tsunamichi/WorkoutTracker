@@ -32,8 +32,6 @@ targets:
     sources:
       - path: EquilibriumTests
       - path: Equilibrium/Shared/TestSupport
-      - path: fixtures/equilibrium-backup-v1.golden.json
-        buildPhase: resources
     dependencies:
       - target: Equilibrium
     settings:

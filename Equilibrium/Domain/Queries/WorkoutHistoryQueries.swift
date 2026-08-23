@@ -1,27 +1,25 @@
 import Foundation
 
 public enum WorkoutHistoryQuery {
-    public static func completionDate(_ workout: ScheduledWorkout) -> Date {
+    public static func completionDate(_ workout: Workout) -> Date {
         workout.completedAt ?? workout.updatedAt
     }
 
-    public static func completed(_ workouts: [ScheduledWorkout]) -> [ScheduledWorkout] {
+    public static func completed(_ workouts: [Workout]) -> [Workout] {
         workouts.filter { $0.status == .completed }.sorted {
             let lhs = completionDate($0), rhs = completionDate($1)
             if lhs != rhs { return lhs > rhs }
-            if $0.day != $1.day { return $0.day > $1.day }
             return $0.id.rawValue > $1.id.rawValue
         }
     }
 }
 
 public struct ExerciseHistoryOccurrence: Identifiable, Equatable, Sendable {
-    public let id: ScheduledExerciseID
+    public let id: WorkoutExerciseID
     public let exerciseID: ExerciseID
     public let exerciseNameSnapshot: String
-    public let workoutID: ScheduledWorkoutID
+    public let workoutID: WorkoutID
     public let workoutTitleSnapshot: String
-    public let day: LocalDay
     public let occurredAt: Date
     public let sets: [LoggedSet]
 }
@@ -44,9 +42,8 @@ public enum ExercisePerformanceMetricFamily: Equatable, Sendable {
 }
 
 public struct ExerciseTrendPoint: Identifiable, Equatable, Sendable {
-    public let id: ScheduledExerciseID
-    public let workoutID: ScheduledWorkoutID
-    public let day: LocalDay
+    public let id: WorkoutExerciseID
+    public let workoutID: WorkoutID
     public let occurredAt: Date
     public let value: ExerciseTrendValue
 }
@@ -64,7 +61,7 @@ public struct ExercisePerformance: Equatable, Sendable {
 }
 
 public enum ExercisePerformanceQuery {
-    public static func performance(exerciseID: ExerciseID, workouts: [ScheduledWorkout]) -> ExercisePerformance {
+    public static func performance(exerciseID: ExerciseID, workouts: [Workout]) -> ExercisePerformance {
         let completed = WorkoutHistoryQuery.completed(workouts)
         var occurrences: [ExerciseHistoryOccurrence] = []
 
@@ -78,7 +75,6 @@ public enum ExercisePerformanceQuery {
                     exerciseNameSnapshot: exercise.nameSnapshot,
                     workoutID: workout.id,
                     workoutTitleSnapshot: workout.titleSnapshot,
-                    day: workout.day,
                     occurredAt: WorkoutHistoryQuery.completionDate(workout),
                     sets: sets
                 ))
@@ -101,7 +97,7 @@ public enum ExercisePerformanceQuery {
         )
     }
 
-    public static func validCompletedSets(in exercise: ScheduledExercise) -> [LoggedSet] {
+    public static func validCompletedSets(in exercise: WorkoutExercise) -> [LoggedSet] {
         let prescriptions = Dictionary(uniqueKeysWithValues: exercise.prescriptions.map { ($0.id, $0) })
         let indexed = exercise.loggedSets.enumerated().compactMap { index, log -> (Int, LoggedSet)? in
             guard log.completedAt != nil, let prescriptionID = log.prescriptionID,
@@ -180,6 +176,6 @@ public enum ExercisePerformanceQuery {
             guard let duration = occurrence.sets.compactMap(\.duration).max() else { return nil }
             value = .duration(duration)
         }
-        return .init(id: occurrence.id, workoutID: occurrence.workoutID, day: occurrence.day, occurredAt: occurrence.occurredAt, value: value)
+        return .init(id: occurrence.id, workoutID: occurrence.workoutID, occurredAt: occurrence.occurredAt, value: value)
     }
 }

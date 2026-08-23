@@ -12,9 +12,9 @@ final class HistoryPerformancePhase4Tests: XCTestCase {
         let older = workout(id: "older", exerciseID: exerciseA, completedAt: .init(timeIntervalSince1970: 100))
         let tieA = workout(id: "tie-a", exerciseID: exerciseA, completedAt: same)
         let tieB = workout(id: "tie-b", exerciseID: exerciseA, completedAt: same)
-        var planned = workout(id: "planned", exerciseID: exerciseA, completedAt: .init(timeIntervalSince1970: 900))
-        planned.status = .planned; planned.startedAt = nil; planned.completedAt = nil
-        XCTAssertEqual(WorkoutHistoryQuery.completed([older, planned, tieA, tieB]).map(\.id.rawValue), ["tie-b", "tie-a", "older"])
+        var ready = workout(id: "ready", exerciseID: exerciseA, completedAt: .init(timeIntervalSince1970: 900))
+        ready.status = .ready; ready.startedAt = nil; ready.completedAt = nil
+        XCTAssertEqual(WorkoutHistoryQuery.completed([older, ready, tieA, tieB]).map(\.id.rawValue), ["tie-b", "tie-a", "older"])
         XCTAssertTrue(WorkoutHistoryQuery.completed([]).isEmpty)
     }
 
@@ -125,7 +125,7 @@ final class HistoryPerformancePhase4Tests: XCTestCase {
         let definition = ExerciseDefinition(id: exerciseA, name: "Current Catalog Name", normalizedName: "", aliases: [], equipment: nil, category: nil, isCustom: true, archivedAt: nil)
         try await repository.saveExercise(definition)
         let historical = workout(id: "snapshot", exerciseID: exerciseA, name: "Historical Name", completedAt: .init(timeIntervalSince1970: 100))
-        try await repository.schedule(historical)
+        try await repository.create(historical)
         try await repository.archiveExercise(id: exerciseA, at: .init(timeIntervalSince1970: 200))
         let loadedValue = try await repository.completedWorkout(id: historical.id)
         let loaded = try XCTUnwrap(loadedValue)
@@ -140,7 +140,7 @@ final class HistoryPerformancePhase4Tests: XCTestCase {
         var container: ModelContainer? = try PersistenceController.makeContainer(storageURL: url)
         var repository: SwiftDataRepository? = SwiftDataRepository(container: container!)
         let historical = workout(id: "relaunch", exerciseID: exerciseA, completedAt: .init(timeIntervalSince1970: 100), values: [.repetitions(155, 8)])
-        try await repository!.schedule(historical)
+        try await repository!.create(historical)
         let beforeHistory = try await repository!.completedWorkouts()
         let beforePerformance = try await repository!.exercisePerformance(exerciseID: exerciseA)
         repository = nil; container = nil
@@ -153,7 +153,7 @@ final class HistoryPerformancePhase4Tests: XCTestCase {
 
     private enum Value { case repetitions(Double?, Int); case duration(TimeInterval) }
 
-    private func workout(id: String, exerciseID: ExerciseID, name: String = "Same Name", completedAt: Date, values: [Value] = [.repetitions(100, 8)]) -> ScheduledWorkout {
+    private func workout(id: String, exerciseID: ExerciseID, name: String = "Same Name", completedAt: Date, values: [Value] = [.repetitions(100, 8)]) -> Workout {
         let pairs: [(SetPrescription, LoggedSet)] = values.enumerated().map { index, value in
             let prescriptionID = SetID(rawValue: "\(id)-set-\(index)")
             let prescription: SetPrescription
@@ -168,8 +168,8 @@ final class HistoryPerformancePhase4Tests: XCTestCase {
             }
             return (prescription, log)
         }
-        let exercise = ScheduledExercise(id: .init(rawValue: "\(id)-exercise"), exerciseID: exerciseID, nameSnapshot: name, prescriptions: pairs.map(\.0), loggedSets: pairs.map(\.1), restDuration: nil, skippedAt: nil)
-        return ScheduledWorkout(id: .init(rawValue: id), day: try! LocalDay("2026-08-22"), titleSnapshot: "Workout snapshot", templateID: .init(rawValue: "mutable-template"), planID: nil, source: .manual, exercises: [exercise], status: .completed, startedAt: completedAt.addingTimeInterval(-100), completedAt: completedAt, createdAt: completedAt.addingTimeInterval(-200), updatedAt: completedAt)
+        let exercise = WorkoutExercise(id: .init(rawValue: "\(id)-exercise"), exerciseID: exerciseID, nameSnapshot: name, prescriptions: pairs.map(\.0), loggedSets: pairs.map(\.1), restDuration: nil, skippedAt: nil)
+        return Workout(id: .init(rawValue: id), titleSnapshot: "Workout snapshot", exercises: [exercise], status: .completed, startedAt: completedAt.addingTimeInterval(-100), completedAt: completedAt, createdAt: completedAt.addingTimeInterval(-200), updatedAt: completedAt)
     }
 
     private func makeRepository() throws -> SwiftDataRepository { SwiftDataRepository(container: try PersistenceController.makeContainer(inMemory: true)) }

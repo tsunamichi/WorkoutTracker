@@ -2,15 +2,14 @@ import SwiftUI
 
 struct AddWorkoutSheet: View {
     let initialRoute: CreationRoute
-    let day: LocalDay
     let exercises: any ExerciseRepository
-    let workouts: any ScheduledWorkoutRepository
+    let workouts: any WorkoutRepository
     let history: any ExerciseHistoryRepository
-    let scheduled: ([ScheduledWorkout]) -> Void
+    let created: ([Workout]) -> Void
     @Environment(\.dismiss) private var dismiss
     @State private var path: [CreationRoute] = []
-    init(initialRoute: CreationRoute, day: LocalDay, exercises: any ExerciseRepository, workouts: any ScheduledWorkoutRepository, history: any ExerciseHistoryRepository, scheduled: @escaping ([ScheduledWorkout]) -> Void) {
-        self.initialRoute = initialRoute; self.day = day; self.exercises = exercises; self.workouts = workouts; self.history = history; self.scheduled = scheduled
+    init(initialRoute: CreationRoute, exercises: any ExerciseRepository, workouts: any WorkoutRepository, history: any ExerciseHistoryRepository, created: @escaping ([Workout]) -> Void) {
+        self.initialRoute = initialRoute; self.exercises = exercises; self.workouts = workouts; self.history = history; self.created = created
     }
     var body: some View {
         NavigationStack(path: $path) {
@@ -22,9 +21,9 @@ struct AddWorkoutSheet: View {
     @ViewBuilder private func creationDestination(_ route: CreationRoute) -> some View {
         switch route {
         case .builder(let draft):
-            WorkoutBuilderView(model: .init(day: day, draft: draft, exercises: exercises, workouts: workouts, history: history), exercises: exercises, history: history) { value in scheduled([value]); dismiss() }
+            WorkoutBuilderView(model: .init(draft: draft, exercises: exercises, workouts: workouts, history: history), exercises: exercises, history: history) { value in created([value]); dismiss() }
         case .recent:
-            RecentWorkoutPicker(repository: workouts, history: history, day: day) { values in scheduled(values); dismiss() }
+            RecentWorkoutPicker(repository: workouts, history: history) { values in created(values); dismiss() }
         case .pasteWorkout:
             ClipboardWorkoutImportView(repository: exercises) { path.append(.builder($0)) }
         }
@@ -40,7 +39,7 @@ struct WorkoutBuilderView: View {
     @State var model: WorkoutBuilderModel
     let exercises: any ExerciseRepository
     let history: any ExerciseHistoryRepository
-    let scheduled: (ScheduledWorkout) -> Void
+    let created: (Workout) -> Void
     @State private var pickerPresented = false
     @State private var discardPresented = false
     @Environment(\.dismiss) private var dismiss
@@ -61,7 +60,7 @@ struct WorkoutBuilderView: View {
         .navigationTitle("Workout Builder").navigationBarBackButtonHidden(model.draft.isMeaningful)
         .toolbar {
             if model.draft.isMeaningful { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { discardPresented = true } } }
-            ToolbarItem(placement: .confirmationAction) { Button("Create workout") { Task { if let value = await model.schedule() { scheduled(value) } } }.disabled(!model.canCommit || model.isSaving) }
+            ToolbarItem(placement: .confirmationAction) { Button("Create workout") { Task { if let value = await model.create() { created(value) } } }.disabled(!model.canCommit || model.isSaving) }
         }
         .sheet(isPresented: $pickerPresented) { ExercisePickerView(repository: exercises, history: history) { model.add($0); pickerPresented = false } }
         .confirmationDialog("Discard this workout?", isPresented: $discardPresented) { Button("Discard Changes", role: .destructive) { dismiss() }; Button("Keep Editing", role: .cancel) {} } message: { Text("Your unsaved builder changes will be lost.") }
@@ -71,7 +70,7 @@ struct WorkoutBuilderView: View {
 #if DEBUG
 @MainActor private func builderPreview(draft: WorkoutDraft = .init(), size: DynamicTypeSize = .large) -> some View {
     let repository = SwiftDataRepository(container: try! PersistenceController.makeContainer(inMemory: true))
-    return NavigationStack { WorkoutBuilderView(model: .init(day: try! LocalDay("2026-08-22"), draft: draft, exercises: repository, workouts: repository, history: repository), exercises: repository, history: repository) { _ in } }.dynamicTypeSize(size).preferredColorScheme(.dark)
+    return NavigationStack { WorkoutBuilderView(model: .init(draft: draft, exercises: repository, workouts: repository, history: repository), exercises: repository, history: repository) { _ in } }.dynamicTypeSize(size).preferredColorScheme(.dark)
 }
 private extension WorkoutDraft {
     static var previewMixed: Self {

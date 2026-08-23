@@ -7,35 +7,28 @@ public protocol ExerciseRepository: Sendable {
     func saveExercise(_ exercise: ExerciseDefinition) async throws
     func archiveExercise(id: ExerciseID, at date: Date) async throws
 }
-public protocol WorkoutTemplateRepository: Sendable {
-    func allTemplates() async throws -> [WorkoutTemplate]
-    func template(id: WorkoutTemplateID) async throws -> WorkoutTemplate?
-    func saveTemplate(_ template: WorkoutTemplate) async throws
-    func archiveTemplate(id: WorkoutTemplateID, at date: Date) async throws
-}
-public protocol ScheduledWorkoutRepository: Sendable {
-    func workouts(on day: LocalDay) async throws -> [ScheduledWorkout]
-    func workouts(from startDay: LocalDay, through endDay: LocalDay) async throws -> [ScheduledWorkout]
-    func workout(id: ScheduledWorkoutID) async throws -> ScheduledWorkout?
-    func allWorkouts() async throws -> [ScheduledWorkout]
-    func schedule(_ workout: ScheduledWorkout) async throws
-    func update(_ workout: ScheduledWorkout) async throws
-    func materializeAtomically(_ workouts: [ScheduledWorkout]) async throws
-    func startWorkout(id: ScheduledWorkoutID, at date: Date) async throws -> ScheduledWorkout
-    func logSet(workoutID: ScheduledWorkoutID, exerciseID: ScheduledExerciseID, prescriptionID: SetID, input: SetLogInput, completed: Bool, at date: Date) async throws -> ScheduledWorkout
-    func appendSet(workoutID: ScheduledWorkoutID, exerciseID: ScheduledExerciseID, seed: SetLogInput?, at date: Date) async throws -> ScheduledWorkout
-    func removeSet(workoutID: ScheduledWorkoutID, exerciseID: ScheduledExerciseID, prescriptionID: SetID, at date: Date) async throws -> ScheduledWorkout
-    func completeWorkout(id: ScheduledWorkoutID, at date: Date) async throws -> ScheduledWorkout
-    func resetWorkout(id: ScheduledWorkoutID, at date: Date) async throws -> ScheduledWorkout
-    func deleteWorkout(id: ScheduledWorkoutID) async throws
-    func setRestDuration(workoutID: ScheduledWorkoutID, exerciseID: ScheduledExerciseID, seconds: TimeInterval, at date: Date) async throws -> ScheduledWorkout
-    func recentCompletedWorkouts(limit: Int) async throws -> [ScheduledWorkout]
-    func completedWorkouts() async throws -> [ScheduledWorkout]
-    func completedWorkout(id: ScheduledWorkoutID) async throws -> ScheduledWorkout?
+public protocol WorkoutRepository: Sendable {
+    func activeWorkouts() async throws -> [Workout]
+    func workout(id: WorkoutID) async throws -> Workout?
+    func allWorkouts() async throws -> [Workout]
+    func create(_ workout: Workout) async throws
+    func update(_ workout: Workout) async throws
+    func materializeAtomically(_ workouts: [Workout]) async throws
+    func startWorkout(id: WorkoutID, at date: Date) async throws -> Workout
+    func logSet(workoutID: WorkoutID, exerciseID: WorkoutExerciseID, prescriptionID: SetID, input: SetLogInput, completed: Bool, at date: Date) async throws -> Workout
+    func appendSet(workoutID: WorkoutID, exerciseID: WorkoutExerciseID, seed: SetLogInput?, at date: Date) async throws -> Workout
+    func removeSet(workoutID: WorkoutID, exerciseID: WorkoutExerciseID, prescriptionID: SetID, at date: Date) async throws -> Workout
+    func completeWorkout(id: WorkoutID, at date: Date) async throws -> Workout
+    func resetWorkout(id: WorkoutID, at date: Date) async throws -> Workout
+    func deleteWorkout(id: WorkoutID) async throws
+    func setRestDuration(workoutID: WorkoutID, exerciseID: WorkoutExerciseID, seconds: TimeInterval, at date: Date) async throws -> Workout
+    func recentCompletedWorkouts(limit: Int) async throws -> [Workout]
+    func completedWorkouts() async throws -> [Workout]
+    func completedWorkout(id: WorkoutID) async throws -> Workout?
 }
 public struct LatestExerciseLog: Equatable, Sendable {
     public let exerciseID: ExerciseID
-    public let workoutID: ScheduledWorkoutID
+    public let workoutID: WorkoutID
     public let occurredAt: Date
     public let sets: [LoggedSet]
 }
@@ -44,39 +37,27 @@ public protocol ExerciseHistoryRepository: Sendable {
     func latestExerciseLog(exerciseID: ExerciseID) async throws -> LatestExerciseLog?
     func exercisePerformance(exerciseID: ExerciseID) async throws -> ExercisePerformance
 }
-public protocol CyclePlanRepository: Sendable {
-    func allPlans() async throws -> [CyclePlan]
-    func savePlan(_ plan: CyclePlan, availableTemplates: Set<WorkoutTemplateID>) async throws
-}
 public protocol SettingsRepository: Sendable {
     func settings() async throws -> AppSettings
     func saveSettings(_ settings: AppSettings) async throws
 }
 public protocol BackupRepository: Sendable {
-    func exportBackup(exportedAt: Date, sourceDeviceID: String) async throws -> EquilibriumBackupV1
-    func restoreBackup(_ backup: EquilibriumBackupV1) async throws
+    func exportBackup(exportedAt: Date, sourceDeviceID: String) async throws -> EquilibriumBackupV2
+    func restoreBackup(_ backup: EquilibriumBackupV2) async throws
 }
-public enum RepositoryError: Error, Equatable { case notFound, immutableCompletedWorkout, workoutNotCurrentDay, workoutNotInProgress, prescriptionNotFound, cannotRemoveCompletedSet, invalidSetInput, invalidRestDuration, incompleteWorkout, duplicateIdentifier, duplicateExerciseName, invalidBackup }
+public enum RepositoryError: Error, Equatable { case notFound, immutableCompletedWorkout, workoutNotInProgress, prescriptionNotFound, cannotRemoveCompletedSet, invalidSetInput, invalidRestDuration, incompleteWorkout, duplicateIdentifier, duplicateExerciseName, invalidBackup }
 
-public extension ScheduledWorkoutRepository {
-    func completedWorkouts() async throws -> [ScheduledWorkout] {
+public extension WorkoutRepository {
+    func completedWorkouts() async throws -> [Workout] {
         WorkoutHistoryQuery.completed(try await allWorkouts())
     }
 
-    func completedWorkout(id: ScheduledWorkoutID) async throws -> ScheduledWorkout? {
+    func completedWorkout(id: WorkoutID) async throws -> Workout? {
         guard let workout = try await workout(id: id), workout.status == .completed else { return nil }
         return workout
     }
 
-    func recentCompletedWorkouts(limit: Int) async throws -> [ScheduledWorkout] {
+    func recentCompletedWorkouts(limit: Int) async throws -> [Workout] {
         Array(WorkoutHistoryQuery.completed(try await allWorkouts()).prefix(limit))
     }
-}
-
-public protocol CurrentDayProviding: Sendable { func currentDay() throws -> LocalDay }
-
-public struct SystemCurrentDayProvider: CurrentDayProviding {
-    private let calendar: Calendar
-    public init(calendar: Calendar = .autoupdatingCurrent) { self.calendar = calendar }
-    public func currentDay() throws -> LocalDay { try LocalDay(date: .now, calendar: calendar) }
 }

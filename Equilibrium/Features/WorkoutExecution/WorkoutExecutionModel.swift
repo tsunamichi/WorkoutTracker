@@ -2,7 +2,7 @@ import Foundation
 import Observation
 
 struct WorkoutRestState: Equatable, Sendable {
-    let exerciseID: ScheduledExerciseID
+    let exerciseID: WorkoutExerciseID
     let exerciseName: String
     let endsAt: Date
     let totalDuration: TimeInterval
@@ -11,45 +11,43 @@ struct WorkoutRestState: Equatable, Sendable {
 
 @MainActor @Observable
 final class WorkoutExecutionModel {
-    let workoutID: ScheduledWorkoutID
-    private let repository: any ScheduledWorkoutRepository
+    let workoutID: WorkoutID
+    private let repository: any WorkoutRepository
     private let now: () -> Date
-    private let currentDayProvider: any CurrentDayProviding
-    private let didPersist: (ScheduledWorkout) -> Void
+    private let didPersist: (Workout) -> Void
     private let defaultRestDuration: TimeInterval
 
-    private(set) var workout: ScheduledWorkout?
+    private(set) var workout: Workout?
     private(set) var errorMessage: String?
     private(set) var isActivated = false
     private(set) var showsCompletion = false
-    var focusedExerciseID: ScheduledExerciseID?
+    var focusedExerciseID: WorkoutExerciseID?
     var selectedSetIndex = 0
     private(set) var restState: WorkoutRestState?
     @ObservationIgnored private var restTask: Task<Void, Never>?
     let weightUnit: WeightUnit
 
-    init(workoutID: ScheduledWorkoutID, repository: any ScheduledWorkoutRepository, weightUnit: WeightUnit = .pounds, defaultRestDuration: TimeInterval = 90, now: @escaping () -> Date = Date.init, currentDayProvider: any CurrentDayProviding = SystemCurrentDayProvider(), didPersist: @escaping (ScheduledWorkout) -> Void = { _ in }) {
+    init(workoutID: WorkoutID, repository: any WorkoutRepository, weightUnit: WeightUnit = .pounds, defaultRestDuration: TimeInterval = 90, now: @escaping () -> Date = Date.init, didPersist: @escaping (Workout) -> Void = { _ in }) {
         self.workoutID = workoutID
         self.repository = repository
         self.weightUnit = weightUnit
         self.now = now
-        self.currentDayProvider = currentDayProvider
         self.didPersist = didPersist
         self.defaultRestDuration = defaultRestDuration
     }
 
-    var isReadOnly: Bool { workout.map { $0.status == .completed || (try? currentDayProvider.currentDay()) != $0.day } ?? true }
+    var isReadOnly: Bool { workout?.status == .completed }
     var showsExecutionOptions: Bool { workout?.status == .inProgress && !isReadOnly }
     var progress: WorkoutProgress { workout.map(WorkoutExecutionQuery.progress) ?? .init(completedSetCount: 0, requiredSetCount: 0) }
-    var states: [ScheduledExerciseID: ExerciseState] { workout.map { WorkoutExecutionQuery.states(in: $0, focusedExerciseID: focusedExerciseID) } ?? [:] }
+    var states: [WorkoutExerciseID: ExerciseState] { workout.map { WorkoutExecutionQuery.states(in: $0, focusedExerciseID: focusedExerciseID) } ?? [:] }
     var canComplete: Bool { workout.map { $0.status == .inProgress && WorkoutExecutionQuery.canComplete($0) } ?? false }
-    var completedExercises: [ScheduledExercise] { workout?.exercises.filter(WorkoutExecutionQuery.isComplete) ?? [] }
-    var upNextExercises: [ScheduledExercise] {
+    var completedExercises: [WorkoutExercise] { workout?.exercises.filter(WorkoutExecutionQuery.isComplete) ?? [] }
+    var upNextExercises: [WorkoutExercise] {
         guard let workout else { return [] }
         let currentID = currentExercise?.id
         return workout.exercises.filter { !WorkoutExecutionQuery.isComplete($0) && $0.id != currentID }
     }
-    var currentExercise: ScheduledExercise? {
+    var currentExercise: WorkoutExercise? {
         guard let workout else { return nil }
         return workout.exercises.first { states[$0.id] == .current }
     }
@@ -57,8 +55,8 @@ final class WorkoutExecutionModel {
         guard let exercise = currentExercise, exercise.prescriptions.indices.contains(selectedSetIndex) else { return nil }
         return exercise.prescriptions[selectedSetIndex]
     }
-    var performanceExercise: ScheduledExercise? { restState == nil ? currentExercise : nil }
-    var restEditableExercise: ScheduledExercise? { restState == nil ? currentExercise : nil }
+    var performanceExercise: WorkoutExercise? { restState == nil ? currentExercise : nil }
+    var restEditableExercise: WorkoutExercise? { restState == nil ? currentExercise : nil }
     var canEditRestDuration: Bool { restEditableExercise != nil && showsExecutionOptions }
     var shareText: String? { workout.map { WorkoutShareText.build(workout: $0, unit: weightUnit) } }
     var configuredRestDuration: TimeInterval {
@@ -71,8 +69,8 @@ final class WorkoutExecutionModel {
         do {
             guard let loaded = try await repository.workout(id: workoutID) else { throw RepositoryError.notFound }
             workout = loaded
-            if loaded.status == .planned {
-                // Yield keeps the Schedule source card alive through destination activation.
+            if loaded.status == .ready {
+                // Yield keeps the Home source card alive through destination activation.
                 await Task.yield()
                 let started = try await repository.startWorkout(id: workoutID, at: now())
                 accept(started)
@@ -82,7 +80,7 @@ final class WorkoutExecutionModel {
         } catch { errorMessage = message(for: error) }
     }
 
-    func log(exerciseID: ScheduledExerciseID, prescriptionID: SetID, input: SetLogInput) async {
+    func log(exerciseID: WorkoutExerciseID, prescriptionID: SetID, input: SetLogInput) async {
         do {
             let wasComplete = workout?.exercises.first(where: { $0.id == exerciseID })?.loggedSets.contains(where: { $0.prescriptionID == prescriptionID && $0.completedAt != nil }) == true
             let updated = try await repository.logSet(workoutID: workoutID, exerciseID: exerciseID, prescriptionID: prescriptionID, input: input, completed: true, at: now())
@@ -99,7 +97,7 @@ final class WorkoutExecutionModel {
         } catch { errorMessage = message(for: error) }
     }
 
-    func logFirstSet(exerciseID: ScheduledExerciseID, input: SetLogInput) async {
+    func logFirstSet(exerciseID: WorkoutExerciseID, input: SetLogInput) async {
         do {
             let appended = try await repository.appendSet(workoutID: workoutID, exerciseID: exerciseID, seed: input, at: now())
             guard let prescriptionID = appended.exercises.first(where: { $0.id == exerciseID })?.prescriptions.last?.id else { throw RepositoryError.prescriptionNotFound }
@@ -110,7 +108,7 @@ final class WorkoutExecutionModel {
         } catch { errorMessage = message(for: error) }
     }
 
-    func addSet(exerciseID: ScheduledExerciseID) async {
+    func addSet(exerciseID: WorkoutExerciseID) async {
         do {
             let updated = try await repository.appendSet(workoutID: workoutID, exerciseID: exerciseID, seed: nil, at: now())
             accept(updated); focusedExerciseID = exerciseID
@@ -119,12 +117,12 @@ final class WorkoutExecutionModel {
         } catch { errorMessage = message(for: error) }
     }
 
-    func removeCurrentSet(exerciseID: ScheduledExerciseID, prescriptionID: SetID) async {
+    func removeCurrentSet(exerciseID: WorkoutExerciseID, prescriptionID: SetID) async {
         do { let updated = try await repository.removeSet(workoutID: workoutID, exerciseID: exerciseID, prescriptionID: prescriptionID, at: now()); accept(updated); selectFirstIncompleteSet(); errorMessage = nil }
         catch { errorMessage = message(for: error) }
     }
 
-    func focus(_ id: ScheduledExerciseID) {
+    func focus(_ id: WorkoutExerciseID) {
         guard let workout, workout.status == .inProgress, let exercise = workout.exercises.first(where: { $0.id == id }) else { return }
         focusedExerciseID = id
         selectedSetIndex = exercise.prescriptions.firstIndex(where: { !WorkoutExecutionQuery.completedPrescriptionIDs(in: exercise).contains($0.id) })
@@ -172,12 +170,12 @@ final class WorkoutExecutionModel {
         catch { errorMessage = message(for: error); return false }
     }
 
-    private func accept(_ value: ScheduledWorkout) { workout = value; didPersist(value) }
+    private func accept(_ value: Workout) { workout = value; didPersist(value) }
     private func selectFirstIncompleteSet() {
         guard let exercise = currentExercise else { selectedSetIndex = 0; return }
         selectedSetIndex = exercise.prescriptions.firstIndex(where: { !WorkoutExecutionQuery.completedPrescriptionIDs(in: exercise).contains($0.id) }) ?? 0
     }
-    private func startRest(for exercise: ScheduledExercise, duration: TimeInterval) {
+    private func startRest(for exercise: WorkoutExercise, duration: TimeInterval) {
         restTask?.cancel()
         let end = now().addingTimeInterval(duration)
         restState = .init(exerciseID: exercise.id, exerciseName: exercise.nameSnapshot, endsAt: end, totalDuration: duration, remaining: duration)
@@ -190,7 +188,7 @@ final class WorkoutExecutionModel {
             }
         }
     }
-    private func beginRestIfAppropriate(after exercise: ScheduledExercise, in workout: ScheduledWorkout) {
+    private func beginRestIfAppropriate(after exercise: WorkoutExercise, in workout: Workout) {
         guard !WorkoutExecutionQuery.canComplete(workout) else { return }
         let duration = exercise.restDuration ?? defaultRestDuration
         guard duration > 0 else { return }
@@ -201,7 +199,6 @@ final class WorkoutExecutionModel {
         switch error as? RepositoryError {
         case .incompleteWorkout: return "Complete every required set before finishing."
         case .immutableCompletedWorkout: return "Completed workouts are read-only."
-        case .workoutNotCurrentDay: return "Only today's workout can be updated."
         case .invalidSetInput: return "Enter a valid set value."
         case .invalidRestDuration: return "Choose a rest duration from 15 seconds to 5 minutes."
         default: return "The workout could not be updated."

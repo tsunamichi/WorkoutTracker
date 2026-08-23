@@ -2,15 +2,14 @@ import SwiftUI
 
 struct HomeView: View {
     @State private var model: HomeModel
-    private let repository: any ScheduledWorkoutRepository
+    private let repository: any WorkoutRepository
     private let exerciseRepository: any ExerciseRepository
     private let historyRepository: any ExerciseHistoryRepository
     @Namespace private var workoutTransition
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @Environment(\.scenePhase) private var scenePhase
     @AppStorage(EQPreferenceKey.weightUnit) private var weightUnitRaw = WeightUnit.pounds.rawValue
 
-    init(repository: any ScheduledWorkoutRepository, exerciseRepository: (any ExerciseRepository)? = nil, historyRepository: (any ExerciseHistoryRepository)? = nil) {
+    init(repository: any WorkoutRepository, exerciseRepository: (any ExerciseRepository)? = nil, historyRepository: (any ExerciseHistoryRepository)? = nil) {
         self.repository = repository
         guard let shared = repository as? SwiftDataRepository else {
             precondition(exerciseRepository != nil && historyRepository != nil, "Creation repositories are required")
@@ -33,20 +32,18 @@ struct HomeView: View {
             .toolbar(.hidden, for: .navigationBar)
             .navigationDestination(for: HomeRoute.self) { destination($0) }
             .sheet(item: $model.creationRoute) { route in
-                AddWorkoutSheet(initialRoute: route, day: model.today, exercises: exerciseRepository, workouts: repository, history: historyRepository) {
-                    model.applyPersistedWorkouts($0)
+                AddWorkoutSheet(initialRoute: route, exercises: exerciseRepository, workouts: repository, history: historyRepository) { created in
+                    model.applyPersistedWorkouts(created)
                 }
             }
             .sheet(isPresented: $model.isTimerPresented) { StandaloneTimerPlaceholder() }
             .task { await model.load() }
-            .onChange(of: scenePhase) { _, phase in if phase == .active { Task { await model.appBecameActive() } } }
         }.tint(EQColor.accent)
     }
 
     private var header: some View {
         VStack(alignment: .leading, spacing: EQSpacing.sm) {
-            Text("Workout of the day").font(EQTypography.title)
-            Text(model.calendar.fullDate(model.today)).font(EQTypography.body).foregroundStyle(EQColor.secondaryText)
+            Text("Workouts").font(EQTypography.title)
             HStack {
                 NavigationLink("Workout history", value: HomeRoute.history).font(EQTypography.caption)
                 Spacer()
@@ -71,7 +68,7 @@ struct HomeView: View {
         }
         .scrollTargetBehavior(.viewAligned(limitBehavior: .always))
         .scrollIndicators(.hidden)
-        .accessibilityLabel("Today's workouts")
+        .accessibilityLabel("Active workouts")
     }
 
     private var timer: some View {
@@ -93,17 +90,17 @@ struct HomeView: View {
     }
 }
 
-enum HomeRoute: Hashable { case workout(ScheduledWorkoutID), settings, history }
+enum HomeRoute: Hashable { case workout(WorkoutID), settings, history }
 
 private struct WorkoutCard: View {
-    let workout: ScheduledWorkout; let sequence: Int
+    let workout: Workout; let sequence: Int
     private var presentation: HomeCardPresentation { .init(status: workout.status) }
     var body: some View {
         VStack(alignment: .leading, spacing: EQSpacing.md) {
             HStack {
                 Text(String(format: "%02d", sequence)).font(EQTypography.caption).foregroundStyle(EQColor.secondaryText)
                 Spacer()
-                Label(presentation.stateLabel, systemImage: workout.status == .completed ? "checkmark.circle.fill" : workout.status == .inProgress ? "play.circle.fill" : "calendar")
+                Label(presentation.stateLabel, systemImage: workout.status == .completed ? "checkmark.circle.fill" : workout.status == .inProgress ? "play.circle.fill" : "circle")
                     .font(EQTypography.caption).foregroundStyle(workout.status == .completed ? EQColor.success : EQColor.accent)
             }
             Text(workout.titleSnapshot).font(EQTypography.cardHero).lineLimit(2)
@@ -147,11 +144,11 @@ private struct HomeZoomModifier: ViewModifier {
 }
 
 #if DEBUG
-@MainActor private func homePreview(_ workouts: [ScheduledWorkout] = []) -> some View {
+@MainActor private func homePreview(_ workouts: [Workout] = []) -> some View {
     let container = try! PersistenceController.makeContainer(inMemory: true)
     workouts.forEach { container.mainContext.insert(WorkoutMapper.record(from: $0)) }; try! container.mainContext.save()
     return HomeView(repository: SwiftDataRepository(container: container)).modelContainer(container)
 }
-#Preview("Multiple workouts") { homePreview([EquilibriumFixtures.planned(), EquilibriumFixtures.inProgress(id: "preview-progress"), EquilibriumFixtures.completed(id: "preview-complete")]) }
+#Preview("Multiple workouts") { homePreview([EquilibriumFixtures.ready(), EquilibriumFixtures.inProgress(id: "preview-progress"), EquilibriumFixtures.completed(id: "preview-complete")]) }
 #Preview("Add workout only") { homePreview() }
 #endif

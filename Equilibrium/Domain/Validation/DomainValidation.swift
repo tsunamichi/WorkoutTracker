@@ -2,24 +2,34 @@ import Foundation
 
 public enum DomainValidationError: Error, Equatable, CustomStringConvertible {
     case invalidID(String), invalidName, invalidSetTarget, duplicateID(String), invalidWorkoutStatus
-    case orphanedLoggedSet(String), invalidCompletedSet(String), incompleteCompletedWorkout, invalidPlanDuration
-    case duplicateWeekday, invalidPlanLifecycle, missingTemplate(String), duplicateWorkoutDay(LocalDay)
-    public var description: String { String(describing: self) }
+    case orphanedLoggedSet(String), invalidCompletedSet(String), incompleteCompletedWorkout
+    public var description: String {
+        switch self {
+        case .invalidID(let value): "Invalid identifier: \(value)"
+        case .invalidName: "Invalid name"
+        case .invalidSetTarget: "Invalid set target"
+        case .duplicateID(let value): "Duplicate identifier: \(value)"
+        case .invalidWorkoutStatus: "Invalid workout status timestamps"
+        case .orphanedLoggedSet(let value): "Orphaned logged set: \(value)"
+        case .invalidCompletedSet(let value): "Invalid completed set: \(value)"
+        case .incompleteCompletedWorkout: "Completed workout has incomplete exercises"
+        }
+    }
 }
 
 public enum DomainValidator {
-    public static func validate(_ workout: ScheduledWorkout) throws {
-        guard workout.id.isValid else { throw DomainValidationError.invalidID("scheduledWorkout") }
+    public static func validate(_ workout: Workout) throws {
+        guard workout.id.isValid else { throw DomainValidationError.invalidID("workout") }
         guard !workout.titleSnapshot.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { throw DomainValidationError.invalidName }
         switch workout.status {
-        case .planned: guard workout.startedAt == nil && workout.completedAt == nil else { throw DomainValidationError.invalidWorkoutStatus }
+        case .ready: guard workout.startedAt == nil && workout.completedAt == nil else { throw DomainValidationError.invalidWorkoutStatus }
         case .inProgress: guard workout.startedAt != nil && workout.completedAt == nil else { throw DomainValidationError.invalidWorkoutStatus }
         case .completed:
             guard let started = workout.startedAt, let completed = workout.completedAt, completed >= started else { throw DomainValidationError.invalidWorkoutStatus }
         }
         try requireUnique(workout.exercises.map(\.id.rawValue))
         for exercise in workout.exercises {
-            guard exercise.id.isValid, exercise.exerciseID.isValid else { throw DomainValidationError.invalidID("scheduledExercise") }
+            guard exercise.id.isValid, exercise.exerciseID.isValid else { throw DomainValidationError.invalidID("workoutExercise") }
             try requireUnique(exercise.prescriptions.map(\.id.rawValue))
             try requireUnique(exercise.loggedSets.map(\.id.rawValue))
             let targets = Dictionary(uniqueKeysWithValues: exercise.prescriptions.map { ($0.id, $0.target) })
@@ -50,20 +60,6 @@ public enum DomainValidator {
         switch target {
         case .repetitions: guard let repetitions = set.repetitions, repetitions > 0, set.duration == nil else { throw DomainValidationError.invalidCompletedSet(set.id.rawValue) }
         case .duration: guard let duration = set.duration, duration.isFinite, duration > 0, set.repetitions == nil else { throw DomainValidationError.invalidCompletedSet(set.id.rawValue) }
-        }
-    }
-
-    public static func validate(_ plan: CyclePlan, availableTemplates: Set<WorkoutTemplateID>? = nil) throws {
-        guard plan.id.isValid else { throw DomainValidationError.invalidID("plan") }
-        guard plan.numberOfWeeks > 0 else { throw DomainValidationError.invalidPlanDuration }
-        guard Set(plan.days.map(\.weekday)).count == plan.days.count else { throw DomainValidationError.duplicateWeekday }
-        if let availableTemplates {
-            for day in plan.days where !availableTemplates.contains(day.workoutTemplateID) { throw DomainValidationError.missingTemplate(day.workoutTemplateID.rawValue) }
-        }
-        switch plan.status {
-        case .draft, .active: guard plan.pausedUntil == nil && plan.endedOn == nil else { throw DomainValidationError.invalidPlanLifecycle }
-        case .paused: guard plan.pausedUntil != nil && plan.endedOn == nil else { throw DomainValidationError.invalidPlanLifecycle }
-        case .ended, .completed: guard plan.endedOn != nil && plan.pausedUntil == nil else { throw DomainValidationError.invalidPlanLifecycle }
         }
     }
 

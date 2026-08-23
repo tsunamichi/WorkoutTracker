@@ -4,10 +4,10 @@ import SwiftUI
 
 @MainActor @Observable
 final class WorkoutHistoryModel {
-    private let repository: any ScheduledWorkoutRepository
-    private(set) var workouts: [ScheduledWorkout] = []
+    private let repository: any WorkoutRepository
+    private(set) var workouts: [Workout] = []
     private(set) var errorMessage: String?
-    init(repository: any ScheduledWorkoutRepository) { self.repository = repository }
+    init(repository: any WorkoutRepository) { self.repository = repository }
     func load() async {
         do { workouts = try await repository.completedWorkouts(); errorMessage = nil }
         catch { errorMessage = "Workout history could not be loaded." }
@@ -18,7 +18,7 @@ struct WorkoutHistoryView: View {
     @State private var model: WorkoutHistoryModel
     let historyRepository: any ExerciseHistoryRepository
     @AppStorage(EQPreferenceKey.weightUnit) private var unitRaw = WeightUnit.pounds.rawValue
-    init(repository: any ScheduledWorkoutRepository, historyRepository: any ExerciseHistoryRepository) {
+    init(repository: any WorkoutRepository, historyRepository: any ExerciseHistoryRepository) {
         _model = State(initialValue: WorkoutHistoryModel(repository: repository)); self.historyRepository = historyRepository
     }
     var body: some View {
@@ -40,11 +40,11 @@ struct WorkoutHistoryView: View {
 }
 
 private struct WorkoutHistoryRow: View {
-    let workout: ScheduledWorkout
+    let workout: Workout
     var body: some View {
         VStack(alignment: .leading, spacing: EQSpacing.xs) {
             Text(workout.titleSnapshot).font(EQTypography.cardTitle)
-            Text(ScheduleCalendar().fullDate(workout.day)).font(EQTypography.caption).foregroundStyle(EQColor.secondaryText)
+            Text(HistoryDateText.full(WorkoutHistoryQuery.completionDate(workout))).font(EQTypography.caption).foregroundStyle(EQColor.secondaryText)
             Text(summary).font(EQTypography.caption).foregroundStyle(EQColor.secondaryText)
         }.padding(.vertical, EQSpacing.xs).accessibilityElement(children: .combine)
     }
@@ -55,7 +55,7 @@ private struct WorkoutHistoryRow: View {
 }
 
 struct CompletedWorkoutDetailView: View {
-    let workout: ScheduledWorkout
+    let workout: Workout
     let historyRepository: any ExerciseHistoryRepository
     let weightUnit: WeightUnit
     var body: some View {
@@ -63,7 +63,7 @@ struct CompletedWorkoutDetailView: View {
             VStack(alignment: .leading, spacing: EQSpacing.lg) {
                 VStack(alignment: .leading, spacing: EQSpacing.xs) {
                     Text(workout.titleSnapshot).font(EQTypography.title)
-                    Text(ScheduleCalendar().fullDate(workout.day)).foregroundStyle(EQColor.secondaryText)
+                    Text(HistoryDateText.full(WorkoutHistoryQuery.completionDate(workout))).foregroundStyle(EQColor.secondaryText)
                     Label("Completed · Read-only", systemImage: "lock.fill").font(EQTypography.caption).foregroundStyle(EQColor.success)
                 }
                 ForEach(Array(workout.exercises.enumerated()), id: \.element.id) { index, exercise in
@@ -143,7 +143,7 @@ struct ExercisePerformanceView: View {
             ForEach(performance.occurrences.reversed()) { occurrence in
                 VStack(alignment: .leading, spacing: EQSpacing.xs) {
                     Text(occurrence.workoutTitleSnapshot).font(EQTypography.cardTitle)
-                    Text("\(ScheduleCalendar().fullDate(occurrence.day)) · \(occurrence.exerciseNameSnapshot)").font(EQTypography.caption).foregroundStyle(EQColor.secondaryText)
+                    Text("\(HistoryDateText.full(occurrence.occurredAt)) · \(occurrence.exerciseNameSnapshot)").font(EQTypography.caption).foregroundStyle(EQColor.secondaryText)
                     ForEach(Array(occurrence.sets.enumerated()), id: \.element.id) { index, set in Text("Set \(index + 1): \(performanceSetText(set))").font(EQTypography.caption) }
                 }.eqCard()
             }
@@ -194,7 +194,7 @@ private struct PerformanceTrendView: View {
                     PointMark(x: .value("Date", item.0.occurredAt), y: .value(metricLabel, item.1)).foregroundStyle(EQColor.accent)
                 }.frame(height: 180).accessibilityHidden(true)
             }
-            ForEach(selected, id: \.0.id) { item in Text("\(item.0.day.iso8601): \(valueText(item))").font(EQTypography.caption).foregroundStyle(EQColor.secondaryText) }
+            ForEach(selected, id: \.0.id) { item in Text("\(HistoryDateText.short(item.0.occurredAt)): \(valueText(item))").font(EQTypography.caption).foregroundStyle(EQColor.secondaryText) }
         }.eqCard()
     }
     private var metricLabel: String {
@@ -208,4 +208,9 @@ private struct PerformanceTrendView: View {
         case .duration: return DurationText.format(item.1)
         }
     }
+}
+
+private enum HistoryDateText {
+    static func full(_ date: Date) -> String { date.formatted(.dateTime.weekday(.wide).month(.wide).day().year()) }
+    static func short(_ date: Date) -> String { date.formatted(.dateTime.year().month(.twoDigits).day(.twoDigits)) }
 }

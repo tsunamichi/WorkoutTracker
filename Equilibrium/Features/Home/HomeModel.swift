@@ -3,39 +3,29 @@ import Observation
 
 @MainActor @Observable
 final class HomeModel {
-    private let repository: any ScheduledWorkoutRepository
-    private let now: () -> Date
-    private(set) var today: LocalDay
-    private(set) var workouts: [ScheduledWorkout] = []
+    private let repository: any WorkoutRepository
+    private(set) var workouts: [Workout] = []
     private(set) var errorMessage: String?
     var creationRoute: CreationRoute?
     var isTimerPresented = false
-    let calendar: ScheduleCalendar
-
-    init(repository: any ScheduledWorkoutRepository, calendar: ScheduleCalendar = .init(), now: @escaping () -> Date = Date.init) {
-        self.repository = repository; self.calendar = calendar; self.now = now
-        today = (try? calendar.today(now: now())) ?? (try! LocalDay("2001-01-01"))
-    }
+    init(repository: any WorkoutRepository) { self.repository = repository }
 
     func load() async {
         do {
-            today = try calendar.today(now: now())
-            workouts = try await repository.workouts(on: today)
+            workouts = try await repository.activeWorkouts()
             errorMessage = nil
         } catch { errorMessage = "Home could not be loaded." }
     }
 
-    func appBecameActive() async { await load() }
-
-    func applyPersistedWorkout(_ workout: ScheduledWorkout) {
-        guard workout.day == today else { return }
+    func applyPersistedWorkout(_ workout: Workout) {
+        if workout.status == .completed { workouts.removeAll { $0.id == workout.id }; return }
         if let index = workouts.firstIndex(where: { $0.id == workout.id }) { workouts[index] = workout }
         else { workouts.append(workout); workouts.sort(by: Self.carouselOrder) }
     }
 
-    func applyPersistedWorkouts(_ values: [ScheduledWorkout]) { values.forEach(applyPersistedWorkout) }
+    func applyPersistedWorkouts(_ values: [Workout]) { values.forEach(applyPersistedWorkout) }
 
-    private static func carouselOrder(_ lhs: ScheduledWorkout, _ rhs: ScheduledWorkout) -> Bool {
+    private static func carouselOrder(_ lhs: Workout, _ rhs: Workout) -> Bool {
         lhs.createdAt == rhs.createdAt ? lhs.id.rawValue < rhs.id.rawValue : lhs.createdAt < rhs.createdAt
     }
 }
@@ -46,7 +36,7 @@ struct HomeCardPresentation: Equatable {
     let stateLabel: String; let actionLabel: String; let action: HomeCardAction
     init(status: WorkoutStatus) {
         switch status {
-        case .planned: stateLabel = "Planned"; actionLabel = "Start workout"; action = .start
+        case .ready: stateLabel = "Ready"; actionLabel = "Start workout"; action = .start
         case .inProgress: stateLabel = "In progress"; actionLabel = "Resume workout"; action = .resume
         case .completed: stateLabel = "Completed"; actionLabel = "View workout"; action = .view
         }

@@ -2,7 +2,7 @@ import XCTest
 @testable import Equilibrium
 
 final class WorkoutImportPhase3BTests: XCTestCase {
-    private let parser = PlanTextParser()
+    private let parser = WorkoutTextParser()
 
     func testBasicGrammarWhitespaceBulletsAndBlankLines() throws {
         let result = parser.parse("  Push  \n\n• Bench Press 3x8\nIncline Press 3 x 10\nCable Fly 3×12\nPlank 3x30 sec\n")
@@ -29,7 +29,7 @@ final class WorkoutImportPhase3BTests: XCTestCase {
     }
 
     func testMultipleNamedWorkoutsStayIndependentAndOrdered() throws {
-        let result = parser.parse(PlanImportFixtures.multiple)
+        let result = parser.parse(WorkoutImportFixtures.multiple)
         XCTAssertFalse(result.hasBlockingIssues); XCTAssertEqual(result.workouts.map(\.name), ["Push", "Core"])
         XCTAssertEqual(result.workouts[0].exercises.map(\.name), ["Back Squat"])
         XCTAssertEqual(result.workouts[1].exercises.map(\.name), ["Plank"])
@@ -50,7 +50,7 @@ final class WorkoutImportPhase3BTests: XCTestCase {
     func testMatchingExactAliasDiacriticCompactUnmatchedAndAmbiguous() throws {
         let canonical = ExerciseDefinition(id: .new(), name: "Café Press", normalizedName: "cafe press", aliases: ["Coffee Press"], equipment: nil, category: nil, isCustom: false, archivedAt: nil)
         let pullup = ExerciseDefinition(id: .new(), name: "Pull-up", normalizedName: "pull up", aliases: [], equipment: nil, category: nil, isCustom: false, archivedAt: nil)
-        let matcher = PlanExerciseMatcher()
+        let matcher = WorkoutExerciseMatcher()
         for name in ["CAFÉ PRESS", "Coffee Press", "pullup"] {
             guard case .matched = matcher.match(name: name, catalog: [canonical, pullup]) else { return XCTFail("Expected match for \(name)") }
         }
@@ -61,18 +61,18 @@ final class WorkoutImportPhase3BTests: XCTestCase {
     }
 
     func testCustomExerciseCanExplicitlyResolveUnmatched() throws {
-        let parsed = try XCTUnwrap(parser.parse(PlanImportFixtures.unmatched).workouts.first?.exercises.first)
+        let parsed = try XCTUnwrap(parser.parse(WorkoutImportFixtures.unmatched).workouts.first?.exercises.first)
         let custom = ExerciseDefinition(id: .new(), name: "Mystery Press", normalizedName: "mystery press", aliases: [], equipment: nil, category: nil, isCustom: true, archivedAt: nil)
         let resolved = ResolvedParsedWorkout(id: UUID(), name: "Push", exercises: [.init(parsed: parsed, match: .matched(custom))])
-        XCTAssertEqual(PlanImportDraftConverter.draft(from: resolved)?.exercises.first?.exerciseID, custom.id)
+        XCTAssertEqual(WorkoutImportDraftConverter.draft(from: resolved)?.exercises.first?.exerciseID, custom.id)
     }
 
     func testDraftConversionPreservesOrderTargetsAndGeneratesFreshIdentity() throws {
-        let result = parser.parse(PlanImportFixtures.simple)
+        let result = parser.parse(WorkoutImportFixtures.simple)
         let definitions = EquilibriumFixtures.exercises
-        let matcher = PlanExerciseMatcher()
+        let matcher = WorkoutExerciseMatcher()
         let resolved = ResolvedParsedWorkout(id: UUID(), name: result.workouts[0].name, exercises: result.workouts[0].exercises.map { .init(parsed: $0, match: matcher.match(name: $0.name, catalog: definitions)) })
-        let first = try XCTUnwrap(PlanImportDraftConverter.draft(from: resolved)), second = try XCTUnwrap(PlanImportDraftConverter.draft(from: resolved))
+        let first = try XCTUnwrap(WorkoutImportDraftConverter.draft(from: resolved)), second = try XCTUnwrap(WorkoutImportDraftConverter.draft(from: resolved))
         XCTAssertEqual(first.exercises.map(\.exerciseID), [EquilibriumFixtures.squatID, EquilibriumFixtures.plankID])
         XCTAssertNotEqual(first.exercises.map(\.id), second.exercises.map(\.id)); XCTAssertNotEqual(first.exercises.flatMap(\.prescriptions).map(\.id), second.exercises.flatMap(\.prescriptions).map(\.id))
         guard case .repetitions(lower: 8, upper: 8) = first.exercises[0].prescriptions[0].target else { return XCTFail("Expected reps") }
@@ -80,20 +80,20 @@ final class WorkoutImportPhase3BTests: XCTestCase {
     }
 
     func testUnresolvedMatchBlocksDraftConversionAndImportRouteExists() throws {
-        let parsed = try XCTUnwrap(parser.parse(PlanImportFixtures.unmatched).workouts.first?.exercises.first)
+        let parsed = try XCTUnwrap(parser.parse(WorkoutImportFixtures.unmatched).workouts.first?.exercises.first)
         let unresolved = ResolvedParsedWorkout(id: UUID(), name: "Push", exercises: [.init(parsed: parsed, match: .unmatched)])
-        XCTAssertNil(PlanImportDraftConverter.draft(from: unresolved)); XCTAssertEqual(CreationRoute.pasteWorkout, .pasteWorkout)
+        XCTAssertNil(WorkoutImportDraftConverter.draft(from: unresolved)); XCTAssertEqual(CreationRoute.pasteWorkout, .pasteWorkout)
     }
 
     @MainActor func testImportedDraftUsesBuilderTemplateScheduleAndExecutionArchitecture() async throws {
         let repository = SwiftDataRepository(container: try PersistenceController.makeContainer(inMemory: true))
         for exercise in EquilibriumFixtures.exercises { try await repository.saveExercise(exercise) }
-        let result = parser.parse(PlanImportFixtures.simple), matcher = PlanExerciseMatcher()
+        let result = parser.parse(WorkoutImportFixtures.simple), matcher = WorkoutExerciseMatcher()
         let resolved = ResolvedParsedWorkout(id: UUID(), name: result.workouts[0].name, exercises: result.workouts[0].exercises.map { .init(parsed: $0, match: matcher.match(name: $0.name, catalog: EquilibriumFixtures.exercises)) })
-        let draft = try XCTUnwrap(PlanImportDraftConverter.draft(from: resolved))
-        let model = WorkoutBuilderModel(day: try LocalDay("2026-08-22"), draft: draft, exercises: repository, workouts: repository, history: repository)
-        let scheduledValue = await model.schedule(); let scheduled = try XCTUnwrap(scheduledValue)
-        let execution = WorkoutExecutionModel(workoutID: scheduled.id, repository: repository)
-        await execution.activate(); XCTAssertEqual(execution.workout?.id, scheduled.id); XCTAssertEqual(execution.workout?.status, .inProgress)
+        let draft = try XCTUnwrap(WorkoutImportDraftConverter.draft(from: resolved))
+        let model = WorkoutBuilderModel(draft: draft, exercises: repository, workouts: repository, history: repository)
+        let createdValue = await model.create(); let workout = try XCTUnwrap(createdValue)
+        let execution = WorkoutExecutionModel(workoutID: workout.id, repository: repository)
+        await execution.activate(); XCTAssertEqual(execution.workout?.id, workout.id); XCTAssertEqual(execution.workout?.status, .inProgress)
     }
 }

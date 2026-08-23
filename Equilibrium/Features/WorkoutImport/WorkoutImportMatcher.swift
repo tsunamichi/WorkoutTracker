@@ -6,7 +6,7 @@ enum ExerciseMatch: Hashable, Sendable {
     case ambiguous([ExerciseDefinition])
 }
 
-struct PlanExerciseMatcher: Sendable {
+struct WorkoutExerciseMatcher: Sendable {
     func match(name: String, catalog: [ExerciseDefinition]) -> ExerciseMatch {
         let needle = SwiftDataRepository.normalizeExerciseName(name)
         let canonical = catalog.filter { SwiftDataRepository.normalizeExerciseName($0.name) == needle }
@@ -35,15 +35,15 @@ struct ResolvedParsedWorkout: Identifiable, Hashable, Sendable {
     var exercises: [ResolvedParsedExercise]
 }
 
-enum PlanImportDraftConverter {
+enum WorkoutImportDraftConverter {
     static func lightweightDraft(from workout: ParsedWorkout, catalog: [ExerciseDefinition]) -> WorkoutDraft {
-        let matcher = PlanExerciseMatcher()
+        let matcher = WorkoutExerciseMatcher()
         return .init(name: workout.name, exercises: workout.exercises.map { parsed in
             if case .matched(let definition) = matcher.match(name: parsed.name, catalog: catalog) {
                 return .init(exerciseID: definition.id, name: definition.name)
             }
             return .init(exerciseID: nil, name: parsed.name.trimmingCharacters(in: .whitespacesAndNewlines))
-        }, sourceTemplateID: nil)
+        })
     }
     static func draft(from workout: ResolvedParsedWorkout) -> WorkoutDraft? {
         var exercises: [DraftExercise] = []
@@ -63,6 +63,6 @@ enum PlanImportDraftConverter {
                 restDuration: value.parsed.restDuration
             ))
         }
-        return .init(name: workout.name, exercises: exercises, sourceTemplateID: nil)
+        return .init(name: workout.name, exercises: exercises)
     }
 }

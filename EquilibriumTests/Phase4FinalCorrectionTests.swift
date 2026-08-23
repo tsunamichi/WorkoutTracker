@@ -4,14 +4,13 @@ import XCTest
 
 @MainActor
 final class Phase4FinalCorrectionTests: XCTestCase {
-    private let day = try! LocalDay("2026-08-22")
     private var now: Date { EquilibriumFixtures.timestamp }
 
     func testOptionsAndPerformanceEligibilityAcrossRestTransition() async throws {
         let repository = makeRepository()
         let workout = EquilibriumFixtures.mixed(id: "rest-performance")
-        try await repository.schedule(workout)
-        let model = WorkoutExecutionModel(workoutID: workout.id, repository: repository, now: { self.now }, currentDayProvider: FixedCurrentDayProvider(day: day))
+        try await repository.create(workout)
+        let model = WorkoutExecutionModel(workoutID: workout.id, repository: repository, now: { self.now })
         await model.activate()
         XCTAssertTrue(model.showsExecutionOptions)
         XCTAssertFalse(model.canComplete)
@@ -39,8 +38,8 @@ final class Phase4FinalCorrectionTests: XCTestCase {
         var awaitingCompletion = EquilibriumFixtures.completed(id: "awaiting-completion")
         awaitingCompletion.status = .inProgress
         awaitingCompletion.completedAt = nil
-        try await repository.schedule(awaitingCompletion)
-        let model = WorkoutExecutionModel(workoutID: awaitingCompletion.id, repository: repository, now: { self.now }, currentDayProvider: FixedCurrentDayProvider(day: day))
+        try await repository.create(awaitingCompletion)
+        let model = WorkoutExecutionModel(workoutID: awaitingCompletion.id, repository: repository, now: { self.now })
         await model.activate()
         XCTAssertTrue(model.showsExecutionOptions)
         XCTAssertTrue(model.canComplete)
@@ -54,8 +53,8 @@ final class Phase4FinalCorrectionTests: XCTestCase {
         var workout = EquilibriumFixtures.mixed(id: "rest-default")
         workout.exercises[0].restDuration = nil
         workout.exercises[1].restDuration = 240
-        try await repository.schedule(workout)
-        let model = WorkoutExecutionModel(workoutID: workout.id, repository: repository, defaultRestDuration: 90, now: { self.now }, currentDayProvider: FixedCurrentDayProvider(day: day))
+        try await repository.create(workout)
+        let model = WorkoutExecutionModel(workoutID: workout.id, repository: repository, defaultRestDuration: 90, now: { self.now })
         await model.activate()
         XCTAssertEqual(model.restEditableExercise?.id, workout.exercises[0].id)
         XCTAssertEqual(model.configuredRestDuration, 90)
@@ -64,8 +63,8 @@ final class Phase4FinalCorrectionTests: XCTestCase {
     func testCompletedWorkoutHasNoActiveExecutionOptions() async throws {
         let repository = makeRepository()
         let completed = EquilibriumFixtures.completed(id: "completed-options")
-        try await repository.schedule(completed)
-        let model = WorkoutExecutionModel(workoutID: completed.id, repository: repository, now: { self.now }, currentDayProvider: FixedCurrentDayProvider(day: day))
+        try await repository.create(completed)
+        let model = WorkoutExecutionModel(workoutID: completed.id, repository: repository, now: { self.now })
         await model.activate()
         XCTAssertFalse(model.showsExecutionOptions)
     }
@@ -73,7 +72,7 @@ final class Phase4FinalCorrectionTests: XCTestCase {
     func testResetClearsOnlyCanonicalProgressAndPersistsAcrossRecreation() async throws {
         let url = TestSupport.temporaryStoreURL()
         var container: ModelContainer? = try PersistenceController.makeContainer(storageURL: url)
-        var repository: SwiftDataRepository? = SwiftDataRepository(container: container!, currentDayProvider: FixedCurrentDayProvider(day: day))
+        var repository: SwiftDataRepository? = SwiftDataRepository(container: container!)
         let target = EquilibriumFixtures.inProgress(id: "reset-target")
         let unrelated = EquilibriumFixtures.completed(id: "reset-unrelated")
         try await repository!.materializeAtomically([target, unrelated])
@@ -83,7 +82,7 @@ final class Phase4FinalCorrectionTests: XCTestCase {
         let unrelatedBeforeRelaunch = try await repository!.workout(id: unrelated.id)
         XCTAssertEqual(unrelatedBeforeRelaunch, unrelated)
         repository = nil; container = nil
-        let reopened = SwiftDataRepository(container: try PersistenceController.makeContainer(storageURL: url), currentDayProvider: FixedCurrentDayProvider(day: day))
+        let reopened = SwiftDataRepository(container: try PersistenceController.makeContainer(storageURL: url))
         let persistedValue = try await reopened.workout(id: target.id)
         let persisted = try XCTUnwrap(persistedValue)
         XCTAssertTrue(persisted.exercises.flatMap(\.loggedSets).isEmpty)
@@ -94,10 +93,10 @@ final class Phase4FinalCorrectionTests: XCTestCase {
     func testDeleteRemovesOnlyTargetAndRejectsCompletedWorkout() async throws {
         let repository = makeRepository()
         let target = EquilibriumFixtures.inProgress(id: "delete-target")
-        let unrelated = EquilibriumFixtures.planned(id: "delete-unrelated")
+        let unrelated = EquilibriumFixtures.ready(id: "delete-unrelated")
         let completed = EquilibriumFixtures.completed(id: "delete-completed")
         try await repository.materializeAtomically([target, unrelated, completed])
-        let model = WorkoutExecutionModel(workoutID: target.id, repository: repository, now: { self.now }, currentDayProvider: FixedCurrentDayProvider(day: day))
+        let model = WorkoutExecutionModel(workoutID: target.id, repository: repository, now: { self.now })
         await model.activate()
         let shouldDismiss = await model.deleteWorkout()
         XCTAssertTrue(shouldDismiss)
@@ -112,10 +111,10 @@ final class Phase4FinalCorrectionTests: XCTestCase {
     func testRestEditPersistsOnlyActiveExerciseAndDrivesSubsequentRest() async throws {
         let url = TestSupport.temporaryStoreURL()
         var container: ModelContainer? = try PersistenceController.makeContainer(storageURL: url)
-        var repository: SwiftDataRepository? = SwiftDataRepository(container: container!, currentDayProvider: FixedCurrentDayProvider(day: day))
+        var repository: SwiftDataRepository? = SwiftDataRepository(container: container!)
         let workout = EquilibriumFixtures.mixed(id: "rest-edit")
-        try await repository!.schedule(workout)
-        let model = WorkoutExecutionModel(workoutID: workout.id, repository: repository!, now: { self.now }, currentDayProvider: FixedCurrentDayProvider(day: day))
+        try await repository!.create(workout)
+        let model = WorkoutExecutionModel(workoutID: workout.id, repository: repository!, now: { self.now })
         await model.activate()
         let saved = await model.setRestDuration(75)
         XCTAssertTrue(saved)
@@ -124,7 +123,7 @@ final class Phase4FinalCorrectionTests: XCTestCase {
         await model.log(exerciseID: workout.exercises[0].id, prescriptionID: workout.exercises[0].prescriptions[0].id, input: .repetitions(weight: nil, repetitions: 8))
         XCTAssertEqual(model.restState?.totalDuration, 75)
         repository = nil; container = nil
-        let recreated = SwiftDataRepository(container: try PersistenceController.makeContainer(storageURL: url), currentDayProvider: FixedCurrentDayProvider(day: day))
+        let recreated = SwiftDataRepository(container: try PersistenceController.makeContainer(storageURL: url))
         let recreatedWorkout = try await recreated.workout(id: workout.id)
         XCTAssertEqual(recreatedWorkout?.exercises[0].restDuration, 75)
     }
@@ -132,7 +131,7 @@ final class Phase4FinalCorrectionTests: XCTestCase {
     func testRestDurationRepositoryRequiresFiveSecondIncrements() async throws {
         let repository = makeRepository()
         let workout = EquilibriumFixtures.inProgress(id: "rest-increments")
-        try await repository.schedule(workout)
+        try await repository.create(workout)
         let valid = try await repository.setRestDuration(workoutID: workout.id, exerciseID: workout.exercises[0].id, seconds: 80, at: now)
         XCTAssertEqual(valid.exercises[0].restDuration, 80)
         for invalid in [16.0, 74.0] {
@@ -148,7 +147,7 @@ final class Phase4FinalCorrectionTests: XCTestCase {
     func testSharePayloadUsesSnapshotAndHasNoPersistenceSideEffects() async throws {
         let repository = makeRepository()
         let workout = EquilibriumFixtures.inProgress(id: "share")
-        try await repository.schedule(workout)
+        try await repository.create(workout)
         let before = try await repository.workout(id: workout.id)
         let text = WorkoutShareText.build(workout: workout, unit: .pounds)
         XCTAssertTrue(text.contains(workout.titleSnapshot))
@@ -159,7 +158,7 @@ final class Phase4FinalCorrectionTests: XCTestCase {
     }
 
     private func makeRepository() -> SwiftDataRepository {
-        SwiftDataRepository(container: try! PersistenceController.makeContainer(inMemory: true), currentDayProvider: FixedCurrentDayProvider(day: day))
+        SwiftDataRepository(container: try! PersistenceController.makeContainer(inMemory: true))
     }
 
 

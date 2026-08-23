@@ -59,21 +59,15 @@ struct ExercisePickerView: View {
     }
 }
 
-struct WorkoutTemplatePicker: View {
-    let repository: any WorkoutTemplateRepository; let selection: (WorkoutTemplate) -> Void
-    @State private var values: [WorkoutTemplate] = []; @State private var failed = false
-    var body: some View { List(values) { value in Button { selection(value) } label: { VStack(alignment: .leading) { Text(value.name); Text("\(value.exercises.count) exercises").font(EQTypography.caption).foregroundStyle(EQColor.secondaryText) }.frame(minHeight: EQDimension.minimumTouch) } }.overlay { if values.isEmpty { ContentUnavailableView("No reusable workouts", systemImage: "rectangle.stack", description: Text(failed ? "Workouts could not be loaded." : "Save a workout from the Builder first.")) } }.scrollContentBackground(.hidden).background(EQColor.canvas).navigationTitle("Existing Workout").task { do { values = try await repository.allTemplates() } catch { failed = true } } }
-}
-
 struct RecentWorkoutPicker: View {
-    let repository: any ScheduledWorkoutRepository; let day: LocalDay; let selection: ([ScheduledWorkout]) -> Void
+    let repository: any WorkoutRepository; let selection: ([Workout]) -> Void
     let history: any ExerciseHistoryRepository
-    init(repository: any ScheduledWorkoutRepository, history: any ExerciseHistoryRepository, day: LocalDay, selection: @escaping ([ScheduledWorkout]) -> Void) { self.repository = repository; self.history = history; self.day = day; self.selection = selection }
-    @State private var values: [ScheduledWorkout] = []; @State private var selectedIDs: [ScheduledWorkoutID] = []; @State private var failed = false; @State private var saving = false
+    init(repository: any WorkoutRepository, history: any ExerciseHistoryRepository, selection: @escaping ([Workout]) -> Void) { self.repository = repository; self.history = history; self.selection = selection }
+    @State private var values: [Workout] = []; @State private var selectedIDs: [WorkoutID] = []; @State private var failed = false; @State private var saving = false
     var body: some View {
         List(values) { value in
             Button { if selectedIDs.contains(value.id) { selectedIDs.removeAll { $0 == value.id } } else { selectedIDs.append(value.id) } } label: {
-                HStack { VStack(alignment: .leading) { Text(value.titleSnapshot); Text(value.day.iso8601).font(EQTypography.caption).foregroundStyle(EQColor.secondaryText) }; Spacer(); Image(systemName: selectedIDs.contains(value.id) ? "checkmark.circle.fill" : "circle").foregroundStyle(EQColor.accent) }.frame(minHeight: EQDimension.minimumTouch)
+                HStack { Text(value.titleSnapshot); Spacer(); Image(systemName: selectedIDs.contains(value.id) ? "checkmark.circle.fill" : "circle").foregroundStyle(EQColor.accent) }.frame(minHeight: EQDimension.minimumTouch)
             }
         }
         .overlay { if values.isEmpty { ContentUnavailableView("No recent workouts", systemImage: "clock.arrow.circlepath", description: Text(failed ? "Recent workouts could not be loaded." : "Completed workouts appear here.")) } }
@@ -85,16 +79,16 @@ struct RecentWorkoutPicker: View {
         saving = true; defer { saving = false }
         let chosen = selectedIDs.compactMap { id in values.first { $0.id == id } }
         do {
-            var fresh: [ScheduledWorkout] = []
-            for (index, historical) in chosen.enumerated() { fresh.append(try await historical.freshCopy(on: day, createdAt: now.addingTimeInterval(Double(index) / 1_000), history: history)) }
+            var fresh: [Workout] = []
+            for (index, historical) in chosen.enumerated() { fresh.append(try await historical.freshCopy(createdAt: now.addingTimeInterval(Double(index) / 1_000), history: history)) }
             try await repository.materializeAtomically(fresh); selection(fresh)
         } catch { failed = true }
     }
 }
 
-extension ScheduledWorkout {
-    func freshCopy(on day: LocalDay, createdAt: Date, history: any ExerciseHistoryRepository) async throws -> ScheduledWorkout {
-        var copied: [ScheduledExercise] = []
+extension Workout {
+    func freshCopy(createdAt: Date, history: any ExerciseHistoryRepository) async throws -> Workout {
+        var copied: [WorkoutExercise] = []
         for exercise in exercises {
             let latest = try await history.latestExerciseLog(exerciseID: exercise.exerciseID)
             copied.append(.init(id: .new(), exerciseID: exercise.exerciseID, nameSnapshot: exercise.nameSnapshot, prescriptions: latest?.sets.map { set in
@@ -102,7 +96,7 @@ extension ScheduledWorkout {
                 let reps = max(1, set.repetitions ?? 1); return .init(id: .new(), target: .repetitions(range: reps...reps), suggestedWeight: set.weight)
             } ?? [], loggedSets: [], restDuration: nil, skippedAt: nil))
         }
-        return .init(id: .new(), day: day, titleSnapshot: titleSnapshot, templateID: templateID, planID: nil, source: .manual, exercises: copied, status: .planned, startedAt: nil, completedAt: nil, createdAt: createdAt, updatedAt: createdAt)
+        return .init(id: .new(), titleSnapshot: titleSnapshot, exercises: copied, status: .ready, startedAt: nil, completedAt: nil, createdAt: createdAt, updatedAt: createdAt)
     }
 }
 
@@ -112,10 +106,9 @@ private extension String { var nilIfBlank: String? { let value = trimmingCharact
 @MainActor private var pickerPreviewRepository: SwiftDataRepository {
     let container = try! PersistenceController.makeContainer(inMemory: true)
     for exercise in EquilibriumFixtures.exercises { container.mainContext.insert(DefinitionMapper.record(from: exercise)) }
-    container.mainContext.insert(DefinitionMapper.record(from: EquilibriumFixtures.template)); container.mainContext.insert(WorkoutMapper.record(from: EquilibriumFixtures.completed()))
+    container.mainContext.insert(WorkoutMapper.record(from: EquilibriumFixtures.completed()))
     try! container.mainContext.save(); return SwiftDataRepository(container: container)
 }
 #Preview("Exercise Picker") { ExercisePickerView(repository: pickerPreviewRepository, history: pickerPreviewRepository) { _ in } }
-#Preview("Existing Workout") { NavigationStack { WorkoutTemplatePicker(repository: pickerPreviewRepository) { _ in } }.preferredColorScheme(.dark) }
-#Preview("Recent Workout") { NavigationStack { RecentWorkoutPicker(repository: pickerPreviewRepository, history: pickerPreviewRepository, day: try! LocalDay("2026-08-22")) { _ in } }.preferredColorScheme(.dark) }
+#Preview("Recent Workout") { NavigationStack { RecentWorkoutPicker(repository: pickerPreviewRepository, history: pickerPreviewRepository) { _ in } }.preferredColorScheme(.dark) }
 #endif

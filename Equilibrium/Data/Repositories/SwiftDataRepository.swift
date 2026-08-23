@@ -2,11 +2,10 @@ import Foundation
 import SwiftData
 
 @MainActor
-public final class SwiftDataRepository: ExerciseRepository, WorkoutTemplateRepository, ScheduledWorkoutRepository, ExerciseHistoryRepository, BackupRepository {
+public final class SwiftDataRepository: ExerciseRepository, WorkoutRepository, ExerciseHistoryRepository, BackupRepository {
     private let context: ModelContext
-    private let currentDayProvider: any CurrentDayProviding
-    public init(container: ModelContainer, currentDayProvider: any CurrentDayProviding = SystemCurrentDayProvider()) {
-        context = ModelContext(container); context.autosaveEnabled = false; self.currentDayProvider = currentDayProvider
+    public init(container: ModelContainer) {
+        context = ModelContext(container); context.autosaveEnabled = false
     }
 
     public func allExercises() async throws -> [ExerciseDefinition] {
@@ -44,81 +43,44 @@ public final class SwiftDataRepository: ExerciseRepository, WorkoutTemplateRepos
         let key = id.rawValue; var descriptor = FetchDescriptor<ExerciseDefinitionRecord>(predicate: #Predicate { $0.id == key }); descriptor.fetchLimit = 1
         guard let record = try context.fetch(descriptor).first else { throw RepositoryError.notFound }; record.archivedAt = date; try saveOrRollback()
     }
-    public func allTemplates() async throws -> [WorkoutTemplate] {
-        try context.fetch(FetchDescriptor<WorkoutTemplateRecord>(sortBy: [SortDescriptor(\.updatedAt, order: .reverse)])).map(DefinitionMapper.domain).filter { $0.archivedAt == nil }
-    }
-    public func template(id: WorkoutTemplateID) async throws -> WorkoutTemplate? {
-        let key = id.rawValue; var descriptor = FetchDescriptor<WorkoutTemplateRecord>(predicate: #Predicate { $0.id == key }); descriptor.fetchLimit = 1
-        return try context.fetch(descriptor).first.map(DefinitionMapper.domain)
-    }
-    public func saveTemplate(_ template: WorkoutTemplate) async throws {
-        guard !template.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, !template.exercises.isEmpty else { throw RepositoryError.invalidBackup }
-        let childIDs = template.exercises.map(\.id.rawValue) + template.exercises.flatMap(\.prescriptions).map(\.id.rawValue)
-        guard Set(childIDs).count == childIDs.count else { throw RepositoryError.duplicateIdentifier }
-        let key = template.id.rawValue; var descriptor = FetchDescriptor<WorkoutTemplateRecord>(predicate: #Predicate { $0.id == key }); descriptor.fetchLimit = 1
-        if let existing = try context.fetch(descriptor).first {
-            let replacement = DefinitionMapper.record(from: template)
-            existing.name = template.name; existing.createdAt = template.createdAt; existing.updatedAt = template.updatedAt; existing.archivedAt = template.archivedAt
-            for child in existing.exercises { context.delete(child) }; existing.exercises = replacement.exercises
-        } else { context.insert(DefinitionMapper.record(from: template)) }
-        try saveOrRollback()
-    }
-    public func archiveTemplate(id: WorkoutTemplateID, at date: Date) async throws {
-        let key = id.rawValue; var descriptor = FetchDescriptor<WorkoutTemplateRecord>(predicate: #Predicate { $0.id == key }); descriptor.fetchLimit = 1
-        guard let record = try context.fetch(descriptor).first else { throw RepositoryError.notFound }; record.archivedAt = date; record.updatedAt = date; try saveOrRollback()
-    }
     public nonisolated static func normalizeExerciseName(_ value: String) -> String {
         value.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: .current).lowercased().split(whereSeparator: { !$0.isLetter && !$0.isNumber }).joined(separator: " ")
     }
 
-    public func workouts(on day: LocalDay) async throws -> [ScheduledWorkout] {
-        let key = day.iso8601
-        let descriptor = FetchDescriptor<ScheduledWorkoutRecord>(predicate: #Predicate { $0.localDay == key }, sortBy: [SortDescriptor(\.createdAt), SortDescriptor(\.id)])
-        return try context.fetch(descriptor).map { try WorkoutMapper.domain(from: $0) }
+    public func activeWorkouts() async throws -> [Workout] {
+        let completed = WorkoutStatus.completed.rawValue
+        return try context.fetch(FetchDescriptor<WorkoutRecord>(predicate: #Predicate { $0.statusRaw != completed }, sortBy: [SortDescriptor(\.createdAt), SortDescriptor(\.id)])).map { try WorkoutMapper.domain(from: $0) }
     }
-    public func workouts(from startDay: LocalDay, through endDay: LocalDay) async throws -> [ScheduledWorkout] {
-        let lower = startDay.iso8601, upper = endDay.iso8601
-        let descriptor = FetchDescriptor<ScheduledWorkoutRecord>(
-            predicate: #Predicate { $0.localDay >= lower && $0.localDay <= upper },
-            sortBy: [SortDescriptor(\.localDay), SortDescriptor(\.createdAt), SortDescriptor(\.id)]
-        )
-        return try context.fetch(descriptor).map { try WorkoutMapper.domain(from: $0) }
-    }
-    public func workout(id: ScheduledWorkoutID) async throws -> ScheduledWorkout? {
+    public func workout(id: WorkoutID) async throws -> Workout? {
         let key = id.rawValue
-        var descriptor = FetchDescriptor<ScheduledWorkoutRecord>(predicate: #Predicate { $0.id == key })
+        var descriptor = FetchDescriptor<WorkoutRecord>(predicate: #Predicate { $0.id == key })
         descriptor.fetchLimit = 1
         return try context.fetch(descriptor).first.map { try WorkoutMapper.domain(from: $0) }
     }
-    public func allWorkouts() async throws -> [ScheduledWorkout] {
-        try context.fetch(FetchDescriptor<ScheduledWorkoutRecord>(sortBy: [SortDescriptor(\.localDay), SortDescriptor(\.createdAt), SortDescriptor(\.id)])).map { try WorkoutMapper.domain(from: $0) }
+    public func allWorkouts() async throws -> [Workout] {
+        try context.fetch(FetchDescriptor<WorkoutRecord>(sortBy: [SortDescriptor(\.createdAt), SortDescriptor(\.id)])).map { try WorkoutMapper.domain(from: $0) }
     }
-    public func schedule(_ workout: ScheduledWorkout) async throws {
+    public func create(_ workout: Workout) async throws {
         try DomainValidator.validate(workout)
         guard try await self.workout(id: workout.id) == nil else { throw RepositoryError.duplicateIdentifier }
         context.insert(WorkoutMapper.record(from: workout))
         do { try context.save() } catch { context.rollback(); throw error }
     }
-    public func update(_ workout: ScheduledWorkout) async throws {
+    public func update(_ workout: Workout) async throws {
         try DomainValidator.validate(workout)
         let key = workout.id.rawValue
-        var descriptor = FetchDescriptor<ScheduledWorkoutRecord>(predicate: #Predicate { $0.id == key }); descriptor.fetchLimit = 1
+        var descriptor = FetchDescriptor<WorkoutRecord>(predicate: #Predicate { $0.id == key }); descriptor.fetchLimit = 1
         guard let existing = try context.fetch(descriptor).first else { throw RepositoryError.notFound }
-        let dayKey = workout.day.iso8601
         if existing.statusRaw == WorkoutStatus.completed.rawValue { throw RepositoryError.immutableCompletedWorkout }
-        let currentDay = try currentDayProvider.currentDay()
-        guard try LocalDay(existing.localDay) == currentDay, workout.day == currentDay else { throw RepositoryError.workoutNotCurrentDay }
-        existing.localDay = dayKey; existing.titleSnapshot = workout.titleSnapshot; existing.templateID = workout.templateID?.rawValue; existing.planID = workout.planID?.rawValue
-        existing.sourceRaw = workout.source.rawValue; existing.statusRaw = workout.status.rawValue; existing.startedAt = workout.startedAt; existing.completedAt = workout.completedAt; existing.updatedAt = workout.updatedAt
+        existing.titleSnapshot = workout.titleSnapshot; existing.statusRaw = workout.status.rawValue; existing.startedAt = workout.startedAt; existing.completedAt = workout.completedAt; existing.updatedAt = workout.updatedAt
         for child in existing.exercises { context.delete(child) }
         let replacement = WorkoutMapper.record(from: workout)
         existing.exercises = replacement.exercises
         do { try context.save() } catch { context.rollback(); throw error }
     }
 
-    public func startWorkout(id: ScheduledWorkoutID, at date: Date = .now) async throws -> ScheduledWorkout {
+    public func startWorkout(id: WorkoutID, at date: Date = .now) async throws -> Workout {
         guard var workout = try await workout(id: id) else { throw RepositoryError.notFound }
-        try requireCurrentDay(workout)
         if workout.status == .completed { throw RepositoryError.immutableCompletedWorkout }
         if workout.status == .inProgress { return workout }
         workout.status = .inProgress
@@ -128,9 +90,8 @@ public final class SwiftDataRepository: ExerciseRepository, WorkoutTemplateRepos
         return workout
     }
 
-    public func logSet(workoutID: ScheduledWorkoutID, exerciseID: ScheduledExerciseID, prescriptionID: SetID, input: SetLogInput, completed: Bool, at date: Date = .now) async throws -> ScheduledWorkout {
+    public func logSet(workoutID: WorkoutID, exerciseID: WorkoutExerciseID, prescriptionID: SetID, input: SetLogInput, completed: Bool, at date: Date = .now) async throws -> Workout {
         guard var workout = try await workout(id: workoutID) else { throw RepositoryError.notFound }
-        try requireCurrentDay(workout)
         guard workout.status == .inProgress else {
             if workout.status == .completed { throw RepositoryError.immutableCompletedWorkout }
             throw RepositoryError.workoutNotInProgress
@@ -165,9 +126,8 @@ public final class SwiftDataRepository: ExerciseRepository, WorkoutTemplateRepos
         return workout
     }
 
-    public func appendSet(workoutID: ScheduledWorkoutID, exerciseID: ScheduledExerciseID, seed: SetLogInput? = nil, at date: Date = .now) async throws -> ScheduledWorkout {
+    public func appendSet(workoutID: WorkoutID, exerciseID: WorkoutExerciseID, seed: SetLogInput? = nil, at date: Date = .now) async throws -> Workout {
         guard var workout = try await workout(id: workoutID) else { throw RepositoryError.notFound }
-        try requireCurrentDay(workout)
         guard workout.status == .inProgress else { throw workout.status == .completed ? RepositoryError.immutableCompletedWorkout : RepositoryError.workoutNotInProgress }
         guard let index = workout.exercises.firstIndex(where: { $0.id == exerciseID }) else { throw RepositoryError.notFound }
         let prescription: SetPrescription
@@ -185,9 +145,8 @@ public final class SwiftDataRepository: ExerciseRepository, WorkoutTemplateRepos
         return workout
     }
 
-    public func removeSet(workoutID: ScheduledWorkoutID, exerciseID: ScheduledExerciseID, prescriptionID: SetID, at date: Date = .now) async throws -> ScheduledWorkout {
+    public func removeSet(workoutID: WorkoutID, exerciseID: WorkoutExerciseID, prescriptionID: SetID, at date: Date = .now) async throws -> Workout {
         guard var workout = try await workout(id: workoutID) else { throw RepositoryError.notFound }
-        try requireCurrentDay(workout)
         guard workout.status == .inProgress else { throw workout.status == .completed ? RepositoryError.immutableCompletedWorkout : RepositoryError.workoutNotInProgress }
         guard let index = workout.exercises.firstIndex(where: { $0.id == exerciseID }), workout.exercises[index].prescriptions.contains(where: { $0.id == prescriptionID }) else { throw RepositoryError.prescriptionNotFound }
         guard !workout.exercises[index].loggedSets.contains(where: { $0.prescriptionID == prescriptionID && $0.completedAt != nil }) else { throw RepositoryError.cannotRemoveCompletedSet }
@@ -198,9 +157,8 @@ public final class SwiftDataRepository: ExerciseRepository, WorkoutTemplateRepos
         return workout
     }
 
-    public func completeWorkout(id: ScheduledWorkoutID, at date: Date = .now) async throws -> ScheduledWorkout {
+    public func completeWorkout(id: WorkoutID, at date: Date = .now) async throws -> Workout {
         guard var workout = try await workout(id: id) else { throw RepositoryError.notFound }
-        try requireCurrentDay(workout)
         if workout.status == .completed { return workout }
         guard workout.status == .inProgress else { throw RepositoryError.workoutNotInProgress }
         guard WorkoutExecutionQuery.canComplete(workout) else { throw RepositoryError.incompleteWorkout }
@@ -210,9 +168,8 @@ public final class SwiftDataRepository: ExerciseRepository, WorkoutTemplateRepos
         try await update(workout)
         return workout
     }
-    public func resetWorkout(id: ScheduledWorkoutID, at date: Date = .now) async throws -> ScheduledWorkout {
+    public func resetWorkout(id: WorkoutID, at date: Date = .now) async throws -> Workout {
         guard var workout = try await workout(id: id) else { throw RepositoryError.notFound }
-        try requireCurrentDay(workout)
         guard workout.status == .inProgress else { throw workout.status == .completed ? RepositoryError.immutableCompletedWorkout : RepositoryError.workoutNotInProgress }
         for index in workout.exercises.indices {
             workout.exercises[index].loggedSets = []
@@ -222,21 +179,19 @@ public final class SwiftDataRepository: ExerciseRepository, WorkoutTemplateRepos
         try await update(workout)
         return workout
     }
-    public func deleteWorkout(id: ScheduledWorkoutID) async throws {
+    public func deleteWorkout(id: WorkoutID) async throws {
         guard let workout = try await workout(id: id) else { throw RepositoryError.notFound }
-        try requireCurrentDay(workout)
         guard workout.status != .completed else { throw RepositoryError.immutableCompletedWorkout }
         let key = id.rawValue
-        var descriptor = FetchDescriptor<ScheduledWorkoutRecord>(predicate: #Predicate { $0.id == key }); descriptor.fetchLimit = 1
+        var descriptor = FetchDescriptor<WorkoutRecord>(predicate: #Predicate { $0.id == key }); descriptor.fetchLimit = 1
         guard let record = try context.fetch(descriptor).first else { throw RepositoryError.notFound }
         context.delete(record)
         try saveOrRollback()
     }
-    public func setRestDuration(workoutID: ScheduledWorkoutID, exerciseID: ScheduledExerciseID, seconds: TimeInterval, at date: Date = .now) async throws -> ScheduledWorkout {
+    public func setRestDuration(workoutID: WorkoutID, exerciseID: WorkoutExerciseID, seconds: TimeInterval, at date: Date = .now) async throws -> Workout {
         guard seconds.isFinite, seconds >= 15, seconds <= 300, seconds.rounded() == seconds,
               Int(seconds) % 5 == 0 else { throw RepositoryError.invalidRestDuration }
         guard var workout = try await workout(id: workoutID) else { throw RepositoryError.notFound }
-        try requireCurrentDay(workout)
         guard workout.status == .inProgress else { throw workout.status == .completed ? RepositoryError.immutableCompletedWorkout : RepositoryError.workoutNotInProgress }
         guard let index = workout.exercises.firstIndex(where: { $0.id == exerciseID }) else { throw RepositoryError.notFound }
         workout.exercises[index].restDuration = seconds
@@ -244,7 +199,7 @@ public final class SwiftDataRepository: ExerciseRepository, WorkoutTemplateRepos
         try await update(workout)
         return workout
     }
-    public func materializeAtomically(_ workouts: [ScheduledWorkout]) async throws {
+    public func materializeAtomically(_ workouts: [Workout]) async throws {
         for workout in workouts {
             try DomainValidator.validate(workout)
             if try await self.workout(id: workout.id) != nil { throw RepositoryError.duplicateIdentifier }
@@ -252,33 +207,29 @@ public final class SwiftDataRepository: ExerciseRepository, WorkoutTemplateRepos
         for workout in workouts { context.insert(WorkoutMapper.record(from: workout)) }
         do { try context.save() } catch { context.rollback(); throw error }
     }
-    public func exportBackup(exportedAt: Date, sourceDeviceID: String) async throws -> EquilibriumBackupV1 {
+    public func exportBackup(exportedAt: Date, sourceDeviceID: String) async throws -> EquilibriumBackupV2 {
         let stored = try loadCollection()
-        return try EquilibriumBackupV1(exportedAt: exportedAt, sourceDeviceID: sourceDeviceID, exercises: try await allExercises(), workoutTemplates: try await allTemplates(), scheduledWorkouts: try await allWorkouts(), cyclePlans: stored?.cyclePlans ?? [], settings: stored?.settings ?? .init(weightUnit: .pounds, defaultRestDuration: 90), progression: stored?.progression ?? FixtureDefaults.progression)
+        return try EquilibriumBackupV2(exportedAt: exportedAt, sourceDeviceID: sourceDeviceID, exercises: try await allExercises(), workouts: try await allWorkouts(), settings: stored?.settings ?? .init(weightUnit: .pounds, defaultRestDuration: 90), progression: stored?.progression ?? FixtureDefaults.progression)
     }
-    public func restoreBackup(_ backup: EquilibriumBackupV1) async throws {
-        guard backup.schemaVersion == 1 else { throw BackupError.unsupportedSchemaVersion(backup.schemaVersion) }
-        guard try await allWorkouts().isEmpty, try await allExercises().isEmpty, try await allTemplates().isEmpty else { throw RepositoryError.invalidBackup }
-        let exerciseIDs = backup.scheduledWorkouts.flatMap(\.exercises).map(\.id)
-        let prescriptionIDs = backup.scheduledWorkouts.flatMap(\.exercises).flatMap(\.prescriptions).map(\.id)
-        let loggedSetIDs = backup.scheduledWorkouts.flatMap(\.exercises).flatMap(\.loggedSets).map(\.id)
+    public func restoreBackup(_ backup: EquilibriumBackupV2) async throws {
+        guard backup.schemaVersion == 2 else { throw BackupError.unsupportedSchemaVersion(backup.schemaVersion) }
+        guard try await allWorkouts().isEmpty, try await allExercises().isEmpty else { throw RepositoryError.invalidBackup }
+        let exerciseIDs = backup.workouts.flatMap(\.exercises).map(\.id)
+        let prescriptionIDs = backup.workouts.flatMap(\.exercises).flatMap(\.prescriptions).map(\.id)
+        let loggedSetIDs = backup.workouts.flatMap(\.exercises).flatMap(\.loggedSets).map(\.id)
         guard Set(exerciseIDs).count == exerciseIDs.count, Set(prescriptionIDs).count == prescriptionIDs.count, Set(loggedSetIDs).count == loggedSetIDs.count else { throw RepositoryError.duplicateIdentifier }
-        for workout in backup.scheduledWorkouts { try DomainValidator.validate(workout) }
+        for workout in backup.workouts { try DomainValidator.validate(workout) }
         for exercise in backup.exercises { context.insert(DefinitionMapper.record(from: exercise)) }
-        for template in backup.workoutTemplates { context.insert(DefinitionMapper.record(from: template)) }
-        for workout in backup.scheduledWorkouts { context.insert(WorkoutMapper.record(from: workout)) }
+        for workout in backup.workouts { context.insert(WorkoutMapper.record(from: workout)) }
         let metadata = try BackupCodec.encode(backup)
         context.insert(BackupCollectionRecord(payload: metadata))
         do { try context.save() } catch { context.rollback(); throw error }
     }
-    private func loadCollection() throws -> EquilibriumBackupV1? {
+    private func loadCollection() throws -> EquilibriumBackupV2? {
         guard let record = try context.fetch(FetchDescriptor<BackupCollectionRecord>()).first else { return nil }
         return try BackupCodec.decode(record.payload)
     }
     private func saveOrRollback() throws { do { try context.save() } catch { context.rollback(); throw error } }
-    private func requireCurrentDay(_ workout: ScheduledWorkout) throws {
-        guard workout.day == (try currentDayProvider.currentDay()) else { throw RepositoryError.workoutNotCurrentDay }
-    }
 }
 
 enum FixtureDefaults {

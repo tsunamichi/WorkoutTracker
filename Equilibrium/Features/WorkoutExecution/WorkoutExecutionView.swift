@@ -11,7 +11,7 @@ struct WorkoutExecutionView: View {
     @State private var editsRestDuration = false
     private let historyRepository: (any ExerciseHistoryRepository)?
 
-    init(id: ScheduledWorkoutID, repository: any ScheduledWorkoutRepository, historyRepository: (any ExerciseHistoryRepository)? = nil, weightUnit: WeightUnit = .pounds, didPersist: @escaping (ScheduledWorkout) -> Void = { _ in }) {
+    init(id: WorkoutID, repository: any WorkoutRepository, historyRepository: (any ExerciseHistoryRepository)? = nil, weightUnit: WeightUnit = .pounds, didPersist: @escaping (Workout) -> Void = { _ in }) {
         self.historyRepository = historyRepository ?? (repository as? SwiftDataRepository)
         _model = State(initialValue: WorkoutExecutionModel(workoutID: id, repository: repository, weightUnit: weightUnit, didPersist: didPersist))
     }
@@ -37,7 +37,7 @@ struct WorkoutExecutionView: View {
         .alert("Delete workout?", isPresented: $confirmsDelete) {
             Button("Cancel", role: .cancel) {}
             Button("Delete", role: .destructive) { Task { if await model.deleteWorkout() { dismiss() } } }
-        } message: { Text("Remove this scheduled workout? Exercise definitions and templates are not affected.") }
+        } message: { Text("Remove this workout? Your personal exercise definitions are not affected.") }
         .sheet(isPresented: $editsRestDuration) {
             RestDurationEditor(initialSeconds: model.configuredRestDuration) { seconds in await model.setRestDuration(seconds) }
         }
@@ -45,8 +45,8 @@ struct WorkoutExecutionView: View {
 
     @ToolbarContentBuilder private var workoutToolbar: some ToolbarContent {
         ToolbarItem(placement: .topBarLeading) {
-            Button { dismiss() } label: { Label("Schedule", systemImage: "chevron.left") }
-                .accessibilityHint("Returns to Schedule")
+            Button { dismiss() } label: { Label("Home", systemImage: "chevron.left") }
+                .accessibilityHint("Returns to Home")
         }
         ToolbarItem(placement: .topBarTrailing) {
             if model.showsExecutionOptions {
@@ -70,7 +70,7 @@ struct WorkoutExecutionView: View {
         }
     }
 
-    private func content(_ workout: ScheduledWorkout) -> some View {
+    private func content(_ workout: Workout) -> some View {
         ScrollView {
             VStack(alignment: .leading, spacing: EQSpacing.md) {
                 Text(workout.titleSnapshot).font(EQTypography.title).padding(.horizontal, EQSpacing.lg)
@@ -89,7 +89,7 @@ struct WorkoutExecutionView: View {
         .scrollIndicators(.hidden)
     }
 
-    private func exercisesCard(_ workout: ScheduledWorkout) -> some View {
+    private func exercisesCard(_ workout: Workout) -> some View {
         VStack(alignment: .leading, spacing: EQSpacing.sm) {
             HStack {
                 Text("EXERCISES").font(EQTypography.caption.weight(.bold))
@@ -167,7 +167,7 @@ struct WorkoutExecutionView: View {
         Task { await model.complete(); if model.showsCompletion { completionFeedback += 1 } }
     }
 
-    private func prescriptionSummary(_ exercise: ScheduledExercise) -> String {
+    private func prescriptionSummary(_ exercise: WorkoutExercise) -> String {
         guard let first = exercise.prescriptions.first else { return "No prescribed sets" }
         switch first.target {
         case .repetitions(let range): return "\(exercise.prescriptions.count) sets · \(range.lowerBound)–\(range.upperBound) reps"
@@ -175,7 +175,7 @@ struct WorkoutExecutionView: View {
         }
     }
 
-    private func exerciseDetail(_ exercise: ScheduledExercise, state: ExerciseState) -> String {
+    private func exerciseDetail(_ exercise: WorkoutExercise, state: ExerciseState) -> String {
         switch state {
         case .completed: return "\(WorkoutExecutionQuery.completedPrescriptionIDs(in: exercise).count) sets logged"
         case .current: return "Current · \(prescriptionSummary(exercise))"
@@ -190,7 +190,7 @@ struct WorkoutExecutionView: View {
                 Image(systemName: "checkmark.circle.fill").font(.largeTitle).foregroundStyle(EQColor.success)
                 Text("Workout complete").font(EQTypography.title)
                 Text("Your sets are saved.").font(EQTypography.body).foregroundStyle(EQColor.secondaryText)
-                Button("Return to Schedule") { dismiss() }
+                Button("Return to Home") { dismiss() }
                     .buttonStyle(.borderedProminent).buttonBorderShape(.roundedRectangle(radius: EQRadius.control)).controlSize(.large)
             }.padding(EQSpacing.xl)
         }
@@ -227,7 +227,7 @@ private struct RestDurationEditor: View {
 }
 
 private struct FirstSetView: View {
-    let exercise: ScheduledExercise; let weightUnit: WeightUnit; let log: (SetLogInput) async -> Void
+    let exercise: WorkoutExercise; let weightUnit: WeightUnit; let log: (SetLogInput) async -> Void
     @State private var weight = ""; @State private var repetitions = ""
     var body: some View {
         VStack(alignment: .leading, spacing: EQSpacing.lg) {
@@ -244,7 +244,7 @@ private struct FirstSetView: View {
 }
 
 private struct ExerciseListRow: View {
-    let exercise: ScheduledExercise
+    let exercise: WorkoutExercise
     let detail: String
     let state: ExerciseState
     var body: some View {
@@ -261,7 +261,7 @@ private struct ExerciseListRow: View {
 }
 
 private struct FocusedSetView: View {
-    let exercise: ScheduledExercise
+    let exercise: WorkoutExercise
     let prescription: SetPrescription
     let selectedIndex: Int
     let isReadOnly: Bool
@@ -273,7 +273,7 @@ private struct FocusedSetView: View {
     @FocusState private var focusedField: Field?
     private enum Field { case weight, value }
 
-    init(exercise: ScheduledExercise, prescription: SetPrescription, selectedIndex: Int, isReadOnly: Bool, weightUnit: WeightUnit, select: @escaping (Int) -> Void, log: @escaping (SetLogInput) async -> Void) {
+    init(exercise: WorkoutExercise, prescription: SetPrescription, selectedIndex: Int, isReadOnly: Bool, weightUnit: WeightUnit, select: @escaping (Int) -> Void, log: @escaping (SetLogInput) async -> Void) {
         self.exercise = exercise; self.prescription = prescription; self.selectedIndex = selectedIndex; self.isReadOnly = isReadOnly; self.weightUnit = weightUnit; self.select = select; self.log = log
         let logged = exercise.loggedSets.first { $0.prescriptionID == prescription.id }
         _weightText = State(initialValue: WeightText.value(logged?.weight ?? prescription.suggestedWeight, unit: weightUnit))
@@ -375,7 +375,7 @@ private struct RestModeView: View {
 }
 
 private struct ReadOnlySetReview: View {
-    let exercises: [ScheduledExercise]
+    let exercises: [WorkoutExercise]
     let weightUnit: WeightUnit
     var body: some View {
         ForEach(exercises) { exercise in
@@ -397,13 +397,13 @@ private struct ReadOnlySetReview: View {
 }
 
 #if DEBUG
-@MainActor private func executionPreview(_ workout: ScheduledWorkout, size: DynamicTypeSize = .large) -> some View {
+@MainActor private func executionPreview(_ workout: Workout, size: DynamicTypeSize = .large) -> some View {
     let container = try! PersistenceController.makeContainer(inMemory: true)
     container.mainContext.insert(WorkoutMapper.record(from: workout)); try! container.mainContext.save()
     return NavigationStack { WorkoutExecutionView(id: workout.id, repository: SwiftDataRepository(container: container)) }
         .modelContainer(container).preferredColorScheme(.dark).dynamicTypeSize(size)
 }
-#Preview("Fresh planned") { executionPreview(EquilibriumFixtures.planned()) }
+#Preview("Ready workout") { executionPreview(EquilibriumFixtures.ready()) }
 #Preview("Mid-workout") { executionPreview(EquilibriumFixtures.midWorkout()) }
 #Preview("Duration") { executionPreview(EquilibriumFixtures.mixed()) }
 #Preview("Completed read-only") { executionPreview(EquilibriumFixtures.completed()) }

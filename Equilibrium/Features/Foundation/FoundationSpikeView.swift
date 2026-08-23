@@ -18,7 +18,7 @@ struct FoundationSpikeView: View {
                     Spacer()
                 }.padding(EQSpacing.lg)
             }
-            .navigationDestination(for: ScheduledWorkoutID.self) { _ in
+            .navigationDestination(for: WorkoutID.self) { _ in
                 FoundationDetailView(workout: fixture)
                     .modifier(ZoomTransitionModifier(id: fixture.id.rawValue, namespace: transitionNamespace, reduceMotion: reduceMotion))
             }
@@ -34,7 +34,7 @@ private struct ZoomTransitionModifier: ViewModifier {
 }
 
 private struct WorkoutFixtureCard: View {
-    let workout: ScheduledWorkout
+    let workout: Workout
     var body: some View {
         VStack(alignment: .leading, spacing: EQSpacing.sm) {
             Text(workout.titleSnapshot).font(EQTypography.cardTitle).foregroundStyle(EQColor.primaryText)
@@ -46,7 +46,7 @@ private struct WorkoutFixtureCard: View {
 }
 
 private struct FoundationDetailView: View {
-    let workout: ScheduledWorkout
+    let workout: Workout
     var body: some View {
         ZStack {
             EQColor.canvas.ignoresSafeArea()

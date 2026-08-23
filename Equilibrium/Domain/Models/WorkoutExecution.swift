@@ -19,17 +19,17 @@ public struct WorkoutProgress: Equatable, Sendable {
 }
 
 public enum WorkoutExecutionQuery {
-    public static func completedPrescriptionIDs(in exercise: ScheduledExercise) -> Set<SetID> {
+    public static func completedPrescriptionIDs(in exercise: WorkoutExercise) -> Set<SetID> {
         Set(exercise.loggedSets.lazy.filter { $0.completedAt != nil }.compactMap(\.prescriptionID))
     }
 
-    public static func isComplete(_ exercise: ScheduledExercise) -> Bool {
+    public static func isComplete(_ exercise: WorkoutExercise) -> Bool {
         if exercise.skippedAt != nil { return true }
         guard !exercise.prescriptions.isEmpty else { return false }
         return Set(exercise.prescriptions.map(\.id)).isSubset(of: completedPrescriptionIDs(in: exercise))
     }
 
-    public static func states(in workout: ScheduledWorkout, focusedExerciseID: ScheduledExerciseID? = nil) -> [ScheduledExerciseID: ExerciseState] {
+    public static func states(in workout: Workout, focusedExerciseID: WorkoutExerciseID? = nil) -> [WorkoutExerciseID: ExerciseState] {
         let firstIncompleteID = workout.exercises.first(where: { !isComplete($0) })?.id
         let focus = focusedExerciseID.flatMap { id in
             workout.exercises.contains(where: { $0.id == id }) ? id : nil
@@ -44,14 +44,14 @@ public enum WorkoutExecutionQuery {
         })
     }
 
-    public static func progress(in workout: ScheduledWorkout) -> WorkoutProgress {
+    public static func progress(in workout: Workout) -> WorkoutProgress {
         let included = workout.exercises.filter { $0.skippedAt == nil }
         let required = included.reduce(0) { $0 + max(1, $1.prescriptions.count) }
         let completed = included.reduce(0) { $0 + completedPrescriptionIDs(in: $1).intersection(Set($1.prescriptions.map(\.id))).count }
         return WorkoutProgress(completedSetCount: completed, requiredSetCount: required)
     }
 
-    public static func canComplete(_ workout: ScheduledWorkout) -> Bool {
+    public static func canComplete(_ workout: Workout) -> Bool {
         !workout.exercises.isEmpty && workout.exercises.allSatisfy(isComplete)
     }
 }

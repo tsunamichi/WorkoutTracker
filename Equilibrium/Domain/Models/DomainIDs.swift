@@ -21,10 +21,7 @@ public extension DomainID {
 }
 
 public struct ExerciseID: DomainID, Identifiable { public let rawValue: String; public var id: String { rawValue }; public init(rawValue: String) { self.rawValue = rawValue } }
-public struct WorkoutTemplateID: DomainID, Identifiable { public let rawValue: String; public var id: String { rawValue }; public init(rawValue: String) { self.rawValue = rawValue } }
+public struct WorkoutID: DomainID, Identifiable { public let rawValue: String; public var id: String { rawValue }; public init(rawValue: String) { self.rawValue = rawValue } }
 public struct WorkoutExerciseID: DomainID, Identifiable { public let rawValue: String; public var id: String { rawValue }; public init(rawValue: String) { self.rawValue = rawValue } }
-public struct ScheduledWorkoutID: DomainID, Identifiable { public let rawValue: String; public var id: String { rawValue }; public init(rawValue: String) { self.rawValue = rawValue } }
-public struct ScheduledExerciseID: DomainID, Identifiable { public let rawValue: String; public var id: String { rawValue }; public init(rawValue: String) { self.rawValue = rawValue } }
 public struct SetID: DomainID, Identifiable { public let rawValue: String; public var id: String { rawValue }; public init(rawValue: String) { self.rawValue = rawValue } }
-public struct PlanID: DomainID, Identifiable { public let rawValue: String; public var id: String { rawValue }; public init(rawValue: String) { self.rawValue = rawValue } }
 public struct ProgressionRuleID: DomainID, Identifiable { public let rawValue: String; public var id: String { rawValue }; public init(rawValue: String) { self.rawValue = rawValue } }
