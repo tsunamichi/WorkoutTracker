@@ -34,6 +34,8 @@ private struct StandaloneTimerFormView: View {
 private struct StandaloneTimerRunView: View {
     @State private var runner: StandaloneIntervalTimer
     @State private var ticks: Task<Void, Never>?
+    @State private var confirmsExit = false
+    @Environment(\.dismiss) private var dismiss
     @Environment(\.scenePhase) private var scenePhase
     init(configuration: StandaloneTimerConfiguration) { _runner = State(initialValue: StandaloneIntervalTimer(configuration: configuration, haptics: SystemHapticsClient(), audio: SystemAudioFeedbackClient())) }
     var body: some View {
@@ -50,11 +52,33 @@ private struct StandaloneTimerRunView: View {
             if runner.state == .completed { Text("Timer complete").font(EQTypography.title) }
             Spacer()
             Text("Standalone timers never create workout or history records.").font(EQTypography.caption).foregroundStyle(EQColor.secondaryText)
-        }.padding(EQSpacing.xl).navigationTitle(runner.configuration.name).onDisappear { ticks?.cancel() }.onChange(of: scenePhase) { _, phase in if phase == .active { runner.refresh(); runTicks() } }
+        }
+        .padding(EQSpacing.xl)
+        .navigationTitle(runner.configuration.name)
+        .navigationBarBackButtonHidden(StandaloneTimerExitPolicy.requiresConfirmation(for: runner.state))
+        .toolbar {
+            if StandaloneTimerExitPolicy.requiresConfirmation(for: runner.state) {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button { requestExit() } label: { Label("Timer", systemImage: "chevron.left") }
+                        .accessibilityHint("Asks before ending the active timer")
+                }
+            }
+        }
+        .alert("End timer?", isPresented: $confirmsExit) {
+            Button("Keep Timer", role: .cancel) {}
+            Button("End Timer", role: .destructive) { endAndDismiss() }
+        } message: { Text("The timer will end if you leave this page.") }
+        .onDisappear { ticks?.cancel() }
+        .onChange(of: scenePhase) { _, phase in if phase == .active { runner.refresh(); runTicks() } }
     }
     private var display: String { let seconds = max(0, Int(ceil(runner.remaining))); return String(format: "%d:%02d", seconds / 60, seconds % 60) }
     private var primaryLabel: String { switch runner.state { case .ready: "Play"; case .running: "Pause"; case .paused: "Resume"; case .completed: "Restart" } }
     private func primary() { switch runner.state { case .ready: runner.play(); case .running: runner.pause(); case .paused: runner.resume(); case .completed: runner.restart() }; runTicks() }
+    private func requestExit() {
+        if StandaloneTimerExitPolicy.requiresConfirmation(for: runner.state) { confirmsExit = true }
+        else { dismiss() }
+    }
+    private func endAndDismiss() { ticks?.cancel(); ticks = nil; runner.reset(); dismiss() }
     private func runTicks() { ticks?.cancel(); guard runner.state == .running else { return }; ticks = Task { while !Task.isCancelled && runner.state == .running { try? await Task.sleep(for: .milliseconds(200)); runner.refresh() } } }
     private func metric(_ title: String, _ value: String) -> some View { VStack { Text(value).font(EQTypography.sectionTitle); Text(title).font(EQTypography.caption).foregroundStyle(EQColor.secondaryText) }.frame(maxWidth: .infinity).eqCard() }
 }

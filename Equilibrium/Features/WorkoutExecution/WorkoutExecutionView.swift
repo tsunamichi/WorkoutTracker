@@ -119,8 +119,16 @@ struct WorkoutExecutionView: View {
 
     private var activeExerciseCard: some View {
         VStack(alignment: .leading, spacing: EQSpacing.md) {
-            Text(model.restState == nil ? "ACTIVE EXERCISE" : "REST")
-                .font(EQTypography.caption.weight(.bold))
+            HStack {
+                Text(model.restState == nil ? "ACTIVE EXERCISE" : "REST")
+                    .font(EQTypography.caption.weight(.bold))
+                Spacer()
+                if model.restState == nil, let exercise = model.currentExercise, !model.isReadOnly {
+                    Button("Settings") { settingsExercise = exercise }
+                        .font(EQTypography.caption.weight(.semibold))
+                        .accessibilityLabel("Exercise Settings")
+                }
+            }
             Group {
                 if let rest = model.restState {
                     RestModeView(state: rest, skip: model.skipRest)
@@ -138,8 +146,6 @@ struct WorkoutExecutionView: View {
                     .id("\(exercise.id.rawValue)-\(prescription.id.rawValue)")
                     if !model.isReadOnly {
                         HStack {
-                            Button("Add set") { Task { await model.addSet(exerciseID: exercise.id) } }
-                            Spacer()
                             if !exercise.loggedSets.contains(where: { $0.prescriptionID == prescription.id && $0.completedAt != nil }) {
                                 Button("Remove set", role: .destructive) { Task { await model.removeCurrentSet(exerciseID: exercise.id, prescriptionID: prescription.id) } }
                             }
@@ -149,6 +155,14 @@ struct WorkoutExecutionView: View {
                     FirstSetView(exercise: exercise, weightUnit: model.weightUnit) { input in await model.logFirstSet(exerciseID: exercise.id, input: input) }
                 } else {
                     Text(model.isReadOnly ? "Workout complete." : "Every required set is logged.").font(EQTypography.sectionTitle)
+                }
+            }
+            if model.restState == nil, let exercise = model.currentExercise, !model.isReadOnly {
+                HStack {
+                    Spacer()
+                    Button("Add set", systemImage: "plus") { Task { await model.addSet(exerciseID: exercise.id) } }
+                        .frame(minHeight: EQDimension.minimumTouch)
+                        .accessibilityHint("Appends a new working set to \(exercise.nameSnapshot)")
                 }
             }
             if let exercise = model.performanceExercise, let historyRepository {

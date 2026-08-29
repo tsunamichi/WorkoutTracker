@@ -22,6 +22,12 @@ public struct StandaloneTimerConfiguration: Identifiable, Codable, Hashable, Sen
 public enum StandaloneTimerPhase: String, Equatable, Sendable { case move, exerciseRest, roundRest, completed }
 public enum StandaloneTimerRunState: Equatable, Sendable { case ready, running, paused, completed }
 
+public enum StandaloneTimerExitPolicy {
+    public static func requiresConfirmation(for state: StandaloneTimerRunState) -> Bool {
+        state == .running || state == .paused
+    }
+}
+
 @MainActor @Observable
 public final class StandaloneIntervalTimer {
     public let configuration: StandaloneTimerConfiguration

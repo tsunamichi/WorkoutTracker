@@ -41,6 +41,13 @@ import SwiftData
         runner.restart(); XCTAssertEqual(runner.state, .running); XCTAssertEqual(runner.phase, .move)
     }
 
+    func testTimerExitConfirmationPolicy() {
+        XCTAssertFalse(StandaloneTimerExitPolicy.requiresConfirmation(for: .ready))
+        XCTAssertTrue(StandaloneTimerExitPolicy.requiresConfirmation(for: .running))
+        XCTAssertTrue(StandaloneTimerExitPolicy.requiresConfirmation(for: .paused))
+        XCTAssertFalse(StandaloneTimerExitPolicy.requiresConfirmation(for: .completed))
+    }
+
     func testTimerConfigurationPersistenceIsSeparateFromWorkoutHistory() async throws {
         let suite = "timer-tests-\(UUID().uuidString)"; let defaults = try XCTUnwrap(UserDefaults(suiteName: suite)); defaults.removePersistentDomain(forName: suite)
         let store = UserDefaultsStandaloneTimerStore(defaults: defaults, key: "timers"); let value = StandaloneTimerConfiguration(name: "Saved")
