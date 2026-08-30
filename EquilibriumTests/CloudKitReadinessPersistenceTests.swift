@@ -4,6 +4,33 @@ import XCTest
 
 @MainActor
 final class CloudKitReadinessPersistenceTests: XCTestCase {
+    private struct SimulatedCloudFailure: Error {}
+
+    func testCloudUnavailableStartupFallsBackWithoutReplacingLocalStore() throws {
+        let local = try PersistenceController.makeContainer(inMemory: true)
+        local.mainContext.insert(ExerciseDefinitionRecord(id: "survives", name: "Survives", normalizedName: "survives", aliases: [], equipment: nil, category: nil, isCustom: true, archivedAt: nil))
+        try local.mainContext.save()
+
+        let result = try PersistenceController.resilientStartup(
+            cloud: { throw SimulatedCloudFailure() },
+            local: { local }
+        )
+
+        XCTAssertEqual(result.mode, .localFallback)
+        XCTAssertEqual(try result.container.mainContext.fetch(FetchDescriptor<ExerciseDefinitionRecord>()).map(\.id), ["survives"])
+    }
+
+    func testPersistentStoreRemoteChangePublishesRepositoryRefresh() async throws {
+        let repository = SwiftDataRepository(container: try PersistenceController.makeContainer(inMemory: true))
+        let refreshed = expectation(description: "repository refresh")
+        refreshed.assertForOverFulfill = false
+        let token = NotificationCenter.default.addObserver(forName: .equilibriumRepositoryDidChange, object: nil, queue: .main) { _ in refreshed.fulfill() }
+        defer { NotificationCenter.default.removeObserver(token); _ = repository }
+
+        NotificationCenter.default.post(name: .NSPersistentStoreRemoteChange, object: nil)
+        await fulfillment(of: [refreshed], timeout: 1)
+    }
+
     func testDuplicateLogicalWorkoutAndExerciseIDsChooseNewestMetadataWithoutDeletingEitherRecord() async throws {
         let container = try PersistenceController.makeContainer(inMemory: true)
         let older = WorkoutMapper.record(from: EquilibriumFixtures.ready(id: "duplicate"))
@@ -66,6 +93,64 @@ final class CloudKitReadinessPersistenceTests: XCTestCase {
         XCTAssertEqual(loaded?.exercises.first?.loggedSets.first?.repetitions, 8)
         XCTAssertEqual(try container.mainContext.fetchCount(FetchDescriptor<PrescriptionRecord>()), 2)
         XCTAssertEqual(try container.mainContext.fetchCount(FetchDescriptor<LoggedSetRecord>()), 2)
+    }
+
+    func testDuplicateOccurrenceProgressionAndTimerIDsResolveDeterministically() async throws {
+        let container = try PersistenceController.makeContainer(inMemory: true)
+        let oldOccurrence = WorkoutExerciseRecord(id: "same-occurrence", exerciseID: "definition", nameSnapshot: "Old", position: 0, restDuration: nil, skippedAt: nil, updatedAt: .init(timeIntervalSince1970: 1), prescriptions: [], loggedSets: [])
+        let newOccurrence = WorkoutExerciseRecord(id: "same-occurrence", exerciseID: "definition", nameSnapshot: "New", position: 0, restDuration: 60, skippedAt: nil, updatedAt: .init(timeIntervalSince1970: 2), prescriptions: [], loggedSets: [])
+        let workout = WorkoutRecord(id: "duplicate-occurrence", titleSnapshot: "Duplicate", statusRaw: WorkoutStatus.completed.rawValue, startedAt: .init(timeIntervalSince1970: 1), completedAt: .init(timeIntervalSince1970: 3), createdAt: .init(timeIntervalSince1970: 1), updatedAt: .init(timeIntervalSince1970: 3), exercises: [oldOccurrence, newOccurrence])
+        container.mainContext.insert(workout)
+        container.mainContext.insert(ProgressionAssignmentRecord(exerciseID: "definition", profileRaw: AutoProgressionProfile.upper.rawValue, updatedAt: .init(timeIntervalSince1970: 1)))
+        container.mainContext.insert(ProgressionAssignmentRecord(exerciseID: "definition", profileRaw: AutoProgressionProfile.lower.rawValue, updatedAt: .init(timeIntervalSince1970: 2)))
+        container.mainContext.insert(StandaloneTimerConfigurationRecord(id: "same-timer", name: "Old", moveDuration: 30, exerciseRestDuration: 30, exercisesPerRound: 3, rounds: 1, roundRestDuration: 30, createdAt: .init(timeIntervalSince1970: 1), updatedAt: .init(timeIntervalSince1970: 1)))
+        container.mainContext.insert(StandaloneTimerConfigurationRecord(id: "same-timer", name: "New", moveDuration: 45, exerciseRestDuration: 30, exercisesPerRound: 3, rounds: 1, roundRestDuration: 30, createdAt: .init(timeIntervalSince1970: 1), updatedAt: .init(timeIntervalSince1970: 2)))
+        try container.mainContext.save()
+
+        let repository = SwiftDataRepository(container: container)
+        let selectedWorkout = try await repository.workout(id: .init(rawValue: "duplicate-occurrence"))
+        let selectedProgression = try await repository.progressionConfiguration()
+        XCTAssertEqual(selectedWorkout?.exercises.map(\.nameSnapshot), ["New"])
+        XCTAssertEqual(selectedProgression.assignments[.init(rawValue: "definition")], .lower)
+        XCTAssertEqual(try repository.timerConfigurations().map(\.name), ["New"])
+        XCTAssertEqual(try container.mainContext.fetchCount(FetchDescriptor<WorkoutExerciseRecord>()), 2)
+    }
+
+    func testIndependentSettingsAndProgressionMutationsSurviveStalePeerState() async throws {
+        let container = try PersistenceController.makeContainer(inMemory: true)
+        let repository = SwiftDataRepository(container: container)
+        try await repository.saveDefaultRestDuration(75)
+        let staleSettings = try await repository.settings()
+        try await repository.saveWeightUnit(.kilograms)
+        XCTAssertEqual(staleSettings.defaultRestDuration, 75)
+        let settings = try await repository.settings()
+        XCTAssertEqual(settings, .init(weightUnit: .kilograms, defaultRestDuration: 75))
+
+        try await repository.saveProgressionProfile(.upper, for: .init(rawValue: "exercise-a"))
+        try await repository.saveProgressionProfile(.accessories, for: .init(rawValue: "exercise-b"))
+        let assignments = try await repository.progressionConfiguration().assignments
+        XCTAssertEqual(assignments[.init(rawValue: "exercise-a")], .upper)
+        XCTAssertEqual(assignments[.init(rawValue: "exercise-b")], .accessories)
+    }
+
+    func testDeletionPolicyKeepsCompletedHistoryAndArchivesExercises() async throws {
+        let container = try PersistenceController.makeContainer(inMemory: true)
+        let repository = SwiftDataRepository(container: container)
+        let incomplete = EquilibriumFixtures.ready(id: "delete-ready")
+        let completed = EquilibriumFixtures.completed(id: "keep-history")
+        try await repository.create(incomplete); try await repository.create(completed)
+        try await repository.deleteWorkout(id: incomplete.id)
+        do { try await repository.deleteWorkout(id: completed.id); XCTFail("Completed history must not be deletable") }
+        catch { XCTAssertEqual(error as? RepositoryError, .immutableCompletedWorkout) }
+
+        let definition = ExerciseDefinition(id: .init(rawValue: "archive-only"), name: "Archive Only", normalizedName: "archive only", aliases: [], equipment: nil, category: nil, isCustom: true, archivedAt: nil)
+        try await repository.saveExercise(definition); try await repository.archiveExercise(id: definition.id, at: .init(timeIntervalSince1970: 10))
+        let activeExercises = try await repository.allExercises()
+        let persistedDefinitions = try container.mainContext.fetch(FetchDescriptor<ExerciseDefinitionRecord>())
+        let survivingHistory = try await repository.workout(id: completed.id)
+        XCTAssertNil(activeExercises.first { $0.id == definition.id })
+        XCTAssertEqual(persistedDefinitions.first { $0.id == definition.id.rawValue }?.archivedAt, .init(timeIntervalSince1970: 10))
+        XCTAssertNotNil(survivingHistory)
     }
 
     func testDuplicateSettingsResolvePerKeyAndIndependentSavesDoNotOverwriteOtherKeys() async throws {

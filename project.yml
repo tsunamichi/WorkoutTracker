@@ -11,6 +11,15 @@ targets:
   Equilibrium:
     type: application
     platform: iOS
+    info:
+      path: Equilibrium/Info.plist
+      properties:
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: false
+        UIApplicationSupportsIndirectInputEvents: true
+        UILaunchScreen: {}
+        UIBackgroundModes:
+          - remote-notification
     sources:
       - path: Equilibrium
         excludes:
@@ -19,10 +28,7 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.tsunamichi.equilibrium
         PRODUCT_NAME: Equilibrium
-        GENERATE_INFOPLIST_FILE: YES
-        INFOPLIST_KEY_UIApplicationSceneManifest_Generation: YES
-        INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents: YES
-        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+        CODE_SIGN_ENTITLEMENTS: Equilibrium/Equilibrium.entitlements
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         TARGETED_DEVICE_FAMILY: "1,2"
         SUPPORTS_MACCATALYST: NO

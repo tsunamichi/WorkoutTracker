@@ -36,6 +36,7 @@ struct WorkoutHistoryView: View {
         }
         .overlay { if let message = model.errorMessage { ContentUnavailableView("History unavailable", systemImage: "exclamationmark.triangle", description: Text(message)) } }
         .background(EQColor.canvas).navigationTitle("Workout History").task { await model.load() }
+        .onReceive(NotificationCenter.default.publisher(for: .equilibriumRepositoryDidChange)) { _ in Task { await model.load() } }
     }
 }
 
@@ -92,6 +93,9 @@ struct CompletedWorkoutDetailView: View {
             }.padding(EQSpacing.md)
         }
         .background(EQColor.canvas).navigationTitle("Completed Workout").navigationBarTitleDisplayMode(.inline)
+        .onReceive(NotificationCenter.default.publisher(for: .equilibriumRepositoryDidChange)) { _ in
+            Task { if let refreshed = try? await repository.workout(id: workout.id) { workout = refreshed } }
+        }
         .sheet(item: $editTarget) { target in
             CompletedSetEditor(target: target, weightUnit: weightUnit) { input in
                 do { workout = try await repository.editCompletedSet(workoutID: workout.id, exerciseID: target.exerciseID, prescriptionID: target.prescriptionID, input: input, at: .now); return true }
@@ -193,6 +197,7 @@ struct ExercisePerformanceView: View {
         }
         .overlay { if let message = model.errorMessage { ContentUnavailableView("Performance unavailable", systemImage: "exclamationmark.triangle", description: Text(message)) } }
         .background(EQColor.canvas).navigationTitle(model.performance?.displayName ?? fallbackName).navigationBarTitleDisplayMode(.inline).task { await model.load() }
+        .onReceive(NotificationCenter.default.publisher(for: .equilibriumRepositoryDidChange)) { _ in Task { await model.load() } }
     }
     private func prCard(_ performance: ExercisePerformance) -> some View {
         VStack(alignment: .leading, spacing: EQSpacing.xs) {

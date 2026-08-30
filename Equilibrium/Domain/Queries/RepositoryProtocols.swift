@@ -41,10 +41,24 @@ public protocol ExerciseHistoryRepository: Sendable {
 public protocol SettingsRepository: Sendable {
     func settings() async throws -> AppSettings
     func saveSettings(_ settings: AppSettings) async throws
+    func saveWeightUnit(_ unit: WeightUnit) async throws
+    func saveDefaultRestDuration(_ seconds: TimeInterval) async throws
 }
 public protocol ProgressionRepository: Sendable {
     func progressionConfiguration() async throws -> ProgressionConfiguration
     func saveProgressionConfiguration(_ configuration: ProgressionConfiguration) async throws
+    func saveProgressionEnabled(_ enabled: Bool) async throws
+    func saveProgressionProfile(_ profile: AutoProgressionProfile, for exerciseID: ExerciseID) async throws
+}
+
+public extension SettingsRepository {
+    func saveWeightUnit(_ unit: WeightUnit) async throws { var value = try await settings(); value.weightUnit = unit; try await saveSettings(value) }
+    func saveDefaultRestDuration(_ seconds: TimeInterval) async throws { var value = try await settings(); value.defaultRestDuration = seconds; try await saveSettings(value) }
+}
+
+public extension ProgressionRepository {
+    func saveProgressionEnabled(_ enabled: Bool) async throws { var value = try await progressionConfiguration(); value.isEnabled = enabled; try await saveProgressionConfiguration(value) }
+    func saveProgressionProfile(_ profile: AutoProgressionProfile, for exerciseID: ExerciseID) async throws { var value = try await progressionConfiguration(); value.assign(profile, to: exerciseID); try await saveProgressionConfiguration(value) }
 }
 public protocol BackupRepository: Sendable {
     func exportBackup(exportedAt: Date, sourceDeviceID: String) async throws -> EquilibriumBackupV2

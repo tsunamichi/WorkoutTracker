@@ -25,6 +25,7 @@ struct StandaloneTimerView: View {
                 }
             }
         }.scrollContentBackground(.hidden).background(EQColor.canvas).navigationTitle("Timer").onAppear { reload() }
+            .onReceive(NotificationCenter.default.publisher(for: .equilibriumRepositoryDidChange)) { _ in reload() }
             .alert("Delete timer?", isPresented: Binding(get: { deletionTarget != nil }, set: { if !$0 { deletionTarget = nil } })) {
                 Button("Cancel", role: .cancel) { deletionTarget = nil }
                 Button("Delete Timer", role: .destructive) { if let deletionTarget { StandaloneTimerHomeActions.delete(id: deletionTarget.id, store: store, configurations: &configurations) }; deletionTarget = nil }

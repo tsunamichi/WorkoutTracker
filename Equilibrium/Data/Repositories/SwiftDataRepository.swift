@@ -1,10 +1,22 @@
 import Foundation
 import SwiftData
+import CoreData
 
 @MainActor
 public final class SwiftDataRepository: ExerciseRepository, WorkoutRepository, ExerciseHistoryRepository, SettingsRepository, ProgressionRepository, BackupRepository {
     let context: ModelContext
-    public init(container: ModelContainer) { context = ModelContext(container); context.autosaveEnabled = false }
+    private var remoteChangeObserver: NSObjectProtocol?
+    public init(container: ModelContainer) {
+        context = ModelContext(container); context.autosaveEnabled = false
+        remoteChangeObserver = NotificationCenter.default.addObserver(
+            forName: .NSPersistentStoreRemoteChange,
+            object: nil,
+            queue: .main
+        ) { _ in
+            NotificationCenter.default.post(name: .equilibriumRepositoryDidChange, object: nil)
+        }
+    }
+    deinit { if let remoteChangeObserver { NotificationCenter.default.removeObserver(remoteChangeObserver) } }
 
     // MARK: Exercise definitions
 
@@ -193,6 +205,15 @@ public final class SwiftDataRepository: ExerciseRepository, WorkoutRepository, E
         try saveOrRollback()
         NotificationCenter.default.post(name: .equilibriumSettingsDidChange, object: nil)
     }
+    public func saveWeightUnit(_ unit: WeightUnit) async throws {
+        try setSetting(key: SettingKey.weightUnit, value: unit.rawValue, at: .now)
+        try saveOrRollback(); NotificationCenter.default.post(name: .equilibriumSettingsDidChange, object: nil)
+    }
+    public func saveDefaultRestDuration(_ seconds: TimeInterval) async throws {
+        guard Self.isValidRestDuration(seconds) else { throw RepositoryError.invalidSettings }
+        try setSetting(key: SettingKey.defaultRestDuration, value: String(seconds), at: .now)
+        try saveOrRollback(); NotificationCenter.default.post(name: .equilibriumSettingsDidChange, object: nil)
+    }
     public func progressionConfiguration() async throws -> ProgressionConfiguration {
         let legacy = try legacyConfiguration()?.progression
         let enabled = try setting(key: SettingKey.progressionEnabled).map { $0.value == "true" } ?? legacy?.isEnabled ?? true
@@ -212,6 +233,16 @@ public final class SwiftDataRepository: ExerciseRepository, WorkoutRepository, E
             else { context.insert(ProgressionAssignmentRecord(exerciseID: exerciseID.rawValue, profileRaw: profile.rawValue, updatedAt: now)) }
         }
         for record in existing where configuration.assignments[ExerciseID(rawValue: record.exerciseID)] == nil { context.delete(record) }
+        try saveOrRollback()
+    }
+    public func saveProgressionEnabled(_ enabled: Bool) async throws {
+        try setSetting(key: SettingKey.progressionEnabled, value: enabled ? "true" : "false", at: .now)
+        try saveOrRollback()
+    }
+    public func saveProgressionProfile(_ profile: AutoProgressionProfile, for exerciseID: ExerciseID) async throws {
+        let records = try context.fetch(FetchDescriptor<ProgressionAssignmentRecord>(predicate: #Predicate { $0.exerciseID == exerciseID.rawValue }))
+        if let record = winner(records, updatedAt: \ProgressionAssignmentRecord.updatedAt) { record.profileRaw = profile.rawValue; record.updatedAt = .now }
+        else { context.insert(ProgressionAssignmentRecord(exerciseID: exerciseID.rawValue, profileRaw: profile.rawValue, updatedAt: .now)) }
         try saveOrRollback()
     }
 
@@ -386,6 +417,7 @@ public final class SwiftDataRepository: ExerciseRepository, WorkoutRepository, E
 
 extension Notification.Name {
     static let equilibriumSettingsDidChange = Notification.Name("equilibrium.settings-did-change")
+    static let equilibriumRepositoryDidChange = Notification.Name("equilibrium.repository-did-change")
 }
 
 enum FixtureDefaults {

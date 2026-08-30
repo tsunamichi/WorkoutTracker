@@ -28,6 +28,7 @@ struct WorkoutExecutionView: View {
         .navigationBarBackButtonHidden()
         .toolbar { workoutToolbar }
         .task { await model.activate() }
+        .onReceive(NotificationCenter.default.publisher(for: .equilibriumRepositoryDidChange)) { _ in Task { await model.refreshFromPersistence() } }
         .onChange(of: scenePhase) { _, phase in if phase == .active { model.refreshRest() } }
         .onChange(of: model.didAutoComplete) { _, completed in
             if completed { completionFeedback += 1; dismiss() }

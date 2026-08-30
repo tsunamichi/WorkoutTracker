@@ -113,6 +113,13 @@ final class WorkoutExecutionModel {
         } catch { errorMessage = message(for: error) }
     }
 
+    func refreshFromPersistence() async {
+        do {
+            guard let loaded = try await repository.workout(id: workoutID) else { throw RepositoryError.notFound }
+            accept(loaded); await loadSuggestions(for: loaded); errorMessage = nil
+        } catch { errorMessage = message(for: error) }
+    }
+
     func suggestion(for exercise: WorkoutExercise) -> ProgressionSuggestion? {
         guard exercise.prescriptions.contains(where: { if case .repetitions = $0.target { true } else { false } }) else { return nil }
         return suggestions[exercise.exerciseID]

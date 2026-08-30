@@ -55,6 +55,12 @@ struct HomeView: View {
                     if let settings = try? await settingsRepository.settings() { appSettings = settings }
                 }
             }
+            .task {
+                for await _ in NotificationCenter.default.notifications(named: .equilibriumRepositoryDidChange) {
+                    await model.load()
+                    if let settings = try? await settingsRepository.settings() { appSettings = settings }
+                }
+            }
         }.tint(EQColor.accent)
     }
 
