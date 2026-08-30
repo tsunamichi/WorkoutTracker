@@ -231,6 +231,7 @@ private struct FirstSetView: View {
     let exercise: WorkoutExercise; let progression: ProgressionSuggestion?; let weightUnit: WeightUnit; let log: (SetLogInput) async -> Void
     @State private var weight: String
     @State private var repetitions: String
+    @FocusState private var fieldFocused: Bool
 
     init(exercise: WorkoutExercise, progression: ProgressionSuggestion?, weightUnit: WeightUnit, log: @escaping (SetLogInput) async -> Void) {
         self.exercise = exercise
@@ -245,12 +246,12 @@ private struct FirstSetView: View {
             Text(exercise.nameSnapshot).font(EQTypography.exerciseTitle)
             Text("No previous working sets").font(EQTypography.caption).foregroundStyle(EQColor.secondaryText)
             HStack(spacing: EQSpacing.lg) {
-                HeroValueField(value: $weight, label: (weightUnit == .pounds ? "lb" : "kg") + (progression?.rationale == .increaseWeight ? " ↑" : ""), accessibilityLabel: "Weight", keyboard: .decimalPad)
-                HeroValueField(value: $repetitions, label: exercise.isTimeBased ? "seconds" : "reps" + (progression?.rationale == .addRepetitions ? " ↑" : ""), accessibilityLabel: exercise.isTimeBased ? "Seconds" : "Repetitions", keyboard: .numberPad)
+                HeroValueField(value: $weight, label: (weightUnit == .pounds ? "lb" : "kg") + (progression?.rationale == .increaseWeight ? " ↑" : ""), accessibilityLabel: "Weight", keyboard: .decimalPad).focused($fieldFocused)
+                HeroValueField(value: $repetitions, label: exercise.isTimeBased ? "seconds" : "reps" + (progression?.rationale == .addRepetitions ? " ↑" : ""), accessibilityLabel: exercise.isTimeBased ? "Seconds" : "Repetitions", keyboard: .numberPad).focused($fieldFocused)
             }
             Button(exercise.isTimeBased ? "Start Timer" : "Log first set") { guard let value = Int(repetitions), value > 0 else { return }; Task { await log(exercise.isTimeBased ? .duration(weight: WeightText.weight(from: weight, unit: weightUnit), seconds: TimeInterval(value)) : .repetitions(weight: WeightText.weight(from: weight, unit: weightUnit), repetitions: value)) } }
                 .frame(maxWidth: .infinity, minHeight: EQDimension.minimumTouch).buttonStyle(.borderedProminent).buttonBorderShape(.roundedRectangle(radius: EQRadius.control))
-        }
+        }.toolbar { ToolbarItemGroup(placement: .keyboard) { Spacer(); Button("Done") { fieldFocused = false } } }
     }
 }
 
@@ -320,6 +321,7 @@ private struct FocusedSetView: View {
             }
         }
         .accessibilityElement(children: .contain)
+        .toolbar { ToolbarItemGroup(placement: .keyboard) { Spacer(); Button("Done") { focusedField = nil } } }
     }
 
     private var setSelector: some View {

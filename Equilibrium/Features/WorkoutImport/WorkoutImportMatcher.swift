@@ -1,68 +1,47 @@
 import Foundation
 
-enum ExerciseMatch: Hashable, Sendable {
-    case matched(ExerciseDefinition)
-    case unmatched
-    case ambiguous([ExerciseDefinition])
-}
-
-struct WorkoutExerciseMatcher: Sendable {
-    func match(name: String, catalog: [ExerciseDefinition]) -> ExerciseMatch {
-        let needle = SwiftDataRepository.normalizeExerciseName(name)
-        let canonical = catalog.filter { SwiftDataRepository.normalizeExerciseName($0.name) == needle }
-        if canonical.count == 1 { return .matched(canonical[0]) }
-        if canonical.count > 1 { return .ambiguous(canonical) }
-        let aliases = catalog.filter { exercise in exercise.aliases.contains { SwiftDataRepository.normalizeExerciseName($0) == needle } }
-        if aliases.count == 1 { return .matched(aliases[0]) }
-        if aliases.count > 1 { return .ambiguous(aliases) }
-        let compactNeedle = needle.replacingOccurrences(of: " ", with: "")
-        let compact = catalog.filter { exercise in
-            SwiftDataRepository.normalizeExerciseName(exercise.name).replacingOccurrences(of: " ", with: "") == compactNeedle ||
-            exercise.aliases.contains { SwiftDataRepository.normalizeExerciseName($0).replacingOccurrences(of: " ", with: "") == compactNeedle }
-        }
-        return compact.count == 1 ? .matched(compact[0]) : compact.count > 1 ? .ambiguous(compact) : .unmatched
-    }
-}
-
-struct ResolvedParsedExercise: Hashable, Sendable {
-    var parsed: ParsedExercise
-    var match: ExerciseMatch
-}
-
-struct ResolvedParsedWorkout: Identifiable, Hashable, Sendable {
-    let id: UUID
-    var name: String
-    var exercises: [ResolvedParsedExercise]
-}
-
 enum WorkoutImportDraftConverter {
     static func lightweightDraft(from workout: ParsedWorkout, catalog: [ExerciseDefinition]) -> WorkoutDraft {
-        let matcher = WorkoutExerciseMatcher()
-        return .init(name: workout.name, exercises: workout.exercises.map { parsed in
-            if case .matched(let definition) = matcher.match(name: parsed.name, catalog: catalog) {
+        .init(name: workout.name, exercises: workout.exercises.map { parsed in
+            if let definition = exactMatch(name: parsed.name, catalog: catalog) {
                 return .init(exerciseID: definition.id, name: definition.name)
             }
             return .init(exerciseID: nil, name: parsed.name.trimmingCharacters(in: .whitespacesAndNewlines))
         })
     }
-    static func draft(from workout: ResolvedParsedWorkout) -> WorkoutDraft? {
-        var exercises: [DraftExercise] = []
-        for value in workout.exercises {
-            guard case .matched(let definition) = value.match else { return nil }
-            exercises.append(.init(
-                exerciseID: definition.id,
-                name: definition.name,
-                prescriptions: value.parsed.prescriptions.map { prescription in
-                    let target: DraftSet.Target
-                    switch prescription.target {
-                    case .repetitions(let range): target = .repetitions(lower: range.lowerBound, upper: range.upperBound)
-                    case .duration(let seconds): target = .duration(seconds: seconds)
-                    }
-                    return .init(id: UUID(), target: target, suggestedPounds: prescription.suggestedPounds)
-                },
-                restDuration: value.parsed.restDuration
-            ))
+
+    private static func exactMatch(name: String, catalog: [ExerciseDefinition]) -> ExerciseDefinition? {
+        let needle = SwiftDataRepository.normalizeExerciseName(name)
+        let canonical = catalog.filter { SwiftDataRepository.normalizeExerciseName($0.name) == needle }
+        if canonical.count == 1 { return canonical[0] }
+        if canonical.count > 1 { return nil }
+        let aliases = catalog.filter { exercise in exercise.aliases.contains { SwiftDataRepository.normalizeExerciseName($0) == needle } }
+        if aliases.count == 1 { return aliases[0] }
+        if aliases.count > 1 { return nil }
+        let compactNeedle = needle.replacingOccurrences(of: " ", with: "")
+        let compact = catalog.filter { exercise in
+            SwiftDataRepository.normalizeExerciseName(exercise.name).replacingOccurrences(of: " ", with: "") == compactNeedle ||
+            exercise.aliases.contains { SwiftDataRepository.normalizeExerciseName($0).replacingOccurrences(of: " ", with: "") == compactNeedle }
         }
-        return .init(name: workout.name, exercises: exercises)
+        return compact.count == 1 ? compact[0] : nil
+    }
+}
+
+@MainActor
+struct WorkoutPasteMaterializer {
+    let exercises: any ExerciseRepository
+    let workouts: any WorkoutRepository
+    let history: any ExerciseHistoryRepository
+
+    func materialize(_ parsed: [ParsedWorkout], now: Date = .now) async throws -> [Workout] {
+        let catalog = try await exercises.allExercises()
+        var values: [Workout] = []
+        for (index, parsedWorkout) in parsed.enumerated() {
+            let draft = WorkoutImportDraftConverter.lightweightDraft(from: parsedWorkout, catalog: catalog)
+            let model = WorkoutBuilderModel(draft: draft, exercises: exercises, workouts: workouts, history: history)
+            values.append(try await model.makeWorkout(now: now.addingTimeInterval(Double(index) / 1_000)))
+        }
+        try await workouts.materializeAtomically(values)
+        return values
     }
 }

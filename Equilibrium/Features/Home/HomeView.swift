@@ -31,9 +31,14 @@ struct HomeView: View {
             ZStack {
                 EQColor.canvas.ignoresSafeArea()
                 ScrollView {
-                    VStack(alignment: .leading, spacing: EQSpacing.lg) { header; carousel; timer }
+                    VStack(alignment: .leading, spacing: EQSpacing.lg) {
+                        header
+                        if model.errorMessage != nil { loadError }
+                        carousel
+                        timer
+                    }
                         .padding(.vertical, EQSpacing.sm)
-                }.scrollIndicators(.hidden)
+                }.scrollIndicators(.hidden).refreshable { await model.load() }
             }
             .toolbar(.hidden, for: .navigationBar)
             .navigationDestination(for: HomeRoute.self) { destination($0) }
@@ -44,6 +49,20 @@ struct HomeView: View {
             }
             .task { await model.load(); if let settings = try? await settingsRepository.settings() { appSettings = settings } }
         }.tint(EQColor.accent)
+    }
+
+    private var loadError: some View {
+        HStack(alignment: .center, spacing: EQSpacing.sm) {
+            Label("Workouts could not be loaded.", systemImage: "exclamationmark.triangle.fill")
+                .font(EQTypography.body).foregroundStyle(EQColor.warning)
+            Spacer(minLength: EQSpacing.sm)
+            Button("Retry") { Task { await model.load() } }
+                .buttonStyle(.bordered).frame(minHeight: EQDimension.minimumTouch)
+                .accessibilityHint("Attempts to load active workouts again")
+        }
+        .padding(EQSpacing.md).background(EQColor.surface, in: RoundedRectangle(cornerRadius: EQRadius.card, style: .continuous))
+        .padding(.horizontal, EQSpacing.lg)
+        .accessibilityElement(children: .contain)
     }
 
     private var header: some View {
@@ -138,9 +157,9 @@ private struct AddWorkoutCard: View {
             Image(systemName: "plus.circle.fill").font(.title).foregroundStyle(EQColor.accent)
             Text("ADD WORKOUT").font(EQTypography.cardHero)
             VStack(alignment: .leading, spacing: EQSpacing.xs) {
-                Button("Create from scratch") { select(.builder(.init())) }
-                Button("Paste workout") { select(.pasteWorkout) }
-                Button("Use recent workout") { select(.recent) }
+                Button("Create from scratch") { select(.builder(.init())) }.frame(minHeight: EQDimension.minimumTouch)
+                Button("Paste workout") { select(.pasteWorkout) }.frame(minHeight: EQDimension.minimumTouch)
+                Button("Use recent workout") { select(.recent) }.frame(minHeight: EQDimension.minimumTouch)
             }.font(EQTypography.body).buttonStyle(.plain).foregroundStyle(EQColor.secondaryText)
         }.foregroundStyle(EQColor.primaryText).padding(EQSpacing.lg)
             .frame(maxWidth: .infinity, minHeight: EQDimension.workoutCardHeight, alignment: .topLeading)

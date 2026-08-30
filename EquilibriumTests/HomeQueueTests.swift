@@ -3,6 +3,20 @@ import XCTest
 
 @MainActor
 final class HomeQueueTests: XCTestCase {
+    func testLoadFailureKeepsVisibleWorkoutsAndSuccessfulRetryClearsError() async {
+        var attempts = 0
+        let retained = EquilibriumFixtures.ready(id: "visible")
+        let refreshed = EquilibriumFixtures.ready(id: "refreshed")
+        let model = HomeModel(loadActive: {
+            attempts += 1
+            if attempts == 2 { throw RepositoryError.notFound }
+            return attempts == 1 ? [retained] : [refreshed]
+        })
+        await model.load(); XCTAssertEqual(model.workouts, [retained]); XCTAssertNil(model.errorMessage)
+        await model.load(); XCTAssertEqual(model.workouts, [retained]); XCTAssertEqual(model.errorMessage, "Home could not be loaded.")
+        await model.load(); XCTAssertEqual(model.workouts, [refreshed]); XCTAssertNil(model.errorMessage)
+    }
+
     func testHomeContainsEveryIncompleteWorkoutInStableCreationOrder() async throws {
         let repository = SwiftDataRepository(container: try PersistenceController.makeContainer(inMemory: true))
         var a = EquilibriumFixtures.ready(id: "a"); a.createdAt = .init(timeIntervalSince1970: 1)

@@ -47,53 +47,55 @@ final class WorkoutImportPhase3BTests: XCTestCase {
         XCTAssertFalse(result.hasBlockingIssues); XCTAssertEqual(result.issues.first?.severity, .warning); XCTAssertEqual(result.workouts[0].exercises.count, 1)
     }
 
-    func testMatchingExactAliasDiacriticCompactUnmatchedAndAmbiguous() throws {
+    func testLightweightConversionMatchesKnownVocabularyAndLeavesUnknownTransient() throws {
         let canonical = ExerciseDefinition(id: .new(), name: "Café Press", normalizedName: "cafe press", aliases: ["Coffee Press"], equipment: nil, category: nil, isCustom: false, archivedAt: nil)
         let pullup = ExerciseDefinition(id: .new(), name: "Pull-up", normalizedName: "pull up", aliases: [], equipment: nil, category: nil, isCustom: false, archivedAt: nil)
-        let matcher = WorkoutExerciseMatcher()
         for name in ["CAFÉ PRESS", "Coffee Press", "pullup"] {
-            guard case .matched = matcher.match(name: name, catalog: [canonical, pullup]) else { return XCTFail("Expected match for \(name)") }
+            let parsed = parser.parse("Test\n\n\(name) 1x8")
+            XCTAssertNotNil(WorkoutImportDraftConverter.lightweightDraft(from: parsed.workouts[0], catalog: [canonical, pullup]).exercises[0].exerciseID)
         }
-        guard case .unmatched = matcher.match(name: "Press", catalog: [canonical]) else { return XCTFail("No fuzzy match allowed") }
-        let duplicateAlias = ExerciseDefinition(id: .new(), name: "Other", normalizedName: "other", aliases: ["Coffee Press"], equipment: nil, category: nil, isCustom: true, archivedAt: nil)
-        guard case .ambiguous(let values) = matcher.match(name: "Coffee Press", catalog: [canonical, duplicateAlias]) else { return XCTFail("Expected ambiguity") }
-        XCTAssertEqual(values.count, 2)
+        let unknown = parser.parse("Test\n\nMystery Press 1x8")
+        XCTAssertNil(WorkoutImportDraftConverter.lightweightDraft(from: unknown.workouts[0], catalog: [canonical]).exercises[0].exerciseID)
     }
 
-    func testCustomExerciseCanExplicitlyResolveUnmatched() throws {
-        let parsed = try XCTUnwrap(parser.parse(WorkoutImportFixtures.unmatched).workouts.first?.exercises.first)
-        let custom = ExerciseDefinition(id: .new(), name: "Mystery Press", normalizedName: "mystery press", aliases: [], equipment: nil, category: nil, isCustom: true, archivedAt: nil)
-        let resolved = ResolvedParsedWorkout(id: UUID(), name: "Push", exercises: [.init(parsed: parsed, match: .matched(custom))])
-        XCTAssertEqual(WorkoutImportDraftConverter.draft(from: resolved)?.exercises.first?.exerciseID, custom.id)
-    }
-
-    func testDraftConversionPreservesOrderTargetsAndGeneratesFreshIdentity() throws {
-        let result = parser.parse(WorkoutImportFixtures.simple)
-        let definitions = EquilibriumFixtures.exercises
-        let matcher = WorkoutExerciseMatcher()
-        let resolved = ResolvedParsedWorkout(id: UUID(), name: result.workouts[0].name, exercises: result.workouts[0].exercises.map { .init(parsed: $0, match: matcher.match(name: $0.name, catalog: definitions)) })
-        let first = try XCTUnwrap(WorkoutImportDraftConverter.draft(from: resolved)), second = try XCTUnwrap(WorkoutImportDraftConverter.draft(from: resolved))
-        XCTAssertEqual(first.exercises.map(\.exerciseID), [EquilibriumFixtures.squatID, EquilibriumFixtures.plankID])
-        XCTAssertNotEqual(first.exercises.map(\.id), second.exercises.map(\.id)); XCTAssertNotEqual(first.exercises.flatMap(\.prescriptions).map(\.id), second.exercises.flatMap(\.prescriptions).map(\.id))
-        guard case .repetitions(lower: 8, upper: 8) = first.exercises[0].prescriptions[0].target else { return XCTFail("Expected reps") }
-        guard case .duration(seconds: 30) = first.exercises[1].prescriptions[0].target else { return XCTFail("Expected duration") }
-    }
-
-    func testUnresolvedMatchBlocksDraftConversionAndImportRouteExists() throws {
-        let parsed = try XCTUnwrap(parser.parse(WorkoutImportFixtures.unmatched).workouts.first?.exercises.first)
-        let unresolved = ResolvedParsedWorkout(id: UUID(), name: "Push", exercises: [.init(parsed: parsed, match: .unmatched)])
-        XCTAssertNil(WorkoutImportDraftConverter.draft(from: unresolved)); XCTAssertEqual(CreationRoute.pasteWorkout, .pasteWorkout)
-    }
-
-    @MainActor func testImportedDraftUsesBuilderTemplateScheduleAndExecutionArchitecture() async throws {
+    @MainActor func testPasteMaterializesOneWorkoutWithFreshCanonicalIdentity() async throws {
         let repository = SwiftDataRepository(container: try PersistenceController.makeContainer(inMemory: true))
         for exercise in EquilibriumFixtures.exercises { try await repository.saveExercise(exercise) }
-        let result = parser.parse(WorkoutImportFixtures.simple), matcher = WorkoutExerciseMatcher()
-        let resolved = ResolvedParsedWorkout(id: UUID(), name: result.workouts[0].name, exercises: result.workouts[0].exercises.map { .init(parsed: $0, match: matcher.match(name: $0.name, catalog: EquilibriumFixtures.exercises)) })
-        let draft = try XCTUnwrap(WorkoutImportDraftConverter.draft(from: resolved))
-        let model = WorkoutBuilderModel(draft: draft, exercises: repository, workouts: repository, history: repository)
-        let createdValue = await model.create(); let workout = try XCTUnwrap(createdValue)
-        let execution = WorkoutExecutionModel(workoutID: workout.id, repository: repository)
-        await execution.activate(); XCTAssertEqual(execution.workout?.id, workout.id); XCTAssertEqual(execution.workout?.status, .inProgress)
+        let result = parser.parse(WorkoutImportFixtures.simple)
+        let values = try await WorkoutPasteMaterializer(exercises: repository, workouts: repository, history: repository).materialize(result.workouts, now: .init(timeIntervalSince1970: 100))
+        XCTAssertEqual(values.count, 1); XCTAssertEqual(values[0].status, .ready); XCTAssertNil(values[0].startedAt); XCTAssertNil(values[0].completedAt)
+        XCTAssertTrue(values[0].exercises.flatMap(\.loggedSets).isEmpty)
+        let activeIDs = try await repository.activeWorkouts().map(\.id)
+        XCTAssertEqual(activeIDs, values.map(\.id))
+    }
+
+    @MainActor func testPasteMaterializesTwoWorkoutsInParsedOrder() async throws {
+        let repository = SwiftDataRepository(container: try PersistenceController.makeContainer(inMemory: true))
+        let result = parser.parse(WorkoutImportFixtures.multiple)
+        let values = try await WorkoutPasteMaterializer(exercises: repository, workouts: repository, history: repository).materialize(result.workouts, now: .init(timeIntervalSince1970: 100))
+        XCTAssertEqual(values.map(\.titleSnapshot), ["Push", "Core"])
+        let activeIDs = try await repository.activeWorkouts().map(\.id)
+        XCTAssertEqual(activeIDs, values.map(\.id))
+    }
+
+    @MainActor func testPasteMaterializesThreeWorkoutsWithFreshChildIdentities() async throws {
+        let repository = SwiftDataRepository(container: try PersistenceController.makeContainer(inMemory: true))
+        let input = "DAY 1 — Upper\n\nPress 2x8\n\nDAY 2 — Lower\n\nSquat 2x8\n\nDAY 3 — Pull\n\nRow 2x8"
+        let result = parser.parse(input); XCTAssertFalse(result.hasBlockingIssues)
+        let values = try await WorkoutPasteMaterializer(exercises: repository, workouts: repository, history: repository).materialize(result.workouts, now: .init(timeIntervalSince1970: 100))
+        XCTAssertEqual(values.map(\.titleSnapshot), ["Upper", "Lower", "Pull"])
+        XCTAssertEqual(Set(values.map(\.id)).count, 3)
+        XCTAssertEqual(Set(values.flatMap(\.exercises).map(\.id)).count, 3)
+        let activeIDs = try await repository.activeWorkouts().map(\.id)
+        XCTAssertEqual(activeIDs, values.map(\.id))
+    }
+
+    @MainActor func testAtomicMaterializationRollsBackWholeBatchWhenValidationFails() async throws {
+        let repository = SwiftDataRepository(container: try PersistenceController.makeContainer(inMemory: true))
+        let valid = EquilibriumFixtures.ready(id: "valid-paste")
+        var invalid = EquilibriumFixtures.ready(id: "invalid-paste"); invalid.titleSnapshot = ""
+        do { try await repository.materializeAtomically([valid, invalid]); XCTFail("Expected validation failure") } catch {}
+        let persisted = try await repository.allWorkouts()
+        XCTAssertTrue(persisted.isEmpty)
     }
 }

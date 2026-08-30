@@ -25,7 +25,7 @@ struct AddWorkoutSheet: View {
         case .recent:
             RecentWorkoutPicker(repository: workouts, history: history) { values in created(values); dismiss() }
         case .pasteWorkout:
-            ClipboardWorkoutImportView(repository: exercises) { path.append(.builder($0)) }
+            ClipboardWorkoutImportView(exercises: exercises, workouts: workouts, history: history) { values in created(values); dismiss() }
         }
     }
 }

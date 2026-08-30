@@ -1,35 +1,28 @@
 # Equilibrium v1 — governing SwiftUI migration plan
 
-Status: active governing plan. Product Model Correction 3 is locked and supersedes all scheduling, dated-workout, template, plan, and cycle language in older result documents and in the frozen React Native application.
+Status: active governing plan. This document incorporates Product Model Correction 3, Progression/Timer QA, and the retained-flow closure decisions. It supersedes contradictory scheduling, template, progression, completion, and completed-immutability language in older result documents and in the frozen React Native application.
 
-## Product invariant
+## Locked product model
 
-Workouts are independent, undated canonical records.
+Workouts are independent, undated canonical records. Home displays every `ready` and `inProgress` workout, ordered by `createdAt` ascending and stable `WorkoutID` ascending. A workout remains there indefinitely until completed or deleted. Persisting the final required valid set automatically completes the workout, removes it from Home immediately, and retains the same canonical record in History.
 
-Home displays all incomplete workouts. A ready or in-progress workout remains in Home indefinitely until completed or deleted. Completing a workout removes it from Home immediately and retains the same canonical record in History.
-
-There is no scheduling, date picker, day rollover, plan, or cycle in native v1. Timestamps describe lifecycle and history, not scheduling.
-
-The frozen React Native baseline remains a behavioral reference only where it does not conflict with this model. Legacy data will be transformed at a future import boundary; it must not shape the native domain.
-
-## Native product graph
-
-Home is the only root experience and presents an active-workout carousel followed by Add Workout. It has no calendar lens or tab bar.
+There is no scheduling, date picker, `LocalDay`, day rollover, template, Plan, or Cycle in native v1. Lifecycle timestamps describe execution and History only. The frozen React Native application is a behavioral reference only where compatible with this model.
 
 ```text
 Home: all ready and in-progress workouts
 ├── Add Workout
 │   ├── Create from scratch
-│   ├── Paste workout
+│   ├── Paste one or more workouts
 │   └── Use recent workout
 ├── Workout Execution
 ├── Workout History
 │   └── Completed Workout Detail
 │       └── Exercise Performance
+├── Saved standalone Timers
 └── Settings
 ```
 
-Plans, cycles, schedule navigation, template management, AI creation, Progress tabs, and authentication launch gates are absent.
+Authentication launch gates, scheduling, templates, Plans, Cycles, AI creation, and a Progress tab are absent.
 
 ## Canonical durable model
 
@@ -46,103 +39,87 @@ struct Workout: Identifiable, Codable, Hashable, Sendable {
 }
 ```
 
-The ordered ownership graph is:
+The ordered ownership graph is `Workout → WorkoutExercise → SetPrescription → LoggedSet`. `ExerciseDefinition` supplies stable personal-exercise identity; names in workouts are historical snapshots. There is no session, scheduling provenance, source, template identity, plan identity, or parallel history store.
 
-```text
-Workout
-→ ordered WorkoutExercise
-→ ordered SetPrescription
-→ LoggedSet
-```
-
-`ExerciseDefinition` supplies stable personal-exercise identity. Workout and exercise names are snapshots. There is no session object, `LocalDay`, scheduling provenance, template identity, source enum, plan identity, or parallel history store.
-
-Valid lifecycle states are:
-
-- `ready`: no start or completion timestamp.
-- `inProgress`: a start timestamp and no completion timestamp.
-- `completed`: both timestamps.
-
-Completed workouts are immutable through normal product commands. Every incomplete workout remains editable regardless of age.
-
-## Repository contracts
-
-The canonical Home query is `activeWorkouts()`. It returns ready and in-progress workouts ordered by `createdAt` ascending, then stable `WorkoutID` ascending. Status changes and `updatedAt` changes never reorder the queue.
-
-Workout commands operate by stable workout and child IDs. They validate status and domain values, persist through repository transaction boundaries, and never check the device calendar. Completing a workout changes the canonical record to completed; Home then excludes it while History includes it.
-
-History queries completed records ordered by `completedAt` descending and then stable `WorkoutID`. Valid completed records always have `completedAt`; `updatedAt` may only be a defensive read fallback for malformed development data.
-
-Exercise Performance groups completed historical occurrences by stable `ExerciseID`. Occurrence and trend chronology use `occurredAt`, derived from completion timestamps. Historical snapshots, valid completed sets, metric-family rules, PR derivation, unit conversion, previous occurrence, and accessibility text remain Phase 4 behavior.
+Lifecycle states are `ready`, `inProgress`, and `completed`. Completed workouts never return to Home. From History, the user may correct canonical logged-set weight, repetitions, or duration. That correction retains workout status, workout `completedAt`, logged-set identity, and logged-set `completedAt`; History, PRs, and Exercise Performance derive again from the corrected logs. Other structural completed-workout mutations remain restricted unless separately approved.
 
 ## Home and creation
 
-Home contains every incomplete workout plus Add Workout as the final page. Empty Home contains only Add Workout. There is no Rest Day state.
+Home contains all incomplete workouts followed by Add Workout. Empty Home contains only Add Workout. A failed refresh keeps already-visible cards, presents a compact error with Retry, and clears the error after a successful load.
 
-All creation paths directly materialize a fresh independent workout using `createdAt` for stable queue order:
+The lightweight scratch Builder owns workout title plus an ordered exercise list. It does not require detailed prescription editing. Known exercises inherit the latest canonical completed working-set structure and values; an exercise without history begins without manufactured sets. Execution owns first-set creation and subsequent set mutation.
 
-- Create from scratch uses the personal exercise vocabulary and an ordered exercise list.
-- Paste workout parses one or more workout definitions and opens each independently in Workout Builder.
-- Use recent workout copies the retained Phase 3 structure and prescription precedence behavior.
+Clipboard Paste uses the deterministic local parser. Every successfully parsed workout is materialized as a fresh independent workout in parsed order through the atomic workout batch boundary. Each receives fresh workout, workout-exercise, and prescription identities, with no logs or lifecycle state. Known and unknown exercises follow the same personal-vocabulary and latest-history rules as scratch creation. Paste creates no dates, schedules, templates, or intermediate multi-workout review aggregate.
 
-Fresh workouts receive fresh workout, exercise, and prescription IDs, with no logged sets, start timestamp, or completion state. Creation has no date parameter or picker. Home does not expose template management.
+Recent reuse creates fresh independent workouts in selection order. It copies selected workout structure while resolving each exercise through current canonical creation inheritance. No logs, lifecycle timestamps, or historical identities are copied.
 
-## Execution
+## Execution and completion
 
-Execution read-only state is exactly `workout.status == .completed`. Ready workouts start; in-progress workouts resume with persisted logged sets. There is no current-day or age eligibility rule.
+Ready workouts start; in-progress workouts resume with persisted logs. All incomplete workouts remain mutable regardless of age. Retained execution includes exercise focus, ordered sets, logging and editing, first-set creation, Add Set and value propagation, removal of unlogged sets, rest-duration editing, rest timer and Skip Rest, Previous Performance, exercise settings/swap/removal, reset, delete, share, and overflow actions.
 
-Retained behavior includes exercise focus, ordered sets, logging and editing, add/remove set, rest timer, Skip Rest, Previous Performance, reset, delete while incomplete, rest-duration editing, share, overflow actions, completion gating, and completion. Completed records remain read-only.
+When the final required valid set is successfully persisted, completion occurs automatically exactly once. There is no Mark Complete button, completion confirmation page, or Return Home page. Completed workouts open read-only in execution; the narrow History metric-correction command is the explicit exception described above.
 
-## Persistence and backup
+Time-based exercises use one ordered flow: work timer → canonical set log → rest timer when another required set remains. Work-timer expiration never creates a parallel history record. The canonical `LoggedSet.duration` remains authoritative.
 
-SwiftData stores only retained product records. This pre-release correction uses a new schema configuration and recreates development storage rather than maintaining compatibility with the invalid development schema.
+## Progression
 
-Native backup schema version 2 contains:
+Progression is enabled globally and assigned per stable `ExerciseID` using exactly four fixed profiles:
 
-- personal `ExerciseDefinition` values;
-- canonical `Workout` values;
-- retained settings;
-- retained progression configuration for the later Progression phase.
+- None: no progression prefill.
+- Upper: 5–8 repetitions, +2.5 lb.
+- Lower: 5–8 repetitions, +5 lb.
+- Accessories: 10–20 repetitions, +2.5 lb.
 
-It contains no dates used for scheduling, templates, plans, cycles, sources, or duplicate workout stores. React Native import and cloud backup remain separate future work.
+The newest completed canonical occurrence drives the calculation. Progression directly prefills the appropriate editable weight or repetition value and displays `↑` beside the dimension that changed. It never manufactures zero weight. Generic defaults, ordered groups, arbitrary overrides, and an informational Suggested card are not product concepts.
 
-## Migration phases
+## Timers
+
+The shared deadline-based countdown engine reconciles elapsed time after suspension or foreground return. In-workout work/rest state is transient and is not backed up or restored after process termination.
+
+Standalone Timers are saved, reusable interval configurations containing a name, movement duration, exercise rest, exercises per round, rounds, and round rest. Users can create, edit, delete, run, pause/resume, skip, reset, and restart them. They create no Workout or History record.
+
+Notification permission, local notifications, Live Activities, Dynamic Island, forced silent-mode audio, and terminated-process timer continuation are not required for native v1.
+
+## History, persistence, and backup
+
+History reads completed canonical workouts ordered by `completedAt` descending and stable `WorkoutID`. Exercise Performance groups by stable `ExerciseID`; occurrences, metric-family selection, PRs, trends, units, previous performance, and accessibility text derive from canonical completed logs.
+
+SwiftData stores personal exercise definitions, canonical workouts and owned children, settings, and fixed-profile progression assignments. Native backup schema version 2 contains the same durable product state. It contains no schedule dates, templates, Plans, Cycles, sources, sessions, duplicate history, or transient timer runtime. Saved standalone timer configurations remain local reusable preferences.
+
+## Migration roadmap
 
 Completed and retained:
 
-1. Native foundation and Home vertical slice, corrected to the active-workout queue.
-2. Workout Execution.
-3. Workout creation, paste import, and recent reuse.
-4. History and Exercise Performance, including correction passes.
-5. Product Model Correction 3: independent workouts, no dates, no plans.
+1. Native foundation and active-workout Home queue.
+2. Workout Execution and automatic completion.
+3. Lightweight scratch, multi-workout Paste, and recent creation.
+4. History, completed metric correction, and Exercise Performance.
+5. Independent-workout product correction with scheduling/templates/Plans removed.
+6. Fixed-profile automatic progression plus work, rest, and saved standalone Timers.
+7. Retained-flow closure, governing-model reconciliation, and functional accessibility hardening.
 
-The former “Phase 5 — Plans” is removed and is not part of the roadmap.
+Next separate changes:
 
-Completed and retained in the next migration change set:
+8. Authentication and versioned Supabase backup.
+9. Explicit React Native migration/import.
+10. Release hardening and retained-product regression.
 
-6. Progression plus full Timer behavior: durable validated configuration and derived completed-history suggestions; one transient deadline-based countdown engine for rest, duration sets, and standalone Timer.
-
-Next, in a separate change set:
-
-7. Authentication and versioned Supabase backup.
-8. Explicit React Native migration/import.
-9. Release hardening and retained-product regression.
-
-No phase may reintroduce scheduling, templates, plans, cycles, or date-based workout eligibility without a new explicit product decision.
+No phase may reintroduce scheduling, templates, Plans, Cycles, generic progression rule architecture, or date-based workout eligibility without a new explicit product decision.
 
 ## Validation gates
 
-Every retained phase must keep these invariants covered:
-
 - ready and in-progress workouts survive relaunch indefinitely;
-- Home ordering is deterministic and Add Workout stays final;
-- completion removes only the completed card immediately;
-- incomplete workout deletion removes only that workout;
-- all three creation paths produce fresh independent records;
+- Home ordering is deterministic, Add Workout stays final, and failed refreshes do not erase visible data;
+- completing the final required set removes only that workout immediately;
+- incomplete deletion removes only its target;
+- scratch, every parsed Paste workout, and recent reuse receive fresh canonical identities;
+- multi-workout Paste is all-or-nothing at the workout persistence boundary;
 - old incomplete workouts support every normal execution mutation;
-- completed workouts remain immutable and appear in History;
-- History and Performance chronology comes from timestamps;
+- completed structural mutations are rejected while History metric correction preserves completion timestamps;
+- History, Performance, and PRs recompute from canonical corrected logs;
+- progression profiles and `↑` prefills follow the locked fixed rules;
+- time-based work logs canonically before rest and standalone Timers create no history;
 - persistence and backup recreate equivalent canonical state;
-- the full XCTest suite, simulator build/install/launch, source terminology scan, and `git diff --check` pass.
+- full XCTest, simulator build/install/launch, source terminology scan, and `git diff --check` pass.
 
-Authentication, Supabase, importer work, and visual polish remain outside this phase.
+Authentication, Supabase, RN import, and general visual polish remain outside this closure pass.

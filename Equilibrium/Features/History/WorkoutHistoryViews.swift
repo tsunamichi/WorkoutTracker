@@ -120,6 +120,7 @@ private struct CompletedSetEditor: View {
     let target: CompletedSetEditTarget; let weightUnit: WeightUnit; let save: (SetLogInput) async -> Bool
     @Environment(\.dismiss) private var dismiss
     @State private var weight: String; @State private var value: String
+    @FocusState private var fieldFocused: Bool
     init(target: CompletedSetEditTarget, weightUnit: WeightUnit, save: @escaping (SetLogInput) async -> Bool) {
         self.target = target; self.weightUnit = weightUnit; self.save = save
         _weight = State(initialValue: WeightText.value(target.set.weight, unit: weightUnit))
@@ -131,10 +132,12 @@ private struct CompletedSetEditor: View {
                 Section("Values") {
                     LabeledContent("Weight (\(weightUnit == .pounds ? "lb" : "kg"))") {
                         TextField("0", text: $weight).keyboardType(.decimalPad).multilineTextAlignment(.trailing)
+                            .focused($fieldFocused)
                             .accessibilityLabel("Weight in \(weightUnit == .pounds ? "pounds" : "kilograms")")
                     }
                     LabeledContent(target.set.duration == nil ? "Reps" : "Seconds") {
                         TextField("0", text: $value).keyboardType(.numberPad).multilineTextAlignment(.trailing)
+                            .focused($fieldFocused)
                             .accessibilityLabel(target.set.duration == nil ? "Reps" : "Seconds")
                     }
                 }
@@ -143,6 +146,7 @@ private struct CompletedSetEditor: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) { Button("Save") { commit() } }
+                ToolbarItemGroup(placement: .keyboard) { Spacer(); Button("Done") { fieldFocused = false } }
             }
         }.presentationDetents([.medium])
     }

@@ -3,16 +3,17 @@ import Observation
 
 @MainActor @Observable
 final class HomeModel {
-    private let repository: any WorkoutRepository
+    private let loadActive: () async throws -> [Workout]
     private(set) var workouts: [Workout] = []
     private(set) var errorMessage: String?
     var creationRoute: CreationRoute?
     var isTimerPresented = false
-    init(repository: any WorkoutRepository) { self.repository = repository }
+    init(repository: any WorkoutRepository) { loadActive = { try await repository.activeWorkouts() } }
+    init(loadActive: @escaping () async throws -> [Workout]) { self.loadActive = loadActive }
 
     func load() async {
         do {
-            workouts = try await repository.activeWorkouts()
+            workouts = try await loadActive()
             errorMessage = nil
         } catch { errorMessage = "Home could not be loaded." }
     }

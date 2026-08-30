@@ -19,7 +19,7 @@ struct StandaloneTimerView: View {
             Section("Saved Timers") {
                 ForEach(configurations) { configuration in
                     HStack {
-                        Button { path.append(.timerRun(configuration.id)) } label: { VStack(alignment: .leading) { Text(configuration.name); Text("\(configuration.exercisesPerRound) exercises × \(configuration.rounds) rounds").font(EQTypography.caption).foregroundStyle(EQColor.secondaryText) } }.buttonStyle(.plain)
+                        Button { path.append(.timerRun(configuration.id)) } label: { VStack(alignment: .leading) { Text(configuration.name).lineLimit(2); Text("\(configuration.exercisesPerRound) exercises × \(configuration.rounds) rounds").font(EQTypography.caption).foregroundStyle(EQColor.secondaryText) } }.buttonStyle(.plain).frame(maxWidth: .infinity, minHeight: EQDimension.minimumTouch, alignment: .leading)
                         Menu { Button("Edit Timer", systemImage: "pencil") { path.append(.timerEdit(configuration.id)) }; Button("Delete Timer", systemImage: "trash", role: .destructive) { deletionTarget = configuration } } label: { Label("Timer actions", systemImage: "ellipsis.circle").labelStyle(.iconOnly) }.accessibilityLabel("Actions for \(configuration.name)")
                     }
                 }
