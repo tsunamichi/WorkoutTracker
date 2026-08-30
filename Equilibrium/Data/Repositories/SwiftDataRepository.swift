@@ -238,6 +238,40 @@ public final class SwiftDataRepository: ExerciseRepository, WorkoutRepository, E
         try saveOrRollback()
     }
 
+    func importLegacyRN(_ value: LegacyImportMaterialization, importedAt: Date = .now) throws -> LegacyImportResult {
+        let sourceDigest = value.sourceDigest
+        let receiptDescriptor = FetchDescriptor<LegacyImportReceiptRecord>(predicate: #Predicate { $0.sourceDigest == sourceDigest })
+        if try !context.fetch(receiptDescriptor).isEmpty { throw RNLegacyImportError.alreadyImported }
+        for workout in value.workouts { try DomainValidator.validate(workout) }
+        if let settings = value.settings, !Self.isValidRestDuration(settings.defaultRestDuration) { throw RepositoryError.invalidSettings }
+        if let progression = value.progression, !ProgressionValidator.isValid(progression) { throw RepositoryError.invalidProgressionConfiguration }
+
+        let existingExerciseIDs = Set(try context.fetch(FetchDescriptor<ExerciseDefinitionRecord>()).map(\.id))
+        let existingWorkoutIDs = Set(try context.fetch(FetchDescriptor<WorkoutRecord>()).map(\.id))
+        let existingTimerIDs = Set(try context.fetch(FetchDescriptor<StandaloneTimerConfigurationRecord>()).map(\.id))
+        let exercises = value.exercises.filter { !existingExerciseIDs.contains($0.id.rawValue) }
+        let workouts = value.workouts.filter { !existingWorkoutIDs.contains($0.id.rawValue) }
+        let timers = value.timers.filter { !existingTimerIDs.contains($0.id) }
+        for exercise in exercises { context.insert(DefinitionMapper.record(from: exercise)) }
+        for workout in workouts { context.insert(WorkoutMapper.record(from: workout)) }
+        for timer in timers { context.insert(timerRecord(timer)) }
+        if let settings = value.settings {
+            context.insert(SettingValueRecord(key: SettingKey.weightUnit, value: settings.weightUnit.rawValue, updatedAt: importedAt))
+            context.insert(SettingValueRecord(key: SettingKey.defaultRestDuration, value: String(settings.defaultRestDuration), updatedAt: importedAt))
+        }
+        if let progression = value.progression {
+            context.insert(SettingValueRecord(key: SettingKey.progressionEnabled, value: progression.isEnabled ? "true" : "false", updatedAt: importedAt))
+            for (id, profile) in progression.assignments { context.insert(ProgressionAssignmentRecord(exerciseID: id.rawValue, profileRaw: profile.rawValue, updatedAt: importedAt)) }
+        }
+        let receipt = LegacyImportReceiptRecord(sourceKind: "react-native-async-storage-v2", sourceDigest: value.sourceDigest, importedAt: importedAt, workoutCount: workouts.count, exerciseCount: exercises.count, timerCount: timers.count)
+        context.insert(receipt)
+        do {
+            try context.save()
+            if value.settings != nil { NotificationCenter.default.post(name: .equilibriumSettingsDidChange, object: nil) }
+            return .init(exercisesImported: exercises.count, workoutsImported: workouts.count, timersImported: timers.count, skippedMalformed: value.skippedMalformedCount)
+        } catch { context.rollback(); throw error }
+    }
+
     // MARK: Timers
 
     func timerConfigurations() throws -> [StandaloneTimerConfiguration] {

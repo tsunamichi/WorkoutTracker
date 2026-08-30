@@ -99,3 +99,14 @@ import SwiftData
         self.exercisesPerRound = exercisesPerRound; self.rounds = rounds; self.roundRestDuration = roundRestDuration; self.createdAt = createdAt; self.updatedAt = updatedAt
     }
 }
+
+@Model final class LegacyImportReceiptRecord {
+    var sourceKind: String
+    var sourceDigest: String
+    var importedAt: Date
+    var workoutCount: Int; var exerciseCount: Int; var timerCount: Int
+    init(sourceKind: String, sourceDigest: String, importedAt: Date = .now, workoutCount: Int, exerciseCount: Int, timerCount: Int) {
+        self.sourceKind = sourceKind; self.sourceDigest = sourceDigest; self.importedAt = importedAt
+        self.workoutCount = workoutCount; self.exerciseCount = exerciseCount; self.timerCount = timerCount
+    }
+}

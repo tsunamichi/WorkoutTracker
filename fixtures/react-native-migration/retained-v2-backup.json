@@ -1,0 +1,51 @@
+{
+  "version": "1.0",
+  "timestamp": "2026-01-20T12:00:00.000Z",
+  "platform": "ios",
+  "@workout_tracker_exercises": [
+    {"id":"squat","name":"Back Squat","canonicalName":"back squat","aliases":["Squat"],"category":"Legs","equipment":"Barbell","isCustom":false,"measurementType":"reps","defaultProgressionType":"main_lower","createdAt":"2024-01-01T00:00:00.000Z"},
+    {"id":"plank","name":"Plank","canonicalName":"plank","aliases":[],"category":"Core","equipment":"Bodyweight","isCustom":false,"measurementType":"time","defaultProgressionType":"accessory","createdAt":"2024-01-01T00:00:00.000Z"},
+    {"id":"pushup","name":"Push-Up","canonicalName":"push up","aliases":["Pushup"],"category":"Chest","equipment":"Bodyweight","isCustom":false,"measurementType":"reps","defaultProgressionType":"main_upper","createdAt":"2024-01-01T00:00:00.000Z"},
+    {"id":"custom-row","name":"Garage Cable Row","canonicalName":"garage cable row","aliases":[],"category":"Back","equipment":"Cable","isCustom":true,"measurementType":"reps","defaultProgressionType":"none","createdAt":"2024-06-01T00:00:00.000Z","archivedAt":"2025-12-01T00:00:00.000Z"},
+    {"broken":"entry intentionally skipped"}
+  ],
+  "@workout_tracker_workout_templates": [
+    {"id":"template-lower","name":"Lower Strength","items":[]},
+    {"id":"template-old","name":"Old Pull","items":[]}
+  ],
+  "@workout_tracker_scheduled_workouts": [
+    {"id":"completed-1","date":"2025-11-10","templateId":"template-lower","titleSnapshot":"Lower Strength","status":"completed","startedAt":"2025-11-10T15:00:00.000Z","completedAt":"2025-11-10T16:00:00.000Z","exercisesSnapshot":[
+      {"id":"item-squat","exerciseId":"squat","nameSnapshot":"Barbell Back Squat","order":0,"sets":2,"reps":"5-8","weight":200,"isTimeBased":false,"isPerSide":false,"restSeconds":90,"progressionType":"main_lower"},
+      {"id":"item-plank","exerciseId":"plank","nameSnapshot":"Front Plank","order":1,"sets":1,"reps":45,"weight":0,"isTimeBased":true,"isPerSide":true,"restSeconds":60,"progressionType":"accessory"}
+    ]},
+    {"id":"active-1","date":"2026-01-20","templateId":"template-active","titleSnapshot":"Bodyweight Work","status":"in_progress","startedAt":"2026-01-20T12:00:00.000Z","completedAt":null,"exercisesSnapshot":[
+      {"id":"item-pushup","exerciseId":"pushup","nameSnapshot":"Push-Up","order":0,"sets":3,"reps":"8-12","weight":0,"isTimeBased":false,"isPerSide":false,"restSeconds":75,"progressionType":"main_upper"}
+    ]},
+    {"id":"future-planned","date":"2027-01-01","templateId":"obsolete-plan","titleSnapshot":"Future Schedule","status":"planned","startedAt":null,"completedAt":null,"exercisesSnapshot":[]}
+  ],
+  "@workout_tracker_detailed_progress": {
+    "completed-1":{"workoutKey":"completed-1","lastUpdated":"2025-11-10T16:00:00.000Z","exercises":{
+      "item-squat":{"exerciseId":"squat","sets":[{"setNumber":1,"weight":205,"reps":8,"completed":true},{"setNumber":2,"weight":205,"reps":7,"completed":true}],"skipped":false},
+      "item-plank":{"exerciseId":"plank","sets":[{"setNumber":1,"weight":0,"reps":45,"completed":true}],"skipped":false}
+    }},
+    "active-1":{"workoutKey":"active-1","lastUpdated":"2026-01-20T12:10:00.000Z","exercises":{
+      "item-pushup":{"exerciseId":"pushup","sets":[{"setNumber":1,"weight":0,"reps":10,"completed":true},{"setNumber":2,"weight":0,"reps":10,"completed":false},{"setNumber":3,"weight":0,"reps":10,"completed":false}],"skipped":false}
+    }}
+  },
+  "@workout_tracker_sessions": [
+    {"id":"legacy-session-1","workoutTemplateId":"template-old","date":"2025-08-01","startTime":"2025-08-01T10:00:00.000Z","endTime":"2025-08-01T10:30:00.000Z","sets":[
+      {"id":"legacy-set-1","sessionId":"legacy-session-1","exerciseId":"custom-row","setIndex":0,"weight":100,"reps":10,"isCompleted":true}
+    ]}
+  ],
+  "@workout_tracker_settings":{"useKg":true,"restTimerDefaultSeconds":75,"progressionSuggestionsEnabled":true,"monthlyProgressReminderEnabled":false,"monthlyProgressReminderDay":1},
+  "@workout_tracker_progression_groups":[],
+  "@workout_tracker_progression_rules":[],
+  "@workout_tracker_progression_defaults":{"repRangeMin":8,"repRangeMax":12,"weightIncrement":5,"progressionMode":"double"},
+  "@workout_tracker_hiit_timers":[
+    {"id":"timer-1","name":"Conditioning","work":30,"workRest":20,"sets":4,"rounds":3,"roundRest":60,"createdAt":"2025-01-01T00:00:00.000Z","isTemplate":true}
+  ],
+  "@workout_tracker_hiit_timer_sessions":[{"id":"ignored-runtime","timerId":"timer-1","timerName":"Conditioning","date":"2025-01-01","completedAt":"2025-01-01T00:20:00.000Z","totalDuration":1200}],
+  "@workout_tracker_cycles":[{"id":"discarded-cycle"}],
+  "@workout_tracker_cycle_plans":[{"id":"discarded-plan"}],
+  "@workout_tracker_exercise_prs":[{"exerciseId":"squat","weight":999,"reps":1,"date":"2025-01-01"}]
+}

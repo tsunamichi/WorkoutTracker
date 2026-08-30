@@ -10,11 +10,13 @@ struct HomeView: View {
     @State private var appSettings = AppSettings(weightUnit: .pounds, defaultRestDuration: 90)
     @State private var path: [HomeRoute] = []
     private let timerStore: any StandaloneTimerConfigurationStore
+    private let legacyImporter: RNLegacyImporter?
     @Namespace private var workoutTransition
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     init(repository: any WorkoutRepository, exerciseRepository: (any ExerciseRepository)? = nil, historyRepository: (any ExerciseHistoryRepository)? = nil, settingsRepository: (any SettingsRepository)? = nil, progressionRepository: (any ProgressionRepository)? = nil, timerStore: (any StandaloneTimerConfigurationStore)? = nil) {
         self.repository = repository
         self.timerStore = timerStore ?? (repository as? SwiftDataRepository).map { SwiftDataStandaloneTimerStore(repository: $0) } ?? UserDefaultsStandaloneTimerStore()
+        self.legacyImporter = (repository as? SwiftDataRepository).map(RNLegacyImporter.init(repository:))
         guard let shared = repository as? SwiftDataRepository else {
             precondition(exerciseRepository != nil && historyRepository != nil && settingsRepository != nil && progressionRepository != nil, "Feature repositories are required")
             self.exerciseRepository = exerciseRepository!; self.historyRepository = historyRepository!
@@ -113,7 +115,7 @@ struct HomeView: View {
             WorkoutExecutionView(id: id, repository: repository, historyRepository: historyRepository, progressionRepository: progressionRepository, exerciseRepository: exerciseRepository, weightUnit: appSettings.weightUnit, defaultRestDuration: appSettings.defaultRestDuration) { model.applyPersistedWorkout($0) }
                 .onDisappear { Task { await model.load() } }
                 .modifier(HomeZoomModifier(id: id.rawValue, namespace: workoutTransition, reduceMotion: reduceMotion))
-        case .settings: SettingsShellView(settingsRepository: settingsRepository, progressionRepository: progressionRepository, exerciseRepository: exerciseRepository).onDisappear { Task { if let settings = try? await settingsRepository.settings() { appSettings = settings } } }
+        case .settings: SettingsShellView(settingsRepository: settingsRepository, progressionRepository: progressionRepository, exerciseRepository: exerciseRepository, legacyImporter: legacyImporter).onDisappear { Task { if let settings = try? await settingsRepository.settings() { appSettings = settings } } }
         case .history: WorkoutHistoryView(repository: repository, historyRepository: historyRepository, weightUnit: appSettings.weightUnit)
         case .timer: StandaloneTimerView(store: timerStore, path: $path)
         case .timerCreate:

@@ -11,8 +11,10 @@
 		0D9CA2DBEEBF22EA4E2FA504 /* HomeQueueTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3DA997724AE63FFC5DBD32D4 /* HomeQueueTests.swift */; };
 		1433D01F8C32DB9F26FC9820 /* EquilibriumApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = D017002BD4397958FCA09910 /* EquilibriumApp.swift */; };
 		15ED3206DAC1E9B4CFD15505 /* BackupTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B95F758DA5D9FFC871964924 /* BackupTests.swift */; };
+		16B70C02602FD495562624C9 /* RNLegacyImporter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 360E18EE71024F5387A3E97B /* RNLegacyImporter.swift */; };
 		1AB6FE787819CF6F8383318C /* EquilibriumFixtures.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAEC6B830776032B8055E925 /* EquilibriumFixtures.swift */; };
 		25CDD6B9A1488793878B9CC2 /* SettingsViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = C5B2E9347C1FFE9B656A8420 /* SettingsViews.swift */; };
+		2D632C17DE4DC8249142E864 /* RNLegacyTransformer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 68688425AB725476CBE6644C /* RNLegacyTransformer.swift */; };
 		37C99B2DD213294EE53EBCF0 /* CloudKitReadinessPersistenceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1F195843562F172FAB98EE74 /* CloudKitReadinessPersistenceTests.swift */; };
 		38BF3AA040AD02258CDA6FB1 /* DomainValidation.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1EA8773328FB592C0A68093 /* DomainValidation.swift */; };
 		3A9ECFA084F527CE94193D95 /* Phase4FinalCorrectionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3A6DC27E813FBDB848D3755D /* Phase4FinalCorrectionTests.swift */; };
@@ -21,8 +23,10 @@
 		3F938F45B4B3482C3640F089 /* RepositoryProtocols.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3663B410C047AC7A86DA812E /* RepositoryProtocols.swift */; };
 		43E6D221A88C306496986931 /* WorkoutCreationPhase3ATests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 37A7B63C57D8F9E09C7CBE9A /* WorkoutCreationPhase3ATests.swift */; };
 		445489AF18781FE3AD1F754D /* HistoryPerformancePhase4Tests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 141939A1C8633C9BDFAAED86 /* HistoryPerformancePhase4Tests.swift */; };
+		44F4F881EB1BC81BAF29BBD2 /* RNLegacyImportTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5536BB07F81D9AA440D6E1CD /* RNLegacyImportTests.swift */; };
 		4581DA37204E0FD526E0E1B3 /* WorkoutTextParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1A86661FEEAF88EF66248D9 /* WorkoutTextParser.swift */; };
 		46EE5A395AB4E12A127D75CB /* HomeModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05DBD6A4BFCF0802AB6028F7 /* HomeModel.swift */; };
+		5034261EF23E8084DEA5577C /* RNLegacyDTOs.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9688645B2EEAF0B12FF8846 /* RNLegacyDTOs.swift */; };
 		54A93783E40418BD63467B80 /* WorkoutImportViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = A62A2C8341DC3EBBDDB1F34A /* WorkoutImportViews.swift */; };
 		56101649CF1E2BDA12F9504C /* WorkoutHistoryQueries.swift in Sources */ = {isa = PBXBuildFile; fileRef = C60C2526C27ECA63EB6B3290 /* WorkoutHistoryQueries.swift */; };
 		567B3923F3C22BF03D3323A8 /* CountdownTimer.swift in Sources */ = {isa = PBXBuildFile; fileRef = BC2F2F34F12A3A217FD82812 /* CountdownTimer.swift */; };
@@ -31,6 +35,7 @@
 		5F730BA67FEEC27898C8C787 /* WorkoutExecutionModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 75C821A597461E8E8745EE42 /* WorkoutExecutionModel.swift */; };
 		6DCEA16F010BC43C4DD803BD /* PersistenceController.swift in Sources */ = {isa = PBXBuildFile; fileRef = B24E251CAD53A9AE446A2DF8 /* PersistenceController.swift */; };
 		74F5CAB5CA4AA53361EBF0E5 /* WorkoutHistoryViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F066B641173BDC23B2AE81D /* WorkoutHistoryViews.swift */; };
+		759CB5E87359C051AFE8C1E8 /* RNLegacyPayloadDecoder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B26DB989BD6AAB39AB9D4C3 /* RNLegacyPayloadDecoder.swift */; };
 		77FC569B7C086E9DCF4EA7AD /* DomainFoundationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6053E003FFA1884518E84211 /* DomainFoundationTests.swift */; };
 		787148CAD821853814636A46 /* WorkoutMapper.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF66101E05DEA9E300376A5C /* WorkoutMapper.swift */; };
 		799695E4B0E454D0AC4E60E3 /* WorkoutExecutionPhase2Tests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 509636B9965F71DB1A19AB39 /* WorkoutExecutionPhase2Tests.swift */; };
@@ -83,6 +88,7 @@
 		2308BA103AA490F7217C83A1 /* Equilibrium.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Equilibrium.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		2EC9A5F31CB59C7DBC582BCA /* ProductCorrectionProgressionTimerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProductCorrectionProgressionTimerTests.swift; sourceTree = "<group>"; };
 		2F066B641173BDC23B2AE81D /* WorkoutHistoryViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkoutHistoryViews.swift; sourceTree = "<group>"; };
+		360E18EE71024F5387A3E97B /* RNLegacyImporter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RNLegacyImporter.swift; sourceTree = "<group>"; };
 		3663B410C047AC7A86DA812E /* RepositoryProtocols.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RepositoryProtocols.swift; sourceTree = "<group>"; };
 		37A7B63C57D8F9E09C7CBE9A /* WorkoutCreationPhase3ATests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkoutCreationPhase3ATests.swift; sourceTree = "<group>"; };
 		386C65DCC6FFC4D762F8226C /* HomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeView.swift; sourceTree = "<group>"; };
@@ -92,8 +98,11 @@
 		432079A25CCD68B1A8A2686A /* TestSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TestSupport.swift; sourceTree = "<group>"; };
 		4F8106C098CFCDA7C9EF06C1 /* DomainIDs.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DomainIDs.swift; sourceTree = "<group>"; };
 		509636B9965F71DB1A19AB39 /* WorkoutExecutionPhase2Tests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkoutExecutionPhase2Tests.swift; sourceTree = "<group>"; };
+		5536BB07F81D9AA440D6E1CD /* RNLegacyImportTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RNLegacyImportTests.swift; sourceTree = "<group>"; };
 		6053E003FFA1884518E84211 /* DomainFoundationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DomainFoundationTests.swift; sourceTree = "<group>"; };
 		6546F07A8E991CB44F6F2FDA /* BackupCodec.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackupCodec.swift; sourceTree = "<group>"; };
+		68688425AB725476CBE6644C /* RNLegacyTransformer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RNLegacyTransformer.swift; sourceTree = "<group>"; };
+		6B26DB989BD6AAB39AB9D4C3 /* RNLegacyPayloadDecoder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RNLegacyPayloadDecoder.swift; sourceTree = "<group>"; };
 		6B434E4F45ED8DFC9DF0F84C /* ProductModelCorrection2Tests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProductModelCorrection2Tests.swift; sourceTree = "<group>"; };
 		6D6EEEC5F3CDCA3DBF906F1D /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		6D716F615836CE015456CF28 /* PersistenceSpikeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PersistenceSpikeTests.swift; sourceTree = "<group>"; };
@@ -122,6 +131,7 @@
 		E270BE88AD8EEA3003C46A8C /* ProgressionEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProgressionEngine.swift; sourceTree = "<group>"; };
 		E35768B38BF1690A1B3E37C0 /* WorkoutExecutionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkoutExecutionView.swift; sourceTree = "<group>"; };
 		E43C3941374311D22633D5AB /* StandaloneTimerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StandaloneTimerView.swift; sourceTree = "<group>"; };
+		E9688645B2EEAF0B12FF8846 /* RNLegacyDTOs.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RNLegacyDTOs.swift; sourceTree = "<group>"; };
 		EC1D14F154ADA57731B7940F /* DefinitionMapper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DefinitionMapper.swift; sourceTree = "<group>"; };
 		F1EA8773328FB592C0A68093 /* DomainValidation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DomainValidation.swift; sourceTree = "<group>"; };
 		F3C17A41B86588F2489D154D /* AppEnvironment.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppEnvironment.swift; sourceTree = "<group>"; };
@@ -136,6 +146,17 @@
 				E35768B38BF1690A1B3E37C0 /* WorkoutExecutionView.swift */,
 			);
 			path = WorkoutExecution;
+			sourceTree = "<group>";
+		};
+		0E02E917B98274EDEA0A98DB /* LegacyImport */ = {
+			isa = PBXGroup;
+			children = (
+				E9688645B2EEAF0B12FF8846 /* RNLegacyDTOs.swift */,
+				360E18EE71024F5387A3E97B /* RNLegacyImporter.swift */,
+				6B26DB989BD6AAB39AB9D4C3 /* RNLegacyPayloadDecoder.swift */,
+				68688425AB725476CBE6644C /* RNLegacyTransformer.swift */,
+			);
+			path = LegacyImport;
 			sourceTree = "<group>";
 		};
 		18C187B89E5DDBBE4A9F980C /* Progression */ = {
@@ -195,6 +216,7 @@
 				2EC9A5F31CB59C7DBC582BCA /* ProductCorrectionProgressionTimerTests.swift */,
 				6B434E4F45ED8DFC9DF0F84C /* ProductModelCorrection2Tests.swift */,
 				2169195BB579B42DD89188E8 /* ProgressionTimerTests.swift */,
+				5536BB07F81D9AA440D6E1CD /* RNLegacyImportTests.swift */,
 				37A7B63C57D8F9E09C7CBE9A /* WorkoutCreationPhase3ATests.swift */,
 				509636B9965F71DB1A19AB39 /* WorkoutExecutionPhase2Tests.swift */,
 				ACF3B316D7BA8A0D3D379187 /* WorkoutImportPhase3BTests.swift */,
@@ -211,6 +233,7 @@
 				62A949CD827B8903E47F390F /* DesignSystem */,
 				E87F0B39FE67182B65B39A3F /* Domain */,
 				BFAD0928F7BBA8FF1262B011 /* Features */,
+				4D34FA12CE697024EC788ABE /* Migration */,
 				8B7BD8AE65C3322C3A4664E5 /* Shared */,
 			);
 			path = Equilibrium;
@@ -266,6 +289,14 @@
 				B7DCFD43CC8459B474AA2C0B /* StandaloneIntervalTimer.swift */,
 			);
 			path = Timer;
+			sourceTree = "<group>";
+		};
+		4D34FA12CE697024EC788ABE /* Migration */ = {
+			isa = PBXGroup;
+			children = (
+				0E02E917B98274EDEA0A98DB /* LegacyImport */,
+			);
+			path = Migration;
 			sourceTree = "<group>";
 		};
 		553F52DB046AE4241529AB9F /* WorkoutImport */ = {
@@ -510,6 +541,7 @@
 				E5EC0DBA56E115865A102F2D /* ProductCorrectionProgressionTimerTests.swift in Sources */,
 				AA9D9730E3611E64D78BE8EE /* ProductModelCorrection2Tests.swift in Sources */,
 				A53D55C4F1C63FEFB5CA8954 /* ProgressionTimerTests.swift in Sources */,
+				44F4F881EB1BC81BAF29BBD2 /* RNLegacyImportTests.swift in Sources */,
 				B1E1416806976AFB5A7ACC11 /* TestSupport.swift in Sources */,
 				43E6D221A88C306496986931 /* WorkoutCreationPhase3ATests.swift in Sources */,
 				799695E4B0E454D0AC4E60E3 /* WorkoutExecutionPhase2Tests.swift in Sources */,
@@ -538,6 +570,10 @@
 				9A63612FAEB97A31E6436EC5 /* PersistenceRecords.swift in Sources */,
 				E2316EBB45FCED41C491F127 /* ProgressionEngine.swift in Sources */,
 				E0FCE8635E65BF972197E2B5 /* ProgressionSettingsBackup.swift in Sources */,
+				5034261EF23E8084DEA5577C /* RNLegacyDTOs.swift in Sources */,
+				16B70C02602FD495562624C9 /* RNLegacyImporter.swift in Sources */,
+				759CB5E87359C051AFE8C1E8 /* RNLegacyPayloadDecoder.swift in Sources */,
+				2D632C17DE4DC8249142E864 /* RNLegacyTransformer.swift in Sources */,
 				3F938F45B4B3482C3640F089 /* RepositoryProtocols.swift in Sources */,
 				25CDD6B9A1488793878B9CC2 /* SettingsViews.swift in Sources */,
 				063EBABF6B916CAD52811F07 /* StandaloneIntervalTimer.swift in Sources */,

@@ -1,9 +1,11 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct SettingsShellView: View {
     let settingsRepository: any SettingsRepository
     let progressionRepository: any ProgressionRepository
     let exerciseRepository: any ExerciseRepository
+    let legacyImporter: RNLegacyImporter?
     var body: some View {
         List {
             Section {
@@ -12,7 +14,36 @@ struct SettingsShellView: View {
                 NavigationLink("Progression") { ProgressionSettingView(repository: progressionRepository, settings: settingsRepository, exercises: exerciseRepository) }
             }
             Section { NavigationLink("Account / Cloud Backup") { ContentUnavailableView("Account / Cloud Backup", systemImage: "hammer", description: Text("This setting arrives in a later phase.")) } }
+            if let legacyImporter { Section("Migration") { NavigationLink("Import React Native backup") { RNLegacyImportView(importer: legacyImporter) } } }
         }.scrollContentBackground(.hidden).background(EQColor.canvas).navigationTitle("Settings").preferredColorScheme(.dark)
+    }
+}
+
+private struct RNLegacyImportView: View {
+    let importer: RNLegacyImporter
+    @State private var presentsImporter = false
+    @State private var resultMessage: String?
+    @State private var isError = false
+    var body: some View {
+        Form {
+            Section {
+                Text("Choose a JSON backup exported from the frozen React Native Equilibrium app. Import is local and never deletes the source file.")
+                    .font(EQTypography.body)
+                Button("Choose backup file") { presentsImporter = true }
+            }
+            if let resultMessage { Section { Text(resultMessage).foregroundStyle(isError ? EQColor.warning : EQColor.success) } }
+        }
+        .navigationTitle("Import Legacy Data")
+        .fileImporter(isPresented: $presentsImporter, allowedContentTypes: [.json]) { selection in
+            do {
+                let url = try selection.get(); let scoped = url.startAccessingSecurityScopedResource(); defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+                let result = try importer.importFileData(Data(contentsOf: url))
+                resultMessage = "Imported \(result.workoutsImported) workouts, \(result.exercisesImported) exercises, and \(result.timersImported) timers. Skipped malformed workouts: \(result.skippedMalformed)."
+                isError = false
+            } catch {
+                resultMessage = error.localizedDescription; isError = true
+            }
+        }
     }
 }
 
