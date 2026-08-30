@@ -55,7 +55,7 @@ struct StandaloneTimerFormView: View {
             Section("Exercise") { Stepper("Move for: \(format(move))", value: $move, in: 5...120, step: 5); Stepper("Rest after each exercise: \(format(exerciseRest))", value: $exerciseRest, in: 5...120, step: 5) }
             Section("Round") { Stepper("Exercises in a round: \(exercises)", value: $exercises, in: 1...20); Stepper("Rounds: \(rounds)", value: $rounds, in: 1...10); Stepper("Rest between rounds: \(format(roundRest))", value: $roundRest, in: 5...180, step: 5) }
             Button(configuration == nil ? "Create Timer" : "Save Changes") {
-                let value = StandaloneTimerConfiguration(id: configuration?.id ?? UUID().uuidString.lowercased(), name: name.trimmingCharacters(in: .whitespacesAndNewlines), moveDuration: Double(move), exerciseRestDuration: Double(exerciseRest), exercisesPerRound: exercises, rounds: rounds, roundRestDuration: Double(roundRest), createdAt: configuration?.createdAt ?? .now)
+                let value = StandaloneTimerConfiguration(id: configuration?.id ?? UUID().uuidString.lowercased(), name: name.trimmingCharacters(in: .whitespacesAndNewlines), moveDuration: Double(move), exerciseRestDuration: Double(exerciseRest), exercisesPerRound: exercises, rounds: rounds, roundRestDuration: Double(roundRest), createdAt: configuration?.createdAt ?? .now, updatedAt: .now)
                 guard value.isValid else { return }; store.save(value)
                 didSave(value)
             }.disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)

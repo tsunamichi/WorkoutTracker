@@ -62,18 +62,19 @@ final class ProgressionTimerTests: XCTestCase {
     @MainActor func testConfigurationPersistsAndBackupRoundTrips() async throws {
         let container = try PersistenceController.makeContainer(inMemory: true)
         let repository = SwiftDataRepository(container: container)
-        let group = ProgressionGroup(id: .init(rawValue: "group"), name: "Pulls", parameters: parameters(.weightOnly), exerciseIDs: [exerciseID])
-        let configuration = ProgressionConfiguration(isEnabled: true, defaults: parameters(), groups: [group], overrides: [.init(exerciseID: .init(rawValue: "other"), parameters: parameters(.disabled))])
+        let configuration = ProgressionConfiguration(isEnabled: true, defaults: parameters(), groups: [], overrides: [], assignments: [exerciseID: .upper])
         try await repository.saveProgressionConfiguration(configuration)
         var settings = try await repository.settings(); settings.defaultRestDuration = 75; settings.weightUnit = .kilograms; try await repository.saveSettings(settings)
         let loadedConfiguration = try await repository.progressionConfiguration()
-        XCTAssertEqual(loadedConfiguration, configuration)
+        XCTAssertEqual(loadedConfiguration.assignments, configuration.assignments)
+        XCTAssertEqual(loadedConfiguration.isEnabled, configuration.isEnabled)
+        XCTAssertTrue(loadedConfiguration.groups.isEmpty); XCTAssertTrue(loadedConfiguration.overrides.isEmpty)
         let backup = try await repository.exportBackup(exportedAt: .now, sourceDeviceID: "test")
-        XCTAssertEqual(backup.progression, configuration); XCTAssertEqual(backup.settings, settings)
+        XCTAssertEqual(backup.progression.assignments, configuration.assignments); XCTAssertEqual(backup.settings, settings)
         let restoredContainer = try PersistenceController.makeContainer(inMemory: true)
         let restored = SwiftDataRepository(container: restoredContainer); try await restored.restoreBackup(backup)
         let restoredConfiguration = try await restored.progressionConfiguration(), restoredSettings = try await restored.settings()
-        XCTAssertEqual(restoredConfiguration, configuration); XCTAssertEqual(restoredSettings, settings)
+        XCTAssertEqual(restoredConfiguration.assignments, configuration.assignments); XCTAssertEqual(restoredSettings, settings)
     }
 
     @MainActor func testInvalidConfigurationIsRejected() async throws {
@@ -87,17 +88,17 @@ final class ProgressionTimerTests: XCTestCase {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         let url = directory.appendingPathComponent("configuration.store")
-        let configuration = ProgressionConfiguration(isEnabled: true, defaults: parameters(increment: Weight(2.5, unit: .kilograms).pounds), groups: [], overrides: [])
+        let configuration = ProgressionConfiguration(isEnabled: true, defaults: parameters(increment: Weight(2.5, unit: .kilograms).pounds), groups: [], overrides: [], assignments: [exerciseID: .lower])
         do {
             let repository = SwiftDataRepository(container: try PersistenceController.makeContainer(storageURL: url))
             try await repository.saveProgressionConfiguration(configuration)
         }
         let recreated = SwiftDataRepository(container: try PersistenceController.makeContainer(storageURL: url))
         let loaded = try await recreated.progressionConfiguration()
-        XCTAssertEqual(loaded, configuration)
-        XCTAssertEqual(loaded.defaults.weightIncrement.value(in: .kilograms), 2.5, accuracy: 0.000_001)
-        let result = ProgressionEngine.calculate(exerciseID: exerciseID, parameters: loaded.defaults, sets: logs([12, 12]))
-        XCTAssertEqual(try XCTUnwrap(result?.suggestedWeight?.pounds), 100 + configuration.defaults.weightIncrement.pounds, accuracy: 0.000_001)
+        XCTAssertEqual(loaded.assignments, configuration.assignments)
+        XCTAssertEqual(loaded.defaults, FixtureDefaults.progression.defaults)
+        let resolved = try XCTUnwrap(ProgressionRuleResolver.resolve(exerciseID: exerciseID, configuration: loaded))
+        XCTAssertEqual(resolved.parameters, AutoProgressionProfile.lower.parameters)
     }
 
     @MainActor func testTimerStateMachineDeadlinePauseResumeResetCancelAndCompletionOnce() {

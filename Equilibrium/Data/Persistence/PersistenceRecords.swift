@@ -2,67 +2,100 @@ import Foundation
 import SwiftData
 
 @Model final class ExerciseDefinitionRecord {
-    @Attribute(.unique) var id: String
+    var id: String
     var name: String; var normalizedName: String; var aliases: [String]
     var equipment: String?; var category: String?; var isCustom: Bool; var archivedAt: Date?
-    init(id: String, name: String, normalizedName: String, aliases: [String], equipment: String?, category: String?, isCustom: Bool, archivedAt: Date?) {
+    var updatedAt: Date = Foundation.Date(timeIntervalSince1970: 0)
+    init(id: String, name: String, normalizedName: String, aliases: [String], equipment: String?, category: String?, isCustom: Bool, archivedAt: Date?, updatedAt: Date = .now) {
         self.id = id; self.name = name; self.normalizedName = normalizedName; self.aliases = aliases
-        self.equipment = equipment; self.category = category; self.isCustom = isCustom; self.archivedAt = archivedAt
+        self.equipment = equipment; self.category = category; self.isCustom = isCustom; self.archivedAt = archivedAt; self.updatedAt = updatedAt
     }
 }
 
 @Model final class WorkoutRecord {
-    @Attribute(.unique) var id: String
+    var id: String
     var titleSnapshot: String; var statusRaw: String
-    var startedAt: Date?; var completedAt: Date?; var createdAt: Date; var updatedAt: Date
-    @Relationship(deleteRule: .cascade, inverse: \WorkoutExerciseRecord.workout) var exercises: [WorkoutExerciseRecord]
-    init(id: String, titleSnapshot: String, statusRaw: String, startedAt: Date?, completedAt: Date?, createdAt: Date, updatedAt: Date, exercises: [WorkoutExerciseRecord]) {
+    var startedAt: Date?; var completedAt: Date?; var createdAt: Date; var updatedAt: Date = Foundation.Date(timeIntervalSince1970: 0)
+    @Relationship(deleteRule: .cascade, inverse: \WorkoutExerciseRecord.workout) var exercises: [WorkoutExerciseRecord]?
+    init(id: String, titleSnapshot: String, statusRaw: String, startedAt: Date?, completedAt: Date?, createdAt: Date, updatedAt: Date, exercises: [WorkoutExerciseRecord]?) {
         self.id = id; self.titleSnapshot = titleSnapshot; self.statusRaw = statusRaw; self.startedAt = startedAt; self.completedAt = completedAt
         self.createdAt = createdAt; self.updatedAt = updatedAt; self.exercises = exercises
     }
 }
 
 @Model final class WorkoutExerciseRecord {
-    @Attribute(.unique) var id: String
+    var id: String
     var exerciseID: String; var nameSnapshot: String; var position: Int; var restDuration: Double?; var skippedAt: Date?; var isTimeBased: Bool = false; var isTwoSided: Bool = false
+    var updatedAt: Date = Foundation.Date(timeIntervalSince1970: 0)
     var workout: WorkoutRecord?
-    @Relationship(deleteRule: .cascade, inverse: \PrescriptionRecord.exercise) var prescriptions: [PrescriptionRecord]
-    @Relationship(deleteRule: .cascade, inverse: \LoggedSetRecord.exercise) var loggedSets: [LoggedSetRecord]
-    init(id: String, exerciseID: String, nameSnapshot: String, position: Int, restDuration: Double?, skippedAt: Date?, isTimeBased: Bool = false, isTwoSided: Bool = false, prescriptions: [PrescriptionRecord], loggedSets: [LoggedSetRecord]) {
-        self.id = id; self.exerciseID = exerciseID; self.nameSnapshot = nameSnapshot; self.position = position; self.restDuration = restDuration; self.skippedAt = skippedAt; self.isTimeBased = isTimeBased; self.isTwoSided = isTwoSided
+    @Relationship(deleteRule: .cascade, inverse: \PrescriptionRecord.exercise) var prescriptions: [PrescriptionRecord]?
+    @Relationship(deleteRule: .cascade, inverse: \LoggedSetRecord.exercise) var loggedSets: [LoggedSetRecord]?
+    init(id: String, exerciseID: String, nameSnapshot: String, position: Int, restDuration: Double?, skippedAt: Date?, isTimeBased: Bool = false, isTwoSided: Bool = false, updatedAt: Date = .now, prescriptions: [PrescriptionRecord]?, loggedSets: [LoggedSetRecord]?) {
+        self.id = id; self.exerciseID = exerciseID; self.nameSnapshot = nameSnapshot; self.position = position; self.restDuration = restDuration; self.skippedAt = skippedAt; self.isTimeBased = isTimeBased; self.isTwoSided = isTwoSided; self.updatedAt = updatedAt
         self.prescriptions = prescriptions; self.loggedSets = loggedSets
     }
 }
 
 @Model final class PrescriptionRecord {
-    @Attribute(.unique) var id: String
+    var id: String
     var position: Int; var targetKind: String; var lowerRepetitions: Int?; var upperRepetitions: Int?; var duration: Double?; var suggestedPounds: Double?
+    var updatedAt: Date = Foundation.Date(timeIntervalSince1970: 0)
     var exercise: WorkoutExerciseRecord?
-    init(id: String, position: Int, targetKind: String, lowerRepetitions: Int?, upperRepetitions: Int?, duration: Double?, suggestedPounds: Double?) {
-        self.id = id; self.position = position; self.targetKind = targetKind; self.lowerRepetitions = lowerRepetitions; self.upperRepetitions = upperRepetitions; self.duration = duration; self.suggestedPounds = suggestedPounds
+    init(id: String, position: Int, targetKind: String, lowerRepetitions: Int?, upperRepetitions: Int?, duration: Double?, suggestedPounds: Double?, updatedAt: Date = .now) {
+        self.id = id; self.position = position; self.targetKind = targetKind; self.lowerRepetitions = lowerRepetitions; self.upperRepetitions = upperRepetitions; self.duration = duration; self.suggestedPounds = suggestedPounds; self.updatedAt = updatedAt
     }
 }
 
 @Model final class LoggedSetRecord {
-    @Attribute(.unique) var id: String
+    var id: String
     var prescriptionID: String?; var position: Int; var pounds: Double?; var repetitions: Int?; var duration: Double?; var completedAt: Date?
+    var updatedAt: Date = Foundation.Date(timeIntervalSince1970: 0)
     var exercise: WorkoutExerciseRecord?
-    init(id: String, prescriptionID: String?, position: Int, pounds: Double?, repetitions: Int?, duration: Double?, completedAt: Date?) {
-        self.id = id; self.prescriptionID = prescriptionID; self.position = position; self.pounds = pounds; self.repetitions = repetitions; self.duration = duration; self.completedAt = completedAt
+    init(id: String, prescriptionID: String?, position: Int, pounds: Double?, repetitions: Int?, duration: Double?, completedAt: Date?, updatedAt: Date = .now) {
+        self.id = id; self.prescriptionID = prescriptionID; self.position = position; self.pounds = pounds; self.repetitions = repetitions; self.duration = duration; self.completedAt = completedAt; self.updatedAt = updatedAt
     }
 }
 
 @Model final class BackupCollectionRecord {
-    @Attribute(.unique) var key: String
+    var key: String
     var payload: Data
-    init(key: String = "canonical-v1", payload: Data) { self.key = key; self.payload = payload }
+    var updatedAt: Date = Foundation.Date(timeIntervalSince1970: 0)
+    init(key: String = "canonical-v2", payload: Data, updatedAt: Date = .now) { self.key = key; self.payload = payload; self.updatedAt = updatedAt }
 }
 
+@Model final class SettingValueRecord {
+    var key: String
+    var value: String
+    var updatedAt: Date
+    init(key: String, value: String, updatedAt: Date = .now) { self.key = key; self.value = value; self.updatedAt = updatedAt }
+}
+
+// Read-only compatibility bridge for pre-release stores. New configuration
+// writes use granular SettingValueRecord and ProgressionAssignmentRecord rows.
 @Model final class AppConfigurationRecord {
-    @Attribute(.unique) var key: String
+    var key: String
     var settingsPayload: Data
     var progressionPayload: Data
     init(key: String = "app-configuration", settingsPayload: Data, progressionPayload: Data) {
         self.key = key; self.settingsPayload = settingsPayload; self.progressionPayload = progressionPayload
+    }
+}
+
+@Model final class ProgressionAssignmentRecord {
+    var exerciseID: String
+    var profileRaw: String
+    var updatedAt: Date
+    init(exerciseID: String, profileRaw: String, updatedAt: Date = .now) { self.exerciseID = exerciseID; self.profileRaw = profileRaw; self.updatedAt = updatedAt }
+}
+
+@Model final class StandaloneTimerConfigurationRecord {
+    var id: String
+    var name: String
+    var moveDuration: Double; var exerciseRestDuration: Double
+    var exercisesPerRound: Int; var rounds: Int; var roundRestDuration: Double
+    var createdAt: Date; var updatedAt: Date
+    init(id: String, name: String, moveDuration: Double, exerciseRestDuration: Double, exercisesPerRound: Int, rounds: Int, roundRestDuration: Double, createdAt: Date, updatedAt: Date) {
+        self.id = id; self.name = name; self.moveDuration = moveDuration; self.exerciseRestDuration = exerciseRestDuration
+        self.exercisesPerRound = exercisesPerRound; self.rounds = rounds; self.roundRestDuration = roundRestDuration; self.createdAt = createdAt; self.updatedAt = updatedAt
     }
 }

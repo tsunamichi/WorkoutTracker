@@ -13,6 +13,7 @@
 		15ED3206DAC1E9B4CFD15505 /* BackupTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B95F758DA5D9FFC871964924 /* BackupTests.swift */; };
 		1AB6FE787819CF6F8383318C /* EquilibriumFixtures.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAEC6B830776032B8055E925 /* EquilibriumFixtures.swift */; };
 		25CDD6B9A1488793878B9CC2 /* SettingsViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = C5B2E9347C1FFE9B656A8420 /* SettingsViews.swift */; };
+		37C99B2DD213294EE53EBCF0 /* CloudKitReadinessPersistenceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1F195843562F172FAB98EE74 /* CloudKitReadinessPersistenceTests.swift */; };
 		38BF3AA040AD02258CDA6FB1 /* DomainValidation.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1EA8773328FB592C0A68093 /* DomainValidation.swift */; };
 		3A9ECFA084F527CE94193D95 /* Phase4FinalCorrectionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3A6DC27E813FBDB848D3755D /* Phase4FinalCorrectionTests.swift */; };
 		3C4AECDE6038E21CEE2489C5 /* WorkoutShareText.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03473FDD21C1CCF68C84BD81 /* WorkoutShareText.swift */; };
@@ -77,6 +78,7 @@
 		0FB1CF4871442A9595BCA2C8 /* WorkoutCreationViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkoutCreationViews.swift; sourceTree = "<group>"; };
 		141939A1C8633C9BDFAAED86 /* HistoryPerformancePhase4Tests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoryPerformancePhase4Tests.swift; sourceTree = "<group>"; };
 		143464D458EF033494C851B9 /* DesignTokens.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesignTokens.swift; sourceTree = "<group>"; };
+		1F195843562F172FAB98EE74 /* CloudKitReadinessPersistenceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudKitReadinessPersistenceTests.swift; sourceTree = "<group>"; };
 		2169195BB579B42DD89188E8 /* ProgressionTimerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProgressionTimerTests.swift; sourceTree = "<group>"; };
 		2308BA103AA490F7217C83A1 /* Equilibrium.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Equilibrium.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		2EC9A5F31CB59C7DBC582BCA /* ProductCorrectionProgressionTimerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProductCorrectionProgressionTimerTests.swift; sourceTree = "<group>"; };
@@ -184,6 +186,7 @@
 			isa = PBXGroup;
 			children = (
 				B95F758DA5D9FFC871964924 /* BackupTests.swift */,
+				1F195843562F172FAB98EE74 /* CloudKitReadinessPersistenceTests.swift */,
 				6053E003FFA1884518E84211 /* DomainFoundationTests.swift */,
 				141939A1C8633C9BDFAAED86 /* HistoryPerformancePhase4Tests.swift */,
 				3DA997724AE63FFC5DBD32D4 /* HomeQueueTests.swift */,
@@ -498,6 +501,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				15ED3206DAC1E9B4CFD15505 /* BackupTests.swift in Sources */,
+				37C99B2DD213294EE53EBCF0 /* CloudKitReadinessPersistenceTests.swift in Sources */,
 				77FC569B7C086E9DCF4EA7AD /* DomainFoundationTests.swift in Sources */,
 				445489AF18781FE3AD1F754D /* HistoryPerformancePhase4Tests.swift in Sources */,
 				0D9CA2DBEEBF22EA4E2FA504 /* HomeQueueTests.swift in Sources */,

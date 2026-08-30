@@ -43,7 +43,6 @@ struct WorkoutBuilderView: View {
     @State private var pickerPresented = false
     @State private var discardPresented = false
     @Environment(\.dismiss) private var dismiss
-    @AppStorage(EQPreferenceKey.weightUnit) private var unitRaw = WeightUnit.pounds.rawValue
     var body: some View {
         @Bindable var model = model
         Form {

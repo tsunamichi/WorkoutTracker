@@ -18,9 +18,9 @@ struct WorkoutHistoryView: View {
     @State private var model: WorkoutHistoryModel
     let workoutRepository: any WorkoutRepository
     let historyRepository: any ExerciseHistoryRepository
-    @AppStorage(EQPreferenceKey.weightUnit) private var unitRaw = WeightUnit.pounds.rawValue
-    init(repository: any WorkoutRepository, historyRepository: any ExerciseHistoryRepository) {
-        _model = State(initialValue: WorkoutHistoryModel(repository: repository)); self.workoutRepository = repository; self.historyRepository = historyRepository
+    let unit: WeightUnit
+    init(repository: any WorkoutRepository, historyRepository: any ExerciseHistoryRepository, weightUnit: WeightUnit = .pounds) {
+        _model = State(initialValue: WorkoutHistoryModel(repository: repository)); self.workoutRepository = repository; self.historyRepository = historyRepository; unit = weightUnit
     }
     var body: some View {
         Group {
@@ -37,7 +37,6 @@ struct WorkoutHistoryView: View {
         .overlay { if let message = model.errorMessage { ContentUnavailableView("History unavailable", systemImage: "exclamationmark.triangle", description: Text(message)) } }
         .background(EQColor.canvas).navigationTitle("Workout History").task { await model.load() }
     }
-    private var unit: WeightUnit { WeightUnit(rawValue: unitRaw) ?? .pounds }
 }
 
 private struct WorkoutHistoryRow: View {

@@ -17,7 +17,6 @@ enum EQRadius { static let compact: CGFloat = 8; static let control: CGFloat = 1
 enum EQTypography { static let display: Font = .largeTitle.bold(); static let title: Font = .title.bold(); static let sectionTitle: Font = .title2.weight(.semibold); static let cardHero: Font = .title.bold(); static let cardTitle: Font = .headline; static let exerciseTitle: Font = .title3.weight(.semibold); static let metric: Font = .system(.largeTitle, design: .rounded, weight: .bold); static let body: Font = .body; static let caption: Font = .caption }
 enum EQDimension { static let minimumTouch: CGFloat = 44; static let inputHeight: CGFloat = 48; static let workoutCardHeight: CGFloat = 300; static let restCardHeight: CGFloat = 180 }
 enum EQMotion { static let standard: Double = 0.25; static let completion: Double = 0.35 }
-enum EQPreferenceKey { static let weightUnit = "equilibrium.weight-unit" }
 
 struct EQCardModifier: ViewModifier {
     var elevated = false

@@ -10,8 +10,10 @@ public struct StandaloneTimerConfiguration: Identifiable, Codable, Hashable, Sen
     public var rounds: Int
     public var roundRestDuration: TimeInterval
     public var createdAt: Date
-    public init(id: String = UUID().uuidString.lowercased(), name: String, moveDuration: TimeInterval = 30, exerciseRestDuration: TimeInterval = 30, exercisesPerRound: Int = 3, rounds: Int = 1, roundRestDuration: TimeInterval = 30, createdAt: Date = .now) {
+    public var updatedAt: Date
+    public init(id: String = UUID().uuidString.lowercased(), name: String, moveDuration: TimeInterval = 30, exerciseRestDuration: TimeInterval = 30, exercisesPerRound: Int = 3, rounds: Int = 1, roundRestDuration: TimeInterval = 30, createdAt: Date = .now, updatedAt: Date? = nil) {
         self.id = id; self.name = name; self.moveDuration = moveDuration; self.exerciseRestDuration = exerciseRestDuration; self.exercisesPerRound = exercisesPerRound; self.rounds = rounds; self.roundRestDuration = roundRestDuration; self.createdAt = createdAt
+        self.updatedAt = updatedAt ?? createdAt
     }
     public var isValid: Bool {
         !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && Self.valid(moveDuration, range: 5...120) && Self.valid(exerciseRestDuration, range: 5...120) && (1...20).contains(exercisesPerRound) && (1...10).contains(rounds) && Self.valid(roundRestDuration, range: 5...180)
@@ -101,4 +103,24 @@ public final class StandaloneIntervalTimer {
     public func configurations() -> [StandaloneTimerConfiguration] { (try? JSONDecoder().decode([StandaloneTimerConfiguration].self, from: defaults.data(forKey: key) ?? Data())) ?? [] }
     public func save(_ configuration: StandaloneTimerConfiguration) { var values = configurations(); values.removeAll { $0.id == configuration.id }; values.append(configuration); defaults.set(try? JSONEncoder().encode(values), forKey: key) }
     public func delete(id: String) { defaults.set(try? JSONEncoder().encode(configurations().filter { $0.id != id }), forKey: key) }
+}
+
+@MainActor public final class SwiftDataStandaloneTimerStore: StandaloneTimerConfigurationStore {
+    private let repository: SwiftDataRepository
+    private let defaults: UserDefaults
+    private let legacyKey: String
+    private let migrationKey: String
+    public init(repository: SwiftDataRepository, defaults: UserDefaults = .standard, legacyKey: String = "standalone-timer-configurations-v1", migrationKey: String = "standalone-timer-configurations-swiftdata-migrated-v1") {
+        self.repository = repository; self.defaults = defaults; self.legacyKey = legacyKey; self.migrationKey = migrationKey
+        migrateLegacyIfNeeded()
+    }
+    public func configurations() -> [StandaloneTimerConfiguration] { (try? repository.timerConfigurations()) ?? [] }
+    public func save(_ configuration: StandaloneTimerConfiguration) { try? repository.saveTimerConfiguration(configuration) }
+    public func delete(id: String) { try? repository.deleteTimerConfiguration(id: id) }
+    private func migrateLegacyIfNeeded() {
+        guard !defaults.bool(forKey: migrationKey) else { return }
+        let legacy = (try? JSONDecoder().decode([StandaloneTimerConfiguration].self, from: defaults.data(forKey: legacyKey) ?? Data())) ?? []
+        for configuration in legacy { try? repository.saveTimerConfiguration(configuration) }
+        defaults.set(true, forKey: migrationKey)
+    }
 }

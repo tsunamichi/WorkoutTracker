@@ -19,14 +19,13 @@ struct SettingsShellView: View {
 private struct UnitsSettingView: View {
     let repository: any SettingsRepository
     @State private var unit = WeightUnit.pounds
-    @AppStorage(EQPreferenceKey.weightUnit) private var unitRaw = WeightUnit.pounds.rawValue
     var body: some View {
         Form {
             Picker("Weight unit", selection: $unit) { Text("Pounds (lb)").tag(WeightUnit.pounds); Text("Kilograms (kg)").tag(WeightUnit.kilograms) }.pickerStyle(.inline)
             Section { Text("Workout entries and progression increments use this unit for presentation. Canonical weight remains pounds.").font(EQTypography.caption).foregroundStyle(EQColor.secondaryText) }
         }.scrollContentBackground(.hidden).background(EQColor.canvas).navigationTitle("Units")
-            .task { if let settings = try? await repository.settings() { unit = settings.weightUnit; unitRaw = settings.weightUnit.rawValue } }
-            .onChange(of: unit) { _, value in unitRaw = value.rawValue; Task { if var settings = try? await repository.settings() { settings.weightUnit = value; try? await repository.saveSettings(settings) } } }
+            .task { if let settings = try? await repository.settings() { unit = settings.weightUnit } }
+            .onChange(of: unit) { _, value in Task { if var settings = try? await repository.settings() { settings.weightUnit = value; try? await repository.saveSettings(settings) } } }
     }
 }
 

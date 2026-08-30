@@ -14,7 +14,7 @@ struct HomeView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     init(repository: any WorkoutRepository, exerciseRepository: (any ExerciseRepository)? = nil, historyRepository: (any ExerciseHistoryRepository)? = nil, settingsRepository: (any SettingsRepository)? = nil, progressionRepository: (any ProgressionRepository)? = nil, timerStore: (any StandaloneTimerConfigurationStore)? = nil) {
         self.repository = repository
-        self.timerStore = timerStore ?? UserDefaultsStandaloneTimerStore()
+        self.timerStore = timerStore ?? (repository as? SwiftDataRepository).map { SwiftDataStandaloneTimerStore(repository: $0) } ?? UserDefaultsStandaloneTimerStore()
         guard let shared = repository as? SwiftDataRepository else {
             precondition(exerciseRepository != nil && historyRepository != nil && settingsRepository != nil && progressionRepository != nil, "Feature repositories are required")
             self.exerciseRepository = exerciseRepository!; self.historyRepository = historyRepository!
@@ -48,6 +48,11 @@ struct HomeView: View {
                 }
             }
             .task { await model.load(); if let settings = try? await settingsRepository.settings() { appSettings = settings } }
+            .task {
+                for await _ in NotificationCenter.default.notifications(named: .equilibriumSettingsDidChange) {
+                    if let settings = try? await settingsRepository.settings() { appSettings = settings }
+                }
+            }
         }.tint(EQColor.accent)
     }
 
@@ -109,7 +114,7 @@ struct HomeView: View {
                 .onDisappear { Task { await model.load() } }
                 .modifier(HomeZoomModifier(id: id.rawValue, namespace: workoutTransition, reduceMotion: reduceMotion))
         case .settings: SettingsShellView(settingsRepository: settingsRepository, progressionRepository: progressionRepository, exerciseRepository: exerciseRepository).onDisappear { Task { if let settings = try? await settingsRepository.settings() { appSettings = settings } } }
-        case .history: WorkoutHistoryView(repository: repository, historyRepository: historyRepository)
+        case .history: WorkoutHistoryView(repository: repository, historyRepository: historyRepository, weightUnit: appSettings.weightUnit)
         case .timer: StandaloneTimerView(store: timerStore, path: $path)
         case .timerCreate:
             StandaloneTimerFormView(store: timerStore) { created in path = StandaloneTimerNavigationPolicy.replacingCreation(in: path, withRunID: created.id) }

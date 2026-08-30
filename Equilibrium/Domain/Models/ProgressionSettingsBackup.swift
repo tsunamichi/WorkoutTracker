@@ -48,10 +48,17 @@ public struct EquilibriumBackupV2: Codable, Sendable {
     public let schemaVersion: Int; public let exportedAt: Date; public let sourceDeviceID: String
     public let exercises: [ExerciseDefinition]; public let workouts: [Workout]
     public let settings: AppSettings; public let progression: ProgressionConfiguration
-    public init(schemaVersion: Int = 2, exportedAt: Date, sourceDeviceID: String, exercises: [ExerciseDefinition], workouts: [Workout], settings: AppSettings, progression: ProgressionConfiguration) throws {
+    public let timers: [StandaloneTimerConfiguration]
+    public init(schemaVersion: Int = 2, exportedAt: Date, sourceDeviceID: String, exercises: [ExerciseDefinition], workouts: [Workout], settings: AppSettings, progression: ProgressionConfiguration, timers: [StandaloneTimerConfiguration] = []) throws {
         guard schemaVersion == 2 else { throw BackupError.unsupportedSchemaVersion(schemaVersion) }
         self.schemaVersion = schemaVersion; self.exportedAt = exportedAt; self.sourceDeviceID = sourceDeviceID; self.exercises = exercises
-        self.workouts = workouts; self.settings = settings; self.progression = progression
+        self.workouts = workouts; self.settings = settings; self.progression = progression; self.timers = timers
+    }
+    private enum CodingKeys: String, CodingKey { case schemaVersion, exportedAt, sourceDeviceID, exercises, workouts, settings, progression, timers }
+    public init(from decoder: Decoder) throws {
+        let box = try decoder.container(keyedBy: CodingKeys.self)
+        schemaVersion = try box.decode(Int.self, forKey: .schemaVersion); exportedAt = try box.decode(Date.self, forKey: .exportedAt); sourceDeviceID = try box.decode(String.self, forKey: .sourceDeviceID)
+        exercises = try box.decode([ExerciseDefinition].self, forKey: .exercises); workouts = try box.decode([Workout].self, forKey: .workouts); settings = try box.decode(AppSettings.self, forKey: .settings); progression = try box.decode(ProgressionConfiguration.self, forKey: .progression); timers = try box.decodeIfPresent([StandaloneTimerConfiguration].self, forKey: .timers) ?? []
     }
 }
 public enum BackupError: Error, Equatable { case unsupportedSchemaVersion(Int), invalidPayload }
