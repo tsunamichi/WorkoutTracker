@@ -16,10 +16,11 @@ final class WorkoutHistoryModel {
 
 struct WorkoutHistoryView: View {
     @State private var model: WorkoutHistoryModel
+    let workoutRepository: any WorkoutRepository
     let historyRepository: any ExerciseHistoryRepository
     @AppStorage(EQPreferenceKey.weightUnit) private var unitRaw = WeightUnit.pounds.rawValue
     init(repository: any WorkoutRepository, historyRepository: any ExerciseHistoryRepository) {
-        _model = State(initialValue: WorkoutHistoryModel(repository: repository)); self.historyRepository = historyRepository
+        _model = State(initialValue: WorkoutHistoryModel(repository: repository)); self.workoutRepository = repository; self.historyRepository = historyRepository
     }
     var body: some View {
         Group {
@@ -28,7 +29,7 @@ struct WorkoutHistoryView: View {
             } else {
                 List(model.workouts) { workout in
                     NavigationLink {
-                        CompletedWorkoutDetailView(workout: workout, historyRepository: historyRepository, weightUnit: unit)
+                        CompletedWorkoutDetailView(workout: workout, repository: workoutRepository, historyRepository: historyRepository, weightUnit: unit)
                     } label: { WorkoutHistoryRow(workout: workout) }
                 }.listStyle(.plain).scrollContentBackground(.hidden)
             }
@@ -55,16 +56,21 @@ private struct WorkoutHistoryRow: View {
 }
 
 struct CompletedWorkoutDetailView: View {
-    let workout: Workout
+    @State private var workout: Workout
+    let repository: any WorkoutRepository
     let historyRepository: any ExerciseHistoryRepository
     let weightUnit: WeightUnit
+    @State private var editTarget: CompletedSetEditTarget?
+    init(workout: Workout, repository: any WorkoutRepository, historyRepository: any ExerciseHistoryRepository, weightUnit: WeightUnit) {
+        _workout = State(initialValue: workout); self.repository = repository; self.historyRepository = historyRepository; self.weightUnit = weightUnit
+    }
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: EQSpacing.lg) {
                 VStack(alignment: .leading, spacing: EQSpacing.xs) {
                     Text(workout.titleSnapshot).font(EQTypography.title)
                     Text(HistoryDateText.full(WorkoutHistoryQuery.completionDate(workout))).foregroundStyle(EQColor.secondaryText)
-                    Label("Completed · Read-only", systemImage: "lock.fill").font(EQTypography.caption).foregroundStyle(EQColor.success)
+                    Label("Completed", systemImage: "checkmark.circle.fill").font(EQTypography.caption).foregroundStyle(EQColor.success)
                 }
                 ForEach(Array(workout.exercises.enumerated()), id: \.element.id) { index, exercise in
                     VStack(alignment: .leading, spacing: EQSpacing.sm) {
@@ -78,18 +84,73 @@ struct CompletedWorkoutDetailView: View {
                         let sets = ExercisePerformanceQuery.validCompletedSets(in: exercise)
                         if sets.isEmpty { Text("No completed working sets").foregroundStyle(EQColor.secondaryText) }
                         ForEach(Array(sets.enumerated()), id: \.element.id) { setIndex, set in
-                            Text("Set \(setIndex + 1) · \(setSummary(set))").font(EQTypography.body).accessibilityLabel("Set \(setIndex + 1), \(setSummary(set))")
+                            Button { if let prescriptionID = set.prescriptionID { editTarget = .init(exerciseID: exercise.id, prescriptionID: prescriptionID, setNumber: setIndex + 1, set: set) } } label: {
+                                HStack { Text("Set \(setIndex + 1) · \(setSummary(set))"); Spacer(); Image(systemName: "pencil") }
+                            }.buttonStyle(.plain).font(EQTypography.body).accessibilityLabel("Edit set \(setIndex + 1), \(setSummary(set))")
                         }
                     }.eqCard()
                 }
             }.padding(EQSpacing.md)
-        }.background(EQColor.canvas).navigationTitle("Completed Workout").navigationBarTitleDisplayMode(.inline)
+        }
+        .background(EQColor.canvas).navigationTitle("Completed Workout").navigationBarTitleDisplayMode(.inline)
+        .sheet(item: $editTarget) { target in
+            CompletedSetEditor(target: target, weightUnit: weightUnit) { input in
+                do { workout = try await repository.editCompletedSet(workoutID: workout.id, exerciseID: target.exerciseID, prescriptionID: target.prescriptionID, input: input, at: .now); return true }
+                catch { return false }
+            }
+        }
     }
     private func setSummary(_ set: LoggedSet) -> String {
-        if let duration = set.duration { return DurationText.format(duration) }
+        if let duration = set.duration {
+            let load = set.weight.map { " · \(WeightText.value($0, unit: weightUnit)) \(weightUnit == .pounds ? "lb" : "kg")" } ?? ""
+            return DurationText.format(duration) + load
+        }
         let reps = set.repetitions.map { "\($0) reps" } ?? "Repetitions unavailable"
         guard let weight = set.weight else { return reps + " · bodyweight" }
         return "\(WeightText.value(weight, unit: weightUnit)) \(weightUnit == .pounds ? "lb" : "kg") · \(reps)"
+    }
+}
+
+private struct CompletedSetEditTarget: Identifiable {
+    var id: SetID { prescriptionID }
+    let exerciseID: WorkoutExerciseID; let prescriptionID: SetID; let setNumber: Int; let set: LoggedSet
+}
+
+private struct CompletedSetEditor: View {
+    let target: CompletedSetEditTarget; let weightUnit: WeightUnit; let save: (SetLogInput) async -> Bool
+    @Environment(\.dismiss) private var dismiss
+    @State private var weight: String; @State private var value: String
+    init(target: CompletedSetEditTarget, weightUnit: WeightUnit, save: @escaping (SetLogInput) async -> Bool) {
+        self.target = target; self.weightUnit = weightUnit; self.save = save
+        _weight = State(initialValue: WeightText.value(target.set.weight, unit: weightUnit))
+        _value = State(initialValue: target.set.duration.map { String(Int($0.rounded())) } ?? target.set.repetitions.map(String.init) ?? "")
+    }
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("Values") {
+                    LabeledContent("Weight (\(weightUnit == .pounds ? "lb" : "kg"))") {
+                        TextField("0", text: $weight).keyboardType(.decimalPad).multilineTextAlignment(.trailing)
+                            .accessibilityLabel("Weight in \(weightUnit == .pounds ? "pounds" : "kilograms")")
+                    }
+                    LabeledContent(target.set.duration == nil ? "Reps" : "Seconds") {
+                        TextField("0", text: $value).keyboardType(.numberPad).multilineTextAlignment(.trailing)
+                            .accessibilityLabel(target.set.duration == nil ? "Reps" : "Seconds")
+                    }
+                }
+            }
+            .navigationTitle("Edit Set \(target.setNumber)")
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+                ToolbarItem(placement: .confirmationAction) { Button("Save") { commit() } }
+            }
+        }.presentationDetents([.medium])
+    }
+    private func commit() {
+        guard let number = Int(value), number > 0 else { return }
+        let load = WeightText.weight(from: weight, unit: weightUnit)
+        let input: SetLogInput = target.set.duration == nil ? .repetitions(weight: load, repetitions: number) : .duration(weight: load, seconds: TimeInterval(number))
+        Task { if await save(input) { dismiss() } }
     }
 }
 
@@ -152,12 +213,15 @@ struct ExercisePerformanceView: View {
     private func prText(_ record: ExercisePersonalRecord?) -> String {
         guard let record else { return "No PR yet" }
         switch record {
-        case .duration(let set): return DurationText.format(set.duration ?? 0)
+        case .duration(let set): return performanceSetText(set)
         case .repetitions(let set): return performanceSetText(set)
         }
     }
     private func performanceSetText(_ set: LoggedSet) -> String {
-        if let duration = set.duration { return DurationText.format(duration) }
+        if let duration = set.duration {
+            let load = set.weight.map { " · \(WeightText.value($0, unit: weightUnit)) \(weightUnit == .pounds ? "lb" : "kg")" } ?? ""
+            return DurationText.format(duration) + load
+        }
         let reps = "\(set.repetitions ?? 0) reps"
         guard let weight = set.weight else { return reps + " · bodyweight" }
         return "\(WeightText.value(weight, unit: weightUnit)) \(weightUnit == .pounds ? "lb" : "kg") × \(set.repetitions ?? 0)"

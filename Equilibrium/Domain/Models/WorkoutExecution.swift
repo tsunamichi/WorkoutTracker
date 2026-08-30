@@ -2,7 +2,7 @@ import Foundation
 
 public enum SetLogInput: Equatable, Sendable {
     case repetitions(weight: Weight?, repetitions: Int)
-    case duration(seconds: TimeInterval)
+    case duration(weight: Weight?, seconds: TimeInterval)
 }
 
 public enum ExerciseState: String, Equatable, Sendable {

@@ -23,13 +23,15 @@ struct WorkoutExecutionView: View {
             if let workout = model.workout { content(workout) }
             else if let error = model.errorMessage { ContentUnavailableView("Workout unavailable", systemImage: "exclamationmark.triangle", description: Text(error)) }
             else { ProgressView("Loading workout") }
-            if model.showsCompletion { completionOverlay }
         }
         .foregroundStyle(EQColor.primaryText)
         .navigationBarBackButtonHidden()
         .toolbar { workoutToolbar }
         .task { await model.activate() }
         .onChange(of: scenePhase) { _, phase in if phase == .active { model.refreshRest() } }
+        .onChange(of: model.didAutoComplete) { _, completed in
+            if completed { completionFeedback += 1; dismiss() }
+        }
         .sensoryFeedback(.success, trigger: completionFeedback)
         .alert("Reset workout?", isPresented: $confirmsReset) {
             Button("Cancel", role: .cancel) {}
@@ -61,13 +63,11 @@ struct WorkoutExecutionView: View {
                             Label("Share workout", systemImage: "square.and.arrow.up")
                         }
                     }
-                    Button("Mark as complete", systemImage: "checkmark.circle") { completeWorkout() }
-                        .disabled(!model.canComplete)
                     Button("Reset workout", systemImage: "arrow.counterclockwise", role: .destructive) { confirmsReset = true }
                     Button("Delete workout", systemImage: "trash", role: .destructive) { confirmsDelete = true }
                 }
                 .accessibilityLabel("Workout options")
-                .accessibilityHint(model.canComplete ? "Contains available workout actions" : "Workout completion becomes available after every required set is logged")
+                .accessibilityHint("Contains available workout actions")
             }
         }
     }
@@ -130,20 +130,23 @@ struct WorkoutExecutionView: View {
                 }
             }
             Group {
-                if let rest = model.restState {
+                if let work = model.workTimerState {
+                    WorkTimerView(state: work, timerState: model.timer.state, pauseResume: model.toggleWorkTimerPause, skip: model.skipWorkTimer)
+                } else if let rest = model.restState {
                     RestModeView(state: rest, skip: model.skipRest)
                 } else if let exercise = model.currentExercise, let prescription = model.currentPrescription {
-                    if let suggestion = model.suggestion(for: exercise) { ProgressionSuggestionView(suggestion: suggestion, unit: model.weightUnit) }
                     FocusedSetView(
                         exercise: exercise,
                         prescription: prescription,
+                        progression: model.suggestion(for: exercise),
                         selectedIndex: model.selectedSetIndex,
                         isReadOnly: model.isReadOnly,
                         weightUnit: model.weightUnit,
                         select: model.selectSet,
-                        log: { input in await model.log(exerciseID: exercise.id, prescriptionID: prescription.id, input: input) }
+                        log: { input in await model.log(exerciseID: exercise.id, prescriptionID: prescription.id, input: input) },
+                        startTimed: { input in model.startWorkTimer(exerciseID: exercise.id, prescriptionID: prescription.id, input: input) }
                     )
-                    .id("\(exercise.id.rawValue)-\(prescription.id.rawValue)")
+                    .id("\(exercise.id.rawValue)-\(prescription.id.rawValue)-\(model.progressionIdentity(for: exercise))")
                     if !model.isReadOnly {
                         HStack {
                             if !exercise.loggedSets.contains(where: { $0.prescriptionID == prescription.id && $0.completedAt != nil }) {
@@ -152,12 +155,15 @@ struct WorkoutExecutionView: View {
                         }.frame(minHeight: EQDimension.minimumTouch)
                     }
                 } else if let exercise = model.currentExercise, !model.isReadOnly {
-                    FirstSetView(exercise: exercise, weightUnit: model.weightUnit) { input in await model.logFirstSet(exerciseID: exercise.id, input: input) }
+                    FirstSetView(exercise: exercise, progression: model.suggestion(for: exercise), weightUnit: model.weightUnit) { input in
+                        if exercise.isTimeBased { await model.startFirstWorkTimer(exerciseID: exercise.id, input: input) }
+                        else { await model.logFirstSet(exerciseID: exercise.id, input: input) }
+                    }
                 } else {
                     Text(model.isReadOnly ? "Workout complete." : "Every required set is logged.").font(EQTypography.sectionTitle)
                 }
             }
-            if model.restState == nil, let exercise = model.currentExercise, !model.isReadOnly {
+            if model.restState == nil, model.workTimerState == nil, let exercise = model.currentExercise, !model.isReadOnly {
                 HStack {
                     Spacer()
                     Button("Add set", systemImage: "plus") { Task { await model.addSet(exerciseID: exercise.id) } }
@@ -171,18 +177,10 @@ struct WorkoutExecutionView: View {
                 } label: { Label("Previous performance", systemImage: "chart.xyaxis.line").frame(minHeight: EQDimension.minimumTouch) }
                 .accessibilityHint("Shows completed working sets, trend, and personal record")
             }
-            if model.canComplete {
-                Button { completeWorkout() } label: { Label("Complete workout", systemImage: "checkmark.circle.fill").frame(maxWidth: .infinity, minHeight: EQDimension.minimumTouch) }
-                    .buttonStyle(.borderedProminent).buttonBorderShape(.roundedRectangle(radius: EQRadius.control))
-            }
         }
         .eqCard(elevated: true)
         .padding(.horizontal, EQSpacing.md)
         .animation(reduceMotion ? nil : .easeInOut(duration: EQMotion.standard), value: model.restState != nil)
-    }
-
-    private func completeWorkout() {
-        Task { await model.complete(); if model.showsCompletion { completionFeedback += 1 } }
     }
 
     private func prescriptionSummary(_ exercise: WorkoutExercise) -> String {
@@ -201,21 +199,6 @@ struct WorkoutExecutionView: View {
         }
     }
 
-    private var completionOverlay: some View {
-        ZStack {
-            EQColor.canvas.opacity(0.96).ignoresSafeArea()
-            VStack(spacing: EQSpacing.lg) {
-                Image(systemName: "checkmark.circle.fill").font(.largeTitle).foregroundStyle(EQColor.success)
-                Text("Workout complete").font(EQTypography.title)
-                Text("Your sets are saved.").font(EQTypography.body).foregroundStyle(EQColor.secondaryText)
-                Button("Return to Home") { dismiss() }
-                    .buttonStyle(.borderedProminent).buttonBorderShape(.roundedRectangle(radius: EQRadius.control)).controlSize(.large)
-            }.padding(EQSpacing.xl)
-        }
-        .transition(reduceMotion ? .opacity : .scale.combined(with: .opacity))
-        .animation(reduceMotion ? nil : .easeOut(duration: EQMotion.completion), value: model.showsCompletion)
-        .accessibilityAddTraits(.isModal)
-    }
 }
 
 private struct RestDurationEditor: View {
@@ -245,17 +228,27 @@ private struct RestDurationEditor: View {
 }
 
 private struct FirstSetView: View {
-    let exercise: WorkoutExercise; let weightUnit: WeightUnit; let log: (SetLogInput) async -> Void
-    @State private var weight = ""; @State private var repetitions = ""
+    let exercise: WorkoutExercise; let progression: ProgressionSuggestion?; let weightUnit: WeightUnit; let log: (SetLogInput) async -> Void
+    @State private var weight: String
+    @State private var repetitions: String
+
+    init(exercise: WorkoutExercise, progression: ProgressionSuggestion?, weightUnit: WeightUnit, log: @escaping (SetLogInput) async -> Void) {
+        self.exercise = exercise
+        self.progression = progression
+        self.weightUnit = weightUnit
+        self.log = log
+        _weight = State(initialValue: WeightText.value(progression?.suggestedWeight, unit: weightUnit))
+        _repetitions = State(initialValue: progression?.targetRepetitions.map { String($0.lowerBound) } ?? "")
+    }
     var body: some View {
         VStack(alignment: .leading, spacing: EQSpacing.lg) {
             Text(exercise.nameSnapshot).font(EQTypography.exerciseTitle)
             Text("No previous working sets").font(EQTypography.caption).foregroundStyle(EQColor.secondaryText)
             HStack(spacing: EQSpacing.lg) {
-                HeroValueField(value: $weight, label: weightUnit == .pounds ? "lb" : "kg", accessibilityLabel: "Weight", keyboard: .decimalPad)
-                HeroValueField(value: $repetitions, label: "reps", accessibilityLabel: "Repetitions", keyboard: .numberPad)
+                HeroValueField(value: $weight, label: (weightUnit == .pounds ? "lb" : "kg") + (progression?.rationale == .increaseWeight ? " ↑" : ""), accessibilityLabel: "Weight", keyboard: .decimalPad)
+                HeroValueField(value: $repetitions, label: exercise.isTimeBased ? "seconds" : "reps" + (progression?.rationale == .addRepetitions ? " ↑" : ""), accessibilityLabel: exercise.isTimeBased ? "Seconds" : "Repetitions", keyboard: .numberPad)
             }
-            Button("Log first set") { guard let reps = Int(repetitions), reps > 0 else { return }; Task { await log(.repetitions(weight: WeightText.weight(from: weight, unit: weightUnit), repetitions: reps)) } }
+            Button(exercise.isTimeBased ? "Start Timer" : "Log first set") { guard let value = Int(repetitions), value > 0 else { return }; Task { await log(exercise.isTimeBased ? .duration(weight: WeightText.weight(from: weight, unit: weightUnit), seconds: TimeInterval(value)) : .repetitions(weight: WeightText.weight(from: weight, unit: weightUnit), repetitions: value)) } }
                 .frame(maxWidth: .infinity, minHeight: EQDimension.minimumTouch).buttonStyle(.borderedProminent).buttonBorderShape(.roundedRectangle(radius: EQRadius.control))
         }
     }
@@ -281,22 +274,26 @@ private struct ExerciseListRow: View {
 private struct FocusedSetView: View {
     let exercise: WorkoutExercise
     let prescription: SetPrescription
+    let progression: ProgressionSuggestion?
     let selectedIndex: Int
     let isReadOnly: Bool
     let weightUnit: WeightUnit
     let select: (Int) -> Void
     let log: (SetLogInput) async -> Void
+    let startTimed: (SetLogInput) -> Void
     @State private var weightText: String
     @State private var valueText: String
     @FocusState private var focusedField: Field?
     private enum Field { case weight, value }
 
-    init(exercise: WorkoutExercise, prescription: SetPrescription, selectedIndex: Int, isReadOnly: Bool, weightUnit: WeightUnit, select: @escaping (Int) -> Void, log: @escaping (SetLogInput) async -> Void) {
-        self.exercise = exercise; self.prescription = prescription; self.selectedIndex = selectedIndex; self.isReadOnly = isReadOnly; self.weightUnit = weightUnit; self.select = select; self.log = log
+    init(exercise: WorkoutExercise, prescription: SetPrescription, progression: ProgressionSuggestion?, selectedIndex: Int, isReadOnly: Bool, weightUnit: WeightUnit, select: @escaping (Int) -> Void, log: @escaping (SetLogInput) async -> Void, startTimed: @escaping (SetLogInput) -> Void) {
+        self.exercise = exercise; self.prescription = prescription; self.progression = progression; self.selectedIndex = selectedIndex; self.isReadOnly = isReadOnly; self.weightUnit = weightUnit; self.select = select; self.log = log; self.startTimed = startTimed
         let logged = exercise.loggedSets.first { $0.prescriptionID == prescription.id }
-        _weightText = State(initialValue: WeightText.value(logged?.weight ?? prescription.suggestedWeight, unit: weightUnit))
+        let hasLoggedPredecessor = exercise.prescriptions.prefix(selectedIndex).contains { preceding in exercise.loggedSets.contains { $0.prescriptionID == preceding.id && $0.completedAt != nil } }
+        let startingWeight = logged?.weight ?? (hasLoggedPredecessor ? prescription.suggestedWeight : progression?.suggestedWeight ?? prescription.suggestedWeight)
+        _weightText = State(initialValue: WeightText.value(startingWeight, unit: weightUnit))
         switch prescription.target {
-        case .repetitions(let range): _valueText = State(initialValue: logged?.repetitions.map(String.init) ?? String(range.lowerBound))
+        case .repetitions(let range): _valueText = State(initialValue: logged?.repetitions.map(String.init) ?? (hasLoggedPredecessor ? String(range.lowerBound) : progression?.targetRepetitions.map { String($0.lowerBound) } ?? String(range.lowerBound)))
         case .duration(let seconds): _valueText = State(initialValue: logged?.duration.map { String(Int($0)) } ?? String(Int(seconds)))
         }
     }
@@ -308,17 +305,15 @@ private struct FocusedSetView: View {
                 Text("Set \(selectedIndex + 1) of \(exercise.prescriptions.count)").font(EQTypography.caption).foregroundStyle(EQColor.secondaryText)
             }
             HStack(alignment: .bottom, spacing: EQSpacing.lg) {
-                if case .repetitions = prescription.target {
-                    HeroValueField(value: $weightText, label: weightUnit == .pounds ? "lb" : "kg", accessibilityLabel: "\(exercise.nameSnapshot), set \(selectedIndex + 1), weight", keyboard: .decimalPad)
-                        .focused($focusedField, equals: .weight)
-                }
-                HeroValueField(value: $valueText, label: valueLabel, accessibilityLabel: "\(exercise.nameSnapshot), set \(selectedIndex + 1), \(valueLabel)", keyboard: .numberPad)
+                HeroValueField(value: $weightText, label: weightLabel, accessibilityLabel: "\(exercise.nameSnapshot), set \(selectedIndex + 1), weight", keyboard: .decimalPad)
+                    .focused($focusedField, equals: .weight)
+                HeroValueField(value: $valueText, label: progressedValueLabel, accessibilityLabel: "\(exercise.nameSnapshot), set \(selectedIndex + 1), \(valueLabel)", keyboard: .numberPad)
                     .focused($focusedField, equals: .value)
             }
             setSelector
             if !isReadOnly {
                 Button { commit() } label: {
-                    Label(isLogged ? "Update set" : "Log set", systemImage: "checkmark").frame(maxWidth: .infinity, minHeight: EQDimension.minimumTouch)
+                    Label(isLogged ? "Update set" : (exercise.isTimeBased ? "Start Timer" : "Log set"), systemImage: exercise.isTimeBased && !isLogged ? "timer" : "checkmark").frame(maxWidth: .infinity, minHeight: EQDimension.minimumTouch)
                 }
                 .buttonStyle(.borderedProminent).buttonBorderShape(.roundedRectangle(radius: EQRadius.control))
                 .accessibilityHint("Saves this set immediately")
@@ -346,33 +341,19 @@ private struct FocusedSetView: View {
 
     private var isLogged: Bool { exercise.loggedSets.contains { $0.prescriptionID == prescription.id && $0.completedAt != nil } }
     private var valueLabel: String { if case .duration = prescription.target { return "seconds" }; return "reps" }
+    private var weightLabel: String { (weightUnit == .pounds ? "lb" : "kg") + (progression?.rationale == .increaseWeight ? " ↑" : "") }
+    private var progressedValueLabel: String { valueLabel + (progression?.rationale == .addRepetitions ? " ↑" : "") }
     private func commit() {
         focusedField = nil
         guard let value = Int(valueText), value > 0 else { return }
         let input: SetLogInput
         switch prescription.target {
         case .repetitions: input = .repetitions(weight: WeightText.weight(from: weightText, unit: weightUnit), repetitions: value)
-        case .duration: input = .duration(seconds: TimeInterval(value))
+        case .duration: input = .duration(weight: WeightText.weight(from: weightText, unit: weightUnit), seconds: TimeInterval(value))
         }
-        Task { await log(input) }
+        if exercise.isTimeBased && !isLogged { startTimed(input) }
+        else { Task { await log(input) } }
     }
-}
-
-private struct ProgressionSuggestionView: View {
-    let suggestion: ProgressionSuggestion; let unit: WeightUnit
-    var body: some View {
-        VStack(alignment: .leading, spacing: EQSpacing.xxs) {
-            Text("SUGGESTED").font(EQTypography.caption.weight(.bold)).foregroundStyle(EQColor.accent)
-            Text(summary).font(EQTypography.sectionTitle)
-            Text(rationale).font(EQTypography.caption).foregroundStyle(EQColor.secondaryText)
-        }.accessibilityElement(children: .combine).accessibilityHint("Suggestion only. Workout values are not changed automatically.")
-    }
-    private var summary: String {
-        let weight = suggestion.suggestedWeight.map { "\(WeightText.value($0, unit: unit)) \(unit == .pounds ? "lb" : "kg") · " } ?? ""
-        let reps = suggestion.targetRepetitions.map { "\($0.lowerBound)–\($0.upperBound) reps" } ?? ""
-        return weight + reps
-    }
-    private var rationale: String { switch suggestion.rationale { case .increaseWeight: "Increase weight"; case .addRepetitions: "Add repetitions"; case .repeatLast: "Repeat last performance" } }
 }
 
 private struct ExerciseSettingsView: View {
@@ -419,6 +400,35 @@ private struct RestModeView: View {
             Button("Skip rest", action: skip).frame(maxWidth: .infinity, minHeight: EQDimension.minimumTouch)
                 .buttonStyle(.borderedProminent).tint(EQColor.rest).buttonBorderShape(.roundedRectangle(radius: EQRadius.control))
         }
+    }
+    private var durationText: String {
+        let seconds = max(0, Int(ceil(state.remaining)))
+        return String(format: "%d:%02d", seconds / 60, seconds % 60)
+    }
+}
+
+private struct WorkTimerView: View {
+    let state: WorkoutWorkTimerState
+    let timerState: CountdownTimerState
+    let pauseResume: () -> Void
+    let skip: () -> Void
+    var body: some View {
+        VStack(alignment: .leading, spacing: EQSpacing.lg) {
+            Text(state.exerciseName).font(EQTypography.exerciseTitle)
+            Text(phaseLabel).font(EQTypography.caption.weight(.bold)).foregroundStyle(state.phase == .switchSides ? EQColor.rest : EQColor.accent)
+            Text(durationText).font(EQTypography.metric).monospacedDigit().contentTransition(.numericText())
+                .accessibilityLabel("\(phaseLabel), \(durationText) remaining")
+            Text("Set \(state.setNumber) of \(state.totalSets)").font(EQTypography.caption).foregroundStyle(EQColor.secondaryText)
+            ProgressView(value: state.totalDuration - state.remaining, total: state.totalDuration).tint(state.phase == .switchSides ? EQColor.rest : EQColor.accent)
+            HStack {
+                Button(timerState == .paused ? "Resume" : "Pause", action: pauseResume)
+                    .buttonStyle(.borderedProminent).disabled(state.phase == .ready)
+                Button("Skip", action: skip).buttonStyle(.bordered)
+            }.frame(minHeight: EQDimension.minimumTouch)
+        }
+    }
+    private var phaseLabel: String {
+        switch state.phase { case .ready: "GET READY"; case .firstSide: "WORK"; case .switchSides: "SWITCH SIDES"; case .secondSide: "WORK · SECOND SIDE" }
     }
     private var durationText: String {
         let seconds = max(0, Int(ceil(state.remaining)))

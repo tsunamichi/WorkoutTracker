@@ -62,11 +62,15 @@ final class ProductModelCorrection2Tests: XCTestCase {
         let firstID = try XCTUnwrap(appended.exercises[0].prescriptions.first?.id)
         let logged = try await repository.logSet(workoutID: workout.id, exerciseID: exercise.id, prescriptionID: firstID, input: .repetitions(weight: .init(pounds: 100), repetitions: 8), completed: true, at: Date(timeIntervalSince1970: 30))
         let logID = try XCTUnwrap(logged.exercises[0].loggedSets.first?.id)
-        let added = try await repository.appendSet(workoutID: workout.id, exerciseID: exercise.id, seed: nil, at: Date(timeIntervalSince1970: 40))
-        XCTAssertNotEqual(added.exercises[0].prescriptions.last?.id, firstID)
         let edited = try await repository.logSet(workoutID: workout.id, exerciseID: exercise.id, prescriptionID: firstID, input: .repetitions(weight: .init(pounds: 105), repetitions: 9), completed: true, at: Date(timeIntervalSince1970: 50))
         XCTAssertEqual(edited.exercises[0].loggedSets.first?.id, logID)
-        XCTAssertFalse(WorkoutExecutionQuery.canComplete(edited))
+        let added = try await repository.appendSet(workoutID: workout.id, exerciseID: exercise.id, seed: nil, at: Date(timeIntervalSince1970: 60))
+        let inherited = try XCTUnwrap(added.exercises[0].prescriptions.last)
+        XCTAssertNotEqual(inherited.id, firstID)
+        XCTAssertEqual(inherited.suggestedWeight?.pounds, 105)
+        guard case .repetitions(let inheritedRange) = inherited.target else { return XCTFail("Expected repetitions") }
+        XCTAssertEqual(inheritedRange, 9...9)
+        XCTAssertFalse(WorkoutExecutionQuery.canComplete(added))
     }
 
     func testPasteUnknownStaysTransientUntilBuilderCommit() throws {

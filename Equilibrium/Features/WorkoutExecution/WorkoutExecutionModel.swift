@@ -8,6 +8,16 @@ struct WorkoutRestState: Equatable, Sendable {
     var remaining: TimeInterval
 }
 
+enum WorkoutWorkTimerPhase: Equatable, Sendable { case ready, firstSide, switchSides, secondSide }
+struct WorkoutWorkTimerState: Equatable, Sendable {
+    let exerciseName: String
+    let setNumber: Int
+    let totalSets: Int
+    let phase: WorkoutWorkTimerPhase
+    let totalDuration: TimeInterval
+    var remaining: TimeInterval
+}
+
 @MainActor @Observable
 final class WorkoutExecutionModel {
     let workoutID: WorkoutID
@@ -26,10 +36,12 @@ final class WorkoutExecutionModel {
     private(set) var errorMessage: String?
     private(set) var suggestions: [ExerciseID: ProgressionSuggestion] = [:]
     private(set) var isActivated = false
-    private(set) var showsCompletion = false
+    private(set) var didAutoComplete = false
     var focusedExerciseID: WorkoutExerciseID?
     var selectedSetIndex = 0
     private(set) var restingExercise: (id: WorkoutExerciseID, name: String)?
+    private(set) var workTimerPhase: WorkoutWorkTimerPhase?
+    private var pendingTimedSet: (exerciseID: WorkoutExerciseID, prescriptionID: SetID, input: SetLogInput, duration: TimeInterval, twoSided: Bool, exerciseName: String, setNumber: Int, totalSets: Int)?
     @ObservationIgnored private var restTask: Task<Void, Never>?
     let weightUnit: WeightUnit
 
@@ -49,6 +61,11 @@ final class WorkoutExecutionModel {
     var restState: WorkoutRestState? {
         guard let restingExercise, timer.state == .running || timer.state == .paused || timer.state == .completed else { return nil }
         return .init(exerciseID: restingExercise.id, exerciseName: restingExercise.name, totalDuration: timer.configuredDuration, remaining: timer.remainingDuration)
+    }
+    var workTimerState: WorkoutWorkTimerState? {
+        guard let pendingTimedSet, let workTimerPhase,
+              timer.state == .running || timer.state == .paused || timer.state == .completed else { return nil }
+        return .init(exerciseName: pendingTimedSet.exerciseName, setNumber: pendingTimedSet.setNumber, totalSets: pendingTimedSet.totalSets, phase: workTimerPhase, totalDuration: timer.configuredDuration, remaining: timer.remainingDuration)
     }
 
     var isReadOnly: Bool { workout?.status == .completed }
@@ -100,12 +117,17 @@ final class WorkoutExecutionModel {
         guard exercise.prescriptions.contains(where: { if case .repetitions = $0.target { true } else { false } }) else { return nil }
         return suggestions[exercise.exerciseID]
     }
+    func progressionIdentity(for exercise: WorkoutExercise) -> String {
+        guard let suggestion = suggestion(for: exercise) else { return "none" }
+        return "\(suggestion.rationale.rawValue)-\(suggestion.suggestedWeight?.pounds ?? -1)-\(suggestion.targetRepetitions?.lowerBound ?? -1)"
+    }
 
     func log(exerciseID: WorkoutExerciseID, prescriptionID: SetID, input: SetLogInput) async {
         do {
             let wasComplete = workout?.exercises.first(where: { $0.id == exerciseID })?.loggedSets.contains(where: { $0.prescriptionID == prescriptionID && $0.completedAt != nil }) == true
             let updated = try await repository.logSet(workoutID: workoutID, exerciseID: exerciseID, prescriptionID: prescriptionID, input: input, completed: true, at: now())
             accept(updated)
+            if await autoCompleteIfEligible(updated) { return }
             guard let loggedExercise = updated.exercises.first(where: { $0.id == exerciseID }) else { return }
             if WorkoutExecutionQuery.isComplete(loggedExercise) {
                 focusedExerciseID = nil
@@ -123,8 +145,21 @@ final class WorkoutExecutionModel {
             let appended = try await repository.appendSet(workoutID: workoutID, exerciseID: exerciseID, seed: input, at: now())
             guard let prescriptionID = appended.exercises.first(where: { $0.id == exerciseID })?.prescriptions.last?.id else { throw RepositoryError.prescriptionNotFound }
             let updated = try await repository.logSet(workoutID: workoutID, exerciseID: exerciseID, prescriptionID: prescriptionID, input: input, completed: true, at: now())
-            accept(updated); focusedExerciseID = nil; selectFirstIncompleteSet()
+            accept(updated)
+            if await autoCompleteIfEligible(updated) { return }
+            focusedExerciseID = nil; selectFirstIncompleteSet()
             if let loggedExercise = updated.exercises.first(where: { $0.id == exerciseID }) { beginRestIfAppropriate(after: loggedExercise, in: updated) }
+            errorMessage = nil
+        } catch { errorMessage = message(for: error) }
+    }
+    func startFirstWorkTimer(exerciseID: WorkoutExerciseID, input: SetLogInput) async {
+        do {
+            let appended = try await repository.appendSet(workoutID: workoutID, exerciseID: exerciseID, seed: input, at: now())
+            accept(appended)
+            guard let prescriptionID = appended.exercises.first(where: { $0.id == exerciseID })?.prescriptions.last?.id else { throw RepositoryError.prescriptionNotFound }
+            focusedExerciseID = exerciseID
+            selectedSetIndex = max(0, (appended.exercises.first { $0.id == exerciseID }?.prescriptions.count ?? 1) - 1)
+            startWorkTimer(exerciseID: exerciseID, prescriptionID: prescriptionID, input: input)
             errorMessage = nil
         } catch { errorMessage = message(for: error) }
     }
@@ -155,32 +190,45 @@ final class WorkoutExecutionModel {
         selectedSetIndex = index
     }
 
-    func skipRest() { stopRest() }
+    func skipRest() { stopTimer() }
 
-    func refreshRest(at date: Date? = nil) {
-        guard restingExercise != nil else { return }
-        if timer.refresh() { haptics.timerCompleted(); audio.timerCompleted(); stopRest(clearTimer: false) }
+    func startWorkTimer(exerciseID: WorkoutExerciseID, prescriptionID: SetID, input: SetLogInput) {
+        guard workTimerState == nil, restState == nil,
+              let exercise = workout?.exercises.first(where: { $0.id == exerciseID }),
+              let index = exercise.prescriptions.firstIndex(where: { $0.id == prescriptionID }),
+              case .duration(_, let seconds) = input, seconds > 0 else { return }
+        pendingTimedSet = (exerciseID, prescriptionID, input, seconds, exercise.isTwoSided, exercise.nameSnapshot, index + 1, exercise.prescriptions.count)
+        workTimerPhase = .ready
+        startTimer(duration: 5)
+    }
+    func toggleWorkTimerPause() {
+        guard workTimerPhase != .ready else { return }
+        if timer.state == .running { timer.pause() }
+        else if timer.state == .paused { timer.resume() }
+    }
+    func skipWorkTimer() {
+        guard pendingTimedSet != nil else { return }
+        if workTimerPhase == .switchSides { transitionToWork(.secondSide) }
+        else { finishTimedSet() }
     }
 
-    func complete() async {
-        do {
-            let completed = try await repository.completeWorkout(id: workoutID, at: now())
-            accept(completed)
-            showsCompletion = true
-            errorMessage = nil
-        } catch { errorMessage = message(for: error) }
+    func refreshRest(at date: Date? = nil) {
+        guard timer.refresh() else { return }
+        if restingExercise != nil {
+            haptics.timerCompleted(); audio.timerCompleted(); stopTimer(clearTimer: false)
+        } else if workTimerPhase != nil { advanceWorkTimer() }
     }
 
     func resetWorkout() async -> Bool {
         do {
             let reset = try await repository.resetWorkout(id: workoutID, at: now())
-            stopRest(); focusedExerciseID = nil; selectedSetIndex = 0; accept(reset); selectFirstIncompleteSet(); errorMessage = nil
+            stopTimer(); focusedExerciseID = nil; selectedSetIndex = 0; accept(reset); selectFirstIncompleteSet(); errorMessage = nil
             return true
         } catch { errorMessage = message(for: error); return false }
     }
 
     func deleteWorkout() async -> Bool {
-        do { try await repository.deleteWorkout(id: workoutID); stopRest(); errorMessage = nil; return true }
+        do { try await repository.deleteWorkout(id: workoutID); stopTimer(); errorMessage = nil; return true }
         catch { errorMessage = message(for: error); return false }
     }
 
@@ -204,8 +252,24 @@ final class WorkoutExecutionModel {
     func swapExercise(occurrenceID: WorkoutExerciseID, with definition: ExerciseDefinition) async -> Bool {
         guard var value = workout, let index = value.exercises.firstIndex(where: { $0.id == occurrenceID }) else { return false }
         let old = value.exercises[index]
-        value.exercises[index] = WorkoutExercise(id: old.id, exerciseID: definition.id, nameSnapshot: definition.name, prescriptions: old.prescriptions, loggedSets: [], restDuration: old.restDuration, skippedAt: nil, isTimeBased: old.isTimeBased, isTwoSided: old.isTwoSided); value.updatedAt = now()
-        do { try await repository.update(value); accept(value); focusedExerciseID = occurrenceID; errorMessage = nil; return true } catch { errorMessage = message(for: error); return false }
+        let history = try? await historyRepository?.latestExerciseLog(exerciseID: definition.id)
+        let inherited = history?.sets.map { set -> SetPrescription in
+            if let duration = set.duration { return .init(id: .new(), target: .duration(seconds: duration), suggestedWeight: set.weight) }
+            let repetitions = max(1, set.repetitions ?? 1)
+            return .init(id: .new(), target: .repetitions(range: repetitions...repetitions), suggestedWeight: set.weight)
+        } ?? []
+        let inheritedTimeBased = inherited.first.map { if case .duration = $0.target { true } else { false } } ?? old.isTimeBased
+        value.exercises[index] = WorkoutExercise(id: old.id, exerciseID: definition.id, nameSnapshot: definition.name, prescriptions: inherited, loggedSets: [], restDuration: old.restDuration, skippedAt: nil, isTimeBased: inheritedTimeBased, isTwoSided: old.isTwoSided); value.updatedAt = now()
+        do {
+            try await repository.update(value)
+            accept(value)
+            focusedExerciseID = occurrenceID
+            selectedSetIndex = 0
+            suggestions[old.exerciseID] = nil
+            await loadSuggestions(for: value)
+            errorMessage = nil
+            return true
+        } catch { errorMessage = message(for: error); return false }
     }
     func removeExercise(_ occurrenceID: WorkoutExerciseID) async -> Bool {
         guard var value = workout, value.exercises.contains(where: { $0.id == occurrenceID }) else { return false }
@@ -214,6 +278,14 @@ final class WorkoutExecutionModel {
     }
 
     private func accept(_ value: Workout) { workout = value; didPersist(value) }
+    private func autoCompleteIfEligible(_ value: Workout) async -> Bool {
+        guard value.status == .inProgress, WorkoutExecutionQuery.canComplete(value) else { return false }
+        do {
+            let completed = try await repository.completeWorkout(id: workoutID, at: now())
+            stopTimer(); accept(completed); didAutoComplete = true; haptics.timerCompleted(); errorMessage = nil
+            return true
+        } catch { errorMessage = message(for: error); return false }
+    }
     private func loadSuggestions(for workout: Workout) async {
         guard let historyRepository, let progressionRepository,
               let configuration = try? await progressionRepository.progressionConfiguration(), configuration.isEnabled else { return }
@@ -228,26 +300,53 @@ final class WorkoutExecutionModel {
         guard let exercise = currentExercise else { selectedSetIndex = 0; return }
         selectedSetIndex = exercise.prescriptions.firstIndex(where: { !WorkoutExecutionQuery.completedPrescriptionIDs(in: exercise).contains($0.id) }) ?? 0
     }
-    private func startRest(for exercise: WorkoutExercise, duration: TimeInterval) {
+    private func startTimer(duration: TimeInterval, alreadyElapsed: TimeInterval = 0) {
         restTask?.cancel()
-        restingExercise = (exercise.id, exercise.nameSnapshot)
-        timer.start(duration: duration)
+        timer.start(duration: duration, alreadyElapsed: alreadyElapsed)
         restTask = Task { [weak self] in
             while !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(1))
                 guard !Task.isCancelled else { return }
                 self?.refreshRest()
-                if self?.restState == nil { return }
+                if self?.restState == nil && self?.workTimerState == nil { return }
             }
         }
+    }
+    private func transitionToWork(_ phase: WorkoutWorkTimerPhase, alreadyElapsed: TimeInterval = 0) {
+        guard let pendingTimedSet else { return }
+        workTimerPhase = phase
+        startTimer(duration: phase == .switchSides ? 10 : pendingTimedSet.duration, alreadyElapsed: alreadyElapsed)
+        if timer.state == .completed { advanceWorkTimer() }
+    }
+    private func advanceWorkTimer() {
+        guard let pendingTimedSet, let workTimerPhase else { return }
+        switch workTimerPhase {
+        case .ready: transitionToWork(.firstSide, alreadyElapsed: timer.completionOverrun)
+        case .firstSide:
+            haptics.timerCompleted(); audio.timerCompleted()
+            pendingTimedSet.twoSided ? transitionToWork(.switchSides, alreadyElapsed: timer.completionOverrun) : finishTimedSet()
+        case .switchSides:
+            haptics.timerCompleted(); transitionToWork(.secondSide, alreadyElapsed: timer.completionOverrun)
+        case .secondSide:
+            haptics.timerCompleted(); audio.timerCompleted(); finishTimedSet()
+        }
+    }
+    private func finishTimedSet() {
+        guard let pending = pendingTimedSet else { return }
+        restTask?.cancel(); restTask = nil; timer.cancel(); workTimerPhase = nil; pendingTimedSet = nil
+        Task { await log(exerciseID: pending.exerciseID, prescriptionID: pending.prescriptionID, input: pending.input) }
     }
     private func beginRestIfAppropriate(after exercise: WorkoutExercise, in workout: Workout) {
         guard !WorkoutExecutionQuery.canComplete(workout) else { return }
         let duration = exercise.restDuration ?? defaultRestDuration
         guard duration > 0 else { return }
-        startRest(for: exercise, duration: duration)
+        restingExercise = (exercise.id, exercise.nameSnapshot)
+        startTimer(duration: duration)
     }
-    private func stopRest(clearTimer: Bool = true) { restTask?.cancel(); restTask = nil; restingExercise = nil; if clearTimer { timer.cancel() } }
+    private func stopTimer(clearTimer: Bool = true) {
+        restTask?.cancel(); restTask = nil; restingExercise = nil; workTimerPhase = nil; pendingTimedSet = nil
+        if clearTimer { timer.cancel() }
+    }
     private func message(for error: Error) -> String {
         switch error as? RepositoryError {
         case .incompleteWorkout: return "Complete every required set before finishing."

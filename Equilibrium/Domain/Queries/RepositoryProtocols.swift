@@ -22,6 +22,7 @@ public protocol WorkoutRepository: Sendable {
     func resetWorkout(id: WorkoutID, at date: Date) async throws -> Workout
     func deleteWorkout(id: WorkoutID) async throws
     func setRestDuration(workoutID: WorkoutID, exerciseID: WorkoutExerciseID, seconds: TimeInterval, at date: Date) async throws -> Workout
+    func editCompletedSet(workoutID: WorkoutID, exerciseID: WorkoutExerciseID, prescriptionID: SetID, input: SetLogInput, at date: Date) async throws -> Workout
     func recentCompletedWorkouts(limit: Int) async throws -> [Workout]
     func completedWorkouts() async throws -> [Workout]
     func completedWorkout(id: WorkoutID) async throws -> Workout?

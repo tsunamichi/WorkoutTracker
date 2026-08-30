@@ -39,7 +39,7 @@ final class WorkoutExecutionRepositoryTests: XCTestCase {
         try await repository.create(fixture)
         _ = try await repository.startWorkout(id: fixture.id, at: .init(timeIntervalSince1970: 10))
         let exercise = fixture.exercises[1], prescription = exercise.prescriptions[0]
-        let updated = try await repository.logSet(workoutID: fixture.id, exerciseID: exercise.id, prescriptionID: prescription.id, input: .duration(seconds: 52), completed: true, at: .init(timeIntervalSince1970: 20))
+        let updated = try await repository.logSet(workoutID: fixture.id, exerciseID: exercise.id, prescriptionID: prescription.id, input: .duration(weight: nil, seconds: 52), completed: true, at: .init(timeIntervalSince1970: 20))
         XCTAssertEqual(updated.exercises[1].loggedSets[0].duration, 52)
         do {
             _ = try await repository.logSet(workoutID: fixture.id, exerciseID: exercise.id, prescriptionID: prescription.id, input: .repetitions(weight: nil, repetitions: 10), completed: true, at: .now)
@@ -172,7 +172,7 @@ final class WorkoutExecutionNavigationStateTests: XCTestCase {
         XCTAssertFalse(readOnly.showsExecutionOptions)
     }
 
-    func testOptionsRemainEligibleUntilCanonicalCompletionBecomesActionable() async throws {
+    func testFinalValidLogAutomaticallyCompletesExactlyOnceWithoutPrematureCompletion() async throws {
         let repository = SwiftDataRepository(container: try PersistenceController.makeContainer(inMemory: true))
         let fixture = EquilibriumFixtures.ready(id: "options-eligibility")
         try await repository.create(fixture)
@@ -182,21 +182,32 @@ final class WorkoutExecutionNavigationStateTests: XCTestCase {
         XCTAssertTrue(model.showsExecutionOptions)
         XCTAssertFalse(model.canComplete)
 
-        for exercise in fixture.exercises {
-            for prescription in exercise.prescriptions {
+        let prescriptions = fixture.exercises.flatMap { exercise in exercise.prescriptions.map { (exercise, $0) } }
+        for (index, pair) in prescriptions.enumerated() {
+            let (exercise, prescription) = pair
                 let input: SetLogInput
                 switch prescription.target {
                 case .repetitions: input = .repetitions(weight: nil, repetitions: 8)
-                case .duration(let seconds): input = .duration(seconds: seconds)
+                case .duration(let seconds): input = .duration(weight: nil, seconds: seconds)
                 }
                 await model.log(exerciseID: exercise.id, prescriptionID: prescription.id, input: input)
-                XCTAssertTrue(model.showsExecutionOptions)
+            if index < prescriptions.count - 1 {
+                XCTAssertEqual(model.workout?.status, .inProgress)
+                XCTAssertNil(model.workout?.completedAt)
+                XCTAssertFalse(model.didAutoComplete)
             }
         }
 
-        XCTAssertTrue(model.canComplete)
-        await model.complete()
+        let completedAt = try XCTUnwrap(model.workout?.completedAt)
+        XCTAssertEqual(model.workout?.status, .completed)
+        XCTAssertTrue(model.didAutoComplete)
         XCTAssertFalse(model.showsExecutionOptions)
+        let activeWorkouts = try await repository.activeWorkouts()
+        XCTAssertTrue(activeWorkouts.isEmpty)
+        let finalPrescription = try XCTUnwrap(prescriptions.last)
+        await model.log(exerciseID: finalPrescription.0.id, prescriptionID: finalPrescription.1.id, input: .repetitions(weight: nil, repetitions: 9))
+        let persisted = try await repository.workout(id: fixture.id)
+        XCTAssertEqual(persisted?.completedAt, completedAt)
     }
 
     func testBackEquivalentLeavesCanonicalProgressAndHomeAcceptsMutation() async throws {

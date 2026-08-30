@@ -8,10 +8,13 @@ struct HomeView: View {
     private let settingsRepository: any SettingsRepository
     private let progressionRepository: any ProgressionRepository
     @State private var appSettings = AppSettings(weightUnit: .pounds, defaultRestDuration: 90)
+    @State private var path: [HomeRoute] = []
+    private let timerStore: any StandaloneTimerConfigurationStore
     @Namespace private var workoutTransition
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    init(repository: any WorkoutRepository, exerciseRepository: (any ExerciseRepository)? = nil, historyRepository: (any ExerciseHistoryRepository)? = nil, settingsRepository: (any SettingsRepository)? = nil, progressionRepository: (any ProgressionRepository)? = nil) {
+    init(repository: any WorkoutRepository, exerciseRepository: (any ExerciseRepository)? = nil, historyRepository: (any ExerciseHistoryRepository)? = nil, settingsRepository: (any SettingsRepository)? = nil, progressionRepository: (any ProgressionRepository)? = nil, timerStore: (any StandaloneTimerConfigurationStore)? = nil) {
         self.repository = repository
+        self.timerStore = timerStore ?? UserDefaultsStandaloneTimerStore()
         guard let shared = repository as? SwiftDataRepository else {
             precondition(exerciseRepository != nil && historyRepository != nil && settingsRepository != nil && progressionRepository != nil, "Feature repositories are required")
             self.exerciseRepository = exerciseRepository!; self.historyRepository = historyRepository!
@@ -24,7 +27,7 @@ struct HomeView: View {
     }
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $path) {
             ZStack {
                 EQColor.canvas.ignoresSafeArea()
                 ScrollView {
@@ -88,12 +91,22 @@ struct HomeView: View {
                 .modifier(HomeZoomModifier(id: id.rawValue, namespace: workoutTransition, reduceMotion: reduceMotion))
         case .settings: SettingsShellView(settingsRepository: settingsRepository, progressionRepository: progressionRepository, exerciseRepository: exerciseRepository).onDisappear { Task { if let settings = try? await settingsRepository.settings() { appSettings = settings } } }
         case .history: WorkoutHistoryView(repository: repository, historyRepository: historyRepository)
-        case .timer: StandaloneTimerView()
+        case .timer: StandaloneTimerView(store: timerStore, path: $path)
+        case .timerCreate:
+            StandaloneTimerFormView(store: timerStore) { created in path = StandaloneTimerNavigationPolicy.replacingCreation(in: path, withRunID: created.id) }
+        case .timerEdit(let id):
+            if let configuration = timerStore.configurations().first(where: { $0.id == id }) {
+                StandaloneTimerFormView(store: timerStore, configuration: configuration) { _ in if !path.isEmpty { path.removeLast() } }
+            } else { ContentUnavailableView("Timer unavailable", systemImage: "timer") }
+        case .timerRun(let id):
+            if let configuration = timerStore.configurations().first(where: { $0.id == id }) {
+                StandaloneTimerRunView(configuration: configuration)
+            } else { ContentUnavailableView("Timer unavailable", systemImage: "timer") }
         }
     }
 }
 
-enum HomeRoute: Hashable { case workout(WorkoutID), settings, history, timer }
+enum HomeRoute: Hashable { case workout(WorkoutID), settings, history, timer, timerCreate, timerEdit(String), timerRun(String) }
 
 private struct WorkoutCard: View {
     let workout: Workout; let sequence: Int

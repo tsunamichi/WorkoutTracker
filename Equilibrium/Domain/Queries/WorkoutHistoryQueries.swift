@@ -119,7 +119,7 @@ public enum ExercisePerformanceQuery {
             return log.weight.map { $0.pounds.isFinite && $0.pounds >= 0 } ?? true
         case .duration:
             guard let duration = log.duration, duration.isFinite, duration > 0 else { return false }
-            return log.repetitions == nil && log.weight == nil
+            return log.repetitions == nil && (log.weight.map { $0.pounds.isFinite && $0.pounds >= 0 } ?? true)
         }
     }
 

@@ -59,7 +59,7 @@ public enum DomainValidator {
         if let pounds = set.weight?.pounds, (!pounds.isFinite || pounds < 0) { throw DomainValidationError.invalidCompletedSet(set.id.rawValue) }
         switch target {
         case .repetitions: guard let repetitions = set.repetitions, repetitions > 0, set.duration == nil else { throw DomainValidationError.invalidCompletedSet(set.id.rawValue) }
-        case .duration: guard let duration = set.duration, duration.isFinite, duration > 0, set.repetitions == nil else { throw DomainValidationError.invalidCompletedSet(set.id.rawValue) }
+        case .duration: guard let duration = set.duration, duration.isFinite, duration > 0, set.repetitions == nil, set.weight.map({ $0.pounds.isFinite && $0.pounds >= 0 }) ?? true else { throw DomainValidationError.invalidCompletedSet(set.id.rawValue) }
         }
     }
 

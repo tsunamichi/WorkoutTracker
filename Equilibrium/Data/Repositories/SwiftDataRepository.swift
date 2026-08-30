@@ -105,8 +105,8 @@ public final class SwiftDataRepository: ExerciseRepository, WorkoutRepository, E
         switch (prescription.target, input) {
         case (.repetitions, .repetitions(let weight, let repetitions)) where repetitions > 0 && (weight?.pounds ?? 0) >= 0:
             values = (weight, repetitions, nil)
-        case (.duration, .duration(let seconds)) where seconds.isFinite && seconds > 0:
-            values = (nil, nil, seconds)
+        case (.duration, .duration(let weight, let seconds)) where seconds.isFinite && seconds > 0 && (weight?.pounds ?? 0) >= 0:
+            values = (weight, nil, seconds)
         default: throw RepositoryError.invalidSetInput
         }
 
@@ -121,6 +121,21 @@ public final class SwiftDataRepository: ExerciseRepository, WorkoutRepository, E
         )
         if let existingIndex { workout.exercises[exerciseIndex].loggedSets[existingIndex] = logged }
         else { workout.exercises[exerciseIndex].loggedSets.append(logged) }
+        if let currentIndex = workout.exercises[exerciseIndex].prescriptions.firstIndex(where: { $0.id == prescriptionID }) {
+            for nextIndex in workout.exercises[exerciseIndex].prescriptions.indices.dropFirst(currentIndex + 1) {
+                let next = workout.exercises[exerciseIndex].prescriptions[nextIndex]
+                let hasExistingLog = workout.exercises[exerciseIndex].loggedSets.contains { $0.prescriptionID == next.id }
+                if hasExistingLog { break }
+                switch input {
+                case .repetitions(let weight, let repetitions):
+                    workout.exercises[exerciseIndex].prescriptions[nextIndex].target = .repetitions(range: repetitions...repetitions)
+                    workout.exercises[exerciseIndex].prescriptions[nextIndex].suggestedWeight = weight
+                case .duration(let weight, let seconds):
+                    workout.exercises[exerciseIndex].prescriptions[nextIndex].target = .duration(seconds: seconds)
+                    workout.exercises[exerciseIndex].prescriptions[nextIndex].suggestedWeight = weight
+                }
+            }
+        }
         workout.updatedAt = date
         try await update(workout)
         return workout
@@ -132,11 +147,18 @@ public final class SwiftDataRepository: ExerciseRepository, WorkoutRepository, E
         guard let index = workout.exercises.firstIndex(where: { $0.id == exerciseID }) else { throw RepositoryError.notFound }
         let prescription: SetPrescription
         switch seed {
-        case .duration(let seconds): prescription = .init(id: .new(), target: .duration(seconds: max(1, seconds)), suggestedWeight: nil)
+        case .duration(let weight, let seconds): prescription = .init(id: .new(), target: .duration(seconds: max(1, seconds)), suggestedWeight: weight)
         case .repetitions(let weight, let repetitions): prescription = .init(id: .new(), target: .repetitions(range: max(1, repetitions)...max(1, repetitions)), suggestedWeight: weight)
         case nil:
             if let previous = workout.exercises[index].prescriptions.last {
-                prescription = .init(id: .new(), target: previous.target, suggestedWeight: previous.suggestedWeight)
+                let previousLog = workout.exercises[index].loggedSets.last { $0.prescriptionID == previous.id }
+                if let duration = previousLog?.duration {
+                    prescription = .init(id: .new(), target: .duration(seconds: duration), suggestedWeight: previousLog?.weight)
+                } else if let repetitions = previousLog?.repetitions {
+                    prescription = .init(id: .new(), target: .repetitions(range: repetitions...repetitions), suggestedWeight: previousLog?.weight)
+                } else {
+                    prescription = .init(id: .new(), target: previous.target, suggestedWeight: previous.suggestedWeight)
+                }
             } else { prescription = .init(id: .new(), target: .repetitions(range: 1...1), suggestedWeight: nil) }
         }
         workout.exercises[index].prescriptions.append(prescription)
@@ -197,6 +219,23 @@ public final class SwiftDataRepository: ExerciseRepository, WorkoutRepository, E
         workout.exercises[index].restDuration = seconds
         workout.updatedAt = date
         try await update(workout)
+        return workout
+    }
+    public func editCompletedSet(workoutID: WorkoutID, exerciseID: WorkoutExerciseID, prescriptionID: SetID, input: SetLogInput, at date: Date = .now) async throws -> Workout {
+        guard var workout = try await workout(id: workoutID), workout.status == .completed else { throw RepositoryError.workoutNotInProgress }
+        guard let exerciseIndex = workout.exercises.firstIndex(where: { $0.id == exerciseID }),
+              let prescription = workout.exercises[exerciseIndex].prescriptions.first(where: { $0.id == prescriptionID }),
+              let logIndex = workout.exercises[exerciseIndex].loggedSets.firstIndex(where: { $0.prescriptionID == prescriptionID && $0.completedAt != nil }) else { throw RepositoryError.prescriptionNotFound }
+        let old = workout.exercises[exerciseIndex].loggedSets[logIndex]
+        switch (prescription.target, input) {
+        case (.repetitions, .repetitions(let weight, let repetitions)) where repetitions > 0 && (weight?.pounds ?? 0) >= 0:
+            workout.exercises[exerciseIndex].loggedSets[logIndex] = .init(id: old.id, prescriptionID: prescriptionID, weight: weight, repetitions: repetitions, duration: nil, completedAt: old.completedAt)
+        case (.duration, .duration(let weight, let seconds)) where seconds.isFinite && seconds > 0 && (weight?.pounds ?? 0) >= 0:
+            workout.exercises[exerciseIndex].loggedSets[logIndex] = .init(id: old.id, prescriptionID: prescriptionID, weight: weight, repetitions: nil, duration: seconds, completedAt: old.completedAt)
+        default: throw RepositoryError.invalidSetInput
+        }
+        workout.updatedAt = date
+        try replaceStoredWorkout(workout)
         return workout
     }
     public func materializeAtomically(_ workouts: [Workout]) async throws {
@@ -261,6 +300,15 @@ public final class SwiftDataRepository: ExerciseRepository, WorkoutRepository, E
         try saveOrRollback()
     }
     private func saveOrRollback() throws { do { try context.save() } catch { context.rollback(); throw error } }
+    private func replaceStoredWorkout(_ workout: Workout) throws {
+        let key = workout.id.rawValue
+        var descriptor = FetchDescriptor<WorkoutRecord>(predicate: #Predicate { $0.id == key }); descriptor.fetchLimit = 1
+        guard let existing = try context.fetch(descriptor).first else { throw RepositoryError.notFound }
+        existing.titleSnapshot = workout.titleSnapshot; existing.statusRaw = workout.status.rawValue; existing.startedAt = workout.startedAt; existing.completedAt = workout.completedAt; existing.updatedAt = workout.updatedAt
+        for child in existing.exercises { context.delete(child) }
+        existing.exercises = WorkoutMapper.record(from: workout).exercises
+        try saveOrRollback()
+    }
 }
 
 enum FixtureDefaults {
