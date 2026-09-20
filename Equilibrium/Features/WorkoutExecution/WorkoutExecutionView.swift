@@ -12,6 +12,12 @@ final class ExecutionWalletPresentation {
 
     func showFocusedExercise() { mode = .focusedExercise }
     func showExerciseOverview() { mode = .exerciseOverview }
+    func resolvedMode(for foregroundState: ExecutionForegroundState) -> ExecutionWalletPresentationMode {
+        foregroundState == .rest ? .focusedExercise : mode
+    }
+    func synchronize(with foregroundState: ExecutionForegroundState) {
+        if foregroundState == .rest { showFocusedExercise() }
+    }
 }
 
 struct WorkoutExecutionView: View {
@@ -29,11 +35,11 @@ struct WorkoutExecutionView: View {
     private let onExit: (() -> Void)?
     private let usesObjectSurface: Bool
 
-    init(id: WorkoutID, repository: any WorkoutRepository, historyRepository: (any ExerciseHistoryRepository)? = nil, progressionRepository: (any ProgressionRepository)? = nil, exerciseRepository: (any ExerciseRepository)? = nil, weightUnit: WeightUnit = .pounds, defaultRestDuration: TimeInterval = 90, didPersist: @escaping (Workout) -> Void = { _ in }, onExit: (() -> Void)? = nil, usesObjectSurface: Bool = false) {
+    init(id: WorkoutID, repository: any WorkoutRepository, historyRepository: (any ExerciseHistoryRepository)? = nil, progressionRepository: (any ProgressionRepository)? = nil, exerciseRepository: (any ExerciseRepository)? = nil, weightUnit: WeightUnit = .pounds, defaultRestDuration: TimeInterval = 90, restSessionStore: WorkoutRestSessionStore? = nil, didPersist: @escaping (Workout) -> Void = { _ in }, onExit: (() -> Void)? = nil, usesObjectSurface: Bool = false) {
         self.historyRepository = historyRepository ?? (repository as? SwiftDataRepository)
         self.onExit = onExit
         self.usesObjectSurface = usesObjectSurface
-        _model = State(initialValue: WorkoutExecutionModel(workoutID: id, repository: repository, historyRepository: historyRepository ?? (repository as? SwiftDataRepository), progressionRepository: progressionRepository ?? (repository as? SwiftDataRepository), exerciseRepository: exerciseRepository ?? (repository as? SwiftDataRepository), weightUnit: weightUnit, defaultRestDuration: defaultRestDuration, haptics: SystemHapticsClient(), audio: SystemAudioFeedbackClient(), didPersist: didPersist))
+        _model = State(initialValue: WorkoutExecutionModel(workoutID: id, repository: repository, historyRepository: historyRepository ?? (repository as? SwiftDataRepository), progressionRepository: progressionRepository ?? (repository as? SwiftDataRepository), exerciseRepository: exerciseRepository ?? (repository as? SwiftDataRepository), weightUnit: weightUnit, defaultRestDuration: defaultRestDuration, restSessionStore: restSessionStore, haptics: SystemHapticsClient(), audio: SystemAudioFeedbackClient(), didPersist: didPersist))
     }
 
     var body: some View {
@@ -49,6 +55,7 @@ struct WorkoutExecutionView: View {
         .task { await model.activate() }
         .onReceive(NotificationCenter.default.publisher(for: .equilibriumRepositoryDidChange)) { _ in Task { await model.refreshFromPersistence() } }
         .onChange(of: scenePhase) { _, phase in if phase == .active { model.refreshRest() } }
+        .onChange(of: model.foregroundState) { _, state in walletPresentation.synchronize(with: state) }
         .onChange(of: model.didAutoComplete) { _, completed in
             if completed { completionFeedback += 1; requestExit() }
         }
@@ -103,6 +110,7 @@ struct WorkoutExecutionView: View {
                 workout: workout,
                 model: model,
                 presentation: walletPresentation,
+                foregroundState: model.foregroundState,
                 reduceMotion: reduceMotion,
                 listRow: { exercise, state in
                     ExerciseListRow(exercise: exercise, detail: exerciseDetail(exercise, state: state), state: state)
@@ -123,50 +131,67 @@ struct WorkoutExecutionView: View {
     private var foregroundExerciseContent: some View {
         VStack(alignment: .leading, spacing: EQSpacing.md) {
             HStack {
-                Text(model.restState == nil ? "ACTIVE EXERCISE" : "REST")
+                Text(model.foregroundState == .rest ? "REST" : "ACTIVE EXERCISE")
                     .font(EQTypography.caption.weight(.bold))
                 Spacer()
-                if model.restState == nil, let exercise = model.currentExercise, !model.isReadOnly {
+                if model.foregroundState == .exercise, let exercise = model.currentExercise, !model.isReadOnly {
                     Button("Settings") { settingsExercise = exercise }
                         .font(EQTypography.caption.weight(.semibold))
                         .accessibilityLabel("Exercise Settings")
                 }
             }
-            Group {
-                if let work = model.workTimerState {
-                    WorkTimerView(state: work, timerState: model.timer.state, pauseResume: model.toggleWorkTimerPause, skip: model.skipWorkTimer)
-                } else if let rest = model.restState {
-                    RestModeView(state: rest, skip: model.skipRest)
-                } else if let exercise = model.currentExercise, let prescription = model.currentPrescription {
-                    FocusedSetView(
-                        exercise: exercise,
-                        prescription: prescription,
-                        progression: model.suggestion(for: exercise),
-                        selectedIndex: model.selectedSetIndex,
-                        isReadOnly: model.isReadOnly,
-                        weightUnit: model.weightUnit,
-                        select: model.selectSet,
-                        log: { input in await model.log(exerciseID: exercise.id, prescriptionID: prescription.id, input: input) },
-                        startTimed: { input in model.startWorkTimer(exerciseID: exercise.id, prescriptionID: prescription.id, input: input) }
-                    )
-                    .id("\(exercise.id.rawValue)-\(prescription.id.rawValue)-\(model.progressionIdentity(for: exercise))")
-                    if !model.isReadOnly {
-                        HStack {
-                            if !exercise.loggedSets.contains(where: { $0.prescriptionID == prescription.id && $0.completedAt != nil }) {
-                                Button("Remove set", role: .destructive) { Task { await model.removeCurrentSet(exerciseID: exercise.id, prescriptionID: prescription.id) } }
-                            }
-                        }.frame(minHeight: EQDimension.minimumTouch)
-                    }
-                } else if let exercise = model.currentExercise, !model.isReadOnly {
-                    FirstSetView(exercise: exercise, progression: model.suggestion(for: exercise), weightUnit: model.weightUnit) { input in
-                        if exercise.isTimeBased { await model.startFirstWorkTimer(exerciseID: exercise.id, input: input) }
-                        else { await model.logFirstSet(exerciseID: exercise.id, input: input) }
-                    }
+            ZStack(alignment: .topLeading) {
+                if let rest = model.restState {
+                    RestModeView(state: rest, nextAction: restNextAction, reduceMotion: reduceMotion, skip: model.skipRest)
+                        .transition(foregroundTransition)
                 } else {
-                    Text(model.isReadOnly ? "Workout complete." : "Every required set is logged.").font(EQTypography.sectionTitle)
+                    exerciseForegroundContent
+                        .transition(foregroundTransition)
                 }
             }
-            if model.restState == nil, model.workTimerState == nil, let exercise = model.currentExercise, !model.isReadOnly {
+            if let error = model.errorMessage {
+                Label(error, systemImage: "exclamationmark.triangle")
+                    .font(EQTypography.caption)
+                    .foregroundStyle(EQColor.warning)
+            }
+        }
+        .animation(.easeInOut(duration: EQMotion.standard), value: model.foregroundState)
+    }
+
+    @ViewBuilder private var exerciseForegroundContent: some View {
+        VStack(alignment: .leading, spacing: EQSpacing.md) {
+            if let work = model.workTimerState {
+                WorkTimerView(state: work, timerState: model.timer.state, pauseResume: model.toggleWorkTimerPause, skip: model.skipWorkTimer)
+            } else if let exercise = model.currentExercise, let prescription = model.currentPrescription {
+                FocusedSetView(
+                    exercise: exercise,
+                    prescription: prescription,
+                    progression: model.suggestion(for: exercise),
+                    selectedIndex: model.selectedSetIndex,
+                    isReadOnly: model.isReadOnly,
+                    weightUnit: model.weightUnit,
+                    select: model.selectSet,
+                    log: { input in await model.log(exerciseID: exercise.id, prescriptionID: prescription.id, input: input) },
+                    startTimed: { input in model.startWorkTimer(exerciseID: exercise.id, prescriptionID: prescription.id, input: input) }
+                )
+                .id("\(exercise.id.rawValue)-\(prescription.id.rawValue)-\(model.progressionIdentity(for: exercise))")
+                if !model.isReadOnly,
+                   !exercise.loggedSets.contains(where: { $0.prescriptionID == prescription.id && $0.completedAt != nil }) {
+                    HStack {
+                        Button("Remove set", role: .destructive) { Task { await model.removeCurrentSet(exerciseID: exercise.id, prescriptionID: prescription.id) } }
+                    }
+                    .frame(minHeight: EQDimension.minimumTouch)
+                }
+            } else if let exercise = model.currentExercise, !model.isReadOnly {
+                FirstSetView(exercise: exercise, progression: model.suggestion(for: exercise), weightUnit: model.weightUnit) { input in
+                    if exercise.isTimeBased { await model.startFirstWorkTimer(exerciseID: exercise.id, input: input) }
+                    else { await model.logFirstSet(exerciseID: exercise.id, input: input) }
+                }
+            } else {
+                Text(model.isReadOnly ? "Workout complete." : "Every required set is logged.").font(EQTypography.sectionTitle)
+            }
+
+            if model.workTimerState == nil, let exercise = model.currentExercise, !model.isReadOnly {
                 HStack {
                     Spacer()
                     Button("Add set", systemImage: "plus") { Task { await model.addSet(exerciseID: exercise.id) } }
@@ -180,13 +205,22 @@ struct WorkoutExecutionView: View {
                 } label: { Label("Previous performance", systemImage: "chart.xyaxis.line").frame(minHeight: EQDimension.minimumTouch) }
                 .accessibilityHint("Shows completed working sets, trend, and personal record")
             }
-            if let error = model.errorMessage {
-                Label(error, systemImage: "exclamationmark.triangle")
-                    .font(EQTypography.caption)
-                    .foregroundStyle(EQColor.warning)
-            }
         }
-        .animation(reduceMotion ? nil : .easeInOut(duration: EQMotion.standard), value: model.restState != nil)
+    }
+
+    private var foregroundTransition: AnyTransition {
+        if reduceMotion { return .opacity }
+        return .opacity.combined(with: .scale(scale: 0.98, anchor: .center))
+    }
+
+    private var restNextAction: String? {
+        guard let rest = model.restState, let exercise = model.currentExercise else { return nil }
+        let set = exercise.prescriptions.isEmpty ? nil : min(model.selectedSetIndex + 1, exercise.prescriptions.count)
+        if exercise.id == rest.exerciseID, let set {
+            return "Set \(set) of \(exercise.prescriptions.count)"
+        }
+        if let set { return "\(exercise.nameSnapshot) · Set \(set) of \(exercise.prescriptions.count)" }
+        return exercise.nameSnapshot
     }
 
     private var compactExerciseContent: some View {
@@ -245,6 +279,7 @@ private struct ExecutionWallet<ListRow: View, ForegroundContent: View, CompactCo
     let workout: Workout
     let model: WorkoutExecutionModel
     let presentation: ExecutionWalletPresentation
+    let foregroundState: ExecutionForegroundState
     let reduceMotion: Bool
     let listRow: (WorkoutExercise, ExerciseState) -> ListRow
     let selectExercise: (WorkoutExercise) -> Void
@@ -259,7 +294,8 @@ private struct ExecutionWallet<ListRow: View, ForegroundContent: View, CompactCo
             let focusedTop = headerHeight + EQSpacing.xs
             let focusedHeight = max(EQDimension.minimumTouch, proxy.size.height - focusedTop)
             let overviewTop = max(focusedTop, proxy.size.height - compactHeight)
-            let isFocused = presentation.mode == .focusedExercise
+            let resolvedMode = presentation.resolvedMode(for: foregroundState)
+            let isFocused = resolvedMode == .focusedExercise
 
             ZStack(alignment: .top) {
                 exerciseListCard(compactHeight: compactHeight)
@@ -274,7 +310,7 @@ private struct ExecutionWallet<ListRow: View, ForegroundContent: View, CompactCo
                     .zIndex(1)
                     .accessibilityIdentifier("execution-current-exercise-card-\(workout.id.rawValue)")
             }
-            .animation(reduceMotion ? nil : .easeInOut(duration: EQMotion.standard), value: presentation.mode)
+            .animation(reduceMotion ? nil : .easeInOut(duration: EQMotion.standard), value: resolvedMode)
         }
         .id("execution-wallet-\(workout.id.rawValue)")
     }
@@ -298,9 +334,10 @@ private struct ExecutionWallet<ListRow: View, ForegroundContent: View, CompactCo
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .disabled(foregroundState == .rest)
             .padding(.horizontal, EQSpacing.md)
             .padding(.vertical, EQSpacing.sm)
-            .accessibilityHint(presentation.mode == .focusedExercise ? "Shows the full exercise list" : "Exercise list is already visible")
+            .accessibilityHint(foregroundState == .rest ? "Exercise overview is unavailable during rest" : presentation.mode == .focusedExercise ? "Shows the full exercise list" : "Exercise list is already visible")
 
             Divider().overlay(EQColor.separator)
 
@@ -332,7 +369,7 @@ private struct ExecutionWallet<ListRow: View, ForegroundContent: View, CompactCo
                 .padding(.bottom, compactHeight + EQSpacing.md)
             }
             .scrollIndicators(.hidden)
-            .scrollDisabled(presentation.mode == .focusedExercise)
+            .scrollDisabled(presentation.resolvedMode(for: foregroundState) == .focusedExercise)
         }
         .background(EQColor.elevatedSurface, in: RoundedRectangle(cornerRadius: EQRadius.hero, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: EQRadius.hero, style: .continuous).stroke(EQColor.separator))
@@ -554,17 +591,38 @@ private struct HeroValueField: View {
 
 private struct RestModeView: View {
     let state: WorkoutRestState
+    let nextAction: String?
+    let reduceMotion: Bool
     let skip: () -> Void
     var body: some View {
-        VStack(alignment: .leading, spacing: EQSpacing.lg) {
-            Text(state.exerciseName).font(EQTypography.exerciseTitle)
-            Text("REST").font(EQTypography.caption.weight(.bold)).foregroundStyle(EQColor.rest)
-            Text(durationText).font(EQTypography.metric).monospacedDigit().contentTransition(.numericText())
+        VStack(spacing: EQSpacing.lg) {
+            VStack(spacing: EQSpacing.xxs) {
+                Text("RESTING AFTER")
+                    .font(EQTypography.caption.weight(.bold))
+                    .foregroundStyle(EQColor.rest)
+                Text(state.exerciseName)
+                    .font(EQTypography.exerciseTitle)
+                    .multilineTextAlignment(.center)
+            }
+            Text(durationText)
+                .font(EQTypography.metric)
+                .monospacedDigit()
+                .contentTransition(reduceMotion ? .opacity : .numericText())
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
                 .accessibilityLabel("Rest time remaining, \(durationText)")
             ProgressView(value: state.totalDuration - state.remaining, total: state.totalDuration).tint(EQColor.rest)
+            if let nextAction {
+                VStack(spacing: EQSpacing.xxs) {
+                    Text("UP NEXT").font(EQTypography.caption.weight(.bold)).foregroundStyle(EQColor.secondaryText)
+                    Text(nextAction).font(EQTypography.body).multilineTextAlignment(.center)
+                }
+            }
             Button("Skip rest", action: skip).frame(maxWidth: .infinity, minHeight: EQDimension.minimumTouch)
                 .buttonStyle(.borderedProminent).tint(EQColor.rest).buttonBorderShape(.roundedRectangle(radius: EQRadius.control))
         }
+        .frame(maxWidth: .infinity)
+        .accessibilityIdentifier("execution-rest-foreground")
     }
     private var durationText: String {
         let seconds = max(0, Int(ceil(state.remaining)))

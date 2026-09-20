@@ -10,6 +10,7 @@ struct HomeView: View {
     @State private var appSettings = AppSettings(weightUnit: .pounds, defaultRestDuration: 90)
     @State private var homePath: [HomeRoute] = []
     @State private var timerPath: [TimerRoute] = []
+    @State private var restSessionStore = WorkoutRestSessionStore()
     private let timerStore: any StandaloneTimerConfigurationStore
     private let legacyImporter: RNLegacyImporter?
     @Namespace private var workoutTransition
@@ -46,6 +47,7 @@ struct HomeView: View {
                             exerciseRepository: exerciseRepository,
                             weightUnit: appSettings.weightUnit,
                             defaultRestDuration: appSettings.defaultRestDuration,
+                            restSessionStore: restSessionStore,
                             namespace: workoutTransition,
                             reduceMotion: reduceMotion,
                             didPersist: model.applyPersistedWorkout,
@@ -335,6 +337,7 @@ private struct ExpandedWorkoutExecutionContainer: View {
     let exerciseRepository: any ExerciseRepository
     let weightUnit: WeightUnit
     let defaultRestDuration: TimeInterval
+    let restSessionStore: WorkoutRestSessionStore
     let namespace: Namespace.ID
     let reduceMotion: Bool
     let didPersist: (Workout) -> Void
@@ -352,6 +355,7 @@ private struct ExpandedWorkoutExecutionContainer: View {
                     exerciseRepository: exerciseRepository,
                     weightUnit: weightUnit,
                     defaultRestDuration: defaultRestDuration,
+                    restSessionStore: restSessionStore,
                     didPersist: didPersist,
                     onExit: exit,
                     usesObjectSurface: true

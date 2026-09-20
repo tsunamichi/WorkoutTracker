@@ -8,6 +8,47 @@ struct WorkoutRestState: Equatable, Sendable {
     var remaining: TimeInterval
 }
 
+enum ExecutionForegroundState: Equatable, Sendable {
+    case exercise
+    case rest
+}
+
+struct WorkoutRestSession: Equatable, Sendable {
+    let workoutID: WorkoutID
+    let exerciseID: WorkoutExerciseID
+    let totalDuration: TimeInterval
+    let deadline: Date
+}
+
+@MainActor @Observable
+final class WorkoutRestSessionStore {
+    private(set) var activeSession: WorkoutRestSession?
+
+    func begin(workoutID: WorkoutID, exerciseID: WorkoutExerciseID, duration: TimeInterval, at date: Date) {
+        guard duration.isFinite, duration > 0 else {
+            clear(workoutID: workoutID)
+            return
+        }
+        activeSession = WorkoutRestSession(
+            workoutID: workoutID,
+            exerciseID: exerciseID,
+            totalDuration: duration,
+            deadline: date.addingTimeInterval(duration)
+        )
+    }
+
+    func session(for workoutID: WorkoutID) -> WorkoutRestSession? {
+        guard activeSession?.workoutID == workoutID else { return nil }
+        return activeSession
+    }
+
+    func clear(workoutID: WorkoutID, exerciseID: WorkoutExerciseID? = nil) {
+        guard let activeSession, activeSession.workoutID == workoutID else { return }
+        if let exerciseID, activeSession.exerciseID != exerciseID { return }
+        self.activeSession = nil
+    }
+}
+
 enum WorkoutWorkTimerPhase: Equatable, Sendable { case ready, firstSide, switchSides, secondSide }
 struct WorkoutWorkTimerState: Equatable, Sendable {
     let exerciseName: String
@@ -24,6 +65,7 @@ final class WorkoutExecutionModel {
     private let repository: any WorkoutRepository
     private let now: () -> Date
     private let didPersist: (Workout) -> Void
+    private let restSessionStore: WorkoutRestSessionStore
     private var defaultRestDuration: TimeInterval
     let timer: CountdownTimer
     private let haptics: any HapticsClient
@@ -45,12 +87,13 @@ final class WorkoutExecutionModel {
     @ObservationIgnored private var restTask: Task<Void, Never>?
     let weightUnit: WeightUnit
 
-    init(workoutID: WorkoutID, repository: any WorkoutRepository, historyRepository: (any ExerciseHistoryRepository)? = nil, progressionRepository: (any ProgressionRepository)? = nil, exerciseRepository: (any ExerciseRepository)? = nil, weightUnit: WeightUnit = .pounds, defaultRestDuration: TimeInterval = 90, now: @escaping () -> Date = Date.init, timer: CountdownTimer? = nil, haptics: (any HapticsClient)? = nil, audio: (any AudioFeedbackClient)? = nil, didPersist: @escaping (Workout) -> Void = { _ in }) {
+    init(workoutID: WorkoutID, repository: any WorkoutRepository, historyRepository: (any ExerciseHistoryRepository)? = nil, progressionRepository: (any ProgressionRepository)? = nil, exerciseRepository: (any ExerciseRepository)? = nil, weightUnit: WeightUnit = .pounds, defaultRestDuration: TimeInterval = 90, now: @escaping () -> Date = Date.init, timer: CountdownTimer? = nil, restSessionStore: WorkoutRestSessionStore? = nil, haptics: (any HapticsClient)? = nil, audio: (any AudioFeedbackClient)? = nil, didPersist: @escaping (Workout) -> Void = { _ in }) {
         self.workoutID = workoutID
         self.repository = repository
         self.weightUnit = weightUnit
         self.now = now
         self.didPersist = didPersist
+        self.restSessionStore = restSessionStore ?? WorkoutRestSessionStore()
         self.defaultRestDuration = defaultRestDuration
         self.timer = timer ?? CountdownTimer(now: { now().timeIntervalSinceReferenceDate })
         self.haptics = haptics ?? NoopHapticsClient(); self.audio = audio ?? NoopAudioFeedbackClient()
@@ -62,6 +105,7 @@ final class WorkoutExecutionModel {
         guard let restingExercise, timer.state == .running || timer.state == .paused || timer.state == .completed else { return nil }
         return .init(exerciseID: restingExercise.id, exerciseName: restingExercise.name, totalDuration: timer.configuredDuration, remaining: timer.remainingDuration)
     }
+    var foregroundState: ExecutionForegroundState { restState == nil ? .exercise : .rest }
     var workTimerState: WorkoutWorkTimerState? {
         guard let pendingTimedSet, let workTimerPhase,
               timer.state == .running || timer.state == .paused || timer.state == .completed else { return nil }
@@ -99,24 +143,34 @@ final class WorkoutExecutionModel {
         guard !isActivated else { return }
         isActivated = true
         do {
-            guard let loaded = try await repository.workout(id: workoutID) else { throw RepositoryError.notFound }
+            guard let loaded = try await repository.workout(id: workoutID) else {
+                restSessionStore.clear(workoutID: workoutID)
+                throw RepositoryError.notFound
+            }
+            var activeWorkout = loaded
             workout = loaded
             if loaded.status == .ready {
                 // Yield keeps the Home source card alive through destination activation.
                 await Task.yield()
                 let started = try await repository.startWorkout(id: workoutID, at: now())
                 accept(started)
+                activeWorkout = started
             }
             selectFirstIncompleteSet()
-            await loadSuggestions(for: loaded)
+            restoreRestSessionIfAvailable(in: activeWorkout)
+            await loadSuggestions(for: activeWorkout)
             errorMessage = nil
         } catch { errorMessage = message(for: error) }
     }
 
     func refreshFromPersistence() async {
         do {
-            guard let loaded = try await repository.workout(id: workoutID) else { throw RepositoryError.notFound }
-            accept(loaded); await loadSuggestions(for: loaded); errorMessage = nil
+            guard let loaded = try await repository.workout(id: workoutID) else {
+                stopTimer(); throw RepositoryError.notFound
+            }
+            accept(loaded)
+            invalidateRestIfNeeded(for: loaded)
+            await loadSuggestions(for: loaded); errorMessage = nil
         } catch { errorMessage = message(for: error) }
     }
 
@@ -221,9 +275,7 @@ final class WorkoutExecutionModel {
 
     func refreshRest(at date: Date? = nil) {
         guard timer.refresh() else { return }
-        if restingExercise != nil {
-            haptics.timerCompleted(); audio.timerCompleted(); stopTimer(clearTimer: false)
-        } else if workTimerPhase != nil { advanceWorkTimer() }
+        resolveTimerCompletion()
     }
 
     func resetWorkout() async -> Bool {
@@ -270,6 +322,8 @@ final class WorkoutExecutionModel {
         do {
             try await repository.update(value)
             accept(value)
+            if restingExercise?.id == occurrenceID { stopTimer() }
+            else { restSessionStore.clear(workoutID: workoutID, exerciseID: occurrenceID) }
             focusedExerciseID = occurrenceID
             selectedSetIndex = 0
             suggestions[old.exerciseID] = nil
@@ -281,7 +335,12 @@ final class WorkoutExecutionModel {
     func removeExercise(_ occurrenceID: WorkoutExerciseID) async -> Bool {
         guard var value = workout, value.exercises.contains(where: { $0.id == occurrenceID }) else { return false }
         value.exercises.removeAll { $0.id == occurrenceID }; value.updatedAt = now()
-        do { try await repository.update(value); accept(value); focusedExerciseID = nil; selectFirstIncompleteSet(); errorMessage = nil; return true } catch { errorMessage = message(for: error); return false }
+        do {
+            try await repository.update(value); accept(value)
+            if restingExercise?.id == occurrenceID { stopTimer() }
+            else { restSessionStore.clear(workoutID: workoutID, exerciseID: occurrenceID) }
+            focusedExerciseID = nil; selectFirstIncompleteSet(); errorMessage = nil; return true
+        } catch { errorMessage = message(for: error); return false }
     }
 
     private func accept(_ value: Workout) { workout = value; didPersist(value) }
@@ -348,10 +407,40 @@ final class WorkoutExecutionModel {
         let duration = exercise.restDuration ?? defaultRestDuration
         guard duration > 0 else { return }
         restingExercise = (exercise.id, exercise.nameSnapshot)
+        restSessionStore.begin(workoutID: workoutID, exerciseID: exercise.id, duration: duration, at: now())
         startTimer(duration: duration)
+    }
+    private func restoreRestSessionIfAvailable(in workout: Workout) {
+        guard let session = restSessionStore.session(for: workoutID) else { return }
+        guard workout.status == .inProgress,
+              let exercise = workout.exercises.first(where: { $0.id == session.exerciseID }),
+              session.totalDuration.isFinite, session.totalDuration > 0 else {
+            restSessionStore.clear(workoutID: workoutID)
+            return
+        }
+        restingExercise = (exercise.id, exercise.nameSnapshot)
+        let remaining = session.deadline.timeIntervalSince(now())
+        let alreadyElapsed = max(0, session.totalDuration - min(session.totalDuration, remaining))
+        startTimer(duration: session.totalDuration, alreadyElapsed: alreadyElapsed)
+        if timer.state == .completed { resolveTimerCompletion() }
+    }
+    private func invalidateRestIfNeeded(for workout: Workout) {
+        guard let session = restSessionStore.session(for: workoutID) else { return }
+        guard workout.status == .inProgress,
+              workout.exercises.contains(where: { $0.id == session.exerciseID }) else {
+            if restingExercise != nil { stopTimer() }
+            else { restSessionStore.clear(workoutID: workoutID) }
+            return
+        }
+    }
+    private func resolveTimerCompletion() {
+        if restingExercise != nil {
+            haptics.timerCompleted(); audio.timerCompleted(); stopTimer(clearTimer: false)
+        } else if workTimerPhase != nil { advanceWorkTimer() }
     }
     private func stopTimer(clearTimer: Bool = true) {
         restTask?.cancel(); restTask = nil; restingExercise = nil; workTimerPhase = nil; pendingTimedSet = nil
+        restSessionStore.clear(workoutID: workoutID)
         if clearTimer { timer.cancel() }
     }
     private func message(for error: Error) -> String {
