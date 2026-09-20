@@ -301,9 +301,9 @@ import SwiftData
     }
 
     func testTimerCreationRouteIsAtomicallyReplacedByRunAndBackStackIsTimersHome() {
-        let result = StandaloneTimerNavigationPolicy.replacingCreation(in: [.timer, .timerCreate], withRunID: "created")
-        XCTAssertEqual(result, [.timer, .timerRun("created")])
-        XCTAssertEqual(Array(result.dropLast()), [.timer])
+        let result = StandaloneTimerNavigationPolicy.replacingCreation(in: [.create], withRunID: "created")
+        XCTAssertEqual(result, [.run("created")])
+        XCTAssertTrue(Array(result.dropLast()).isEmpty)
     }
 
     func testDeletingSavedTimerPersistsAcrossStoreRecreationAndDoesNotTouchOtherData() async throws {
@@ -315,12 +315,11 @@ import SwiftData
         let repository = SwiftDataRepository(container: try PersistenceController.makeContainer(inMemory: true))
         let history = EquilibriumFixtures.completed(id: "timer-delete-history"); try await repository.create(history)
         var homeConfigurations = [first, second]
-        let homeRoute: [HomeRoute] = [.timer]
+        let timerPath: [TimerRoute] = []
         StandaloneTimerHomeActions.delete(id: first.id, store: store!, configurations: &homeConfigurations)
         XCTAssertEqual(homeConfigurations, [second])
         XCTAssertEqual(store!.configurations(), [second])
-        XCTAssertEqual(homeRoute, [.timer])
-        XCTAssertFalse(homeRoute.contains { route in if case .timerCreate = route { true } else if case .timerEdit = route { true } else if case .timerRun = route { true } else { false } })
+        XCTAssertTrue(timerPath.isEmpty)
         store = nil
         let reopened = UserDefaultsStandaloneTimerStore(defaults: defaults, key: "timers")
         XCTAssertEqual(reopened.configurations(), [second])
@@ -336,10 +335,10 @@ import SwiftData
         let first = StandaloneTimerConfiguration(id: "timer-a", name: "Timer A"), second = StandaloneTimerConfiguration(id: "timer-b", name: "Timer B")
         store.save(first); store.save(second)
         let homeConfigurations = store.configurations()
-        let route: [HomeRoute] = [.timer]
+        let timerPath: [TimerRoute] = []
         // Cancel dismisses the confirmation without invoking the Home-owned delete action.
         XCTAssertEqual(store.configurations(), homeConfigurations)
-        XCTAssertEqual(route, [.timer])
+        XCTAssertTrue(timerPath.isEmpty)
         XCTAssertEqual(Set(store.configurations().map(\.id)), Set([first.id, second.id]))
     }
 }

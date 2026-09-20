@@ -3,42 +3,176 @@ import XCTest
 
 @MainActor
 final class HomeQueueTests: XCTestCase {
+    private var calendar: Calendar {
+        var value = Calendar(identifier: .gregorian)
+        value.timeZone = TimeZone(identifier: "America/New_York")!
+        return value
+    }
+
+    private func date(_ day: Int, hour: Int = 12) -> Date {
+        calendar.date(from: DateComponents(year: 2026, month: 9, day: day, hour: hour))!
+    }
+
+    private func ready(_ id: String, createdAt: Date) -> Workout {
+        var value = EquilibriumFixtures.ready(id: id)
+        value.createdAt = createdAt; value.updatedAt = createdAt
+        return value
+    }
+
+    private func inProgress(_ id: String, createdAt: Date) -> Workout {
+        var value = EquilibriumFixtures.inProgress(id: id)
+        value.createdAt = createdAt; value.updatedAt = createdAt
+        return value
+    }
+
+    private func completed(_ id: String, createdAt: Date, completedAt: Date) -> Workout {
+        var value = EquilibriumFixtures.completed(id: id)
+        value.createdAt = createdAt; value.completedAt = completedAt; value.updatedAt = completedAt
+        return value
+    }
+
     func testLoadFailureKeepsVisibleWorkoutsAndSuccessfulRetryClearsError() async {
         var attempts = 0
-        let retained = EquilibriumFixtures.ready(id: "visible")
-        let refreshed = EquilibriumFixtures.ready(id: "refreshed")
-        let model = HomeModel(loadActive: {
+        let retained = ready("visible", createdAt: date(20))
+        let refreshed = ready("refreshed", createdAt: date(20))
+        let model = HomeModel(loadWorkouts: {
             attempts += 1
             if attempts == 2 { throw RepositoryError.notFound }
             return attempts == 1 ? [retained] : [refreshed]
-        })
+        }, now: { self.date(20) }, calendar: calendar)
         await model.load(); XCTAssertEqual(model.workouts, [retained]); XCTAssertNil(model.errorMessage)
         await model.load(); XCTAssertEqual(model.workouts, [retained]); XCTAssertEqual(model.errorMessage, "Home could not be loaded.")
         await model.load(); XCTAssertEqual(model.workouts, [refreshed]); XCTAssertNil(model.errorMessage)
     }
 
-    func testHomeContainsEveryIncompleteWorkoutInStableCreationOrder() async throws {
-        let repository = SwiftDataRepository(container: try PersistenceController.makeContainer(inMemory: true))
-        var a = EquilibriumFixtures.ready(id: "a"); a.createdAt = .init(timeIntervalSince1970: 1)
-        var b = EquilibriumFixtures.inProgress(id: "b"); b.createdAt = .init(timeIntervalSince1970: 2)
-        var completed = EquilibriumFixtures.completed(id: "completed"); completed.createdAt = .init(timeIntervalSince1970: 0)
-        try await repository.materializeAtomically([b, completed, a])
-        let model = HomeModel(repository: repository); await model.load()
-        XCTAssertEqual(model.workouts.map(\.id), [a.id, b.id])
+    func testActiveWorkoutCreatedTodayAppears() {
+        let workout = ready("today", createdAt: date(20))
+        XCTAssertEqual(HomeWorkoutQuery.visibleWorkouts(in: [workout], now: date(20), calendar: calendar).map(\.id), [workout.id])
     }
 
-    func testCompletionImmediatelyRemovesCardWithoutReorderingRemainingCards() async throws {
+    func testActiveWorkoutCreatedOnAnEarlierDayStillAppears() {
+        let workout = ready("older-ready", createdAt: date(2))
+        XCTAssertEqual(HomeWorkoutQuery.visibleWorkouts(in: [workout], now: date(20), calendar: calendar).map(\.id), [workout.id])
+    }
+
+    func testInProgressWorkoutCreatedOnAnEarlierDayStillAppears() {
+        let workout = inProgress("older-progress", createdAt: date(2))
+        XCTAssertEqual(HomeWorkoutQuery.visibleWorkouts(in: [workout], now: date(20), calendar: calendar).map(\.id), [workout.id])
+    }
+
+    func testWorkoutCompletedTodayAppears() {
+        let workout = completed("completed-today", createdAt: date(2), completedAt: date(20, hour: 8))
+        XCTAssertEqual(HomeWorkoutQuery.visibleWorkouts(in: [workout], now: date(20), calendar: calendar).map(\.id), [workout.id])
+    }
+
+    func testWorkoutCompletedBeforeTodayDoesNotAppear() {
+        let workout = completed("completed-yesterday", createdAt: date(20), completedAt: date(19, hour: 23))
+        XCTAssertTrue(HomeWorkoutQuery.visibleWorkouts(in: [workout], now: date(20), calendar: calendar).isEmpty)
+    }
+
+    func testYesterdayCompletedWorkoutLeavesHomeAfterRolloverWithoutDeletion() async throws {
         let repository = SwiftDataRepository(container: try PersistenceController.makeContainer(inMemory: true))
-        var a = EquilibriumFixtures.ready(id: "a"); a.createdAt = .init(timeIntervalSince1970: 1)
-        var b = EquilibriumFixtures.completed(id: "b"); b.status = .inProgress; b.completedAt = nil; b.createdAt = .init(timeIntervalSince1970: 2)
-        var c = EquilibriumFixtures.ready(id: "c"); c.createdAt = .init(timeIntervalSince1970: 3)
-        try await repository.materializeAtomically([a, b, c])
-        let model = HomeModel(repository: repository); await model.load()
-        let completed = try await repository.completeWorkout(id: b.id, at: EquilibriumFixtures.timestamp.addingTimeInterval(20)); model.applyPersistedWorkout(completed)
-        XCTAssertEqual(model.workouts.map(\.id), [a.id, c.id])
-        let persisted = try await repository.workout(id: b.id)
-        let historyIDs = try await repository.completedWorkouts().map(\.id)
-        XCTAssertNotNil(persisted); XCTAssertEqual(historyIDs, [b.id])
+        let completedToday = completed("finished", createdAt: date(2), completedAt: date(20, hour: 18))
+        let active = ready("active", createdAt: date(2))
+        try await repository.materializeAtomically([completedToday, active])
+
+        let beforeRollover = HomeModel(repository: repository, now: { self.date(20, hour: 22) }, calendar: calendar)
+        await beforeRollover.load()
+        XCTAssertEqual(beforeRollover.workouts.map(\.id), [active.id, completedToday.id])
+
+        let afterRollover = HomeModel(repository: repository, now: { self.date(21, hour: 1) }, calendar: calendar)
+        await afterRollover.load()
+        XCTAssertEqual(afterRollover.workouts.map(\.id), [active.id])
+        let persisted = try await repository.workout(id: completedToday.id)
+        XCTAssertEqual(persisted?.completedAt, completedToday.completedAt)
+    }
+
+    func testCreatedAtDoesNotControlHomeMembership() {
+        let oldActive = ready("old-active", createdAt: date(2))
+        let oldCompletedToday = completed("old-completed-today", createdAt: date(2), completedAt: date(20))
+        let newCompletedYesterday = completed("new-completed-yesterday", createdAt: date(20), completedAt: date(19))
+        let ids = HomeWorkoutQuery.visibleWorkouts(in: [newCompletedYesterday, oldCompletedToday, oldActive], now: date(20), calendar: calendar).map(\.id)
+        XCTAssertEqual(ids, [oldActive.id, oldCompletedToday.id])
+    }
+
+    func testHomeOrderingIsStableWhenAWorkoutCompletesToday() async {
+        let first = ready("first", createdAt: date(2))
+        let second = inProgress("second", createdAt: date(3))
+        let third = ready("third", createdAt: date(4))
+        let model = HomeModel(loadWorkouts: { [first, second, third] }, now: { self.date(20) }, calendar: calendar)
+        await model.load()
+        var completedSecond = second
+        completedSecond.status = .completed; completedSecond.completedAt = date(20); completedSecond.updatedAt = date(20)
+        model.applyPersistedWorkout(completedSecond)
+        XCTAssertEqual(model.workouts.map(\.id), [first.id, second.id, third.id])
+    }
+
+    func testAddWorkoutPresentationDefersTheSelectedFlowUntilDrawerDismisses() {
+        let model = HomeModel(loadWorkouts: { [] }, now: { self.date(20) }, calendar: calendar)
+        model.isAddWorkoutDrawerPresented = true
+        model.selectCreationRoute(.pasteWorkout)
+        XCTAssertFalse(model.isAddWorkoutDrawerPresented); XCTAssertNil(model.creationRoute)
+        model.presentPendingCreationRoute()
+        XCTAssertEqual(model.creationRoute, .pasteWorkout)
+    }
+
+    func testReuseAvailabilityRequiresACompletedCanonicalWorkout() async {
+        let noReuse = HomeModel(loadWorkouts: { [self.ready("active", createdAt: self.date(2))] }, now: { self.date(20) }, calendar: calendar)
+        await noReuse.load()
+        XCTAssertFalse(noReuse.hasReusableWorkouts)
+
+        let reusable = HomeModel(loadWorkouts: { [self.completed("history", createdAt: self.date(2), completedAt: self.date(19))] }, now: { self.date(20) }, calendar: calendar)
+        await reusable.load()
+        XCTAssertTrue(reusable.hasReusableWorkouts)
+    }
+
+    func testPrimarySurfaceIsTransientAndDefaultsToHome() {
+        let model = HomeModel(loadWorkouts: { [] }, now: { self.date(20) }, calendar: calendar)
+        XCTAssertEqual(model.primarySurface, .home)
+        model.primarySurface = .timer
+        XCTAssertEqual(model.primarySurface, .timer)
+    }
+
+    func testExecutionPresentationTracksOnlyTheSelectedWorkoutIDAndClearsOnExit() async {
+        let first = ready("first", createdAt: date(2))
+        let second = ready("second", createdAt: date(3))
+        let model = HomeModel(loadWorkouts: { [first, second] }, now: { self.date(20) }, calendar: calendar)
+        await model.load()
+        let canonicalHomeProjection = model.workouts
+
+        model.beginExecution(for: first.id)
+        XCTAssertEqual(model.expandedWorkoutID, first.id)
+        XCTAssertEqual(model.workouts, canonicalHomeProjection)
+
+        model.beginExecution(for: second.id)
+        XCTAssertEqual(model.expandedWorkoutID, second.id)
+        XCTAssertEqual(model.workouts, canonicalHomeProjection)
+
+        model.endExecution()
+        XCTAssertNil(model.expandedWorkoutID)
+        XCTAssertEqual(model.workouts, canonicalHomeProjection)
+    }
+
+    func testCompletionDuringExpandedExecutionRemainsOnHomeTodayAfterExit() async throws {
+        let repository = SwiftDataRepository(container: try PersistenceController.makeContainer(inMemory: true))
+        let fixture = ready("expanded-completion", createdAt: date(2))
+        try await repository.create(fixture)
+        let home = HomeModel(repository: repository, now: { self.date(20) }, calendar: calendar)
+        await home.load()
+        home.beginExecution(for: fixture.id)
+
+        let execution = WorkoutExecutionModel(workoutID: fixture.id, repository: repository, now: { self.date(20) }, didPersist: { home.applyPersistedWorkout($0) })
+        await execution.activate()
+        for prescription in fixture.exercises[0].prescriptions {
+            await execution.log(exerciseID: fixture.exercises[0].id, prescriptionID: prescription.id, input: .repetitions(weight: nil, repetitions: 8))
+        }
+        home.endExecution()
+
+        XCTAssertNil(home.expandedWorkoutID)
+        XCTAssertEqual(home.workouts.map(\.id), [fixture.id])
+        XCTAssertEqual(home.workouts.first?.status, .completed)
+        let persisted = try await repository.workout(id: fixture.id)
+        XCTAssertEqual(persisted?.completedAt, date(20))
     }
 
     func testReadyWorkoutSurvivesRepositoryRecreationWithoutMutation() async throws {
@@ -88,6 +222,6 @@ final class HomeQueueTests: XCTestCase {
 
     func testCardMappingAndStableRouteIdentity() {
         XCTAssertEqual(HomeCardPresentation(status: .ready).action, .start); XCTAssertEqual(HomeCardPresentation(status: .completed).action, .view)
-        XCTAssertEqual(HomeRoute.workout(.init(rawValue: "stable")), HomeRoute.workout(.init(rawValue: "stable")))
+        XCTAssertEqual(HomeRoute.history, HomeRoute.history)
     }
 }

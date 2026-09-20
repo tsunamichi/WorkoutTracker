@@ -1,4 +1,18 @@
 import SwiftUI
+import Observation
+
+enum ExecutionWalletPresentationMode: Equatable {
+    case focusedExercise
+    case exerciseOverview
+}
+
+@MainActor @Observable
+final class ExecutionWalletPresentation {
+    private(set) var mode: ExecutionWalletPresentationMode = .focusedExercise
+
+    func showFocusedExercise() { mode = .focusedExercise }
+    func showExerciseOverview() { mode = .exerciseOverview }
+}
 
 struct WorkoutExecutionView: View {
     @State private var model: WorkoutExecutionModel
@@ -10,16 +24,21 @@ struct WorkoutExecutionView: View {
     @State private var confirmsDelete = false
     @State private var editsRestDuration = false
     @State private var settingsExercise: WorkoutExercise?
+    @State private var walletPresentation = ExecutionWalletPresentation()
     private let historyRepository: (any ExerciseHistoryRepository)?
+    private let onExit: (() -> Void)?
+    private let usesObjectSurface: Bool
 
-    init(id: WorkoutID, repository: any WorkoutRepository, historyRepository: (any ExerciseHistoryRepository)? = nil, progressionRepository: (any ProgressionRepository)? = nil, exerciseRepository: (any ExerciseRepository)? = nil, weightUnit: WeightUnit = .pounds, defaultRestDuration: TimeInterval = 90, didPersist: @escaping (Workout) -> Void = { _ in }) {
+    init(id: WorkoutID, repository: any WorkoutRepository, historyRepository: (any ExerciseHistoryRepository)? = nil, progressionRepository: (any ProgressionRepository)? = nil, exerciseRepository: (any ExerciseRepository)? = nil, weightUnit: WeightUnit = .pounds, defaultRestDuration: TimeInterval = 90, didPersist: @escaping (Workout) -> Void = { _ in }, onExit: (() -> Void)? = nil, usesObjectSurface: Bool = false) {
         self.historyRepository = historyRepository ?? (repository as? SwiftDataRepository)
+        self.onExit = onExit
+        self.usesObjectSurface = usesObjectSurface
         _model = State(initialValue: WorkoutExecutionModel(workoutID: id, repository: repository, historyRepository: historyRepository ?? (repository as? SwiftDataRepository), progressionRepository: progressionRepository ?? (repository as? SwiftDataRepository), exerciseRepository: exerciseRepository ?? (repository as? SwiftDataRepository), weightUnit: weightUnit, defaultRestDuration: defaultRestDuration, haptics: SystemHapticsClient(), audio: SystemAudioFeedbackClient(), didPersist: didPersist))
     }
 
     var body: some View {
         ZStack {
-            EQColor.canvas.ignoresSafeArea()
+            (usesObjectSurface ? EQColor.surface : EQColor.canvas).ignoresSafeArea()
             if let workout = model.workout { content(workout) }
             else if let error = model.errorMessage { ContentUnavailableView("Workout unavailable", systemImage: "exclamationmark.triangle", description: Text(error)) }
             else { ProgressView("Loading workout") }
@@ -31,7 +50,7 @@ struct WorkoutExecutionView: View {
         .onReceive(NotificationCenter.default.publisher(for: .equilibriumRepositoryDidChange)) { _ in Task { await model.refreshFromPersistence() } }
         .onChange(of: scenePhase) { _, phase in if phase == .active { model.refreshRest() } }
         .onChange(of: model.didAutoComplete) { _, completed in
-            if completed { completionFeedback += 1; dismiss() }
+            if completed { completionFeedback += 1; requestExit() }
         }
         .sensoryFeedback(.success, trigger: completionFeedback)
         .alert("Reset workout?", isPresented: $confirmsReset) {
@@ -40,7 +59,7 @@ struct WorkoutExecutionView: View {
         } message: { Text("Clear all logged progress for this workout? This cannot be undone.") }
         .alert("Delete workout?", isPresented: $confirmsDelete) {
             Button("Cancel", role: .cancel) {}
-            Button("Delete", role: .destructive) { Task { if await model.deleteWorkout() { dismiss() } } }
+            Button("Delete", role: .destructive) { Task { if await model.deleteWorkout() { requestExit() } } }
         } message: { Text("Remove this workout? Your personal exercise definitions are not affected.") }
         .sheet(isPresented: $editsRestDuration) {
             RestDurationEditor(initialSeconds: model.configuredRestDuration) { seconds in await model.setRestDuration(seconds) }
@@ -50,7 +69,7 @@ struct WorkoutExecutionView: View {
 
     @ToolbarContentBuilder private var workoutToolbar: some ToolbarContent {
         ToolbarItem(placement: .topBarLeading) {
-            Button { dismiss() } label: { Label("Home", systemImage: "chevron.left") }
+            Button(action: requestExit) { Label("Home", systemImage: "chevron.left") }
                 .accessibilityHint("Returns to Home")
         }
         ToolbarItem(placement: .topBarTrailing) {
@@ -73,52 +92,35 @@ struct WorkoutExecutionView: View {
         }
     }
 
+    private func requestExit() {
+        if let onExit { onExit() }
+        else { dismiss() }
+    }
+
     private func content(_ workout: Workout) -> some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: EQSpacing.md) {
-                Text(workout.titleSnapshot).font(EQTypography.title).padding(.horizontal, EQSpacing.lg)
-                if model.isReadOnly {
-                    Text("Completed · Read-only").font(EQTypography.caption).foregroundStyle(EQColor.success).padding(.horizontal, EQSpacing.lg)
-                }
-                exercisesCard(workout)
-                activeExerciseCard
-                if let error = model.errorMessage {
-                    Label(error, systemImage: "exclamationmark.triangle").font(EQTypography.caption).foregroundStyle(EQColor.warning).padding(.horizontal, EQSpacing.lg)
-                }
-            }
-            .padding(.bottom, EQSpacing.md)
-        }
-        .scrollDismissesKeyboard(.interactively)
-        .scrollIndicators(.hidden)
-    }
-
-    private func exercisesCard(_ workout: Workout) -> some View {
-        VStack(alignment: .leading, spacing: EQSpacing.sm) {
-            HStack {
-                Text("EXERCISES").font(EQTypography.caption.weight(.bold))
-                Spacer()
-                Text("\(model.progress.completedSetCount) of \(model.progress.requiredSetCount) sets")
-                    .font(EQTypography.caption).foregroundStyle(EQColor.secondaryText)
-            }
-            ForEach(workout.exercises) { exercise in
-                let state = model.states[exercise.id] ?? .upcoming
-                Button {
-                    if workout.status == .inProgress { model.focus(exercise.id) }
-                } label: {
+        GeometryReader { proxy in
+            ExecutionWallet(
+                workout: workout,
+                model: model,
+                presentation: walletPresentation,
+                reduceMotion: reduceMotion,
+                listRow: { exercise, state in
                     ExerciseListRow(exercise: exercise, detail: exerciseDetail(exercise, state: state), state: state)
-                }
-                .buttonStyle(.plain)
-                .disabled(workout.status == .completed)
-                .accessibilityHint(workout.status == .inProgress ? "Makes this the active exercise without changing workout order" : "Completed workout is read-only")
-                .contextMenu { if workout.status == .inProgress { Button("Exercise Settings", systemImage: "gearshape") { settingsExercise = exercise } } }
-            }
-            if workout.status == .completed { ReadOnlySetReview(exercises: workout.exercises, weightUnit: model.weightUnit) }
+                },
+                selectExercise: { exercise in
+                    guard workout.status == .inProgress else { return }
+                    model.focus(exercise.id)
+                    walletPresentation.showFocusedExercise()
+                },
+                showSettings: { settingsExercise = $0 },
+                foregroundContent: { foregroundExerciseContent },
+                compactContent: { compactExerciseContent }
+            )
+            .frame(width: proxy.size.width, height: proxy.size.height)
         }
-        .eqCard()
-        .padding(.horizontal, EQSpacing.md)
     }
 
-    private var activeExerciseCard: some View {
+    private var foregroundExerciseContent: some View {
         VStack(alignment: .leading, spacing: EQSpacing.md) {
             HStack {
                 Text(model.restState == nil ? "ACTIVE EXERCISE" : "REST")
@@ -178,10 +180,46 @@ struct WorkoutExecutionView: View {
                 } label: { Label("Previous performance", systemImage: "chart.xyaxis.line").frame(minHeight: EQDimension.minimumTouch) }
                 .accessibilityHint("Shows completed working sets, trend, and personal record")
             }
+            if let error = model.errorMessage {
+                Label(error, systemImage: "exclamationmark.triangle")
+                    .font(EQTypography.caption)
+                    .foregroundStyle(EQColor.warning)
+            }
         }
-        .eqCard(elevated: true)
-        .padding(.horizontal, EQSpacing.md)
         .animation(reduceMotion ? nil : .easeInOut(duration: EQMotion.standard), value: model.restState != nil)
+    }
+
+    private var compactExerciseContent: some View {
+        Button { walletPresentation.showFocusedExercise() } label: {
+            HStack(spacing: EQSpacing.sm) {
+                VStack(alignment: .leading, spacing: EQSpacing.xxs) {
+                    Text(model.restState == nil ? "CURRENT EXERCISE" : "REST")
+                        .font(EQTypography.caption.weight(.bold))
+                        .foregroundStyle(EQColor.secondaryText)
+                    Text(compactExerciseTitle).font(EQTypography.cardTitle)
+                    Text(compactExerciseDetail).font(EQTypography.caption).foregroundStyle(EQColor.secondaryText)
+                }
+                Spacer()
+                Image(systemName: "arrow.up.left.and.arrow.down.right")
+                    .foregroundStyle(EQColor.accent)
+            }
+            .frame(maxWidth: .infinity, minHeight: EQDimension.minimumTouch, alignment: .leading)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Current exercise, \(compactExerciseTitle)")
+        .accessibilityHint("Expands the current exercise")
+    }
+
+    private var compactExerciseTitle: String {
+        model.restState?.exerciseName ?? model.workTimerState?.exerciseName ?? model.currentExercise?.nameSnapshot ?? (model.isReadOnly ? "Workout complete" : "No active exercise")
+    }
+
+    private var compactExerciseDetail: String {
+        if let rest = model.restState { return "Rest in progress · \(rest.exerciseName)" }
+        if let work = model.workTimerState { return "Timer active · Set \(work.setNumber) of \(work.totalSets)" }
+        if let exercise = model.currentExercise { return exerciseDetail(exercise, state: model.states[exercise.id] ?? .upcoming) }
+        return "Review exercises"
     }
 
     private func prescriptionSummary(_ exercise: WorkoutExercise) -> String {
@@ -200,6 +238,130 @@ struct WorkoutExecutionView: View {
         }
     }
 
+}
+
+private struct ExecutionWallet<ListRow: View, ForegroundContent: View, CompactContent: View>: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    let workout: Workout
+    let model: WorkoutExecutionModel
+    let presentation: ExecutionWalletPresentation
+    let reduceMotion: Bool
+    let listRow: (WorkoutExercise, ExerciseState) -> ListRow
+    let selectExercise: (WorkoutExercise) -> Void
+    let showSettings: (WorkoutExercise) -> Void
+    let foregroundContent: () -> ForegroundContent
+    let compactContent: () -> CompactContent
+
+    var body: some View {
+        GeometryReader { proxy in
+            let headerHeight = dynamicTypeSize.isAccessibilitySize ? EQDimension.restCardHeight : EQDimension.minimumTouch + EQSpacing.md
+            let compactHeight = dynamicTypeSize.isAccessibilitySize ? EQDimension.restCardHeight : EQDimension.minimumTouch + EQSpacing.xl
+            let focusedTop = headerHeight + EQSpacing.xs
+            let focusedHeight = max(EQDimension.minimumTouch, proxy.size.height - focusedTop)
+            let overviewTop = max(focusedTop, proxy.size.height - compactHeight)
+            let isFocused = presentation.mode == .focusedExercise
+
+            ZStack(alignment: .top) {
+                exerciseListCard(compactHeight: compactHeight)
+                    .frame(width: proxy.size.width - (EQSpacing.md * 2), height: proxy.size.height)
+                    .clipShape(RoundedRectangle(cornerRadius: EQRadius.hero, style: .continuous))
+                    .accessibilityIdentifier("execution-exercise-list-card-\(workout.id.rawValue)")
+
+                foregroundCard(isFocused: isFocused)
+                    .frame(width: proxy.size.width - (EQSpacing.md * 2), height: isFocused ? focusedHeight : compactHeight, alignment: .top)
+                    .offset(y: isFocused ? focusedTop : overviewTop)
+                    .clipShape(RoundedRectangle(cornerRadius: EQRadius.hero, style: .continuous))
+                    .zIndex(1)
+                    .accessibilityIdentifier("execution-current-exercise-card-\(workout.id.rawValue)")
+            }
+            .animation(reduceMotion ? nil : .easeInOut(duration: EQMotion.standard), value: presentation.mode)
+        }
+        .id("execution-wallet-\(workout.id.rawValue)")
+    }
+
+    private func exerciseListCard(compactHeight: CGFloat) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Button(action: presentation.showExerciseOverview) {
+                HStack(alignment: .firstTextBaseline, spacing: EQSpacing.sm) {
+                    VStack(alignment: .leading, spacing: EQSpacing.xxs) {
+                        Text("EXERCISES").font(EQTypography.caption.weight(.bold))
+                        Text(workout.titleSnapshot).font(EQTypography.cardTitle)
+                    }
+                    Spacer()
+                    VStack(alignment: .trailing, spacing: EQSpacing.xxs) {
+                        Text("\(model.progress.completedSetCount) / \(model.progress.requiredSetCount)")
+                            .font(EQTypography.cardTitle).monospacedDigit()
+                        Text("SETS").font(EQTypography.caption).foregroundStyle(EQColor.secondaryText)
+                    }
+                }
+                .frame(maxWidth: .infinity, minHeight: EQDimension.minimumTouch, alignment: .leading)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .padding(.horizontal, EQSpacing.md)
+            .padding(.vertical, EQSpacing.sm)
+            .accessibilityHint(presentation.mode == .focusedExercise ? "Shows the full exercise list" : "Exercise list is already visible")
+
+            Divider().overlay(EQColor.separator)
+
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: EQSpacing.xs) {
+                    if model.isReadOnly {
+                        Text("Completed · Read-only")
+                            .font(EQTypography.caption)
+                            .foregroundStyle(EQColor.success)
+                            .padding(.bottom, EQSpacing.xs)
+                    }
+                    ForEach(workout.exercises) { exercise in
+                        let state = model.states[exercise.id] ?? .upcoming
+                        Button { selectExercise(exercise) } label: { listRow(exercise, state) }
+                            .buttonStyle(.plain)
+                            .disabled(workout.status == .completed)
+                            .accessibilityHint(workout.status == .inProgress ? "Makes this the active exercise without changing workout order" : "Completed workout is read-only")
+                            .contextMenu {
+                                if workout.status == .inProgress {
+                                    Button("Exercise Settings", systemImage: "gearshape") { showSettings(exercise) }
+                                }
+                            }
+                    }
+                    if workout.status == .completed {
+                        ReadOnlySetReview(exercises: workout.exercises, weightUnit: model.weightUnit)
+                    }
+                }
+                .padding(EQSpacing.md)
+                .padding(.bottom, compactHeight + EQSpacing.md)
+            }
+            .scrollIndicators(.hidden)
+            .scrollDisabled(presentation.mode == .focusedExercise)
+        }
+        .background(EQColor.elevatedSurface, in: RoundedRectangle(cornerRadius: EQRadius.hero, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: EQRadius.hero, style: .continuous).stroke(EQColor.separator))
+    }
+
+    @ViewBuilder private func foregroundCard(isFocused: Bool) -> some View {
+        if isFocused {
+            ScrollView {
+                foregroundContent()
+                    .padding(EQSpacing.md)
+                    .padding(.bottom, EQSpacing.xl)
+            }
+            .scrollDismissesKeyboard(.interactively)
+            .scrollIndicators(.hidden)
+            .accessibilityElement(children: .contain)
+            .accessibilityLabel("Current exercise")
+            .background(foregroundBackground)
+        } else {
+            compactContent()
+                .padding(EQSpacing.md)
+                .background(foregroundBackground)
+        }
+    }
+
+    private var foregroundBackground: some View {
+        RoundedRectangle(cornerRadius: EQRadius.hero, style: .continuous)
+            .fill(EQColor.surface)
+            .overlay(RoundedRectangle(cornerRadius: EQRadius.hero, style: .continuous).stroke(EQColor.separator))
+    }
 }
 
 private struct RestDurationEditor: View {

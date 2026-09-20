@@ -1,30 +1,38 @@
 import SwiftUI
 
 enum StandaloneTimerNavigationPolicy {
-    static func replacingCreation(in path: [HomeRoute], withRunID id: String) -> [HomeRoute] {
-        guard path.last == .timerCreate else { return path + [.timerRun(id)] }
-        var result = path; result[result.count - 1] = .timerRun(id); return result
+    static func replacingCreation(in path: [TimerRoute], withRunID id: String) -> [TimerRoute] {
+        guard path.last == .create else { return path + [.run(id)] }
+        var result = path; result[result.count - 1] = .run(id); return result
     }
 }
 
+enum TimerRoute: Hashable { case create, edit(String), run(String) }
+
 struct StandaloneTimerView: View {
     private let store: any StandaloneTimerConfigurationStore
-    @Binding private var path: [HomeRoute]
+    @Binding private var path: [TimerRoute]
+    private let dismissToHome: (() -> Void)?
     @State private var configurations: [StandaloneTimerConfiguration] = []
     @State private var deletionTarget: StandaloneTimerConfiguration?
-    init(store: (any StandaloneTimerConfigurationStore)? = nil, path: Binding<[HomeRoute]> = .constant([])) { self.store = store ?? UserDefaultsStandaloneTimerStore(); _path = path }
+    init(store: (any StandaloneTimerConfigurationStore)? = nil, path: Binding<[TimerRoute]> = .constant([]), dismissToHome: (() -> Void)? = nil) {
+        self.store = store ?? UserDefaultsStandaloneTimerStore()
+        _path = path
+        self.dismissToHome = dismissToHome
+    }
     var body: some View {
         List {
-            Section { NavigationLink("Create Timer", value: HomeRoute.timerCreate) }
+            Section { NavigationLink("Create Timer", value: TimerRoute.create) }
             Section("Saved Timers") {
                 ForEach(configurations) { configuration in
                     HStack {
-                        Button { path.append(.timerRun(configuration.id)) } label: { VStack(alignment: .leading) { Text(configuration.name).lineLimit(2); Text("\(configuration.exercisesPerRound) exercises × \(configuration.rounds) rounds").font(EQTypography.caption).foregroundStyle(EQColor.secondaryText) } }.buttonStyle(.plain).frame(maxWidth: .infinity, minHeight: EQDimension.minimumTouch, alignment: .leading)
-                        Menu { Button("Edit Timer", systemImage: "pencil") { path.append(.timerEdit(configuration.id)) }; Button("Delete Timer", systemImage: "trash", role: .destructive) { deletionTarget = configuration } } label: { Label("Timer actions", systemImage: "ellipsis.circle").labelStyle(.iconOnly) }.accessibilityLabel("Actions for \(configuration.name)")
+                        Button { path.append(.run(configuration.id)) } label: { VStack(alignment: .leading) { Text(configuration.name).lineLimit(2); Text("\(configuration.exercisesPerRound) exercises × \(configuration.rounds) rounds").font(EQTypography.caption).foregroundStyle(EQColor.secondaryText) } }.buttonStyle(.plain).frame(maxWidth: .infinity, minHeight: EQDimension.minimumTouch, alignment: .leading)
+                        Menu { Button("Edit Timer", systemImage: "pencil") { path.append(.edit(configuration.id)) }; Button("Delete Timer", systemImage: "trash", role: .destructive) { deletionTarget = configuration } } label: { Label("Timer actions", systemImage: "ellipsis.circle").labelStyle(.iconOnly) }.accessibilityLabel("Actions for \(configuration.name)")
                     }
                 }
             }
         }.scrollContentBackground(.hidden).background(EQColor.canvas).navigationTitle("Timer").onAppear { reload() }
+            .toolbar { if let dismissToHome { ToolbarItem(placement: .topBarLeading) { Button(action: dismissToHome) { Label("Workout of the day", systemImage: "chevron.up") } } } }
             .onReceive(NotificationCenter.default.publisher(for: .equilibriumRepositoryDidChange)) { _ in reload() }
             .alert("Delete timer?", isPresented: Binding(get: { deletionTarget != nil }, set: { if !$0 { deletionTarget = nil } })) {
                 Button("Cancel", role: .cancel) { deletionTarget = nil }
