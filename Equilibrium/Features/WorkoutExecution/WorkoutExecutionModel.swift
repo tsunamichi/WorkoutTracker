@@ -139,6 +139,10 @@ final class WorkoutExecutionModel {
         restEditableExercise?.restDuration ?? defaultRestDuration
     }
 
+    func exercise(id: WorkoutExerciseID) -> WorkoutExercise? {
+        workout?.exercises.first { $0.id == id }
+    }
+
     func activate() async {
         guard !isActivated else { return }
         isActivated = true

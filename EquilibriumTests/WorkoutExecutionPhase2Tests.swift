@@ -211,6 +211,66 @@ final class WorkoutExecutionNavigationStateTests: XCTestCase {
         XCTAssertEqual(home.expandedWorkoutID, fixture.id)
     }
 
+    func testExerciseSettingsPresentationPreservesCanonicalExerciseWalletAndHomeState() async throws {
+        let repository = SwiftDataRepository(container: try PersistenceController.makeContainer(inMemory: true))
+        let fixture = EquilibriumFixtures.midWorkout(id: "settings-presentation")
+        try await repository.create(fixture)
+        let home = HomeModel(repository: repository)
+        await home.load()
+        home.beginExecution(for: fixture.id)
+
+        let execution = WorkoutExecutionModel(workoutID: fixture.id, repository: repository)
+        await execution.activate()
+        let canonicalWorkout = try XCTUnwrap(execution.workout)
+        let canonicalExerciseID = try XCTUnwrap(execution.currentExercise?.id)
+        let wallet = ExecutionWalletPresentation()
+        wallet.showExerciseOverview()
+        let settings = ExerciseSettingsPresentation()
+
+        settings.present(exerciseID: canonicalExerciseID)
+
+        XCTAssertTrue(settings.isPresented)
+        XCTAssertEqual(settings.exerciseID, canonicalExerciseID)
+        XCTAssertEqual(execution.workout, canonicalWorkout)
+        XCTAssertEqual(execution.currentExercise?.id, canonicalExerciseID)
+        XCTAssertEqual(wallet.mode, .exerciseOverview)
+        XCTAssertEqual(home.expandedWorkoutID, fixture.id)
+
+        settings.dismiss()
+
+        XCTAssertFalse(settings.isPresented)
+        XCTAssertNil(settings.exerciseID)
+        XCTAssertEqual(execution.workout, canonicalWorkout)
+        XCTAssertEqual(execution.currentExercise?.id, canonicalExerciseID)
+        XCTAssertEqual(wallet.mode, .exerciseOverview)
+        XCTAssertEqual(home.expandedWorkoutID, fixture.id)
+    }
+
+    func testExerciseSettingsPresentationDoesNotCancelActiveRest() async throws {
+        let repository = SwiftDataRepository(container: try PersistenceController.makeContainer(inMemory: true))
+        let fixture = EquilibriumFixtures.mixed(id: "settings-rest")
+        try await repository.create(fixture)
+        let execution = WorkoutExecutionModel(workoutID: fixture.id, repository: repository)
+        await execution.activate()
+        await execution.log(
+            exerciseID: fixture.exercises[0].id,
+            prescriptionID: fixture.exercises[0].prescriptions[0].id,
+            input: .repetitions(weight: nil, repetitions: 8)
+        )
+        let canonicalWorkout = try XCTUnwrap(execution.workout)
+        let restBeforePresentation = try XCTUnwrap(execution.restState)
+        let settings = ExerciseSettingsPresentation()
+
+        settings.present(exerciseID: fixture.exercises[0].id)
+        settings.dismiss()
+
+        XCTAssertEqual(execution.foregroundState, .rest)
+        XCTAssertEqual(execution.restState, restBeforePresentation)
+        XCTAssertEqual(execution.workout, canonicalWorkout)
+        XCTAssertEqual(execution.timer.state, .running)
+        execution.skipRest()
+    }
+
     func testWalletSelectionUsesCanonicalFocusAndPreservesExerciseOrder() async throws {
         let repository = SwiftDataRepository(container: try PersistenceController.makeContainer(inMemory: true))
         let fixture = EquilibriumFixtures.midWorkout(id: "wallet-selection")

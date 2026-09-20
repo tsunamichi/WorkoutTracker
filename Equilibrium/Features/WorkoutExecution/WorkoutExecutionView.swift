@@ -20,6 +20,16 @@ final class ExecutionWalletPresentation {
     }
 }
 
+@MainActor @Observable
+final class ExerciseSettingsPresentation {
+    private(set) var exerciseID: WorkoutExerciseID?
+
+    var isPresented: Bool { exerciseID != nil }
+
+    func present(exerciseID: WorkoutExerciseID) { self.exerciseID = exerciseID }
+    func dismiss() { exerciseID = nil }
+}
+
 struct WorkoutExecutionView: View {
     @State private var model: WorkoutExecutionModel
     @Environment(\.dismiss) private var dismiss
@@ -29,7 +39,7 @@ struct WorkoutExecutionView: View {
     @State private var confirmsReset = false
     @State private var confirmsDelete = false
     @State private var editsRestDuration = false
-    @State private var settingsExercise: WorkoutExercise?
+    @State private var exerciseSettingsPresentation = ExerciseSettingsPresentation()
     @State private var walletPresentation = ExecutionWalletPresentation()
     private let historyRepository: (any ExerciseHistoryRepository)?
     private let onExit: (() -> Void)?
@@ -71,7 +81,9 @@ struct WorkoutExecutionView: View {
         .sheet(isPresented: $editsRestDuration) {
             RestDurationEditor(initialSeconds: model.configuredRestDuration) { seconds in await model.setRestDuration(seconds) }
         }
-        .sheet(item: $settingsExercise) { exercise in ExerciseSettingsView(exercise: exercise, model: model) }
+        .sheet(item: exerciseSettingsDestination, onDismiss: exerciseSettingsPresentation.dismiss) { exerciseID in
+            ExerciseSettingsView(exerciseID: exerciseID, model: model)
+        }
     }
 
     @ToolbarContentBuilder private var workoutToolbar: some ToolbarContent {
@@ -120,7 +132,7 @@ struct WorkoutExecutionView: View {
                     model.focus(exercise.id)
                     walletPresentation.showFocusedExercise()
                 },
-                showSettings: { settingsExercise = $0 },
+                showSettings: { presentExerciseSettings(for: $0) },
                 foregroundContent: { foregroundExerciseContent },
                 compactContent: { compactExerciseContent }
             )
@@ -135,9 +147,10 @@ struct WorkoutExecutionView: View {
                     .font(EQTypography.caption.weight(.bold))
                 Spacer()
                 if model.foregroundState == .exercise, let exercise = model.currentExercise, !model.isReadOnly {
-                    Button("Settings") { settingsExercise = exercise }
+                    Button("Settings") { presentExerciseSettings(for: exercise) }
                         .font(EQTypography.caption.weight(.semibold))
                         .accessibilityLabel("Exercise Settings")
+                        .accessibilityHint("Opens settings for \(exercise.nameSnapshot) without leaving the workout")
                 }
             }
             ZStack(alignment: .topLeading) {
@@ -270,6 +283,22 @@ struct WorkoutExecutionView: View {
         case .current: return "Current · \(prescriptionSummary(exercise))"
         case .upcoming: return prescriptionSummary(exercise)
         }
+    }
+
+    private var exerciseSettingsDestination: Binding<WorkoutExerciseID?> {
+        Binding(
+            get: { exerciseSettingsPresentation.exerciseID },
+            set: { exerciseID in
+                if let exerciseID { exerciseSettingsPresentation.present(exerciseID: exerciseID) }
+                else { exerciseSettingsPresentation.dismiss() }
+            }
+        )
+    }
+
+    private func presentExerciseSettings(for exercise: WorkoutExercise) {
+        guard model.foregroundState == .exercise, model.showsExecutionOptions,
+              model.exercise(id: exercise.id) != nil else { return }
+        exerciseSettingsPresentation.present(exerciseID: exercise.id)
     }
 
 }
@@ -559,19 +588,94 @@ private struct FocusedSetView: View {
 }
 
 private struct ExerciseSettingsView: View {
-    let exercise: WorkoutExercise; let model: WorkoutExecutionModel
+    let exerciseID: WorkoutExerciseID
+    let model: WorkoutExecutionModel
     @Environment(\.dismiss) private var dismiss
-    @State private var timeBased: Bool; @State private var twoSided: Bool; @State private var profile: AutoProgressionProfile = .none
-    @State private var choices: [ExerciseDefinition] = []; @State private var confirmsRemove = false
-    init(exercise: WorkoutExercise, model: WorkoutExecutionModel) { self.exercise = exercise; self.model = model; _timeBased = State(initialValue: exercise.isTimeBased); _twoSided = State(initialValue: exercise.isTwoSided) }
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @State private var timeBased: Bool
+    @State private var twoSided: Bool
+    @State private var profile: AutoProgressionProfile = .none
+    @State private var choices: [ExerciseDefinition] = []
+    @State private var confirmsRemove = false
+    @State private var selectedDetent: PresentationDetent = .medium
+
+    init(exerciseID: WorkoutExerciseID, model: WorkoutExecutionModel) {
+        self.exerciseID = exerciseID
+        self.model = model
+        let exercise = model.exercise(id: exerciseID)
+        _timeBased = State(initialValue: exercise?.isTimeBased ?? false)
+        _twoSided = State(initialValue: exercise?.isTwoSided ?? false)
+    }
+
+    private var exercise: WorkoutExercise? { model.exercise(id: exerciseID) }
+
     var body: some View {
-        NavigationStack { Form {
-            Section("Exercise Settings") { Toggle("Time-based exercise", isOn: $timeBased); Toggle("Two-sides exercise", isOn: $twoSided) }
-            Section("Auto Progression") { Picker("Auto Progression", selection: $profile) { ForEach(AutoProgressionProfile.allCases, id: \.self) { Text($0.title).tag($0) } } }
-            Section { Menu("Swap exercise") { ForEach(choices.filter { $0.id != exercise.exerciseID }) { definition in Button(definition.name) { Task { if await model.swapExercise(occurrenceID: exercise.id, with: definition) { dismiss() } } } } }; Button("Remove exercise", role: .destructive) { confirmsRemove = true } }
-        }.navigationTitle(exercise.nameSnapshot).toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }; ToolbarItem(placement: .confirmationAction) { Button("Save") { Task { if await model.updateExerciseSettings(exerciseID: exercise.id, timeBased: timeBased, twoSided: twoSided, progression: profile) { dismiss() } } } } } }
-        .task { choices = await model.availableExercises(); profile = await model.progressionProfile(for: exercise) }
-        .alert("Remove exercise?", isPresented: $confirmsRemove) { Button("Cancel", role: .cancel) {}; Button("Remove", role: .destructive) { Task { if await model.removeExercise(exercise.id) { dismiss() } } } } message: { Text("Remove this exercise from this workout?") }
+        NavigationStack {
+            Group {
+                if let exercise {
+                    Form {
+                        Section("Exercise Settings") {
+                            Toggle("Time-based exercise", isOn: $timeBased)
+                            Toggle("Two-sides exercise", isOn: $twoSided)
+                        }
+                        Section("Auto Progression") {
+                            Picker("Auto Progression", selection: $profile) {
+                                ForEach(AutoProgressionProfile.allCases, id: \.self) { Text($0.title).tag($0) }
+                            }
+                        }
+                        Section {
+                            Menu("Swap exercise") {
+                                ForEach(choices.filter { $0.id != exercise.exerciseID }) { definition in
+                                    Button(definition.name) {
+                                        Task { if await model.swapExercise(occurrenceID: exerciseID, with: definition) { dismiss() } }
+                                    }
+                                }
+                            }
+                            .accessibilityHint("Replaces this exercise in the current workout")
+                            Button("Remove exercise", role: .destructive) { confirmsRemove = true }
+                                .accessibilityHint("Requires confirmation before removing this exercise")
+                        }
+                    }
+                } else {
+                    ContentUnavailableView("Exercise unavailable", systemImage: "exclamationmark.triangle")
+                }
+            }
+            .navigationTitle(exercise?.nameSnapshot ?? "Exercise Settings")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Save") {
+                        Task {
+                            if await model.updateExerciseSettings(exerciseID: exerciseID, timeBased: timeBased, twoSided: twoSided, progression: profile) { dismiss() }
+                        }
+                    }
+                    .disabled(exercise == nil)
+                }
+            }
+        }
+        .presentationDetents([.medium, .large], selection: $selectedDetent)
+        .presentationDragIndicator(.visible)
+        .presentationCompactAdaptation(.sheet)
+        .accessibilityIdentifier("exercise-settings-sheet-\(exerciseID.rawValue)")
+        .task(id: exercise?.exerciseID) {
+            choices = await model.availableExercises()
+            if let exercise { profile = await model.progressionProfile(for: exercise) }
+        }
+        .onAppear { expandForVeryLargeTypeIfNeeded() }
+        .onChange(of: dynamicTypeSize) { _, _ in expandForVeryLargeTypeIfNeeded() }
+        .alert("Remove exercise?", isPresented: $confirmsRemove) {
+            Button("Cancel", role: .cancel) {}
+            Button("Remove", role: .destructive) {
+                Task { if await model.removeExercise(exerciseID) { dismiss() } }
+            }
+        } message: { Text("Remove this exercise from this workout?") }
+    }
+
+    private func expandForVeryLargeTypeIfNeeded() {
+        if dynamicTypeSize == .accessibility3 || dynamicTypeSize == .accessibility4 || dynamicTypeSize == .accessibility5 {
+            selectedDetent = .large
+        }
     }
 }
 
