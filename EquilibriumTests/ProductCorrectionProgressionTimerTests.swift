@@ -185,6 +185,8 @@ import SwiftData
         model.focus(exercise.id)
         model.startWorkTimer(exerciseID: exercise.id, prescriptionID: prescription.id, input: .duration(weight: .init(pounds: 40), seconds: 45))
         XCTAssertEqual(model.workTimerState?.phase, .ready)
+        XCTAssertEqual(model.foregroundState, .work)
+        XCTAssertFalse(try XCTUnwrap(model.workTimerState).isTwoSided)
         XCTAssertEqual(model.workTimerState?.totalDuration, 5)
         XCTAssertNil(model.restState)
         monotonic = 5; model.refreshRest()
@@ -211,6 +213,8 @@ import SwiftData
         let exercise = fixture.exercises[1], prescription = exercise.prescriptions[0]
         model.focus(exercise.id)
         model.startWorkTimer(exerciseID: exercise.id, prescriptionID: prescription.id, input: .duration(weight: nil, seconds: 45))
+        XCTAssertTrue(try XCTUnwrap(model.workTimerState).isTwoSided)
+        XCTAssertEqual(model.workTimerState?.exerciseID, exercise.id)
         monotonic = 5; model.refreshRest(); XCTAssertEqual(model.workTimerState?.phase, .firstSide)
         monotonic = 50; model.refreshRest(); XCTAssertEqual(model.workTimerState?.phase, .switchSides); XCTAssertEqual(model.timer.configuredDuration, 10)
         monotonic = 60; model.refreshRest(); XCTAssertEqual(model.workTimerState?.phase, .secondSide); XCTAssertEqual(model.timer.configuredDuration, 45)

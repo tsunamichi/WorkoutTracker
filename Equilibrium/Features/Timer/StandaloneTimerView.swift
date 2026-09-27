@@ -79,12 +79,13 @@ struct StandaloneTimerRunView: View {
     @State private var confirmsExit = false
     @Environment(\.dismiss) private var dismiss
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     init(configuration: StandaloneTimerConfiguration) { _runner = State(initialValue: StandaloneIntervalTimer(configuration: configuration, haptics: SystemHapticsClient(), audio: SystemAudioFeedbackClient())) }
     var body: some View {
         VStack(spacing: EQSpacing.xl) {
             Spacer()
             Text(runner.phase == .move ? "MOVE" : runner.phase == .exerciseRest ? "REST" : runner.phase == .roundRest ? "ROUND REST" : "COMPLETE").font(EQTypography.sectionTitle).foregroundStyle(runner.phase == .move ? EQColor.accent : EQColor.rest)
-            Text(display).font(EQTypography.metric).monospacedDigit().contentTransition(.numericText()).accessibilityLabel("\(Int(ceil(runner.remaining))) seconds remaining")
+            Text(display).font(EQTypography.metric).monospacedDigit().contentTransition(reduceMotion ? .opacity : .numericText()).accessibilityLabel("\(Int(ceil(runner.remaining))) seconds remaining")
             HStack { metric("Exercise", "\(runner.exercise)/\(runner.configuration.exercisesPerRound)"); metric("Round", "\(runner.round)/\(runner.configuration.rounds)") }
             HStack {
                 Button(primaryLabel) { primary() }.buttonStyle(.borderedProminent)

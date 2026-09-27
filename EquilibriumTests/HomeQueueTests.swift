@@ -153,6 +153,24 @@ final class HomeQueueTests: XCTestCase {
         XCTAssertEqual(model.workouts, canonicalHomeProjection)
     }
 
+    func testCarouselGeometryKeepsSymmetricGuttersAcrossContainerWidths() {
+        for width: CGFloat in [320, 375, 393, 430, 768] {
+            let geometry = HomeCarouselGeometry(containerWidth: width, horizontalGutter: 24)
+
+            XCTAssertLessThanOrEqual(geometry.cardWidth, width)
+            XCTAssertEqual(geometry.horizontalGutter, 24)
+            XCTAssertEqual(geometry.cardWidth + geometry.horizontalGutter * 2, width)
+        }
+    }
+
+    func testCarouselGeometryRemainsValidForConstrainedContainers() {
+        let geometry = HomeCarouselGeometry(containerWidth: 32, horizontalGutter: 24)
+
+        XCTAssertEqual(geometry.horizontalGutter, 16)
+        XCTAssertEqual(geometry.cardWidth, 0)
+        XCTAssertLessThanOrEqual(geometry.cardWidth, geometry.containerWidth)
+    }
+
     func testCompletionDuringExpandedExecutionRemainsOnHomeTodayAfterExit() async throws {
         let repository = SwiftDataRepository(container: try PersistenceController.makeContainer(inMemory: true))
         let fixture = ready("expanded-completion", createdAt: date(2))

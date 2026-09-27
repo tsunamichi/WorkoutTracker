@@ -497,6 +497,9 @@
 				BuildIndependentTargetsInParallel = YES;
 				LastUpgradeCheck = 1430;
 				TargetAttributes = {
+					50B25B0A60851C4C6C09EF24 = {
+						DevelopmentTeam = KL8DB5RL28;
+					};
 				};
 			};
 			buildConfigurationList = 50C90C7B99F28C96E8A173E6 /* Build configuration list for PBXProject "Equilibrium" */;
@@ -691,6 +694,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = Equilibrium/Equilibrium.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
+				DEVELOPMENT_TEAM = KL8DB5RL28;
 				INFOPLIST_FILE = Equilibrium/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -790,6 +794,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = Equilibrium/Equilibrium.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
+				DEVELOPMENT_TEAM = KL8DB5RL28;
 				INFOPLIST_FILE = Equilibrium/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",

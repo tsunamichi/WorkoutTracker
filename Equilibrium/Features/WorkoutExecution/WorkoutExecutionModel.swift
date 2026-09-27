@@ -10,6 +10,7 @@ struct WorkoutRestState: Equatable, Sendable {
 
 enum ExecutionForegroundState: Equatable, Sendable {
     case exercise
+    case work
     case rest
 }
 
@@ -51,9 +52,11 @@ final class WorkoutRestSessionStore {
 
 enum WorkoutWorkTimerPhase: Equatable, Sendable { case ready, firstSide, switchSides, secondSide }
 struct WorkoutWorkTimerState: Equatable, Sendable {
+    let exerciseID: WorkoutExerciseID
     let exerciseName: String
     let setNumber: Int
     let totalSets: Int
+    let isTwoSided: Bool
     let phase: WorkoutWorkTimerPhase
     let totalDuration: TimeInterval
     var remaining: TimeInterval
@@ -84,11 +87,13 @@ final class WorkoutExecutionModel {
     private(set) var restingExercise: (id: WorkoutExerciseID, name: String)?
     private(set) var workTimerPhase: WorkoutWorkTimerPhase?
     private var pendingTimedSet: (exerciseID: WorkoutExerciseID, prescriptionID: SetID, input: SetLogInput, duration: TimeInterval, twoSided: Bool, exerciseName: String, setNumber: Int, totalSets: Int)?
+    private var isFinishingTimedSet = false
     @ObservationIgnored private var restTask: Task<Void, Never>?
     let weightUnit: WeightUnit
 
-    init(workoutID: WorkoutID, repository: any WorkoutRepository, historyRepository: (any ExerciseHistoryRepository)? = nil, progressionRepository: (any ProgressionRepository)? = nil, exerciseRepository: (any ExerciseRepository)? = nil, weightUnit: WeightUnit = .pounds, defaultRestDuration: TimeInterval = 90, now: @escaping () -> Date = Date.init, timer: CountdownTimer? = nil, restSessionStore: WorkoutRestSessionStore? = nil, haptics: (any HapticsClient)? = nil, audio: (any AudioFeedbackClient)? = nil, didPersist: @escaping (Workout) -> Void = { _ in }) {
+    init(workoutID: WorkoutID, initialWorkout: Workout? = nil, repository: any WorkoutRepository, historyRepository: (any ExerciseHistoryRepository)? = nil, progressionRepository: (any ProgressionRepository)? = nil, exerciseRepository: (any ExerciseRepository)? = nil, weightUnit: WeightUnit = .pounds, defaultRestDuration: TimeInterval = 90, now: @escaping () -> Date = Date.init, timer: CountdownTimer? = nil, restSessionStore: WorkoutRestSessionStore? = nil, haptics: (any HapticsClient)? = nil, audio: (any AudioFeedbackClient)? = nil, didPersist: @escaping (Workout) -> Void = { _ in }) {
         self.workoutID = workoutID
+        workout = initialWorkout?.id == workoutID ? initialWorkout : nil
         self.repository = repository
         self.weightUnit = weightUnit
         self.now = now
@@ -105,11 +110,24 @@ final class WorkoutExecutionModel {
         guard let restingExercise, timer.state == .running || timer.state == .paused || timer.state == .completed else { return nil }
         return .init(exerciseID: restingExercise.id, exerciseName: restingExercise.name, totalDuration: timer.configuredDuration, remaining: timer.remainingDuration)
     }
-    var foregroundState: ExecutionForegroundState { restState == nil ? .exercise : .rest }
+    var foregroundState: ExecutionForegroundState {
+        if restState != nil { return .rest }
+        if workTimerState != nil { return .work }
+        return .exercise
+    }
     var workTimerState: WorkoutWorkTimerState? {
         guard let pendingTimedSet, let workTimerPhase,
               timer.state == .running || timer.state == .paused || timer.state == .completed else { return nil }
-        return .init(exerciseName: pendingTimedSet.exerciseName, setNumber: pendingTimedSet.setNumber, totalSets: pendingTimedSet.totalSets, phase: workTimerPhase, totalDuration: timer.configuredDuration, remaining: timer.remainingDuration)
+        return .init(
+            exerciseID: pendingTimedSet.exerciseID,
+            exerciseName: pendingTimedSet.exerciseName,
+            setNumber: pendingTimedSet.setNumber,
+            totalSets: pendingTimedSet.totalSets,
+            isTwoSided: pendingTimedSet.twoSided,
+            phase: workTimerPhase,
+            totalDuration: timer.configuredDuration,
+            remaining: timer.remainingDuration
+        )
     }
 
     var isReadOnly: Bool { workout?.status == .completed }
@@ -194,13 +212,17 @@ final class WorkoutExecutionModel {
             accept(updated)
             if await autoCompleteIfEligible(updated) { return }
             guard let loggedExercise = updated.exercises.first(where: { $0.id == exerciseID }) else { return }
-            if WorkoutExecutionQuery.isComplete(loggedExercise) {
+            let exerciseCompleted = WorkoutExecutionQuery.isComplete(loggedExercise)
+            let beganRest = !wasComplete && beginRestIfAppropriate(after: loggedExercise, in: updated)
+            if exerciseCompleted {
                 focusedExerciseID = nil
                 selectFirstIncompleteSet()
             } else if let index = loggedExercise.prescriptions.firstIndex(where: { !WorkoutExecutionQuery.completedPrescriptionIDs(in: loggedExercise).contains($0.id) }) {
                 selectedSetIndex = index
             }
-            if !wasComplete { beginRestIfAppropriate(after: loggedExercise, in: updated) }
+            if exerciseCompleted { haptics.perform(.exerciseCompleted) }
+            else if beganRest { haptics.perform(.restTransition) }
+            else { haptics.perform(.setLogged) }
             errorMessage = nil
         } catch { errorMessage = message(for: error) }
     }
@@ -212,8 +234,14 @@ final class WorkoutExecutionModel {
             let updated = try await repository.logSet(workoutID: workoutID, exerciseID: exerciseID, prescriptionID: prescriptionID, input: input, completed: true, at: now())
             accept(updated)
             if await autoCompleteIfEligible(updated) { return }
-            focusedExerciseID = nil; selectFirstIncompleteSet()
-            if let loggedExercise = updated.exercises.first(where: { $0.id == exerciseID }) { beginRestIfAppropriate(after: loggedExercise, in: updated) }
+            if let loggedExercise = updated.exercises.first(where: { $0.id == exerciseID }) {
+                let beganRest = beginRestIfAppropriate(after: loggedExercise, in: updated)
+                focusedExerciseID = nil
+                selectFirstIncompleteSet()
+                if WorkoutExecutionQuery.isComplete(loggedExercise) { haptics.perform(.exerciseCompleted) }
+                else if beganRest { haptics.perform(.restTransition) }
+                else { haptics.perform(.setLogged) }
+            }
             errorMessage = nil
         } catch { errorMessage = message(for: error) }
     }
@@ -233,9 +261,57 @@ final class WorkoutExecutionModel {
         do {
             let updated = try await repository.appendSet(workoutID: workoutID, exerciseID: exerciseID, seed: nil, at: now())
             accept(updated); focusedExerciseID = exerciseID
-            selectedSetIndex = max(0, (updated.exercises.first { $0.id == exerciseID }?.prescriptions.count ?? 1) - 1)
             errorMessage = nil
         } catch { errorMessage = message(for: error) }
+    }
+
+    func updateSetCount(exerciseID: WorkoutExerciseID, count: Int) async -> Bool {
+        guard (1...20).contains(count), workTimerState == nil, restState == nil,
+              let originalExercise = workout?.exercises.first(where: { $0.id == exerciseID }) else { return false }
+        let completedIDs = Set(originalExercise.loggedSets.filter { $0.completedAt != nil }.compactMap(\.prescriptionID))
+        guard count >= completedIDs.count else {
+            errorMessage = "Keep at least \(completedIDs.count) completed \(completedIDs.count == 1 ? "set" : "sets")."
+            return false
+        }
+        let activePrescriptionID = focusedExerciseID == exerciseID ? currentPrescription?.id : nil
+        let originalIndex = selectedSetIndex
+        do {
+            guard var updated = try await repository.workout(id: workoutID) else { throw RepositoryError.notFound }
+            guard let loadedExercise = updated.exercises.first(where: { $0.id == exerciseID }) else { throw RepositoryError.notFound }
+            let loadedCompletedCount = Set(loadedExercise.loggedSets.filter { $0.completedAt != nil }.compactMap(\.prescriptionID)).count
+            guard count >= loadedCompletedCount else {
+                errorMessage = "Keep at least \(loadedCompletedCount) completed \(loadedCompletedCount == 1 ? "set" : "sets")."
+                return false
+            }
+            while let exercise = updated.exercises.first(where: { $0.id == exerciseID }), exercise.prescriptions.count < count {
+                let seed: SetLogInput? = exercise.prescriptions.isEmpty
+                    ? (exercise.isTimeBased ? .duration(weight: nil, seconds: 30) : .repetitions(weight: nil, repetitions: 1))
+                    : nil
+                updated = try await repository.appendSet(workoutID: workoutID, exerciseID: exerciseID, seed: seed, at: now())
+            }
+            while let exercise = updated.exercises.first(where: { $0.id == exerciseID }), exercise.prescriptions.count > count {
+                let completed = Set(exercise.loggedSets.filter { $0.completedAt != nil }.compactMap(\.prescriptionID))
+                guard let removable = exercise.prescriptions.reversed().first(where: { !completed.contains($0.id) }) else {
+                    errorMessage = "Completed sets cannot be removed."
+                    return false
+                }
+                updated = try await repository.removeSet(workoutID: workoutID, exerciseID: exerciseID, prescriptionID: removable.id, at: now())
+            }
+            accept(updated)
+            focusedExerciseID = exerciseID
+            if let activePrescriptionID,
+               let exercise = updated.exercises.first(where: { $0.id == exerciseID }),
+               let activeIndex = exercise.prescriptions.firstIndex(where: { $0.id == activePrescriptionID }) {
+                selectedSetIndex = activeIndex
+            } else {
+                selectedSetIndex = max(0, min(originalIndex, count - 1))
+            }
+            errorMessage = nil
+            return true
+        } catch {
+            errorMessage = message(for: error)
+            return false
+        }
     }
 
     func removeCurrentSet(exerciseID: WorkoutExerciseID, prescriptionID: SetID) async {
@@ -255,7 +331,11 @@ final class WorkoutExecutionModel {
         selectedSetIndex = index
     }
 
-    func skipRest() { stopTimer() }
+    func skipRest() {
+        guard restState != nil else { return }
+        haptics.perform(.restSkipped)
+        stopTimer()
+    }
 
     func startWorkTimer(exerciseID: WorkoutExerciseID, prescriptionID: SetID, input: SetLogInput) {
         guard workTimerState == nil, restState == nil,
@@ -272,7 +352,7 @@ final class WorkoutExecutionModel {
         else if timer.state == .paused { timer.resume() }
     }
     func skipWorkTimer() {
-        guard pendingTimedSet != nil else { return }
+        guard pendingTimedSet != nil, !isFinishingTimedSet else { return }
         if workTimerPhase == .switchSides { transitionToWork(.secondSide) }
         else { finishTimedSet() }
     }
@@ -352,7 +432,7 @@ final class WorkoutExecutionModel {
         guard value.status == .inProgress, WorkoutExecutionQuery.canComplete(value) else { return false }
         do {
             let completed = try await repository.completeWorkout(id: workoutID, at: now())
-            stopTimer(); accept(completed); didAutoComplete = true; haptics.timerCompleted(); errorMessage = nil
+            stopTimer(); accept(completed); didAutoComplete = true; haptics.perform(.workoutCompleted); errorMessage = nil
             return true
         } catch { errorMessage = message(for: error); return false }
     }
@@ -393,26 +473,50 @@ final class WorkoutExecutionModel {
         switch workTimerPhase {
         case .ready: transitionToWork(.firstSide, alreadyElapsed: timer.completionOverrun)
         case .firstSide:
-            haptics.timerCompleted(); audio.timerCompleted()
+            haptics.perform(.timerCompleted); audio.timerCompleted()
             pendingTimedSet.twoSided ? transitionToWork(.switchSides, alreadyElapsed: timer.completionOverrun) : finishTimedSet()
         case .switchSides:
-            haptics.timerCompleted(); transitionToWork(.secondSide, alreadyElapsed: timer.completionOverrun)
+            haptics.perform(.timerCompleted); transitionToWork(.secondSide, alreadyElapsed: timer.completionOverrun)
         case .secondSide:
-            haptics.timerCompleted(); audio.timerCompleted(); finishTimedSet()
+            haptics.perform(.timerCompleted); audio.timerCompleted(); finishTimedSet()
         }
     }
     private func finishTimedSet() {
-        guard let pending = pendingTimedSet else { return }
-        restTask?.cancel(); restTask = nil; timer.cancel(); workTimerPhase = nil; pendingTimedSet = nil
-        Task { await log(exerciseID: pending.exerciseID, prescriptionID: pending.prescriptionID, input: pending.input) }
+        guard let pending = pendingTimedSet, !isFinishingTimedSet else { return }
+        isFinishingTimedSet = true
+        restTask?.cancel()
+        restTask = nil
+
+        // Keep the work presentation alive while the set is persisted. Clearing it here
+        // creates an observable `.exercise` frame between work and rest, which makes the
+        // timer disappear and both cards expand before the rest state exists.
+        if timer.state != .completed {
+            timer.start(duration: max(timer.configuredDuration, 1), alreadyElapsed: max(timer.configuredDuration, 1))
+        }
+
+        Task { [weak self] in
+            guard let self else { return }
+            await self.log(exerciseID: pending.exerciseID, prescriptionID: pending.prescriptionID, input: pending.input)
+            self.finishTimedSetHandoff()
+        }
     }
-    private func beginRestIfAppropriate(after exercise: WorkoutExercise, in workout: Workout) {
-        guard !WorkoutExecutionQuery.canComplete(workout) else { return }
+
+    private func finishTimedSetHandoff() {
+        workTimerPhase = nil
+        pendingTimedSet = nil
+        isFinishingTimedSet = false
+        if restingExercise == nil, timer.state == .completed {
+            timer.cancel()
+        }
+    }
+    @discardableResult private func beginRestIfAppropriate(after exercise: WorkoutExercise, in workout: Workout) -> Bool {
+        guard !WorkoutExecutionQuery.canComplete(workout) else { return false }
         let duration = exercise.restDuration ?? defaultRestDuration
-        guard duration > 0 else { return }
+        guard duration > 0 else { return false }
         restingExercise = (exercise.id, exercise.nameSnapshot)
         restSessionStore.begin(workoutID: workoutID, exerciseID: exercise.id, duration: duration, at: now())
         startTimer(duration: duration)
+        return true
     }
     private func restoreRestSessionIfAvailable(in workout: Workout) {
         guard let session = restSessionStore.session(for: workoutID) else { return }
@@ -439,11 +543,11 @@ final class WorkoutExecutionModel {
     }
     private func resolveTimerCompletion() {
         if restingExercise != nil {
-            haptics.timerCompleted(); audio.timerCompleted(); stopTimer(clearTimer: false)
+            haptics.perform(.timerCompleted); audio.timerCompleted(); stopTimer(clearTimer: false)
         } else if workTimerPhase != nil { advanceWorkTimer() }
     }
     private func stopTimer(clearTimer: Bool = true) {
-        restTask?.cancel(); restTask = nil; restingExercise = nil; workTimerPhase = nil; pendingTimedSet = nil
+        restTask?.cancel(); restTask = nil; restingExercise = nil; workTimerPhase = nil; pendingTimedSet = nil; isFinishingTimedSet = false
         restSessionStore.clear(workoutID: workoutID)
         if clearTimer { timer.cancel() }
     }

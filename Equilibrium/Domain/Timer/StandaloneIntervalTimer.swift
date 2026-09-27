@@ -87,7 +87,7 @@ public final class StandaloneIntervalTimer {
         }
     }
     private func finishOnce() {
-        guard state != .completed else { return }; state = .completed; phase = .completed; completionFeedbackCount += 1; haptics.timerCompleted(); audio.timerCompleted()
+        guard state != .completed else { return }; state = .completed; phase = .completed; completionFeedbackCount += 1; haptics.perform(.timerCompleted); audio.timerCompleted()
     }
 }
 

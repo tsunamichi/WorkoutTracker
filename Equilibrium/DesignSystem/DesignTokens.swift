@@ -13,10 +13,21 @@ enum EQColor {
     static let rest = Color(red: 0.95, green: 0.72, blue: 0.32)
 }
 enum EQSpacing { static let xxs: CGFloat = 4; static let xs: CGFloat = 8; static let sm: CGFloat = 12; static let md: CGFloat = 16; static let lg: CGFloat = 24; static let xl: CGFloat = 32 }
-enum EQRadius { static let compact: CGFloat = 8; static let control: CGFloat = 12; static let card: CGFloat = 20; static let hero: CGFloat = 28 }
+enum EQRadius { static let compact: CGFloat = 8; static let transformingCard: CGFloat = 10; static let control: CGFloat = 12; static let card: CGFloat = 20; static let hero: CGFloat = 28 }
 enum EQTypography { static let display: Font = .largeTitle.bold(); static let title: Font = .title.bold(); static let sectionTitle: Font = .title2.weight(.semibold); static let cardHero: Font = .title.bold(); static let cardTitle: Font = .headline; static let exerciseTitle: Font = .title3.weight(.semibold); static let metric: Font = .system(.largeTitle, design: .rounded, weight: .bold); static let body: Font = .body; static let caption: Font = .caption }
-enum EQDimension { static let minimumTouch: CGFloat = 44; static let inputHeight: CGFloat = 48; static let workoutCardHeight: CGFloat = 300; static let restCardHeight: CGFloat = 180 }
-enum EQMotion { static let standard: Double = 0.25; static let completion: Double = 0.35 }
+enum EQDimension { static let minimumTouch: CGFloat = 44; static let inputHeight: CGFloat = 48; static let workoutCardHeight: CGFloat = 300; static let exerciseCompactCardHeight: CGFloat = 116; static let restCardHeight: CGFloat = 180 }
+enum EQMotion {
+    /// Immediate control acknowledgement and small content changes.
+    static let responsive = Animation.easeOut(duration: 0.16)
+    /// Persistent objects changing size or position, without spring overshoot.
+    static let objectTransformation = Animation.timingCurve(0.22, 0.78, 0.22, 1, duration: 0.34)
+    /// Peer surfaces entering or leaving the viewport.
+    static let surfaceReveal = Animation.timingCurve(0.33, 0, 0.2, 1, duration: 0.28)
+    /// Content changing inside an object that remains in place.
+    static let contentTransition = Animation.easeInOut(duration: 0.22)
+    /// Preserves state-change legibility without large spatial motion.
+    static let reducedContentTransition = Animation.easeOut(duration: 0.12)
+}
 
 struct EQCardModifier: ViewModifier {
     var elevated = false
