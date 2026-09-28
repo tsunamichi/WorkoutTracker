@@ -1166,3 +1166,71 @@ private final class RecordingHapticsClient: HapticsClient {
     private(set) var events: [HapticFeedback] = []
     func perform(_ feedback: HapticFeedback) { events.append(feedback) }
 }
+
+@MainActor
+final class ExecutionPrimaryActionRegressionTests: XCTestCase {
+    func testPrimaryCTAIdentityIsStableAcrossLoggingAndTimerStates() {
+        let workoutID = WorkoutID(rawValue: "stable-primary-action")
+        let loggingIdentity = ExecutionPrimaryActionIdentity(workoutID: workoutID)
+        let timerIdentity = ExecutionPrimaryActionIdentity(workoutID: workoutID)
+        let restIdentity = ExecutionPrimaryActionIdentity(workoutID: workoutID)
+
+        XCTAssertEqual(loggingIdentity, timerIdentity)
+        XCTAssertEqual(timerIdentity, restIdentity)
+        XCTAssertEqual(
+            loggingIdentity.accessibilityIdentifier,
+            "execution-primary-action-\(workoutID.rawValue)"
+        )
+        XCTAssertNotEqual(
+            loggingIdentity,
+            ExecutionPrimaryActionIdentity(workoutID: WorkoutID(rawValue: "different-workout"))
+        )
+    }
+
+    func testTimerFooterReservesAClippedContentViewportAtStandardAndAccessibilitySizes() {
+        let walletHeight = EQDimension.restCardHeight + EQDimension.minimumTouch
+        let focusedTop = EQDimension.minimumTouch + EQSpacing.md - EQSpacing.xxs
+        let foregroundCardHeight = walletHeight - focusedTop
+        let headerHeight = EQDimension.minimumTouch + EQSpacing.xxs
+
+        for (controlHeight, expectedFooterHeight) in [(CGFloat(60), CGFloat(72)), (CGFloat(80), CGFloat(92))] {
+            let footerHeight = ExecutionPrimaryActionLayout.footerHeight(
+                isVisible: true,
+                controlHeight: controlHeight,
+                bottomInset: EQSpacing.sm
+            )
+            let viewportHeight = ExecutionPrimaryActionLayout.scrollViewportHeight(
+                cardHeight: foregroundCardHeight,
+                headerHeight: headerHeight,
+                footerHeight: footerHeight
+            )
+
+            XCTAssertEqual(footerHeight, expectedFooterHeight)
+            XCTAssertGreaterThan(viewportHeight, 0)
+            XCTAssertEqual(headerHeight + viewportHeight + footerHeight, foregroundCardHeight, accuracy: 0.001)
+        }
+    }
+
+    func testTimerContentViewportStaysFixedAsCountdownDigitsChangeWidth() {
+        let cardHeight: CGFloat = 168
+        let headerHeight: CGFloat = 48
+        let remainingValues: [TimeInterval] = [5, 4, 3, 60, 59, 600]
+        let timerTexts = remainingValues.map(ExecutionTimerFormatting.durationText(for:))
+        XCTAssertEqual(timerTexts, ["0:05", "0:04", "0:03", "1:00", "0:59", "10:00"])
+
+        let footerHeight = ExecutionPrimaryActionLayout.footerHeight(
+            isVisible: true,
+            controlHeight: 60,
+            bottomInset: EQSpacing.sm
+        )
+
+        for _ in timerTexts {
+            let viewportHeight = ExecutionPrimaryActionLayout.scrollViewportHeight(
+                cardHeight: cardHeight,
+                headerHeight: headerHeight,
+                footerHeight: footerHeight
+            )
+            XCTAssertEqual(headerHeight + viewportHeight, cardHeight - footerHeight, accuracy: 0.001)
+        }
+    }
+}

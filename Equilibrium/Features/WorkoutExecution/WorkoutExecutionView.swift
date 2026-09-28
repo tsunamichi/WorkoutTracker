@@ -77,6 +77,52 @@ enum FocusedSetSubmission: Equatable {
     }
 }
 
+struct ExecutionPrimaryActionIdentity: Hashable {
+    let workoutID: WorkoutID
+
+    var accessibilityIdentifier: String {
+        "execution-primary-action-\(workoutID.rawValue)"
+    }
+}
+
+private struct ExecutionPrimaryAction {
+    let title: String
+    let accessibilityHint: String
+    let perform: () -> Void
+}
+
+private struct ExecutionPrimaryActionPreferenceKey: PreferenceKey {
+    static let defaultValue: ExecutionPrimaryAction? = nil
+
+    static func reduce(value: inout ExecutionPrimaryAction?, nextValue: () -> ExecutionPrimaryAction?) {
+        if let nextAction = nextValue() {
+            value = nextAction
+        }
+    }
+}
+
+enum ExecutionPrimaryActionLayout {
+    static func footerHeight(
+        isVisible: Bool,
+        controlHeight: CGFloat,
+        bottomInset: CGFloat
+    ) -> CGFloat {
+        guard isVisible else { return 0 }
+        return controlHeight + bottomInset
+    }
+
+    static func scrollViewportHeight(cardHeight: CGFloat, headerHeight: CGFloat, footerHeight: CGFloat) -> CGFloat {
+        max(0, cardHeight - headerHeight - footerHeight)
+    }
+}
+
+enum ExecutionTimerFormatting {
+    static func durationText(for remaining: TimeInterval) -> String {
+        let seconds = max(0, Int(ceil(remaining)))
+        return String(format: "%d:%02d", seconds / 60, seconds % 60)
+    }
+}
+
 private struct ExecutionMotionTarget: Equatable {
     let foregroundState: ExecutionForegroundState
     let timerVisible: Bool
@@ -410,6 +456,7 @@ struct WorkoutExecutionView: View {
                         model: model,
                         presentation: walletPresentation,
                         visualState: visualState,
+                        foregroundState: model.foregroundState,
                         showsForegroundExercise: surfacePresentation.showsForegroundExercise && model.currentExercise != nil,
                         reduceMotion: reduceMotion,
                         transitionSourceFrame: transitionSourceFrame,
@@ -430,6 +477,9 @@ struct WorkoutExecutionView: View {
                         showOverview: showExerciseOverview,
                         showSettings: { presentExerciseSettings(for: $0) },
                         showFocused: showFocusedExercise,
+                        skipRest: model.skipRest,
+                        skipWork: model.skipWorkTimer,
+                        pauseResumeWork: model.toggleWorkTimerPause,
                         foregroundHeader: foregroundExerciseHeader,
                         foregroundContent: foregroundExerciseContent
                     )
@@ -518,9 +568,7 @@ struct WorkoutExecutionView: View {
     }
 
     @ViewBuilder private func foregroundExerciseContent(focusProgress: CGFloat) -> some View {
-        let isResting = model.restState != nil
-        let isWorking = model.workTimerState != nil
-        let isTiming = isResting || isWorking
+        let isTiming = model.restState != nil || model.workTimerState != nil
         let progress = min(max(focusProgress, 0), 1)
         let secondaryProgress = min(max((progress - 0.18) / 0.82, 0), 1)
         let contentSpacing = isTiming
@@ -534,12 +582,8 @@ struct WorkoutExecutionView: View {
                     .contentTransition(.identity)
                     .accessibilityIdentifier("execution-current-exercise-name-\(foregroundExerciseID?.rawValue ?? model.workoutID.rawValue)")
 
-                Spacer(minLength: isTiming ? 0 : EQSpacing.lg)
-
-                if isTiming {
-                    timedExerciseActions(isWorking: isWorking, isResting: isResting)
-                        .transition(.identity)
-                } else if !model.awaitsExerciseSelection {
+                if !isTiming && !model.awaitsExerciseSelection {
+                    Spacer(minLength: EQSpacing.lg)
                     expandedExerciseControls
                         .opacity(Double(secondaryProgress))
                         .allowsHitTesting(secondaryProgress > 0.99)
@@ -552,38 +596,6 @@ struct WorkoutExecutionView: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    @ViewBuilder private func timedExerciseActions(isWorking: Bool, isResting: Bool) -> some View {
-        let actionWidth: CGFloat = 112
-        HStack(spacing: EQSpacing.sm) {
-            Button {
-                if isResting { model.skipRest() }
-                else { model.skipWorkTimer() }
-            } label: {
-                Text(isResting ? "Skip Rest" : "Skip")
-                    .frame(width: isWorking ? actionWidth : nil)
-                    .padding(.horizontal, isWorking ? 0 : EQSpacing.xl)
-                    .frame(minHeight: EQDimension.minimumTouch)
-            }
-            .buttonStyle(.borderedProminent)
-            .buttonBorderShape(.roundedRectangle(radius: EQRadius.control))
-            .tint(isResting ? EQColor.rest : EQColor.accent)
-            .accessibilityHint(isResting ? "Ends the current rest" : "Skips the current work interval")
-
-            if isWorking {
-                Button(action: model.toggleWorkTimerPause) {
-                    Text(model.timer.state == .paused ? "Resume" : "Pause")
-                        .frame(width: actionWidth)
-                        .frame(minHeight: EQDimension.minimumTouch)
-                }
-                .buttonStyle(.bordered)
-                .buttonBorderShape(.roundedRectangle(radius: EQRadius.control))
-                .tint(EQColor.accent)
-                .disabled(model.workTimerState?.phase == .ready)
-                .accessibilityHint(model.timer.state == .paused ? "Resumes the work timer" : "Pauses the work timer")
-            }
-        }
     }
 
     private var foregroundExercise: WorkoutExercise? {
@@ -724,6 +736,7 @@ private struct ExecutionWallet<ListRow: View, ForegroundHeader: View, Foreground
     let model: WorkoutExecutionModel
     let presentation: ExecutionWalletPresentation
     let visualState: ExecutionWalletVisualState
+    let foregroundState: ExecutionForegroundState
     let showsForegroundExercise: Bool
     let reduceMotion: Bool
     let transitionSourceFrame: CGRect?
@@ -733,6 +746,9 @@ private struct ExecutionWallet<ListRow: View, ForegroundHeader: View, Foreground
     let showOverview: () -> Void
     let showSettings: (WorkoutExercise) -> Void
     let showFocused: () -> Void
+    let skipRest: () -> Void
+    let skipWork: () -> Void
+    let pauseResumeWork: () -> Void
     let foregroundHeader: (CGFloat) -> ForegroundHeader
     let foregroundContent: (CGFloat) -> ForegroundContent
 
@@ -985,25 +1001,44 @@ private struct ExecutionWallet<ListRow: View, ForegroundHeader: View, Foreground
 
     private func foregroundCard(progress: CGFloat) -> some View {
         let isFocused = progress > 0.99
-        let isTimerPresentation = visualState == .focusedWork || visualState == .focusedRest
-        return VStack(alignment: .leading, spacing: 0) {
-            foregroundHeader(progress)
-                .padding(.horizontal, EQSpacing.lg)
-                .padding(.top, EQSpacing.xxs)
-                .background(EQColor.surface)
-                .zIndex(2)
+        let isWorking = visualState == .focusedWork
+        let isTiming = isWorking || visualState == .focusedRest
+        let actionHeight: CGFloat = dynamicTypeSize.isAccessibilitySize ? 80 : 60
+        let actionFooterHeight = ExecutionPrimaryActionLayout.footerHeight(
+            isVisible: true,
+            controlHeight: actionHeight,
+            bottomInset: EQSpacing.sm
+        )
+        let hasExerciseAction = foregroundState == .exercise
+            && !model.isReadOnly
+            && !model.awaitsExerciseSelection
+        let naturalFooterHeight = isTiming || hasExerciseAction ? actionFooterHeight : 0
+        let footerHeight = naturalFooterHeight * (isTiming ? 1 : progress)
+        let headerHeight = EQSpacing.xxs + EQDimension.minimumTouch
 
-            GeometryReader { proxy in
+        return GeometryReader { proxy in
+            let contentHeight = ExecutionPrimaryActionLayout.scrollViewportHeight(
+                cardHeight: proxy.size.height,
+                headerHeight: headerHeight,
+                footerHeight: footerHeight
+            )
+            VStack(alignment: .leading, spacing: 0) {
+                foregroundHeader(progress)
+                    .padding(.horizontal, EQSpacing.lg)
+                    .padding(.top, EQSpacing.xxs)
+                    .background(EQColor.surface)
+                    .zIndex(2)
+
                 ScrollView {
                     foregroundContent(progress)
                         .padding(.horizontal, EQSpacing.lg)
-                        .padding(.bottom, isTimerPresentation ? EQSpacing.lg : 0)
-                        .frame(minHeight: proxy.size.height, alignment: .top)
-                        .padding(.bottom, isTimerPresentation ? 0 : EQSpacing.lg)
-                        .padding(.bottom, isTimerPresentation ? 0 : EQSpacing.xl * progress)
+                        .padding(.top, EQSpacing.xxs)
+                        .padding(.bottom, EQSpacing.lg)
+                        .frame(minHeight: contentHeight, alignment: .top)
                         .opacity(compactContentRevealOpacity)
                         .offset(y: revealOffset(for: compactContentRevealProgress))
                 }
+                .frame(height: contentHeight)
                 .scrollDisabled(!isFocused)
                 .scrollDismissesKeyboard(.interactively)
                 .scrollIndicators(.hidden)
@@ -1017,11 +1052,84 @@ private struct ExecutionWallet<ListRow: View, ForegroundHeader: View, Foreground
                 .onTapGesture {
                     if !isFocused { showFocused() }
                 }
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                 .clipped()
+            }
+            .frame(width: proxy.size.width, height: proxy.size.height, alignment: .topLeading)
+            .overlayPreferenceValue(ExecutionPrimaryActionPreferenceKey.self) { primaryAction in
+                pinnedPrimaryAction(
+                    primaryAction,
+                    progress: progress,
+                    isTiming: isTiming,
+                    isWorking: isWorking,
+                    footerHeight: footerHeight,
+                    actionHeight: actionHeight
+                )
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+
+    private func pinnedPrimaryAction(
+        _ primaryAction: ExecutionPrimaryAction?,
+        progress: CGFloat,
+        isTiming: Bool,
+        isWorking: Bool,
+        footerHeight: CGFloat,
+        actionHeight: CGFloat
+    ) -> some View {
+        let isResting = visualState == .focusedRest
+        let isAvailable = isTiming || primaryAction != nil
+        let focusedReveal = min(max((progress - 0.18) / 0.82, 0), 1)
+        let isInteractive = isAvailable && (isTiming || focusedReveal > 0.99)
+        let title = isResting ? "Skip Rest" : (isWorking ? "Skip" : (primaryAction?.title ?? ""))
+        let hint = isResting
+            ? "Ends the current rest"
+            : (isWorking ? "Skips the current work interval" : (primaryAction?.accessibilityHint ?? ""))
+
+        return HStack(spacing: EQSpacing.sm) {
+            Button {
+                if isResting { skipRest() }
+                else if isWorking { skipWork() }
+                else { primaryAction?.perform() }
+            } label: {
+                Text(title)
+                    .contentTransition(.opacity)
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: .infinity, minHeight: actionHeight)
+            }
+            .buttonStyle(.borderedProminent)
+            .buttonBorderShape(.roundedRectangle(radius: EQRadius.control))
+            .tint(isResting ? EQColor.rest : EQColor.accent)
+            .frame(maxWidth: .infinity, minHeight: actionHeight)
+            .disabled(!isInteractive)
+            .accessibilityHint(hint)
+            .accessibilityIdentifier(ExecutionPrimaryActionIdentity(workoutID: workout.id).accessibilityIdentifier)
+            .id(ExecutionPrimaryActionIdentity(workoutID: workout.id))
+
+            if isWorking {
+                Button(action: pauseResumeWork) {
+                    Text(model.timer.state == .paused ? "Resume" : "Pause")
+                        .contentTransition(.opacity)
+                        .multilineTextAlignment(.center)
+                        .frame(maxWidth: .infinity, minHeight: actionHeight)
+                }
+                .buttonStyle(.bordered)
+                .buttonBorderShape(.roundedRectangle(radius: EQRadius.control))
+                .tint(EQColor.accent)
+                .frame(maxWidth: .infinity, minHeight: actionHeight)
+                .disabled(model.workTimerState?.phase == .ready || !isInteractive)
+                .accessibilityHint(model.timer.state == .paused ? "Resumes the work timer" : "Pauses the work timer")
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .opacity(isAvailable ? (isTiming ? 1 : Double(focusedReveal)) : 0)
+        .allowsHitTesting(isInteractive)
+        .accessibilityHidden(!isInteractive)
+        .padding(.horizontal, EQSpacing.lg)
+        .padding(.bottom, EQSpacing.sm)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
+        .frame(height: footerHeight, alignment: .bottomLeading)
     }
 
     private var foregroundBackground: some View {
@@ -1201,18 +1309,20 @@ private struct FirstSetView: View {
                 HeroValueField(value: $repetitions, label: exercise.isTimeBased ? "seconds" : "reps" + (progression?.rationale == .addRepetitions ? " ↑" : ""), accessibilityLabel: exercise.isTimeBased ? "Seconds" : "Repetitions", keyboard: .numberPad).focused($fieldFocused)
             }
             HStack(spacing: EQSpacing.sm) {
-                Button(exercise.isTimeBased ? "Start Timer" : "Log first set", action: commit)
-                    .buttonStyle(.borderedProminent)
-                    .buttonBorderShape(.roundedRectangle(radius: EQRadius.control))
-                    .tint(EQColor.accent)
-                    .frame(minHeight: EQDimension.minimumTouch)
-                    .accessibilityHint("Saves this set immediately")
                 Spacer(minLength: 0)
                 if canEditSetCount { setCountEditButton }
                 Text("0 sets")
                     .font(EQTypography.caption.weight(.bold))
             }
         }
+        .preference(
+            key: ExecutionPrimaryActionPreferenceKey.self,
+            value: ExecutionPrimaryAction(
+                title: exercise.isTimeBased ? "Start Timer" : "Log first set",
+                accessibilityHint: "Saves this set immediately",
+                perform: commit
+            )
+        )
         .toolbar { ToolbarItemGroup(placement: .keyboard) { Spacer(); Button("Done") { fieldFocused = false } } }
     }
 
@@ -1340,12 +1450,6 @@ private struct FocusedSetView: View {
             }
             if !isReadOnly {
                 HStack(spacing: EQSpacing.sm) {
-                    Button(isLogged ? "Update set" : submission.buttonTitle, action: commit)
-                        .buttonStyle(.borderedProminent)
-                        .buttonBorderShape(.roundedRectangle(radius: EQRadius.control))
-                        .tint(EQColor.accent)
-                        .frame(minHeight: EQDimension.minimumTouch)
-                        .accessibilityHint("Saves this set immediately")
                     Spacer(minLength: 0)
                     if canEditSetCount { setCountEditButton }
                     setCounter
@@ -1354,6 +1458,14 @@ private struct FocusedSetView: View {
                 setCounter
             }
         }
+        .preference(
+            key: ExecutionPrimaryActionPreferenceKey.self,
+            value: isReadOnly ? nil : ExecutionPrimaryAction(
+                title: isLogged ? "Update set" : submission.buttonTitle,
+                accessibilityHint: "Saves this set immediately",
+                perform: commit
+            )
+        )
         .accessibilityElement(children: .contain)
         .toolbar { ToolbarItemGroup(placement: .keyboard) { Spacer(); Button("Done") { focusedField = nil } } }
     }
@@ -1662,10 +1774,7 @@ private struct ExecutionTimerRegion: View {
     }
 
     // Phase 6B can layer the recovery visual around this shared timer region.
-    private var durationText: String {
-        let seconds = max(0, Int(ceil(remaining)))
-        return String(format: "%d:%02d", seconds / 60, seconds % 60)
-    }
+    private var durationText: String { ExecutionTimerFormatting.durationText(for: remaining) }
 
     private func workPhaseLabel(_ phase: WorkoutWorkTimerPhase) -> String {
         switch phase {
