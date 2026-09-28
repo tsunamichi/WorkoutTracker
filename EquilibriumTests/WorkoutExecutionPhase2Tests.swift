@@ -1196,7 +1196,8 @@ final class ExecutionPrimaryActionRegressionTests: XCTestCase {
         let footerHeight = ExecutionPrimaryActionLayout.footerHeight(
             isVisible: true,
             controlHeight: ExecutionActionButtonMetrics.height,
-            bottomInset: EQSpacing.sm
+            bottomInset: EQSpacing.sm,
+            trailingControlHeight: EQDimension.minimumTouch
         )
         let viewportHeight = ExecutionPrimaryActionLayout.scrollViewportHeight(
             cardHeight: foregroundCardHeight,
@@ -1207,6 +1208,7 @@ final class ExecutionPrimaryActionRegressionTests: XCTestCase {
         XCTAssertEqual(ExecutionActionButtonMetrics.height, 48)
         XCTAssertEqual(ExecutionActionButtonMetrics.horizontalPadding, EQSpacing.lg)
         XCTAssertGreaterThanOrEqual(ExecutionActionButtonMetrics.minimumWidth, 44)
+        XCTAssertGreaterThanOrEqual(EQDimension.minimumTouch, 44)
         XCTAssertEqual(footerHeight, 48 + EQSpacing.sm)
         XCTAssertGreaterThan(viewportHeight, 0)
         XCTAssertEqual(headerHeight + viewportHeight + footerHeight, foregroundCardHeight, accuracy: 0.001)

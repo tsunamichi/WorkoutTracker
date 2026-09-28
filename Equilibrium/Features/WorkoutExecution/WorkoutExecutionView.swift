@@ -105,10 +105,11 @@ enum ExecutionPrimaryActionLayout {
     static func footerHeight(
         isVisible: Bool,
         controlHeight: CGFloat,
-        bottomInset: CGFloat
+        bottomInset: CGFloat,
+        trailingControlHeight: CGFloat = 0
     ) -> CGFloat {
         guard isVisible else { return 0 }
-        return controlHeight + bottomInset
+        return max(controlHeight, trailingControlHeight) + bottomInset
     }
 
     static func scrollViewportHeight(cardHeight: CGFloat, headerHeight: CGFloat, footerHeight: CGFloat) -> CGFloat {
@@ -502,7 +503,8 @@ struct WorkoutExecutionView: View {
                         skipWork: model.skipWorkTimer,
                         pauseResumeWork: model.toggleWorkTimerPause,
                         foregroundHeader: foregroundExerciseHeader,
-                        foregroundContent: foregroundExerciseContent
+                        foregroundContent: foregroundExerciseContent,
+                        footerControls: { exercise in footerSetCountControls(for: exercise) }
                     )
                     .frame(height: walletHeight)
                     .modifier(ForegroundFocusTransitionModifier(progress: foregroundFocusProgress))
@@ -525,6 +527,48 @@ struct WorkoutExecutionView: View {
 
     private var timerWalletHeight: CGFloat {
         EQDimension.restCardHeight + EQDimension.minimumTouch
+    }
+
+    @ViewBuilder
+    private func footerSetCountControls(for exercise: WorkoutExercise) -> some View {
+        if model.currentPrescription != nil {
+            Menu {
+                ForEach(exercise.prescriptions.indices, id: \.self) { index in
+                    let done = exercise.loggedSets.contains {
+                        $0.prescriptionID == exercise.prescriptions[index].id && $0.completedAt != nil
+                    }
+                    Button { model.selectSet(at: index) } label: {
+                        Text("Set \(index + 1)\(done ? " · Completed" : "")")
+                    }
+                }
+            } label: {
+                Text("\(model.selectedSetIndex + 1)/\(exercise.prescriptions.count)")
+                    .font(EQTypography.caption.weight(.bold))
+                    .monospacedDigit()
+                    .frame(minWidth: EQDimension.minimumTouch, minHeight: EQDimension.minimumTouch, alignment: .trailing)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Set \(model.selectedSetIndex + 1) of \(exercise.prescriptions.count)")
+            .accessibilityHint("Choose a set")
+        } else {
+            Text("\(exercise.loggedSets.count) sets")
+                .font(EQTypography.caption.weight(.bold))
+                .frame(minWidth: EQDimension.minimumTouch, minHeight: EQDimension.minimumTouch, alignment: .trailing)
+        }
+
+        if model.workTimerState == nil && model.restState == nil {
+            Button { setCountEditorExerciseID = exercise.id } label: {
+                Image(systemName: "pencil")
+                    .font(.system(size: 16, weight: .semibold))
+                    .frame(width: 16, height: 16)
+                    .frame(width: EQDimension.minimumTouch, height: EQDimension.minimumTouch)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Edit number of sets")
+            .accessibilityHint("Adjusts the number of working sets for \(exercise.nameSnapshot)")
+        }
     }
 
     private var executionChromeProgress: Double {
@@ -647,11 +691,8 @@ struct WorkoutExecutionView: View {
                     selectedIndex: model.selectedSetIndex,
                     isReadOnly: model.isReadOnly,
                     weightUnit: model.weightUnit,
-                    select: model.selectSet,
                     log: { input in await model.log(exerciseID: exercise.id, prescriptionID: prescription.id, input: input) },
-                    startTimed: { input in model.startWorkTimer(exerciseID: exercise.id, prescriptionID: prescription.id, input: input) },
-                    canEditSetCount: model.workTimerState == nil && model.restState == nil,
-                    editSetCount: { setCountEditorExerciseID = exercise.id }
+                    startTimed: { input in model.startWorkTimer(exerciseID: exercise.id, prescriptionID: prescription.id, input: input) }
                 )
                 .id("\(exercise.id.rawValue)-\(prescription.id.rawValue)-\(model.progressionIdentity(for: exercise))")
             } else if let exercise = model.currentExercise, !model.isReadOnly {
@@ -662,9 +703,7 @@ struct WorkoutExecutionView: View {
                     log: { input in
                         if exercise.isTimeBased { await model.startFirstWorkTimer(exerciseID: exercise.id, input: input) }
                         else { await model.logFirstSet(exerciseID: exercise.id, input: input) }
-                    },
-                    canEditSetCount: model.workTimerState == nil && model.restState == nil,
-                    editSetCount: { setCountEditorExerciseID = exercise.id }
+                    }
                 )
             } else {
                 Text("Every required set is logged.").font(EQTypography.sectionTitle)
@@ -749,7 +788,7 @@ struct WorkoutExecutionView: View {
 
 }
 
-private struct ExecutionWallet<ListRow: View, ForegroundHeader: View, ForegroundContent: View>: View {
+private struct ExecutionWallet<ListRow: View, ForegroundHeader: View, ForegroundContent: View, FooterControls: View>: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.homeExecutionTransitionProgress) private var homeTransitionProgress
     @Environment(\.foregroundFocusProgress) private var focusProgress
@@ -772,6 +811,7 @@ private struct ExecutionWallet<ListRow: View, ForegroundHeader: View, Foreground
     let pauseResumeWork: () -> Void
     let foregroundHeader: (CGFloat) -> ForegroundHeader
     let foregroundContent: (CGFloat) -> ForegroundContent
+    let footerControls: (WorkoutExercise) -> FooterControls
 
     var body: some View {
         GeometryReader { proxy in
@@ -1023,7 +1063,8 @@ private struct ExecutionWallet<ListRow: View, ForegroundHeader: View, Foreground
         let actionFooterHeight = ExecutionPrimaryActionLayout.footerHeight(
             isVisible: true,
             controlHeight: actionHeight,
-            bottomInset: EQSpacing.sm
+            bottomInset: EQSpacing.sm,
+            trailingControlHeight: EQDimension.minimumTouch
         )
         let hasExerciseAction = foregroundState == .exercise
             && !model.isReadOnly
@@ -1078,7 +1119,8 @@ private struct ExecutionWallet<ListRow: View, ForegroundHeader: View, Foreground
                     isTiming: isTiming,
                     isWorking: isWorking,
                     footerHeight: footerHeight,
-                    actionHeight: actionHeight
+                    actionHeight: actionHeight,
+                    hasExerciseAction: hasExerciseAction
                 )
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
             }
@@ -1092,7 +1134,8 @@ private struct ExecutionWallet<ListRow: View, ForegroundHeader: View, Foreground
         isTiming: Bool,
         isWorking: Bool,
         footerHeight: CGFloat,
-        actionHeight: CGFloat
+        actionHeight: CGFloat,
+        hasExerciseAction: Bool
     ) -> some View {
         let isResting = visualState == .focusedRest
         let isAvailable = isTiming || primaryAction != nil
@@ -1124,6 +1167,11 @@ private struct ExecutionWallet<ListRow: View, ForegroundHeader: View, Foreground
             .accessibilityHint(hint)
             .accessibilityIdentifier(ExecutionPrimaryActionIdentity(workoutID: workout.id).accessibilityIdentifier)
             .id(ExecutionPrimaryActionIdentity(workoutID: workout.id))
+
+            if hasExerciseAction, !isTiming, let exercise = model.currentExercise {
+                Spacer(minLength: EQSpacing.xs)
+                footerControls(exercise)
+            }
 
             if isWorking {
                 Button(action: pauseResumeWork) {
@@ -1305,18 +1353,16 @@ private struct SetCountEditor: View {
 }
 
 private struct FirstSetView: View {
-    let exercise: WorkoutExercise; let progression: ProgressionSuggestion?; let weightUnit: WeightUnit; let log: (SetLogInput) async -> Void; let canEditSetCount: Bool; let editSetCount: () -> Void
+    let exercise: WorkoutExercise; let progression: ProgressionSuggestion?; let weightUnit: WeightUnit; let log: (SetLogInput) async -> Void
     @State private var weight: String
     @State private var repetitions: String
     @FocusState private var fieldFocused: Bool
 
-    init(exercise: WorkoutExercise, progression: ProgressionSuggestion?, weightUnit: WeightUnit, log: @escaping (SetLogInput) async -> Void, canEditSetCount: Bool, editSetCount: @escaping () -> Void) {
+    init(exercise: WorkoutExercise, progression: ProgressionSuggestion?, weightUnit: WeightUnit, log: @escaping (SetLogInput) async -> Void) {
         self.exercise = exercise
         self.progression = progression
         self.weightUnit = weightUnit
         self.log = log
-        self.canEditSetCount = canEditSetCount
-        self.editSetCount = editSetCount
         _weight = State(initialValue: WeightText.value(progression?.suggestedWeight, unit: weightUnit))
         _repetitions = State(initialValue: progression?.targetRepetitions.map { String($0.lowerBound) } ?? "")
     }
@@ -1326,12 +1372,6 @@ private struct FirstSetView: View {
             VStack(alignment: .leading, spacing: EQSpacing.md) {
                 HeroValueField(value: $weight, label: (weightUnit == .pounds ? "lb" : "kg") + (progression?.rationale == .increaseWeight ? " ↑" : ""), accessibilityLabel: "Weight", keyboard: .decimalPad).focused($fieldFocused)
                 HeroValueField(value: $repetitions, label: exercise.isTimeBased ? "seconds" : "reps" + (progression?.rationale == .addRepetitions ? " ↑" : ""), accessibilityLabel: exercise.isTimeBased ? "Seconds" : "Repetitions", keyboard: .numberPad).focused($fieldFocused)
-            }
-            HStack(spacing: EQSpacing.sm) {
-                Spacer(minLength: 0)
-                if canEditSetCount { setCountEditButton }
-                Text("0 sets")
-                    .font(EQTypography.caption.weight(.bold))
             }
         }
         .preference(
@@ -1355,18 +1395,6 @@ private struct FirstSetView: View {
         }
     }
 
-    private var setCountEditButton: some View {
-        Button(action: editSetCount) {
-            Image(systemName: "pencil")
-                .font(.system(size: 16, weight: .semibold))
-                .frame(width: 16, height: 16)
-                .frame(width: EQDimension.minimumTouch, height: EQDimension.minimumTouch)
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel("Edit number of sets")
-        .accessibilityHint("Adjusts the number of working sets for \(exercise.nameSnapshot)")
-    }
 }
 
 private struct ExerciseListRow: View {
@@ -1437,18 +1465,15 @@ private struct FocusedSetView: View {
     let selectedIndex: Int
     let isReadOnly: Bool
     let weightUnit: WeightUnit
-    let select: (Int) -> Void
     let log: (SetLogInput) async -> Void
     let startTimed: (SetLogInput) -> Void
-    let canEditSetCount: Bool
-    let editSetCount: () -> Void
     @State private var weightText: String
     @State private var valueText: String
     @FocusState private var focusedField: Field?
     private enum Field { case weight, value }
 
-    init(exercise: WorkoutExercise, prescription: SetPrescription, progression: ProgressionSuggestion?, selectedIndex: Int, isReadOnly: Bool, weightUnit: WeightUnit, select: @escaping (Int) -> Void, log: @escaping (SetLogInput) async -> Void, startTimed: @escaping (SetLogInput) -> Void, canEditSetCount: Bool, editSetCount: @escaping () -> Void) {
-        self.exercise = exercise; self.prescription = prescription; self.progression = progression; self.selectedIndex = selectedIndex; self.isReadOnly = isReadOnly; self.weightUnit = weightUnit; self.select = select; self.log = log; self.startTimed = startTimed; self.canEditSetCount = canEditSetCount; self.editSetCount = editSetCount
+    init(exercise: WorkoutExercise, prescription: SetPrescription, progression: ProgressionSuggestion?, selectedIndex: Int, isReadOnly: Bool, weightUnit: WeightUnit, log: @escaping (SetLogInput) async -> Void, startTimed: @escaping (SetLogInput) -> Void) {
+        self.exercise = exercise; self.prescription = prescription; self.progression = progression; self.selectedIndex = selectedIndex; self.isReadOnly = isReadOnly; self.weightUnit = weightUnit; self.log = log; self.startTimed = startTimed
         let logged = exercise.loggedSets.first { $0.prescriptionID == prescription.id }
         let hasLoggedPredecessor = exercise.prescriptions.prefix(selectedIndex).contains { preceding in exercise.loggedSets.contains { $0.prescriptionID == preceding.id && $0.completedAt != nil } }
         let startingWeight = logged?.weight ?? (hasLoggedPredecessor ? prescription.suggestedWeight : progression?.suggestedWeight ?? prescription.suggestedWeight)
@@ -1467,15 +1492,6 @@ private struct FocusedSetView: View {
                 HeroValueField(value: $valueText, label: progressedValueLabel, accessibilityLabel: "\(exercise.nameSnapshot), set \(selectedIndex + 1), \(valueLabel)", keyboard: .numberPad)
                     .focused($focusedField, equals: .value)
             }
-            if !isReadOnly {
-                HStack(spacing: EQSpacing.sm) {
-                    Spacer(minLength: 0)
-                    if canEditSetCount { setCountEditButton }
-                    setCounter
-                }
-            } else {
-                setCounter
-            }
         }
         .preference(
             key: ExecutionPrimaryActionPreferenceKey.self,
@@ -1487,39 +1503,6 @@ private struct FocusedSetView: View {
         )
         .accessibilityElement(children: .contain)
         .toolbar { ToolbarItemGroup(placement: .keyboard) { Spacer(); Button("Done") { focusedField = nil } } }
-    }
-
-    private var setCounter: some View {
-        Menu {
-            ForEach(exercise.prescriptions.indices, id: \.self) { index in
-                let done = exercise.loggedSets.contains { $0.prescriptionID == exercise.prescriptions[index].id && $0.completedAt != nil }
-                Button { select(index) } label: {
-                    Text("Set \(index + 1)\(done ? " · Completed" : "")")
-                }
-            }
-        } label: {
-            Text("\(selectedIndex + 1)/\(exercise.prescriptions.count)")
-                .font(EQTypography.caption.weight(.bold))
-                .monospacedDigit()
-                .frame(minWidth: EQDimension.minimumTouch, minHeight: EQDimension.minimumTouch, alignment: .trailing)
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel("Set \(selectedIndex + 1) of \(exercise.prescriptions.count)")
-        .accessibilityHint("Choose a set")
-    }
-
-    private var setCountEditButton: some View {
-        Button(action: editSetCount) {
-            Image(systemName: "pencil")
-                .font(.system(size: 16, weight: .semibold))
-                .frame(width: 16, height: 16)
-                .frame(width: EQDimension.minimumTouch, height: EQDimension.minimumTouch)
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel("Edit number of sets")
-        .accessibilityHint("Adjusts the number of working sets for \(exercise.nameSnapshot)")
     }
 
     private var isLogged: Bool { exercise.loggedSets.contains { $0.prescriptionID == prescription.id && $0.completedAt != nil } }
