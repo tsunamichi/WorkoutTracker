@@ -1187,28 +1187,29 @@ final class ExecutionPrimaryActionRegressionTests: XCTestCase {
         )
     }
 
-    func testTimerFooterReservesAClippedContentViewportAtStandardAndAccessibilitySizes() {
+    func testTimerFooterReservesViewportAroundFixed48PointAction() {
         let walletHeight = EQDimension.restCardHeight + EQDimension.minimumTouch
         let focusedTop = EQDimension.minimumTouch + EQSpacing.md - EQSpacing.xxs
         let foregroundCardHeight = walletHeight - focusedTop
         let headerHeight = EQDimension.minimumTouch + EQSpacing.xxs
 
-        for (controlHeight, expectedFooterHeight) in [(CGFloat(60), CGFloat(72)), (CGFloat(80), CGFloat(92))] {
-            let footerHeight = ExecutionPrimaryActionLayout.footerHeight(
-                isVisible: true,
-                controlHeight: controlHeight,
-                bottomInset: EQSpacing.sm
-            )
-            let viewportHeight = ExecutionPrimaryActionLayout.scrollViewportHeight(
-                cardHeight: foregroundCardHeight,
-                headerHeight: headerHeight,
-                footerHeight: footerHeight
-            )
+        let footerHeight = ExecutionPrimaryActionLayout.footerHeight(
+            isVisible: true,
+            controlHeight: ExecutionActionButtonMetrics.height,
+            bottomInset: EQSpacing.sm
+        )
+        let viewportHeight = ExecutionPrimaryActionLayout.scrollViewportHeight(
+            cardHeight: foregroundCardHeight,
+            headerHeight: headerHeight,
+            footerHeight: footerHeight
+        )
 
-            XCTAssertEqual(footerHeight, expectedFooterHeight)
-            XCTAssertGreaterThan(viewportHeight, 0)
-            XCTAssertEqual(headerHeight + viewportHeight + footerHeight, foregroundCardHeight, accuracy: 0.001)
-        }
+        XCTAssertEqual(ExecutionActionButtonMetrics.height, 48)
+        XCTAssertEqual(ExecutionActionButtonMetrics.horizontalPadding, EQSpacing.lg)
+        XCTAssertGreaterThanOrEqual(ExecutionActionButtonMetrics.minimumWidth, 44)
+        XCTAssertEqual(footerHeight, 48 + EQSpacing.sm)
+        XCTAssertGreaterThan(viewportHeight, 0)
+        XCTAssertEqual(headerHeight + viewportHeight + footerHeight, foregroundCardHeight, accuracy: 0.001)
     }
 
     func testTimerContentViewportStaysFixedAsCountdownDigitsChangeWidth() {
@@ -1220,7 +1221,7 @@ final class ExecutionPrimaryActionRegressionTests: XCTestCase {
 
         let footerHeight = ExecutionPrimaryActionLayout.footerHeight(
             isVisible: true,
-            controlHeight: 60,
+            controlHeight: ExecutionActionButtonMetrics.height,
             bottomInset: EQSpacing.sm
         )
 
@@ -1231,6 +1232,57 @@ final class ExecutionPrimaryActionRegressionTests: XCTestCase {
                 footerHeight: footerHeight
             )
             XCTAssertEqual(headerHeight + viewportHeight, cardHeight - footerHeight, accuracy: 0.001)
+        }
+    }
+
+    func testWalletSurfaceGeometryIsContinuousInBothFocusDirections() {
+        let walletHeight: CGFloat = 640
+        let focusedTop: CGFloat = 56
+        let compactHeight: CGFloat = 180
+        let overview = ExecutionWalletSurfaceLayout.resolve(
+            walletHeight: walletHeight,
+            focusedTop: focusedTop,
+            compactHeight: compactHeight,
+            focusProgress: 0
+        )
+        let focused = ExecutionWalletSurfaceLayout.resolve(
+            walletHeight: walletHeight,
+            focusedTop: focusedTop,
+            compactHeight: compactHeight,
+            focusProgress: 1
+        )
+
+        XCTAssertEqual(overview.top, walletHeight - compactHeight, accuracy: 0.001)
+        XCTAssertEqual(overview.height, compactHeight, accuracy: 0.001)
+        XCTAssertEqual(focused.top, focusedTop, accuracy: 0.001)
+        XCTAssertEqual(focused.height, walletHeight - focusedTop, accuracy: 0.001)
+
+        let samples = stride(from: 0.0, through: 1.0, by: 0.1).map { progress in
+            ExecutionWalletSurfaceLayout.resolve(
+                walletHeight: walletHeight,
+                focusedTop: focusedTop,
+                compactHeight: compactHeight,
+                focusProgress: progress
+            )
+        }
+        for (start, end) in zip(samples, samples.dropFirst()) {
+            XCTAssertLessThanOrEqual(end.top, start.top)
+            XCTAssertGreaterThanOrEqual(end.height, start.height)
+            XCTAssertLessThan(abs(end.top - start.top), 100)
+            XCTAssertLessThan(abs(end.height - start.height), 100)
+        }
+
+        let reverseSamples = stride(from: 1.0, through: 0.0, by: -0.1).map { progress in
+            ExecutionWalletSurfaceLayout.resolve(
+                walletHeight: walletHeight,
+                focusedTop: focusedTop,
+                compactHeight: compactHeight,
+                focusProgress: progress
+            )
+        }
+        for (start, end) in zip(reverseSamples, reverseSamples.dropFirst()) {
+            XCTAssertGreaterThanOrEqual(end.top, start.top)
+            XCTAssertLessThanOrEqual(end.height, start.height)
         }
     }
 }

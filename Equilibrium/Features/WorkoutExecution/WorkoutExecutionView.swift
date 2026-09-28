@@ -116,6 +116,32 @@ enum ExecutionPrimaryActionLayout {
     }
 }
 
+enum ExecutionActionButtonMetrics {
+    static let height: CGFloat = 48
+    static let horizontalPadding = EQSpacing.lg
+    static let minimumWidth = EQDimension.minimumTouch
+}
+
+struct ExecutionWalletSurfaceLayout: Equatable {
+    let top: CGFloat
+    let height: CGFloat
+
+    static func resolve(
+        walletHeight: CGFloat,
+        focusedTop: CGFloat,
+        compactHeight: CGFloat,
+        focusProgress: CGFloat
+    ) -> Self {
+        let progress = min(max(focusProgress, 0), 1)
+        let focusedHeight = max(EQDimension.minimumTouch, walletHeight - focusedTop)
+        let overviewTop = max(focusedTop, walletHeight - compactHeight)
+        return .init(
+            top: overviewTop + ((focusedTop - overviewTop) * progress),
+            height: compactHeight + ((focusedHeight - compactHeight) * progress)
+        )
+    }
+}
+
 enum ExecutionTimerFormatting {
     static func durationText(for remaining: TimeInterval) -> String {
         let seconds = max(0, Int(ceil(remaining)))
@@ -199,12 +225,7 @@ final class ExecutionWalletPresentation {
     @discardableResult func showFocusedExercise() -> Bool { setMode(.focusedExercise) }
     @discardableResult func showExerciseOverview() -> Bool { setMode(.exerciseOverview) }
     @discardableResult func selectExercise(_ id: WorkoutExerciseID, focus: (WorkoutExerciseID) -> Void) -> Bool {
-        // Replace the compact card's canonical content before its surface expands.
-        // Animating this identity swap alongside the geometry keeps the outgoing
-        // controls alive during insertion and produces overlapping exercise data.
-        withTransaction(Transaction(animation: nil)) {
-            focus(id)
-        }
+        focus(id)
         return showFocusedExercise()
     }
     func resolvedMode(for foregroundState: ExecutionForegroundState) -> ExecutionWalletPresentationMode {
@@ -780,11 +801,13 @@ private struct ExecutionWallet<ListRow: View, ForegroundHeader: View, Foreground
             let walletWidth = max(0, currentFrame.width)
             let walletHeight = max(0, currentFrame.height)
             let focusedTop = max(0, headerHeight - EQSpacing.xs)
-            let focusedHeight = max(EQDimension.minimumTouch, walletHeight - focusedTop)
-            let overviewTop = max(focusedTop, walletHeight - compactHeight)
             let progress = showsForegroundExercise ? min(max(focusProgress, 0), 1) : 0
-            let foregroundTop = overviewTop + ((focusedTop - overviewTop) * progress)
-            let foregroundHeight = compactHeight + ((focusedHeight - compactHeight) * progress)
+            let foregroundLayout = ExecutionWalletSurfaceLayout.resolve(
+                walletHeight: walletHeight,
+                focusedTop: focusedTop,
+                compactHeight: compactHeight,
+                focusProgress: progress
+            )
             let compactArrival = HomeExecutionReveal.progress(homeTransitionProgress, from: 0.78, through: 0.96)
             let compactEntranceOffset = (1 - compactArrival) * (compactHeight + EQSpacing.md)
             ZStack(alignment: .topLeading) {
@@ -798,11 +821,11 @@ private struct ExecutionWallet<ListRow: View, ForegroundHeader: View, Foreground
 
                     if showsForegroundExercise {
                         foregroundCard(progress: progress)
-                            .frame(width: walletWidth, height: foregroundHeight, alignment: .top)
+                            .frame(width: walletWidth, height: foregroundLayout.height, alignment: .top)
                             .background(foregroundBackground)
                             .modifier(ExecutionWalletShapeModifier(drawsBorder: true))
                             .contentShape(RoundedRectangle(cornerRadius: EQRadius.transformingCard, style: .continuous))
-                            .offset(y: foregroundTop + compactEntranceOffset)
+                            .offset(y: foregroundLayout.top + compactEntranceOffset)
                             .zIndex(1)
                             .accessibilityIdentifier("execution-current-exercise-card-\(workout.id.rawValue)")
                     }
@@ -881,8 +904,6 @@ private struct ExecutionWallet<ListRow: View, ForegroundHeader: View, Foreground
             .scrollIndicators(.hidden)
             .scrollDisabled(showsForegroundExercise && focusProgress > 0.01)
             .clipped()
-            .opacity(listContentOpacity)
-            .animation(nil, value: visualState)
             .accessibilityHidden(visualState != .exerciseOverview || focusProgress > 0.01)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -893,11 +914,6 @@ private struct ExecutionWallet<ListRow: View, ForegroundHeader: View, Foreground
     }
 
     private var headerRevealOpacity: Double { Double(headerRevealProgress) }
-
-    private var listContentOpacity: Double {
-        guard visualState == .exerciseOverview else { return 0 }
-        return Double(1 - min(max(focusProgress, 0), 1))
-    }
 
     private func rowRevealProgress(index: Int) -> CGFloat {
         let start = min(0.90, 0.82 + (CGFloat(min(index, 4)) * 0.018))
@@ -1003,7 +1019,7 @@ private struct ExecutionWallet<ListRow: View, ForegroundHeader: View, Foreground
         let isFocused = progress > 0.99
         let isWorking = visualState == .focusedWork
         let isTiming = isWorking || visualState == .focusedRest
-        let actionHeight: CGFloat = dynamicTypeSize.isAccessibilitySize ? 80 : 60
+        let actionHeight = ExecutionActionButtonMetrics.height
         let actionFooterHeight = ExecutionPrimaryActionLayout.footerHeight(
             isVisible: true,
             controlHeight: actionHeight,
@@ -1095,13 +1111,15 @@ private struct ExecutionWallet<ListRow: View, ForegroundHeader: View, Foreground
             } label: {
                 Text(title)
                     .contentTransition(.opacity)
-                    .multilineTextAlignment(.center)
-                    .frame(maxWidth: .infinity, minHeight: actionHeight)
+                    .lineLimit(1)
+                    .fixedSize(horizontal: true, vertical: false)
+                    .padding(.horizontal, ExecutionActionButtonMetrics.horizontalPadding)
+                    .frame(minWidth: ExecutionActionButtonMetrics.minimumWidth)
+                    .frame(height: actionHeight)
             }
             .buttonStyle(.borderedProminent)
             .buttonBorderShape(.roundedRectangle(radius: EQRadius.control))
             .tint(isResting ? EQColor.rest : EQColor.accent)
-            .frame(maxWidth: .infinity, minHeight: actionHeight)
             .disabled(!isInteractive)
             .accessibilityHint(hint)
             .accessibilityIdentifier(ExecutionPrimaryActionIdentity(workoutID: workout.id).accessibilityIdentifier)
@@ -1111,18 +1129,19 @@ private struct ExecutionWallet<ListRow: View, ForegroundHeader: View, Foreground
                 Button(action: pauseResumeWork) {
                     Text(model.timer.state == .paused ? "Resume" : "Pause")
                         .contentTransition(.opacity)
-                        .multilineTextAlignment(.center)
-                        .frame(maxWidth: .infinity, minHeight: actionHeight)
+                        .lineLimit(1)
+                        .fixedSize(horizontal: true, vertical: false)
+                        .padding(.horizontal, ExecutionActionButtonMetrics.horizontalPadding)
+                        .frame(minWidth: ExecutionActionButtonMetrics.minimumWidth)
+                        .frame(height: actionHeight)
                 }
                 .buttonStyle(.bordered)
                 .buttonBorderShape(.roundedRectangle(radius: EQRadius.control))
                 .tint(EQColor.accent)
-                .frame(maxWidth: .infinity, minHeight: actionHeight)
                 .disabled(model.workTimerState?.phase == .ready || !isInteractive)
                 .accessibilityHint(model.timer.state == .paused ? "Resumes the work timer" : "Pauses the work timer")
             }
         }
-        .frame(maxWidth: .infinity)
         .opacity(isAvailable ? (isTiming ? 1 : Double(focusedReveal)) : 0)
         .allowsHitTesting(isInteractive)
         .accessibilityHidden(!isInteractive)
