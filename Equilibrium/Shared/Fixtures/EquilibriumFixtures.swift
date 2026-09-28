@@ -17,6 +17,30 @@ public enum EquilibriumFixtures {
     public static func mixed(id: String = "workout-mixed") -> Workout {
         workout(id: id, title: "Mixed Session", exercises: [repExercise(prefix: id), durationExercise(prefix: id)], status: .ready)
     }
+    public static func motionAudit(id: String = "workout-motion-audit") -> Workout {
+        var repetitions = repExercise(prefix: "\(id)-repetitions")
+        repetitions.nameSnapshot = "Cable Row"
+        repetitions.prescriptions = Array(repetitions.prescriptions.prefix(2))
+        repetitions.restDuration = 5
+
+        var duration = durationExercise(prefix: "\(id)-duration")
+        duration.nameSnapshot = "Roman Chair Hold"
+        duration.prescriptions = (1...2).map {
+            SetPrescription(
+                id: .init(rawValue: "\(id)-duration-\($0)"),
+                target: .duration(seconds: 3),
+                suggestedWeight: nil
+            )
+        }
+        duration.restDuration = 5
+
+        return workout(
+            id: id,
+            title: "Motion Audit",
+            exercises: [repetitions, duration],
+            status: .ready
+        )
+    }
     public static func inProgress(id: String = "workout-progress") -> Workout {
         var exercise = repExercise(prefix: id)
         let prescription = exercise.prescriptions[0]

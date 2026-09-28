@@ -163,3 +163,562 @@ final class Phase4FinalCorrectionTests: XCTestCase {
 
 
 }
+
+@MainActor
+final class ExecutionRestPhase4Tests: XCTestCase {
+    func testRestStartsOnlyAfterSuccessfulCanonicalSetPersistence() async throws {
+        let repository = makeRepository()
+        let workout = EquilibriumFixtures.mixed(id: "phase4-rest-after-persistence")
+        try await repository.create(workout)
+        let model = WorkoutExecutionModel(workoutID: workout.id, repository: repository)
+        await model.activate()
+        let exercise = workout.exercises[0]
+        let prescription = exercise.prescriptions[0]
+
+        await model.log(
+            exerciseID: exercise.id,
+            prescriptionID: prescription.id,
+            input: .duration(weight: nil, seconds: 10)
+        )
+
+        XCTAssertNil(model.restState)
+        XCTAssertTrue(model.workout?.exercises[0].loggedSets.isEmpty == true)
+
+        await model.log(
+            exerciseID: exercise.id,
+            prescriptionID: prescription.id,
+            input: .repetitions(weight: nil, repetitions: 8)
+        )
+
+        let persisted = try await repository.workout(id: workout.id)
+        XCTAssertEqual(persisted?.exercises[0].loggedSets.count, 1)
+        XCTAssertEqual(model.restState?.exerciseID, exercise.id)
+        XCTAssertEqual(model.restState?.exerciseName, exercise.nameSnapshot)
+    }
+
+    func testFirstSetPersistenceUsesTheSameRestPath() async throws {
+        let repository = makeRepository()
+        let first = WorkoutExercise(
+            id: .new(),
+            exerciseID: .new(),
+            nameSnapshot: "Unprescribed Exercise",
+            prescriptions: [],
+            loggedSets: [],
+            restDuration: nil,
+            skippedAt: nil
+        )
+        let next = EquilibriumFixtures.ready(id: "phase4-first-set-source").exercises[0]
+        let workout = Workout(
+            id: .init(rawValue: "phase4-first-set"),
+            titleSnapshot: "First set",
+            exercises: [first, next],
+            status: .ready,
+            startedAt: nil,
+            completedAt: nil,
+            createdAt: EquilibriumFixtures.timestamp,
+            updatedAt: EquilibriumFixtures.timestamp
+        )
+        try await repository.create(workout)
+        let model = WorkoutExecutionModel(workoutID: workout.id, repository: repository, defaultRestDuration: 95)
+        await model.activate()
+
+        await model.logFirstSet(
+            exerciseID: first.id,
+            input: .repetitions(weight: nil, repetitions: 8)
+        )
+
+        let persisted = try await repository.workout(id: workout.id)
+        XCTAssertEqual(persisted?.exercises[0].prescriptions.count, 1)
+        XCTAssertEqual(persisted?.exercises[0].loggedSets.count, 1)
+        XCTAssertEqual(model.restState?.totalDuration, 95)
+        XCTAssertEqual(model.restState?.exerciseID, first.id)
+    }
+
+    func testRestDurationUsesExerciseOverrideOtherwiseGlobalDefault() async throws {
+        let repository = makeRepository()
+        var overridden = EquilibriumFixtures.mixed(id: "phase4-rest-override")
+        overridden.exercises[0].restDuration = 75
+        var defaulted = EquilibriumFixtures.mixed(id: "phase4-rest-default")
+        defaulted.exercises[0].restDuration = nil
+        try await repository.materializeAtomically([overridden, defaulted])
+
+        let overrideModel = WorkoutExecutionModel(
+            workoutID: overridden.id,
+            repository: repository,
+            defaultRestDuration: 95
+        )
+        await overrideModel.activate()
+        await overrideModel.log(
+            exerciseID: overridden.exercises[0].id,
+            prescriptionID: overridden.exercises[0].prescriptions[0].id,
+            input: .repetitions(weight: nil, repetitions: 8)
+        )
+
+        let defaultModel = WorkoutExecutionModel(
+            workoutID: defaulted.id,
+            repository: repository,
+            defaultRestDuration: 95
+        )
+        await defaultModel.activate()
+        await defaultModel.log(
+            exerciseID: defaulted.exercises[0].id,
+            prescriptionID: defaulted.exercises[0].prescriptions[0].id,
+            input: .repetitions(weight: nil, repetitions: 8)
+        )
+
+        XCTAssertEqual(overrideModel.restState?.totalDuration, 75)
+        XCTAssertEqual(defaultModel.restState?.totalDuration, 95)
+    }
+
+    func testSkippingRestReturnsToTheCanonicalNextSetWithoutPersistingAgain() async throws {
+        let repository = makeRepository()
+        let workout = EquilibriumFixtures.mixed(id: "phase4-rest-skip")
+        let sessions = WorkoutRestSessionStore()
+        try await repository.create(workout)
+        let model = WorkoutExecutionModel(
+            workoutID: workout.id,
+            repository: repository,
+            restSessionStore: sessions
+        )
+        await model.activate()
+
+        await model.log(
+            exerciseID: workout.exercises[0].id,
+            prescriptionID: workout.exercises[0].prescriptions[0].id,
+            input: .repetitions(weight: nil, repetitions: 8)
+        )
+        model.skipRest()
+
+        let persisted = try await repository.workout(id: workout.id)
+        XCTAssertNil(model.restState)
+        XCTAssertNil(sessions.activeSession)
+        XCTAssertEqual(model.currentExercise?.id, workout.exercises[0].id)
+        XCTAssertEqual(model.currentPrescription?.id, workout.exercises[0].prescriptions[1].id)
+        XCTAssertEqual(persisted?.exercises[0].loggedSets.count, 1)
+    }
+
+    func testNaturalRestCompletionReturnsToCanonicalStateAndClearsDeadline() async throws {
+        let repository = makeRepository()
+        let workout = EquilibriumFixtures.mixed(id: "phase4-rest-natural-completion")
+        let sessions = WorkoutRestSessionStore()
+        var wallClock = Date(timeIntervalSince1970: 10_000)
+        try await repository.create(workout)
+        let model = WorkoutExecutionModel(
+            workoutID: workout.id,
+            repository: repository,
+            now: { wallClock },
+            restSessionStore: sessions
+        )
+        await model.activate()
+        await model.log(
+            exerciseID: workout.exercises[0].id,
+            prescriptionID: workout.exercises[0].prescriptions[0].id,
+            input: .repetitions(weight: nil, repetitions: 8)
+        )
+
+        wallClock = wallClock.addingTimeInterval(121)
+        model.refreshRest(at: wallClock)
+
+        XCTAssertNil(model.restState)
+        XCTAssertNil(sessions.activeSession)
+        XCTAssertEqual(model.timer.state, .completed)
+        XCTAssertEqual(model.currentExercise?.id, workout.exercises[0].id)
+        XCTAssertEqual(model.currentPrescription?.id, workout.exercises[0].prescriptions[1].id)
+    }
+
+    func testEditingCompletedSetDoesNotRestartRest() async throws {
+        let repository = makeRepository()
+        let workout = EquilibriumFixtures.mixed(id: "phase4-rest-edit-completed")
+        try await repository.create(workout)
+        let model = WorkoutExecutionModel(workoutID: workout.id, repository: repository)
+        await model.activate()
+        let exercise = workout.exercises[0]
+        let prescription = exercise.prescriptions[0]
+
+        await model.log(
+            exerciseID: exercise.id,
+            prescriptionID: prescription.id,
+            input: .repetitions(weight: nil, repetitions: 8)
+        )
+        model.skipRest()
+        await model.log(
+            exerciseID: exercise.id,
+            prescriptionID: prescription.id,
+            input: .repetitions(weight: nil, repetitions: 10)
+        )
+
+        let persisted = try await repository.workout(id: workout.id)
+        XCTAssertNil(model.restState)
+        XCTAssertEqual(persisted?.exercises[0].loggedSets.count, 1)
+        XCTAssertEqual(persisted?.exercises[0].loggedSets[0].repetitions, 10)
+    }
+
+    func testFinalWorkoutSetSuppressesRestAndCompletesWorkout() async throws {
+        let repository = makeRepository()
+        let workout = EquilibriumFixtures.ready(id: "phase4-final-set")
+        let sessions = WorkoutRestSessionStore()
+        try await repository.create(workout)
+        let model = WorkoutExecutionModel(
+            workoutID: workout.id,
+            repository: repository,
+            restSessionStore: sessions
+        )
+        await model.activate()
+
+        for (index, prescription) in workout.exercises[0].prescriptions.enumerated() {
+            await model.log(
+                exerciseID: workout.exercises[0].id,
+                prescriptionID: prescription.id,
+                input: .repetitions(weight: nil, repetitions: 8)
+            )
+            if index < workout.exercises[0].prescriptions.count - 1 { model.skipRest() }
+        }
+
+        XCTAssertEqual(model.workout?.status, .completed)
+        XCTAssertTrue(model.didAutoComplete)
+        XCTAssertNil(model.restState)
+        XCTAssertNil(sessions.activeSession)
+    }
+
+    func testForegroundLifecycleReconcilesRestFromWallClockDeadline() async throws {
+        let repository = makeRepository()
+        let workout = EquilibriumFixtures.mixed(id: "phase4-rest-lifecycle")
+        let sessions = WorkoutRestSessionStore()
+        var wallClock = Date(timeIntervalSince1970: 20_000)
+        let countdownClock: TimeInterval = 0
+        let timer = CountdownTimer(now: { countdownClock })
+        try await repository.create(workout)
+        let model = WorkoutExecutionModel(
+            workoutID: workout.id,
+            repository: repository,
+            now: { wallClock },
+            timer: timer,
+            restSessionStore: sessions
+        )
+        await model.activate()
+        await model.log(
+            exerciseID: workout.exercises[0].id,
+            prescriptionID: workout.exercises[0].prescriptions[0].id,
+            input: .repetitions(weight: nil, repetitions: 8)
+        )
+
+        wallClock = wallClock.addingTimeInterval(45)
+        model.refreshRest(at: wallClock)
+        XCTAssertEqual(try XCTUnwrap(model.restState?.remaining), 75, accuracy: 0.001)
+
+        wallClock = wallClock.addingTimeInterval(76)
+        model.refreshRest(at: wallClock)
+        XCTAssertNil(model.restState)
+        XCTAssertNil(sessions.activeSession)
+        XCTAssertEqual(timer.state, .completed)
+    }
+
+    func testCanonicalRefreshSuppressesRetainedRestWhenWorkoutCanComplete() async throws {
+        let repository = makeRepository()
+        let workout = EquilibriumFixtures.mixed(id: "phase4-rest-canonical-completion")
+        let sessions = WorkoutRestSessionStore()
+        try await repository.create(workout)
+        let model = WorkoutExecutionModel(
+            workoutID: workout.id,
+            repository: repository,
+            restSessionStore: sessions
+        )
+        await model.activate()
+        await model.log(
+            exerciseID: workout.exercises[0].id,
+            prescriptionID: workout.exercises[0].prescriptions[0].id,
+            input: .repetitions(weight: nil, repetitions: 8)
+        )
+        XCTAssertNotNil(model.restState)
+
+        for exercise in workout.exercises {
+            let alreadyCompleted = Set(
+                (try await repository.workout(id: workout.id))?
+                    .exercises.first(where: { $0.id == exercise.id })?
+                    .loggedSets.compactMap(\.prescriptionID) ?? []
+            )
+            for prescription in exercise.prescriptions where !alreadyCompleted.contains(prescription.id) {
+                let input: SetLogInput
+                switch prescription.target {
+                case .repetitions: input = .repetitions(weight: nil, repetitions: 8)
+                case .duration: input = .duration(weight: nil, seconds: 30)
+                }
+                _ = try await repository.logSet(
+                    workoutID: workout.id,
+                    exerciseID: exercise.id,
+                    prescriptionID: prescription.id,
+                    input: input,
+                    completed: true,
+                    at: .now
+                )
+            }
+        }
+
+        await model.refreshFromPersistence()
+
+        XCTAssertTrue(model.canComplete)
+        XCTAssertNil(model.restState)
+        XCTAssertNil(sessions.activeSession)
+    }
+
+    func testPartialExerciseRestReturnsToSameFocusedExerciseAndNextSet() async throws {
+        let repository = makeRepository()
+        let workout = EquilibriumFixtures.mixed(id: "phase41-partial")
+        try await repository.create(workout)
+        let model = WorkoutExecutionModel(workoutID: workout.id, repository: repository)
+        let presentation = ExecutionWalletPresentation(initialMode: .focusedExercise)
+        await model.activate()
+
+        await model.log(
+            exerciseID: workout.exercises[0].id,
+            prescriptionID: workout.exercises[0].prescriptions[0].id,
+            input: .repetitions(weight: nil, repetitions: 8)
+        )
+
+        XCTAssertFalse(try XCTUnwrap(model.restState).completesExercise)
+        XCTAssertFalse(model.awaitsExerciseSelection)
+        XCTAssertFalse(presentation.synchronize(
+            with: model.foregroundState,
+            awaitsExerciseSelection: model.awaitsExerciseSelection
+        ))
+        model.skipRest()
+        _ = presentation.synchronize(
+            with: model.foregroundState,
+            awaitsExerciseSelection: model.awaitsExerciseSelection
+        )
+
+        XCTAssertEqual(presentation.mode, .focusedExercise)
+        XCTAssertEqual(model.currentExercise?.id, workout.exercises[0].id)
+        XCTAssertEqual(model.currentPrescription?.id, workout.exercises[0].prescriptions[1].id)
+    }
+
+    func testFinalExerciseSetSkipRestMinimizesWithoutFocusingNextExercise() async throws {
+        let repository = makeRepository()
+        let workout = EquilibriumFixtures.mixed(id: "phase41-final-skip")
+        try await repository.create(workout)
+        let model = WorkoutExecutionModel(workoutID: workout.id, repository: repository)
+        let presentation = ExecutionWalletPresentation(initialMode: .focusedExercise)
+        await model.activate()
+
+        for (index, prescription) in workout.exercises[0].prescriptions.enumerated() {
+            await model.log(
+                exerciseID: workout.exercises[0].id,
+                prescriptionID: prescription.id,
+                input: .repetitions(weight: nil, repetitions: 8)
+            )
+            if index < workout.exercises[0].prescriptions.count - 1 { model.skipRest() }
+        }
+
+        XCTAssertTrue(try XCTUnwrap(model.restState).completesExercise)
+        XCTAssertFalse(model.awaitsExerciseSelection)
+        _ = presentation.synchronize(
+            with: model.foregroundState,
+            awaitsExerciseSelection: model.awaitsExerciseSelection
+        )
+        model.skipRest()
+        XCTAssertTrue(presentation.synchronize(
+            with: model.foregroundState,
+            awaitsExerciseSelection: model.awaitsExerciseSelection
+        ))
+
+        XCTAssertEqual(presentation.mode, .exerciseOverview)
+        XCTAssertTrue(model.awaitsExerciseSelection)
+        XCTAssertNil(model.focusedExerciseID)
+        XCTAssertEqual(model.currentExercise?.id, workout.exercises[1].id)
+        XCTAssertTrue(WorkoutExecutionQuery.isComplete(try XCTUnwrap(model.exercise(id: workout.exercises[0].id))))
+    }
+
+    func testFinalExerciseSetNaturalRestCompletionUsesSameMinimizationPath() async throws {
+        let repository = makeRepository()
+        let workout = EquilibriumFixtures.mixed(id: "phase41-final-natural")
+        var wallClock = Date(timeIntervalSince1970: 30_000)
+        try await repository.create(workout)
+        let model = WorkoutExecutionModel(workoutID: workout.id, repository: repository, now: { wallClock })
+        let presentation = ExecutionWalletPresentation(initialMode: .focusedExercise)
+        await model.activate()
+
+        for (index, prescription) in workout.exercises[0].prescriptions.enumerated() {
+            await model.log(
+                exerciseID: workout.exercises[0].id,
+                prescriptionID: prescription.id,
+                input: .repetitions(weight: nil, repetitions: 8)
+            )
+            if index < workout.exercises[0].prescriptions.count - 1 { model.skipRest() }
+        }
+        _ = presentation.synchronize(
+            with: model.foregroundState,
+            awaitsExerciseSelection: model.awaitsExerciseSelection
+        )
+        wallClock = wallClock.addingTimeInterval(121)
+        model.refreshRest(at: wallClock)
+        _ = presentation.synchronize(
+            with: model.foregroundState,
+            awaitsExerciseSelection: model.awaitsExerciseSelection
+        )
+
+        XCTAssertNil(model.restState)
+        XCTAssertTrue(model.awaitsExerciseSelection)
+        XCTAssertEqual(presentation.mode, .exerciseOverview)
+        XCTAssertNil(model.focusedExerciseID)
+    }
+
+    func testFinalExerciseSetWithoutRestShowsOverviewImmediately() async throws {
+        let repository = makeRepository()
+        var workout = EquilibriumFixtures.mixed(id: "phase41-final-no-rest")
+        workout.exercises[0].restDuration = nil
+        try await repository.create(workout)
+        let model = WorkoutExecutionModel(
+            workoutID: workout.id,
+            repository: repository,
+            defaultRestDuration: 0
+        )
+        let presentation = ExecutionWalletPresentation(initialMode: .focusedExercise)
+        await model.activate()
+
+        for prescription in workout.exercises[0].prescriptions {
+            await model.log(
+                exerciseID: workout.exercises[0].id,
+                prescriptionID: prescription.id,
+                input: .repetitions(weight: nil, repetitions: 8)
+            )
+        }
+        _ = presentation.synchronize(
+            with: model.foregroundState,
+            awaitsExerciseSelection: model.awaitsExerciseSelection
+        )
+
+        XCTAssertNil(model.restState)
+        XCTAssertTrue(model.awaitsExerciseSelection)
+        XCTAssertEqual(presentation.mode, .exerciseOverview)
+        XCTAssertNil(model.focusedExerciseID)
+    }
+
+    func testExplicitSelectionAfterExerciseCompletionCanChooseAnyRemainingExercise() async throws {
+        let repository = makeRepository()
+        let workout = EquilibriumFixtures.midWorkout(id: "phase41-explicit-selection")
+        try await repository.create(workout)
+        let model = WorkoutExecutionModel(workoutID: workout.id, repository: repository)
+        let presentation = ExecutionWalletPresentation(initialMode: .focusedExercise)
+        await model.activate()
+        let completingExercise = workout.exercises[1]
+
+        for prescription in completingExercise.prescriptions.dropFirst() {
+            await model.log(
+                exerciseID: completingExercise.id,
+                prescriptionID: prescription.id,
+                input: .repetitions(weight: nil, repetitions: 8)
+            )
+            if prescription != completingExercise.prescriptions.last { model.skipRest() }
+        }
+        model.skipRest()
+        _ = presentation.synchronize(
+            with: model.foregroundState,
+            awaitsExerciseSelection: model.awaitsExerciseSelection
+        )
+        let chosen = workout.exercises[3]
+        XCTAssertTrue(presentation.selectExercise(chosen.id, focus: model.focus))
+
+        XCTAssertFalse(model.awaitsExerciseSelection)
+        XCTAssertEqual(model.focusedExerciseID, chosen.id)
+        XCTAssertEqual(model.currentExercise?.id, chosen.id)
+        XCTAssertEqual(presentation.mode, .focusedExercise)
+    }
+
+    func testAwaitingSelectionAndCanonicalProgressSurviveRepositoryRefresh() async throws {
+        let repository = makeRepository()
+        let workout = EquilibriumFixtures.mixed(id: "phase41-refresh")
+        try await repository.create(workout)
+        let model = WorkoutExecutionModel(workoutID: workout.id, repository: repository)
+        await model.activate()
+
+        for (index, prescription) in workout.exercises[0].prescriptions.enumerated() {
+            await model.log(
+                exerciseID: workout.exercises[0].id,
+                prescriptionID: prescription.id,
+                input: .repetitions(weight: nil, repetitions: 8)
+            )
+            if index < workout.exercises[0].prescriptions.count - 1 { model.skipRest() }
+        }
+        model.skipRest()
+        let progressBeforeRefresh = model.progress
+
+        await model.refreshFromPersistence()
+
+        XCTAssertEqual(model.progress, progressBeforeRefresh)
+        XCTAssertTrue(model.awaitsExerciseSelection)
+        XCTAssertNil(model.focusedExerciseID)
+        XCTAssertEqual(model.exercise(id: workout.exercises[0].id)?.loggedSets.count, 3)
+        XCTAssertEqual(model.currentExercise?.id, workout.exercises[1].id)
+    }
+
+    private func makeRepository() -> SwiftDataRepository {
+        SwiftDataRepository(container: try! PersistenceController.makeContainer(inMemory: true))
+    }
+}
+
+@MainActor
+final class ExecutionWalletMotionPhase42Tests: XCTestCase {
+    func testTimedSequenceKeepsOneFocusedCardAcrossReadyWorkAndRest() {
+        let presentation = ExecutionWalletPresentation(initialMode: .focusedExercise)
+
+        XCTAssertEqual(
+            presentation.resolvedState(for: .exercise),
+            .focusedExercise
+        )
+
+        XCTAssertFalse(presentation.synchronize(with: .work, awaitsExerciseSelection: false))
+        XCTAssertEqual(
+            presentation.resolvedState(for: .work),
+            .focusedWork
+        )
+
+        XCTAssertFalse(presentation.synchronize(with: .rest, awaitsExerciseSelection: false))
+        XCTAssertEqual(
+            presentation.resolvedState(for: .rest),
+            .focusedRest
+        )
+        XCTAssertEqual(presentation.mode, .focusedExercise)
+    }
+
+    func testPartialRestCompletionReturnsToFocusedExercisePresentation() {
+        let presentation = ExecutionWalletPresentation(initialMode: .exerciseOverview)
+
+        XCTAssertTrue(presentation.synchronize(with: .rest, awaitsExerciseSelection: false))
+        XCTAssertEqual(presentation.resolvedState(for: .rest), .focusedRest)
+
+        XCTAssertFalse(presentation.synchronize(with: .exercise, awaitsExerciseSelection: false))
+        XCTAssertEqual(presentation.resolvedState(for: .exercise), .focusedExercise)
+    }
+
+    func testFinalExerciseRestCompletionResolvesToOverviewPresentation() {
+        let presentation = ExecutionWalletPresentation(initialMode: .focusedExercise)
+
+        XCTAssertFalse(presentation.synchronize(with: .rest, awaitsExerciseSelection: false))
+        XCTAssertEqual(presentation.resolvedState(for: .rest), .focusedRest)
+
+        XCTAssertTrue(presentation.synchronize(with: .exercise, awaitsExerciseSelection: true))
+        XCTAssertEqual(presentation.resolvedState(for: .exercise, awaitsExerciseSelection: true), .exerciseOverview)
+        XCTAssertEqual(presentation.mode, .exerciseOverview)
+    }
+
+    func testOverviewSelectionReturnsToFocusedExerciseWithoutIntermediateVisualState() {
+        let presentation = ExecutionWalletPresentation(initialMode: .exerciseOverview)
+        let selectedID = WorkoutExerciseID(rawValue: "phase42-selected")
+        var focusedID: WorkoutExerciseID?
+
+        XCTAssertTrue(presentation.selectExercise(selectedID) { focusedID = $0 })
+
+        XCTAssertEqual(focusedID, selectedID)
+        XCTAssertEqual(presentation.resolvedState(for: .exercise), .focusedExercise)
+        XCTAssertEqual(presentation.mode, .focusedExercise)
+    }
+
+    func testAwaitingSelectionOverridesStaleFocusedMode() {
+        let presentation = ExecutionWalletPresentation(initialMode: .focusedExercise)
+
+        XCTAssertEqual(
+            presentation.resolvedState(for: .exercise, awaitsExerciseSelection: true),
+            .exerciseOverview
+        )
+    }
+}

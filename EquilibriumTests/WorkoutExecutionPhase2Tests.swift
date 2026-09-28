@@ -160,13 +160,18 @@ final class WorkoutExecutionNavigationStateTests: XCTestCase {
         await model.activate()
         let canonicalWorkout = model.workout
         let foregroundID = try XCTUnwrap(model.currentExercise?.id)
+        model.selectSet(at: 2)
+        let selectedPrescriptionID = try XCTUnwrap(model.currentPrescription?.id)
 
         XCTAssertTrue(presentation.showExerciseOverview())
         XCTAssertEqual(model.currentExercise?.id, foregroundID)
         XCTAssertTrue(presentation.showFocusedExercise())
+        XCTAssertTrue(presentation.showExerciseOverview())
+        XCTAssertTrue(presentation.showFocusedExercise())
 
         XCTAssertEqual(presentation.mode, .focusedExercise)
         XCTAssertEqual(model.currentExercise?.id, foregroundID)
+        XCTAssertEqual(model.currentPrescription?.id, selectedPrescriptionID)
         XCTAssertEqual(model.workout, canonicalWorkout)
     }
 
@@ -508,9 +513,106 @@ final class WorkoutExecutionNavigationStateTests: XCTestCase {
         XCTAssertEqual(model.currentExercise?.nameSnapshot, fixture.exercises[2].nameSnapshot)
         XCTAssertEqual(model.completedExercises.map(\.id), [fixture.exercises[0].id])
         XCTAssertEqual(model.upNextExercises.map(\.id), [fixture.exercises[1].id, fixture.exercises[3].id])
+        XCTAssertEqual(fixture.exercises.map { model.states[$0.id] }, [.completed, .upcoming, .current, .upcoming])
         let persisted = try await repository.workout(id: fixture.id)
         XCTAssertEqual(persisted?.exercises.map(\.id), fixture.exercises.map(\.id))
         XCTAssertEqual(presentation.mode, .focusedExercise)
+    }
+
+    func testCanonicalRefreshPreservesFocusedExerciseAndSelectedSetByIdentity() async throws {
+        let repository = SwiftDataRepository(container: try PersistenceController.makeContainer(inMemory: true))
+        let fixture = EquilibriumFixtures.midWorkout(id: "wallet-refresh-preserves-selection")
+        try await repository.create(fixture)
+        let model = WorkoutExecutionModel(workoutID: fixture.id, repository: repository)
+        let presentation = ExecutionWalletPresentation()
+        await model.activate()
+
+        model.focus(fixture.exercises[2].id)
+        model.selectSet(at: 2)
+        presentation.showExerciseOverview()
+        let selectedPrescriptionID = try XCTUnwrap(model.currentPrescription?.id)
+        let loaded = try await repository.workout(id: fixture.id)
+        var persisted = try XCTUnwrap(loaded)
+        persisted.updatedAt = persisted.updatedAt.addingTimeInterval(1)
+        try await repository.update(persisted)
+
+        await model.refreshFromPersistence()
+
+        XCTAssertEqual(presentation.mode, .exerciseOverview)
+        XCTAssertEqual(model.focusedExerciseID, fixture.exercises[2].id)
+        XCTAssertEqual(model.currentExercise?.id, fixture.exercises[2].id)
+        XCTAssertEqual(model.currentPrescription?.id, selectedPrescriptionID)
+        XCTAssertEqual(persisted.exercises.map(\.id), model.workout?.exercises.map(\.id))
+    }
+
+    func testCanonicalRefreshPreservesSelectedSetForImplicitCurrentExercise() async throws {
+        let repository = SwiftDataRepository(container: try PersistenceController.makeContainer(inMemory: true))
+        let fixture = EquilibriumFixtures.midWorkout(id: "wallet-refresh-preserves-implicit-current")
+        try await repository.create(fixture)
+        let model = WorkoutExecutionModel(workoutID: fixture.id, repository: repository)
+        await model.activate()
+
+        XCTAssertNil(model.focusedExerciseID)
+        model.selectSet(at: 2)
+        let currentExerciseID = try XCTUnwrap(model.currentExercise?.id)
+        let selectedPrescriptionID = try XCTUnwrap(model.currentPrescription?.id)
+
+        await model.refreshFromPersistence()
+
+        XCTAssertNil(model.focusedExerciseID)
+        XCTAssertEqual(model.currentExercise?.id, currentExerciseID)
+        XCTAssertEqual(model.currentPrescription?.id, selectedPrescriptionID)
+    }
+
+    func testCompletingFocusedExerciseAdvancesCanonicalListStates() async throws {
+        let repository = SwiftDataRepository(container: try PersistenceController.makeContainer(inMemory: true))
+        let fixture = EquilibriumFixtures.midWorkout(id: "wallet-exercise-completion")
+        try await repository.create(fixture)
+        let model = WorkoutExecutionModel(workoutID: fixture.id, repository: repository)
+        let presentation = ExecutionWalletPresentation()
+        await model.activate()
+        let completingExercise = fixture.exercises[1]
+
+        for prescription in completingExercise.prescriptions.dropFirst() {
+            await model.log(
+                exerciseID: completingExercise.id,
+                prescriptionID: prescription.id,
+                input: .repetitions(weight: nil, repetitions: 8)
+            )
+            if prescription.id != completingExercise.prescriptions.last?.id { model.skipRest() }
+        }
+
+        XCTAssertEqual(presentation.mode, .focusedExercise)
+        XCTAssertNil(model.focusedExerciseID)
+        XCTAssertEqual(model.currentExercise?.id, fixture.exercises[2].id)
+        XCTAssertEqual(model.completedExercises.map(\.id), [fixture.exercises[0].id, completingExercise.id])
+        XCTAssertEqual(model.upNextExercises.map(\.id), [fixture.exercises[3].id])
+        XCTAssertEqual(fixture.exercises.map { model.states[$0.id] }, [.completed, .completed, .current, .upcoming])
+    }
+
+    func testWorkoutCompletionClearsTransientWalletSelection() async throws {
+        let repository = SwiftDataRepository(container: try PersistenceController.makeContainer(inMemory: true))
+        let fixture = EquilibriumFixtures.ready(id: "wallet-completion-clears-selection")
+        try await repository.create(fixture)
+        let model = WorkoutExecutionModel(workoutID: fixture.id, repository: repository)
+        await model.activate()
+        model.focus(fixture.exercises[0].id)
+
+        for (index, prescription) in fixture.exercises[0].prescriptions.enumerated() {
+            await model.log(
+                exerciseID: fixture.exercises[0].id,
+                prescriptionID: prescription.id,
+                input: .repetitions(weight: nil, repetitions: 8)
+            )
+            if index < fixture.exercises[0].prescriptions.count - 1 { model.skipRest() }
+        }
+
+        XCTAssertEqual(model.workout?.status, .completed)
+        XCTAssertTrue(model.didAutoComplete)
+        XCTAssertNil(model.focusedExerciseID)
+        XCTAssertNil(model.currentExercise)
+        XCTAssertEqual(model.selectedSetIndex, 0)
+        XCTAssertEqual(fixture.exercises.map { model.states[$0.id] }, [.completed])
     }
 
     func testCompactForegroundPresentationPreservesCanonicalCurrentExerciseTitleAndIdentity() async throws {

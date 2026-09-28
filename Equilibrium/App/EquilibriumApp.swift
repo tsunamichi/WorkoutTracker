@@ -15,6 +15,7 @@ struct EquilibriumApp: App {
                 case "ready": workouts = [EquilibriumFixtures.ready(id: "launch-ready")]
                 case "inProgress": workouts = [EquilibriumFixtures.inProgress(id: "launch-progress")]
                 case "completed": workouts = [EquilibriumFixtures.completed(id: "launch-completed")]
+                case "motionAudit": workouts = [EquilibriumFixtures.motionAudit(id: "launch-motion-audit")]
                 case "carousel":
                     var a = EquilibriumFixtures.ready(id: "launch-a")
                     var b = EquilibriumFixtures.inProgress(id: "launch-b")
