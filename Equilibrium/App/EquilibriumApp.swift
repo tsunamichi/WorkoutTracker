@@ -25,7 +25,7 @@ struct EquilibriumApp: App {
                 default: workouts = []
                 }
                 for workout in workouts { container.mainContext.insert(WorkoutMapper.record(from: workout)) }; try container.mainContext.save()
-                environment = AppEnvironment(container: container)
+                environment = try AppEnvironment(container: container)
                 return
             }
 #endif

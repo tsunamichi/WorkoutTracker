@@ -4,14 +4,20 @@ import SwiftData
 
 @MainActor
 final class ProductModelCorrection2Tests: XCTestCase {
-    func testFreshProductionEnvironmentHasNoSeedCatalogAndExerciseNeedsOnlyName() async throws {
-        let environment = AppEnvironment(container: try PersistenceController.makeContainer(inMemory: true))
-        let initiallyEmpty = try await environment.exerciseRepository.allExercises()
-        XCTAssertTrue(initiallyEmpty.isEmpty)
+    func testFreshProductionEnvironmentSeedsDefaultsAndExerciseNeedsOnlyName() async throws {
+        let environment = try AppEnvironment(container: try PersistenceController.makeContainer(inMemory: true))
+        let seededExercises = try await environment.exerciseRepository.allExercises()
+        XCTAssertEqual(seededExercises.count, 30)
+        let seededWorkouts = try await environment.workoutRepository.allWorkouts()
+        XCTAssertEqual(seededWorkouts.map(\.titleSnapshot), [
+            "Lower Quad — P2",
+            "Upper Push — P2",
+            "Upper Pull — P2"
+        ])
         let exercise = ExerciseDefinition(id: .new(), name: "Single-Leg Hamstring Curl", normalizedName: "", aliases: [], equipment: nil, category: nil, isCustom: true, archivedAt: nil)
         try await environment.exerciseRepository.saveExercise(exercise)
         let search = try await environment.exerciseRepository.searchExercises("hamstring")
-        XCTAssertEqual(search.map(\.id), [exercise.id])
+        XCTAssertTrue(search.contains { $0.id == exercise.id })
         do {
             try await environment.exerciseRepository.saveExercise(.init(id: .new(), name: " single leg hamstring-curl ", normalizedName: "", aliases: [], equipment: nil, category: nil, isCustom: true, archivedAt: nil))
             XCTFail("Expected normalized duplicate protection")

@@ -14,7 +14,8 @@ final class AppEnvironment {
     let timerStore: any StandaloneTimerConfigurationStore
     let legacyImporter: RNLegacyImporter
     let persistenceStartupMode: PersistenceController.StartupMode
-    init(container: ModelContainer, persistenceStartupMode: PersistenceController.StartupMode = .localFallback) {
+    init(container: ModelContainer, persistenceStartupMode: PersistenceController.StartupMode = .localFallback) throws {
+        try Self.seedDefaultWorkoutsIfNeeded(in: container)
         self.container = container
         self.persistenceStartupMode = persistenceStartupMode
         let repository = SwiftDataRepository(container: container)
@@ -23,6 +24,23 @@ final class AppEnvironment {
         timerStore = SwiftDataStandaloneTimerStore(repository: repository)
         legacyImporter = RNLegacyImporter(repository: repository)
     }
+
+    static func seedDefaultWorkoutsIfNeeded(in container: ModelContainer) throws {
+        let context = container.mainContext
+        guard try context.fetch(FetchDescriptor<WorkoutRecord>()).isEmpty else { return }
+
+        let existingExercises = try context.fetch(FetchDescriptor<ExerciseDefinitionRecord>())
+            .map(DefinitionMapper.domain)
+        let seed = EquilibriumFixtures.defaultSeed(existingExercises: existingExercises)
+        for definition in seed.definitions {
+            context.insert(DefinitionMapper.record(from: definition))
+        }
+        for workout in seed.workouts {
+            context.insert(WorkoutMapper.record(from: workout))
+        }
+        try context.save()
+    }
+
     static func live() throws -> AppEnvironment {
         // Unit-test hosts are intentionally unsigned and must never attempt to
         // bootstrap CloudKit merely because they launch the application target.
@@ -30,6 +48,6 @@ final class AppEnvironment {
             return try AppEnvironment(container: PersistenceController.makeContainer())
         }
         let startup = try PersistenceController.makeLiveContainer()
-        return AppEnvironment(container: startup.container, persistenceStartupMode: startup.mode)
+        return try AppEnvironment(container: startup.container, persistenceStartupMode: startup.mode)
     }
 }
