@@ -1237,6 +1237,29 @@ final class ExecutionPrimaryActionRegressionTests: XCTestCase {
         }
     }
 
+    func testForegroundValueViewportEndsAtCTAEdgeThroughoutFocusTransition() {
+        let cardHeight: CGFloat = 640
+        let headerHeight: CGFloat = 48
+        let naturalFooterHeight = ExecutionPrimaryActionLayout.footerHeight(
+            isVisible: true,
+            controlHeight: ExecutionActionButtonMetrics.height,
+            bottomInset: EQSpacing.sm,
+            trailingControlHeight: EQDimension.minimumTouch
+        )
+
+        for progress: CGFloat in [0.25, 0.5, 0.75, 1] {
+            let footerHeight = naturalFooterHeight * progress
+            let viewportHeight = ExecutionPrimaryActionLayout.scrollViewportHeight(
+                cardHeight: cardHeight,
+                headerHeight: headerHeight,
+                footerHeight: footerHeight
+            )
+            let valueViewportBottom = headerHeight + viewportHeight
+            XCTAssertEqual(valueViewportBottom, cardHeight - footerHeight, accuracy: 0.001)
+            XCTAssertEqual(valueViewportBottom + footerHeight, cardHeight, accuracy: 0.001)
+        }
+    }
+
     func testWalletSurfaceGeometryIsContinuousInBothFocusDirections() {
         let walletHeight: CGFloat = 640
         let focusedTop: CGFloat = 56

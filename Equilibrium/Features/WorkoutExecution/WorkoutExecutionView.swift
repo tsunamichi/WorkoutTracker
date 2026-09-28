@@ -660,7 +660,7 @@ struct WorkoutExecutionView: View {
                     .font(EQTypography.exerciseTitle)
             }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
     }
 
     private var foregroundExercise: WorkoutExercise? {
