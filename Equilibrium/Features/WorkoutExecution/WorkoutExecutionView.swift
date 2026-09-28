@@ -504,6 +504,7 @@ struct WorkoutExecutionView: View {
                         pauseResumeWork: model.toggleWorkTimerPause,
                         foregroundHeader: foregroundExerciseHeader,
                         foregroundContent: foregroundExerciseContent,
+                        foregroundValues: { expandedExerciseControls },
                         footerControls: { exercise in footerSetCountControls(for: exercise) }
                     )
                     .frame(height: walletHeight)
@@ -635,7 +636,6 @@ struct WorkoutExecutionView: View {
     @ViewBuilder private func foregroundExerciseContent(focusProgress: CGFloat) -> some View {
         let isTiming = model.restState != nil || model.workTimerState != nil
         let progress = min(max(focusProgress, 0), 1)
-        let secondaryProgress = min(max((progress - 0.18) / 0.82, 0), 1)
         let contentSpacing = isTiming
             ? EQSpacing.xs
             : EQSpacing.xs + ((EQSpacing.md - EQSpacing.xs) * progress)
@@ -646,15 +646,6 @@ struct WorkoutExecutionView: View {
                     .lineLimit(2)
                     .contentTransition(.identity)
                     .accessibilityIdentifier("execution-current-exercise-name-\(foregroundExerciseID?.rawValue ?? model.workoutID.rawValue)")
-
-                if !isTiming && !model.awaitsExerciseSelection {
-                    Spacer(minLength: EQSpacing.lg)
-                    expandedExerciseControls
-                        .opacity(Double(secondaryProgress))
-                        .allowsHitTesting(secondaryProgress > 0.99)
-                        .accessibilityHidden(secondaryProgress < 0.99)
-                        .transition(.identity)
-                }
             } else {
                 Text("No active exercise")
                     .font(EQTypography.exerciseTitle)
@@ -788,7 +779,7 @@ struct WorkoutExecutionView: View {
 
 }
 
-private struct ExecutionWallet<ListRow: View, ForegroundHeader: View, ForegroundContent: View, FooterControls: View>: View {
+private struct ExecutionWallet<ListRow: View, ForegroundHeader: View, ForegroundContent: View, ForegroundValues: View, FooterControls: View>: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.homeExecutionTransitionProgress) private var homeTransitionProgress
     @Environment(\.foregroundFocusProgress) private var focusProgress
@@ -811,6 +802,7 @@ private struct ExecutionWallet<ListRow: View, ForegroundHeader: View, Foreground
     let pauseResumeWork: () -> Void
     let foregroundHeader: (CGFloat) -> ForegroundHeader
     let foregroundContent: (CGFloat) -> ForegroundContent
+    let foregroundValues: () -> ForegroundValues
     let footerControls: (WorkoutExercise) -> FooterControls
 
     var body: some View {
@@ -1112,6 +1104,25 @@ private struct ExecutionWallet<ListRow: View, ForegroundHeader: View, Foreground
                 .clipped()
             }
             .frame(width: proxy.size.width, height: proxy.size.height, alignment: .topLeading)
+            .overlay(alignment: .topLeading) {
+                if hasExerciseAction, !isTiming {
+                    let revealProgress = min(max((progress - 0.18) / 0.82, 0), 1)
+                    foregroundValues()
+                        .frame(
+                            width: max(0, proxy.size.width - (EQSpacing.lg * 2)),
+                            height: max(0, contentHeight - EQSpacing.md),
+                            alignment: .bottomLeading
+                        )
+                        .padding(.horizontal, EQSpacing.lg)
+                        .padding(.top, headerHeight)
+                        .padding(.bottom, footerHeight + EQSpacing.md)
+                        .frame(width: proxy.size.width, height: proxy.size.height, alignment: .topLeading)
+                        .clipped()
+                        .opacity(Double(revealProgress))
+                        .allowsHitTesting(revealProgress > 0.99)
+                        .accessibilityHidden(revealProgress < 0.99)
+                }
+            }
             .overlayPreferenceValue(ExecutionPrimaryActionPreferenceKey.self) { primaryAction in
                 pinnedPrimaryAction(
                     primaryAction,
