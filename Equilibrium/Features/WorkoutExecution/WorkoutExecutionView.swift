@@ -101,6 +101,14 @@ private struct ExecutionPrimaryActionPreferenceKey: PreferenceKey {
     }
 }
 
+private struct ExecutionForegroundTitleHeightPreferenceKey: PreferenceKey {
+    static let defaultValue: CGFloat = 0
+
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = max(value, nextValue())
+    }
+}
+
 enum ExecutionPrimaryActionLayout {
     static func footerHeight(
         isVisible: Bool,
@@ -115,6 +123,34 @@ enum ExecutionPrimaryActionLayout {
     static func scrollViewportHeight(cardHeight: CGFloat, headerHeight: CGFloat, footerHeight: CGFloat) -> CGFloat {
         max(0, cardHeight - headerHeight - footerHeight)
     }
+
+    static func foregroundAnchors(cardHeight: CGFloat, headerHeight: CGFloat, footerHeight: CGFloat) -> ExecutionForegroundCardAnchors {
+        let footerTop = max(headerHeight, cardHeight - footerHeight)
+        return .init(
+            contentTop: headerHeight,
+            contentBottom: footerTop,
+            footerTop: footerTop,
+            footerBottom: cardHeight
+        )
+    }
+
+    static func titleOnlyViewportHeight(
+        titleHeight: CGFloat,
+        availableHeight: CGFloat,
+        minimumTitleHeight: CGFloat,
+        topInset: CGFloat
+    ) -> CGFloat {
+        min(availableHeight, max(titleHeight, minimumTitleHeight) + topInset)
+    }
+}
+
+struct ExecutionForegroundCardAnchors: Equatable {
+    let contentTop: CGFloat
+    let contentBottom: CGFloat
+    let footerTop: CGFloat
+    let footerBottom: CGFloat
+
+    var contentHeight: CGFloat { max(0, contentBottom - contentTop) }
 }
 
 enum ExecutionActionButtonMetrics {
@@ -230,7 +266,11 @@ final class ExecutionWalletPresentation {
         return showFocusedExercise()
     }
     func resolvedMode(for foregroundState: ExecutionForegroundState) -> ExecutionWalletPresentationMode {
-        foregroundState == .exercise ? mode : .focusedExercise
+        switch foregroundState {
+        case .exercise: mode
+        case .work: .focusedExercise
+        case .rest: .exerciseOverview
+        }
     }
     func resolvedState(
         for foregroundState: ExecutionForegroundState,
@@ -246,14 +286,33 @@ final class ExecutionWalletPresentation {
         }
     }
     @discardableResult func synchronize(with foregroundState: ExecutionForegroundState) -> Bool {
-        foregroundState == .exercise ? false : showFocusedExercise()
+        switch foregroundState {
+        case .exercise: return false
+        case .work: return showFocusedExercise()
+        case .rest: return showFocusedExercise()
+        }
     }
     @discardableResult func synchronize(
         with foregroundState: ExecutionForegroundState,
         awaitsExerciseSelection: Bool
     ) -> Bool {
-        if foregroundState != .exercise { return showFocusedExercise() }
-        return awaitsExerciseSelection ? showExerciseOverview() : false
+        switch foregroundState {
+        case .work: return showFocusedExercise()
+        case .rest: return showFocusedExercise()
+        case .exercise: return awaitsExerciseSelection ? showExerciseOverview() : false
+        }
+    }
+
+    func showsActionFooter(
+        for foregroundState: ExecutionForegroundState,
+        awaitsExerciseSelection: Bool = false,
+        isReadOnly: Bool = false
+    ) -> Bool {
+        guard !isReadOnly else { return false }
+        switch foregroundState {
+        case .work, .rest: return true
+        case .exercise: return !awaitsExerciseSelection && mode == .focusedExercise
+        }
     }
 
     private func setMode(_ newMode: ExecutionWalletPresentationMode) -> Bool {
@@ -503,8 +562,7 @@ struct WorkoutExecutionView: View {
                         skipWork: model.skipWorkTimer,
                         pauseResumeWork: model.toggleWorkTimerPause,
                         foregroundHeader: foregroundExerciseHeader,
-                        foregroundContent: foregroundExerciseContent,
-                        foregroundValues: { expandedExerciseControls },
+                        foregroundContent: { foregroundExerciseContent() },
                         footerControls: { exercise in footerSetCountControls(for: exercise) }
                     )
                     .frame(height: walletHeight)
@@ -633,25 +691,33 @@ struct WorkoutExecutionView: View {
             }
     }
 
-    @ViewBuilder private func foregroundExerciseContent(focusProgress: CGFloat) -> some View {
+    @ViewBuilder private func foregroundExerciseContent() -> some View {
         let isTiming = model.restState != nil || model.workTimerState != nil
-        let progress = min(max(focusProgress, 0), 1)
-        let contentSpacing = isTiming
-            ? EQSpacing.xs
-            : EQSpacing.xs + ((EQSpacing.md - EQSpacing.xs) * progress)
-        VStack(alignment: .leading, spacing: contentSpacing) {
+        VStack(alignment: .leading, spacing: EQSpacing.md) {
             if let exerciseName = foregroundExerciseName {
                 Text(exerciseName)
                     .font(EQTypography.exerciseTitle)
                     .lineLimit(2)
                     .contentTransition(.identity)
                     .accessibilityIdentifier("execution-current-exercise-name-\(foregroundExerciseID?.rawValue ?? model.workoutID.rawValue)")
+                    .background {
+                        GeometryReader { proxy in
+                            Color.clear.preference(
+                                key: ExecutionForegroundTitleHeightPreferenceKey.self,
+                                value: proxy.size.height
+                            )
+                        }
+                    }
             } else {
                 Text("No active exercise")
                     .font(EQTypography.exerciseTitle)
             }
+            if !isTiming && !model.awaitsExerciseSelection {
+                expandedExerciseControls
+                    .transition(.identity)
+            }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+        .frame(maxWidth: .infinity, alignment: .topLeading)
     }
 
     private var foregroundExercise: WorkoutExercise? {
@@ -779,10 +845,11 @@ struct WorkoutExecutionView: View {
 
 }
 
-private struct ExecutionWallet<ListRow: View, ForegroundHeader: View, ForegroundContent: View, ForegroundValues: View, FooterControls: View>: View {
+private struct ExecutionWallet<ListRow: View, ForegroundHeader: View, ForegroundContent: View, FooterControls: View>: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.homeExecutionTransitionProgress) private var homeTransitionProgress
     @Environment(\.foregroundFocusProgress) private var focusProgress
+    @State private var foregroundTitleHeight: CGFloat = 0
     let workout: Workout
     let model: WorkoutExecutionModel
     let presentation: ExecutionWalletPresentation
@@ -801,8 +868,7 @@ private struct ExecutionWallet<ListRow: View, ForegroundHeader: View, Foreground
     let skipWork: () -> Void
     let pauseResumeWork: () -> Void
     let foregroundHeader: (CGFloat) -> ForegroundHeader
-    let foregroundContent: (CGFloat) -> ForegroundContent
-    let foregroundValues: () -> ForegroundValues
+    let foregroundContent: () -> ForegroundContent
     let footerControls: (WorkoutExercise) -> FooterControls
 
     var body: some View {
@@ -1061,36 +1127,55 @@ private struct ExecutionWallet<ListRow: View, ForegroundHeader: View, Foreground
         let hasExerciseAction = foregroundState == .exercise
             && !model.isReadOnly
             && !model.awaitsExerciseSelection
-        let naturalFooterHeight = isTiming || hasExerciseAction ? actionFooterHeight : 0
-        let footerHeight = naturalFooterHeight * (isTiming ? 1 : progress)
-        let headerHeight = EQSpacing.xxs + EQDimension.minimumTouch
+        let showsActionFooter = presentation.showsActionFooter(
+            for: foregroundState,
+            awaitsExerciseSelection: model.awaitsExerciseSelection,
+            isReadOnly: model.isReadOnly
+        )
+        let footerProgress: CGFloat = showsActionFooter ? (isTiming ? 1 : progress) : 0
+        let footerHeight = actionFooterHeight * footerProgress
+        let accessibilityHeaderPadding = dynamicTypeSize.isAccessibilitySize ? EQSpacing.xl : 0
+        let headerHeight = EQDimension.minimumTouch + EQSpacing.xxs + (accessibilityHeaderPadding * 2)
 
         return GeometryReader { proxy in
-            let contentHeight = ExecutionPrimaryActionLayout.scrollViewportHeight(
+            let anchors = ExecutionPrimaryActionLayout.foregroundAnchors(
                 cardHeight: proxy.size.height,
                 headerHeight: headerHeight,
                 footerHeight: footerHeight
             )
+            let isOverview = presentation.resolvedMode(for: foregroundState) == .exerciseOverview
+            let contentViewportHeight = isOverview
+                ? ExecutionPrimaryActionLayout.titleOnlyViewportHeight(
+                    titleHeight: foregroundTitleHeight,
+                    availableHeight: anchors.contentHeight,
+                    minimumTitleHeight: EQDimension.minimumTouch,
+                    topInset: EQSpacing.xxs
+                )
+                : anchors.contentHeight
             VStack(alignment: .leading, spacing: 0) {
                 foregroundHeader(progress)
+                    .frame(maxWidth: .infinity, minHeight: EQDimension.minimumTouch, alignment: .leading)
                     .padding(.horizontal, EQSpacing.lg)
                     .padding(.top, EQSpacing.xxs)
+                    .padding(.vertical, accessibilityHeaderPadding)
                     .background(EQColor.surface)
                     .zIndex(2)
 
                 ScrollView {
-                    foregroundContent(progress)
+                    foregroundContent()
                         .padding(.horizontal, EQSpacing.lg)
                         .padding(.top, EQSpacing.xxs)
-                        .padding(.bottom, EQSpacing.lg)
-                        .frame(minHeight: contentHeight, alignment: .top)
+                        .frame(maxWidth: .infinity, alignment: .topLeading)
                         .opacity(compactContentRevealOpacity)
                         .offset(y: revealOffset(for: compactContentRevealProgress))
                 }
-                .frame(height: contentHeight)
+                .frame(height: contentViewportHeight, alignment: .top)
                 .scrollDisabled(!isFocused)
                 .scrollDismissesKeyboard(.interactively)
                 .scrollIndicators(.hidden)
+                .onPreferenceChange(ExecutionForegroundTitleHeightPreferenceKey.self) {
+                    foregroundTitleHeight = $0
+                }
                 .accessibilityElement(children: .contain)
                 .accessibilityLabel("Current exercise")
                 .accessibilityHint(isFocused ? "Focused exercise controls" : "Expands the current exercise")
@@ -1104,36 +1189,20 @@ private struct ExecutionWallet<ListRow: View, ForegroundHeader: View, Foreground
                 .clipped()
             }
             .frame(width: proxy.size.width, height: proxy.size.height, alignment: .topLeading)
-            .overlay(alignment: .topLeading) {
-                if hasExerciseAction, !isTiming {
-                    let revealProgress = min(max((progress - 0.18) / 0.82, 0), 1)
-                    foregroundValues()
-                        .frame(
-                            width: max(0, proxy.size.width - (EQSpacing.lg * 2)),
-                            height: max(0, contentHeight - EQSpacing.md),
-                            alignment: .bottomLeading
-                        )
-                        .padding(.horizontal, EQSpacing.lg)
-                        .padding(.top, headerHeight)
-                        .padding(.bottom, footerHeight + EQSpacing.md)
-                        .frame(width: proxy.size.width, height: proxy.size.height, alignment: .topLeading)
-                        .clipped()
-                        .opacity(Double(revealProgress))
-                        .allowsHitTesting(revealProgress > 0.99)
-                        .accessibilityHidden(revealProgress < 0.99)
-                }
-            }
             .overlayPreferenceValue(ExecutionPrimaryActionPreferenceKey.self) { primaryAction in
                 pinnedPrimaryAction(
                     primaryAction,
                     progress: progress,
                     isTiming: isTiming,
                     isWorking: isWorking,
-                    footerHeight: footerHeight,
+                    footerHeight: actionFooterHeight,
+                    visibleFooterHeight: footerHeight,
                     actionHeight: actionHeight,
-                    hasExerciseAction: hasExerciseAction
+                    hasExerciseAction: hasExerciseAction,
+                    showsActionFooter: showsActionFooter
                 )
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
+                .clipped()
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -1145,13 +1214,15 @@ private struct ExecutionWallet<ListRow: View, ForegroundHeader: View, Foreground
         isTiming: Bool,
         isWorking: Bool,
         footerHeight: CGFloat,
+        visibleFooterHeight: CGFloat,
         actionHeight: CGFloat,
-        hasExerciseAction: Bool
+        hasExerciseAction: Bool,
+        showsActionFooter: Bool
     ) -> some View {
         let isResting = visualState == .focusedRest
         let isAvailable = isTiming || primaryAction != nil
         let focusedReveal = min(max((progress - 0.18) / 0.82, 0), 1)
-        let isInteractive = isAvailable && (isTiming || focusedReveal > 0.99)
+        let isInteractive = showsActionFooter && isAvailable && (isTiming || focusedReveal > 0.99)
         let title = isResting ? "Skip Rest" : (isWorking ? "Skip" : (primaryAction?.title ?? ""))
         let hint = isResting
             ? "Ends the current rest"
@@ -1201,13 +1272,15 @@ private struct ExecutionWallet<ListRow: View, ForegroundHeader: View, Foreground
                 .accessibilityHint(model.timer.state == .paused ? "Resumes the work timer" : "Pauses the work timer")
             }
         }
-        .opacity(isAvailable ? (isTiming ? 1 : Double(focusedReveal)) : 0)
+        .opacity(isAvailable ? 1 : 0)
         .allowsHitTesting(isInteractive)
         .accessibilityHidden(!isInteractive)
         .padding(.horizontal, EQSpacing.lg)
         .padding(.bottom, EQSpacing.sm)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
         .frame(height: footerHeight, alignment: .bottomLeading)
+        .frame(height: visibleFooterHeight, alignment: .bottomLeading)
+        .clipped()
     }
 
     private var foregroundBackground: some View {

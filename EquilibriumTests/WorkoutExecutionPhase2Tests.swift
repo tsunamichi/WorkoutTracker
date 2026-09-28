@@ -151,6 +151,19 @@ final class WorkoutExecutionNavigationStateTests: XCTestCase {
         XCTAssertEqual(presentation.mode, .focusedExercise)
     }
 
+    func testActionFooterVisibilityDistinguishesRestFromBrowseOverview() {
+        let presentation = ExecutionWalletPresentation()
+
+        XCTAssertTrue(presentation.showsActionFooter(for: .exercise))
+        XCTAssertFalse(presentation.showsActionFooter(for: .exercise, isReadOnly: true))
+
+        XCTAssertTrue(presentation.showExerciseOverview())
+        XCTAssertFalse(presentation.showsActionFooter(for: .exercise))
+        XCTAssertTrue(presentation.showsActionFooter(for: .rest))
+        XCTAssertEqual(presentation.resolvedMode(for: .rest), .exerciseOverview)
+        XCTAssertTrue(presentation.showsActionFooter(for: .work))
+    }
+
     func testWalletFocusedOverviewRoundTripPreservesCanonicalForegroundIdentity() async throws {
         let repository = SwiftDataRepository(container: try PersistenceController.makeContainer(inMemory: true))
         let fixture = EquilibriumFixtures.midWorkout(id: "wallet-round-trip")
@@ -367,7 +380,7 @@ final class WorkoutExecutionNavigationStateTests: XCTestCase {
         XCTAssertFalse(haptics.events.contains(.exerciseCompleted))
     }
 
-    func testCanonicalRestDerivesForegroundAndForcesFocusedWalletWithoutMutatingExecution() async throws {
+    func testCanonicalRestMinimizesWalletAndPreservesExecutionState() async throws {
         let repository = SwiftDataRepository(container: try PersistenceController.makeContainer(inMemory: true))
         let fixture = EquilibriumFixtures.mixed(id: "rest-foreground")
         try await repository.create(fixture)
@@ -376,7 +389,6 @@ final class WorkoutExecutionNavigationStateTests: XCTestCase {
         await model.activate()
         let canonicalExerciseID = model.currentExercise?.id
 
-        presentation.showExerciseOverview()
         await model.log(
             exerciseID: fixture.exercises[0].id,
             prescriptionID: fixture.exercises[0].prescriptions[0].id,
@@ -388,9 +400,10 @@ final class WorkoutExecutionNavigationStateTests: XCTestCase {
         XCTAssertEqual(model.restState?.remaining, model.timer.remainingDuration)
         XCTAssertEqual(model.restState?.exerciseID, fixture.exercises[0].id)
         XCTAssertEqual(model.currentExercise?.id, canonicalExerciseID)
-        XCTAssertEqual(presentation.resolvedMode(for: model.foregroundState), .focusedExercise)
+        XCTAssertEqual(presentation.resolvedMode(for: model.foregroundState), .exerciseOverview)
+        XCTAssertTrue(presentation.showsActionFooter(for: model.foregroundState))
 
-        XCTAssertTrue(presentation.synchronize(with: model.foregroundState))
+        XCTAssertFalse(presentation.synchronize(with: model.foregroundState))
         XCTAssertFalse(presentation.synchronize(with: model.foregroundState))
         XCTAssertEqual(presentation.mode, .focusedExercise)
         XCTAssertEqual(model.workout, canonicalAfterLogging)
@@ -402,6 +415,7 @@ final class WorkoutExecutionNavigationStateTests: XCTestCase {
         XCTAssertEqual(model.currentExercise?.id, canonicalExerciseID)
         XCTAssertEqual(model.workout, canonicalAfterLogging)
         XCTAssertEqual(presentation.resolvedMode(for: model.foregroundState), .focusedExercise)
+        XCTAssertTrue(presentation.showsActionFooter(for: model.foregroundState))
     }
 
     func testWalletModeDoesNotMutateCanonicalExecutionOrOuterHomeState() async throws {
@@ -1107,6 +1121,7 @@ final class WorkoutExecutionNavigationStateTests: XCTestCase {
         XCTAssertNil(model.restState)
         XCTAssertEqual(model.foregroundState, .exercise)
         XCTAssertEqual(presentation.resolvedMode(for: model.foregroundState), .focusedExercise)
+        XCTAssertTrue(presentation.showsActionFooter(for: model.foregroundState))
         XCTAssertEqual(model.selectedSetIndex, 1)
     }
 
@@ -1237,27 +1252,52 @@ final class ExecutionPrimaryActionRegressionTests: XCTestCase {
         }
     }
 
-    func testForegroundValueViewportEndsAtCTAEdgeThroughoutFocusTransition() {
-        let cardHeight: CGFloat = 640
-        let headerHeight: CGFloat = 48
+    func testForegroundContentAndFooterAnchorsStayFixedAcrossPresentationHeights() {
+        let headerHeight: CGFloat = 64
         let naturalFooterHeight = ExecutionPrimaryActionLayout.footerHeight(
             isVisible: true,
             controlHeight: ExecutionActionButtonMetrics.height,
             bottomInset: EQSpacing.sm,
             trailingControlHeight: EQDimension.minimumTouch
         )
+        let presentations: [(cardHeight: CGFloat, footerHeight: CGFloat)] = [
+            (640, naturalFooterHeight),
+            (180, naturalFooterHeight),
+            (180, 0)
+        ]
 
-        for progress: CGFloat in [0.25, 0.5, 0.75, 1] {
-            let footerHeight = naturalFooterHeight * progress
-            let viewportHeight = ExecutionPrimaryActionLayout.scrollViewportHeight(
-                cardHeight: cardHeight,
+        for presentation in presentations {
+            let anchors = ExecutionPrimaryActionLayout.foregroundAnchors(
+                cardHeight: presentation.cardHeight,
                 headerHeight: headerHeight,
-                footerHeight: footerHeight
+                footerHeight: presentation.footerHeight
             )
-            let valueViewportBottom = headerHeight + viewportHeight
-            XCTAssertEqual(valueViewportBottom, cardHeight - footerHeight, accuracy: 0.001)
-            XCTAssertEqual(valueViewportBottom + footerHeight, cardHeight, accuracy: 0.001)
+            XCTAssertEqual(anchors.contentTop, headerHeight, accuracy: 0.001)
+            XCTAssertEqual(anchors.contentBottom, anchors.footerTop, accuracy: 0.001)
+            XCTAssertEqual(anchors.footerBottom, presentation.cardHeight, accuracy: 0.001)
+            XCTAssertEqual(anchors.footerBottom - anchors.footerTop, presentation.footerHeight, accuracy: 0.001)
         }
+
+        XCTAssertEqual(
+            ExecutionPrimaryActionLayout.titleOnlyViewportHeight(
+                titleHeight: 30,
+                availableHeight: 68,
+                minimumTitleHeight: 44,
+                topInset: EQSpacing.xxs
+            ),
+            48,
+            accuracy: 0.001
+        )
+        XCTAssertEqual(
+            ExecutionPrimaryActionLayout.titleOnlyViewportHeight(
+                titleHeight: 58,
+                availableHeight: 68,
+                minimumTitleHeight: 44,
+                topInset: EQSpacing.xxs
+            ),
+            62,
+            accuracy: 0.001
+        )
     }
 
     func testWalletSurfaceGeometryIsContinuousInBothFocusDirections() {
