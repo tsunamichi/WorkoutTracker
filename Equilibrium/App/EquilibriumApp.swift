@@ -34,7 +34,19 @@ struct EquilibriumApp: App {
         catch { fatalError("Unable to initialize Equilibrium persistence: \(error)") }
     }
     var body: some Scene {
-        WindowGroup { HomeView(repository: environment.workoutRepository, exerciseRepository: environment.exerciseRepository, historyRepository: environment.exerciseHistoryRepository, settingsRepository: environment.settingsRepository, progressionRepository: environment.progressionRepository, timerStore: environment.timerStore).environment(environment).preferredColorScheme(.dark) }
+        WindowGroup {
+            HomeView(
+                repository: environment.workoutRepository,
+                exerciseRepository: environment.exerciseRepository,
+                historyRepository: environment.exerciseHistoryRepository,
+                settingsRepository: environment.settingsRepository,
+                progressionRepository: environment.progressionRepository,
+                timerStore: environment.timerStore
+            )
+            .environment(environment)
+            .fontWeight(.regular)
+            .preferredColorScheme(.dark)
+        }
             .modelContainer(environment.container)
     }
 }

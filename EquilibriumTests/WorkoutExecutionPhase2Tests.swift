@@ -1211,7 +1211,8 @@ final class ExecutionPrimaryActionRegressionTests: XCTestCase {
         let footerHeight = ExecutionPrimaryActionLayout.footerHeight(
             isVisible: true,
             controlHeight: ExecutionActionButtonMetrics.height,
-            bottomInset: EQSpacing.sm,
+            topInset: ExecutionActionButtonMetrics.topInset,
+            bottomInset: ExecutionActionButtonMetrics.bottomInset,
             trailingControlHeight: EQDimension.minimumTouch
         )
         let viewportHeight = ExecutionPrimaryActionLayout.scrollViewportHeight(
@@ -1221,10 +1222,18 @@ final class ExecutionPrimaryActionRegressionTests: XCTestCase {
         )
 
         XCTAssertEqual(ExecutionActionButtonMetrics.height, 48)
+        XCTAssertEqual(ExecutionActionButtonMetrics.timerWidth, 112)
+        XCTAssertEqual(ExecutionActionButtonMetrics.topInset, 24)
         XCTAssertEqual(ExecutionActionButtonMetrics.horizontalPadding, EQSpacing.lg)
         XCTAssertGreaterThanOrEqual(ExecutionActionButtonMetrics.minimumWidth, 44)
         XCTAssertGreaterThanOrEqual(EQDimension.minimumTouch, 44)
-        XCTAssertEqual(footerHeight, 48 + EQSpacing.sm)
+        XCTAssertEqual(ExecutionActionButtonMetrics.bottomInset, 24)
+        XCTAssertEqual(ExecutionExerciseListMetrics.rowSpacing, 4)
+        XCTAssertEqual(ExecutionExerciseListMetrics.minimumRowHeight, 48)
+        XCTAssertEqual(
+            footerHeight,
+            ExecutionActionButtonMetrics.topInset + 48 + ExecutionActionButtonMetrics.bottomInset
+        )
         XCTAssertGreaterThan(viewportHeight, 0)
         XCTAssertEqual(headerHeight + viewportHeight + footerHeight, foregroundCardHeight, accuracy: 0.001)
     }
@@ -1257,7 +1266,8 @@ final class ExecutionPrimaryActionRegressionTests: XCTestCase {
         let naturalFooterHeight = ExecutionPrimaryActionLayout.footerHeight(
             isVisible: true,
             controlHeight: ExecutionActionButtonMetrics.height,
-            bottomInset: EQSpacing.sm,
+            topInset: ExecutionActionButtonMetrics.topInset,
+            bottomInset: ExecutionActionButtonMetrics.bottomInset,
             trailingControlHeight: EQDimension.minimumTouch
         )
         let presentations: [(cardHeight: CGFloat, footerHeight: CGFloat)] = [
@@ -1349,5 +1359,101 @@ final class ExecutionPrimaryActionRegressionTests: XCTestCase {
             XCTAssertGreaterThanOrEqual(end.top, start.top)
             XCTAssertLessThanOrEqual(end.height, start.height)
         }
+    }
+
+    func testRestCompactCardUsesFocusedAnchorToExposeOnlyExerciseHeader() {
+        let walletHeight = EQDimension.restCardHeight + EQDimension.minimumTouch + EQSpacing.md
+        let focusedTop = EQDimension.minimumTouch + EQSpacing.md - EQSpacing.xs
+        let compactHeight = walletHeight - focusedTop
+
+        let rest = ExecutionWalletSurfaceLayout.resolve(
+            walletHeight: walletHeight,
+            focusedTop: focusedTop,
+            compactHeight: compactHeight,
+            focusProgress: 0
+        )
+
+        XCTAssertEqual(rest.top, focusedTop, accuracy: 0.001)
+        XCTAssertEqual(rest.height, walletHeight - focusedTop, accuracy: 0.001)
+        XCTAssertGreaterThan(
+            rest.height,
+            EQDimension.minimumTouch
+                + EQSpacing.xxs
+                + ExecutionActionButtonMetrics.topInset
+                + ExecutionActionButtonMetrics.height
+                + ExecutionActionButtonMetrics.bottomInset
+        )
+    }
+
+    func testExpandedRestCapsTimerAtQuarterOfAvailableHeight() {
+        let containerHeight: CGFloat = 800
+        let compactWalletHeight: CGFloat = 240
+
+        let collapsed = ExecutionTimerWalletLayout.walletHeight(
+            containerHeight: containerHeight,
+            compactWalletHeight: compactWalletHeight,
+            timerVisibilityProgress: 1,
+            restExpansionProgress: 0
+        )
+        let expanded = ExecutionTimerWalletLayout.walletHeight(
+            containerHeight: containerHeight,
+            compactWalletHeight: compactWalletHeight,
+            timerVisibilityProgress: 1,
+            restExpansionProgress: 1
+        )
+
+        XCTAssertEqual(collapsed, compactWalletHeight, accuracy: 0.001)
+        XCTAssertEqual(expanded, containerHeight * 0.75, accuracy: 0.001)
+        XCTAssertLessThanOrEqual(
+            containerHeight - expanded,
+            containerHeight * ExecutionTimerWalletLayout.maximumExpandedTimerFraction
+        )
+
+        let focusedTop = EQDimension.minimumTouch + EQSpacing.md - EQSpacing.xs
+        let restCardHeight = compactWalletHeight - focusedTop
+        let collapsedCard = ExecutionWalletSurfaceLayout.resolve(
+            walletHeight: collapsed,
+            focusedTop: focusedTop,
+            compactHeight: restCardHeight,
+            focusProgress: 0
+        )
+        let expandedListCard = ExecutionWalletSurfaceLayout.resolve(
+            walletHeight: expanded,
+            focusedTop: focusedTop,
+            compactHeight: restCardHeight,
+            focusProgress: 0
+        )
+
+        XCTAssertEqual(collapsedCard.height, restCardHeight, accuracy: 0.001)
+        XCTAssertEqual(expandedListCard.height, restCardHeight, accuracy: 0.001)
+        XCTAssertGreaterThan(expandedListCard.top, collapsedCard.top)
+    }
+
+    func testTimerLayoutTransitionsContinuouslyAsItsHeightChanges() {
+        XCTAssertEqual(
+            ExecutionTimerResponsiveLayout.compactProgress(for: 220),
+            1,
+            accuracy: 0.001
+        )
+        XCTAssertEqual(
+            ExecutionTimerResponsiveLayout.compactProgress(for: 270),
+            0.5,
+            accuracy: 0.001
+        )
+        XCTAssertEqual(
+            ExecutionTimerResponsiveLayout.compactProgress(for: 320),
+            0,
+            accuracy: 0.001
+        )
+        XCTAssertEqual(
+            ExecutionTimerResponsiveLayout.compactProgress(for: 180),
+            1,
+            accuracy: 0.001
+        )
+        XCTAssertEqual(
+            ExecutionTimerResponsiveLayout.compactProgress(for: 420),
+            0,
+            accuracy: 0.001
+        )
     }
 }

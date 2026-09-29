@@ -201,14 +201,14 @@ struct ExercisePerformanceView: View {
     }
     private func prCard(_ performance: ExercisePerformance) -> some View {
         VStack(alignment: .leading, spacing: EQSpacing.xs) {
-            Text("PERSONAL RECORD").font(EQTypography.caption.weight(.bold))
+            Text("PERSONAL RECORD").font(EQTypography.caption)
             Text(prText(performance.personalRecord)).font(EQTypography.sectionTitle)
             Text("Derived from completed workout logs").font(EQTypography.caption).foregroundStyle(EQColor.secondaryText)
         }.frame(maxWidth: .infinity, alignment: .leading).eqCard(elevated: true)
     }
     private func occurrences(_ performance: ExercisePerformance) -> some View {
         VStack(alignment: .leading, spacing: EQSpacing.sm) {
-            Text("WORKING SET HISTORY").font(EQTypography.caption.weight(.bold))
+            Text("WORKING SET HISTORY").font(EQTypography.caption)
             ForEach(performance.occurrences.reversed()) { occurrence in
                 VStack(alignment: .leading, spacing: EQSpacing.xs) {
                     Text(occurrence.workoutTitleSnapshot).font(EQTypography.cardTitle)
@@ -257,7 +257,7 @@ private struct PerformanceTrendView: View {
     }
     var body: some View {
         VStack(alignment: .leading, spacing: EQSpacing.sm) {
-            Text("TREND").font(EQTypography.caption.weight(.bold))
+            Text("TREND").font(EQTypography.caption)
             if selected.isEmpty { Text("No trend data").foregroundStyle(EQColor.secondaryText) }
             else if selected.count == 1 { Text("One completed occurrence · \(valueText(selected[0]))").font(EQTypography.body) }
             else {

@@ -217,6 +217,10 @@ enum HomeWorkoutTransitionIdentity {
 enum HomeWorkoutTitleAnchor: Hashable {
     case source(WorkoutID)
     case destination(WorkoutID)
+    case card(WorkoutID)
+    case exerciseCount(WorkoutID)
+    case status(WorkoutID)
+    case sequence(WorkoutID)
 }
 
 struct HomeWorkoutTitleAnchorKey: PreferenceKey {
@@ -232,6 +236,7 @@ struct HomeWorkoutTitleAnchorKey: PreferenceKey {
 
 private struct HomeWorkoutTitleLayer: View {
     @Environment(\.homeExecutionTransitionProgress) private var progress
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let workouts: [Workout]
     let transitioningWorkoutID: WorkoutID?
     let anchors: [HomeWorkoutTitleAnchor: Anchor<CGRect>]
@@ -245,12 +250,70 @@ private struct HomeWorkoutTitleLayer: View {
                     let titleProgress = workout.id == transitioningWorkoutID ? progress : 0
                     let frame = sourceFrame.interpolated(to: destinationFrame, progress: titleProgress)
                     Text(workout.titleSnapshot)
-                        .font(EQTypography.cardHero)
+                        .font(
+                            workout.id == transitioningWorkoutID
+                                ? .title.weight(.regular)
+                                : EQTypography.cardHero
+                        )
                         .lineLimit(2)
                         .scaleEffect(1 - (0.39 * titleProgress), anchor: .center)
                         .id(HomeWorkoutTransitionIdentity.title(for: workout.id))
                         .position(x: frame.midX, y: frame.midY)
                         .accessibilityHidden(true)
+                }
+            }
+
+            ForEach(Array(workouts.enumerated()), id: \.element.id) { index, workout in
+                if let cardAnchor = anchors[.card(workout.id)] {
+                    let cardFrame = proxy[cardAnchor]
+                    let metadataProgress = transitioningWorkoutID == nil ? 0 : min(max(progress, 0), 1)
+                    let upperOffset = reduceMotion ? 0 : -(EQSpacing.sm * metadataProgress)
+                    let lowerOffset = reduceMotion ? 0 : EQSpacing.sm * metadataProgress
+
+                    ZStack(alignment: .topLeading) {
+                        if let countAnchor = anchors[.exerciseCount(workout.id)] {
+                            let frame = proxy[countAnchor]
+                            Text("\(workout.exercises.count) \(workout.exercises.count == 1 ? "exercise" : "exercises")")
+                                .font(EQTypography.caption)
+                                .foregroundStyle(EQColor.secondaryText)
+                                .position(
+                                    x: frame.midX - cardFrame.minX,
+                                    y: frame.midY - cardFrame.minY
+                                )
+                                .offset(y: upperOffset)
+                        }
+
+                        if let statusAnchor = anchors[.status(workout.id)] {
+                            let frame = proxy[statusAnchor]
+                            Text(HomeCardPresentation(status: workout.status).stateLabel)
+                                .font(EQTypography.caption)
+                                .foregroundStyle(workout.status == .completed ? EQColor.success : EQColor.accent)
+                                .position(
+                                    x: frame.midX - cardFrame.minX,
+                                    y: frame.midY - cardFrame.minY
+                                )
+                                .offset(y: lowerOffset)
+                        }
+
+                        if let sequenceAnchor = anchors[.sequence(workout.id)] {
+                            let frame = proxy[sequenceAnchor]
+                            Text("\(index + 1)")
+                                .font(.system(size: 180, weight: .regular, design: .rounded))
+                                .foregroundStyle(EQColor.primaryText.opacity(0.08))
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.5)
+                                .position(
+                                    x: frame.midX - cardFrame.minX,
+                                    y: frame.midY - cardFrame.minY
+                                )
+                                .offset(x: lowerOffset, y: lowerOffset)
+                        }
+                    }
+                    .frame(width: cardFrame.width, height: cardFrame.height)
+                    .clipShape(RoundedRectangle(cornerRadius: EQRadius.transformingCard, style: .continuous))
+                    .opacity(Double(1 - metadataProgress))
+                    .position(x: cardFrame.midX, y: cardFrame.midY)
+                    .accessibilityHidden(true)
                 }
             }
         }
@@ -554,7 +617,6 @@ private struct HomeScene: View {
                 sequence: sequence,
                 carouselViewportWidth: viewportWidth,
                 isExpanded: model.expandedWorkoutID == workout.id,
-                expansionProgress: workout.id == transitioningWorkoutID ? executionProgress : 0,
                 reportFrame: { reportWorkoutFrame(workout.id, $0) }
             )
         }
@@ -665,7 +727,7 @@ private struct AddWorkoutCarouselCard: View {
         VStack(alignment: .leading, spacing: EQSpacing.sm) {
             if isVisible {
                 Text("ADD WORKOUT")
-                    .font(EQTypography.caption.weight(.bold))
+                    .font(EQTypography.caption)
                     .foregroundStyle(EQColor.secondaryText)
                     .matchedGeometryEffect(id: "add-workout-title", in: transition)
 
@@ -782,13 +844,8 @@ private struct WorkoutCard: View {
     let sequence: Int
     let carouselViewportWidth: CGFloat
     var isExpanded = false
-    var expansionProgress: CGFloat = 0
     let reportFrame: (CGRect) -> Void
     private var presentation: HomeCardPresentation { .init(status: workout.status) }
-    private var selectedMetadataOpacity: Double {
-        let clearingProgress = min(max(expansionProgress / 0.18, 0), 1)
-        return Double(1 - clearingProgress)
-    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: EQSpacing.md) {
@@ -805,12 +862,18 @@ private struct WorkoutCard: View {
             Text("\(workout.exercises.count) \(workout.exercises.count == 1 ? "exercise" : "exercises")")
                 .font(EQTypography.caption)
                 .foregroundStyle(EQColor.secondaryText)
-                .opacity(selectedMetadataOpacity)
+                .anchorPreference(key: HomeWorkoutTitleAnchorKey.self, value: .bounds) {
+                    [.exerciseCount(workout.id): $0]
+                }
+                .hidden()
             Spacer()
             Text(presentation.stateLabel)
                 .font(EQTypography.caption)
                 .foregroundStyle(statusColor)
-                .opacity(selectedMetadataOpacity)
+                .anchorPreference(key: HomeWorkoutTitleAnchorKey.self, value: .bounds) {
+                    [.status(workout.id): $0]
+                }
+                .hidden()
         }
         .padding(.horizontal, EQSpacing.lg)
         .padding(.bottom, EQSpacing.lg)
@@ -819,22 +882,30 @@ private struct WorkoutCard: View {
         .frame(maxWidth: .infinity, minHeight: EQDimension.workoutCardHeight, alignment: .topLeading)
         .background(alignment: .bottomTrailing) {
             Text("\(sequence)")
-                .font(.system(size: 180, weight: .bold, design: .rounded))
+                .font(.system(size: 180, weight: .regular, design: .rounded))
                 .foregroundStyle(EQColor.primaryText.opacity(0.08))
                 .lineLimit(1)
                 .minimumScaleFactor(0.5)
                 .offset(x: EQSpacing.xs, y: EQSpacing.xl)
-                .opacity(selectedMetadataOpacity)
                 .accessibilityHidden(true)
+                .visualEffect { content, proxy in
+                    let frame = proxy.frame(in: .scrollView(axis: .horizontal))
+                    let distance = frame.midX - (carouselViewportWidth / 2)
+                    let phase = min(max(distance / max(frame.width, 1), -1), 1)
+                    return content.offset(x: -(phase * EQSpacing.lg))
+                }
+                .anchorPreference(key: HomeWorkoutTitleAnchorKey.self, value: .bounds) {
+                    [.sequence(workout.id): $0]
+                }
+                .hidden()
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
-            .visualEffect { content, proxy in
-                let frame = proxy.frame(in: .scrollView(axis: .horizontal))
-                let distance = frame.midX - (carouselViewportWidth / 2)
-                let phase = min(max(distance / max(frame.width, 1), -1), 1)
-                return content.offset(x: -(phase * EQSpacing.lg))
-            }
         }
         .clipShape(RoundedRectangle(cornerRadius: EQRadius.transformingCard, style: .continuous))
+        .background {
+            Color.clear.anchorPreference(key: HomeWorkoutTitleAnchorKey.self, value: .bounds) {
+                [.card(workout.id): $0]
+            }
+        }
         .onGeometryChange(for: CGRect.self) { proxy in
             proxy.frame(in: .global)
         } action: { frame in
@@ -847,6 +918,9 @@ private struct WorkoutCard: View {
             }
         }
         .accessibilityElement(children: .combine)
+        .accessibilityLabel(
+            "\(workout.titleSnapshot), \(workout.exercises.count) \(workout.exercises.count == 1 ? "exercise" : "exercises"), \(presentation.stateLabel)"
+        )
         .accessibilityHidden(isExpanded)
     }
 
