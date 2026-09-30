@@ -2124,7 +2124,7 @@ private struct FirstSetView: View {
             Text("No previous working sets").eqTextStyle(.caption).foregroundStyle(EQColor.Execution.foregroundSecondaryText)
             VStack(alignment: .leading, spacing: EQSpacing.md) {
                 EQMetricInput(value: $weight, label: (weightUnit == .pounds ? "lb" : "kg") + (progression?.rationale == .increaseWeight ? " ↑" : ""), accessibilityLabel: "Weight", keyboard: .decimalPad, valueColor: EQColor.Execution.primaryAction, unitColor: EQColor.Execution.foregroundSecondaryText).focused($fieldFocused)
-                EQMetricInput(value: $repetitions, label: exercise.isTimeBased ? "seconds" : "reps" + (progression?.rationale == .addRepetitions ? " ↑" : ""), accessibilityLabel: exercise.isTimeBased ? "Seconds" : "Repetitions", keyboard: .numberPad, valueColor: EQColor.Execution.primaryAction, unitColor: EQColor.Execution.foregroundSecondaryText).focused($fieldFocused)
+                EQMetricInput(value: $repetitions, label: exercise.isTimeBased ? "secs" : "reps" + (progression?.rationale == .addRepetitions ? " ↑" : ""), accessibilityLabel: exercise.isTimeBased ? "Seconds" : "Repetitions", keyboard: .numberPad, valueColor: EQColor.Execution.primaryAction, unitColor: EQColor.Execution.foregroundSecondaryText).focused($fieldFocused)
             }
         }
         .preference(
@@ -2257,7 +2257,7 @@ private struct FocusedSetView: View {
             VStack(alignment: .leading, spacing: EQSpacing.md) {
                 EQMetricInput(value: $weightText, label: weightLabel, accessibilityLabel: "\(exercise.nameSnapshot), set \(selectedIndex + 1), weight", keyboard: .decimalPad, valueColor: EQColor.Execution.primaryAction, unitColor: EQColor.Execution.foregroundSecondaryText)
                     .focused($focusedField, equals: .weight)
-                EQMetricInput(value: $valueText, label: progressedValueLabel, accessibilityLabel: "\(exercise.nameSnapshot), set \(selectedIndex + 1), \(valueLabel)", keyboard: .numberPad, valueColor: EQColor.Execution.primaryAction, unitColor: EQColor.Execution.foregroundSecondaryText)
+                EQMetricInput(value: $valueText, label: progressedValueLabel, accessibilityLabel: "\(exercise.nameSnapshot), set \(selectedIndex + 1), \(valueAccessibilityLabel)", keyboard: .numberPad, valueColor: EQColor.Execution.primaryAction, unitColor: EQColor.Execution.foregroundSecondaryText)
                     .focused($focusedField, equals: .value)
             }
         }
@@ -2273,7 +2273,8 @@ private struct FocusedSetView: View {
     }
 
     private var isLogged: Bool { exercise.loggedSets.contains { $0.prescriptionID == prescription.id && $0.completedAt != nil } }
-    private var valueLabel: String { if case .duration = prescription.target { return "seconds" }; return "reps" }
+    private var valueLabel: String { if case .duration = prescription.target { return "secs" }; return "reps" }
+    private var valueAccessibilityLabel: String { if case .duration = prescription.target { return "seconds" }; return "reps" }
     private var weightLabel: String { (weightUnit == .pounds ? "lb" : "kg") + (progression?.rationale == .increaseWeight ? " ↑" : "") }
     private var progressedValueLabel: String { valueLabel + (progression?.rationale == .addRepetitions ? " ↑" : "") }
     private func commit() {
