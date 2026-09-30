@@ -989,7 +989,7 @@ struct WorkoutExecutionView: View {
                 }
             } label: {
                 Text("\(model.selectedSetIndex + 1)/\(exercise.prescriptions.count)")
-                    .eqTextStyle(.caption)
+                    .eqTextStyle(.sectionLabel)
                     .monospacedDigit()
                     .frame(minWidth: EQLayout.minimumTouch, minHeight: EQLayout.minimumTouch, alignment: .trailing)
                     .contentShape(Rectangle())
