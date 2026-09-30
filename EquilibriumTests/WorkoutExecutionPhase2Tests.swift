@@ -1,5 +1,6 @@
 import XCTest
 import SwiftData
+import SwiftUI
 @testable import Equilibrium
 
 @MainActor
@@ -133,6 +134,414 @@ final class WorkoutExecutionRepositoryTests: XCTestCase {
         try await repository.create(workout)
         let started = try await repository.startWorkout(id: workout.id, at: .init(timeIntervalSince1970: 9_999_999))
         XCTAssertEqual(started.status, .inProgress)
+    }
+}
+
+@MainActor
+final class ExerciseSettingsPhase5Tests: XCTestCase {
+    private func repository() throws -> SwiftDataRepository {
+        SwiftDataRepository(container: try PersistenceController.makeContainer(inMemory: true))
+    }
+
+    func testOpeningAndDismissingSettingsPreservesWorkoutExerciseSetAndExpandedWallet() async throws {
+        let repository = try repository()
+        let fixture = EquilibriumFixtures.midWorkout(id: "phase5-presentation")
+        try await repository.create(fixture)
+        let model = WorkoutExecutionModel(workoutID: fixture.id, repository: repository)
+        await model.activate()
+        let exercise = fixture.exercises[1]
+        model.focus(exercise.id)
+        model.selectSet(at: 1)
+        let selectedSetID = try XCTUnwrap(model.currentPrescription?.id)
+        let wallet = ExecutionWalletPresentation(initialMode: .focusedExercise)
+        let settings = ExerciseSettingsPresentation()
+
+        settings.present(exerciseID: exercise.id)
+        XCTAssertEqual(settings.exerciseID, exercise.id)
+        XCTAssertEqual(model.workout?.id, fixture.id)
+        XCTAssertEqual(model.focusedExerciseID, exercise.id)
+        XCTAssertEqual(model.currentPrescription?.id, selectedSetID)
+        XCTAssertEqual(wallet.mode, .focusedExercise)
+
+        settings.dismiss()
+        XCTAssertNil(settings.exerciseID)
+        XCTAssertEqual(model.workout?.id, fixture.id)
+        XCTAssertEqual(model.focusedExerciseID, exercise.id)
+        XCTAssertEqual(model.currentPrescription?.id, selectedSetID)
+        XCTAssertEqual(wallet.mode, .focusedExercise)
+    }
+
+    func testRestInheritanceOverrideAllSetsAndActiveCountdownSnapshot() async throws {
+        let repository = try repository()
+        let fixture = EquilibriumFixtures.mixed(id: "phase5-rest")
+        try await repository.create(fixture)
+        try await repository.saveDefaultRestDuration(120)
+        let model = WorkoutExecutionModel(
+            workoutID: fixture.id,
+            repository: repository,
+            defaultRestDuration: 90
+        )
+        await model.activate()
+        let exercise = fixture.exercises[0]
+        let inheritingExercise = fixture.exercises[1]
+
+        XCTAssertEqual(model.effectiveRestDuration(for: exercise.id), 120)
+        XCTAssertEqual(model.effectiveRestDuration(for: inheritingExercise.id), 120)
+
+        let savedOverride = await model.setExerciseRestDuration(exerciseID: exercise.id, seconds: 90)
+        XCTAssertTrue(savedOverride)
+        XCTAssertEqual(model.effectiveRestDuration(for: exercise.id), 90)
+        let persistedOverride = try await repository.exerciseRestDuration(for: exercise.exerciseID)
+        let persistedWorkout = try await repository.workout(id: fixture.id)
+        XCTAssertEqual(persistedOverride, 90)
+        XCTAssertEqual(persistedWorkout?.exercises[0].restDuration, fixture.exercises[0].restDuration)
+
+        let changedGlobal = await model.setGlobalRestDuration(150)
+        XCTAssertTrue(changedGlobal)
+        XCTAssertEqual(model.effectiveRestDuration(for: exercise.id), 90)
+        XCTAssertEqual(model.effectiveRestDuration(for: inheritingExercise.id), 150)
+
+        await model.log(
+            exerciseID: exercise.id,
+            prescriptionID: exercise.prescriptions[0].id,
+            input: .repetitions(weight: nil, repetitions: 8)
+        )
+        XCTAssertEqual(model.restState?.totalDuration, 90)
+
+        let changedOverride = await model.setExerciseRestDuration(exerciseID: exercise.id, seconds: 120)
+        XCTAssertTrue(changedOverride)
+        XCTAssertEqual(model.restState?.totalDuration, 90)
+
+        model.skipRest()
+        await model.log(
+            exerciseID: exercise.id,
+            prescriptionID: exercise.prescriptions[1].id,
+            input: .repetitions(weight: nil, repetitions: 8)
+        )
+        XCTAssertEqual(model.restState?.totalDuration, 120)
+
+        let resetOverride = await model.setExerciseRestDuration(exerciseID: exercise.id, seconds: nil)
+        XCTAssertTrue(resetOverride)
+        XCTAssertEqual(model.restState?.totalDuration, 120)
+        XCTAssertEqual(model.effectiveRestDuration(for: exercise.id), 150)
+        let removedOverride = try await repository.exerciseRestDuration(for: exercise.exerciseID)
+        XCTAssertNil(removedOverride)
+        model.skipRest()
+    }
+
+    func testExerciseRestOverridePersistsAcrossWorkoutOccurrencesByStableExerciseID() async throws {
+        let repository = try repository()
+        let first = EquilibriumFixtures.mixed(id: "phase5-rest-first")
+        var second = EquilibriumFixtures.mixed(id: "phase5-rest-second")
+        let secondOccurrence = second.exercises[0]
+        second.exercises[0] = WorkoutExercise(
+            id: secondOccurrence.id,
+            exerciseID: first.exercises[0].exerciseID,
+            nameSnapshot: secondOccurrence.nameSnapshot,
+            prescriptions: secondOccurrence.prescriptions,
+            loggedSets: secondOccurrence.loggedSets,
+            restDuration: secondOccurrence.restDuration,
+            skippedAt: secondOccurrence.skippedAt,
+            isTimeBased: secondOccurrence.isTimeBased,
+            isTwoSided: secondOccurrence.isTwoSided
+        )
+        try await repository.materializeAtomically([first, second])
+        try await repository.saveDefaultRestDuration(120)
+
+        let firstModel = WorkoutExecutionModel(workoutID: first.id, repository: repository)
+        await firstModel.activate()
+        let saved = await firstModel.setExerciseRestDuration(exerciseID: first.exercises[0].id, seconds: 90)
+        XCTAssertTrue(saved)
+
+        let secondModel = WorkoutExecutionModel(workoutID: second.id, repository: repository)
+        await secondModel.activate()
+        XCTAssertEqual(secondModel.effectiveRestDuration(for: second.exercises[0].id), 90)
+        XCTAssertEqual(secondModel.effectiveRestDuration(for: second.exercises[1].id), 120)
+
+        try await repository.saveDefaultRestDuration(150)
+        await secondModel.refreshRestPreferences()
+        XCTAssertEqual(secondModel.effectiveRestDuration(for: second.exercises[0].id), 90)
+        XCTAssertEqual(secondModel.effectiveRestDuration(for: second.exercises[1].id), 150)
+    }
+
+    func testSkipPreservesOccurrenceAndReturnsExpandedWalletToOverviewWithoutAutoFocus() async throws {
+        let repository = try repository()
+        let fixture = EquilibriumFixtures.midWorkout(id: "phase5-skip")
+        try await repository.create(fixture)
+        let model = WorkoutExecutionModel(workoutID: fixture.id, repository: repository)
+        await model.activate()
+        let focusedID = fixture.exercises[1].id
+        model.focus(focusedID)
+        let originalCount = try XCTUnwrap(model.workout).exercises.count
+        let wallet = ExecutionWalletPresentation(initialMode: .focusedExercise)
+
+        let didSkip = await model.skipExercise(focusedID)
+        XCTAssertTrue(didSkip)
+        let persistedValue = try await repository.workout(id: fixture.id)
+        let persisted = try XCTUnwrap(persistedValue)
+        XCTAssertEqual(persisted.exercises.count, originalCount)
+        XCTAssertNotNil(persisted.exercises.first(where: { $0.id == focusedID })?.skippedAt)
+        XCTAssertNil(model.focusedExerciseID)
+        XCTAssertTrue(model.awaitsExerciseSelection)
+
+        XCTAssertTrue(wallet.synchronize(
+            with: model.foregroundState,
+            awaitsExerciseSelection: model.awaitsExerciseSelection
+        ))
+        XCTAssertEqual(wallet.mode, .exerciseOverview)
+        XCTAssertNil(model.focusedExerciseID, "Skipping must not automatically focus the next exercise")
+    }
+
+    func testSkippedOccurrenceIsExcludedFromExposureProgressionAndPersonalRecords() throws {
+        var included = EquilibriumFixtures.completed(id: "phase5-included")
+        included.completedAt = Date(timeIntervalSince1970: 100)
+        included.updatedAt = included.completedAt!
+        var skipped = EquilibriumFixtures.completed(id: "phase5-skipped")
+        skipped.completedAt = Date(timeIntervalSince1970: 200)
+        skipped.updatedAt = skipped.completedAt!
+        skipped.exercises[0].skippedAt = skipped.completedAt
+        for index in skipped.exercises[0].loggedSets.indices {
+            skipped.exercises[0].loggedSets[index].weight = .init(pounds: 500)
+            skipped.exercises[0].loggedSets[index].repetitions = 20
+        }
+
+        let performance = ExercisePerformanceQuery.performance(
+            exerciseID: included.exercises[0].exerciseID,
+            workouts: [included, skipped]
+        )
+        XCTAssertEqual(performance.occurrences.map(\.workoutID), [included.id])
+        guard case .repetitions(let record)? = performance.personalRecord else {
+            return XCTFail("Expected repetition PR")
+        }
+        XCTAssertEqual(record.weight?.pounds, 145)
+
+        let configuration = ProgressionConfiguration(
+            isEnabled: true,
+            defaults: FixtureDefaults.progression.defaults,
+            groups: [],
+            overrides: [],
+            assignments: [included.exercises[0].exerciseID: .upper]
+        )
+        let suggestion = ProgressionEngine.suggestion(
+            exerciseID: included.exercises[0].exerciseID,
+            configuration: configuration,
+            workouts: [included, skipped]
+        )
+        XCTAssertEqual(suggestion?.suggestedWeight?.pounds, 147.5)
+        XCTAssertTrue(ExercisePerformanceQuery.validCompletedSets(in: skipped.exercises[0]).isEmpty)
+    }
+
+    func testSkipAndRemoveRemainDistinctCanonicalMutations() async throws {
+        let repository = try repository()
+        let fixture = EquilibriumFixtures.mixed(id: "phase5-distinct")
+        try await repository.create(fixture)
+        _ = try await repository.startWorkout(id: fixture.id, at: .init(timeIntervalSince1970: 10))
+
+        let skipped = try await repository.skipExercise(
+            workoutID: fixture.id,
+            exerciseID: fixture.exercises[0].id,
+            at: .init(timeIntervalSince1970: 20)
+        )
+        XCTAssertEqual(skipped.exercises.count, 2)
+        XCTAssertNotNil(skipped.exercises[0].skippedAt)
+
+        let removed = try await repository.removeExercise(
+            workoutID: fixture.id,
+            exerciseID: fixture.exercises[1].id,
+            at: .init(timeIntervalSince1970: 30)
+        )
+        XCTAssertEqual(removed.exercises.map(\.id), [fixture.exercises[0].id])
+        XCTAssertNotNil(removed.exercises[0].skippedAt)
+    }
+
+    func testCompletedWorkoutCannotBeStructurallyChangedByExerciseSettings() async throws {
+        let repository = try repository()
+        let completed = EquilibriumFixtures.completed(id: "phase5-history-immutable")
+        try await repository.create(completed)
+        let exerciseID = completed.exercises[0].id
+
+        let mutations: [() async throws -> Workout] = [
+            { try await repository.skipExercise(workoutID: completed.id, exerciseID: exerciseID, at: .now) },
+            { try await repository.restoreExercise(workoutID: completed.id, exerciseID: exerciseID, at: .now) },
+            { try await repository.removeExercise(workoutID: completed.id, exerciseID: exerciseID, at: .now) }
+        ]
+        for mutation in mutations {
+            do {
+                _ = try await mutation()
+                XCTFail("Expected completed history to be immutable")
+            } catch {
+                XCTAssertEqual(error as? RepositoryError, .immutableCompletedWorkout)
+            }
+        }
+
+        let persisted = try await repository.workout(id: completed.id)
+        XCTAssertEqual(persisted, completed)
+
+        try await repository.saveExerciseRestDuration(75, for: completed.exercises[0].exerciseID)
+        let unchanged = try await repository.workout(id: completed.id)
+        XCTAssertEqual(unchanged, completed)
+    }
+}
+
+@MainActor
+final class SkippedExercisePhase5CorrectionTests: XCTestCase {
+    private func repository() throws -> SwiftDataRepository {
+        SwiftDataRepository(container: try PersistenceController.makeContainer(inMemory: true))
+    }
+
+    func testSkippedExerciseHasDistinctRowStateAndDoesNotCountAsCompletedProgress() async throws {
+        let repository = try repository()
+        var fixture = EquilibriumFixtures.midWorkout(id: "phase5-skipped-presentation")
+        fixture.exercises[1].skippedAt = EquilibriumFixtures.timestamp
+        try await repository.create(fixture)
+        let model = WorkoutExecutionModel(workoutID: fixture.id, repository: repository)
+        await model.activate()
+
+        XCTAssertEqual(model.states[fixture.exercises[0].id], .completed)
+        XCTAssertEqual(model.states[fixture.exercises[1].id], .skipped)
+        XCTAssertEqual(model.completedExercises.map(\.id), [fixture.exercises[0].id])
+        XCTAssertEqual(model.progress.completedSetCount, 3)
+        XCTAssertEqual(model.progress.requiredSetCount, 7)
+
+        let skippedRow = ExerciseListRowPresentation.resolve(state: .skipped)
+        let completedRow = ExerciseListRowPresentation.resolve(state: .completed)
+        XCTAssertTrue(skippedRow.strikethrough)
+        XCTAssertEqual(skippedRow.emphasis, .reduced)
+        XCTAssertFalse(skippedRow.showsLoggedSets)
+        XCTAssertFalse(completedRow.strikethrough)
+        XCTAssertEqual(completedRow.emphasis, .standard)
+        XCTAssertTrue(completedRow.showsLoggedSets)
+        XCTAssertFalse(ExerciseListRowPresentation.resolve(state: .current).showsLoggedSets)
+        XCTAssertFalse(ExerciseListRowPresentation.resolve(state: .upcoming).showsLoggedSets)
+    }
+
+    func testSkippedExerciseSelectionExposesOnlyRestore() {
+        var skipped = EquilibriumFixtures.ready(id: "phase5-skipped-actions").exercises[0]
+        skipped.skippedAt = EquilibriumFixtures.timestamp
+        XCTAssertEqual(ExerciseOverviewInteraction.actions(for: skipped), [.restoreExercise])
+
+        skipped.skippedAt = nil
+        XCTAssertEqual(
+            ExerciseOverviewInteraction.actions(for: skipped),
+            [.openExecution, .exerciseSettings]
+        )
+    }
+
+    func testSkippedExerciseRejectsLogsSetMutationAndWorkTimerWithoutStartingRest() async throws {
+        let repository = try repository()
+        let fixture = EquilibriumFixtures.mixed(id: "phase5-skipped-guards")
+        try await repository.create(fixture)
+        _ = try await repository.startWorkout(id: fixture.id, at: .init(timeIntervalSince1970: 10))
+        _ = try await repository.skipExercise(
+            workoutID: fixture.id,
+            exerciseID: fixture.exercises[1].id,
+            at: .init(timeIntervalSince1970: 20)
+        )
+
+        do {
+            _ = try await repository.logSet(
+                workoutID: fixture.id,
+                exerciseID: fixture.exercises[1].id,
+                prescriptionID: fixture.exercises[1].prescriptions[0].id,
+                input: .duration(weight: nil, seconds: 45),
+                completed: true,
+                at: .init(timeIntervalSince1970: 30)
+            )
+            XCTFail("Expected skipped exercise log rejection")
+        } catch { XCTAssertEqual(error as? RepositoryError, .exerciseSkipped) }
+
+        do {
+            _ = try await repository.appendSet(
+                workoutID: fixture.id,
+                exerciseID: fixture.exercises[1].id,
+                seed: .duration(weight: nil, seconds: 45),
+                at: .init(timeIntervalSince1970: 31)
+            )
+            XCTFail("Expected skipped exercise set mutation rejection")
+        } catch { XCTAssertEqual(error as? RepositoryError, .exerciseSkipped) }
+
+        let model = WorkoutExecutionModel(workoutID: fixture.id, repository: repository)
+        await model.activate()
+        model.focus(fixture.exercises[1].id)
+        XCTAssertNotEqual(model.focusedExerciseID, fixture.exercises[1].id)
+        model.startWorkTimer(
+            exerciseID: fixture.exercises[1].id,
+            prescriptionID: fixture.exercises[1].prescriptions[0].id,
+            input: .duration(weight: nil, seconds: 45)
+        )
+        XCTAssertNil(model.workTimerState)
+        XCTAssertNil(model.restState)
+        let persisted = try await repository.workout(id: fixture.id)
+        XCTAssertTrue(persisted?.exercises[1].loggedSets.isEmpty == true)
+    }
+
+    func testRestoreUntouchedExerciseReturnsToUntouchedCanonicalStateWithoutExplicitFocus() async throws {
+        let repository = try repository()
+        let fixture = EquilibriumFixtures.mixed(id: "phase5-restore-untouched")
+        try await repository.create(fixture)
+        let model = WorkoutExecutionModel(workoutID: fixture.id, repository: repository)
+        await model.activate()
+
+        let skipped = await model.skipExercise(fixture.exercises[0].id)
+        let restoredSuccessfully = await model.restoreExercise(fixture.exercises[0].id)
+        XCTAssertTrue(skipped)
+        XCTAssertTrue(restoredSuccessfully)
+
+        let restored = try XCTUnwrap(model.exercise(id: fixture.exercises[0].id))
+        XCTAssertNil(restored.skippedAt)
+        XCTAssertTrue(restored.loggedSets.isEmpty)
+        XCTAssertEqual(model.states[restored.id], .current)
+        XCTAssertNil(model.focusedExerciseID)
+    }
+
+    func testRestorePartiallyCompletedExercisePreservesLogsAndPartialProgress() async throws {
+        let repository = try repository()
+        let fixture = EquilibriumFixtures.midWorkout(id: "phase5-restore-partial")
+        try await repository.create(fixture)
+        let model = WorkoutExecutionModel(workoutID: fixture.id, repository: repository)
+        await model.activate()
+        let partial = fixture.exercises[1]
+        let originalLogs = partial.loggedSets
+
+        let skipped = await model.skipExercise(partial.id)
+        let restoredSuccessfully = await model.restoreExercise(partial.id)
+        XCTAssertTrue(skipped)
+        XCTAssertTrue(restoredSuccessfully)
+
+        let restored = try XCTUnwrap(model.exercise(id: partial.id))
+        XCTAssertEqual(restored.loggedSets, originalLogs)
+        XCTAssertFalse(WorkoutExecutionQuery.isComplete(restored))
+        XCTAssertEqual(model.states[partial.id], .current)
+        XCTAssertEqual(WorkoutExecutionQuery.completedPrescriptionIDs(in: restored).count, 1)
+        XCTAssertNil(model.focusedExerciseID)
+    }
+
+    func testRestoredExerciseBecomesEligibleForExecutionAgain() async throws {
+        let repository = try repository()
+        let fixture = EquilibriumFixtures.mixed(id: "phase5-restore-executable")
+        try await repository.create(fixture)
+        _ = try await repository.startWorkout(id: fixture.id, at: .init(timeIntervalSince1970: 10))
+        _ = try await repository.skipExercise(
+            workoutID: fixture.id,
+            exerciseID: fixture.exercises[0].id,
+            at: .init(timeIntervalSince1970: 20)
+        )
+        let restored = try await repository.restoreExercise(
+            workoutID: fixture.id,
+            exerciseID: fixture.exercises[0].id,
+            at: .init(timeIntervalSince1970: 30)
+        )
+        XCTAssertNil(restored.exercises[0].skippedAt)
+
+        let logged = try await repository.logSet(
+            workoutID: fixture.id,
+            exerciseID: fixture.exercises[0].id,
+            prescriptionID: fixture.exercises[0].prescriptions[0].id,
+            input: .repetitions(weight: nil, repetitions: 8),
+            completed: true,
+            at: .init(timeIntervalSince1970: 40)
+        )
+        XCTAssertEqual(logged.exercises[0].loggedSets.count, 1)
     }
 }
 
@@ -360,6 +769,61 @@ final class WorkoutExecutionNavigationStateTests: XCTestCase {
         XCTAssertEqual(model.foregroundState, .exercise)
         let persisted = try await repository.workout(id: fixture.id)
         XCTAssertEqual(model.workout, persisted)
+    }
+
+    func testTimedExecutionEmitsReadyPauseResumeAndSkipHaptics() async throws {
+        let repository = SwiftDataRepository(container: try PersistenceController.makeContainer(inMemory: true))
+        let fixture = EquilibriumFixtures.mixed(id: "timed-execution-haptics")
+        try await repository.create(fixture)
+        let haptics = RecordingHapticsClient()
+        var instant = Date(timeIntervalSince1970: 5_000)
+        let model = WorkoutExecutionModel(
+            workoutID: fixture.id,
+            repository: repository,
+            now: { instant },
+            haptics: haptics
+        )
+        await model.activate()
+
+        let exercise = fixture.exercises[1]
+        let prescription = try XCTUnwrap(exercise.prescriptions.first)
+        model.focus(exercise.id)
+        model.startWorkTimer(
+            exerciseID: exercise.id,
+            prescriptionID: prescription.id,
+            input: .duration(weight: nil, seconds: 45)
+        )
+
+        instant = instant.addingTimeInterval(5)
+        model.refreshRest()
+        XCTAssertEqual(haptics.events, [.timerStarted])
+
+        model.toggleWorkTimerPause()
+        model.toggleWorkTimerPause()
+        model.skipWorkTimer()
+        XCTAssertEqual(
+            Array(haptics.events.prefix(4)),
+            [.timerStarted, .selection, .selection, .timerSkipped]
+        )
+    }
+
+    func testSkipAndRestoreEmitDistinctExecutionHaptics() async throws {
+        let repository = SwiftDataRepository(container: try PersistenceController.makeContainer(inMemory: true))
+        let fixture = EquilibriumFixtures.mixed(id: "skip-restore-haptics")
+        try await repository.create(fixture)
+        let haptics = RecordingHapticsClient()
+        let model = WorkoutExecutionModel(
+            workoutID: fixture.id,
+            repository: repository,
+            haptics: haptics
+        )
+        await model.activate()
+
+        let skipped = await model.skipExercise(fixture.exercises[0].id)
+        let restored = await model.restoreExercise(fixture.exercises[0].id)
+        XCTAssertTrue(skipped)
+        XCTAssertTrue(restored)
+        XCTAssertEqual(haptics.events, [.exerciseSkipped, .exerciseRestored])
     }
 
     func testWorkoutCompletionUsesSingleStrongAcknowledgement() async throws {
@@ -927,6 +1391,7 @@ final class WorkoutExecutionNavigationStateTests: XCTestCase {
         let repository = SwiftDataRepository(container: try PersistenceController.makeContainer(inMemory: true))
         let fixture = EquilibriumFixtures.mixed(id: "rest")
         try await repository.create(fixture)
+        try await repository.saveExerciseRestDuration(120, for: fixture.exercises[0].exerciseID)
         var instant = Date(timeIntervalSince1970: 1_000)
         let model = WorkoutExecutionModel(workoutID: fixture.id, repository: repository, now: { instant })
         await model.activate()
@@ -947,6 +1412,7 @@ final class WorkoutExecutionNavigationStateTests: XCTestCase {
         let repository = SwiftDataRepository(container: try PersistenceController.makeContainer(inMemory: true))
         let fixture = EquilibriumFixtures.mixed(id: "rest-session-recreate")
         try await repository.create(fixture)
+        try await repository.saveExerciseRestDuration(120, for: fixture.exercises[0].exerciseID)
         var instant = Date(timeIntervalSince1970: 10_000)
         let sessions = WorkoutRestSessionStore()
 
@@ -1049,6 +1515,7 @@ final class WorkoutExecutionNavigationStateTests: XCTestCase {
         let workoutA = EquilibriumFixtures.mixed(id: "rest-session-a")
         let workoutB = EquilibriumFixtures.mixed(id: "rest-session-b")
         try await repository.materializeAtomically([workoutA, workoutB])
+        try await repository.saveExerciseRestDuration(120, for: workoutA.exercises[0].exerciseID)
         var instant = Date(timeIntervalSince1970: 50_000)
         let sessions = WorkoutRestSessionStore()
         let first = WorkoutExecutionModel(workoutID: workoutA.id, repository: repository, now: { instant }, restSessionStore: sessions)
@@ -1184,6 +1651,52 @@ private final class RecordingHapticsClient: HapticsClient {
 
 @MainActor
 final class ExecutionPrimaryActionRegressionTests: XCTestCase {
+    func testDesignSystemApprovedSemanticPalette() {
+        assertColor(EQColor.productCanvas, hex: 0xFAFAFA)
+        assertColor(EQColor.primaryActionSurface, hex: 0xE0FB60)
+        assertColor(EQColor.deepExecutionSurface, hex: 0x133011)
+        assertColor(EQColor.restActionAccent, hex: 0xFFA424)
+        assertColor(EQColor.textPrimary, hex: 0x1F1F1F)
+        assertColor(EQColor.textSecondary, hex: 0x717171)
+    }
+
+    func testDesignSystemHomeTypographyUsesSemanticTextStyles() {
+        XCTAssertEqual(EQTextStyle.screenTitle.size, 24)
+        XCTAssertEqual(EQTextStyle.screenTitle.weight, .medium)
+        XCTAssertEqual(EQTextStyle.cardHero.size, 28)
+        XCTAssertEqual(EQTextStyle.cardHero.weight, .medium)
+        XCTAssertEqual(EQTextStyle.caption.size, 15)
+        XCTAssertEqual(EQTextStyle.caption.weight, .regular)
+        XCTAssertEqual(EQTextStyle.sectionLabel.size, 12)
+        XCTAssertEqual(EQTextStyle.sectionLabel.weight, .regular)
+        XCTAssertEqual(EQTextStyle.listItemTitle.size, 16)
+        XCTAssertEqual(EQTextStyle.listItemTitle.weight, .regular)
+        XCTAssertEqual(EQTextStyle.carouselIndex.size, 300)
+        XCTAssertEqual(EQTextStyle.carouselIndex.weight, .black)
+        XCTAssertEqual(EQTextStyle.carouselIndex.design, .default)
+        XCTAssertEqual(EQLayout.Home.carouselIndexOverflowFraction, 0.20)
+        XCTAssertEqual(EQLayout.Home.carouselIndexVerticalOffset, 20)
+        XCTAssertEqual(EQLayout.Home.heroTitleDateSpacing, 2)
+    }
+
+    func testDesignSystemLayoutAndRadiusRolesPreserveApprovedExecutionGeometry() {
+        XCTAssertEqual(EQLayout.screenGutter, 24)
+        XCTAssertEqual(EQLayout.cardInset, 24)
+        XCTAssertEqual(EQLayout.sectionGap, 24)
+        XCTAssertEqual(EQLayout.exerciseBlockGap, 24)
+        XCTAssertEqual(EQLayout.controlGap, 12)
+        XCTAssertEqual(EQRadius.card, 16)
+        XCTAssertEqual(EQRadius.largeSurface, 32)
+        XCTAssertEqual(EQRadius.button, 14)
+        XCTAssertEqual(EQRadius.sheet, 32)
+        XCTAssertEqual(EQLayout.ProgressIndicator.compactSize, 16)
+        XCTAssertEqual(EQLayout.ProgressIndicator.lineWidth, 3)
+        XCTAssertEqual(EQLayout.WorkoutExecution.walletInset, 24)
+        XCTAssertEqual(EQLayout.WorkoutExecution.overviewHeaderBottomInset, 8)
+        XCTAssertEqual(EQLayout.WorkoutExecution.overviewContentTopInset, 16)
+        XCTAssertEqual(EQLayout.WorkoutExecution.primaryActionHeight, 56)
+    }
+
     func testPrimaryCTAIdentityIsStableAcrossLoggingAndTimerStates() {
         let workoutID = WorkoutID(rawValue: "stable-primary-action")
         let loggingIdentity = ExecutionPrimaryActionIdentity(workoutID: workoutID)
@@ -1202,18 +1715,101 @@ final class ExecutionPrimaryActionRegressionTests: XCTestCase {
         )
     }
 
-    func testTimerFooterReservesViewportAroundFixed48PointAction() {
-        let walletHeight = EQDimension.restCardHeight + EQDimension.minimumTouch
-        let focusedTop = EQDimension.minimumTouch + EQSpacing.md - EQSpacing.xxs
+    func testPrimaryCTAUsesOnePresentationAcrossExerciseWorkAndRest() {
+        XCTAssertEqual(
+            ExecutionPrimaryActionPhase.resolve(foregroundState: .exercise, hasExerciseAction: true),
+            .exercise
+        )
+        XCTAssertEqual(
+            ExecutionPrimaryActionPhase.resolve(foregroundState: .work, hasExerciseAction: false),
+            .work
+        )
+        XCTAssertEqual(
+            ExecutionPrimaryActionPhase.resolve(foregroundState: .rest, hasExerciseAction: false),
+            .rest
+        )
+        XCTAssertEqual(
+            ExecutionPrimaryActionPhase.resolve(foregroundState: .exercise, hasExerciseAction: false),
+            .hidden
+        )
+        XCTAssertTrue(ExecutionPrimaryActionPhase.work.showsPauseControl)
+        XCTAssertFalse(ExecutionPrimaryActionPhase.rest.showsPauseControl)
+    }
+
+    func testReduceMotionRemovesSpatialOffsetsWithoutChangingEndStates() {
+        XCTAssertEqual(
+            ExecutionMotionPolicy.offset(distance: 240, progress: 0, reduceMotion: true),
+            0
+        )
+        XCTAssertEqual(
+            ExecutionMotionPolicy.offset(distance: 240, progress: 0, reduceMotion: false),
+            240
+        )
+        XCTAssertEqual(
+            ExecutionMotionPolicy.offset(distance: 240, progress: 0.5, reduceMotion: false),
+            120
+        )
+        XCTAssertEqual(
+            ExecutionMotionPolicy.offset(distance: 240, progress: 1, reduceMotion: false),
+            0
+        )
+    }
+
+    func testCompletedDisclosureDefaultsCollapsedAndUsesExerciseCountOnly() {
+        var presentation = ExecutionCompletedSectionPresentation()
+
+        XCTAssertFalse(presentation.isExpanded)
+        XCTAssertEqual(
+            ExecutionCompletedSectionPresentation.title(completedCount: 4),
+            "COMPLETED [4]"
+        )
+        XCTAssertFalse(ExecutionCompletedSectionPresentation.title(completedCount: 4).contains("/"))
+
+        presentation.toggle()
+        XCTAssertTrue(presentation.isExpanded)
+        presentation.toggle()
+        XCTAssertFalse(presentation.isExpanded)
+
+        XCTAssertFalse(
+            ExecutionCompletedSectionPresentation().isExpanded,
+            "Re-entering execution creates a collapsed Completed section"
+        )
+    }
+
+    func testCompletedDisclosureMotionUsesTrailingSpringCadence() {
+        XCTAssertEqual(ExecutionCompletedSectionMotion.insertionOffset, 18)
+        XCTAssertEqual(ExecutionCompletedSectionMotion.expansionStagger, 0.055)
+        XCTAssertEqual(ExecutionCompletedSectionMotion.collapseStagger, 0.035)
+        XCTAssertEqual(ExecutionCompletedSectionMotion.expansionResponse, 0.40)
+        XCTAssertEqual(ExecutionCompletedSectionMotion.expansionDampingFraction, 0.78)
+        XCTAssertEqual(ExecutionCompletedSectionMotion.collapseResponse, 0.30)
+        XCTAssertEqual(ExecutionCompletedSectionMotion.collapseDampingFraction, 0.84)
+        XCTAssertEqual(
+            ExecutionCompletedSectionMotion.stepDelay(reduceMotion: false, expanding: true),
+            0.055
+        )
+        XCTAssertEqual(
+            ExecutionCompletedSectionMotion.stepDelay(reduceMotion: false, expanding: false),
+            0.035
+        )
+        XCTAssertEqual(
+            ExecutionCompletedSectionMotion.stepDelay(reduceMotion: true, expanding: true),
+            0
+        )
+    }
+
+    func testTimerFooterReservesViewportAroundDesignSystemActionHeight() {
+        let walletHeight = EQLayout.WorkoutExecution.restCardHeight + EQLayout.minimumTouch
+        let focusedTop = EQLayout.minimumTouch + EQSpacing.md - EQSpacing.xxs
         let foregroundCardHeight = walletHeight - focusedTop
-        let headerHeight = EQDimension.minimumTouch + EQSpacing.xxs
+        let headerHeight = EQLayout.minimumTouch + EQSpacing.xxs
 
         let footerHeight = ExecutionPrimaryActionLayout.footerHeight(
             isVisible: true,
-            controlHeight: ExecutionActionButtonMetrics.height,
-            topInset: ExecutionActionButtonMetrics.topInset,
-            bottomInset: ExecutionActionButtonMetrics.bottomInset,
-            trailingControlHeight: EQDimension.minimumTouch
+            controlHeight: EQLayout.WorkoutExecution.primaryActionHeight,
+            topInset: EQLayout.WorkoutExecution.primaryActionTopInset,
+            bottomInset: EQLayout.WorkoutExecution.primaryActionBottomInset,
+            trailingControlHeight: EQLayout.minimumTouch
         )
         let viewportHeight = ExecutionPrimaryActionLayout.scrollViewportHeight(
             cardHeight: foregroundCardHeight,
@@ -1221,18 +1817,21 @@ final class ExecutionPrimaryActionRegressionTests: XCTestCase {
             footerHeight: footerHeight
         )
 
-        XCTAssertEqual(ExecutionActionButtonMetrics.height, 48)
-        XCTAssertEqual(ExecutionActionButtonMetrics.timerWidth, 112)
-        XCTAssertEqual(ExecutionActionButtonMetrics.topInset, 24)
-        XCTAssertEqual(ExecutionActionButtonMetrics.horizontalPadding, EQSpacing.lg)
-        XCTAssertGreaterThanOrEqual(ExecutionActionButtonMetrics.minimumWidth, 44)
-        XCTAssertGreaterThanOrEqual(EQDimension.minimumTouch, 44)
-        XCTAssertEqual(ExecutionActionButtonMetrics.bottomInset, 24)
-        XCTAssertEqual(ExecutionExerciseListMetrics.rowSpacing, 4)
-        XCTAssertEqual(ExecutionExerciseListMetrics.minimumRowHeight, 48)
+        XCTAssertEqual(EQLayout.WorkoutExecution.primaryActionHeight, 56)
+        XCTAssertEqual(EQLayout.WorkoutExecution.primaryActionTimerWidth, 152)
+        XCTAssertEqual(EQLayout.WorkoutExecution.primaryActionTopInset, 24)
+        XCTAssertEqual(EQLayout.WorkoutExecution.primaryActionHorizontalPadding, EQSpacing.lg)
+        XCTAssertGreaterThanOrEqual(EQLayout.minimumTouch, 44)
+        XCTAssertEqual(EQLayout.WorkoutExecution.primaryActionBottomInset, 24)
+        XCTAssertEqual(EQLayout.exerciseBlockGap, 24)
+        XCTAssertEqual(EQLayout.WorkoutExecution.completedSectionTopSpacing, 48)
+        XCTAssertEqual(EQLayout.WorkoutExecution.titleToSetsSpacing, 8)
+        XCTAssertEqual(EQLayout.WorkoutExecution.loggedSetSpacing, 4)
         XCTAssertEqual(
             footerHeight,
-            ExecutionActionButtonMetrics.topInset + 48 + ExecutionActionButtonMetrics.bottomInset
+            EQLayout.WorkoutExecution.primaryActionTopInset
+                + EQLayout.WorkoutExecution.primaryActionHeight
+                + EQLayout.WorkoutExecution.primaryActionBottomInset
         )
         XCTAssertGreaterThan(viewportHeight, 0)
         XCTAssertEqual(headerHeight + viewportHeight + footerHeight, foregroundCardHeight, accuracy: 0.001)
@@ -1247,7 +1846,7 @@ final class ExecutionPrimaryActionRegressionTests: XCTestCase {
 
         let footerHeight = ExecutionPrimaryActionLayout.footerHeight(
             isVisible: true,
-            controlHeight: ExecutionActionButtonMetrics.height,
+            controlHeight: EQLayout.WorkoutExecution.primaryActionHeight,
             bottomInset: EQSpacing.sm
         )
 
@@ -1265,10 +1864,10 @@ final class ExecutionPrimaryActionRegressionTests: XCTestCase {
         let headerHeight: CGFloat = 64
         let naturalFooterHeight = ExecutionPrimaryActionLayout.footerHeight(
             isVisible: true,
-            controlHeight: ExecutionActionButtonMetrics.height,
-            topInset: ExecutionActionButtonMetrics.topInset,
-            bottomInset: ExecutionActionButtonMetrics.bottomInset,
-            trailingControlHeight: EQDimension.minimumTouch
+            controlHeight: EQLayout.WorkoutExecution.primaryActionHeight,
+            topInset: EQLayout.WorkoutExecution.primaryActionTopInset,
+            bottomInset: EQLayout.WorkoutExecution.primaryActionBottomInset,
+            trailingControlHeight: EQLayout.minimumTouch
         )
         let presentations: [(cardHeight: CGFloat, footerHeight: CGFloat)] = [
             (640, naturalFooterHeight),
@@ -1362,8 +1961,8 @@ final class ExecutionPrimaryActionRegressionTests: XCTestCase {
     }
 
     func testRestCompactCardUsesFocusedAnchorToExposeOnlyExerciseHeader() {
-        let walletHeight = EQDimension.restCardHeight + EQDimension.minimumTouch + EQSpacing.md
-        let focusedTop = EQDimension.minimumTouch + EQSpacing.md - EQSpacing.xs
+        let walletHeight = EQLayout.WorkoutExecution.restCardHeight + EQLayout.minimumTouch + EQSpacing.md
+        let focusedTop = EQLayout.minimumTouch + EQSpacing.md - EQSpacing.xs
         let compactHeight = walletHeight - focusedTop
 
         let rest = ExecutionWalletSurfaceLayout.resolve(
@@ -1377,15 +1976,17 @@ final class ExecutionPrimaryActionRegressionTests: XCTestCase {
         XCTAssertEqual(rest.height, walletHeight - focusedTop, accuracy: 0.001)
         XCTAssertGreaterThan(
             rest.height,
-            EQDimension.minimumTouch
+            EQLayout.minimumTouch
                 + EQSpacing.xxs
-                + ExecutionActionButtonMetrics.topInset
-                + ExecutionActionButtonMetrics.height
-                + ExecutionActionButtonMetrics.bottomInset
+                + EQLayout.WorkoutExecution.primaryActionTopInset
+                + EQLayout.WorkoutExecution.primaryActionHeight
+                + EQLayout.WorkoutExecution.primaryActionBottomInset
         )
     }
 
     func testExpandedRestCapsTimerAtQuarterOfAvailableHeight() {
+        XCTAssertEqual(EQLayout.WorkoutExecution.headerWalletSpacing, 40)
+
         let containerHeight: CGFloat = 800
         let compactWalletHeight: CGFloat = 240
 
@@ -1409,7 +2010,7 @@ final class ExecutionPrimaryActionRegressionTests: XCTestCase {
             containerHeight * ExecutionTimerWalletLayout.maximumExpandedTimerFraction
         )
 
-        let focusedTop = EQDimension.minimumTouch + EQSpacing.md - EQSpacing.xs
+        let focusedTop = EQLayout.minimumTouch + EQSpacing.md - EQSpacing.xs
         let restCardHeight = compactWalletHeight - focusedTop
         let collapsedCard = ExecutionWalletSurfaceLayout.resolve(
             walletHeight: collapsed,
@@ -1427,6 +2028,20 @@ final class ExecutionPrimaryActionRegressionTests: XCTestCase {
         XCTAssertEqual(collapsedCard.height, restCardHeight, accuracy: 0.001)
         XCTAssertEqual(expandedListCard.height, restCardHeight, accuracy: 0.001)
         XCTAssertGreaterThan(expandedListCard.top, collapsedCard.top)
+    }
+
+    func testKeyboardMovesWalletWithoutChangingItsGeometry() {
+        let keyboard = CGRect(x: 0, y: 500, width: 393, height: 352)
+
+        let overlap = ExecutionKeyboardLayout.overlap(keyboardFrame: keyboard)
+
+        XCTAssertEqual(overlap, 352, accuracy: 0.001)
+        XCTAssertEqual(ExecutionKeyboardLayout.walletOffset(overlap: overlap), -352, accuracy: 0.001)
+        XCTAssertEqual(
+            ExecutionKeyboardLayout.overlap(keyboardFrame: .null),
+            0,
+            accuracy: 0.001
+        )
     }
 
     func testTimerLayoutTransitionsContinuouslyAsItsHeightChanges() {
@@ -1455,5 +2070,26 @@ final class ExecutionPrimaryActionRegressionTests: XCTestCase {
             0,
             accuracy: 0.001
         )
+    }
+
+    private func assertColor(
+        _ color: Color,
+        hex: UInt32,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) {
+        var red: CGFloat = 0
+        var green: CGFloat = 0
+        var blue: CGFloat = 0
+        var alpha: CGFloat = 0
+        XCTAssertTrue(
+            UIColor(color).getRed(&red, green: &green, blue: &blue, alpha: &alpha),
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(red, CGFloat((hex >> 16) & 0xFF) / 255, accuracy: 0.001, file: file, line: line)
+        XCTAssertEqual(green, CGFloat((hex >> 8) & 0xFF) / 255, accuracy: 0.001, file: file, line: line)
+        XCTAssertEqual(blue, CGFloat(hex & 0xFF) / 255, accuracy: 0.001, file: file, line: line)
+        XCTAssertEqual(alpha, 1, accuracy: 0.001, file: file, line: line)
     }
 }

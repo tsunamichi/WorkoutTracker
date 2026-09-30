@@ -109,6 +109,7 @@ public final class SwiftDataRepository: ExerciseRepository, WorkoutRepository, E
     public func logSet(workoutID: WorkoutID, exerciseID: WorkoutExerciseID, prescriptionID: SetID, input: SetLogInput, completed: Bool, at date: Date = .now) async throws -> Workout {
         let (workout, exercise) = try mutableExercise(workoutID, exerciseID)
         guard workout.statusRaw == WorkoutStatus.inProgress.rawValue else { throw workout.statusRaw == WorkoutStatus.completed.rawValue ? RepositoryError.immutableCompletedWorkout : RepositoryError.workoutNotInProgress }
+        guard exercise.skippedAt == nil else { throw RepositoryError.exerciseSkipped }
         guard let prescription = childWinner(exercise.prescriptions ?? [], id: prescriptionID.rawValue, idPath: \PrescriptionRecord.id, updatedAt: \PrescriptionRecord.updatedAt) else { throw RepositoryError.prescriptionNotFound }
         let values = try validatedValues(targetKind: prescription.targetKind, input: input)
         if let logged = (exercise.loggedSets ?? []).filter({ $0.prescriptionID == prescriptionID.rawValue }).max(by: { $0.updatedAt < $1.updatedAt }) {
@@ -130,6 +131,7 @@ public final class SwiftDataRepository: ExerciseRepository, WorkoutRepository, E
     public func appendSet(workoutID: WorkoutID, exerciseID: WorkoutExerciseID, seed: SetLogInput? = nil, at date: Date = .now) async throws -> Workout {
         let (workout, exercise) = try mutableExercise(workoutID, exerciseID)
         guard workout.statusRaw == WorkoutStatus.inProgress.rawValue else { throw workout.statusRaw == WorkoutStatus.completed.rawValue ? RepositoryError.immutableCompletedWorkout : RepositoryError.workoutNotInProgress }
+        guard exercise.skippedAt == nil else { throw RepositoryError.exerciseSkipped }
         let existing = (exercise.prescriptions ?? []).sorted { $0.position < $1.position }
         let record: PrescriptionRecord
         if let seed { record = prescriptionRecord(id: SetID.new().rawValue, position: existing.count, input: seed, at: date) }
@@ -147,6 +149,7 @@ public final class SwiftDataRepository: ExerciseRepository, WorkoutRepository, E
     public func removeSet(workoutID: WorkoutID, exerciseID: WorkoutExerciseID, prescriptionID: SetID, at date: Date = .now) async throws -> Workout {
         let (workout, exercise) = try mutableExercise(workoutID, exerciseID)
         guard workout.statusRaw == WorkoutStatus.inProgress.rawValue else { throw workout.statusRaw == WorkoutStatus.completed.rawValue ? RepositoryError.immutableCompletedWorkout : RepositoryError.workoutNotInProgress }
+        guard exercise.skippedAt == nil else { throw RepositoryError.exerciseSkipped }
         guard let target = childWinner(exercise.prescriptions ?? [], id: prescriptionID.rawValue, idPath: \PrescriptionRecord.id, updatedAt: \PrescriptionRecord.updatedAt) else { throw RepositoryError.prescriptionNotFound }
         guard !(exercise.loggedSets ?? []).contains(where: { $0.prescriptionID == prescriptionID.rawValue && $0.completedAt != nil }) else { throw RepositoryError.cannotRemoveCompletedSet }
         for log in (exercise.loggedSets ?? []).filter({ $0.prescriptionID == prescriptionID.rawValue }) { context.delete(log) }
@@ -173,15 +176,37 @@ public final class SwiftDataRepository: ExerciseRepository, WorkoutRepository, E
         guard record.statusRaw != WorkoutStatus.completed.rawValue else { throw RepositoryError.immutableCompletedWorkout }
         context.delete(record); try saveOrRollback()
     }
-    public func setRestDuration(workoutID: WorkoutID, exerciseID: WorkoutExerciseID, seconds: TimeInterval, at date: Date = .now) async throws -> Workout {
-        guard Self.isValidRestDuration(seconds) else { throw RepositoryError.invalidRestDuration }
+    public func skipExercise(workoutID: WorkoutID, exerciseID: WorkoutExerciseID, at date: Date = .now) async throws -> Workout {
         let (workout, exercise) = try mutableExercise(workoutID, exerciseID)
         guard workout.statusRaw == WorkoutStatus.inProgress.rawValue else { throw workout.statusRaw == WorkoutStatus.completed.rawValue ? RepositoryError.immutableCompletedWorkout : RepositoryError.workoutNotInProgress }
-        exercise.restDuration = seconds; exercise.updatedAt = date; workout.updatedAt = date; try saveOrRollback(); return try WorkoutMapper.domain(from: workout)
+        if exercise.skippedAt == nil { exercise.skippedAt = date }
+        exercise.updatedAt = date; workout.updatedAt = date
+        try saveOrRollback(); return try WorkoutMapper.domain(from: workout)
+    }
+    public func restoreExercise(workoutID: WorkoutID, exerciseID: WorkoutExerciseID, at date: Date = .now) async throws -> Workout {
+        let (workout, exercise) = try mutableExercise(workoutID, exerciseID)
+        guard workout.statusRaw == WorkoutStatus.inProgress.rawValue else { throw workout.statusRaw == WorkoutStatus.completed.rawValue ? RepositoryError.immutableCompletedWorkout : RepositoryError.workoutNotInProgress }
+        exercise.skippedAt = nil
+        exercise.updatedAt = date; workout.updatedAt = date
+        try saveOrRollback(); return try WorkoutMapper.domain(from: workout)
+    }
+    public func removeExercise(workoutID: WorkoutID, exerciseID: WorkoutExerciseID, at date: Date = .now) async throws -> Workout {
+        let (workout, exercise) = try mutableExercise(workoutID, exerciseID)
+        guard workout.statusRaw == WorkoutStatus.inProgress.rawValue else { throw workout.statusRaw == WorkoutStatus.completed.rawValue ? RepositoryError.immutableCompletedWorkout : RepositoryError.workoutNotInProgress }
+        let remaining = (workout.exercises ?? []).filter { $0 !== exercise }
+        for (position, item) in remaining.sorted(by: { $0.position < $1.position }).enumerated() {
+            item.position = position
+            item.updatedAt = date
+        }
+        workout.exercises = remaining
+        workout.updatedAt = date
+        context.delete(exercise)
+        try saveOrRollback(); return try WorkoutMapper.domain(from: workout)
     }
     public func editCompletedSet(workoutID: WorkoutID, exerciseID: WorkoutExerciseID, prescriptionID: SetID, input: SetLogInput, at date: Date = .now) async throws -> Workout {
         let (workout, exercise) = try mutableExercise(workoutID, exerciseID)
         guard workout.statusRaw == WorkoutStatus.completed.rawValue else { throw RepositoryError.workoutNotInProgress }
+        guard exercise.skippedAt == nil else { throw RepositoryError.exerciseSkipped }
         guard let prescription = childWinner(exercise.prescriptions ?? [], id: prescriptionID.rawValue, idPath: \PrescriptionRecord.id, updatedAt: \PrescriptionRecord.updatedAt),
               let logged = (exercise.loggedSets ?? []).filter({ $0.prescriptionID == prescriptionID.rawValue && $0.completedAt != nil }).max(by: { $0.updatedAt < $1.updatedAt }) else { throw RepositoryError.prescriptionNotFound }
         let values = try validatedValues(targetKind: prescription.targetKind, input: input)
@@ -213,6 +238,24 @@ public final class SwiftDataRepository: ExerciseRepository, WorkoutRepository, E
         guard Self.isValidRestDuration(seconds) else { throw RepositoryError.invalidSettings }
         try setSetting(key: SettingKey.defaultRestDuration, value: String(seconds), at: .now)
         try saveOrRollback(); NotificationCenter.default.post(name: .equilibriumSettingsDidChange, object: nil)
+    }
+    public func exerciseRestDuration(for exerciseID: ExerciseID) async throws -> TimeInterval? {
+        guard let value = try setting(key: SettingKey.exerciseRestDuration(exerciseID)).flatMap({ Double($0.value) }) else { return nil }
+        guard Self.isValidRestDuration(value) else { throw RepositoryError.invalidSettings }
+        return value
+    }
+    public func saveExerciseRestDuration(_ seconds: TimeInterval?, for exerciseID: ExerciseID) async throws {
+        guard seconds.map(Self.isValidRestDuration) ?? true else { throw RepositoryError.invalidSettings }
+        let key = SettingKey.exerciseRestDuration(exerciseID)
+        if let seconds {
+            try setSetting(key: key, value: String(seconds), at: .now)
+        } else {
+            for record in try context.fetch(FetchDescriptor<SettingValueRecord>(predicate: #Predicate { $0.key == key })) {
+                context.delete(record)
+            }
+        }
+        try saveOrRollback()
+        NotificationCenter.default.post(name: .equilibriumSettingsDidChange, object: nil)
     }
     public func progressionConfiguration() async throws -> ProgressionConfiguration {
         let legacy = try legacyConfiguration()?.progression
@@ -362,7 +405,12 @@ public final class SwiftDataRepository: ExerciseRepository, WorkoutRepository, E
 
     // MARK: Helpers
 
-    private enum SettingKey { static let weightUnit = "weight-unit"; static let defaultRestDuration = "default-rest-duration"; static let progressionEnabled = "progression-enabled" }
+    private enum SettingKey {
+        static let weightUnit = "weight-unit"
+        static let defaultRestDuration = "default-rest-duration"
+        static let progressionEnabled = "progression-enabled"
+        static func exerciseRestDuration(_ exerciseID: ExerciseID) -> String { "exercise-rest-duration:\(exerciseID.rawValue)" }
+    }
     private static let decoder = JSONDecoder()
     private func legacyConfiguration() throws -> (settings: AppSettings, progression: ProgressionConfiguration)? {
         guard let record = try context.fetch(FetchDescriptor<AppConfigurationRecord>()).sorted(by: { $0.key < $1.key }).first else { return nil }

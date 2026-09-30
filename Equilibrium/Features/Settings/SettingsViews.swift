@@ -6,21 +6,66 @@ struct SettingsShellView: View {
     let progressionRepository: any ProgressionRepository
     let exerciseRepository: any ExerciseRepository
     let legacyImporter: RNLegacyImporter?
+    let dismiss: () -> Void
+    @State private var presentedSheet: SettingsSheetDestination?
+
     var body: some View {
-        List {
-            Section {
-                NavigationLink("Units") { UnitsSettingView(repository: settingsRepository) }
-                NavigationLink("Timer") { TimerSettingView(repository: settingsRepository) }
-                NavigationLink("Progression") { ProgressionSettingView(repository: progressionRepository, settings: settingsRepository, exercises: exerciseRepository) }
+        VStack(alignment: .leading, spacing: 0) {
+            EQOverlayPageHeader(title: "Settings", dismiss: dismiss)
+
+            List {
+                Section {
+                    settingsSheetButton("Units", destination: .units)
+                    settingsSheetButton("Timer", destination: .timer)
+                }
+                Section {
+                    NavigationLink("Progression") { ProgressionSettingView(repository: progressionRepository, settings: settingsRepository, exercises: exerciseRepository) }
+                }
+                Section("iCloud Sync") {
+                    Label("Private iCloud sync", systemImage: "icloud")
+                    Text("Equilibrium saves locally first and syncs through your Apple account when iCloud is available. Sync is eventual; backups remain a separate recovery tool.")
+                        .eqTextStyle(.caption).foregroundStyle(EQColor.secondaryText)
+                }
+                if let legacyImporter { Section("Migration") { NavigationLink("Import React Native backup") { RNLegacyImportView(importer: legacyImporter) } } }
             }
-            Section("iCloud Sync") {
-                Label("Private iCloud sync", systemImage: "icloud")
-                Text("Equilibrium saves locally first and syncs through your Apple account when iCloud is available. Sync is eventual; backups remain a separate recovery tool.")
-                    .font(EQTypography.caption).foregroundStyle(EQColor.secondaryText)
+            .scrollContentBackground(.hidden)
+            .contentMargins(.top, 0, for: .scrollContent)
+            .listSectionSpacing(EQLayout.Settings.sectionSpacing)
+        }
+        .background(EQColor.canvas)
+        .toolbar(.hidden, for: .navigationBar)
+        .preferredColorScheme(.dark)
+        .sheet(item: $presentedSheet) { destination in
+            switch destination {
+            case .units:
+                UnitsSettingView(repository: settingsRepository)
+            case .timer:
+                TimerSettingView(repository: settingsRepository)
             }
-            if let legacyImporter { Section("Migration") { NavigationLink("Import React Native backup") { RNLegacyImportView(importer: legacyImporter) } } }
-        }.scrollContentBackground(.hidden).background(EQColor.canvas).navigationTitle("Settings").preferredColorScheme(.dark)
+        }
     }
+
+    private func settingsSheetButton(_ title: String, destination: SettingsSheetDestination) -> some View {
+        Button {
+            presentedSheet = destination
+        } label: {
+            HStack {
+                Text(title)
+                Spacer()
+                Image(systemName: "chevron.up")
+                    .foregroundStyle(.tertiary)
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+enum SettingsSheetDestination: String, Identifiable {
+    case units
+    case timer
+
+    var id: String { rawValue }
 }
 
 private struct RNLegacyImportView: View {
@@ -32,7 +77,7 @@ private struct RNLegacyImportView: View {
         Form {
             Section {
                 Text("Choose a JSON backup exported from the frozen React Native Equilibrium app. Import is local and never deletes the source file.")
-                    .font(EQTypography.body)
+                    .eqTextStyle(.body)
                 Button("Choose backup file") { presentsImporter = true }
             }
             if let resultMessage { Section { Text(resultMessage).foregroundStyle(isError ? EQColor.warning : EQColor.success) } }
@@ -55,10 +100,13 @@ private struct UnitsSettingView: View {
     let repository: any SettingsRepository
     @State private var unit = WeightUnit.pounds
     var body: some View {
-        Form {
-            Picker("Weight unit", selection: $unit) { Text("Pounds (lb)").tag(WeightUnit.pounds); Text("Kilograms (kg)").tag(WeightUnit.kilograms) }.pickerStyle(.inline)
-            Section { Text("Workout entries and progression increments use this unit for presentation. Canonical weight remains pounds.").font(EQTypography.caption).foregroundStyle(EQColor.secondaryText) }
-        }.scrollContentBackground(.hidden).background(EQColor.canvas).navigationTitle("Units")
+        SettingsBottomSheet(title: "Units") {
+            Form {
+                Picker("Weight unit", selection: $unit) { Text("Pounds (lb)").tag(WeightUnit.pounds); Text("Kilograms (kg)").tag(WeightUnit.kilograms) }.pickerStyle(.inline)
+                Section { Text("Workout entries and progression increments use this unit for presentation. Canonical weight remains pounds.").eqTextStyle(.caption).foregroundStyle(EQColor.secondaryText) }
+            }
+            .scrollContentBackground(.hidden)
+        }
             .task { if let settings = try? await repository.settings() { unit = settings.weightUnit } }
             .onChange(of: unit) { _, value in Task { try? await repository.saveWeightUnit(value) } }
             .onReceive(NotificationCenter.default.publisher(for: .equilibriumRepositoryDidChange)) { _ in Task { if let settings = try? await repository.settings() { unit = settings.weightUnit } } }
@@ -70,16 +118,41 @@ private struct TimerSettingView: View {
     @State private var seconds: Double = 90
     private var text: String { String(format: "%d:%02d", Int(seconds) / 60, Int(seconds) % 60) }
     var body: some View {
-        Form {
-            Section("Default rest duration") {
-                Text(text).font(EQTypography.metric).monospacedDigit().accessibilityLabel("Default rest duration, \(text)")
-                Slider(value: $seconds, in: 15...300, step: 5).accessibilityValue(text)
-                Button("Save") { Task { try? await repository.saveDefaultRestDuration(seconds) } }
+        SettingsBottomSheet(title: "Timer") {
+            Form {
+                Section("Default rest duration") {
+                    Text(text).eqTextStyle(.largeMetric).monospacedDigit().accessibilityLabel("Default rest duration, \(text)")
+                    Slider(value: $seconds, in: 15...300, step: 5).accessibilityValue(text)
+                    Button("Save") { Task { try? await repository.saveDefaultRestDuration(seconds) } }
+                }
+                Section { Text("Exercise-specific rest duration wins. Changing this setting does not rewrite workouts or restart an active countdown.").eqTextStyle(.caption).foregroundStyle(EQColor.secondaryText) }
             }
-            Section { Text("Exercise-specific rest duration wins. Changing this setting does not rewrite workouts or restart an active countdown.").font(EQTypography.caption).foregroundStyle(EQColor.secondaryText) }
-        }.scrollContentBackground(.hidden).background(EQColor.canvas).navigationTitle("Timer")
+            .scrollContentBackground(.hidden)
+        }
             .task { if let value = try? await repository.settings().defaultRestDuration { seconds = value } }
             .onReceive(NotificationCenter.default.publisher(for: .equilibriumRepositoryDidChange)) { _ in Task { if let value = try? await repository.settings().defaultRestDuration { seconds = value } } }
+    }
+}
+
+private struct SettingsBottomSheet<Content: View>: View {
+    let title: String
+    @ViewBuilder let content: () -> Content
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text(title)
+                .eqTextStyle(.screenTitle)
+                .padding(.horizontal, EQLayout.screenGutter)
+                .padding(.top, EQLayout.Settings.sheetTopSpacing)
+                .padding(.bottom, EQLayout.Settings.sheetTitleToContentSpacing)
+            content()
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .background(EQColor.elevatedSurface)
+        .presentationDetents([.medium])
+        .presentationDragIndicator(.visible)
+        .presentationCornerRadius(EQRadius.sheet)
+        .presentationBackground(EQColor.elevatedSurface)
     }
 }
 
@@ -102,7 +175,7 @@ private struct ProgressionSettingView: View {
         Form {
             Section { Toggle("Enable progression", isOn: $model.configuration.isEnabled).onChange(of: model.configuration.isEnabled) { _, _ in Task { await model.saveEnabled() } } }
             Section("Automatic progression") {
-                Text("Assignments use the stable exercise identity and apply anywhere that exercise appears.").font(EQTypography.caption).foregroundStyle(EQColor.secondaryText)
+                Text("Assignments use the stable exercise identity and apply anywhere that exercise appears.").eqTextStyle(.caption).foregroundStyle(EQColor.secondaryText)
                 ForEach(model.exercises) { exercise in
                     Picker(exercise.name, selection: profile(exercise.id)) { ForEach(AutoProgressionProfile.allCases, id: \.self) { Text($0.title).tag($0) } }
                 }

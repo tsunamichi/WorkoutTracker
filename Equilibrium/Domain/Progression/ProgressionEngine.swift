@@ -48,7 +48,9 @@ public enum ProgressionEngine {
     public static func suggestion(exerciseID: ExerciseID, configuration: ProgressionConfiguration, workouts: [Workout]) -> ProgressionSuggestion? {
         guard let rule = ProgressionRuleResolver.resolve(exerciseID: exerciseID, configuration: configuration) else { return nil }
         let completed = WorkoutHistoryQuery.completed(workouts)
-        guard let occurrence = completed.lazy.flatMap(\.exercises).first(where: { $0.exerciseID == exerciseID }) else { return nil }
+        guard let occurrence = completed.lazy.flatMap(\.exercises).first(where: {
+            $0.exerciseID == exerciseID && $0.skippedAt == nil
+        }) else { return nil }
         guard occurrence.prescriptions.contains(where: { if case .repetitions = $0.target { true } else { false } }) else { return nil }
         let valid = occurrence.loggedSets.filter { $0.completedAt != nil && ($0.repetitions ?? 0) > 0 }
         guard !valid.isEmpty else { return nil }

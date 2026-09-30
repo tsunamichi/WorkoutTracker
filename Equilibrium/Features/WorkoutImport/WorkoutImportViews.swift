@@ -14,7 +14,7 @@ struct ClipboardWorkoutImportView: View {
         Group {
             if fallback {
                 WorkoutImportInputView(initialText: initialText) { result in Task { await open(result) } }
-                    .safeAreaInset(edge: .top) { if let fallbackMessage { Text(fallbackMessage).font(EQTypography.caption).foregroundStyle(EQColor.warning).padding(.horizontal, EQSpacing.lg) } }
+                    .safeAreaInset(edge: .top) { if let fallbackMessage { Text(fallbackMessage).eqTextStyle(.caption).foregroundStyle(EQColor.warning).padding(.horizontal, EQSpacing.lg) } }
             } else { ProgressView("Reading clipboard") }
         }
         .task { await readClipboard() }
@@ -52,7 +52,7 @@ struct WorkoutImportInputView: View {
         Form {
             Section {
                 Text("Paste one or more structured workouts. Each named workout will be added separately. Use one exercise per line with sets and repetitions or duration.")
-                    .font(EQTypography.body).foregroundStyle(EQColor.secondaryText)
+                    .eqTextStyle(.body).foregroundStyle(EQColor.secondaryText)
                 TextEditor(text: $text)
                     .frame(minHeight: editorMinimumHeight)
                     .focused($editorFocused)
@@ -86,7 +86,7 @@ struct ParseIssueRow: View {
         Label {
             VStack(alignment: .leading, spacing: EQSpacing.xxs) {
                 Text(issue.lineNumber.map { "Line \($0): \(issue.message)" } ?? issue.message)
-                if let content = issue.content { Text(content).font(EQTypography.caption).foregroundStyle(EQColor.secondaryText) }
+                if let content = issue.content { Text(content).eqTextStyle(.caption).foregroundStyle(EQColor.secondaryText) }
             }
         } icon: { Image(systemName: issue.severity == .error ? "xmark.circle.fill" : "exclamationmark.triangle.fill") }
         .foregroundStyle(EQColor.warning).accessibilityElement(children: .combine)

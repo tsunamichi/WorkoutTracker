@@ -21,7 +21,9 @@ public protocol WorkoutRepository: Sendable {
     func completeWorkout(id: WorkoutID, at date: Date) async throws -> Workout
     func resetWorkout(id: WorkoutID, at date: Date) async throws -> Workout
     func deleteWorkout(id: WorkoutID) async throws
-    func setRestDuration(workoutID: WorkoutID, exerciseID: WorkoutExerciseID, seconds: TimeInterval, at date: Date) async throws -> Workout
+    func skipExercise(workoutID: WorkoutID, exerciseID: WorkoutExerciseID, at date: Date) async throws -> Workout
+    func restoreExercise(workoutID: WorkoutID, exerciseID: WorkoutExerciseID, at date: Date) async throws -> Workout
+    func removeExercise(workoutID: WorkoutID, exerciseID: WorkoutExerciseID, at date: Date) async throws -> Workout
     func editCompletedSet(workoutID: WorkoutID, exerciseID: WorkoutExerciseID, prescriptionID: SetID, input: SetLogInput, at date: Date) async throws -> Workout
     func recentCompletedWorkouts(limit: Int) async throws -> [Workout]
     func completedWorkouts() async throws -> [Workout]
@@ -43,6 +45,8 @@ public protocol SettingsRepository: Sendable {
     func saveSettings(_ settings: AppSettings) async throws
     func saveWeightUnit(_ unit: WeightUnit) async throws
     func saveDefaultRestDuration(_ seconds: TimeInterval) async throws
+    func exerciseRestDuration(for exerciseID: ExerciseID) async throws -> TimeInterval?
+    func saveExerciseRestDuration(_ seconds: TimeInterval?, for exerciseID: ExerciseID) async throws
 }
 public protocol ProgressionRepository: Sendable {
     func progressionConfiguration() async throws -> ProgressionConfiguration
@@ -64,7 +68,7 @@ public protocol BackupRepository: Sendable {
     func exportBackup(exportedAt: Date, sourceDeviceID: String) async throws -> EquilibriumBackupV2
     func restoreBackup(_ backup: EquilibriumBackupV2) async throws
 }
-public enum RepositoryError: Error, Equatable { case notFound, immutableCompletedWorkout, workoutNotInProgress, prescriptionNotFound, cannotRemoveCompletedSet, invalidSetInput, invalidRestDuration, invalidSettings, invalidProgressionConfiguration, incompleteWorkout, duplicateIdentifier, duplicateExerciseName, invalidBackup }
+public enum RepositoryError: Error, Equatable { case notFound, immutableCompletedWorkout, workoutNotInProgress, exerciseSkipped, prescriptionNotFound, cannotRemoveCompletedSet, invalidSetInput, invalidRestDuration, invalidSettings, invalidProgressionConfiguration, incompleteWorkout, duplicateIdentifier, duplicateExerciseName, invalidBackup }
 
 public extension WorkoutRepository {
     func completedWorkouts() async throws -> [Workout] {

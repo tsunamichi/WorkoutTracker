@@ -6,7 +6,11 @@ public enum HapticFeedback: Equatable, Sendable {
     case lightImpact
     case restTransition
     case restSkipped
+    case timerStarted
+    case timerSkipped
     case setLogged
+    case exerciseSkipped
+    case exerciseRestored
     case exerciseCompleted
     case timerCompleted
     case workoutCompleted
@@ -19,11 +23,11 @@ public struct SystemHapticsClient: HapticsClient {
     public init() {}
     public func perform(_ feedback: HapticFeedback) {
         switch feedback {
-        case .selection, .setLogged:
+        case .selection, .setLogged, .exerciseRestored:
             UISelectionFeedbackGenerator().selectionChanged()
-        case .lightImpact, .restSkipped:
+        case .lightImpact, .restSkipped, .timerSkipped, .exerciseSkipped:
             UIImpactFeedbackGenerator(style: .light).impactOccurred()
-        case .restTransition:
+        case .restTransition, .timerStarted:
             UIImpactFeedbackGenerator(style: .soft).impactOccurred()
         case .exerciseCompleted:
             UIImpactFeedbackGenerator(style: .medium).impactOccurred()

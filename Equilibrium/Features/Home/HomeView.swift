@@ -8,8 +8,9 @@ struct HomeView: View {
     private let settingsRepository: any SettingsRepository
     private let progressionRepository: any ProgressionRepository
     @State private var appSettings = AppSettings(weightUnit: .pounds, defaultRestDuration: 90)
-    @State private var homePath: [HomeRoute] = []
     @State private var timerPath: [TimerRoute] = []
+    @State private var presentedHomeOverlay: HomeOverlayDestination?
+    @State private var homeOverlayTransitionIsActive = false
     @State private var restSessionStore = WorkoutRestSessionStore()
     @State private var homeExecutionProgress: CGFloat = 0
     @State private var transitioningWorkoutID: WorkoutID?
@@ -41,55 +42,97 @@ struct HomeView: View {
         HomeTimerContainer(
             primarySurface: $model.primarySurface,
             reduceMotion: reduceMotion,
-            clipsToBounds: transitioningWorkoutID == nil && homePath.isEmpty
+            clipsToBounds: transitioningWorkoutID == nil && !homeOverlayOwnsSurface,
+            allowsSurfacePull: transitioningWorkoutID == nil
+                && model.expandedWorkoutID == nil
+                && timerPath.isEmpty
+                && !homeOverlayOwnsSurface
         ) {
-            ZStack {
-                NavigationStack(path: $homePath) {
-                    HomeScene(
-                        model: model,
-                        reduceMotion: reduceMotion,
-                        transitioningWorkoutID: transitioningWorkoutID,
-                        reportWorkoutFrame: reportWorkoutFrame,
-                        selectWorkout: beginExecution
-                    )
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .toolbar(.hidden, for: .navigationBar)
-                    .navigationDestination(for: HomeRoute.self) { homeDestination($0) }
-                }
-                .ignoresSafeArea(.container, edges: homePath.isEmpty ? [] : .bottom)
+            GeometryReader { proxy in
+                ZStack {
+                    ZStack {
+                        NavigationStack {
+                            HomeScene(
+                                model: model,
+                                reduceMotion: reduceMotion,
+                                transitioningWorkoutID: transitioningWorkoutID,
+                                reportWorkoutFrame: reportWorkoutFrame,
+                                selectWorkout: beginExecution,
+                                showHistory: { presentHomeOverlay(.history) },
+                                showSettings: { presentHomeOverlay(.settings) }
+                            )
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                            .toolbar(.hidden, for: .navigationBar)
+                        }
 
-                if let workoutID = model.expandedWorkoutID,
-                   let sourceWorkout = model.workouts.first(where: { $0.id == workoutID }) {
-                    ExpandedWorkoutExecutionContainer(
-                        workoutID: workoutID,
-                        sourceWorkout: sourceWorkout,
-                        repository: repository,
-                        historyRepository: historyRepository,
-                        progressionRepository: progressionRepository,
-                        exerciseRepository: exerciseRepository,
-                        weightUnit: appSettings.weightUnit,
-                        defaultRestDuration: appSettings.defaultRestDuration,
-                        restSessionStore: restSessionStore,
-                        transitionSourceFrame: transitionSourceFrame,
-                        reportWalletFrame: reportWalletFrame,
-                        didPersist: model.applyPersistedWorkout,
-                        exit: endExecution
-                    )
-                    .ignoresSafeArea(.container, edges: .bottom)
-                    .zIndex(1)
+                        if let workoutID = model.expandedWorkoutID,
+                           let sourceWorkout = model.workouts.first(where: { $0.id == workoutID }) {
+                            ExpandedWorkoutExecutionContainer(
+                                workoutID: workoutID,
+                                sourceWorkout: sourceWorkout,
+                                repository: repository,
+                                historyRepository: historyRepository,
+                                progressionRepository: progressionRepository,
+                                exerciseRepository: exerciseRepository,
+                                settingsRepository: settingsRepository,
+                                weightUnit: appSettings.weightUnit,
+                                defaultRestDuration: appSettings.defaultRestDuration,
+                                restSessionStore: restSessionStore,
+                                transitionSourceFrame: transitionSourceFrame,
+                                reportWalletFrame: reportWalletFrame,
+                                didPersist: model.applyPersistedWorkout,
+                                exit: endExecution
+                            )
+                            .ignoresSafeArea(.container, edges: .bottom)
+                            .zIndex(1)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .overlayPreferenceValue(HomeWorkoutTitleAnchorKey.self) { anchors in
+                        HomeWorkoutTitleLayer(
+                            workouts: model.workouts,
+                            transitioningWorkoutID: transitioningWorkoutID,
+                            anchors: anchors
+                        )
+                    }
+                    .scaleEffect(HomeOverlayPresentation.backgroundScale(
+                        isPresented: homeOverlayIsPresented,
+                        reduceMotion: reduceMotion
+                    ))
+                    .clipShape(RoundedRectangle(
+                        cornerRadius: homeOverlayIsPresented ? EQRadius.largeSurface : 0,
+                        style: .continuous
+                    ))
+                    .overlay {
+                        Color.black
+                            .opacity(homeOverlayIsPresented ? 0.06 : 0)
+                            .allowsHitTesting(false)
+                    }
+                    .allowsHitTesting(!homeOverlayOwnsSurface)
+
+                    settingsOverlay
+                        .frame(width: proxy.size.width, height: proxy.size.height)
+                        .offset(x: overlayOffset(for: .settings, width: proxy.size.width))
+                        .opacity(overlayOpacity(for: .settings))
+                        .allowsHitTesting(presentedHomeOverlay == .settings)
+                        .accessibilityHidden(presentedHomeOverlay != .settings)
+                        .zIndex(presentedHomeOverlay == .settings ? 3 : 2)
+
+                    historyOverlay
+                        .frame(width: proxy.size.width, height: proxy.size.height)
+                        .offset(x: overlayOffset(for: .history, width: proxy.size.width))
+                        .opacity(overlayOpacity(for: .history))
+                        .allowsHitTesting(presentedHomeOverlay == .history)
+                        .accessibilityHidden(presentedHomeOverlay != .history)
+                        .zIndex(presentedHomeOverlay == .history ? 3 : 2)
                 }
+                .animation(
+                    reduceMotion ? EQMotion.reducedContentTransition : EQMotion.surfaceReveal,
+                    value: presentedHomeOverlay
+                )
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .modifier(HomeExecutionTransitionModifier(progress: homeExecutionProgress))
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .overlayPreferenceValue(HomeWorkoutTitleAnchorKey.self) { anchors in
-                if homePath.isEmpty {
-                    HomeWorkoutTitleLayer(
-                        workouts: model.workouts,
-                        transitioningWorkoutID: transitioningWorkoutID,
-                        anchors: anchors
-                    )
-                }
-            }
-            .modifier(HomeExecutionTransitionModifier(progress: homeExecutionProgress))
         } timer: {
             NavigationStack(path: $timerPath) {
                 StandaloneTimerView(store: timerStore, path: $timerPath) { model.primarySurface = .home }
@@ -119,17 +162,48 @@ struct HomeView: View {
         .onChange(of: scenePhase) { _, phase in
             if phase == .active { Task { await loadHomeAndSettings() } }
         }
-        .tint(EQColor.accent)
+        .tint(EQColor.Home.accent)
     }
 
-    @ViewBuilder private func homeDestination(_ route: HomeRoute) -> some View {
-        switch route {
-        case .settings:
-            SettingsShellView(settingsRepository: settingsRepository, progressionRepository: progressionRepository, exerciseRepository: exerciseRepository, legacyImporter: legacyImporter)
-                .onDisappear { Task { if let settings = try? await settingsRepository.settings() { appSettings = settings } } }
-        case .history:
-            WorkoutHistoryView(repository: repository, historyRepository: historyRepository, weightUnit: appSettings.weightUnit)
+    private var homeOverlayIsPresented: Bool {
+        presentedHomeOverlay != nil
+    }
+
+    private var homeOverlayOwnsSurface: Bool {
+        homeOverlayIsPresented || homeOverlayTransitionIsActive
+    }
+
+    private var settingsOverlay: some View {
+        NavigationStack {
+            SettingsShellView(
+                settingsRepository: settingsRepository,
+                progressionRepository: progressionRepository,
+                exerciseRepository: exerciseRepository,
+                legacyImporter: legacyImporter,
+                dismiss: dismissHomeOverlay
+            )
         }
+        .background(EQColor.Home.canvas)
+    }
+
+    private var historyOverlay: some View {
+        NavigationStack {
+            WorkoutHistoryView(
+                repository: repository,
+                historyRepository: historyRepository,
+                weightUnit: appSettings.weightUnit,
+                dismiss: dismissHomeOverlay
+            )
+        }
+        .background(EQColor.Home.canvas)
+    }
+
+    private func overlayOffset(for destination: HomeOverlayDestination, width: CGFloat) -> CGFloat {
+        reduceMotion || presentedHomeOverlay == destination ? 0 : width
+    }
+
+    private func overlayOpacity(for destination: HomeOverlayDestination) -> Double {
+        reduceMotion && presentedHomeOverlay != destination ? 0 : 1
     }
 
     @ViewBuilder private func timerDestination(_ route: TimerRoute) -> some View {
@@ -174,6 +248,33 @@ struct HomeView: View {
         model.beginExecution(for: workoutID)
     }
 
+    private func presentHomeOverlay(_ destination: HomeOverlayDestination) {
+        guard presentedHomeOverlay == nil, !homeOverlayTransitionIsActive else { return }
+        SystemHapticsClient().perform(.selection)
+        withAnimation(reduceMotion ? EQMotion.reducedContentTransition : EQMotion.surfaceReveal) {
+            presentedHomeOverlay = destination
+        }
+    }
+
+    private func dismissHomeOverlay() {
+        let dismissedDestination = presentedHomeOverlay
+        homeOverlayTransitionIsActive = true
+        withAnimation(
+            reduceMotion ? EQMotion.reducedContentTransition : EQMotion.surfaceReveal,
+            completionCriteria: .logicallyComplete
+        ) {
+            presentedHomeOverlay = nil
+        } completion: {
+            guard presentedHomeOverlay == nil else { return }
+            homeOverlayTransitionIsActive = false
+        }
+        if dismissedDestination == .settings { Task {
+            if let settings = try? await settingsRepository.settings() {
+                appSettings = settings
+            }
+        } }
+    }
+
     private func endExecution() {
         withAnimation(
             reduceMotion ? EQMotion.reducedContentTransition : EQMotion.objectTransformation,
@@ -207,7 +308,16 @@ struct HomeView: View {
     }
 }
 
-enum HomeRoute: Hashable { case settings, history }
+enum HomeOverlayDestination: Hashable {
+    case history
+    case settings
+}
+
+enum HomeOverlayPresentation {
+    static func backgroundScale(isPresented: Bool, reduceMotion: Bool) -> CGFloat {
+        isPresented && !reduceMotion ? EQLayout.Home.overlayBackgroundScale : 1
+    }
+}
 
 enum HomeWorkoutTransitionIdentity {
     static func surface(for id: WorkoutID) -> String { "home-workout-\(id.rawValue)" }
@@ -250,10 +360,10 @@ private struct HomeWorkoutTitleLayer: View {
                     let titleProgress = workout.id == transitioningWorkoutID ? progress : 0
                     let frame = sourceFrame.interpolated(to: destinationFrame, progress: titleProgress)
                     Text(workout.titleSnapshot)
-                        .font(
+                        .eqTextStyle(
                             workout.id == transitioningWorkoutID
-                                ? .title.weight(.regular)
-                                : EQTypography.cardHero
+                                ? .transitionDestinationTitle
+                                : .cardHero
                         )
                         .lineLimit(2)
                         .scaleEffect(1 - (0.39 * titleProgress), anchor: .center)
@@ -274,8 +384,8 @@ private struct HomeWorkoutTitleLayer: View {
                         if let countAnchor = anchors[.exerciseCount(workout.id)] {
                             let frame = proxy[countAnchor]
                             Text("\(workout.exercises.count) \(workout.exercises.count == 1 ? "exercise" : "exercises")")
-                                .font(EQTypography.caption)
-                                .foregroundStyle(EQColor.secondaryText)
+                                .eqTextStyle(.caption)
+                                .foregroundStyle(EQColor.Home.cardSecondaryText)
                                 .position(
                                     x: frame.midX - cardFrame.minX,
                                     y: frame.midY - cardFrame.minY
@@ -286,8 +396,8 @@ private struct HomeWorkoutTitleLayer: View {
                         if let statusAnchor = anchors[.status(workout.id)] {
                             let frame = proxy[statusAnchor]
                             Text(HomeCardPresentation(status: workout.status).stateLabel)
-                                .font(EQTypography.caption)
-                                .foregroundStyle(workout.status == .completed ? EQColor.success : EQColor.accent)
+                                .eqTextStyle(.caption)
+                                .foregroundStyle(EQColor.Home.completedText)
                                 .position(
                                     x: frame.midX - cardFrame.minX,
                                     y: frame.midY - cardFrame.minY
@@ -297,16 +407,29 @@ private struct HomeWorkoutTitleLayer: View {
 
                         if let sequenceAnchor = anchors[.sequence(workout.id)] {
                             let frame = proxy[sequenceAnchor]
+                            let parallaxOffset = HomeCarouselIndexParallax.offset(
+                                cardMidX: cardFrame.midX,
+                                viewportWidth: proxy.size.width,
+                                cardWidth: cardFrame.width,
+                                reduceMotion: reduceMotion
+                            )
                             Text("\(index + 1)")
-                                .font(.system(size: 180, weight: .regular, design: .rounded))
-                                .foregroundStyle(EQColor.primaryText.opacity(0.08))
+                                .eqTextStyle(.carouselIndex)
+                                .foregroundStyle(EQColor.Home.indexText)
                                 .lineLimit(1)
                                 .minimumScaleFactor(0.5)
                                 .position(
                                     x: frame.midX - cardFrame.minX,
                                     y: frame.midY - cardFrame.minY
                                 )
-                                .offset(x: lowerOffset, y: lowerOffset)
+                                .offset(
+                                    x: (frame.width * EQLayout.Home.carouselIndexOverflowFraction)
+                                        + lowerOffset
+                                        + parallaxOffset,
+                                    y: (frame.height * EQLayout.Home.carouselIndexOverflowFraction)
+                                        + EQLayout.Home.carouselIndexVerticalOffset
+                                        + lowerOffset
+                                )
                         }
                     }
                     .frame(width: cardFrame.width, height: cardFrame.height)
@@ -318,6 +441,19 @@ private struct HomeWorkoutTitleLayer: View {
             }
         }
         .allowsHitTesting(false)
+    }
+}
+
+enum HomeCarouselIndexParallax {
+    static func offset(
+        cardMidX: CGFloat,
+        viewportWidth: CGFloat,
+        cardWidth: CGFloat,
+        reduceMotion: Bool
+    ) -> CGFloat {
+        guard !reduceMotion, cardWidth > 0 else { return 0 }
+        let phase = min(max((cardMidX - (viewportWidth / 2)) / cardWidth, -1), 1)
+        return -(phase * EQLayout.Home.carouselIndexParallax)
     }
 }
 
@@ -350,10 +486,20 @@ private struct HomeExecutionTransitionProgressKey: EnvironmentKey {
     static let defaultValue: CGFloat = 1
 }
 
+private struct HomeSurfacePullBlocksInteractionKey: EnvironmentKey {
+    static let defaultValue = false
+}
+
 extension EnvironmentValues {
     var homeExecutionTransitionProgress: CGFloat {
         get { self[HomeExecutionTransitionProgressKey.self] }
         set { self[HomeExecutionTransitionProgressKey.self] = newValue }
+    }
+
+
+    var homeSurfacePullBlocksInteraction: Bool {
+        get { self[HomeSurfacePullBlocksInteractionKey.self] }
+        set { self[HomeSurfacePullBlocksInteractionKey.self] = newValue }
     }
 }
 
@@ -371,47 +517,166 @@ struct HomeCarouselGeometry: Equatable {
     }
 }
 
+enum HomeAddWorkoutVisibility {
+    static func showsCarouselDestination(isAtAddWorkoutCard: Bool, scrollIsIdle: Bool) -> Bool {
+        isAtAddWorkoutCard && scrollIsIdle
+    }
+}
+
 private struct HomeTimerContainer<HomeContent: View, TimerContent: View>: View {
     @Binding var primarySurface: HomePrimarySurface
     let reduceMotion: Bool
     let clipsToBounds: Bool
+    let allowsSurfacePull: Bool
     let homeContent: HomeContent
     let timerContent: TimerContent
+    @State private var interactiveProgress: CGFloat?
+    @State private var surfacePullBlocksInteraction = false
 
     init(
         primarySurface: Binding<HomePrimarySurface>,
         reduceMotion: Bool,
         clipsToBounds: Bool,
+        allowsSurfacePull: Bool,
         @ViewBuilder home: () -> HomeContent,
         @ViewBuilder timer: () -> TimerContent
     ) {
         _primarySurface = primarySurface
         self.reduceMotion = reduceMotion
         self.clipsToBounds = clipsToBounds
+        self.allowsSurfacePull = allowsSurfacePull
         homeContent = home()
         timerContent = timer()
     }
 
     var body: some View {
         GeometryReader { proxy in
+            let progress = interactiveProgress ?? HomeTimerSurfacePull.restingProgress(for: primarySurface)
             ZStack {
                 homeContent
                     .frame(width: proxy.size.width, height: proxy.size.height)
-                    .offset(y: reduceMotion || primarySurface == .home ? 0 : -proxy.size.height)
-                    .opacity(primarySurface == .home ? 1 : reduceMotion ? 0 : 1)
-                    .allowsHitTesting(primarySurface == .home)
+                    .offset(y: reduceMotion ? 0 : -(proxy.size.height * progress))
+                    .opacity(reduceMotion ? Double(1 - progress) : 1)
+                    .environment(\.homeSurfacePullBlocksInteraction, surfacePullBlocksInteraction)
+                    .allowsHitTesting(primarySurface == .home && !surfacePullBlocksInteraction)
                     .accessibilityHidden(primarySurface != .home)
                 timerContent
                     .frame(width: proxy.size.width, height: proxy.size.height)
-                    .offset(y: reduceMotion || primarySurface == .timer ? 0 : proxy.size.height)
-                    .opacity(primarySurface == .timer ? 1 : reduceMotion || !clipsToBounds ? 0 : 1)
-                    .allowsHitTesting(primarySurface == .timer)
+                    .offset(y: reduceMotion ? 0 : proxy.size.height * (1 - progress))
+                    .opacity(timerOpacity(progress: progress))
+                    .environment(\.homeSurfacePullBlocksInteraction, surfacePullBlocksInteraction)
+                    .allowsHitTesting(primarySurface == .timer && !surfacePullBlocksInteraction)
                     .accessibilityHidden(primarySurface != .timer)
             }
             .modifier(HomeTimerClippingModifier(clipsToBounds: clipsToBounds))
             .animation(reduceMotion ? EQMotion.reducedContentTransition : EQMotion.surfaceReveal, value: primarySurface)
+            .simultaneousGesture(surfacePullGesture(height: proxy.size.height))
         }
-        .background(EQColor.canvas)
+        .background(EQColor.Home.canvas)
+    }
+
+    private func timerOpacity(progress: CGFloat) -> Double {
+        if reduceMotion { return Double(progress) }
+        return clipsToBounds || progress == 1 ? 1 : 0
+    }
+
+    private func surfacePullGesture(height: CGFloat) -> some Gesture {
+        DragGesture(minimumDistance: 8)
+            .onChanged { value in
+                guard allowsSurfacePull,
+                      abs(value.translation.height) > abs(value.translation.width) else {
+                    interactiveProgress = nil
+                    return
+                }
+                surfacePullBlocksInteraction = true
+                let progress = HomeTimerSurfacePull.progress(
+                    from: primarySurface,
+                    translation: value.translation.height,
+                    height: height
+                )
+                guard progress != HomeTimerSurfacePull.restingProgress(for: primarySurface) else {
+                    interactiveProgress = nil
+                    return
+                }
+                interactiveProgress = progress
+            }
+            .onEnded { value in
+                guard allowsSurfacePull, interactiveProgress != nil else {
+                    interactiveProgress = nil
+                    releaseSurfacePullInteractionLockAfterCancelledPull()
+                    return
+                }
+                let destination = HomeTimerSurfacePull.destination(
+                    from: primarySurface,
+                    translation: value.translation.height,
+                    predictedTranslation: value.predictedEndTranslation.height,
+                    height: height
+                )
+                if destination != primarySurface {
+                    SystemHapticsClient().perform(.lightImpact)
+                }
+                withAnimation(
+                    reduceMotion ? EQMotion.reducedContentTransition : EQMotion.surfaceReveal,
+                    completionCriteria: .logicallyComplete
+                ) {
+                    primarySurface = destination
+                    interactiveProgress = nil
+                } completion: {
+                    surfacePullBlocksInteraction = false
+                }
+            }
+    }
+
+    private func releaseSurfacePullInteractionLockAfterCancelledPull() {
+        guard surfacePullBlocksInteraction else { return }
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(100))
+            guard interactiveProgress == nil else { return }
+            surfacePullBlocksInteraction = false
+        }
+    }
+}
+
+enum HomeTimerSurfacePull {
+    static let completionProgress: CGFloat = 0.18
+    static let projectedCompletionProgress: CGFloat = 0.12
+
+    static func restingProgress(for surface: HomePrimarySurface) -> CGFloat {
+        surface == .home ? 0 : 1
+    }
+
+    static func progress(
+        from surface: HomePrimarySurface,
+        translation: CGFloat,
+        height: CGFloat
+    ) -> CGFloat {
+        guard height > 0 else { return restingProgress(for: surface) }
+        switch surface {
+        case .home:
+            return min(max(-translation / height, 0), 1)
+        case .timer:
+            return 1 - min(max(translation / height, 0), 1)
+        }
+    }
+
+    static func destination(
+        from surface: HomePrimarySurface,
+        translation: CGFloat,
+        predictedTranslation: CGFloat,
+        height: CGFloat
+    ) -> HomePrimarySurface {
+        let current = progress(from: surface, translation: translation, height: height)
+        let projected = progress(from: surface, translation: predictedTranslation, height: height)
+        switch surface {
+        case .home:
+            return current >= completionProgress || projected >= projectedCompletionProgress
+                ? .timer
+                : .home
+        case .timer:
+            return current <= 1 - completionProgress || projected <= 1 - projectedCompletionProgress
+                ? .home
+                : .timer
+        }
     }
 }
 
@@ -434,6 +699,59 @@ private struct HomeTimerClipShape: Shape {
     }
 }
 
+struct HomeTimerSurfaceButton: View {
+    enum IconPlacement {
+        case top
+        case bottom
+    }
+
+    let title: String
+    let systemImage: String
+    var iconPlacement: IconPlacement = .bottom
+    let accessibilityHint: String
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            VStack(spacing: EQSpacing.xxs) {
+                if iconPlacement == .top {
+                    Image(systemName: systemImage).eqTextStyle(.captionEmphasized)
+                }
+                Text(title).eqTextStyle(.listItemTitle)
+                if iconPlacement == .bottom {
+                    Image(systemName: systemImage).eqTextStyle(.captionEmphasized)
+                }
+            }
+            .foregroundStyle(EQColor.Home.secondaryText)
+            .frame(maxWidth: .infinity, minHeight: EQDimension.minimumTouch)
+        }
+        .buttonStyle(.plain)
+        .padding(.horizontal, EQSpacing.lg)
+        .padding(.vertical, EQSpacing.sm)
+        .accessibilityHint(accessibilityHint)
+    }
+}
+
+struct HomeAddActionButton<Label: View>: View {
+    let accessibilityHint: String
+    var horizontalPadding = EQSpacing.lg
+    var alignment: Alignment = .center
+    let action: () -> Void
+    @ViewBuilder let label: () -> Label
+
+    var body: some View {
+        Button(action: action) {
+            label()
+                .eqTextStyle(.listItemTitle)
+                .frame(maxWidth: .infinity, minHeight: EQDimension.minimumTouch, alignment: alignment)
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(EQColor.Home.accent)
+        .padding(.horizontal, horizontalPadding)
+        .accessibilityHint(accessibilityHint)
+    }
+}
+
 private enum HomeCarouselPosition: Hashable {
     case workout(WorkoutID)
     case addWorkout
@@ -442,15 +760,19 @@ private enum HomeCarouselPosition: Hashable {
 private struct HomeScene: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.homeExecutionTransitionProgress) private var executionProgress
+    @Environment(\.homeSurfacePullBlocksInteraction) private var surfacePullBlocksInteraction
     @Namespace private var addWorkoutTransition
     @State private var carouselPosition: HomeCarouselPosition?
     @State private var addWorkoutCardIsVisible = false
+    @State private var carouselIsIdle = true
     @State private var homeChromeFrame: CGRect = .zero
     @Bindable var model: HomeModel
     let reduceMotion: Bool
     let transitioningWorkoutID: WorkoutID?
     let reportWorkoutFrame: (WorkoutID, CGRect) -> Void
     let selectWorkout: (WorkoutID) -> Void
+    let showHistory: () -> Void
+    let showSettings: () -> Void
 
     private var isExecutionExpanded: Bool { transitioningWorkoutID != nil }
 
@@ -471,62 +793,57 @@ private struct HomeScene: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            ScrollView {
+            VStack(alignment: .leading, spacing: EQSpacing.lg) {
                 VStack(alignment: .leading, spacing: EQSpacing.lg) {
-                    VStack(alignment: .leading, spacing: EQSpacing.lg) {
-                        header
-                        if model.errorMessage != nil { loadError }
-                        workoutOfTheDay
-                    }
-                    .onGeometryChange(for: CGRect.self) { proxy in
-                        proxy.frame(in: .global)
-                    } action: { frame in
-                        if !isExecutionExpanded, frame.width > 0, frame.height > 0 {
-                            homeChromeFrame = frame
-                        }
-                    }
-                    .offset(y: homeChromeOffset)
-                    .opacity(departingHomeOpacity)
-                    carousel
-                        .padding(.top, EQSpacing.lg)
-                    addWorkout
-                        .offset(y: lowerHomeContentOffset)
-                        .opacity(departingHomeOpacity)
+                    header
+                    if model.errorMessage != nil { loadError }
+                    workoutOfTheDay
                 }
-                .padding(.vertical, EQSpacing.sm)
+                .onGeometryChange(for: CGRect.self) { proxy in
+                    proxy.frame(in: .global)
+                } action: { frame in
+                    if !isExecutionExpanded, frame.width > 0, frame.height > 0 {
+                        homeChromeFrame = frame
+                    }
+                }
+                .offset(y: homeChromeOffset)
+                .opacity(departingHomeOpacity)
+                carousel
+                    .padding(.top, EQSpacing.lg)
+                addWorkout
+                    .offset(y: lowerHomeContentOffset)
+                    .opacity(departingHomeOpacity)
             }
-            .scrollIndicators(.hidden)
-            .scrollClipDisabled()
-            .scrollDisabled(isExecutionExpanded)
-            .refreshable { await model.load() }
+            .padding(.vertical, EQSpacing.sm)
+            Spacer(minLength: 0)
             timerAffordance
                 .offset(y: lowerHomeContentOffset)
                 .opacity(departingHomeOpacity)
         }
-        .background(EQColor.canvas.ignoresSafeArea())
+        .background(EQColor.Home.canvas.ignoresSafeArea())
         .allowsHitTesting(!isExecutionExpanded)
     }
 
     private var header: some View {
         HStack(alignment: .center, spacing: EQSpacing.md) {
-            Text("Home").font(EQTypography.title).hidden()
+            Text("Home").eqTextStyle(.screenTitle).hidden()
             Spacer(minLength: EQSpacing.sm)
             HStack(spacing: EQSpacing.xs) {
-                NavigationLink(value: HomeRoute.history) {
+                Button(action: showHistory) {
                     Image(systemName: "clock.arrow.circlepath")
-                        .font(.system(size: 16))
-                        .frame(width: 16, height: 16)
-                        .frame(width: 32, height: 32)
+                        .eqTextStyle(.icon)
+                        .frame(width: EQLayout.Home.headerIconSize, height: EQLayout.Home.headerIconSize)
+                        .frame(width: EQLayout.Home.headerControlSize, height: EQLayout.Home.headerControlSize)
                         .contentShape(Rectangle())
                 }
+                .buttonStyle(.plain)
                 .accessibilityLabel("Workout history")
-                NavigationLink(value: HomeRoute.settings) {
-                    Image(systemName: "gearshape")
-                        .font(.system(size: 16))
-                        .frame(width: 16, height: 16)
-                        .frame(width: 32, height: 32)
+                Button(action: showSettings) {
+                    EQSettingsGlyph(color: EQColor.Home.secondaryText)
+                        .frame(width: EQLayout.Home.headerControlSize, height: EQLayout.Home.headerControlSize)
                         .contentShape(Rectangle())
                 }
+                .buttonStyle(.plain)
                 .accessibilityLabel("Settings")
             }
         }
@@ -535,8 +852,8 @@ private struct HomeScene: View {
     }
 
     private var workoutOfTheDay: some View {
-        VStack(alignment: .leading, spacing: EQSpacing.xs) {
-            Text("Workout of the day").font(EQTypography.sectionTitle)
+        VStack(alignment: .leading, spacing: EQLayout.Home.heroTitleDateSpacing) {
+            Text("Workout of the day").eqTextStyle(.screenTitle)
             homeDate
         }
         .padding(.horizontal, EQSpacing.lg)
@@ -558,12 +875,12 @@ private struct HomeScene: View {
 
         return HStack(alignment: .firstTextBaseline, spacing: 0) {
             Text("\(month) \(day)")
-                .font(EQTypography.sectionTitle)
+                .eqTextStyle(.screenTitle)
             Text(suffix)
-                .font(EQTypography.caption)
+                .eqTextStyle(.caption)
                 .baselineOffset(7)
         }
-        .foregroundStyle(EQColor.secondaryText)
+        .foregroundStyle(EQColor.Home.secondaryText)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("\(month) \(day)\(suffix)")
     }
@@ -583,8 +900,7 @@ private struct HomeScene: View {
                                 workout,
                                 sequence: index + 1,
                                 width: geometry.cardWidth,
-                                dispersalWidth: max(proxy.size.width, proxy.size.height),
-                                viewportWidth: proxy.size.width
+                                dispersalWidth: max(proxy.size.width, proxy.size.height)
                             )
                         }
                         addWorkoutCarouselCard(width: geometry.cardWidth)
@@ -597,6 +913,13 @@ private struct HomeScene: View {
                 .scrollIndicators(.hidden)
                 .scrollClipDisabled()
                 .accessibilityLabel("Home workouts")
+                .onScrollPhaseChange { _, phase in
+                    carouselIsIdle = phase == .idle
+                    if carouselIsIdle { synchronizeAddWorkoutTransition() }
+                }
+                .onChange(of: carouselPosition) { _, _ in
+                    if carouselIsIdle { synchronizeAddWorkoutTransition() }
+                }
                 .onAppear {
                     if carouselPosition == nil, let firstID = model.workouts.first?.id {
                         carouselPosition = .workout(firstID)
@@ -607,15 +930,15 @@ private struct HomeScene: View {
         }
     }
 
-    private func carouselCard(_ workout: Workout, sequence: Int, width: CGFloat, dispersalWidth: CGFloat, viewportWidth: CGFloat) -> some View {
+    private func carouselCard(_ workout: Workout, sequence: Int, width: CGFloat, dispersalWidth: CGFloat) -> some View {
         Button {
+            guard !surfacePullBlocksInteraction else { return }
             carouselPosition = .workout(workout.id)
             selectWorkout(workout.id)
         } label: {
             WorkoutCard(
                 workout: workout,
                 sequence: sequence,
-                carouselViewportWidth: viewportWidth,
                 isExpanded: model.expandedWorkoutID == workout.id,
                 reportFrame: { reportWorkoutFrame(workout.id, $0) }
             )
@@ -648,10 +971,16 @@ private struct HomeScene: View {
                 anchor: phase.value < 0 ? .trailing : phase.value > 0 ? .leading : .center
             )
         }
-        .onScrollVisibilityChange(threshold: 0.2) { isVisible in
-            withAnimation(reduceMotion ? EQMotion.reducedContentTransition : EQMotion.objectTransformation) {
-                addWorkoutCardIsVisible = isVisible
-            }
+    }
+
+    private func synchronizeAddWorkoutTransition() {
+        let showsDestination = HomeAddWorkoutVisibility.showsCarouselDestination(
+            isAtAddWorkoutCard: carouselPosition == .addWorkout,
+            scrollIsIdle: carouselIsIdle
+        )
+        guard showsDestination != addWorkoutCardIsVisible else { return }
+        withAnimation(reduceMotion ? EQMotion.reducedContentTransition : EQMotion.objectTransformation) {
+            addWorkoutCardIsVisible = showsDestination
         }
     }
 
@@ -666,46 +995,41 @@ private struct HomeScene: View {
 
 
     private var addWorkout: some View {
-        Button { model.isAddWorkoutDrawerPresented = true } label: {
+        HomeAddActionButton(
+            accessibilityHint: "Shows options to create, paste, or reuse a workout"
+        ) {
+            model.isAddWorkoutDrawerPresented = true
+        } label: {
             ZStack {
                 if !addWorkoutCardIsVisible {
-                    HStack(spacing: EQSpacing.xs) {
-                        Image(systemName: "plus.circle.fill")
-                        Text("Add Workout")
-                            .matchedGeometryEffect(id: "add-workout-title", in: addWorkoutTransition)
-                    }
+                    HomeAddWorkoutLabel()
+                        .matchedGeometryEffect(
+                            id: "add-workout-label",
+                            in: addWorkoutTransition,
+                            properties: .position,
+                            anchor: .center
+                        )
                 }
             }
-            .font(EQTypography.cardTitle)
-            .frame(maxWidth: .infinity, minHeight: EQDimension.minimumTouch)
         }
-        .buttonStyle(.plain)
-        .foregroundStyle(EQColor.accent)
-        .padding(.horizontal, EQSpacing.lg)
         .allowsHitTesting(!addWorkoutCardIsVisible)
         .accessibilityHidden(addWorkoutCardIsVisible)
-        .accessibilityHint("Shows options to create, paste, or reuse a workout")
     }
 
     private var timerAffordance: some View {
-        Button { model.primarySurface = .timer } label: {
-            VStack(spacing: EQSpacing.xxs) {
-                Text("Timer").font(EQTypography.cardTitle)
-                Image(systemName: "chevron.down").font(EQTypography.caption.weight(.bold))
-            }
-            .foregroundStyle(EQColor.secondaryText)
-            .frame(maxWidth: .infinity, minHeight: EQDimension.minimumTouch)
+        HomeTimerSurfaceButton(
+            title: "Timer",
+            systemImage: "chevron.down",
+            accessibilityHint: "Moves to the standalone timer"
+        ) {
+            model.primarySurface = .timer
         }
-        .buttonStyle(.plain)
-        .padding(.horizontal, EQSpacing.lg)
-        .padding(.vertical, EQSpacing.sm)
-        .accessibilityHint("Moves to the standalone timer")
     }
 
     private var loadError: some View {
         HStack(alignment: .center, spacing: EQSpacing.sm) {
             Label("Workouts could not be loaded.", systemImage: "exclamationmark.triangle.fill")
-                .font(EQTypography.body).foregroundStyle(EQColor.warning)
+                .eqTextStyle(.body).foregroundStyle(EQColor.warning)
             Spacer(minLength: EQSpacing.sm)
             Button("Retry") { Task { await model.load() } }
                 .buttonStyle(.bordered).frame(minHeight: EQDimension.minimumTouch)
@@ -725,44 +1049,64 @@ private struct AddWorkoutCarouselCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: EQSpacing.sm) {
-            if isVisible {
-                Text("ADD WORKOUT")
-                    .font(EQTypography.caption)
-                    .foregroundStyle(EQColor.secondaryText)
-                    .matchedGeometryEffect(id: "add-workout-title", in: transition)
+            ZStack {
+                if isVisible {
+                    HomeAddWorkoutLabel()
+                        .matchedGeometryEffect(
+                            id: "add-workout-label",
+                            in: transition,
+                            properties: .position,
+                            anchor: .center
+                        )
+                }
+            }
+            .frame(maxWidth: .infinity, minHeight: EQDimension.minimumTouch, alignment: .center)
 
-                Spacer().frame(height: EQSpacing.xs)
+            Spacer().frame(height: EQSpacing.xs)
 
-                cardAction("Create workout", systemImage: "plus") {
+            VStack(alignment: .leading, spacing: EQSpacing.sm) {
+                cardAction("Create workout", systemImage: "plus.circle.fill", hint: "Opens the workout builder") {
                     select(.builder(.init()))
                 }
-                cardAction("Paste/import", systemImage: "doc.on.clipboard") {
+                cardAction("Paste/import", systemImage: "doc.on.clipboard", hint: "Imports a workout from text") {
                     select(.pasteWorkout)
                 }
                 if hasReusableWorkouts {
-                    cardAction("Reuse", systemImage: "clock.arrow.circlepath") {
+                    cardAction("Reuse", systemImage: "clock.arrow.circlepath", hint: "Creates a workout from a completed workout") {
                         select(.recent)
                     }
                 }
-            } else {
-                Color.clear
             }
+            .opacity(isVisible ? 1 : 0)
+            .allowsHitTesting(isVisible)
+            .accessibilityHidden(!isVisible)
             Spacer(minLength: 0)
         }
         .padding(EQSpacing.lg)
-        .foregroundStyle(EQColor.primaryText)
+        .foregroundStyle(EQColor.Home.primaryText)
         .frame(maxWidth: .infinity, minHeight: EQDimension.workoutCardHeight, alignment: .topLeading)
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Add Workout")
     }
 
-    private func cardAction(_ title: String, systemImage: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Label(title, systemImage: systemImage)
-                .font(EQTypography.body)
-                .frame(maxWidth: .infinity, minHeight: EQDimension.minimumTouch, alignment: .leading)
+    private func cardAction(_ title: String, systemImage: String, hint: String, action: @escaping () -> Void) -> some View {
+        HomeAddActionButton(accessibilityHint: hint, horizontalPadding: 0, alignment: .leading, action: action) {
+            HStack(spacing: EQSpacing.xs) {
+                Image(systemName: systemImage)
+                Text(title)
+            }
         }
-        .buttonStyle(.plain)
+    }
+}
+
+private struct HomeAddWorkoutLabel: View {
+    var body: some View {
+        HStack(spacing: EQSpacing.xs) {
+            Image(systemName: "plus.circle.fill")
+            Text("Add Workout")
+        }
+        .eqTextStyle(.listItemTitle)
+        .foregroundStyle(EQColor.Home.accent)
     }
 }
 
@@ -773,6 +1117,7 @@ private struct ExpandedWorkoutExecutionContainer: View {
     let historyRepository: any ExerciseHistoryRepository
     let progressionRepository: any ProgressionRepository
     let exerciseRepository: any ExerciseRepository
+    let settingsRepository: any SettingsRepository
     let weightUnit: WeightUnit
     let defaultRestDuration: TimeInterval
     let restSessionStore: WorkoutRestSessionStore
@@ -789,6 +1134,7 @@ private struct ExpandedWorkoutExecutionContainer: View {
             historyRepository: historyRepository,
             progressionRepository: progressionRepository,
             exerciseRepository: exerciseRepository,
+            settingsRepository: settingsRepository,
             weightUnit: weightUnit,
             defaultRestDuration: defaultRestDuration,
             restSessionStore: restSessionStore,
@@ -808,29 +1154,63 @@ private struct AddWorkoutDrawer: View {
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
-        VStack(alignment: .leading, spacing: EQSpacing.md) {
-            Text("Add Workout").font(EQTypography.sectionTitle)
-            drawerAction("Create workout", systemImage: "plus") { choose(.builder(.init())) }
-            drawerAction("Paste/import", systemImage: "doc.on.clipboard") { choose(.pasteWorkout) }
-            if hasReusableWorkouts {
-                drawerAction("Reuse", systemImage: "clock.arrow.circlepath") { choose(.recent) }
+        VStack(alignment: .leading, spacing: 0) {
+            Text("Add Workout").eqTextStyle(.screenTitle)
+            LazyVGrid(columns: columns, spacing: EQSpacing.sm) {
+                drawerAction("Create", systemImage: "plus", hint: "Opens the workout builder") {
+                    choose(.builder(.init()))
+                }
+                drawerAction("Import", systemImage: "doc.on.doc", hint: "Imports a workout from text") {
+                    choose(.pasteWorkout)
+                }
+                if hasReusableWorkouts {
+                    drawerAction("Reuse", systemImage: "clock.arrow.circlepath", hint: "Creates a workout from a completed workout") {
+                        choose(.recent)
+                    }
+                }
             }
+            .padding(.top, EQLayout.Home.addWorkoutTitleToCardsSpacing)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(EQSpacing.lg)
-        .presentationDetents([.height(hasReusableWorkouts ? 260 : 205)])
+        .padding(.horizontal, EQSpacing.lg)
+        .padding(.top, EQLayout.Home.addWorkoutSheetTopSpacing)
+        .padding(.bottom, EQLayout.Home.addWorkoutSheetBottomSpacing)
+        .presentationDetents([.height(EQLayout.Home.addWorkoutSheetHeight)])
         .presentationDragIndicator(.visible)
         .presentationBackground(EQColor.elevatedSurface)
     }
 
-    private func drawerAction(_ title: String, systemImage: String, action: @escaping () -> Void) -> some View {
+    private var columns: [GridItem] {
+        Array(
+            repeating: GridItem(.flexible(), spacing: EQSpacing.sm),
+            count: HomeAddWorkoutDrawerLayout.columnCount(hasReusableWorkouts: hasReusableWorkouts)
+        )
+    }
+
+    private func drawerAction(_ title: String, systemImage: String, hint: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            Label(title, systemImage: systemImage)
-                .font(EQTypography.body)
-                .frame(maxWidth: .infinity, minHeight: EQDimension.minimumTouch, alignment: .leading)
+            VStack(spacing: EQSpacing.sm) {
+                Image(systemName: systemImage)
+                    .eqTextStyle(.sectionTitle)
+                    .frame(
+                        width: EQLayout.Home.addWorkoutActionIconSize,
+                        height: EQLayout.Home.addWorkoutActionIconSize
+                    )
+                Text(title)
+                    .eqTextStyle(.listItemTitle)
+            }
+            .frame(
+                maxWidth: .infinity,
+                minHeight: EQLayout.Home.addWorkoutActionCardHeight
+            )
+            .foregroundStyle(EQColor.Home.accent)
+            .background(
+                EQColor.Home.cardSurface,
+                in: RoundedRectangle(cornerRadius: EQRadius.card, style: .continuous)
+            )
         }
         .buttonStyle(.plain)
-        .foregroundStyle(EQColor.primaryText)
+        .accessibilityHint(hint)
     }
 
     private func choose(_ route: CreationRoute) {
@@ -839,10 +1219,15 @@ private struct AddWorkoutDrawer: View {
     }
 }
 
+enum HomeAddWorkoutDrawerLayout {
+    static func columnCount(hasReusableWorkouts: Bool) -> Int {
+        hasReusableWorkouts ? 3 : 2
+    }
+}
+
 private struct WorkoutCard: View {
     let workout: Workout
     let sequence: Int
-    let carouselViewportWidth: CGFloat
     var isExpanded = false
     let reportFrame: (CGRect) -> Void
     private var presentation: HomeCardPresentation { .init(status: workout.status) }
@@ -851,7 +1236,7 @@ private struct WorkoutCard: View {
         VStack(alignment: .leading, spacing: EQSpacing.md) {
             ZStack(alignment: .leading) {
                 Text(workout.titleSnapshot)
-                    .font(EQTypography.cardHero)
+                    .eqTextStyle(.cardHero)
                     .lineLimit(2)
                     .hidden()
             }
@@ -860,15 +1245,15 @@ private struct WorkoutCard: View {
             }
 
             Text("\(workout.exercises.count) \(workout.exercises.count == 1 ? "exercise" : "exercises")")
-                .font(EQTypography.caption)
-                .foregroundStyle(EQColor.secondaryText)
+                .eqTextStyle(.caption)
+                .foregroundStyle(EQColor.Home.cardSecondaryText)
                 .anchorPreference(key: HomeWorkoutTitleAnchorKey.self, value: .bounds) {
                     [.exerciseCount(workout.id): $0]
                 }
                 .hidden()
             Spacer()
             Text(presentation.stateLabel)
-                .font(EQTypography.caption)
+                .eqTextStyle(.caption)
                 .foregroundStyle(statusColor)
                 .anchorPreference(key: HomeWorkoutTitleAnchorKey.self, value: .bounds) {
                     [.status(workout.id): $0]
@@ -877,23 +1262,16 @@ private struct WorkoutCard: View {
         }
         .padding(.horizontal, EQSpacing.lg)
         .padding(.bottom, EQSpacing.lg)
-        .padding(.top, 20)
-        .foregroundStyle(EQColor.primaryText)
+        .padding(.top, EQLayout.Home.cardTopInset)
+        .foregroundStyle(EQColor.Home.primaryText)
         .frame(maxWidth: .infinity, minHeight: EQDimension.workoutCardHeight, alignment: .topLeading)
         .background(alignment: .bottomTrailing) {
             Text("\(sequence)")
-                .font(.system(size: 180, weight: .regular, design: .rounded))
-                .foregroundStyle(EQColor.primaryText.opacity(0.08))
+                .eqTextStyle(.carouselIndex)
+                .foregroundStyle(EQColor.Home.indexText)
                 .lineLimit(1)
                 .minimumScaleFactor(0.5)
-                .offset(x: EQSpacing.xs, y: EQSpacing.xl)
                 .accessibilityHidden(true)
-                .visualEffect { content, proxy in
-                    let frame = proxy.frame(in: .scrollView(axis: .horizontal))
-                    let distance = frame.midX - (carouselViewportWidth / 2)
-                    let phase = min(max(distance / max(frame.width, 1), -1), 1)
-                    return content.offset(x: -(phase * EQSpacing.lg))
-                }
                 .anchorPreference(key: HomeWorkoutTitleAnchorKey.self, value: .bounds) {
                     [.sequence(workout.id): $0]
                 }
@@ -914,7 +1292,7 @@ private struct WorkoutCard: View {
         .background {
             if !isExpanded {
                 RoundedRectangle(cornerRadius: EQRadius.transformingCard, style: .continuous)
-                    .fill(EQColor.surface)
+                    .fill(EQColor.Home.cardSurface)
             }
         }
         .accessibilityElement(children: .combine)
@@ -924,7 +1302,7 @@ private struct WorkoutCard: View {
         .accessibilityHidden(isExpanded)
     }
 
-    private var statusColor: Color { workout.status == .completed ? EQColor.success : EQColor.accent }
+    private var statusColor: Color { EQColor.Home.completedText }
 }
 
 #if DEBUG

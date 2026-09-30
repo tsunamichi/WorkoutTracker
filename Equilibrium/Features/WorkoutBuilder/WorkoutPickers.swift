@@ -15,9 +15,9 @@ struct ExercisePickerView: View {
                 ForEach(results) { exercise in
                     Button { selection(exercise); dismiss() } label: {
                         VStack(alignment: .leading, spacing: EQSpacing.xxs) {
-                            Text(exercise.name).font(EQTypography.cardTitle).foregroundStyle(EQColor.primaryText)
+                            Text(exercise.name).eqTextStyle(.listItemTitle).foregroundStyle(EQColor.primaryText)
                             if let context = contexts[exercise.id], let set = context.sets.last {
-                                Text(contextText(set, date: context.occurredAt)).font(EQTypography.caption).foregroundStyle(EQColor.secondaryText)
+                                Text(contextText(set, date: context.occurredAt)).eqTextStyle(.caption).foregroundStyle(EQColor.secondaryText)
                             }
                         }.frame(maxWidth: .infinity, minHeight: EQDimension.minimumTouch, alignment: .leading)
                     }.accessibilityLabel(exercise.name)

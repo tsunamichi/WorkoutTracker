@@ -23,9 +23,10 @@ final class Phase4FinalCorrectionTests: XCTestCase {
         XCTAssertEqual(model.currentExercise?.exerciseID, workout.exercises[1].exerciseID)
         XCTAssertNil(model.performanceExercise)
         XCTAssertNil(model.restEditableExercise)
-        XCTAssertFalse(model.canEditRestDuration)
-        let editedDuringRest = await model.setRestDuration(80)
-        XCTAssertFalse(editedDuringRest)
+        XCTAssertTrue(model.canEditRestDuration)
+        let editedDuringRest = await model.setGlobalRestDuration(80)
+        XCTAssertTrue(editedDuringRest)
+        XCTAssertEqual(model.restState?.totalDuration, 90)
         model.skipRest()
         XCTAssertEqual(model.performanceExercise?.exerciseID, workout.exercises[1].exerciseID)
         XCTAssertEqual(model.restEditableExercise?.exerciseID, workout.exercises[1].exerciseID)
@@ -45,7 +46,7 @@ final class Phase4FinalCorrectionTests: XCTestCase {
         XCTAssertTrue(model.canComplete)
         XCTAssertNil(model.currentExercise)
         XCTAssertNil(model.restEditableExercise)
-        XCTAssertFalse(model.canEditRestDuration)
+        XCTAssertTrue(model.canEditRestDuration)
     }
 
     func testConfiguredRestDurationUsesCurrentOverrideOrDefaultWithoutFirstExerciseFallback() async throws {
@@ -108,7 +109,7 @@ final class Phase4FinalCorrectionTests: XCTestCase {
         catch { XCTAssertEqual(error as? RepositoryError, .immutableCompletedWorkout) }
     }
 
-    func testRestEditPersistsOnlyActiveExerciseAndDrivesSubsequentRest() async throws {
+    func testWorkoutMenuRestEditPersistsCanonicalGlobalDefaultAndDrivesSubsequentRest() async throws {
         let url = TestSupport.temporaryStoreURL()
         var container: ModelContainer? = try PersistenceController.makeContainer(storageURL: url)
         var repository: SwiftDataRepository? = SwiftDataRepository(container: container!)
@@ -116,32 +117,35 @@ final class Phase4FinalCorrectionTests: XCTestCase {
         try await repository!.create(workout)
         let model = WorkoutExecutionModel(workoutID: workout.id, repository: repository!, now: { self.now })
         await model.activate()
-        let saved = await model.setRestDuration(75)
+        let saved = await model.setGlobalRestDuration(75)
         XCTAssertTrue(saved)
-        XCTAssertEqual(model.workout?.exercises[0].restDuration, 75)
-        XCTAssertEqual(model.workout?.exercises[1].restDuration, workout.exercises[1].restDuration)
+        let savedSettings = try await repository!.settings()
+        XCTAssertEqual(savedSettings.defaultRestDuration, 75)
+        XCTAssertEqual(model.workout?.exercises[0].restDuration, workout.exercises[0].restDuration)
         await model.log(exerciseID: workout.exercises[0].id, prescriptionID: workout.exercises[0].prescriptions[0].id, input: .repetitions(weight: nil, repetitions: 8))
         XCTAssertEqual(model.restState?.totalDuration, 75)
         repository = nil; container = nil
         let recreated = SwiftDataRepository(container: try PersistenceController.makeContainer(storageURL: url))
-        let recreatedWorkout = try await recreated.workout(id: workout.id)
-        XCTAssertEqual(recreatedWorkout?.exercises[0].restDuration, 75)
+        let recreatedSettings = try await recreated.settings()
+        XCTAssertEqual(recreatedSettings.defaultRestDuration, 75)
     }
 
     func testRestDurationRepositoryRequiresFiveSecondIncrements() async throws {
         let repository = makeRepository()
         let workout = EquilibriumFixtures.inProgress(id: "rest-increments")
         try await repository.create(workout)
-        let valid = try await repository.setRestDuration(workoutID: workout.id, exerciseID: workout.exercises[0].id, seconds: 80, at: now)
-        XCTAssertEqual(valid.exercises[0].restDuration, 80)
+        let stableID = workout.exercises[0].exerciseID
+        try await repository.saveExerciseRestDuration(80, for: stableID)
+        let savedDuration = try await repository.exerciseRestDuration(for: stableID)
+        XCTAssertEqual(savedDuration, 80)
         for invalid in [16.0, 74.0] {
             do {
-                _ = try await repository.setRestDuration(workoutID: workout.id, exerciseID: workout.exercises[0].id, seconds: invalid, at: now)
+                try await repository.saveExerciseRestDuration(invalid, for: stableID)
                 XCTFail("Expected invalid rest duration")
-            } catch { XCTAssertEqual(error as? RepositoryError, .invalidRestDuration) }
+            } catch { XCTAssertEqual(error as? RepositoryError, .invalidSettings) }
         }
-        let persisted = try await repository.workout(id: workout.id)
-        XCTAssertEqual(persisted?.exercises[0].restDuration, 80)
+        let retainedDuration = try await repository.exerciseRestDuration(for: stableID)
+        XCTAssertEqual(retainedDuration, 80)
     }
 
     func testSharePayloadUsesSnapshotAndHasNoPersistenceSideEffects() async throws {
@@ -219,6 +223,7 @@ final class ExecutionRestPhase4Tests: XCTestCase {
             updatedAt: EquilibriumFixtures.timestamp
         )
         try await repository.create(workout)
+        try await repository.saveDefaultRestDuration(95)
         let model = WorkoutExecutionModel(workoutID: workout.id, repository: repository, defaultRestDuration: 95)
         await model.activate()
 
@@ -241,6 +246,8 @@ final class ExecutionRestPhase4Tests: XCTestCase {
         var defaulted = EquilibriumFixtures.mixed(id: "phase4-rest-default")
         defaulted.exercises[0].restDuration = nil
         try await repository.materializeAtomically([overridden, defaulted])
+        try await repository.saveDefaultRestDuration(95)
+        try await repository.saveExerciseRestDuration(75, for: overridden.exercises[0].exerciseID)
 
         let overrideModel = WorkoutExecutionModel(
             workoutID: overridden.id,
@@ -253,6 +260,7 @@ final class ExecutionRestPhase4Tests: XCTestCase {
             prescriptionID: overridden.exercises[0].prescriptions[0].id,
             input: .repetitions(weight: nil, repetitions: 8)
         )
+        try await repository.saveExerciseRestDuration(nil, for: overridden.exercises[0].exerciseID)
 
         let defaultModel = WorkoutExecutionModel(
             workoutID: defaulted.id,
@@ -388,6 +396,7 @@ final class ExecutionRestPhase4Tests: XCTestCase {
         let countdownClock: TimeInterval = 0
         let timer = CountdownTimer(now: { countdownClock })
         try await repository.create(workout)
+        try await repository.saveExerciseRestDuration(120, for: workout.exercises[0].exerciseID)
         let model = WorkoutExecutionModel(
             workoutID: workout.id,
             repository: repository,
@@ -562,7 +571,7 @@ final class ExecutionRestPhase4Tests: XCTestCase {
         XCTAssertNil(model.focusedExerciseID)
     }
 
-    func testFinalExerciseSetWithoutRestShowsOverviewImmediately() async throws {
+    func testFinalExerciseSetUsesGlobalRestBeforeShowingOverview() async throws {
         let repository = makeRepository()
         var workout = EquilibriumFixtures.mixed(id: "phase41-final-no-rest")
         workout.exercises[0].restDuration = nil
@@ -570,7 +579,7 @@ final class ExecutionRestPhase4Tests: XCTestCase {
         let model = WorkoutExecutionModel(
             workoutID: workout.id,
             repository: repository,
-            defaultRestDuration: 0
+            defaultRestDuration: 90
         )
         let presentation = ExecutionWalletPresentation(initialMode: .focusedExercise)
         await model.activate()
@@ -587,7 +596,15 @@ final class ExecutionRestPhase4Tests: XCTestCase {
             awaitsExerciseSelection: model.awaitsExerciseSelection
         )
 
-        XCTAssertNil(model.restState)
+        XCTAssertEqual(model.restState?.totalDuration, 90)
+        XCTAssertFalse(model.awaitsExerciseSelection)
+        XCTAssertEqual(presentation.mode, .focusedExercise)
+
+        model.skipRest()
+        _ = presentation.synchronize(
+            with: model.foregroundState,
+            awaitsExerciseSelection: model.awaitsExerciseSelection
+        )
         XCTAssertTrue(model.awaitsExerciseSelection)
         XCTAssertEqual(presentation.mode, .exerciseOverview)
         XCTAssertNil(model.focusedExerciseID)

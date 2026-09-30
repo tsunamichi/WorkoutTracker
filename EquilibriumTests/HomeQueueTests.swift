@@ -133,6 +133,161 @@ final class HomeQueueTests: XCTestCase {
         XCTAssertEqual(model.primarySurface, .timer)
     }
 
+    func testHomeTimerSurfacePullTracksOnlyTheDirectionTowardTheOtherSurface() {
+        XCTAssertEqual(
+            HomeTimerSurfacePull.progress(from: .home, translation: -200, height: 800),
+            0.25,
+            accuracy: 0.001
+        )
+        XCTAssertEqual(
+            HomeTimerSurfacePull.progress(from: .home, translation: 200, height: 800),
+            0,
+            accuracy: 0.001
+        )
+        XCTAssertEqual(
+            HomeTimerSurfacePull.progress(from: .timer, translation: 200, height: 800),
+            0.75,
+            accuracy: 0.001
+        )
+        XCTAssertEqual(
+            HomeTimerSurfacePull.progress(from: .timer, translation: -200, height: 800),
+            1,
+            accuracy: 0.001
+        )
+    }
+
+    func testHomeTimerSurfacePullSettlesUsingDistanceOrProjectedIntent() {
+        XCTAssertEqual(
+            HomeTimerSurfacePull.destination(
+                from: .home,
+                translation: -160,
+                predictedTranslation: -160,
+                height: 800
+            ),
+            .timer
+        )
+        XCTAssertEqual(
+            HomeTimerSurfacePull.destination(
+                from: .home,
+                translation: -40,
+                predictedTranslation: -40,
+                height: 800
+            ),
+            .home
+        )
+        XCTAssertEqual(
+            HomeTimerSurfacePull.destination(
+                from: .home,
+                translation: -40,
+                predictedTranslation: -120,
+                height: 800
+            ),
+            .timer
+        )
+        XCTAssertEqual(
+            HomeTimerSurfacePull.destination(
+                from: .timer,
+                translation: 160,
+                predictedTranslation: 160,
+                height: 800
+            ),
+            .home
+        )
+        XCTAssertEqual(
+            HomeTimerSurfacePull.destination(
+                from: .timer,
+                translation: 40,
+                predictedTranslation: 40,
+                height: 800
+            ),
+            .timer
+        )
+    }
+
+    func testAddWorkoutTransitionWaitsForSettledFinalCarouselPosition() {
+        XCTAssertFalse(
+            HomeAddWorkoutVisibility.showsCarouselDestination(
+                isAtAddWorkoutCard: true,
+                scrollIsIdle: false
+            )
+        )
+        XCTAssertFalse(
+            HomeAddWorkoutVisibility.showsCarouselDestination(
+                isAtAddWorkoutCard: false,
+                scrollIsIdle: true
+            )
+        )
+        XCTAssertTrue(
+            HomeAddWorkoutVisibility.showsCarouselDestination(
+                isAtAddWorkoutCard: true,
+                scrollIsIdle: true
+            )
+        )
+    }
+
+    func testAddWorkoutDrawerUsesTwoOrThreeActionColumns() {
+        XCTAssertEqual(HomeAddWorkoutDrawerLayout.columnCount(hasReusableWorkouts: false), 2)
+        XCTAssertEqual(HomeAddWorkoutDrawerLayout.columnCount(hasReusableWorkouts: true), 3)
+        XCTAssertEqual(EQLayout.Home.addWorkoutActionIconSize, 40)
+        XCTAssertEqual(EQLayout.Home.addWorkoutSheetTopSpacing, 40)
+        XCTAssertEqual(EQLayout.Home.addWorkoutTitleToCardsSpacing, 40)
+        XCTAssertEqual(EQLayout.Home.addWorkoutSheetBottomSpacing, 40)
+    }
+
+    func testSettingsOverlayShrinksHomeWithoutMovingIt() {
+        XCTAssertEqual(
+            HomeOverlayPresentation.backgroundScale(isPresented: false, reduceMotion: false),
+            1
+        )
+        XCTAssertEqual(
+            HomeOverlayPresentation.backgroundScale(isPresented: true, reduceMotion: false),
+            EQLayout.Home.overlayBackgroundScale
+        )
+        XCTAssertEqual(
+            HomeOverlayPresentation.backgroundScale(isPresented: true, reduceMotion: true),
+            1
+        )
+    }
+
+    func testCarouselIndexParallaxLagsBehindCardMotion() {
+        XCTAssertEqual(
+            HomeCarouselIndexParallax.offset(
+                cardMidX: 200,
+                viewportWidth: 400,
+                cardWidth: 320,
+                reduceMotion: false
+            ),
+            0
+        )
+        XCTAssertGreaterThan(
+            HomeCarouselIndexParallax.offset(
+                cardMidX: 40,
+                viewportWidth: 400,
+                cardWidth: 320,
+                reduceMotion: false
+            ),
+            0
+        )
+        XCTAssertLessThan(
+            HomeCarouselIndexParallax.offset(
+                cardMidX: 360,
+                viewportWidth: 400,
+                cardWidth: 320,
+                reduceMotion: false
+            ),
+            0
+        )
+        XCTAssertEqual(
+            HomeCarouselIndexParallax.offset(
+                cardMidX: 40,
+                viewportWidth: 400,
+                cardWidth: 320,
+                reduceMotion: true
+            ),
+            0
+        )
+    }
+
     func testExecutionPresentationTracksOnlyTheSelectedWorkoutIDAndClearsOnExit() async {
         let first = ready("first", createdAt: date(2))
         let second = ready("second", createdAt: date(3))
@@ -240,6 +395,6 @@ final class HomeQueueTests: XCTestCase {
 
     func testCardMappingAndStableRouteIdentity() {
         XCTAssertEqual(HomeCardPresentation(status: .ready).action, .start); XCTAssertEqual(HomeCardPresentation(status: .completed).action, .view)
-        XCTAssertEqual(HomeRoute.history, HomeRoute.history)
+        XCTAssertNotEqual(HomeOverlayDestination.history, HomeOverlayDestination.settings)
     }
 }

@@ -6,7 +6,7 @@ public enum SetLogInput: Equatable, Sendable {
 }
 
 public enum ExerciseState: String, Equatable, Sendable {
-    case upcoming, current, completed
+    case upcoming, current, completed, skipped
 }
 
 public struct WorkoutProgress: Equatable, Sendable {
@@ -32,12 +32,13 @@ public enum WorkoutExecutionQuery {
     public static func states(in workout: Workout, focusedExerciseID: WorkoutExerciseID? = nil) -> [WorkoutExerciseID: ExerciseState] {
         let firstIncompleteID = workout.exercises.first(where: { !isComplete($0) })?.id
         let focus = focusedExerciseID.flatMap { id in
-            workout.exercises.contains(where: { $0.id == id }) ? id : nil
+            workout.exercises.contains(where: { $0.id == id && $0.skippedAt == nil }) ? id : nil
         } ?? firstIncompleteID
 
         return Dictionary(uniqueKeysWithValues: workout.exercises.map { exercise in
             let state: ExerciseState
-            if exercise.id == focus { state = .current }
+            if exercise.skippedAt != nil { state = .skipped }
+            else if exercise.id == focus { state = .current }
             else if isComplete(exercise) { state = .completed }
             else { state = .upcoming }
             return (exercise.id, state)

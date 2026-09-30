@@ -49,7 +49,7 @@ struct WorkoutBuilderView: View {
             Section("Workout") { TextField("Workout name", text: $model.draft.name).accessibilityLabel("Workout name") }
             Section("Exercises") {
                 ForEach($model.draft.exercises) { $exercise in
-                    HStack { Text(exercise.name).font(EQTypography.exerciseTitle); Spacer(); Menu("Move") { Button("Move up") { model.moveExercise(id: exercise.id, direction: -1) }; Button("Move down") { model.moveExercise(id: exercise.id, direction: 1) } } }
+                    HStack { Text(exercise.name).eqTextStyle(.exerciseTitle); Spacer(); Menu("Move") { Button("Move up") { model.moveExercise(id: exercise.id, direction: -1) }; Button("Move down") { model.moveExercise(id: exercise.id, direction: 1) } } }
                 }.onDelete(perform: model.remove).onMove(perform: model.move)
                 Button { pickerPresented = true } label: { Label("Add exercise", systemImage: "plus") }.frame(minHeight: EQDimension.minimumTouch)
             }

@@ -66,7 +66,7 @@ public enum ExercisePerformanceQuery {
         var occurrences: [ExerciseHistoryOccurrence] = []
 
         for workout in completed {
-            for exercise in workout.exercises where exercise.exerciseID == exerciseID {
+            for exercise in workout.exercises where exercise.exerciseID == exerciseID && exercise.skippedAt == nil {
                 let sets = validCompletedSets(in: exercise)
                 guard !sets.isEmpty else { continue }
                 occurrences.append(.init(
@@ -98,6 +98,7 @@ public enum ExercisePerformanceQuery {
     }
 
     public static func validCompletedSets(in exercise: WorkoutExercise) -> [LoggedSet] {
+        guard exercise.skippedAt == nil else { return [] }
         let prescriptions = Dictionary(uniqueKeysWithValues: exercise.prescriptions.map { ($0.id, $0) })
         let indexed = exercise.loggedSets.enumerated().compactMap { index, log -> (Int, LoggedSet)? in
             guard log.completedAt != nil, let prescriptionID = log.prescriptionID,

@@ -21,18 +21,51 @@ struct StandaloneTimerView: View {
         self.dismissToHome = dismissToHome
     }
     var body: some View {
-        List {
-            Section { NavigationLink("Create Timer", value: TimerRoute.create) }
-            Section("Saved Timers") {
-                ForEach(configurations) { configuration in
-                    HStack {
-                        Button { path.append(.run(configuration.id)) } label: { VStack(alignment: .leading) { Text(configuration.name).lineLimit(2); Text("\(configuration.exercisesPerRound) exercises × \(configuration.rounds) rounds").font(EQTypography.caption).foregroundStyle(EQColor.secondaryText) } }.buttonStyle(.plain).frame(maxWidth: .infinity, minHeight: EQDimension.minimumTouch, alignment: .leading)
-                        Menu { Button("Edit Timer", systemImage: "pencil") { path.append(.edit(configuration.id)) }; Button("Delete Timer", systemImage: "trash", role: .destructive) { deletionTarget = configuration } } label: { Label("Timer actions", systemImage: "ellipsis.circle").labelStyle(.iconOnly) }.accessibilityLabel("Actions for \(configuration.name)")
-                    }
+        VStack(spacing: 0) {
+            if let dismissToHome {
+                HomeTimerSurfaceButton(
+                    title: "Workout of the day",
+                    systemImage: "chevron.up",
+                    iconPlacement: .top,
+                    accessibilityHint: "Returns to the workout of the day"
+                ) {
+                    dismissToHome()
                 }
             }
-        }.scrollContentBackground(.hidden).background(EQColor.canvas).navigationTitle("Timer").onAppear { reload() }
-            .toolbar { if let dismissToHome { ToolbarItem(placement: .topBarLeading) { Button(action: dismissToHome) { Label("Workout of the day", systemImage: "chevron.up") } } } }
+
+            List {
+                Section {
+                    if !configurations.isEmpty {
+                        ForEach(configurations) { configuration in
+                            HStack {
+                                Button { path.append(.run(configuration.id)) } label: { VStack(alignment: .leading) { Text(configuration.name).lineLimit(2); Text("\(configuration.exercisesPerRound) exercises × \(configuration.rounds) rounds").eqTextStyle(.caption).foregroundStyle(EQColor.secondaryText) } }.buttonStyle(.plain).frame(maxWidth: .infinity, minHeight: EQDimension.minimumTouch, alignment: .leading)
+                                Menu { Button("Edit Timer", systemImage: "pencil") { path.append(.edit(configuration.id)) }; Button("Delete Timer", systemImage: "trash", role: .destructive) { deletionTarget = configuration } } label: { Label("Timer actions", systemImage: "ellipsis.circle").labelStyle(.iconOnly) }.accessibilityLabel("Actions for \(configuration.name)")
+                            }
+                        }
+                    }
+                } header: {
+                    Text(configurations.isEmpty ? "No timers yet" : "Saved Timers")
+                        .eqTextStyle(.sectionTitle)
+                        .foregroundStyle(EQColor.primaryText)
+                        .textCase(nil)
+                }
+            }
+            .scrollContentBackground(.hidden)
+
+            HomeAddActionButton(
+                accessibilityHint: "Opens the timer creator"
+            ) {
+                path.append(.create)
+            } label: {
+                HStack(spacing: EQSpacing.xs) {
+                    Image(systemName: "plus.circle.fill")
+                    Text("Create Timer")
+                }
+            }
+        }
+        .background(EQColor.canvas)
+        .toolbar(.hidden, for: .navigationBar)
+        .onAppear { reload() }
             .onReceive(NotificationCenter.default.publisher(for: .equilibriumRepositoryDidChange)) { _ in reload() }
             .alert("Delete timer?", isPresented: Binding(get: { deletionTarget != nil }, set: { if !$0 { deletionTarget = nil } })) {
                 Button("Cancel", role: .cancel) { deletionTarget = nil }
@@ -84,17 +117,17 @@ struct StandaloneTimerRunView: View {
     var body: some View {
         VStack(spacing: EQSpacing.xl) {
             Spacer()
-            Text(runner.phase == .move ? "MOVE" : runner.phase == .exerciseRest ? "REST" : runner.phase == .roundRest ? "ROUND REST" : "COMPLETE").font(EQTypography.sectionTitle).foregroundStyle(runner.phase == .move ? EQColor.accent : EQColor.rest)
-            Text(display).font(EQTypography.metric).monospacedDigit().contentTransition(reduceMotion ? .opacity : .numericText()).accessibilityLabel("\(Int(ceil(runner.remaining))) seconds remaining")
+            Text(runner.phase == .move ? "MOVE" : runner.phase == .exerciseRest ? "REST" : runner.phase == .roundRest ? "ROUND REST" : "COMPLETE").eqTextStyle(.sectionTitle).foregroundStyle(runner.phase == .move ? EQColor.accent : EQColor.rest)
+            Text(display).eqTextStyle(.largeMetric).monospacedDigit().contentTransition(reduceMotion ? .opacity : .numericText()).accessibilityLabel("\(Int(ceil(runner.remaining))) seconds remaining")
             HStack { metric("Exercise", "\(runner.exercise)/\(runner.configuration.exercisesPerRound)"); metric("Round", "\(runner.round)/\(runner.configuration.rounds)") }
             HStack {
                 Button(primaryLabel) { primary() }.buttonStyle(.borderedProminent)
                 Button("Skip") { runner.skip(); runTicks() }.buttonStyle(.bordered).disabled(runner.state == .ready || runner.state == .completed)
                 Menu("Options", systemImage: "ellipsis") { Button("Reset") { runner.reset(); runTicks() }; Button("Restart") { runner.restart(); runTicks() } }
             }.frame(minHeight: EQDimension.minimumTouch)
-            if runner.state == .completed { Text("Timer complete").font(EQTypography.title) }
+            if runner.state == .completed { Text("Timer complete").eqTextStyle(.screenTitle) }
             Spacer()
-            Text("Standalone timers never create workout or history records.").font(EQTypography.caption).foregroundStyle(EQColor.secondaryText)
+            Text("Standalone timers never create workout or history records.").eqTextStyle(.caption).foregroundStyle(EQColor.secondaryText)
         }
         .padding(EQSpacing.xl)
         .navigationTitle(runner.configuration.name)
@@ -123,5 +156,5 @@ struct StandaloneTimerRunView: View {
     }
     private func endAndDismiss() { ticks?.cancel(); ticks = nil; runner.reset(); dismiss() }
     private func runTicks() { ticks?.cancel(); guard runner.state == .running else { return }; ticks = Task { while !Task.isCancelled && runner.state == .running { try? await Task.sleep(for: .milliseconds(200)); runner.refresh() } } }
-    private func metric(_ title: String, _ value: String) -> some View { VStack { Text(value).font(EQTypography.sectionTitle); Text(title).font(EQTypography.caption).foregroundStyle(EQColor.secondaryText) }.frame(maxWidth: .infinity).eqCard() }
+    private func metric(_ title: String, _ value: String) -> some View { VStack { Text(value).eqTextStyle(.sectionTitle); Text(title).eqTextStyle(.caption).foregroundStyle(EQColor.secondaryText) }.frame(maxWidth: .infinity).eqCard() }
 }

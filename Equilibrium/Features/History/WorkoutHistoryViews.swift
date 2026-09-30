@@ -19,23 +19,31 @@ struct WorkoutHistoryView: View {
     let workoutRepository: any WorkoutRepository
     let historyRepository: any ExerciseHistoryRepository
     let unit: WeightUnit
-    init(repository: any WorkoutRepository, historyRepository: any ExerciseHistoryRepository, weightUnit: WeightUnit = .pounds) {
-        _model = State(initialValue: WorkoutHistoryModel(repository: repository)); self.workoutRepository = repository; self.historyRepository = historyRepository; unit = weightUnit
+    let dismiss: () -> Void
+    init(repository: any WorkoutRepository, historyRepository: any ExerciseHistoryRepository, weightUnit: WeightUnit = .pounds, dismiss: @escaping () -> Void) {
+        _model = State(initialValue: WorkoutHistoryModel(repository: repository)); self.workoutRepository = repository; self.historyRepository = historyRepository; unit = weightUnit; self.dismiss = dismiss
     }
     var body: some View {
-        Group {
-            if model.workouts.isEmpty, model.errorMessage == nil {
-                ContentUnavailableView("No completed workouts", systemImage: "clock.arrow.circlepath", description: Text("Completed workouts will appear here."))
-            } else {
-                List(model.workouts) { workout in
-                    NavigationLink {
-                        CompletedWorkoutDetailView(workout: workout, repository: workoutRepository, historyRepository: historyRepository, weightUnit: unit)
-                    } label: { WorkoutHistoryRow(workout: workout) }
-                }.listStyle(.plain).scrollContentBackground(.hidden)
+        VStack(alignment: .leading, spacing: 0) {
+            EQOverlayPageHeader(title: "Workout History", dismiss: dismiss)
+
+            Group {
+                if model.workouts.isEmpty, model.errorMessage == nil {
+                    ContentUnavailableView("No completed workouts", systemImage: "clock.arrow.circlepath", description: Text("Completed workouts will appear here."))
+                } else {
+                    List(model.workouts) { workout in
+                        NavigationLink {
+                            CompletedWorkoutDetailView(workout: workout, repository: workoutRepository, historyRepository: historyRepository, weightUnit: unit)
+                        } label: { WorkoutHistoryRow(workout: workout) }
+                    }
+                    .listStyle(.plain)
+                    .scrollContentBackground(.hidden)
+                    .contentMargins(.top, 0, for: .scrollContent)
+                }
             }
         }
         .overlay { if let message = model.errorMessage { ContentUnavailableView("History unavailable", systemImage: "exclamationmark.triangle", description: Text(message)) } }
-        .background(EQColor.canvas).navigationTitle("Workout History").task { await model.load() }
+        .background(EQColor.canvas).toolbar(.hidden, for: .navigationBar).task { await model.load() }
         .onReceive(NotificationCenter.default.publisher(for: .equilibriumRepositoryDidChange)) { _ in Task { await model.load() } }
     }
 }
@@ -44,9 +52,9 @@ private struct WorkoutHistoryRow: View {
     let workout: Workout
     var body: some View {
         VStack(alignment: .leading, spacing: EQSpacing.xs) {
-            Text(workout.titleSnapshot).font(EQTypography.cardTitle)
-            Text(HistoryDateText.full(WorkoutHistoryQuery.completionDate(workout))).font(EQTypography.caption).foregroundStyle(EQColor.secondaryText)
-            Text(summary).font(EQTypography.caption).foregroundStyle(EQColor.secondaryText)
+            Text(workout.titleSnapshot).eqTextStyle(.listItemTitle)
+            Text(HistoryDateText.full(WorkoutHistoryQuery.completionDate(workout))).eqTextStyle(.caption).foregroundStyle(EQColor.secondaryText)
+            Text(summary).eqTextStyle(.caption).foregroundStyle(EQColor.secondaryText)
         }.padding(.vertical, EQSpacing.xs).accessibilityElement(children: .combine)
     }
     private var summary: String {
@@ -68,25 +76,25 @@ struct CompletedWorkoutDetailView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: EQSpacing.lg) {
                 VStack(alignment: .leading, spacing: EQSpacing.xs) {
-                    Text(workout.titleSnapshot).font(EQTypography.title)
+                    Text(workout.titleSnapshot).eqTextStyle(.screenTitle)
                     Text(HistoryDateText.full(WorkoutHistoryQuery.completionDate(workout))).foregroundStyle(EQColor.secondaryText)
-                    Label("Completed", systemImage: "checkmark.circle.fill").font(EQTypography.caption).foregroundStyle(EQColor.success)
+                    Label("Completed", systemImage: "checkmark.circle.fill").eqTextStyle(.caption).foregroundStyle(EQColor.success)
                 }
                 ForEach(Array(workout.exercises.enumerated()), id: \.element.id) { index, exercise in
                     VStack(alignment: .leading, spacing: EQSpacing.sm) {
                         HStack(alignment: .firstTextBaseline) {
-                            Text("\(index + 1). \(exercise.nameSnapshot)").font(EQTypography.exerciseTitle)
+                            Text("\(index + 1). \(exercise.nameSnapshot)").eqTextStyle(.exerciseTitle)
                             Spacer()
                             NavigationLink {
                                 ExercisePerformanceView(exerciseID: exercise.exerciseID, fallbackName: exercise.nameSnapshot, repository: historyRepository, weightUnit: weightUnit)
-                            } label: { Label("Performance", systemImage: "chart.xyaxis.line") }.font(EQTypography.caption)
+                            } label: { Label("Performance", systemImage: "chart.xyaxis.line") }.eqTextStyle(.caption)
                         }
                         let sets = ExercisePerformanceQuery.validCompletedSets(in: exercise)
                         if sets.isEmpty { Text("No completed working sets").foregroundStyle(EQColor.secondaryText) }
                         ForEach(Array(sets.enumerated()), id: \.element.id) { setIndex, set in
                             Button { if let prescriptionID = set.prescriptionID { editTarget = .init(exerciseID: exercise.id, prescriptionID: prescriptionID, setNumber: setIndex + 1, set: set) } } label: {
                                 HStack { Text("Set \(setIndex + 1) · \(setSummary(set))"); Spacer(); Image(systemName: "pencil") }
-                            }.buttonStyle(.plain).font(EQTypography.body).accessibilityLabel("Edit set \(setIndex + 1), \(setSummary(set))")
+                            }.buttonStyle(.plain).eqTextStyle(.body).accessibilityLabel("Edit set \(setIndex + 1), \(setSummary(set))")
                         }
                     }.eqCard()
                 }
@@ -196,25 +204,31 @@ struct ExercisePerformanceView: View {
             } else if model.errorMessage == nil { ProgressView("Loading performance").padding(.top, EQSpacing.xl) }
         }
         .overlay { if let message = model.errorMessage { ContentUnavailableView("Performance unavailable", systemImage: "exclamationmark.triangle", description: Text(message)) } }
-        .background(EQColor.canvas).navigationTitle(model.performance?.displayName ?? fallbackName).navigationBarTitleDisplayMode(.inline).task { await model.load() }
+        .foregroundStyle(EQColor.Execution.foregroundText)
+        .background(EQColor.Execution.foregroundSurface)
+        .navigationTitle(model.performance?.displayName ?? fallbackName)
+        .navigationBarTitleDisplayMode(.inline)
+        .task { await model.load() }
         .onReceive(NotificationCenter.default.publisher(for: .equilibriumRepositoryDidChange)) { _ in Task { await model.load() } }
     }
     private func prCard(_ performance: ExercisePerformance) -> some View {
         VStack(alignment: .leading, spacing: EQSpacing.xs) {
-            Text("PERSONAL RECORD").font(EQTypography.caption)
-            Text(prText(performance.personalRecord)).font(EQTypography.sectionTitle)
-            Text("Derived from completed workout logs").font(EQTypography.caption).foregroundStyle(EQColor.secondaryText)
-        }.frame(maxWidth: .infinity, alignment: .leading).eqCard(elevated: true)
+            Text("PERSONAL RECORD").eqTextStyle(.caption)
+            Text(prText(performance.personalRecord)).eqTextStyle(.sectionTitle)
+            Text("Derived from completed workout logs").eqTextStyle(.caption).foregroundStyle(EQColor.Execution.foregroundSecondaryText)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .executionPerformanceCard()
     }
     private func occurrences(_ performance: ExercisePerformance) -> some View {
         VStack(alignment: .leading, spacing: EQSpacing.sm) {
-            Text("WORKING SET HISTORY").font(EQTypography.caption)
+            Text("WORKING SET HISTORY").eqTextStyle(.caption)
             ForEach(performance.occurrences.reversed()) { occurrence in
                 VStack(alignment: .leading, spacing: EQSpacing.xs) {
-                    Text(occurrence.workoutTitleSnapshot).font(EQTypography.cardTitle)
-                    Text("\(HistoryDateText.full(occurrence.occurredAt)) · \(occurrence.exerciseNameSnapshot)").font(EQTypography.caption).foregroundStyle(EQColor.secondaryText)
-                    ForEach(Array(occurrence.sets.enumerated()), id: \.element.id) { index, set in Text("Set \(index + 1): \(performanceSetText(set))").font(EQTypography.caption) }
-                }.eqCard()
+                    Text(occurrence.workoutTitleSnapshot).eqTextStyle(.listItemTitle)
+                    Text("\(HistoryDateText.full(occurrence.occurredAt)) · \(occurrence.exerciseNameSnapshot)").eqTextStyle(.caption).foregroundStyle(EQColor.Execution.foregroundSecondaryText)
+                    ForEach(Array(occurrence.sets.enumerated()), id: \.element.id) { index, set in Text("Set \(index + 1): \(performanceSetText(set))").eqTextStyle(.caption) }
+                }.executionPerformanceCard()
             }
         }
     }
@@ -233,6 +247,16 @@ struct ExercisePerformanceView: View {
         let reps = "\(set.repetitions ?? 0) reps"
         guard let weight = set.weight else { return reps + " · bodyweight" }
         return "\(WeightText.value(weight, unit: weightUnit)) \(weightUnit == .pounds ? "lb" : "kg") × \(set.repetitions ?? 0)"
+    }
+}
+
+private extension View {
+    func executionPerformanceCard() -> some View {
+        eqCard(
+            surface: EQColor.Execution.foregroundSurface,
+            text: EQColor.Execution.foregroundText,
+            border: EQColor.Execution.foregroundText.opacity(0.18)
+        )
     }
 }
 
@@ -257,17 +281,17 @@ private struct PerformanceTrendView: View {
     }
     var body: some View {
         VStack(alignment: .leading, spacing: EQSpacing.sm) {
-            Text("TREND").font(EQTypography.caption)
-            if selected.isEmpty { Text("No trend data").foregroundStyle(EQColor.secondaryText) }
-            else if selected.count == 1 { Text("One completed occurrence · \(valueText(selected[0]))").font(EQTypography.body) }
+            Text("TREND").eqTextStyle(.caption)
+            if selected.isEmpty { Text("No trend data").foregroundStyle(EQColor.Execution.foregroundSecondaryText) }
+            else if selected.count == 1 { Text("One completed occurrence · \(valueText(selected[0]))").eqTextStyle(.body) }
             else {
                 Chart(selected, id: \.0.id) { item in
-                    LineMark(x: .value("Date", item.0.occurredAt), y: .value(metricLabel, item.1)).foregroundStyle(EQColor.accent)
-                    PointMark(x: .value("Date", item.0.occurredAt), y: .value(metricLabel, item.1)).foregroundStyle(EQColor.accent)
-                }.frame(height: 180).accessibilityHidden(true)
+                    LineMark(x: .value("Date", item.0.occurredAt), y: .value(metricLabel, item.1)).foregroundStyle(EQColor.Execution.primaryAction)
+                    PointMark(x: .value("Date", item.0.occurredAt), y: .value(metricLabel, item.1)).foregroundStyle(EQColor.Execution.foregroundText)
+                }.frame(height: EQLayout.Performance.chartHeight).accessibilityHidden(true)
             }
-            ForEach(selected, id: \.0.id) { item in Text("\(HistoryDateText.short(item.0.occurredAt)): \(valueText(item))").font(EQTypography.caption).foregroundStyle(EQColor.secondaryText) }
-        }.eqCard()
+            ForEach(selected, id: \.0.id) { item in Text("\(HistoryDateText.short(item.0.occurredAt)): \(valueText(item))").eqTextStyle(.caption).foregroundStyle(EQColor.Execution.foregroundSecondaryText) }
+        }.executionPerformanceCard()
     }
     private var metricLabel: String {
         guard let value = selected.last?.0.value else { return "Performance" }

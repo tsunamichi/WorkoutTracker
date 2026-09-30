@@ -85,10 +85,12 @@ final class WorkoutExecutionModel {
     private let historyRepository: (any ExerciseHistoryRepository)?
     private let progressionRepository: (any ProgressionRepository)?
     private let exerciseRepository: (any ExerciseRepository)?
+    private let settingsRepository: (any SettingsRepository)?
 
     private(set) var workout: Workout?
     private(set) var errorMessage: String?
     private(set) var suggestions: [ExerciseID: ProgressionSuggestion] = [:]
+    private(set) var exerciseRestDurations: [ExerciseID: TimeInterval] = [:]
     private(set) var isActivated = false
     private(set) var didAutoComplete = false
     var focusedExerciseID: WorkoutExerciseID?
@@ -101,7 +103,7 @@ final class WorkoutExecutionModel {
     @ObservationIgnored private var restTask: Task<Void, Never>?
     let weightUnit: WeightUnit
 
-    init(workoutID: WorkoutID, initialWorkout: Workout? = nil, repository: any WorkoutRepository, historyRepository: (any ExerciseHistoryRepository)? = nil, progressionRepository: (any ProgressionRepository)? = nil, exerciseRepository: (any ExerciseRepository)? = nil, weightUnit: WeightUnit = .pounds, defaultRestDuration: TimeInterval = 90, now: @escaping () -> Date = Date.init, timer: CountdownTimer? = nil, restSessionStore: WorkoutRestSessionStore? = nil, haptics: (any HapticsClient)? = nil, audio: (any AudioFeedbackClient)? = nil, didPersist: @escaping (Workout) -> Void = { _ in }) {
+    init(workoutID: WorkoutID, initialWorkout: Workout? = nil, repository: any WorkoutRepository, historyRepository: (any ExerciseHistoryRepository)? = nil, progressionRepository: (any ProgressionRepository)? = nil, exerciseRepository: (any ExerciseRepository)? = nil, settingsRepository: (any SettingsRepository)? = nil, weightUnit: WeightUnit = .pounds, defaultRestDuration: TimeInterval = 90, now: @escaping () -> Date = Date.init, timer: CountdownTimer? = nil, restSessionStore: WorkoutRestSessionStore? = nil, haptics: (any HapticsClient)? = nil, audio: (any AudioFeedbackClient)? = nil, didPersist: @escaping (Workout) -> Void = { _ in }) {
         self.workoutID = workoutID
         workout = initialWorkout?.id == workoutID ? initialWorkout : nil
         self.repository = repository
@@ -115,6 +117,7 @@ final class WorkoutExecutionModel {
         self.historyRepository = historyRepository
         self.progressionRepository = progressionRepository
         self.exerciseRepository = exerciseRepository
+        self.settingsRepository = settingsRepository ?? (repository as? any SettingsRepository)
     }
     var restState: WorkoutRestState? {
         guard let restingExercise, timer.state == .running || timer.state == .paused || timer.state == .completed else { return nil }
@@ -152,7 +155,7 @@ final class WorkoutExecutionModel {
     var states: [WorkoutExerciseID: ExerciseState] { workout.map { WorkoutExecutionQuery.states(in: $0, focusedExerciseID: focusedExerciseID) } ?? [:] }
     var canComplete: Bool { workout.map { $0.status == .inProgress && WorkoutExecutionQuery.canComplete($0) } ?? false }
     var awaitsExerciseSelection: Bool { completedExerciseAwaitingSelectionID != nil && restState == nil }
-    var completedExercises: [WorkoutExercise] { workout?.exercises.filter(WorkoutExecutionQuery.isComplete) ?? [] }
+    var completedExercises: [WorkoutExercise] { workout?.exercises.filter { $0.skippedAt == nil && WorkoutExecutionQuery.isComplete($0) } ?? [] }
     var upNextExercises: [WorkoutExercise] {
         guard let workout else { return [] }
         let currentID = currentExercise?.id
@@ -168,10 +171,19 @@ final class WorkoutExecutionModel {
     }
     var performanceExercise: WorkoutExercise? { restState == nil ? currentExercise : nil }
     var restEditableExercise: WorkoutExercise? { restState == nil ? currentExercise : nil }
-    var canEditRestDuration: Bool { restEditableExercise != nil && showsExecutionOptions }
+    var canEditRestDuration: Bool { settingsRepository != nil && showsExecutionOptions }
     var shareText: String? { workout.map { WorkoutShareText.build(workout: $0, unit: weightUnit) } }
-    var configuredRestDuration: TimeInterval {
-        restEditableExercise?.restDuration ?? defaultRestDuration
+    var globalRestDuration: TimeInterval { defaultRestDuration }
+    var configuredRestDuration: TimeInterval { defaultRestDuration }
+
+    func effectiveRestDuration(for exerciseID: WorkoutExerciseID) -> TimeInterval {
+        guard let stableID = exercise(id: exerciseID)?.exerciseID else { return defaultRestDuration }
+        return exerciseRestDurations[stableID] ?? defaultRestDuration
+    }
+
+    func exerciseRestDurationOverride(for exerciseID: WorkoutExerciseID) -> TimeInterval? {
+        guard let stableID = exercise(id: exerciseID)?.exerciseID else { return nil }
+        return exerciseRestDurations[stableID]
     }
 
     func exercise(id: WorkoutExerciseID) -> WorkoutExercise? {
@@ -197,6 +209,7 @@ final class WorkoutExecutionModel {
             }
             selectFirstIncompleteSet()
             restoreRestSessionIfAvailable(in: activeWorkout)
+            try await loadRestPreferences(for: activeWorkout)
             await loadSuggestions(for: activeWorkout)
             errorMessage = nil
         } catch { errorMessage = message(for: error) }
@@ -218,12 +231,22 @@ final class WorkoutExecutionModel {
             )
             reconcileCompletionPresentation(in: loaded)
             invalidateRestIfNeeded(for: loaded)
+            try await loadRestPreferences(for: loaded)
             await loadSuggestions(for: loaded); errorMessage = nil
         } catch { errorMessage = message(for: error) }
     }
 
+    func refreshRestPreferences() async {
+        guard let workout else { return }
+        do {
+            try await loadRestPreferences(for: workout)
+            errorMessage = nil
+        } catch { errorMessage = message(for: error) }
+    }
+
     func suggestion(for exercise: WorkoutExercise) -> ProgressionSuggestion? {
-        guard exercise.prescriptions.contains(where: { if case .repetitions = $0.target { true } else { false } }) else { return nil }
+        guard exercise.skippedAt == nil,
+              exercise.prescriptions.contains(where: { if case .repetitions = $0.target { true } else { false } }) else { return nil }
         return suggestions[exercise.exerciseID]
     }
     func progressionIdentity(for exercise: WorkoutExercise) -> String {
@@ -311,7 +334,8 @@ final class WorkoutExecutionModel {
 
     func updateSetCount(exerciseID: WorkoutExerciseID, count: Int) async -> Bool {
         guard (1...20).contains(count), workTimerState == nil, restState == nil,
-              let originalExercise = workout?.exercises.first(where: { $0.id == exerciseID }) else { return false }
+              let originalExercise = workout?.exercises.first(where: { $0.id == exerciseID }),
+              originalExercise.skippedAt == nil else { return false }
         let completedIDs = Set(originalExercise.loggedSets.filter { $0.completedAt != nil }.compactMap(\.prescriptionID))
         guard count >= completedIDs.count else {
             errorMessage = "Keep at least \(completedIDs.count) completed \(completedIDs.count == 1 ? "set" : "sets")."
@@ -365,7 +389,9 @@ final class WorkoutExecutionModel {
     }
 
     func focus(_ id: WorkoutExerciseID) {
-        guard let workout, workout.status == .inProgress, let exercise = workout.exercises.first(where: { $0.id == id }) else { return }
+        guard let workout, workout.status == .inProgress,
+              let exercise = workout.exercises.first(where: { $0.id == id }),
+              exercise.skippedAt == nil else { return }
         completedExerciseAwaitingSelectionID = nil
         focusedExerciseID = id
         selectedSetIndex = exercise.prescriptions.firstIndex(where: { !WorkoutExecutionQuery.completedPrescriptionIDs(in: exercise).contains($0.id) })
@@ -386,6 +412,7 @@ final class WorkoutExecutionModel {
     func startWorkTimer(exerciseID: WorkoutExerciseID, prescriptionID: SetID, input: SetLogInput) {
         guard workTimerState == nil, restState == nil,
               let exercise = workout?.exercises.first(where: { $0.id == exerciseID }),
+              exercise.skippedAt == nil,
               let index = exercise.prescriptions.firstIndex(where: { $0.id == prescriptionID }),
               case .duration(_, let seconds) = input, seconds > 0 else { return }
         pendingTimedSet = (exerciseID, prescriptionID, input, seconds, exercise.isTwoSided, exercise.nameSnapshot, index + 1, exercise.prescriptions.count)
@@ -394,11 +421,17 @@ final class WorkoutExecutionModel {
     }
     func toggleWorkTimerPause() {
         guard workTimerPhase != .ready else { return }
-        if timer.state == .running { timer.pause() }
-        else if timer.state == .paused { timer.resume() }
+        if timer.state == .running {
+            timer.pause()
+            haptics.perform(.selection)
+        } else if timer.state == .paused {
+            timer.resume()
+            haptics.perform(.selection)
+        }
     }
     func skipWorkTimer() {
         guard pendingTimedSet != nil, !isFinishingTimedSet else { return }
+        haptics.perform(.timerSkipped)
         if workTimerPhase == .switchSides { transitionToWork(.secondSide) }
         else { finishTimedSet() }
     }
@@ -432,14 +465,37 @@ final class WorkoutExecutionModel {
         catch { errorMessage = message(for: error); return false }
     }
 
-    func setRestDuration(_ seconds: TimeInterval) async -> Bool {
-        guard let exerciseID = restEditableExercise?.id else { return false }
-        do { accept(try await repository.setRestDuration(workoutID: workoutID, exerciseID: exerciseID, seconds: seconds, at: now())); errorMessage = nil; return true }
+    func setGlobalRestDuration(_ seconds: TimeInterval) async -> Bool {
+        guard let settingsRepository else { return false }
+        do {
+            try await settingsRepository.saveDefaultRestDuration(seconds)
+            defaultRestDuration = seconds
+            errorMessage = nil
+            return true
+        } catch { errorMessage = message(for: error); return false }
+    }
+    func setExerciseRestDuration(exerciseID: WorkoutExerciseID, seconds: TimeInterval?) async -> Bool {
+        guard showsExecutionOptions,
+              let exercise = exercise(id: exerciseID), exercise.skippedAt == nil,
+              let settingsRepository else { return false }
+        let stableID = exercise.exerciseID
+        do {
+            try await settingsRepository.saveExerciseRestDuration(seconds, for: stableID)
+            exerciseRestDurations[stableID] = seconds
+            errorMessage = nil
+            return true
+        }
         catch { errorMessage = message(for: error); return false }
     }
     func availableExercises() async -> [ExerciseDefinition] { (try? await exerciseRepository?.allExercises()) ?? [] }
     func progressionProfile(for exercise: WorkoutExercise) async -> AutoProgressionProfile { (try? await progressionRepository?.progressionConfiguration().assignments[exercise.exerciseID]) ?? .none }
-    func updateExerciseSettings(exerciseID: WorkoutExerciseID, timeBased: Bool, twoSided: Bool, progression: AutoProgressionProfile) async -> Bool {
+    func updateExerciseSettings(
+        exerciseID: WorkoutExerciseID,
+        timeBased: Bool,
+        twoSided: Bool,
+        progression: AutoProgressionProfile
+    ) async -> Bool {
+        guard showsExecutionOptions, exercise(id: exerciseID)?.skippedAt == nil else { return false }
         guard var value = workout, let index = value.exercises.firstIndex(where: { $0.id == exerciseID }) else { return false }
         var occurrence = value.exercises[index]
         if occurrence.isTimeBased != timeBased {
@@ -447,10 +503,19 @@ final class WorkoutExecutionModel {
             occurrence.loggedSets = []
         }
         occurrence.isTimeBased = timeBased; occurrence.isTwoSided = twoSided; value.exercises[index] = occurrence; value.updatedAt = now()
-        do { try await repository.update(value); if var configuration = try await progressionRepository?.progressionConfiguration() { configuration.assign(progression, to: occurrence.exerciseID); try await progressionRepository?.saveProgressionConfiguration(configuration) }; accept(value); errorMessage = nil; return true } catch { errorMessage = message(for: error); return false }
+        do {
+            try await repository.update(value)
+            if var configuration = try await progressionRepository?.progressionConfiguration() {
+                configuration.assign(progression, to: occurrence.exerciseID)
+                try await progressionRepository?.saveProgressionConfiguration(configuration)
+            }
+            accept(value); errorMessage = nil; return true
+        } catch { errorMessage = message(for: error); return false }
     }
     func swapExercise(occurrenceID: WorkoutExerciseID, with definition: ExerciseDefinition) async -> Bool {
-        guard var value = workout, let index = value.exercises.firstIndex(where: { $0.id == occurrenceID }) else { return false }
+        guard var value = workout,
+              let index = value.exercises.firstIndex(where: { $0.id == occurrenceID }),
+              value.exercises[index].skippedAt == nil else { return false }
         let old = value.exercises[index]
         let history = try? await historyRepository?.latestExerciseLog(exerciseID: definition.id)
         let inherited = history?.sets.map { set -> SetPrescription in
@@ -469,16 +534,19 @@ final class WorkoutExecutionModel {
             focusedExerciseID = occurrenceID
             selectedSetIndex = 0
             suggestions[old.exerciseID] = nil
+            if let settingsRepository {
+                exerciseRestDurations[definition.id] = try? await settingsRepository.exerciseRestDuration(for: definition.id)
+            }
             await loadSuggestions(for: value)
             errorMessage = nil
             return true
         } catch { errorMessage = message(for: error); return false }
     }
     func removeExercise(_ occurrenceID: WorkoutExerciseID) async -> Bool {
-        guard var value = workout, value.exercises.contains(where: { $0.id == occurrenceID }) else { return false }
-        value.exercises.removeAll { $0.id == occurrenceID }; value.updatedAt = now()
+        guard workout?.exercises.contains(where: { $0.id == occurrenceID && $0.skippedAt == nil }) == true else { return false }
         do {
-            try await repository.update(value); accept(value)
+            let value = try await repository.removeExercise(workoutID: workoutID, exerciseID: occurrenceID, at: now())
+            accept(value)
             if restingExercise?.id == occurrenceID { stopTimer() }
             else { restSessionStore.clear(workoutID: workoutID, exerciseID: occurrenceID) }
             if completedExerciseAwaitingSelectionID == occurrenceID {
@@ -486,6 +554,56 @@ final class WorkoutExecutionModel {
             }
             focusedExerciseID = nil; selectFirstIncompleteSet(); errorMessage = nil; return true
         } catch { errorMessage = message(for: error); return false }
+    }
+
+    func skipExercise(_ occurrenceID: WorkoutExerciseID) async -> Bool {
+        guard let exercise = exercise(id: occurrenceID), exercise.skippedAt == nil else { return false }
+        let wasFocused = focusedExerciseID == occurrenceID || currentExercise?.id == occurrenceID
+        do {
+            let value = try await repository.skipExercise(
+                workoutID: workoutID,
+                exerciseID: occurrenceID,
+                at: now()
+            )
+            accept(value)
+            suggestions[exercise.exerciseID] = nil
+            if restingExercise?.id == occurrenceID { stopTimer() }
+            else { restSessionStore.clear(workoutID: workoutID, exerciseID: occurrenceID) }
+            if wasFocused {
+                focusedExerciseID = nil
+                selectedSetIndex = 0
+                completedExerciseAwaitingSelectionID = occurrenceID
+            }
+            haptics.perform(.exerciseSkipped)
+            errorMessage = nil
+            return true
+        } catch {
+            errorMessage = message(for: error)
+            return false
+        }
+    }
+
+    func restoreExercise(_ occurrenceID: WorkoutExerciseID) async -> Bool {
+        guard let exercise = exercise(id: occurrenceID), exercise.skippedAt != nil else { return false }
+        do {
+            let value = try await repository.restoreExercise(
+                workoutID: workoutID,
+                exerciseID: occurrenceID,
+                at: now()
+            )
+            accept(value)
+            if focusedExerciseID == occurrenceID { focusedExerciseID = nil }
+            if completedExerciseAwaitingSelectionID == occurrenceID {
+                completedExerciseAwaitingSelectionID = nil
+            }
+            await loadSuggestions(for: value)
+            haptics.perform(.exerciseRestored)
+            errorMessage = nil
+            return true
+        } catch {
+            errorMessage = message(for: error)
+            return false
+        }
     }
 
     private func accept(_ value: Workout) { workout = value; didPersist(value) }
@@ -508,11 +626,21 @@ final class WorkoutExecutionModel {
         guard let historyRepository, let progressionRepository,
               let configuration = try? await progressionRepository.progressionConfiguration(), configuration.isEnabled else { return }
         for exercise in workout.exercises {
-            guard exercise.prescriptions.contains(where: { if case .repetitions = $0.target { true } else { false } }),
+            guard exercise.skippedAt == nil,
+                  exercise.prescriptions.contains(where: { if case .repetitions = $0.target { true } else { false } }),
                   let rule = ProgressionRuleResolver.resolve(exerciseID: exercise.exerciseID, configuration: configuration),
                   let log = try? await historyRepository.latestExerciseLog(exerciseID: exercise.exerciseID) else { continue }
             suggestions[exercise.exerciseID] = ProgressionEngine.calculate(exerciseID: exercise.exerciseID, parameters: rule.parameters, sets: log.sets)
         }
+    }
+    private func loadRestPreferences(for workout: Workout) async throws {
+        guard let settingsRepository else { return }
+        defaultRestDuration = try await settingsRepository.settings().defaultRestDuration
+        var loaded: [ExerciseID: TimeInterval] = [:]
+        for exerciseID in Set(workout.exercises.map(\.exerciseID)) {
+            loaded[exerciseID] = try await settingsRepository.exerciseRestDuration(for: exerciseID)
+        }
+        exerciseRestDurations = loaded
     }
     private func selectFirstIncompleteSet() {
         guard let exercise = currentExercise else { selectedSetIndex = 0; return }
@@ -582,7 +710,9 @@ final class WorkoutExecutionModel {
     private func advanceWorkTimer() {
         guard let pendingTimedSet, let workTimerPhase else { return }
         switch workTimerPhase {
-        case .ready: transitionToWork(.firstSide, alreadyElapsed: timer.completionOverrun)
+        case .ready:
+            haptics.perform(.timerStarted)
+            transitionToWork(.firstSide, alreadyElapsed: timer.completionOverrun)
         case .firstSide:
             haptics.perform(.timerCompleted); audio.timerCompleted()
             pendingTimedSet.twoSided ? transitionToWork(.switchSides, alreadyElapsed: timer.completionOverrun) : finishTimedSet()
@@ -626,7 +756,7 @@ final class WorkoutExecutionModel {
         completesExercise: Bool
     ) -> Bool {
         guard !WorkoutExecutionQuery.canComplete(workout) else { return false }
-        let duration = exercise.restDuration ?? defaultRestDuration
+        let duration = exerciseRestDurations[exercise.exerciseID] ?? defaultRestDuration
         guard duration > 0 else { return false }
         restingExercise = (exercise.id, exercise.nameSnapshot)
         restSessionStore.begin(
@@ -681,9 +811,10 @@ final class WorkoutExecutionModel {
         switch error as? RepositoryError {
         case .incompleteWorkout: return "Complete every required set before finishing."
         case .immutableCompletedWorkout: return "Completed workouts are read-only."
+        case .exerciseSkipped: return "Restore this exercise before logging or editing sets."
         case .invalidSetInput: return "Enter a valid set value."
-        case .invalidRestDuration: return "Choose a rest duration from 15 seconds to 5 minutes."
-        default: return "The workout could not be updated."
+        case .invalidRestDuration, .invalidSettings: return "Choose a rest duration from 15 seconds to 5 minutes."
+            default: return "The workout could not be updated."
         }
     }
 }

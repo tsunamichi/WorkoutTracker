@@ -10,8 +10,8 @@ struct FoundationSpikeView: View {
             ZStack {
                 EQColor.canvas.ignoresSafeArea()
                 VStack(alignment: .leading, spacing: EQSpacing.lg) {
-                    Text("Equilibrium").font(EQTypography.title).foregroundStyle(EQColor.primaryText)
-                    Text("Native foundation spike").font(EQTypography.body).foregroundStyle(EQColor.secondaryText)
+                    Text("Equilibrium").eqTextStyle(.screenTitle).foregroundStyle(EQColor.primaryText)
+                    Text("Native foundation spike").eqTextStyle(.body).foregroundStyle(EQColor.secondaryText)
                     NavigationLink(value: fixture.id) { WorkoutFixtureCard(workout: fixture) }
                         .buttonStyle(.plain)
                         .matchedTransitionSource(id: fixture.id.rawValue, in: transitionNamespace)
@@ -37,10 +37,10 @@ private struct WorkoutFixtureCard: View {
     let workout: Workout
     var body: some View {
         VStack(alignment: .leading, spacing: EQSpacing.sm) {
-            Text(workout.titleSnapshot).font(EQTypography.cardTitle).foregroundStyle(EQColor.primaryText)
-            Text("\(workout.exercises.count) exercises · fixture data").font(EQTypography.caption).foregroundStyle(EQColor.secondaryText)
+            Text(workout.titleSnapshot).eqTextStyle(.listItemTitle).foregroundStyle(EQColor.primaryText)
+            Text("\(workout.exercises.count) exercises · fixture data").eqTextStyle(.caption).foregroundStyle(EQColor.secondaryText)
             Divider().overlay(EQColor.separator)
-            Text("Open transition proof").font(EQTypography.body).foregroundStyle(EQColor.accent)
+            Text("Open transition proof").eqTextStyle(.body).foregroundStyle(EQColor.accent)
         }.padding(EQSpacing.md).frame(maxWidth: .infinity, alignment: .leading).background(EQColor.surface, in: RoundedRectangle(cornerRadius: EQRadius.card, style: .continuous))
     }
 }
@@ -51,7 +51,7 @@ private struct FoundationDetailView: View {
         ZStack {
             EQColor.canvas.ignoresSafeArea()
             VStack(alignment: .leading, spacing: EQSpacing.md) {
-                Text(workout.titleSnapshot).font(EQTypography.title)
+                Text(workout.titleSnapshot).eqTextStyle(.screenTitle)
                 Text("Development-only navigation and persistence foundation. This is not Workout Execution.").foregroundStyle(EQColor.secondaryText)
                 ForEach(workout.exercises) { exercise in Text(exercise.nameSnapshot).padding().frame(maxWidth: .infinity, alignment: .leading).background(EQColor.elevatedSurface, in: RoundedRectangle(cornerRadius: EQRadius.control)) }
                 Spacer()

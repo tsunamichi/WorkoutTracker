@@ -178,6 +178,7 @@ import SwiftData
         let repository = SwiftDataRepository(container: try PersistenceController.makeContainer(inMemory: true))
         let fixture = EquilibriumFixtures.mixed(id: "work-rest")
         try await repository.create(fixture)
+        try await repository.saveExerciseRestDuration(60, for: fixture.exercises[1].exerciseID)
         let countdown = CountdownTimer(now: { monotonic })
         let model = WorkoutExecutionModel(workoutID: fixture.id, repository: repository, now: { .init(timeIntervalSince1970: monotonic) }, timer: countdown)
         await model.activate()
@@ -208,6 +209,7 @@ import SwiftData
         var fixture = EquilibriumFixtures.mixed(id: "two-sided-work")
         fixture.exercises[1].isTwoSided = true
         try await repository.create(fixture)
+        try await repository.saveExerciseRestDuration(60, for: fixture.exercises[1].exerciseID)
         let model = WorkoutExecutionModel(workoutID: fixture.id, repository: repository, timer: CountdownTimer(now: { monotonic }))
         await model.activate()
         let exercise = fixture.exercises[1], prescription = exercise.prescriptions[0]
