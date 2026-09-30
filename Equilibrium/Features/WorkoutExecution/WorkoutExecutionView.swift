@@ -2358,33 +2358,34 @@ private struct ExerciseSettingsView: View {
     var body: some View {
         Group {
             if let exercise {
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 0) {
-                        settingsHeader(exercise)
-                            .padding(.bottom, EQSpacing.xxxl)
-                        VStack(alignment: .leading, spacing: EQSpacing.xs) {
-                            Toggle("Time-based", isOn: $timeBased)
+                VStack(alignment: .leading, spacing: 0) {
+                    settingsHeader(exercise)
+                        .padding(.bottom, EQSpacing.xxxl)
+                    VStack(alignment: .leading, spacing: EQSpacing.xs) {
+                        Toggle("Time-based", isOn: $timeBased)
+                            .toggleStyle(ExerciseSettingsToggleStyle())
+                        if timeBased {
+                            Toggle("Two-sides", isOn: $twoSided)
                                 .toggleStyle(ExerciseSettingsToggleStyle())
-                            if timeBased {
-                                Toggle("Two-sides", isOn: $twoSided)
-                                    .toggleStyle(ExerciseSettingsToggleStyle())
-                                    .transition(.opacity)
-                            }
-                            progressionRow
-                            restDurationRow
+                                .transition(.opacity)
                         }
-                        .eqTextStyle(.body)
-                        .disabled(loadedProfile == nil)
-                        actionButtons(exercise)
-                            .padding(.top, EQSpacing.xxxl)
+                        progressionRow
+                        restDurationRow
                     }
-                    .padding(.horizontal, EQLayout.WorkoutExecution.walletInset)
-                    .padding(.top, EQSpacing.xl)
-                    .padding(.bottom, EQSpacing.lg)
-                    .animation(EQMotion.contentTransition, value: timeBased)
-                    .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { contentHeight = $0 }
+                    .eqTextStyle(.body)
+                    .disabled(loadedProfile == nil)
+                    actionButtons(exercise)
+                        .padding(.top, EQSpacing.xxxl)
                 }
-                .scrollBounceBehavior(.basedOnSize)
+                .padding(.horizontal, EQLayout.WorkoutExecution.walletInset)
+                .padding(.top, EQSpacing.xl)
+                .padding(.bottom, EQSpacing.lg)
+                .animation(EQMotion.contentTransition, value: timeBased)
+                .fixedSize(horizontal: false, vertical: true)
+                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { contentHeight = $0 }
+                // Bottom-anchored so a new row grows the sheet upward and
+                // everything below it stays put.
+                .frame(maxHeight: .infinity, alignment: .bottom)
             } else {
                 ContentUnavailableView("Exercise unavailable", systemImage: "exclamationmark.triangle")
             }
@@ -2522,41 +2523,40 @@ private struct ExerciseSettingsView: View {
     }
 
     private func actionButtons(_ exercise: WorkoutExercise) -> some View {
-        VStack(alignment: .leading, spacing: EQSpacing.lg) {
+        HStack(spacing: EQLayout.controlGap) {
+            Menu {
+                ForEach(choices.filter { $0.id != exercise.exerciseID }) { definition in
+                    Button(definition.name) {
+                        endedByAction = true
+                        Task { if await model.swapExercise(occurrenceID: exerciseID, with: definition) { dismiss() } }
+                    }
+                }
+            } label: {
+                Text("Swap")
+                    .eqOutlinedControl(tint: EQColor.Execution.foregroundText)
+            }
+            .frame(maxWidth: .infinity)
+            .accessibilityHint("Replaces this exercise in the current workout")
+
             Button { confirmsSkip = true } label: {
-                Text("Skip Exercise")
-                    .eqTextStyle(.body)
-                    .foregroundStyle(EQColor.Execution.destructive)
-                    .frame(minHeight: EQLayout.minimumTouch)
-                    .contentShape(Rectangle())
+                Text("Skip")
+                    .eqOutlinedControl(tint: EQColor.Execution.foregroundText)
             }
             .buttonStyle(.plain)
+            .frame(maxWidth: .infinity)
+            .accessibilityLabel("Skip Exercise")
             .accessibilityHint("Marks this occurrence skipped and returns to Exercise Overview")
 
-            HStack(spacing: EQLayout.controlGap) {
-                Menu {
-                    ForEach(choices.filter { $0.id != exercise.exerciseID }) { definition in
-                        Button(definition.name) {
-                            endedByAction = true
-                            Task { if await model.swapExercise(occurrenceID: exerciseID, with: definition) { dismiss() } }
-                        }
-                    }
-                } label: {
-                    Text("Swap")
-                        .eqOutlinedControl(tint: EQColor.Execution.foregroundText)
-                }
-                .frame(maxWidth: .infinity)
-                .accessibilityHint("Replaces this exercise in the current workout")
-
-                Button { confirmsRemove = true } label: {
-                    Text("Remove")
-                        .eqOutlinedControl(tint: EQColor.Execution.foregroundText)
-                }
-                .buttonStyle(.plain)
-                .frame(maxWidth: .infinity)
-                .accessibilityHint("Permanently removes this occurrence from the current workout")
+            Button { confirmsRemove = true } label: {
+                Text("Remove")
+                    .eqOutlinedControl(tint: EQColor.Execution.foregroundText)
             }
+            .buttonStyle(.plain)
+            .frame(maxWidth: .infinity)
+            .accessibilityHint("Permanently removes this occurrence from the current workout")
         }
+        .lineLimit(1)
+        .minimumScaleFactor(0.8)
     }
 
     private var restDurationValueText: String {
