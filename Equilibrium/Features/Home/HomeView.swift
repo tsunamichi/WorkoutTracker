@@ -99,9 +99,9 @@ struct HomeView: View {
                         isPresented: homeOverlayIsPresented,
                         reduceMotion: reduceMotion
                     ))
-                    .clipShape(RoundedRectangle(
+                    .clipShape(HomeOverlayBackgroundClipShape(
                         cornerRadius: homeOverlayIsPresented ? EQRadius.largeSurface : 0,
-                        style: .continuous
+                        bottomExtension: proxy.safeAreaInsets.bottom
                     ))
                     .overlay {
                         Color.black
@@ -677,6 +677,24 @@ enum HomeTimerSurfacePull {
                 ? .home
                 : .timer
         }
+    }
+}
+
+/// Clips the Home background for overlay presentation while extending through the
+/// bottom safe area, so full-bleed content (the execution wallet) reaches the device edge.
+struct HomeOverlayBackgroundClipShape: Shape {
+    var cornerRadius: CGFloat
+    var bottomExtension: CGFloat
+
+    var animatableData: CGFloat {
+        get { cornerRadius }
+        set { cornerRadius = newValue }
+    }
+
+    func path(in rect: CGRect) -> Path {
+        var extended = rect
+        extended.size.height += max(0, bottomExtension)
+        return RoundedRectangle(cornerRadius: cornerRadius, style: .continuous).path(in: extended)
     }
 }
 
