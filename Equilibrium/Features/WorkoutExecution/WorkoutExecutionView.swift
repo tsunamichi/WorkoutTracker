@@ -629,10 +629,10 @@ final class ExerciseSettingsPresentation {
 
 struct WorkoutExecutionView: View {
     @State private var model: WorkoutExecutionModel
-    @Environment(\.dismiss) private var dismiss
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.scenePhase) private var scenePhase
-    @Environment(\.homeExecutionTransitionProgress) private var homeTransitionProgress
+    @Environment(\.homeExecutionTransitionIsSettled) private var homeTransitionIsSettled
+    @State private var dismissRequest = 0
     @State private var confirmsReset = false
     @State private var confirmsDelete = false
     @State private var editsRestDuration = false
@@ -682,6 +682,7 @@ struct WorkoutExecutionView: View {
         .ignoresSafeArea(.keyboard, edges: .bottom)
         .foregroundStyle(EQColor.Execution.primaryText)
         .navigationBarBackButtonHidden()
+        .modifier(ExecutionDismissOnRequest(request: dismissRequest))
         .task { await model.activate() }
         .onReceive(NotificationCenter.default.publisher(for: .equilibriumRepositoryDidChange)) { _ in Task { await model.refreshFromPersistence() } }
         .onReceive(NotificationCenter.default.publisher(for: .equilibriumSettingsDidChange)) { _ in Task { await model.refreshRestPreferences() } }
@@ -773,8 +774,7 @@ struct WorkoutExecutionView: View {
             Button(action: requestExit) {
                 HStack(spacing: EQSpacing.xs) {
                     Image(systemName: "chevron.left")
-                        .opacity(executionChromeProgress)
-                        .offset(y: executionHeaderOffset)
+                        .modifier(executionChromeRevealEffect)
                     Text(workout.titleSnapshot)
                         .eqTextStyle(.navigationTitle)
                         .lineLimit(1)
@@ -812,18 +812,17 @@ struct WorkoutExecutionView: View {
                 }
                 .accessibilityLabel("Workout options")
                 .accessibilityHint("Contains available workout actions")
-                .opacity(executionChromeProgress)
-                .offset(y: executionHeaderOffset)
+                .modifier(executionChromeRevealEffect)
             }
         }
         .padding(.horizontal, EQLayout.screenGutter)
         .frame(maxWidth: .infinity, minHeight: EQLayout.minimumTouch + EQSpacing.sm)
-        .allowsHitTesting(homeTransitionProgress > 0.99)
+        .allowsHitTesting(homeTransitionIsSettled)
     }
 
     private func requestExit() {
         if let onExit { onExit() }
-        else { dismiss() }
+        else { dismissRequest += 1 }
     }
 
     private func content(_ workout: Workout) -> some View {
@@ -1007,16 +1006,17 @@ struct WorkoutExecutionView: View {
         }
     }
 
-    private var executionChromeProgress: Double {
-        Double(HomeExecutionReveal.progress(homeTransitionProgress, from: 0.55, through: 0.80))
-    }
-
-    private var executionHeaderOffset: CGFloat {
-        ExecutionMotionPolicy.offset(
-            distance: -EQSpacing.md,
-            progress: CGFloat(executionChromeProgress),
-            reduceMotion: reduceMotion
-        )
+    private var executionChromeRevealEffect: HomeExecutionProgressEffect {
+        let reduceMotion = reduceMotion
+        return HomeExecutionProgressEffect { homeProgress in
+            let progress = HomeExecutionReveal.progress(homeProgress, from: 0.55, through: 0.80)
+            let offset = ExecutionMotionPolicy.offset(
+                distance: -EQSpacing.md,
+                progress: progress,
+                reduceMotion: reduceMotion
+            )
+            return (CGSize(width: 0, height: offset), Double(progress))
+        }
     }
 
     @ViewBuilder private func foregroundExerciseHeader(focusProgress: CGFloat) -> some View {
@@ -1224,7 +1224,7 @@ struct WorkoutExecutionView: View {
             foregroundPresenceProgress = target.foreground == nil ? 0 : 1
         }
 
-        guard !reduceMotion, homeTransitionProgress > 0.99 else {
+        guard !reduceMotion, homeTransitionIsSettled else {
             applyTarget()
             if target.foreground == nil { displayedForeground = nil }
             return
@@ -1246,6 +1246,18 @@ struct WorkoutExecutionView: View {
         return changed
     }
 
+}
+
+/// Holds `dismiss` outside `WorkoutExecutionView`. `DismissAction` is recreated on every
+/// environment update, so reading it in the screen rebuilt the whole execution tree on
+/// every frame of the Home → wallet transition.
+private struct ExecutionDismissOnRequest: ViewModifier {
+    @Environment(\.dismiss) private var dismiss
+    let request: Int
+
+    func body(content: Content) -> some View {
+        content.onChange(of: request) { _, _ in dismiss() }
+    }
 }
 
 private struct ExecutionWallet<ListRow: View, ForegroundHeader: View, ForegroundContent: View, ForegroundValues: View, FooterControls: View>: View {

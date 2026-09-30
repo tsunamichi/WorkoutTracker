@@ -20,19 +20,36 @@ public enum HapticFeedback: Equatable, Sendable {
 @MainActor public protocol AudioFeedbackClient: Sendable { func timerCompleted() }
 
 public struct SystemHapticsClient: HapticsClient {
+    /// Shared generators: creating a generator per event makes the first haptic
+    /// block the main thread while the haptic engine spins up.
+    private enum Generators {
+        static let selection = UISelectionFeedbackGenerator()
+        static let light = UIImpactFeedbackGenerator(style: .light)
+        static let soft = UIImpactFeedbackGenerator(style: .soft)
+        static let medium = UIImpactFeedbackGenerator(style: .medium)
+        static let notification = UINotificationFeedbackGenerator()
+    }
+
     public init() {}
+
+    /// Spins up the haptic engine ahead of the first interaction.
+    public static func prepare() {
+        Generators.light.prepare()
+        Generators.selection.prepare()
+    }
+
     public func perform(_ feedback: HapticFeedback) {
         switch feedback {
         case .selection, .setLogged, .exerciseRestored:
-            UISelectionFeedbackGenerator().selectionChanged()
+            Generators.selection.selectionChanged()
         case .lightImpact, .restSkipped, .timerSkipped, .exerciseSkipped:
-            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            Generators.light.impactOccurred()
         case .restTransition, .timerStarted:
-            UIImpactFeedbackGenerator(style: .soft).impactOccurred()
+            Generators.soft.impactOccurred()
         case .exerciseCompleted:
-            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+            Generators.medium.impactOccurred()
         case .timerCompleted, .workoutCompleted:
-            UINotificationFeedbackGenerator().notificationOccurred(.success)
+            Generators.notification.notificationOccurred(.success)
         }
     }
 }

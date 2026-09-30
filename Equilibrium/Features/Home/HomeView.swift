@@ -147,7 +147,10 @@ struct HomeView: View {
                 model.applyPersistedWorkouts(created)
             }
         }
-        .task { await loadHomeAndSettings() }
+        .task {
+            SystemHapticsClient.prepare()
+            await loadHomeAndSettings()
+        }
         .task { await refreshAtLocalDayBoundary() }
         .task {
             for await _ in NotificationCenter.default.notifications(named: .equilibriumSettingsDidChange) {
@@ -478,12 +481,33 @@ private struct HomeExecutionTransitionModifier: ViewModifier, Animatable {
     }
 
     func body(content: Content) -> some View {
-        content.environment(\.homeExecutionTransitionProgress, progress)
+        content
+            .environment(\.homeExecutionTransitionProgress, progress)
+            .environment(\.homeExecutionTransitionIsSettled, progress > 0.99)
+    }
+}
+
+/// Applies Home → wallet transition progress to one view. Reading the per-frame
+/// progress here, rather than in a screen's `body`, keeps whole screens from
+/// re-evaluating on every animation frame.
+struct HomeExecutionProgressEffect: ViewModifier {
+    @Environment(\.homeExecutionTransitionProgress) private var progress
+    let transform: (CGFloat) -> (offset: CGSize, opacity: Double)
+
+    func body(content: Content) -> some View {
+        let value = transform(progress)
+        content
+            .offset(value.offset)
+            .opacity(value.opacity)
     }
 }
 
 private struct HomeExecutionTransitionProgressKey: EnvironmentKey {
     static let defaultValue: CGFloat = 1
+}
+
+private struct HomeExecutionTransitionIsSettledKey: EnvironmentKey {
+    static let defaultValue = true
 }
 
 private struct HomeSurfacePullBlocksInteractionKey: EnvironmentKey {
@@ -494,6 +518,13 @@ extension EnvironmentValues {
     var homeExecutionTransitionProgress: CGFloat {
         get { self[HomeExecutionTransitionProgressKey.self] }
         set { self[HomeExecutionTransitionProgressKey.self] = newValue }
+    }
+
+    /// Changes only when the transition lands, so views that just need to know
+    /// whether it has finished don't depend on the per-frame progress.
+    var homeExecutionTransitionIsSettled: Bool {
+        get { self[HomeExecutionTransitionIsSettledKey.self] }
+        set { self[HomeExecutionTransitionIsSettledKey.self] = newValue }
     }
 
 
@@ -777,7 +808,6 @@ private enum HomeCarouselPosition: Hashable {
 
 private struct HomeScene: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
-    @Environment(\.homeExecutionTransitionProgress) private var executionProgress
     @Environment(\.homeSurfacePullBlocksInteraction) private var surfacePullBlocksInteraction
     @Namespace private var addWorkoutTransition
     @State private var carouselPosition: HomeCarouselPosition?
@@ -794,19 +824,27 @@ private struct HomeScene: View {
 
     private var isExecutionExpanded: Bool { transitioningWorkoutID != nil }
 
-    private var homeChromeOffset: CGFloat {
-        guard !reduceMotion else { return 0 }
-        return -homeChromeFrame.maxY * executionProgress
+    private var homeChromeDistance: CGFloat {
+        reduceMotion ? 0 : -homeChromeFrame.maxY
     }
 
-    private var lowerHomeContentOffset: CGFloat {
-        guard !reduceMotion else { return 0 }
-        return max(homeChromeFrame.height, EQDimension.workoutCardHeight) * executionProgress
+    private var lowerHomeContentDistance: CGFloat {
+        reduceMotion ? 0 : max(homeChromeFrame.height, EQDimension.workoutCardHeight)
     }
 
-    private var departingHomeOpacity: Double {
+    private static func departingHomeOpacity(progress: CGFloat, reduceMotion: Bool) -> Double {
         let destinationOpacity: CGFloat = reduceMotion ? 0 : 0.18
-        return Double(1 - ((1 - destinationOpacity) * executionProgress))
+        return Double(1 - ((1 - destinationOpacity) * progress))
+    }
+
+    private func departingHomeEffect(distance: CGFloat) -> HomeExecutionProgressEffect {
+        let reduceMotion = reduceMotion
+        return HomeExecutionProgressEffect { progress in
+            (
+                CGSize(width: 0, height: distance * progress),
+                Self.departingHomeOpacity(progress: progress, reduceMotion: reduceMotion)
+            )
+        }
     }
 
     var body: some View {
@@ -824,19 +862,16 @@ private struct HomeScene: View {
                         homeChromeFrame = frame
                     }
                 }
-                .offset(y: homeChromeOffset)
-                .opacity(departingHomeOpacity)
+                .modifier(departingHomeEffect(distance: homeChromeDistance))
                 carousel
                     .padding(.top, EQSpacing.lg)
                 addWorkout
-                    .offset(y: lowerHomeContentOffset)
-                    .opacity(departingHomeOpacity)
+                    .modifier(departingHomeEffect(distance: lowerHomeContentDistance))
             }
             .padding(.vertical, EQSpacing.sm)
             Spacer(minLength: 0)
             timerAffordance
-                .offset(y: lowerHomeContentOffset)
-                .opacity(departingHomeOpacity)
+                .modifier(departingHomeEffect(distance: lowerHomeContentDistance))
         }
         .background(EQColor.Home.canvas.ignoresSafeArea())
         .allowsHitTesting(!isExecutionExpanded)
@@ -970,7 +1005,7 @@ private struct HomeScene: View {
                 anchor: phase.value < 0 ? .trailing : phase.value > 0 ? .leading : .center
             )
         }
-        .offset(x: siblingOffset(for: workout, width: dispersalWidth))
+        .modifier(siblingDispersalEffect(for: workout, width: dispersalWidth))
         .zIndex(model.expandedWorkoutID == workout.id ? 1 : 0)
     }
 
@@ -1002,13 +1037,20 @@ private struct HomeScene: View {
         }
     }
 
-    private func siblingOffset(for workout: Workout, width: CGFloat) -> CGFloat {
+    private func siblingDispersalEffect(for workout: Workout, width: CGFloat) -> HomeExecutionProgressEffect {
+        let distance = siblingDispersalDistance(for: workout, width: width)
+        return HomeExecutionProgressEffect { progress in
+            (CGSize(width: distance * progress, height: 0), 1)
+        }
+    }
+
+    private func siblingDispersalDistance(for workout: Workout, width: CGFloat) -> CGFloat {
         guard !reduceMotion,
               let expandedWorkoutID = transitioningWorkoutID,
               let selectedIndex = model.workouts.firstIndex(where: { $0.id == expandedWorkoutID }),
               let index = model.workouts.firstIndex(where: { $0.id == workout.id }),
               index != selectedIndex else { return 0 }
-        return (index < selectedIndex ? -width : width) * executionProgress
+        return index < selectedIndex ? -width : width
     }
 
 
