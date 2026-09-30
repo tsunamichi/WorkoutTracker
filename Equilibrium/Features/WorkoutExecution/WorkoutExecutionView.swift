@@ -2330,7 +2330,6 @@ private struct ExerciseSettingsView: View {
     let exerciseID: WorkoutExerciseID
     let model: WorkoutExecutionModel
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var timeBased: Bool
     @State private var twoSided: Bool
     @State private var editsRestDuration = false
@@ -2340,7 +2339,7 @@ private struct ExerciseSettingsView: View {
     @State private var confirmsSkip = false
     @State private var confirmsRemove = false
     @State private var endedByAction = false
-    @State private var selectedDetent: PresentationDetent = .medium
+    @State private var contentHeight: CGFloat = 420
     private let initialTimeBased: Bool
     private let initialTwoSided: Bool
 
@@ -2366,19 +2365,24 @@ private struct ExerciseSettingsView: View {
                         VStack(alignment: .leading, spacing: EQSpacing.xs) {
                             Toggle("Time-based", isOn: $timeBased)
                                 .toggleStyle(ExerciseSettingsToggleStyle())
-                            Toggle("Two-sides", isOn: $twoSided)
-                                .toggleStyle(ExerciseSettingsToggleStyle())
+                            if timeBased {
+                                Toggle("Two-sides", isOn: $twoSided)
+                                    .toggleStyle(ExerciseSettingsToggleStyle())
+                                    .transition(.opacity)
+                            }
                             progressionRow
                             restDurationRow
                         }
                         .eqTextStyle(.body)
                         .disabled(loadedProfile == nil)
-                        Spacer(minLength: EQSpacing.xxxl)
                         actionButtons(exercise)
+                            .padding(.top, EQSpacing.xxxl)
                     }
                     .padding(.horizontal, EQLayout.WorkoutExecution.walletInset)
                     .padding(.top, EQSpacing.xl)
                     .padding(.bottom, EQSpacing.lg)
+                    .animation(EQMotion.contentTransition, value: timeBased)
+                    .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { contentHeight = $0 }
                 }
                 .scrollBounceBehavior(.basedOnSize)
             } else {
@@ -2387,7 +2391,8 @@ private struct ExerciseSettingsView: View {
         }
         .foregroundStyle(EQColor.Execution.foregroundText)
         .tint(EQColor.Execution.foregroundText)
-        .presentationDetents([.medium, .large], selection: $selectedDetent)
+        // Single fitted detent: the sheet always shows all of its content and cannot expand.
+        .presentationDetents([.height(contentHeight)])
         .presentationDragIndicator(.hidden)
         .presentationBackground(EQColor.Execution.foregroundSurface)
         .presentationCornerRadius(EQRadius.sheet)
@@ -2408,8 +2413,9 @@ private struct ExerciseSettingsView: View {
                 loadedProfile = value
             }
         }
-        .onAppear { expandForVeryLargeTypeIfNeeded() }
-        .onChange(of: dynamicTypeSize) { _, _ in expandForVeryLargeTypeIfNeeded() }
+        .onChange(of: timeBased) { _, isOn in
+            if !isOn { twoSided = false }
+        }
         .onDisappear(perform: saveIfChanged)
         .alert("Skip exercise?", isPresented: $confirmsSkip) {
             Button("Cancel", role: .cancel) {}
@@ -2447,15 +2453,10 @@ private struct ExerciseSettingsView: View {
 
     private func settingsHeader(_ exercise: WorkoutExercise) -> some View {
         HStack(alignment: .top, spacing: EQLayout.controlGap) {
-            VStack(alignment: .leading, spacing: EQSpacing.xxs) {
-                Text(exercise.nameSnapshot)
-                    .eqTextStyle(.body)
-                    .foregroundStyle(EQColor.Execution.foregroundSecondaryText)
-                    .lineLimit(2)
-                Text("Settings")
-                    .eqTextStyle(.screenTitle)
-                    .accessibilityAddTraits(.isHeader)
-            }
+            Text("Settings")
+                .eqTextStyle(.screenTitle)
+                .frame(minHeight: EQLayout.minimumTouch)
+                .accessibilityAddTraits(.isHeader)
             Spacer()
             Button { dismiss() } label: {
                 Image(systemName: "chevron.down")
@@ -2572,14 +2573,7 @@ private struct ExerciseSettingsView: View {
     private static func durationText(_ seconds: TimeInterval) -> String {
         String(format: "%d:%02d", Int(seconds) / 60, Int(seconds) % 60)
     }
-
-    private func expandForVeryLargeTypeIfNeeded() {
-        if dynamicTypeSize == .accessibility3 || dynamicTypeSize == .accessibility4 || dynamicTypeSize == .accessibility5 {
-            selectedDetent = .large
-        }
-    }
 }
-
 
 private struct ExerciseSettingsToggleStyle: ToggleStyle {
     func makeBody(configuration: Configuration) -> some View {
