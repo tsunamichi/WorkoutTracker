@@ -43,6 +43,8 @@ enum EQColor {
         static let warning = EQColor.restActionAccent
         static let primaryAction = EQColor.restActionAccent
         static let metricUnit = EQColor.restActionAccentMuted
+        /// Dims the execution screen behind the exercise settings sheet.
+        static let settingsScrim = Color.black.opacity(0.4)
         static let restAccent = EQColor.restActionAccent
         static let destructive = EQColor.restActionAccent
     }

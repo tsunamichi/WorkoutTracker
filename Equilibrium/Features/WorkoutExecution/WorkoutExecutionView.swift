@@ -766,8 +766,24 @@ struct WorkoutExecutionView: View {
                 }
             }
         }
-        .sheet(item: exerciseSettingsDestination, onDismiss: exerciseSettingsPresentation.dismiss) { exerciseID in
-            ExerciseSettingsView(exerciseID: exerciseID, model: model)
+        // In-app bottom sheet: its surface is exactly as tall as its content, and rows
+        // revealed inside it grow the surface upward in the same transaction.
+        .overlay {
+            ZStack(alignment: .bottom) {
+                if exerciseSettingsPresentation.isPresented {
+                    EQColor.Execution.settingsScrim
+                        .ignoresSafeArea()
+                        .onTapGesture { exerciseSettingsPresentation.dismiss() }
+                        .accessibilityHidden(true)
+                        .transition(.opacity)
+                }
+                if let exerciseID = exerciseSettingsPresentation.exerciseID {
+                    ExerciseSettingsView(exerciseID: exerciseID, model: model, onDismiss: exerciseSettingsPresentation.dismiss)
+                        .id(exerciseID)
+                        .transition(.move(edge: .bottom))
+                }
+            }
+            .animation(reduceMotion ? EQMotion.reducedContentTransition : EQMotion.surfaceReveal, value: exerciseSettingsPresentation.exerciseID)
         }
         .sheet(item: $performancePresentation) { presentation in
             if let historyRepository {
@@ -1183,16 +1199,6 @@ struct WorkoutExecutionView: View {
         }
         if let set { return "\(exercise.nameSnapshot) · Set \(set) of \(exercise.prescriptions.count)" }
         return exercise.nameSnapshot
-    }
-
-    private var exerciseSettingsDestination: Binding<WorkoutExerciseID?> {
-        Binding(
-            get: { exerciseSettingsPresentation.exerciseID },
-            set: { exerciseID in
-                if let exerciseID { exerciseSettingsPresentation.present(exerciseID: exerciseID) }
-                else { exerciseSettingsPresentation.dismiss() }
-            }
-        )
     }
 
     private func presentExerciseSettings(for exercise: WorkoutExercise) {
@@ -2329,7 +2335,8 @@ private struct FocusedSetView: View {
 private struct ExerciseSettingsView: View {
     let exerciseID: WorkoutExerciseID
     let model: WorkoutExecutionModel
-    @Environment(\.dismiss) private var dismiss
+    let onDismiss: () -> Void
+    @State private var dragOffset: CGFloat = 0
     @State private var timeBased: Bool
     @State private var twoSided: Bool
     @State private var editsRestDuration = false
@@ -2339,15 +2346,13 @@ private struct ExerciseSettingsView: View {
     @State private var confirmsSkip = false
     @State private var confirmsRemove = false
     @State private var endedByAction = false
-    @State private var sheetHeight: CGFloat?
-    @State private var twoSidesRowHeight: CGFloat = 0
-    @State private var contentHeight: CGFloat = 0
     private let initialTimeBased: Bool
     private let initialTwoSided: Bool
 
-    init(exerciseID: WorkoutExerciseID, model: WorkoutExecutionModel) {
+    init(exerciseID: WorkoutExerciseID, model: WorkoutExecutionModel, onDismiss: @escaping () -> Void) {
         self.exerciseID = exerciseID
         self.model = model
+        self.onDismiss = onDismiss
         let exercise = model.exercise(id: exerciseID)
         initialTimeBased = exercise?.isTimeBased ?? false
         initialTwoSided = exercise?.isTwoSided ?? false
@@ -2360,14 +2365,7 @@ private struct ExerciseSettingsView: View {
     var body: some View {
         Group {
             if let exercise {
-                ZStack(alignment: .bottom) {
-                    // Transparent space above the drawn surface still dismisses like the sheet's dimmed backdrop.
-                    Color.clear
-                        .contentShape(Rectangle())
-                        .onTapGesture { dismiss() }
-                        .accessibilityHidden(true)
-                    settingsContent(exercise)
-                }
+                settingsContent(exercise)
             } else {
                 ContentUnavailableView("Exercise unavailable", systemImage: "exclamationmark.triangle")
                     .background(EQColor.Execution.foregroundSurface)
@@ -2375,15 +2373,18 @@ private struct ExerciseSettingsView: View {
         }
         .foregroundStyle(EQColor.Execution.foregroundText)
         .tint(EQColor.Execution.foregroundText)
-        // The system sheet stays at a fixed height tall enough for every row and is
-        // transparent. The visible surface is drawn by the content itself, so revealing
-        // Two-sides grows it upward in the same SwiftUI transaction as the row, instead of
-        // racing a separately animated UIKit detent change.
-        .presentationDetents([.height(sheetHeight ?? 420)])
-        .presentationDragIndicator(.hidden)
-        .presentationBackground(.clear)
-        .presentationCompactAdaptation(.sheet)
         .environment(\.colorScheme, .dark)
+        .offset(y: dragOffset)
+        .gesture(
+            DragGesture()
+                .onChanged { dragOffset = max(0, $0.translation.height) }
+                .onEnded { value in
+                    if value.predictedEndTranslation.height > 120 { onDismiss() }
+                    else { withAnimation(EQMotion.responsive) { dragOffset = 0 } }
+                }
+        )
+        .accessibilityAddTraits(.isModal)
+        .accessibilityAction(.escape) { onDismiss() }
         .sheet(isPresented: $editsRestDuration) {
             RestDurationEditor(
                 initialSeconds: model.effectiveRestDuration(for: exerciseID),
@@ -2407,7 +2408,7 @@ private struct ExerciseSettingsView: View {
             Button("Cancel", role: .cancel) {}
             Button("Skip Exercise", role: .destructive) {
                 endedByAction = true
-                Task { if await model.skipExercise(exerciseID) { dismiss() } }
+                Task { if await model.skipExercise(exerciseID) { onDismiss() } }
             }
         } message: {
             Text("This exercise stays in the workout and history as skipped. It will not contribute to progression or personal records.")
@@ -2416,16 +2417,9 @@ private struct ExerciseSettingsView: View {
             Button("Cancel", role: .cancel) {}
             Button("This workout only", role: .destructive) {
                 endedByAction = true
-                Task { if await model.removeExercise(exerciseID) { dismiss() } }
+                Task { if await model.removeExercise(exerciseID) { onDismiss() } }
             }
         } message: { Text("Remove this exercise from the current workout? Completed workout history is never changed.") }
-    }
-
-    /// Records the tallest layout (Two-sides visible) so the fixed sheet never needs to resize.
-    private func updateSheetHeight() {
-        guard contentHeight > 0 else { return }
-        let fullHeight = contentHeight + (timeBased ? 0 : twoSidesRowHeight + EQSpacing.xs)
-        if fullHeight > (sheetHeight ?? 0) { sheetHeight = fullHeight }
     }
 
     private func settingsContent(_ exercise: WorkoutExercise) -> some View {
@@ -2452,15 +2446,6 @@ private struct ExerciseSettingsView: View {
         .padding(.top, EQSpacing.xl)
         .padding(.bottom, EQSpacing.lg)
         .fixedSize(horizontal: false, vertical: true)
-        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { contentHeight = $0; updateSheetHeight() }
-        .background(alignment: .top) {
-            Toggle("Two-sides", isOn: .constant(false))
-                .toggleStyle(ExerciseSettingsToggleStyle())
-                .eqTextStyle(.body)
-                .hidden()
-                .accessibilityHidden(true)
-                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { twoSidesRowHeight = $0; updateSheetHeight() }
-        }
         .background {
             UnevenRoundedRectangle(topLeadingRadius: EQRadius.sheet, topTrailingRadius: EQRadius.sheet)
                 .fill(EQColor.Execution.foregroundSurface)
@@ -2493,7 +2478,7 @@ private struct ExerciseSettingsView: View {
                 .frame(minHeight: EQLayout.minimumTouch)
                 .accessibilityAddTraits(.isHeader)
             Spacer()
-            Button { dismiss() } label: {
+            Button { onDismiss() } label: {
                 Image(systemName: "chevron.down")
                     .eqTextStyle(.icon)
                     .frame(width: EQLayout.iconSize, height: EQLayout.iconSize)
@@ -2562,7 +2547,7 @@ private struct ExerciseSettingsView: View {
                 ForEach(choices.filter { $0.id != exercise.exerciseID }) { definition in
                     Button(definition.name) {
                         endedByAction = true
-                        Task { if await model.swapExercise(occurrenceID: exerciseID, with: definition) { dismiss() } }
+                        Task { if await model.swapExercise(occurrenceID: exerciseID, with: definition) { onDismiss() } }
                     }
                 }
             } label: {
