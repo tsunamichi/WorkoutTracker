@@ -491,6 +491,12 @@ enum ExecutionForegroundEntry {
         let exitArrival = min(max((walletTransitionProgress - 0.78) / 0.18, 0), 1)
         return min(min(max(entryProgress, 0), 1), exitArrival)
     }
+
+    /// Distance that fully clears the card (and its footer) below the wallet's bottom
+    /// edge from wherever it currently sits, so an expanded card leaves as one sheet.
+    static func slideDistance(walletHeight: CGFloat, cardTop: CGFloat, gap: CGFloat) -> CGFloat {
+        max(0, walletHeight - cardTop) + gap
+    }
 }
 
 private enum HomeExecutionReveal {
@@ -1343,7 +1349,11 @@ private struct ExecutionWallet<ListRow: View, ForegroundHeader: View, Foreground
                 walletTransitionProgress: homeTransitionProgress,
                 entryProgress: foregroundEntryProgress
             )
-            let compactEntranceOffset = (1 - compactArrival) * (compactHeight + EQSpacing.md)
+            let compactEntranceOffset = (1 - compactArrival) * ExecutionForegroundEntry.slideDistance(
+                walletHeight: walletHeight,
+                cardTop: foregroundLayout.top,
+                gap: EQSpacing.md
+            )
             let presence = min(max(foregroundPresenceProgress, 0), 1)
             let foregroundDismissalOffset = ExecutionMotionPolicy.offset(
                 distance: compactHeight + EQSpacing.md,
@@ -1374,6 +1384,7 @@ private struct ExecutionWallet<ListRow: View, ForegroundHeader: View, Foreground
                 .frame(width: walletWidth, height: walletHeight)
                 .overlayPreferenceValue(ExecutionPrimaryActionPreferenceKey.self) { primaryAction in
                     unifiedActionControls(primaryAction)
+                        .offset(y: showsForegroundExercise ? compactEntranceOffset : 0)
                 }
                 .modifier(ExecutionWalletShapeModifier())
                 .position(x: currentFrame.midX, y: currentFrame.midY)

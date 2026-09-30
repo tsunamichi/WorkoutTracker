@@ -2122,4 +2122,11 @@ final class ExecutionForegroundEntryTests: XCTestCase {
         XCTAssertLessThan(ExecutionForegroundEntry.arrival(walletTransitionProgress: 0.85, entryProgress: 1), 1)
         XCTAssertEqual(ExecutionForegroundEntry.arrival(walletTransitionProgress: 0.5, entryProgress: 1), 0)
     }
+
+    func testExpandedCardSlidesFullyOutOfWallet() {
+        let expanded = ExecutionForegroundEntry.slideDistance(walletHeight: 700, cardTop: 40, gap: 12)
+        XCTAssertEqual(expanded, 672, "expanded card must clear the wallet bottom, not just the compact height")
+        let compact = ExecutionForegroundEntry.slideDistance(walletHeight: 700, cardTop: 580, gap: 12)
+        XCTAssertEqual(compact, 132)
+    }
 }
