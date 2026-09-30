@@ -41,6 +41,7 @@ enum EQColor {
         static let success = EQColor.deepExecutionSurface
         static let warning = EQColor.restActionAccent
         static let primaryAction = EQColor.restActionAccent
+        static let metricUnit = EQColor.restActionAccent.opacity(0.24)
         static let restAccent = EQColor.restActionAccent
         static let destructive = EQColor.restActionAccent
     }

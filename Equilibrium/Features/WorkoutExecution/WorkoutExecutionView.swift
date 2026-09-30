@@ -2123,8 +2123,8 @@ private struct FirstSetView: View {
         VStack(alignment: .leading, spacing: EQLayout.sectionGap) {
             Text("No previous working sets").eqTextStyle(.caption).foregroundStyle(EQColor.Execution.foregroundSecondaryText)
             VStack(alignment: .leading, spacing: EQSpacing.md) {
-                EQMetricInput(value: $weight, label: (weightUnit == .pounds ? "lb" : "kg") + (progression?.rationale == .increaseWeight ? " ↑" : ""), accessibilityLabel: "Weight", keyboard: .decimalPad, valueColor: EQColor.Execution.primaryAction, unitColor: EQColor.Execution.foregroundSecondaryText).focused($fieldFocused)
-                EQMetricInput(value: $repetitions, label: exercise.isTimeBased ? "secs" : "reps" + (progression?.rationale == .addRepetitions ? " ↑" : ""), accessibilityLabel: exercise.isTimeBased ? "Seconds" : "Repetitions", keyboard: .numberPad, valueColor: EQColor.Execution.primaryAction, unitColor: EQColor.Execution.foregroundSecondaryText).focused($fieldFocused)
+                EQMetricInput(value: $weight, label: (weightUnit == .pounds ? "lb" : "kg") + (progression?.rationale == .increaseWeight ? " ↑" : ""), accessibilityLabel: "Weight", keyboard: .decimalPad, valueColor: EQColor.Execution.primaryAction, unitColor: EQColor.Execution.metricUnit).focused($fieldFocused)
+                EQMetricInput(value: $repetitions, label: exercise.isTimeBased ? "secs" : "reps" + (progression?.rationale == .addRepetitions ? " ↑" : ""), accessibilityLabel: exercise.isTimeBased ? "Seconds" : "Repetitions", keyboard: .numberPad, valueColor: EQColor.Execution.primaryAction, unitColor: EQColor.Execution.metricUnit).focused($fieldFocused)
             }
         }
         .preference(
@@ -2255,9 +2255,9 @@ private struct FocusedSetView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: EQLayout.sectionGap) {
             VStack(alignment: .leading, spacing: EQSpacing.md) {
-                EQMetricInput(value: $weightText, label: weightLabel, accessibilityLabel: "\(exercise.nameSnapshot), set \(selectedIndex + 1), weight", keyboard: .decimalPad, valueColor: EQColor.Execution.primaryAction, unitColor: EQColor.Execution.foregroundSecondaryText)
+                EQMetricInput(value: $weightText, label: weightLabel, accessibilityLabel: "\(exercise.nameSnapshot), set \(selectedIndex + 1), weight", keyboard: .decimalPad, valueColor: EQColor.Execution.primaryAction, unitColor: EQColor.Execution.metricUnit)
                     .focused($focusedField, equals: .weight)
-                EQMetricInput(value: $valueText, label: progressedValueLabel, accessibilityLabel: "\(exercise.nameSnapshot), set \(selectedIndex + 1), \(valueAccessibilityLabel)", keyboard: .numberPad, valueColor: EQColor.Execution.primaryAction, unitColor: EQColor.Execution.foregroundSecondaryText)
+                EQMetricInput(value: $valueText, label: progressedValueLabel, accessibilityLabel: "\(exercise.nameSnapshot), set \(selectedIndex + 1), \(valueAccessibilityLabel)", keyboard: .numberPad, valueColor: EQColor.Execution.primaryAction, unitColor: EQColor.Execution.metricUnit)
                     .focused($focusedField, equals: .value)
             }
         }
