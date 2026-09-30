@@ -178,6 +178,9 @@ enum EQLayout {
     enum WorkoutExecution {
         static let walletInset = EQSpacing.lg
         static let walletEdgeInset = EQSpacing.xs
+        /// Shifts trailing icons inside the wallet so they share the header settings
+        /// icon's column (screen gutter), ignoring their larger tap targets.
+        static let trailingIconOutset = walletEdgeInset + walletInset - EQLayout.screenGutter
         static let walletBorderWidth: CGFloat = 2
         static let headerWalletSpacing: CGFloat = 40
         static let overviewHeaderBottomInset = EQSpacing.xs
@@ -288,6 +291,7 @@ struct EQDisclosureRow: View {
     let isExpanded: Bool
     var color = EQColor.secondaryText
     var animation: Animation?
+    var iconTrailingOffset: CGFloat = 0
 
     var body: some View {
         HStack(spacing: EQLayout.controlGap) {
@@ -300,6 +304,8 @@ struct EQDisclosureRow: View {
                 .foregroundStyle(color)
                 .rotationEffect(.degrees(isExpanded ? 180 : 0))
                 .animation(animation, value: isExpanded)
+                .frame(width: EQLayout.iconSize)
+                .offset(x: iconTrailingOffset)
                 .accessibilityHidden(true)
         }
         .frame(maxWidth: .infinity, alignment: .leading)

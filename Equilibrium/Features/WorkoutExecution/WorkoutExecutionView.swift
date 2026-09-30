@@ -1004,7 +1004,7 @@ struct WorkoutExecutionView: View {
         }
 
         if model.workTimerState == nil && model.restState == nil {
-            EQIconButton(systemImage: "pencil") {
+            EQIconButton(systemImage: "pencil", alignment: .trailing) {
                 setCountEditorExerciseID = exercise.id
             }
             .accessibilityLabel("Edit number of sets")
@@ -1040,6 +1040,7 @@ struct WorkoutExecutionView: View {
                 ZStack(alignment: .trailing) {
                     Image(systemName: "chevron.up")
                         .foregroundStyle(EQColor.Execution.foregroundText)
+                        .frame(width: EQLayout.iconSize)
                         .accessibilityHidden(true)
                         .opacity(isTiming ? 0 : 1 - secondaryProgress)
                     HStack(spacing: 0) {
@@ -1066,6 +1067,7 @@ struct WorkoutExecutionView: View {
                     .allowsHitTesting(!isTiming && secondaryProgress > 0.99)
                     .accessibilityHidden(isTiming || secondaryProgress < 0.99)
                 }
+                .offset(x: EQLayout.WorkoutExecution.trailingIconOutset)
             }
     }
 
@@ -1573,6 +1575,8 @@ private struct ExecutionWallet<ListRow: View, ForegroundHeader: View, Foreground
                     .monospacedDigit()
             }
             exerciseProgressCircle
+                .frame(width: EQLayout.iconSize)
+                .offset(x: EQLayout.WorkoutExecution.trailingIconOutset)
         }
         .contentShape(Rectangle())
         .accessibilityElement(children: .ignore)
@@ -1594,7 +1598,8 @@ private struct ExecutionWallet<ListRow: View, ForegroundHeader: View, Foreground
                     ? nil
                     : ExecutionCompletedSectionMotion.animation(
                         expanding: completedSectionPresentation.isExpanded
-                    )
+                    ),
+                iconTrailingOffset: EQLayout.WorkoutExecution.trailingIconOutset
             )
         }
         .buttonStyle(.plain)
@@ -1916,6 +1921,7 @@ private struct ExecutionWallet<ListRow: View, ForegroundHeader: View, Foreground
             if phase == .exercise, hasExerciseAction, let exercise = model.currentExercise {
                 Spacer(minLength: EQSpacing.xs)
                 footerControls(exercise)
+                    .offset(x: EQLayout.WorkoutExecution.trailingIconOutset)
             }
         }
         .animation(phaseAnimation, value: phase)
