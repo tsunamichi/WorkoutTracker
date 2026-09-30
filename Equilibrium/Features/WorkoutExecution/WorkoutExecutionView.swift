@@ -1331,9 +1331,7 @@ private struct ExecutionWallet<ListRow: View, ForegroundHeader: View, Foreground
                 walletTransitionProgress: homeTransitionProgress,
                 entryProgress: foregroundEntryProgress
             )
-            let compactEntranceOffset = reduceMotion
-                ? 0
-                : (1 - compactArrival) * (compactHeight + EQSpacing.md)
+            let compactEntranceOffset = (1 - compactArrival) * (compactHeight + EQSpacing.md)
             let presence = min(max(foregroundPresenceProgress, 0), 1)
             let foregroundDismissalOffset = ExecutionMotionPolicy.offset(
                 distance: compactHeight + EQSpacing.md,
@@ -1356,7 +1354,6 @@ private struct ExecutionWallet<ListRow: View, ForegroundHeader: View, Foreground
                             .modifier(ExecutionWalletShapeModifier(drawsBorder: true))
                             .contentShape(RoundedRectangle(cornerRadius: EQRadius.walletSurface, style: .continuous))
                             .offset(y: foregroundLayout.top + compactEntranceOffset + foregroundDismissalOffset)
-                            .opacity(Double(compactArrival))
                             .accessibilityHidden(compactArrival < 0.99)
                             .zIndex(1)
                             .accessibilityIdentifier("execution-current-exercise-card-\(workout.id.rawValue)")
@@ -1746,8 +1743,6 @@ private struct ExecutionWallet<ListRow: View, ForegroundHeader: View, Foreground
                         .padding(.horizontal, EQLayout.WorkoutExecution.walletInset)
                         .padding(.top, EQSpacing.xxs)
                         .frame(maxWidth: .infinity, alignment: .topLeading)
-                        .opacity(compactContentRevealOpacity)
-                        .offset(y: revealOffset(for: compactContentRevealProgress))
                 }
                 .frame(height: contentViewportHeight, alignment: .top)
                 .scrollDisabled(!isFocused)
@@ -1910,11 +1905,6 @@ private struct ExecutionWallet<ListRow: View, ForegroundHeader: View, Foreground
         EQSurface(color: EQColor.Execution.foregroundSurface, radius: EQRadius.walletSurface)
     }
 
-    private var compactContentRevealProgress: CGFloat {
-        HomeExecutionReveal.progress(homeTransitionProgress, from: 0.88, through: 1)
-    }
-
-    private var compactContentRevealOpacity: Double { Double(compactContentRevealProgress) }
 }
 
 private struct ExecutionWalletShapeModifier: ViewModifier {
