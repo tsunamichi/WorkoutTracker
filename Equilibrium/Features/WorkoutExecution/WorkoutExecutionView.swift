@@ -1373,7 +1373,12 @@ private struct ExecutionWallet<ListRow: View, ForegroundHeader: View, Foreground
                         foregroundCard(progress: progress)
                             .frame(width: walletWidth, height: foregroundLayout.height, alignment: .top)
                             .background(foregroundBackground)
-                            .modifier(ExecutionWalletShapeModifier(drawsBorder: true))
+                            .modifier(ExecutionWalletShapeModifier(
+                                drawsBorder: true,
+                                borderColor: model.restState == nil
+                                    ? EQColor.Execution.walletBorder
+                                    : EQColor.Execution.restCanvas
+                            ))
                             .contentShape(RoundedRectangle(cornerRadius: EQRadius.walletSurface, style: .continuous))
                             .offset(y: foregroundLayout.top + compactEntranceOffset + foregroundDismissalOffset)
                             .accessibilityHidden(compactArrival < 0.99)
@@ -1932,6 +1937,7 @@ private struct ExecutionWallet<ListRow: View, ForegroundHeader: View, Foreground
 
 private struct ExecutionWalletShapeModifier: ViewModifier {
     var drawsBorder = false
+    var borderColor: Color = EQColor.Execution.walletBorder
 
     @ViewBuilder func body(content: Content) -> some View {
         if #available(iOS 26.0, *) {
@@ -1944,7 +1950,7 @@ private struct ExecutionWalletShapeModifier: ViewModifier {
                 .overlay {
                     if drawsBorder {
                         shape.stroke(
-                            EQColor.Execution.walletBorder,
+                            borderColor,
                             lineWidth: EQLayout.WorkoutExecution.walletBorderWidth
                         )
                     }
@@ -1956,7 +1962,7 @@ private struct ExecutionWalletShapeModifier: ViewModifier {
                 .overlay {
                     if drawsBorder {
                         shape.stroke(
-                            EQColor.Execution.walletBorder,
+                            borderColor,
                             lineWidth: EQLayout.WorkoutExecution.walletBorderWidth
                         )
                     }

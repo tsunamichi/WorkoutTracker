@@ -101,7 +101,8 @@ struct HomeView: View {
                     ))
                     .clipShape(HomeOverlayBackgroundClipShape(
                         cornerRadius: homeOverlayIsPresented ? EQRadius.largeSurface : 0,
-                        bottomExtension: proxy.safeAreaInsets.bottom
+                        bottomExtension: proxy.safeAreaInsets.bottom,
+                        topExtension: model.expandedWorkoutID == nil ? 0 : proxy.safeAreaInsets.top
                     ))
                     .overlay {
                         Color.black
@@ -716,6 +717,8 @@ enum HomeTimerSurfacePull {
 struct HomeOverlayBackgroundClipShape: Shape {
     var cornerRadius: CGFloat
     var bottomExtension: CGFloat
+    /// Lets the open workout paint its canvas (e.g. the rest colour) behind the status bar.
+    var topExtension: CGFloat = 0
 
     var animatableData: CGFloat {
         get { cornerRadius }
@@ -724,7 +727,8 @@ struct HomeOverlayBackgroundClipShape: Shape {
 
     func path(in rect: CGRect) -> Path {
         var extended = rect
-        extended.size.height += max(0, bottomExtension)
+        extended.origin.y -= max(0, topExtension)
+        extended.size.height += max(0, bottomExtension) + max(0, topExtension)
         return RoundedRectangle(cornerRadius: cornerRadius, style: .continuous).path(in: extended)
     }
 }
