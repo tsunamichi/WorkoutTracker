@@ -2093,3 +2093,33 @@ final class ExecutionPrimaryActionRegressionTests: XCTestCase {
         XCTAssertEqual(alpha, 1, accuracy: 0.001, file: file, line: line)
     }
 }
+
+final class ExecutionForegroundEntryTests: XCTestCase {
+    func testMinimizedCardStaysHiddenUntilWalletIsFullSize() {
+        for progress: CGFloat in [0, 0.5, 0.9, 0.96, 0.998] {
+            XCTAssertFalse(ExecutionForegroundEntry.walletIsFullSize(progress))
+            XCTAssertEqual(
+                ExecutionForegroundEntry.arrival(walletTransitionProgress: progress, entryProgress: 0),
+                0,
+                "card must not arrive while the wallet is still expanding (progress \(progress))"
+            )
+        }
+        XCTAssertTrue(ExecutionForegroundEntry.walletIsFullSize(1))
+    }
+
+    func testCardArrivalFollowsItsOwnEntryAnimationOnceWalletIsFullSize() {
+        XCTAssertEqual(ExecutionForegroundEntry.arrival(walletTransitionProgress: 1, entryProgress: 0), 0)
+        XCTAssertEqual(ExecutionForegroundEntry.arrival(walletTransitionProgress: 1, entryProgress: 0.5), 0.5)
+        XCTAssertEqual(ExecutionForegroundEntry.arrival(walletTransitionProgress: 1, entryProgress: 1), 1)
+    }
+
+    func testEntryWaitsOneHundredMilliseconds() {
+        XCTAssertEqual(ExecutionForegroundEntry.delay, 0.1, accuracy: 0.0001)
+    }
+
+    func testCardRidesWalletOutOnExit() {
+        XCTAssertEqual(ExecutionForegroundEntry.arrival(walletTransitionProgress: 1, entryProgress: 1), 1)
+        XCTAssertLessThan(ExecutionForegroundEntry.arrival(walletTransitionProgress: 0.85, entryProgress: 1), 1)
+        XCTAssertEqual(ExecutionForegroundEntry.arrival(walletTransitionProgress: 0.5, entryProgress: 1), 0)
+    }
+}

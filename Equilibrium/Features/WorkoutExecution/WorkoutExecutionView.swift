@@ -473,6 +473,26 @@ private struct ExecutionPerformancePresentation: Identifiable {
     let exerciseName: String
 }
 
+/// Sequences the minimized foreground card after the Home → wallet transition:
+/// the wallet reaches full size, holds briefly, then the card slides in.
+/// On exit the card rides the wallet transition back out.
+enum ExecutionForegroundEntry {
+    static let delay: TimeInterval = 0.1
+
+    static func walletIsFullSize(_ walletTransitionProgress: CGFloat) -> Bool {
+        walletTransitionProgress >= 0.999
+    }
+
+    static func animation(reduceMotion: Bool) -> Animation {
+        (reduceMotion ? EQMotion.reducedContentTransition : EQMotion.objectTransformation).delay(delay)
+    }
+
+    static func arrival(walletTransitionProgress: CGFloat, entryProgress: CGFloat) -> CGFloat {
+        let exitArrival = min(max((walletTransitionProgress - 0.78) / 0.18, 0), 1)
+        return min(min(max(entryProgress, 0), 1), exitArrival)
+    }
+}
+
 private enum HomeExecutionReveal {
     static func progress(
         _ masterProgress: CGFloat,
@@ -1236,6 +1256,7 @@ private struct ExecutionWallet<ListRow: View, ForegroundHeader: View, Foreground
     @State private var completedSectionPresentation = ExecutionCompletedSectionPresentation()
     @State private var revealedCompletedExerciseIDs: Set<WorkoutExerciseID> = []
     @State private var completedSectionAnimationTask: Task<Void, Never>?
+    @State private var foregroundEntryProgress: CGFloat = 0
     let workout: Workout
     let model: WorkoutExecutionModel
     let presentation: ExecutionWalletPresentation
@@ -1306,8 +1327,13 @@ private struct ExecutionWallet<ListRow: View, ForegroundHeader: View, Foreground
                 compactHeight: compactHeight,
                 focusProgress: progress
             )
-            let compactArrival = HomeExecutionReveal.progress(homeTransitionProgress, from: 0.78, through: 0.96)
-            let compactEntranceOffset = (1 - compactArrival) * (compactHeight + EQSpacing.md)
+            let compactArrival = ExecutionForegroundEntry.arrival(
+                walletTransitionProgress: homeTransitionProgress,
+                entryProgress: foregroundEntryProgress
+            )
+            let compactEntranceOffset = reduceMotion
+                ? 0
+                : (1 - compactArrival) * (compactHeight + EQSpacing.md)
             let presence = min(max(foregroundPresenceProgress, 0), 1)
             let foregroundDismissalOffset = ExecutionMotionPolicy.offset(
                 distance: compactHeight + EQSpacing.md,
@@ -1357,6 +1383,20 @@ private struct ExecutionWallet<ListRow: View, ForegroundHeader: View, Foreground
             reportFrame?(frame)
         }
         .id("execution-wallet-\(workout.id.rawValue)")
+        .onAppear {
+            if ExecutionForegroundEntry.walletIsFullSize(homeTransitionProgress) {
+                foregroundEntryProgress = 1
+            }
+        }
+        .onChange(of: ExecutionForegroundEntry.walletIsFullSize(homeTransitionProgress)) { _, isFullSize in
+            if isFullSize {
+                withAnimation(ExecutionForegroundEntry.animation(reduceMotion: reduceMotion)) {
+                    foregroundEntryProgress = 1
+                }
+            } else if homeTransitionProgress <= 0.001 {
+                foregroundEntryProgress = 0
+            }
+        }
         .allowsHitTesting(homeTransitionProgress > 0.99)
     }
 
