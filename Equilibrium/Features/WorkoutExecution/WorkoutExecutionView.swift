@@ -209,6 +209,21 @@ struct ExecutionForegroundCardAnchors: Equatable {
 enum ExecutionTimerWalletLayout {
     static let maximumExpandedTimerFraction: CGFloat = 0.25
 
+    /// Smallest foreground card that shows the IN PROGRESS header, the full exercise
+    /// title and the timer action footer without clipping the title.
+    static func minimumTimingCardHeight(titleHeight: CGFloat) -> CGFloat {
+        let header = EQLayout.minimumTouch + EQSpacing.xxs
+        let titleLine = UIFont.systemFont(ofSize: EQTextStyle.screenTitle.size).lineHeight.rounded(.up)
+        let footer = ExecutionPrimaryActionLayout.footerHeight(
+            isVisible: true,
+            controlHeight: EQLayout.WorkoutExecution.primaryActionHeight,
+            topInset: EQLayout.WorkoutExecution.primaryActionTopInset,
+            bottomInset: EQLayout.WorkoutExecution.primaryActionBottomInset,
+            trailingControlHeight: EQLayout.minimumTouch
+        )
+        return header + EQSpacing.xxs + max(titleHeight, titleLine) + footer
+    }
+
     static func walletHeight(
         containerHeight: CGFloat,
         compactWalletHeight: CGFloat,
@@ -639,6 +654,7 @@ struct WorkoutExecutionView: View {
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.homeExecutionTransitionIsSettled) private var homeTransitionIsSettled
     @State private var dismissRequest = 0
+    @State private var timingTitleHeight: CGFloat = 0
     @State private var confirmsReset = false
     @State private var confirmsDelete = false
     @State private var editsRestDuration = false
@@ -925,6 +941,9 @@ struct WorkoutExecutionView: View {
                     )
                     .frame(height: walletHeight)
                     .offset(y: ExecutionKeyboardLayout.walletOffset(overlap: keyboardOverlap))
+                    .onPreferenceChange(ExecutionForegroundTitleHeightPreferenceKey.self) {
+                        timingTitleHeight = $0
+                    }
                     .modifier(ForegroundFocusTransitionModifier(progress: foregroundFocusProgress))
                 }
             }
@@ -944,7 +963,11 @@ struct WorkoutExecutionView: View {
     }
 
     private var timerWalletHeight: CGFloat {
-        EQLayout.WorkoutExecution.restCardHeight + EQLayout.minimumTouch + EQSpacing.md
+        max(
+            EQLayout.WorkoutExecution.restCardHeight + EQLayout.minimumTouch + EQSpacing.md,
+            EQLayout.minimumTouch + EQSpacing.md
+                + ExecutionTimerWalletLayout.minimumTimingCardHeight(titleHeight: timingTitleHeight)
+        )
     }
 
     private var keyboardOverlap: CGFloat {
@@ -1337,7 +1360,8 @@ private struct ExecutionWallet<ListRow: View, ForegroundHeader: View, Foreground
                     EQLayout.WorkoutExecution.restCardHeight
                         + EQLayout.minimumTouch
                         + EQSpacing.md
-                        - focusedTop
+                        - focusedTop,
+                    ExecutionTimerWalletLayout.minimumTimingCardHeight(titleHeight: foregroundTitleHeight)
                 )
                 : defaultCompactHeight
             let progress = showsForegroundExercise ? min(max(focusProgress, 0), 1) : 0

@@ -2130,3 +2130,19 @@ final class ExecutionForegroundEntryTests: XCTestCase {
         XCTAssertEqual(compact, 132)
     }
 }
+
+final class ExecutionTimingCardHeightTests: XCTestCase {
+    func testTimingCardFitsHeaderTitleAndFooter() {
+        let footer = EQLayout.WorkoutExecution.primaryActionTopInset
+            + EQLayout.WorkoutExecution.primaryActionHeight
+            + EQLayout.WorkoutExecution.primaryActionBottomInset
+        let header = EQLayout.minimumTouch + EQSpacing.xxs
+        let oneLine = ExecutionTimerWalletLayout.minimumTimingCardHeight(titleHeight: 0)
+        XCTAssertGreaterThanOrEqual(oneLine, header + EQSpacing.xxs + 28 + footer)
+        XCTAssertEqual(
+            ExecutionTimerWalletLayout.minimumTimingCardHeight(titleHeight: 60),
+            header + EQSpacing.xxs + 60 + footer,
+            "two-line titles must grow the card"
+        )
+    }
+}
