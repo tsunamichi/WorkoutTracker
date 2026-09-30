@@ -477,7 +477,7 @@ private struct ExecutionPerformancePresentation: Identifiable {
 /// the wallet reaches full size, holds briefly, then the card slides in.
 /// On exit the card rides the wallet transition back out.
 enum ExecutionForegroundEntry {
-    static let delay: TimeInterval = 0.1
+    static let delay: TimeInterval = 0.03
 
     static func walletIsFullSize(_ walletTransitionProgress: CGFloat) -> Bool {
         walletTransitionProgress >= 0.999

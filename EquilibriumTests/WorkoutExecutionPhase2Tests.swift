@@ -2113,8 +2113,8 @@ final class ExecutionForegroundEntryTests: XCTestCase {
         XCTAssertEqual(ExecutionForegroundEntry.arrival(walletTransitionProgress: 1, entryProgress: 1), 1)
     }
 
-    func testEntryWaitsOneHundredMilliseconds() {
-        XCTAssertEqual(ExecutionForegroundEntry.delay, 0.1, accuracy: 0.0001)
+    func testEntryWaitsThirtyMilliseconds() {
+        XCTAssertEqual(ExecutionForegroundEntry.delay, 0.03, accuracy: 0.0001)
     }
 
     func testCardRidesWalletOutOnExit() {
