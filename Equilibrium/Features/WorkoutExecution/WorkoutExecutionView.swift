@@ -658,7 +658,7 @@ struct WorkoutExecutionView: View {
     @State private var confirmsReset = false
     @State private var confirmsDelete = false
     @State private var editsRestDuration = false
-    @State private var setCountEditorExerciseID: WorkoutExerciseID?
+    @State private var setSwipeEdge: Edge = .trailing
     @State private var restoresExercise: WorkoutExercise?
     @State private var exerciseSettingsPresentation = ExerciseSettingsPresentation()
     @State private var performancePresentation: ExecutionPerformancePresentation?
@@ -754,17 +754,6 @@ struct WorkoutExecutionView: View {
                 initialSeconds: model.globalRestDuration,
                 guidance: "This is the app default for exercises without a custom rest duration. An active countdown is unchanged."
             ) { seconds in await model.setGlobalRestDuration(seconds) }
-        }
-        .sheet(item: $setCountEditorExerciseID) { exerciseID in
-            if let exercise = model.exercise(id: exerciseID) {
-                SetCountEditor(
-                    exerciseName: exercise.nameSnapshot,
-                    initialCount: exercise.prescriptions.count,
-                    minimumCount: max(1, Set(exercise.loggedSets.filter { $0.completedAt != nil }.compactMap(\.prescriptionID)).count)
-                ) { count in
-                    await model.updateSetCount(exerciseID: exerciseID, count: count)
-                }
-            }
         }
         // In-app bottom sheet: its surface is exactly as tall as its content, and rows
         // revealed inside it grow the surface upward in the same transaction.
@@ -1014,41 +1003,70 @@ struct WorkoutExecutionView: View {
         model.restState == nil ? EQColor.Execution.canvas : EQColor.Execution.restCanvas
     }
 
-    @ViewBuilder
+    /// Single entry point for choosing a set and changing how many sets the exercise has.
     private func footerSetCountControls(for exercise: WorkoutExercise) -> some View {
-        if model.currentPrescription != nil {
-            Menu {
-                ForEach(exercise.prescriptions.indices, id: \.self) { index in
-                    let done = exercise.loggedSets.contains {
-                        $0.prescriptionID == exercise.prescriptions[index].id && $0.completedAt != nil
-                    }
-                    Button { model.selectSet(at: index) } label: {
-                        Text("Set \(index + 1)\(done ? " · Completed" : "")")
+        let count = exercise.prescriptions.count
+        let hasSelection = model.currentPrescription != nil
+        let editsCount = model.workTimerState == nil && model.restState == nil && !model.isReadOnly
+        let completedCount = Set(exercise.loggedSets.filter { $0.completedAt != nil }.compactMap(\.prescriptionID)).count
+        return Menu {
+            if hasSelection {
+                Section {
+                    ForEach(exercise.prescriptions.indices, id: \.self) { index in
+                        let done = exercise.loggedSets.contains {
+                            $0.prescriptionID == exercise.prescriptions[index].id && $0.completedAt != nil
+                        }
+                        Button { selectSet(at: index) } label: {
+                            Text("Set \(index + 1)\(done ? " · Completed" : "")")
+                        }
                     }
                 }
-            } label: {
-                Text("\(model.selectedSetIndex + 1)/\(exercise.prescriptions.count)")
-                    .eqTextStyle(.sectionLabel)
-                    .monospacedDigit()
-                    .frame(minWidth: EQLayout.minimumTouch, minHeight: EQLayout.minimumTouch, alignment: .trailing)
-                    .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Set \(model.selectedSetIndex + 1) of \(exercise.prescriptions.count)")
-            .accessibilityHint("Choose a set")
-        } else {
-            Text("\(exercise.loggedSets.count) sets")
-                .eqTextStyle(.caption)
+            if editsCount {
+                Section {
+                    Button { Task { await model.updateSetCount(exerciseID: exercise.id, count: count + 1) } } label: {
+                        Label("Add set", systemImage: "plus")
+                    }
+                    .disabled(count >= 20)
+                    Button(role: .destructive) { Task { await model.updateSetCount(exerciseID: exercise.id, count: count - 1) } } label: {
+                        Label("Remove last set", systemImage: "minus")
+                    }
+                    .disabled(count <= max(1, completedCount))
+                }
+            }
+        } label: {
+            Text(hasSelection ? "\(model.selectedSetIndex + 1)/\(count)" : "\(exercise.loggedSets.count) sets")
+                .eqTextStyle(.sectionLabel)
+                .monospacedDigit()
                 .frame(minWidth: EQLayout.minimumTouch, minHeight: EQLayout.minimumTouch, alignment: .trailing)
+                .contentShape(Rectangle())
         }
+        .buttonStyle(.plain)
+        .disabled(!hasSelection && !editsCount)
+        .accessibilityLabel(hasSelection ? "Set \(model.selectedSetIndex + 1) of \(count)" : "\(exercise.loggedSets.count) sets")
+        .accessibilityHint(editsCount ? "Choose a set, or add or remove sets" : "Choose a set")
+    }
 
-        if model.workTimerState == nil && model.restState == nil {
-            EQIconButton(systemImage: "pencil", alignment: .trailing) {
-                setCountEditorExerciseID = exercise.id
-            }
-            .accessibilityLabel("Edit number of sets")
-            .accessibilityHint("Adjusts the number of working sets for \(exercise.nameSnapshot)")
+    /// Selects a set, sliding the values in from the side of travel.
+    private func selectSet(at index: Int) {
+        guard index != model.selectedSetIndex else { return }
+        setSwipeEdge = index > model.selectedSetIndex ? .trailing : .leading
+        withAnimation(reduceMotion ? EQMotion.reducedContentTransition : EQMotion.contentTransition) {
+            model.selectSet(at: index)
         }
+    }
+
+    private var setSwipeGesture: some Gesture {
+        DragGesture(minimumDistance: 24)
+            .onEnded { value in
+                let dx = value.translation.width, dy = value.translation.height
+                guard abs(dx) > abs(dy) * 1.5, abs(value.predictedEndTranslation.width) > 60,
+                      model.workTimerState == nil,
+                      let count = model.currentExercise?.prescriptions.count else { return }
+                let target = model.selectedSetIndex + (dx < 0 ? 1 : -1)
+                guard (0..<count).contains(target) else { return }
+                selectSet(at: target)
+            }
     }
 
     private var executionChromeRevealEffect: HomeExecutionProgressEffect {
@@ -1162,7 +1180,8 @@ struct WorkoutExecutionView: View {
     }
 
     @ViewBuilder private var expandedExerciseControls: some View {
-        VStack(alignment: .leading, spacing: EQSpacing.md) {
+        // ZStack so the outgoing and incoming sets overlap while sliding.
+        ZStack(alignment: .bottomLeading) {
             if let exercise = model.currentExercise, let prescription = model.currentPrescription {
                 FocusedSetView(
                     exercise: exercise,
@@ -1175,6 +1194,10 @@ struct WorkoutExecutionView: View {
                     startTimed: { input in model.startWorkTimer(exerciseID: exercise.id, prescriptionID: prescription.id, input: input) }
                 )
                 .id("\(exercise.id.rawValue)-\(prescription.id.rawValue)-\(model.progressionIdentity(for: exercise))")
+                .transition(reduceMotion ? .opacity : .asymmetric(
+                    insertion: .move(edge: setSwipeEdge).combined(with: .opacity),
+                    removal: .move(edge: setSwipeEdge == .trailing ? .leading : .trailing).combined(with: .opacity)
+                ))
             } else if let exercise = model.currentExercise, !model.isReadOnly {
                 FirstSetView(
                     exercise: exercise,
@@ -1189,6 +1212,9 @@ struct WorkoutExecutionView: View {
                 Text("Every required set is logged.").eqTextStyle(.sectionTitle)
             }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .contentShape(Rectangle())
+        .simultaneousGesture(setSwipeGesture)
     }
 
     private var restNextAction: String? {
@@ -2072,73 +2098,6 @@ private struct RestDurationEditor: View {
         .environment(\.colorScheme, .dark)
     }
     private var durationText: String { String(format: "%d:%02d", Int(seconds) / 60, Int(seconds) % 60) }
-}
-
-private struct SetCountEditor: View {
-    @Environment(\.dismiss) private var dismiss
-    @State private var count: Int
-    @State private var isSaving = false
-    let exerciseName: String
-    let minimumCount: Int
-    let save: (Int) async -> Bool
-
-    init(exerciseName: String, initialCount: Int, minimumCount: Int, save: @escaping (Int) async -> Bool) {
-        self.exerciseName = exerciseName
-        self.minimumCount = minimumCount
-        self.save = save
-        _count = State(initialValue: min(20, max(minimumCount, initialCount)))
-    }
-
-    var body: some View {
-        NavigationStack {
-            VStack(alignment: .leading, spacing: EQLayout.sectionGap) {
-                Text(exerciseName)
-                    .eqTextStyle(.sectionTitle)
-                    .lineLimit(2)
-                Text("\(count)")
-                    .eqTextStyle(.largeMetric)
-                    .monospacedDigit()
-                    .contentTransition(.numericText())
-                    .accessibilityHidden(true)
-                Stepper(value: $count, in: minimumCount...20) {
-                    Text(count == 1 ? "1 set" : "\(count) sets")
-                        .eqTextStyle(.body)
-                }
-                if minimumCount > 1 {
-                    Text("\(minimumCount) completed sets will be kept.")
-                        .eqTextStyle(.caption)
-                        .foregroundStyle(EQColor.Execution.foregroundSecondaryText)
-                }
-                Spacer(minLength: 0)
-            }
-            .padding(EQLayout.screenGutter)
-            .foregroundStyle(EQColor.Execution.foregroundText)
-            .background(EQColor.Execution.foregroundSurface)
-            .navigationTitle("Number of sets")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
-                        .disabled(isSaving)
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") {
-                        isSaving = true
-                        Task {
-                            if await save(count) { dismiss() }
-                            else { isSaving = false }
-                        }
-                    }
-                    .disabled(isSaving)
-                }
-            }
-        }
-        .presentationDetents([.height(320)])
-        .presentationBackground(EQColor.Execution.foregroundSurface)
-        .presentationCornerRadius(EQRadius.sheet)
-        .environment(\.colorScheme, .dark)
-        .interactiveDismissDisabled(isSaving)
-    }
 }
 
 private struct FirstSetView: View {
