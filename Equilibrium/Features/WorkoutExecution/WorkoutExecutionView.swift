@@ -2339,7 +2339,9 @@ private struct ExerciseSettingsView: View {
     @State private var confirmsSkip = false
     @State private var confirmsRemove = false
     @State private var endedByAction = false
-    @State private var contentHeight: CGFloat = 420
+    @State private var sheetHeight: CGFloat?
+    @State private var twoSidesRowHeight: CGFloat = 0
+    @State private var contentHeight: CGFloat = 0
     private let initialTimeBased: Bool
     private let initialTwoSided: Bool
 
@@ -2358,45 +2360,28 @@ private struct ExerciseSettingsView: View {
     var body: some View {
         Group {
             if let exercise {
-                VStack(alignment: .leading, spacing: 0) {
-                    settingsHeader(exercise)
-                        .padding(.bottom, EQSpacing.xxxl)
-                    VStack(alignment: .leading, spacing: EQSpacing.xs) {
-                        Toggle("Time-based", isOn: $timeBased)
-                            .toggleStyle(ExerciseSettingsToggleStyle())
-                        if timeBased {
-                            Toggle("Two-sides", isOn: $twoSided)
-                                .toggleStyle(ExerciseSettingsToggleStyle())
-                                .transition(.opacity)
-                        }
-                        progressionRow
-                        restDurationRow
-                    }
-                    .eqTextStyle(.body)
-                    .disabled(loadedProfile == nil)
-                    actionButtons(exercise)
-                        .padding(.top, EQSpacing.xxxl)
+                ZStack(alignment: .bottom) {
+                    // Transparent space above the drawn surface still dismisses like the sheet's dimmed backdrop.
+                    Color.clear
+                        .contentShape(Rectangle())
+                        .onTapGesture { dismiss() }
+                        .accessibilityHidden(true)
+                    settingsContent(exercise)
                 }
-                .padding(.horizontal, EQLayout.WorkoutExecution.walletInset)
-                .padding(.top, EQSpacing.xl)
-                .padding(.bottom, EQSpacing.lg)
-                .animation(EQMotion.contentTransition, value: timeBased)
-                .fixedSize(horizontal: false, vertical: true)
-                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { contentHeight = $0 }
-                // Bottom-anchored so a new row grows the sheet upward and
-                // everything below it stays put.
-                .frame(maxHeight: .infinity, alignment: .bottom)
             } else {
                 ContentUnavailableView("Exercise unavailable", systemImage: "exclamationmark.triangle")
+                    .background(EQColor.Execution.foregroundSurface)
             }
         }
         .foregroundStyle(EQColor.Execution.foregroundText)
         .tint(EQColor.Execution.foregroundText)
-        // Single fitted detent: the sheet always shows all of its content and cannot expand.
-        .presentationDetents([.height(contentHeight)])
+        // The system sheet stays at a fixed height tall enough for every row and is
+        // transparent. The visible surface is drawn by the content itself, so revealing
+        // Two-sides grows it upward in the same SwiftUI transaction as the row, instead of
+        // racing a separately animated UIKit detent change.
+        .presentationDetents([.height(sheetHeight ?? 420)])
         .presentationDragIndicator(.hidden)
-        .presentationBackground(EQColor.Execution.foregroundSurface)
-        .presentationCornerRadius(EQRadius.sheet)
+        .presentationBackground(.clear)
         .presentationCompactAdaptation(.sheet)
         .environment(\.colorScheme, .dark)
         .sheet(isPresented: $editsRestDuration) {
@@ -2434,6 +2419,55 @@ private struct ExerciseSettingsView: View {
                 Task { if await model.removeExercise(exerciseID) { dismiss() } }
             }
         } message: { Text("Remove this exercise from the current workout? Completed workout history is never changed.") }
+    }
+
+    /// Records the tallest layout (Two-sides visible) so the fixed sheet never needs to resize.
+    private func updateSheetHeight() {
+        guard contentHeight > 0 else { return }
+        let fullHeight = contentHeight + (timeBased ? 0 : twoSidesRowHeight + EQSpacing.xs)
+        if fullHeight > (sheetHeight ?? 0) { sheetHeight = fullHeight }
+    }
+
+    private func settingsContent(_ exercise: WorkoutExercise) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            settingsHeader(exercise)
+                .padding(.bottom, EQSpacing.xxxl)
+            VStack(alignment: .leading, spacing: EQSpacing.xs) {
+                Toggle("Time-based", isOn: $timeBased)
+                    .toggleStyle(ExerciseSettingsToggleStyle())
+                if timeBased {
+                    Toggle("Two-sides", isOn: $twoSided)
+                        .toggleStyle(ExerciseSettingsToggleStyle())
+                        .transition(.opacity)
+                }
+                progressionRow
+                restDurationRow
+            }
+            .eqTextStyle(.body)
+            .disabled(loadedProfile == nil)
+            actionButtons(exercise)
+                .padding(.top, EQSpacing.xxxl)
+        }
+        .padding(.horizontal, EQLayout.WorkoutExecution.walletInset)
+        .padding(.top, EQSpacing.xl)
+        .padding(.bottom, EQSpacing.lg)
+        .fixedSize(horizontal: false, vertical: true)
+        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { contentHeight = $0; updateSheetHeight() }
+        .background(alignment: .top) {
+            Toggle("Two-sides", isOn: .constant(false))
+                .toggleStyle(ExerciseSettingsToggleStyle())
+                .eqTextStyle(.body)
+                .hidden()
+                .accessibilityHidden(true)
+                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { twoSidesRowHeight = $0; updateSheetHeight() }
+        }
+        .background {
+            UnevenRoundedRectangle(topLeadingRadius: EQRadius.sheet, topTrailingRadius: EQRadius.sheet)
+                .fill(EQColor.Execution.foregroundSurface)
+                .ignoresSafeArea(edges: .bottom)
+        }
+        .contentShape(Rectangle())
+        .animation(EQMotion.contentTransition, value: timeBased)
     }
 
     /// Changes commit when the sheet closes, so flipping Time-based back and forth
