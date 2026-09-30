@@ -7,6 +7,7 @@ enum EQColor {
     static let primaryActionSurface = rgb(0xE0FB60)
     static let deepExecutionSurface = rgb(0x133011)
     static let restActionAccent = rgb(0xFFA424)
+    static let restActionAccentMuted = rgb(0x784D12)
     static let textPrimary = rgb(0x1F1F1F)
     static let textSecondary = rgb(0x717171)
 
@@ -41,7 +42,7 @@ enum EQColor {
         static let success = EQColor.deepExecutionSurface
         static let warning = EQColor.restActionAccent
         static let primaryAction = EQColor.restActionAccent
-        static let metricUnit = EQColor.restActionAccent.opacity(0.24)
+        static let metricUnit = EQColor.restActionAccentMuted
         static let restAccent = EQColor.restActionAccent
         static let destructive = EQColor.restActionAccent
     }
