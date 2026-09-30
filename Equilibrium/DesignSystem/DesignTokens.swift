@@ -465,7 +465,7 @@ private struct EQPrimaryCTAButtonStyle: ButtonStyle {
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .eqTextStyle(.body)
+            .eqTextStyle(.listItemTitle)
             .foregroundStyle(variant == .filled ? foreground : tint)
             .background {
                 RoundedRectangle(cornerRadius: EQRadius.button, style: .continuous)
