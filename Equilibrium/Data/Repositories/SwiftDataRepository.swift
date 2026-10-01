@@ -21,6 +21,7 @@ public final class SwiftDataRepository: ExerciseRepository, WorkoutRepository, E
     // MARK: Exercise definitions
 
     public func allExercises() async throws -> [ExerciseDefinition] { try canonicalExerciseRecords(includeArchived: false).map(DefinitionMapper.domain) }
+    func persistedExerciseDefinitions() throws -> [ExerciseDefinition] { try allPersistedExercises() }
     private func allPersistedExercises() throws -> [ExerciseDefinition] { try canonicalExerciseRecords(includeArchived: true).map(DefinitionMapper.domain) }
     private func canonicalExerciseRecords(includeArchived: Bool) throws -> [ExerciseDefinitionRecord] {
         let records = try context.fetch(FetchDescriptor<ExerciseDefinitionRecord>())

@@ -76,7 +76,7 @@ private struct RNLegacyImportView: View {
     var body: some View {
         Form {
             Section {
-                Text("Choose a JSON backup exported from the frozen React Native Equilibrium app. Import is local and never deletes the source file.")
+                Text("Choose a JSON backup or workout history export from the React Native Equilibrium app. Import is local and never deletes the source file.")
                     .eqTextStyle(.body)
                 Button("Choose backup file") { presentsImporter = true }
             }

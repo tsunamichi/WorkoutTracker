@@ -158,3 +158,85 @@ enum RNLegacyTransformer {
 private extension String { var nonempty: String? { isEmpty ? nil : self } }
 private extension ISO8601DateFormatter { static let fractional: ISO8601DateFormatter = { let value = ISO8601DateFormatter(); value.formatOptions = [.withInternetDateTime, .withFractionalSeconds]; return value }() }
 private extension DateFormatter { static let legacyDay: DateFormatter = { let value = DateFormatter(); value.locale = Locale(identifier: "en_US_POSIX"); value.timeZone = TimeZone(secondsFromGMT: 0); value.dateFormat = "yyyy-MM-dd"; return value }() }
+
+/// Converts the React Native app's "workout history" export (`{ startDate, endDate, workouts: [...] }`),
+/// which identifies exercises by name only. Names are matched to existing catalog exercises so history and
+/// progression attach to the same exercise; sets recorded as "—" are skipped.
+enum WorkoutHistoryExportTransformer {
+    private struct Export: Decodable { let workouts: [ExportWorkout] }
+    private struct ExportWorkout: Decodable { let id: String; let date: String; let workoutName: String?; let exercises: [ExportExercise] }
+    private struct ExportExercise: Decodable { let name: String; let sets: [ExportSet] }
+    private struct ExportSet: Decodable {
+        let weight: Double?; let reps: Int?
+        private enum CodingKeys: String, CodingKey { case weight, reps }
+        init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            weight = Self.number(container, .weight)
+            reps = Self.number(container, .reps).map { Int($0.rounded()) }
+        }
+        private static func number(_ container: KeyedDecodingContainer<CodingKeys>, _ key: CodingKeys) -> Double? {
+            if let value = try? container.decode(Double.self, forKey: key) { return value }
+            guard let text = try? container.decode(String.self, forKey: key) else { return nil }
+            return Double(text.trimmingCharacters(in: .whitespaces))
+        }
+    }
+
+    static func isHistoryExport(_ data: Data) -> Bool {
+        guard let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let workouts = root["workouts"] as? [[String: Any]] else { return false }
+        return workouts.isEmpty || workouts.first?["exercises"] != nil
+    }
+
+    static func transform(data: Data, existingExercises: [ExerciseDefinition]) throws -> LegacyImportMaterialization {
+        guard let export = try? JSONDecoder().decode(Export.self, from: data) else { throw RNLegacyImportError.unsupportedPayload }
+        let digest = SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
+        var definitionsByName: [String: ExerciseDefinition] = [:]
+        for definition in existingExercises where definition.archivedAt == nil { definitionsByName[definition.normalizedName] = definitionsByName[definition.normalizedName] ?? definition }
+        var newDefinitions: [ExerciseDefinition] = []
+        var workouts: [Workout] = []; var skipped = 0
+
+        for source in export.workouts {
+            guard let start = startDate(source) else { skipped += 1; continue }
+            var exercises: [WorkoutExercise] = []
+            for (position, item) in source.exercises.enumerated() {
+                let sets = item.sets.filter { ($0.reps ?? 0) > 0 }
+                let name = item.name.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !sets.isEmpty, !name.isEmpty else { continue }
+                let normalized = SwiftDataRepository.normalizeExerciseName(name)
+                let definition: ExerciseDefinition
+                if let existing = definitionsByName[normalized] { definition = existing } else {
+                    definition = .init(id: .init(rawValue: "history-exercise:\(normalized)"), name: name, normalizedName: normalized, aliases: [], equipment: nil, category: nil, isCustom: true, archivedAt: nil)
+                    definitionsByName[normalized] = definition; newDefinitions.append(definition)
+                }
+                let base = "history:\(source.id):\(position)"
+                let prescriptions = sets.enumerated().map { index, set in
+                    SetPrescription(id: .init(rawValue: "\(base):prescription:\(index)"), target: .repetitions(range: set.reps!...set.reps!), suggestedWeight: weight(set.weight))
+                }
+                let logs = sets.enumerated().map { index, set in
+                    LoggedSet(id: .init(rawValue: "\(base):log:\(index)"), prescriptionID: prescriptions[index].id, weight: weight(set.weight), repetitions: set.reps, duration: nil, completedAt: start)
+                }
+                exercises.append(WorkoutExercise(id: .init(rawValue: "\(base):occurrence"), exerciseID: definition.id, nameSnapshot: name, prescriptions: prescriptions, loggedSets: logs, restDuration: nil, skippedAt: nil, isTimeBased: false))
+            }
+            guard !exercises.isEmpty else { skipped += 1; continue }
+            let title = source.workoutName?.trimmingCharacters(in: .whitespacesAndNewlines)
+            let workout = Workout(id: .init(rawValue: "history:\(source.id)"), titleSnapshot: title.flatMap { $0.isEmpty ? nil : $0 } ?? "Imported Workout", exercises: exercises, status: .completed, startedAt: start, completedAt: start, createdAt: start, updatedAt: start)
+            try DomainValidator.validate(workout)
+            workouts.append(workout)
+        }
+        return .init(sourceDigest: digest, exercises: newDefinitions, workouts: workouts, settings: nil, progression: nil, timers: [], skippedMalformedCount: skipped)
+    }
+
+    private static func weight(_ value: Double?) -> Weight? { value.flatMap { $0.isFinite && $0 > 0 ? Weight(pounds: $0) : nil } }
+
+    /// Uses the millisecond timestamp embedded in ids like `sw-cp-1771257952786-2026-02-16` when it falls on the
+    /// exported day; otherwise noon local time on that day.
+    private static func startDate(_ source: ExportWorkout) -> Date? {
+        let formatter = DateFormatter(); formatter.locale = Locale(identifier: "en_US_POSIX"); formatter.dateFormat = "yyyy-MM-dd"
+        guard let day = formatter.date(from: source.date) else { return nil }
+        if let millis = source.id.split(separator: "-").compactMap({ Double($0) }).first(where: { $0 > 1_000_000_000_000 }) {
+            let stamp = Date(timeIntervalSince1970: millis / 1000)
+            if formatter.string(from: stamp) == source.date { return stamp }
+        }
+        return Calendar.current.date(byAdding: .hour, value: 12, to: day)
+    }
+}

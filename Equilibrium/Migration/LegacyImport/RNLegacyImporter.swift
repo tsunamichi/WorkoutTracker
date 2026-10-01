@@ -13,7 +13,9 @@ final class RNLegacyImporter {
     init(repository: SwiftDataRepository) { self.repository = repository }
 
     func importFileData(_ data: Data, importedAt: Date = .now) throws -> LegacyImportResult {
-        let materialization = try RNLegacyTransformer.transform(data: data)
+        let materialization = WorkoutHistoryExportTransformer.isHistoryExport(data)
+            ? try WorkoutHistoryExportTransformer.transform(data: data, existingExercises: repository.persistedExerciseDefinitions())
+            : try RNLegacyTransformer.transform(data: data)
         return try repository.importLegacyRN(materialization, importedAt: importedAt)
     }
 }
