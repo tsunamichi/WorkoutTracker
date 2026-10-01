@@ -97,7 +97,7 @@ struct RecentWorkoutPicker: View {
         .presentationDragIndicator(.visible)
         .presentationCornerRadius(EQRadius.sheet)
         .presentationBackground(EQColor.elevatedSurface)
-        .task { do { values = try await repository.recentCompletedWorkouts(limit: 20) } catch { failed = true } }
+        .task { do { values = Workout.distinctRoutines(try await repository.recentCompletedWorkouts(limit: .max)) } catch { failed = true } }
     }
     private func row(_ value: Workout) -> some View {
         let selected = selectedIDs.contains(value.id)
@@ -162,6 +162,17 @@ struct RecentWorkoutPicker: View {
 }
 
 extension Workout {
+    /// Collapses repeated runs of the same routine (same name and exercises) to its most recent run.
+    /// Expects input sorted newest first.
+    static func distinctRoutines(_ workouts: [Workout]) -> [Workout] {
+        var seen = Set<String>()
+        return workouts.filter { workout in
+            let name = workout.titleSnapshot.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            let exercises = workout.exercises.map(\.exerciseID.rawValue).sorted().joined(separator: "|")
+            return seen.insert("\(name)#\(exercises)").inserted
+        }
+    }
+
     func freshCopy(createdAt: Date, history: any ExerciseHistoryRepository) async throws -> Workout {
         var copied: [WorkoutExercise] = []
         for exercise in exercises {
