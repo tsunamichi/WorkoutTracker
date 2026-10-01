@@ -15,7 +15,7 @@ struct AddWorkoutSheet: View {
         NavigationStack(path: $path) {
             creationDestination(initialRoute)
                 .navigationDestination(for: CreationRoute.self) { creationDestination($0) }
-        }.presentationDetents([.large]).preferredColorScheme(.dark)
+        }.presentationDetents([.large]).preferredColorScheme(initialRoute == .recent ? .light : .dark)
     }
 
     @ViewBuilder private func creationDestination(_ route: CreationRoute) -> some View {
