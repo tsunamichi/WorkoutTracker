@@ -159,7 +159,9 @@ struct HomeView: View {
             }
         }
         .task {
-            for await _ in NotificationCenter.default.notifications(named: .equilibriumRepositoryDidChange) {
+            for await notification in NotificationCenter.default.notifications(named: .equilibriumRepositoryDidChange) {
+                // Execution reports its saves through didPersist and Home reloads once execution ends.
+                if RepositoryChangeOrigin.of(notification) == .local && (model.expandedWorkoutID != nil || transitioningWorkoutID != nil) { continue }
                 await loadHomeAndSettings()
             }
         }

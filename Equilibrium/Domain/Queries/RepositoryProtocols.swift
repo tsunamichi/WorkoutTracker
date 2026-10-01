@@ -28,6 +28,8 @@ public protocol WorkoutRepository: Sendable {
     func recentCompletedWorkouts(limit: Int) async throws -> [Workout]
     func completedWorkouts() async throws -> [Workout]
     func completedWorkout(id: WorkoutID) async throws -> Workout?
+    /// Workouts that are not completed plus those completed at or after `completedSince`, and whether any completed workout exists.
+    func homeWorkouts(completedSince: Date) async throws -> (workouts: [Workout], hasCompletedWorkouts: Bool)
 }
 public struct LatestExerciseLog: Equatable, Sendable {
     public let exerciseID: ExerciseID
@@ -71,6 +73,10 @@ public protocol BackupRepository: Sendable {
 public enum RepositoryError: Error, Equatable { case notFound, immutableCompletedWorkout, workoutNotInProgress, exerciseSkipped, prescriptionNotFound, cannotRemoveCompletedSet, invalidSetInput, invalidRestDuration, invalidSettings, invalidProgressionConfiguration, incompleteWorkout, duplicateIdentifier, duplicateExerciseName, invalidBackup }
 
 public extension WorkoutRepository {
+    func homeWorkouts(completedSince: Date) async throws -> (workouts: [Workout], hasCompletedWorkouts: Bool) {
+        let all = try await allWorkouts()
+        return (all.filter { $0.status != .completed || ($0.completedAt.map { $0 >= completedSince } ?? false) }, all.contains { $0.status == .completed })
+    }
     func completedWorkouts() async throws -> [Workout] {
         WorkoutHistoryQuery.completed(try await allWorkouts())
     }

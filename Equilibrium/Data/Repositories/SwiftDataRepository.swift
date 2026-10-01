@@ -6,15 +6,32 @@ import CoreData
 public final class SwiftDataRepository: ExerciseRepository, WorkoutRepository, ExerciseHistoryRepository, SettingsRepository, ProgressionRepository, BackupRepository {
     let context: ModelContext
     private var remoteChangeObserver: NSObjectProtocol?
+    private static let localAuthor = "equilibrium.app"
+    private var historyToken: DefaultHistoryToken?
+    private let historyStart = Date.now
     public init(container: ModelContainer) {
-        context = ModelContext(container); context.autosaveEnabled = false
+        context = ModelContext(container); context.autosaveEnabled = false; context.author = Self.localAuthor
         remoteChangeObserver = NotificationCenter.default.addObserver(
             forName: .NSPersistentStoreRemoteChange,
             object: nil,
             queue: .main
-        ) { _ in
-            NotificationCenter.default.post(name: .equilibriumRepositoryDidChange, object: nil)
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.storeDidChange() }
         }
+    }
+    /// The store posts a remote-change notification for every transaction, including this context's own saves.
+    /// Callers already hold the result of their own mutations, so tag those as local and let hot views skip reloading.
+    private func storeDidChange() {
+        var origin = RepositoryChangeOrigin.external
+        var descriptor = HistoryDescriptor<DefaultHistoryTransaction>()
+        if let historyToken { descriptor.predicate = #Predicate { $0.token > historyToken } }
+        else { let start = historyStart; descriptor.predicate = #Predicate { $0.timestamp >= start } }
+        if let transactions = try? context.fetchHistory(descriptor) {
+            if let last = transactions.max(by: { $0.token < $1.token }) { historyToken = last.token }
+            let foreign = transactions.filter { $0.author != Self.localAuthor && !$0.changes.isEmpty }
+            if foreign.isEmpty, !transactions.isEmpty { origin = .local }
+        }
+        NotificationCenter.default.post(name: .equilibriumRepositoryDidChange, object: nil, userInfo: [RepositoryChangeOrigin.userInfoKey: origin])
     }
     deinit { if let remoteChangeObserver { NotificationCenter.default.removeObserver(remoteChangeObserver) } }
 
@@ -39,7 +56,7 @@ public final class SwiftDataRepository: ExerciseRepository, WorkoutRepository, E
         return .init(exerciseID: exerciseID, workoutID: occurrence.workoutID, occurredAt: occurrence.occurredAt, sets: occurrence.sets)
     }
     public func exercisePerformance(exerciseID: ExerciseID) async throws -> ExercisePerformance {
-        ExercisePerformanceQuery.performance(exerciseID: exerciseID, workouts: try await allWorkouts())
+        ExercisePerformanceQuery.performance(exerciseID: exerciseID, workouts: try canonicalWorkouts(containing: exerciseID))
     }
     public func exercise(id: ExerciseID) async throws -> ExerciseDefinition? {
         winner(try exerciseRecords(id.rawValue), updatedAt: \ExerciseDefinitionRecord.updatedAt).map(DefinitionMapper.domain)
@@ -79,6 +96,25 @@ public final class SwiftDataRepository: ExerciseRepository, WorkoutRepository, E
         return try canonical(records, key: \WorkoutRecord.id, updatedAt: \WorkoutRecord.updatedAt)
             .map(WorkoutMapper.domain)
             .sorted { $0.createdAt == $1.createdAt ? $0.id.rawValue < $1.id.rawValue : $0.createdAt < $1.createdAt }
+    }
+    public func homeWorkouts(completedSince: Date) async throws -> (workouts: [Workout], hasCompletedWorkouts: Bool) {
+        let completed = WorkoutStatus.completed.rawValue, never = Date.distantPast
+        let candidates = try context.fetch(FetchDescriptor<WorkoutRecord>(predicate: #Predicate { $0.statusRaw != completed || ($0.completedAt ?? never) >= completedSince }))
+        let ids = Array(Set(candidates.map { $0.id }))
+        let records = ids.isEmpty ? [] : try context.fetch(FetchDescriptor<WorkoutRecord>(predicate: #Predicate { ids.contains($0.id) }))
+        let workouts = try canonical(records, key: \WorkoutRecord.id, updatedAt: \WorkoutRecord.updatedAt).map(WorkoutMapper.domain)
+            .filter { $0.status != .completed || ($0.completedAt.map { $0 >= completedSince } ?? false) }
+        var completedDescriptor = FetchDescriptor<WorkoutRecord>(predicate: #Predicate { $0.statusRaw == completed }); completedDescriptor.fetchLimit = 1
+        return (workouts, try context.fetchCount(completedDescriptor) > 0)
+    }
+    /// Only workouts with an occurrence of the exercise can contribute to its history, so avoid mapping the whole store.
+    private func canonicalWorkouts(containing exerciseID: ExerciseID) throws -> [Workout] {
+        let raw = exerciseID.rawValue
+        let occurrences = try context.fetch(FetchDescriptor<WorkoutExerciseRecord>(predicate: #Predicate { $0.exerciseID == raw }))
+        let ids = Array(Set(occurrences.compactMap { $0.workout?.id }))
+        guard !ids.isEmpty else { return [] }
+        let records = try context.fetch(FetchDescriptor<WorkoutRecord>(predicate: #Predicate { ids.contains($0.id) }))
+        return try canonical(records, key: \WorkoutRecord.id, updatedAt: \WorkoutRecord.updatedAt).map(WorkoutMapper.domain)
     }
     private func workoutRecords(_ id: String) throws -> [WorkoutRecord] {
         try context.fetch(FetchDescriptor<WorkoutRecord>(predicate: #Predicate { $0.id == id }))
@@ -467,6 +503,13 @@ public final class SwiftDataRepository: ExerciseRepository, WorkoutRepository, E
 extension Notification.Name {
     static let equilibriumSettingsDidChange = Notification.Name("equilibrium.settings-did-change")
     static let equilibriumRepositoryDidChange = Notification.Name("equilibrium.repository-did-change")
+}
+
+enum RepositoryChangeOrigin: Sendable {
+    case none, local, external
+    static let userInfoKey = "origin"
+    /// Notifications without an origin come from older paths; treat them as external so listeners still refresh.
+    static func of(_ notification: Notification) -> RepositoryChangeOrigin { notification.userInfo?[userInfoKey] as? RepositoryChangeOrigin ?? .external }
 }
 
 enum FixtureDefaults {

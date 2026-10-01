@@ -3,7 +3,7 @@ import Observation
 
 @MainActor @Observable
 final class HomeModel {
-    private let loadWorkouts: () async throws -> [Workout]
+    private let loadSnapshot: (Date) async throws -> (workouts: [Workout], hasCompletedWorkouts: Bool)
     private let now: () -> Date
     private let calendar: Calendar
     private(set) var workouts: [Workout] = []
@@ -15,21 +15,22 @@ final class HomeModel {
     private var pendingCreationRoute: CreationRoute?
     var creationRoute: CreationRoute?
     init(repository: any WorkoutRepository, now: @escaping () -> Date = { .now }, calendar: Calendar = .autoupdatingCurrent) {
-        loadWorkouts = { try await repository.allWorkouts() }
+        loadSnapshot = { try await repository.homeWorkouts(completedSince: $0) }
         self.now = now
         self.calendar = calendar
     }
     init(loadWorkouts: @escaping () async throws -> [Workout], now: @escaping () -> Date = { .now }, calendar: Calendar = .autoupdatingCurrent) {
-        self.loadWorkouts = loadWorkouts
+        loadSnapshot = { _ in let values = try await loadWorkouts(); return (values, values.contains { $0.status == .completed }) }
         self.now = now
         self.calendar = calendar
     }
 
     func load() async {
         do {
-            let values = try await loadWorkouts()
-            workouts = HomeWorkoutQuery.visibleWorkouts(in: values, now: now(), calendar: calendar)
-            hasReusableWorkouts = values.contains { $0.status == .completed }
+            let current = now()
+            let snapshot = try await loadSnapshot(calendar.startOfDay(for: current))
+            workouts = HomeWorkoutQuery.visibleWorkouts(in: snapshot.workouts, now: current, calendar: calendar)
+            hasReusableWorkouts = snapshot.hasCompletedWorkouts
             errorMessage = nil
         } catch { errorMessage = "Home could not be loaded." }
     }

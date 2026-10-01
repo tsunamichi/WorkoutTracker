@@ -706,7 +706,11 @@ struct WorkoutExecutionView: View {
         .navigationBarBackButtonHidden()
         .modifier(ExecutionDismissOnRequest(request: dismissRequest))
         .task { await model.activate() }
-        .onReceive(NotificationCenter.default.publisher(for: .equilibriumRepositoryDidChange)) { _ in Task { await model.refreshFromPersistence() } }
+        .onReceive(NotificationCenter.default.publisher(for: .equilibriumRepositoryDidChange)) { notification in
+            // The model already applied its own saves; reloading here would block the main thread mid-transition.
+            guard RepositoryChangeOrigin.of(notification) == .external else { return }
+            Task { await model.refreshFromPersistence() }
+        }
         .onReceive(NotificationCenter.default.publisher(for: .equilibriumSettingsDidChange)) { _ in Task { await model.refreshRestPreferences() } }
         .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillChangeFrameNotification)) {
             updateKeyboardFrame(from: $0)

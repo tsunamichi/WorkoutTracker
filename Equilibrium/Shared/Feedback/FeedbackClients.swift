@@ -36,6 +36,9 @@ public struct SystemHapticsClient: HapticsClient {
     public static func prepare() {
         Generators.light.prepare()
         Generators.selection.prepare()
+        Generators.soft.prepare()
+        Generators.medium.prepare()
+        Generators.notification.prepare()
     }
 
     public func perform(_ feedback: HapticFeedback) {
