@@ -77,12 +77,17 @@ struct RecentWorkoutPicker: View {
                     .foregroundStyle(EQColor.secondaryText)
                     .frame(maxHeight: .infinity)
             } else {
-                ScrollView {
-                    LazyVStack(spacing: EQSpacing.xs) { ForEach(values) { row($0) } }
-                        .padding(.horizontal, EQLayout.screenGutter)
-                        .padding(.bottom, EQSpacing.lg)
+                // List cancels row taps when a drag turns into a scroll; a plain ScrollView can fire them.
+                List(values) { value in
+                    row(value)
+                        .listRowInsets(.init(top: EQSpacing.xxs, leading: EQLayout.screenGutter, bottom: EQSpacing.xxs, trailing: EQLayout.screenGutter))
+                        .listRowSeparator(.hidden)
+                        .listRowBackground(Color.clear)
                 }
+                .listStyle(.plain)
+                .scrollContentBackground(.hidden)
                 .scrollIndicators(.hidden)
+                .contentMargins(.bottom, EQSpacing.lg, for: .scrollContent)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
