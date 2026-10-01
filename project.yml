@@ -15,6 +15,8 @@ targets:
       path: Equilibrium/Info.plist
       properties:
         ITSAppUsesNonExemptEncryption: false
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
         UIApplicationSceneManifest:
           UIApplicationSupportsMultipleScenes: false
         UIApplicationSupportsIndirectInputEvents: true
@@ -29,10 +31,10 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.tsunamichi.equilibrium
         PRODUCT_NAME: Equilibrium
-        DEVELOPMENT_TEAM: KL8DB5RL28
+        DEVELOPMENT_TEAM: 7N3L34BQ4Q
         CODE_SIGN_ENTITLEMENTS: Equilibrium/Equilibrium.entitlements
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
-        TARGETED_DEVICE_FAMILY: "1,2"
+        TARGETED_DEVICE_FAMILY: "1"
         SUPPORTS_MACCATALYST: NO
   EquilibriumTests:
     type: bundle.unit-test

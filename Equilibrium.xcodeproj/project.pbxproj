@@ -501,7 +501,7 @@
 				LastUpgradeCheck = 1430;
 				TargetAttributes = {
 					50B25B0A60851C4C6C09EF24 = {
-						DevelopmentTeam = KL8DB5RL28;
+						DevelopmentTeam = 7N3L34BQ4Q;
 					};
 				};
 			};
@@ -687,7 +687,7 @@
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.tsunamichi.equilibrium.tests;
 				SDKROOT = iphoneos;
-				TARGETED_DEVICE_FAMILY = "1,2";
+				TARGETED_DEVICE_FAMILY = 1;
 				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Equilibrium.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Equilibrium";
 			};
 			name = Debug;
@@ -698,7 +698,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = Equilibrium/Equilibrium.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
-				DEVELOPMENT_TEAM = KL8DB5RL28;
+				DEVELOPMENT_TEAM = 7N3L34BQ4Q;
 				INFOPLIST_FILE = Equilibrium/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -708,7 +708,7 @@
 				PRODUCT_NAME = Equilibrium;
 				SDKROOT = iphoneos;
 				SUPPORTS_MACCATALYST = NO;
-				TARGETED_DEVICE_FAMILY = "1,2";
+				TARGETED_DEVICE_FAMILY = 1;
 			};
 			name = Release;
 		};
@@ -787,7 +787,7 @@
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.tsunamichi.equilibrium.tests;
 				SDKROOT = iphoneos;
-				TARGETED_DEVICE_FAMILY = "1,2";
+				TARGETED_DEVICE_FAMILY = 1;
 				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Equilibrium.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Equilibrium";
 			};
 			name = Release;
@@ -798,7 +798,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = Equilibrium/Equilibrium.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
-				DEVELOPMENT_TEAM = KL8DB5RL28;
+				DEVELOPMENT_TEAM = 7N3L34BQ4Q;
 				INFOPLIST_FILE = Equilibrium/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -808,7 +808,7 @@
 				PRODUCT_NAME = Equilibrium;
 				SDKROOT = iphoneos;
 				SUPPORTS_MACCATALYST = NO;
-				TARGETED_DEVICE_FAMILY = "1,2";
+				TARGETED_DEVICE_FAMILY = 1;
 			};
 			name = Debug;
 		};

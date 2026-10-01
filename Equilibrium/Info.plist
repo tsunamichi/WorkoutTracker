@@ -31,6 +31,10 @@
 	<array>
 		<string>remote-notification</string>
 	</array>
+	<key>UISupportedInterfaceOrientations</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+	</array>
 	<key>UILaunchScreen</key>
 	<dict/>
 </dict>
