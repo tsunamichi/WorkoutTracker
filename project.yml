@@ -14,6 +14,7 @@ targets:
     info:
       path: Equilibrium/Info.plist
       properties:
+        ITSAppUsesNonExemptEncryption: false
         UIApplicationSceneManifest:
           UIApplicationSupportsMultipleScenes: false
         UIApplicationSupportsIndirectInputEvents: true
