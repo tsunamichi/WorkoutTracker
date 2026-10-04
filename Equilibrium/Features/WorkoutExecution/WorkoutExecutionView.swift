@@ -67,6 +67,10 @@ enum ExecutionTimerRegionPresentation: Equatable {
         if case .rest = self { return true }
         return false
     }
+    var isWork: Bool {
+        if case .work = self { return true }
+        return false
+    }
 }
 
 struct ExecutionSurfacePresentation: Equatable {
@@ -243,13 +247,19 @@ enum ExecutionTimerWalletLayout {
 }
 
 enum ExecutionKeyboardLayout {
+    /// Tracks UIKit's keyboard spring (curve 7). Fitted from frame captures and slightly faster than
+    /// the keyboard to absorb SwiftUI's render latency, so the card never slips behind the keyboard.
+    static let animation = Animation.spring(response: 0.2, dampingFraction: 1)
+
     static func overlap(keyboardFrame: CGRect) -> CGFloat {
         guard !keyboardFrame.isNull else { return 0 }
         return max(0, keyboardFrame.height)
     }
 
-    static func walletOffset(overlap: CGFloat) -> CGFloat {
-        -max(0, overlap)
+    /// The wallet keeps its top edge and shrinks so its bottom sits on the keyboard.
+    static func walletHeight(base: CGFloat, overlap: CGFloat, minimum: CGFloat) -> CGFloat {
+        guard overlap > 0 else { return base }
+        return max(min(base, minimum), base - overlap)
     }
 }
 
@@ -533,7 +543,56 @@ private struct TimerVisibilityProgressKey: EnvironmentKey {
     static let defaultValue: CGFloat = 0
 }
 
+private struct ExecutionRestTintKey: EnvironmentKey {
+    static let defaultValue: Double = 0
+}
+
+private struct ExecutionWorkHeaderTintKey: EnvironmentKey {
+    static let defaultValue: Double = 0
+}
+
+/// How far the page header has blended toward the IN PROGRESS card colour during a work interval.
+/// Home reads it to tint the shared workout title, which it draws above the execution page.
+struct ExecutionWorkHeaderTintPreferenceKey: PreferenceKey {
+    static let defaultValue: Double = 0
+    static func reduce(value: inout Double, nextValue: () -> Double) { value = max(value, nextValue()) }
+}
+
+/// Animates the header tint with the timer reveal so it changes in step with the page canvas.
+private struct ExecutionWorkHeaderTintModifier: ViewModifier, Animatable {
+    var progress: CGFloat
+    var animatableData: CGFloat {
+        get { progress }
+        set { progress = newValue }
+    }
+    func body(content: Content) -> some View {
+        let tint = Double(min(max(progress, 0), 1))
+        content
+            .foregroundStyle(EQColor.Execution.primaryText.mix(with: EQColor.Execution.restForegroundSurface, by: tint))
+            .environment(\.executionWorkHeaderTint, tint)
+            .preference(key: ExecutionWorkHeaderTintPreferenceKey.self, value: tint)
+    }
+}
+
+private struct ExecutionHeaderSettingsGlyph: View {
+    @Environment(\.executionWorkHeaderTint) private var tint
+    var body: some View {
+        EQSettingsGlyph(color: EQColor.Execution.secondaryText.mix(with: EQColor.Execution.restForegroundSurface, by: tint))
+    }
+}
+
 private extension EnvironmentValues {
+    var executionWorkHeaderTint: Double {
+        get { self[ExecutionWorkHeaderTintKey.self] }
+        set { self[ExecutionWorkHeaderTintKey.self] = newValue }
+    }
+
+    /// How far overview rows have blended toward the rest card text colour.
+    var executionRestTint: Double {
+        get { self[ExecutionRestTintKey.self] }
+        set { self[ExecutionRestTintKey.self] = newValue }
+    }
+
     var foregroundFocusProgress: CGFloat {
         get { self[ForegroundFocusProgressKey.self] }
         set { self[ForegroundFocusProgressKey.self] = newValue }
@@ -553,6 +612,25 @@ private struct ForegroundFocusTransitionModifier: ViewModifier, Animatable {
     }
     func body(content: Content) -> some View {
         content.environment(\.foregroundFocusProgress, min(max(progress, 0), 1))
+    }
+}
+
+/// The rest colour belongs to the page, so it fades with the timer collapse instead of
+/// leaving a shrinking coloured block behind.
+private struct ExecutionPageCanvas: View, Animatable {
+    var restProgress: CGFloat
+    var workProgress: CGFloat = 0
+    let drawsBaseCanvas: Bool
+    var animatableData: AnimatablePair<CGFloat, CGFloat> {
+        get { AnimatablePair(restProgress, workProgress) }
+        set { restProgress = newValue.first; workProgress = newValue.second }
+    }
+    var body: some View {
+        ZStack {
+            if drawsBaseCanvas { EQColor.Execution.canvas }
+            EQColor.Execution.restCanvas.opacity(Double(min(max(restProgress, 0), 1)))
+            EQColor.Execution.foregroundSurface.opacity(Double(min(max(workProgress, 0), 1)))
+        }
     }
 }
 
@@ -690,9 +768,12 @@ struct WorkoutExecutionView: View {
 
     var body: some View {
         ZStack {
-            if !usesObjectSurface || model.restState != nil {
-                executionCanvas.ignoresSafeArea()
-            }
+            ExecutionPageCanvas(
+                restProgress: displayedTimerPresentation.isRest ? timerVisibilityProgress : 0,
+                workProgress: displayedTimerPresentation.isWork ? timerVisibilityProgress : 0,
+                drawsBaseCanvas: !usesObjectSurface
+            )
+            .ignoresSafeArea()
             if let workout = model.workout {
                 content(workout)
             } else if let error = model.errorMessage {
@@ -837,7 +918,7 @@ struct WorkoutExecutionView: View {
                     Button("Reset workout", systemImage: "arrow.counterclockwise", role: .destructive) { confirmsReset = true }
                     Button("Delete workout", systemImage: "trash", role: .destructive) { confirmsDelete = true }
                 } label: {
-                    EQSettingsGlyph(color: EQColor.Execution.secondaryText)
+                    ExecutionHeaderSettingsGlyph()
                         .frame(width: EQLayout.minimumTouch, height: EQLayout.minimumTouch, alignment: .trailing)
                         .contentShape(Rectangle())
                 }
@@ -872,6 +953,9 @@ struct WorkoutExecutionView: View {
         )
         return VStack(spacing: 0) {
             workoutHeader(workout)
+                .modifier(ExecutionWorkHeaderTintModifier(
+                    progress: displayedTimerPresentation.isWork ? timerVisibilityProgress : 0
+                ))
             if let error = model.errorMessage {
                 Label(error, systemImage: "exclamationmark.triangle")
                     .eqTextStyle(.caption)
@@ -946,10 +1030,17 @@ struct WorkoutExecutionView: View {
                         foregroundHeader: foregroundExerciseHeader,
                         foregroundContent: foregroundExerciseContent,
                         foregroundValues: { expandedExerciseControls },
-                        footerControls: { exercise in footerSetCountControls(for: exercise) }
+                        footerControls: { exercise in footerSetCountControls(for: exercise) },
+                        keyboardVisible: keyboardOverlap > 0,
+                        showsRestTint: visualTimerPresentation.isRest,
+                        showsWorkTint: visualTimerPresentation.isWork
                     )
-                    .frame(height: walletHeight)
-                    .offset(y: ExecutionKeyboardLayout.walletOffset(overlap: keyboardOverlap))
+                    .frame(height: ExecutionKeyboardLayout.walletHeight(
+                        base: walletHeight,
+                        overlap: keyboardOverlap,
+                        minimum: compactWalletHeight
+                    ))
+                    .frame(height: walletHeight, alignment: .top)
                     .onPreferenceChange(ExecutionForegroundTitleHeightPreferenceKey.self) {
                         timingTitleHeight = $0
                     }
@@ -997,8 +1088,9 @@ struct WorkoutExecutionView: View {
             keyboardFrame = targetFrame
             return
         }
-        let duration = notification.userInfo?[UIResponder.keyboardAnimationDurationUserInfoKey] as? Double ?? 0.25
-        withAnimation(.easeOut(duration: duration)) {
+        // UIKit reports a zero duration for some dismissals even though the keyboard still slides,
+        // so the wallet always follows with the keyboard-matched spring.
+        withAnimation(ExecutionKeyboardLayout.animation) {
             keyboardFrame = targetFrame
         }
     }
@@ -1086,12 +1178,13 @@ struct WorkoutExecutionView: View {
         }
     }
 
-    @ViewBuilder private func foregroundExerciseHeader(focusProgress: CGFloat) -> some View {
+    @ViewBuilder private func foregroundExerciseHeader(focusProgress: CGFloat, restProgress: CGFloat) -> some View {
         let isResting = model.restState != nil
         let isWorking = model.workTimerState != nil
         let isTiming = isResting || isWorking
         let progress = min(max(focusProgress, 0), 1)
-        let secondaryProgress = min(max((progress - 0.18) / 0.82, 0), 1)
+        // Leaving rest expands straight to the focused card, so the overview chevron never shows.
+        let secondaryProgress = max(min(max((progress - 0.18) / 0.82, 0), 1), min(max(restProgress, 0), 1))
         let headerControlsOpacity = isTiming ? 0 : Double(secondaryProgress)
         Text("IN PROGRESS")
             .eqTextStyle(.sectionLabel)
@@ -1331,6 +1424,7 @@ private struct ExecutionWallet<ListRow: View, ForegroundHeader: View, Foreground
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.homeExecutionTransitionProgress) private var homeTransitionProgress
     @Environment(\.foregroundFocusProgress) private var focusProgress
+    @Environment(\.timerVisibilityProgress) private var timerVisibilityProgress
     @State private var foregroundTitleHeight: CGFloat = 0
     @State private var completedSectionPresentation = ExecutionCompletedSectionPresentation()
     @State private var revealedCompletedExerciseIDs: Set<WorkoutExerciseID> = []
@@ -1355,10 +1449,40 @@ private struct ExecutionWallet<ListRow: View, ForegroundHeader: View, Foreground
     let skipRest: () -> Void
     let skipWork: () -> Void
     let pauseResumeWork: () -> Void
-    let foregroundHeader: (CGFloat) -> ForegroundHeader
+    let foregroundHeader: (CGFloat, CGFloat) -> ForegroundHeader
     let foregroundContent: () -> ForegroundContent
     let foregroundValues: () -> ForegroundValues
     let footerControls: (WorkoutExercise) -> FooterControls
+    /// While typing, the foreground card claims the whole wallet so the inputs fit above the keyboard.
+    var keyboardVisible = false
+    /// True while the timer region shows rest, including while it collapses away.
+    var showsRestTint = false
+    /// True while the timer region shows a work interval, including while it collapses away.
+    var showsWorkTint = false
+
+    private var workTint: Double {
+        showsWorkTint ? Double(min(max(timerVisibilityProgress, 0), 1)) : 0
+    }
+
+    /// Follows the same animated progress as the page's rest canvas so wallet colours change in step.
+    private var restTint: Double {
+        showsRestTint ? Double(min(max(timerVisibilityProgress, 0), 1)) : 0
+    }
+
+    /// While the card leaves rest it is already committed to the focused layout, so its
+    /// footer and header controls hold their focused positions instead of re-revealing.
+    private var isLeavingRest: Bool { visualState == .focusedExercise && restTint > 0.001 }
+
+    private func restBlend(_ color: Color, _ rest: Color) -> Color { color.mix(with: rest, by: restTint) }
+    private var overviewTextColor: Color { restBlend(EQColor.Execution.overviewText, EQColor.Execution.restCardText) }
+    /// The IN PROGRESS card takes the same rest styling during rest and work intervals.
+    private var timingTint: Double { max(restTint, workTint) }
+    private var foregroundTextColor: Color {
+        EQColor.Execution.foregroundText.mix(with: EQColor.Execution.restCardText, by: timingTint)
+    }
+    private var foregroundSurfaceColor: Color {
+        EQColor.Execution.foregroundSurface.mix(with: EQColor.Execution.restForegroundSurface, by: timingTint)
+    }
 
     var body: some View {
         GeometryReader { proxy in
@@ -1389,17 +1513,22 @@ private struct ExecutionWallet<ListRow: View, ForegroundHeader: View, Foreground
             )
             let walletWidth = max(0, currentFrame.width)
             let walletHeight = max(0, currentFrame.height)
-            let focusedTop = max(0, headerHeight - EQLayout.WorkoutExecution.walletEdgeInset)
-            let compactHeight = visualState == .focusedRest
-                ? max(
-                    defaultCompactHeight,
-                    EQLayout.WorkoutExecution.restCardHeight
-                        + EQLayout.minimumTouch
-                        + EQSpacing.md
-                        - focusedTop,
-                    ExecutionTimerWalletLayout.minimumTimingCardHeight(titleHeight: foregroundTitleHeight)
-                )
-                : defaultCompactHeight
+            let focusedTop = keyboardVisible ? 0 : max(0, headerHeight - EQLayout.WorkoutExecution.walletEdgeInset)
+            let restCompactHeight = max(
+                defaultCompactHeight,
+                EQLayout.WorkoutExecution.restCardHeight
+                    + EQLayout.minimumTouch
+                    + EQSpacing.md
+                    - focusedTop,
+                ExecutionTimerWalletLayout.minimumTimingCardHeight(titleHeight: foregroundTitleHeight)
+            )
+            // Blend with the rest timer's progress so leaving rest grows from the rest card's
+            // geometry instead of snapping to the shorter overview card first.
+            // Collapsed cards trim the space beneath their content, with or without an action.
+            let compactHeight = (visualState == .focusedRest
+                ? restCompactHeight
+                : defaultCompactHeight + (restCompactHeight - defaultCompactHeight) * CGFloat(restTint))
+                - EQSpacing.xs
             let progress = showsForegroundExercise ? min(max(focusProgress, 0), 1) : 0
             let foregroundLayout = ExecutionWalletSurfaceLayout.resolve(
                 walletHeight: walletHeight,
@@ -1429,6 +1558,8 @@ private struct ExecutionWallet<ListRow: View, ForegroundHeader: View, Foreground
                         .background {
                             walletSurface.accessibilityHidden(true)
                         }
+                        // During a work interval the list tucks down behind the IN PROGRESS card.
+                        .offset(y: showsForegroundExercise ? (foregroundLayout.top + EQSpacing.lg) * CGFloat(workTint) : 0)
                         .accessibilityIdentifier("execution-exercise-list-card-\(workout.id.rawValue)")
 
                     if showsForegroundExercise {
@@ -1437,9 +1568,9 @@ private struct ExecutionWallet<ListRow: View, ForegroundHeader: View, Foreground
                             .background(foregroundBackground)
                             .modifier(ExecutionWalletShapeModifier(
                                 drawsBorder: true,
-                                borderColor: model.restState == nil
-                                    ? EQColor.Execution.walletBorder
-                                    : EQColor.Execution.restCanvas
+                                borderColor: EQColor.Execution.walletBorder
+                                    .mix(with: EQColor.Execution.restCanvas, by: restTint)
+                                    .mix(with: EQColor.Execution.foregroundSurface, by: workTint)
                             ))
                             .contentShape(RoundedRectangle(cornerRadius: EQRadius.walletSurface, style: .continuous))
                             .offset(y: foregroundLayout.top + compactEntranceOffset + foregroundDismissalOffset)
@@ -1451,7 +1582,10 @@ private struct ExecutionWallet<ListRow: View, ForegroundHeader: View, Foreground
                 .frame(width: walletWidth, height: walletHeight)
                 .overlayPreferenceValue(ExecutionPrimaryActionPreferenceKey.self) { primaryAction in
                     unifiedActionControls(primaryAction)
-                        .offset(y: showsForegroundExercise ? compactEntranceOffset : 0)
+                        .opacity(keyboardVisible ? 0 : 1)
+                        .allowsHitTesting(!keyboardVisible)
+                        .accessibilityHidden(keyboardVisible)
+                        .offset(y: showsForegroundExercise ? compactEntranceOffset + foregroundDismissalOffset : 0)
                 }
                 .modifier(ExecutionWalletShapeModifier())
                 .position(x: currentFrame.midX, y: currentFrame.midY)
@@ -1492,9 +1626,14 @@ private struct ExecutionWallet<ListRow: View, ForegroundHeader: View, Foreground
     }
 
     private var overviewSurfaceColor: Color {
-        visualState == .focusedRest
-            ? EQColor.Execution.restOverviewSurface
-            : EQColor.Execution.overviewSurface
+        let dim = showsForegroundExercise ? Double(min(max(focusProgress, 0), 1)) : 0
+        let surface = EQColor.Execution.overviewSurface
+            .mix(with: EQColor.Execution.overviewDimmedSurface, by: dim)
+            .mix(with: EQColor.Execution.restOverviewSurface, by: restTint)
+        // Completed workouts leave Home on the neutral card fill, so blend from it as the wallet grows.
+        guard model.isReadOnly else { return surface }
+        return HomeCardColors(status: .completed).surface
+            .mix(with: surface, by: Double(min(max(homeTransitionProgress, 0), 1)))
     }
 
     private func exerciseListCard(compactHeight: CGFloat) -> some View {
@@ -1514,7 +1653,7 @@ private struct ExecutionWallet<ListRow: View, ForegroundHeader: View, Foreground
                     if model.isReadOnly {
                         Text("Completed · Read-only")
                             .eqTextStyle(.caption)
-                            .foregroundStyle(EQColor.Execution.overviewText)
+                            .foregroundStyle(overviewTextColor)
                             .modifier(WalletRevealModifier(progress: rowRevealProgress(index: 0)))
                     }
                     LazyVStack(alignment: .leading, spacing: EQLayout.exerciseBlockGap) {
@@ -1556,7 +1695,7 @@ private struct ExecutionWallet<ListRow: View, ForegroundHeader: View, Foreground
             .accessibilityHidden(visualState != .exerciseOverview || focusProgress > 0.01)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .foregroundStyle(EQColor.Execution.overviewText)
+        .foregroundStyle(overviewTextColor)
         .onChange(of: completedExerciseIDs) { _, ids in
             revealedCompletedExerciseIDs.formIntersection(ids)
             if completedSectionPresentation.isExpanded {
@@ -1628,12 +1767,11 @@ private struct ExecutionWallet<ListRow: View, ForegroundHeader: View, Foreground
     }
 
     private var exerciseListHeaderLabel: some View {
-        EQSectionHeader(title: "EXERCISES", color: EQColor.Execution.overviewText) {
-            if presentation.mode == .exerciseOverview {
-                Text(model.progress.fraction, format: .percent.precision(.fractionLength(0)))
-                    .eqTextStyle(.sectionLabel)
-                    .monospacedDigit()
-            }
+        EQSectionHeader(title: "EXERCISES", color: overviewTextColor) {
+            Text(model.progress.fraction, format: .percent.precision(.fractionLength(0)))
+                .eqTextStyle(.sectionLabel)
+                .monospacedDigit()
+                .opacity(presentation.mode == .exerciseOverview ? 1 : 0)
             exerciseProgressCircle
                 .frame(width: EQLayout.iconSize)
                 .offset(x: EQLayout.WorkoutExecution.trailingIconOutset)
@@ -1653,7 +1791,7 @@ private struct ExecutionWallet<ListRow: View, ForegroundHeader: View, Foreground
             EQDisclosureRow(
                 title: ExecutionCompletedSectionPresentation.title(completedCount: completedExercises.count),
                 isExpanded: completedSectionPresentation.isExpanded,
-                color: EQColor.Execution.overviewSecondaryText,
+                color: restBlend(EQColor.Execution.overviewSecondaryText, EQColor.Execution.restCardText),
                 animation: reduceMotion
                     ? nil
                     : ExecutionCompletedSectionMotion.animation(
@@ -1671,8 +1809,8 @@ private struct ExecutionWallet<ListRow: View, ForegroundHeader: View, Foreground
     private var exerciseProgressCircle: some View {
         EQCircularProgressIndicator(
             progress: model.progress.fraction,
-            tint: EQColor.Execution.progressAccent,
-            track: EQColor.Execution.overviewText.opacity(0.18)
+            tint: restBlend(EQColor.Execution.progressAccent, EQColor.Execution.restCardText),
+            track: overviewTextColor.opacity(0.18)
         )
     }
 
@@ -1780,6 +1918,7 @@ private struct ExecutionWallet<ListRow: View, ForegroundHeader: View, Foreground
         }
         .accessibilityIdentifier("execution-exercise-row-\(exercise.id.rawValue)")
         .frame(maxWidth: .infinity, alignment: .leading)
+        .environment(\.executionRestTint, restTint)
     }
 
     private func foregroundCard(progress: CGFloat) -> some View {
@@ -1802,10 +1941,12 @@ private struct ExecutionWallet<ListRow: View, ForegroundHeader: View, Foreground
             awaitsExerciseSelection: model.awaitsExerciseSelection,
             isReadOnly: model.isReadOnly
         )
-        let footerProgress: CGFloat = showsActionFooter ? (isTiming ? 1 : progress) : 0
+        let footerProgress: CGFloat = keyboardVisible ? 0 : showsActionFooter ? (isTiming || isLeavingRest ? 1 : progress) : 0
         let footerHeight = actionFooterHeight * footerProgress
         let accessibilityHeaderPadding = dynamicTypeSize.isAccessibilitySize ? EQSpacing.xl : 0
-        let headerHeight = EQLayout.minimumTouch + EQSpacing.xxs + (accessibilityHeaderPadding * 2)
+        // The collapsed card tucks the title closer to IN PROGRESS; the gap opens as it expands.
+        let collapsedTitleLift = EQSpacing.md * max(1 - min(max(progress, 0), 1), CGFloat(workTint))
+        let headerHeight = EQLayout.minimumTouch + EQSpacing.xxs + (accessibilityHeaderPadding * 2) - collapsedTitleLift
 
         return GeometryReader { proxy in
             let anchors = ExecutionPrimaryActionLayout.foregroundAnchors(
@@ -1823,12 +1964,13 @@ private struct ExecutionWallet<ListRow: View, ForegroundHeader: View, Foreground
                 )
                 : anchors.contentHeight
             VStack(alignment: .leading, spacing: 0) {
-                foregroundHeader(progress)
+                foregroundHeader(progress, isLeavingRest ? 1 : 0)
                     .frame(maxWidth: .infinity, minHeight: EQLayout.minimumTouch, alignment: .leading)
                     .padding(.horizontal, EQLayout.WorkoutExecution.walletInset)
                     .padding(.top, EQSpacing.xxs)
                     .padding(.vertical, accessibilityHeaderPadding)
-                    .background(EQColor.Execution.foregroundSurface)
+                    .padding(.bottom, -collapsedTitleLift)
+                    .background(foregroundSurfaceColor)
                     .zIndex(2)
 
                 ScrollView {
@@ -1857,14 +1999,24 @@ private struct ExecutionWallet<ListRow: View, ForegroundHeader: View, Foreground
             .overlay(alignment: .topLeading) {
                 if hasExerciseAction, !isTiming {
                     let revealProgress = min(max((progress - 0.18) / 0.82, 0), 1)
-                    let valuesTopInset = anchors.contentTop + EQSpacing.md
+                    // Values scroll in their own viewport beneath the exercise title.
+                    let valuesTopInset = anchors.contentTop + EQSpacing.xxs + foregroundTitleHeight + EQSpacing.xs
                     let valuesBottomInset = max(0, proxy.size.height - anchors.contentBottom) + EQSpacing.md
-                    foregroundValues()
+                    ScrollView {
+                        foregroundValues()
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .defaultScrollAnchor(.bottom, for: .alignment)
+                    .defaultScrollAnchor(.bottom, for: .initialOffset)
+                    .scrollBounceBehavior(.basedOnSize)
+                    .scrollIndicators(.hidden)
+                    .scrollDismissesKeyboard(.interactively)
                         .frame(
                             width: max(0, proxy.size.width - (EQLayout.WorkoutExecution.walletInset * 2)),
                             height: max(0, proxy.size.height - valuesTopInset - valuesBottomInset),
                             alignment: .bottomLeading
                         )
+                        .clipped()
                         .padding(.horizontal, EQLayout.WorkoutExecution.walletInset)
                         .padding(.top, valuesTopInset)
                         .padding(.bottom, valuesBottomInset)
@@ -1882,7 +2034,7 @@ private struct ExecutionWallet<ListRow: View, ForegroundHeader: View, Foreground
             )
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .foregroundStyle(EQColor.Execution.foregroundText)
+        .foregroundStyle(foregroundTextColor)
     }
 
     private func unifiedActionControls(_ primaryAction: ExecutionPrimaryAction?) -> some View {
@@ -1902,7 +2054,7 @@ private struct ExecutionWallet<ListRow: View, ForegroundHeader: View, Foreground
         let focusedReveal = min(max((focusProgress - 0.18) / 0.82, 0), 1)
         let revealProgress: CGFloat = switch phase {
         case .work, .rest: 1
-        case .exercise: primaryAction == nil ? 0 : focusedReveal
+        case .exercise: primaryAction == nil ? 0 : (isLeavingRest ? 1 : focusedReveal)
         case .hidden: 0
         }
         let isAvailable = phase == .work || phase == .rest || primaryAction != nil
@@ -1950,9 +2102,9 @@ private struct ExecutionWallet<ListRow: View, ForegroundHeader: View, Foreground
                     .frame(width: timerWidth, height: EQLayout.WorkoutExecution.primaryActionHeight)
             }
             .eqPrimaryCTA(
-                tint: EQColor.Execution.primaryAction,
-                foreground: EQColor.Execution.foregroundSurface,
-                variant: isResting ? .outlined : .filled
+                tint: EQColor.Execution.primaryAction.mix(with: EQColor.Execution.restCardText, by: timingTint),
+                foreground: foregroundSurfaceColor,
+                variant: isResting || phase == .work ? .outlined : .filled
             )
             .accessibilityHint(hint)
             .accessibilityIdentifier(ExecutionPrimaryActionIdentity(workoutID: workout.id).accessibilityIdentifier)
@@ -1969,8 +2121,8 @@ private struct ExecutionWallet<ListRow: View, ForegroundHeader: View, Foreground
                         .frame(height: EQLayout.WorkoutExecution.primaryActionHeight)
                 }
                 .eqPrimaryCTA(
-                    tint: EQColor.Execution.foregroundText,
-                    foreground: EQColor.Execution.foregroundSurface,
+                    tint: foregroundTextColor,
+                    foreground: foregroundSurfaceColor,
                     variant: .outlined
                 )
                 .disabled(model.workTimerState?.phase == .ready)
@@ -1992,11 +2144,11 @@ private struct ExecutionWallet<ListRow: View, ForegroundHeader: View, Foreground
         .padding(.bottom, EQLayout.WorkoutExecution.primaryActionBottomInset)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
         .offset(y: footerHeight * (1 - revealProgress))
-        .foregroundStyle(EQColor.Execution.foregroundText)
+        .foregroundStyle(foregroundTextColor)
     }
 
     private var foregroundBackground: some View {
-        EQSurface(color: EQColor.Execution.foregroundSurface, radius: EQRadius.walletSurface)
+        EQSurface(color: foregroundSurfaceColor, radius: EQRadius.walletSurface)
     }
 
 }
@@ -2104,11 +2256,47 @@ private struct RestDurationEditor: View {
     private var durationText: String { String(format: "%d:%02d", Int(seconds) / 60, Int(seconds) % 60) }
 }
 
+enum SetInputField: CaseIterable {
+    case weight, value
+
+    var previous: SetInputField? { self == .value ? .weight : nil }
+    var next: SetInputField? { self == .weight ? .value : nil }
+}
+
+/// Native keyboard accessory bar: previous/next field and Done.
+private struct SetInputKeyboardBar: ViewModifier {
+    var focusedField: FocusState<SetInputField?>.Binding
+
+    func body(content: Content) -> some View {
+        content.toolbar {
+            ToolbarItemGroup(placement: .keyboard) {
+                Group {
+                Button { focusedField.wrappedValue = focusedField.wrappedValue?.previous } label: {
+                    Image(systemName: "chevron.up")
+                }
+                .disabled(focusedField.wrappedValue?.previous == nil)
+                .accessibilityLabel("Previous field")
+                Button { focusedField.wrappedValue = focusedField.wrappedValue?.next } label: {
+                    Image(systemName: "chevron.down")
+                }
+                .disabled(focusedField.wrappedValue?.next == nil)
+                .accessibilityLabel("Next field")
+                Spacer()
+                Button("Done") { focusedField.wrappedValue = nil }
+                    .fontWeight(.semibold)
+                }
+                .tint(EQColor.primaryText)
+                .foregroundStyle(EQColor.primaryText)
+            }
+        }
+    }
+}
+
 private struct FirstSetView: View {
     let exercise: WorkoutExercise; let progression: ProgressionSuggestion?; let weightUnit: WeightUnit; let log: (SetLogInput) async -> Void
     @State private var weight: String
     @State private var repetitions: String
-    @FocusState private var fieldFocused: Bool
+    @FocusState private var focusedField: SetInputField?
 
     init(exercise: WorkoutExercise, progression: ProgressionSuggestion?, weightUnit: WeightUnit, log: @escaping (SetLogInput) async -> Void) {
         self.exercise = exercise
@@ -2122,10 +2310,11 @@ private struct FirstSetView: View {
         VStack(alignment: .leading, spacing: EQLayout.sectionGap) {
             Text("No previous working sets").eqTextStyle(.caption).foregroundStyle(EQColor.Execution.foregroundSecondaryText)
             VStack(alignment: .leading, spacing: EQSpacing.md) {
-                EQMetricInput(value: $weight, label: (weightUnit == .pounds ? "lb" : "kg") + (progression?.rationale == .increaseWeight ? " ↑" : ""), accessibilityLabel: "Weight", keyboard: .decimalPad, valueColor: EQColor.Execution.primaryAction, unitColor: EQColor.Execution.metricUnit).focused($fieldFocused)
-                EQMetricInput(value: $repetitions, label: exercise.isTimeBased ? "secs" : "reps" + (progression?.rationale == .addRepetitions ? " ↑" : ""), accessibilityLabel: exercise.isTimeBased ? "Seconds" : "Repetitions", keyboard: .numberPad, valueColor: EQColor.Execution.primaryAction, unitColor: EQColor.Execution.metricUnit).focused($fieldFocused)
+                EQMetricInput(value: $weight, label: weightUnit == .pounds ? "lb" : "kg", accessibilityLabel: "Weight", keyboard: .decimalPad, valueColor: EQColor.Execution.primaryAction, unitColor: EQColor.Execution.metricUnit, progressed: progression?.rationale == .increaseWeight, holdLegend: BarbellLoad.legend(weight, unit: weightUnit), legendColor: EQColor.Execution.metricUnit).focused($focusedField, equals: .weight)
+                EQMetricInput(value: $repetitions, label: exercise.isTimeBased ? "secs" : "reps", accessibilityLabel: exercise.isTimeBased ? "Seconds" : "Repetitions", keyboard: .numberPad, valueColor: EQColor.Execution.primaryAction, unitColor: EQColor.Execution.metricUnit, progressed: !exercise.isTimeBased && progression?.rationale == .addRepetitions).focused($focusedField, equals: .value)
             }
         }
+        .modifier(SetInputKeyboardBar(focusedField: $focusedField))
         .preference(
             key: ExecutionPrimaryActionPreferenceKey.self,
             value: ExecutionPrimaryAction(
@@ -2137,7 +2326,7 @@ private struct FirstSetView: View {
     }
 
     private func commit() {
-        fieldFocused = false
+        focusedField = nil
         guard let value = Int(repetitions), value > 0 else { return }
         Task {
             await log(exercise.isTimeBased
@@ -2149,9 +2338,12 @@ private struct FirstSetView: View {
 }
 
 private struct ExerciseListRow: View {
+    @Environment(\.executionRestTint) private var restTint
     let exercise: WorkoutExercise
     let state: ExerciseState
     let weightUnit: WeightUnit
+
+    private func restBlend(_ color: Color) -> Color { color.mix(with: EQColor.Execution.restCardText, by: restTint) }
 
     var body: some View {
         let presentation = ExerciseListRowPresentation.resolve(state: state)
@@ -2160,7 +2352,7 @@ private struct ExerciseListRow: View {
                 Text(exercise.nameSnapshot)
                     .eqTextStyle(.listItemTitle)
                     .strikethrough(presentation.strikethrough)
-                    .foregroundStyle(presentation.emphasis == .reduced ? EQColor.Execution.overviewSecondaryText : EQColor.Execution.overviewText)
+                    .foregroundStyle(restBlend(presentation.emphasis == .reduced ? EQColor.Execution.overviewSecondaryText : EQColor.Execution.overviewText))
                 Spacer()
                 if state == .current {
                     Circle()
@@ -2184,7 +2376,7 @@ private struct ExerciseListRow: View {
                             Text(summary(set))
                         }
                         .eqTextStyle(.secondaryBody)
-                        .foregroundStyle(EQColor.Execution.overviewSecondaryText)
+                        .foregroundStyle(restBlend(EQColor.Execution.overviewSecondaryText))
                     }
                 }
             }
@@ -2236,8 +2428,7 @@ private struct FocusedSetView: View {
     let startTimed: (SetLogInput) -> Void
     @State private var weightText: String
     @State private var valueText: String
-    @FocusState private var focusedField: Field?
-    private enum Field { case weight, value }
+    @FocusState private var focusedField: SetInputField?
 
     init(exercise: WorkoutExercise, prescription: SetPrescription, progression: ProgressionSuggestion?, selectedIndex: Int, isReadOnly: Bool, weightUnit: WeightUnit, log: @escaping (SetLogInput) async -> Void, startTimed: @escaping (SetLogInput) -> Void) {
         self.exercise = exercise; self.prescription = prescription; self.progression = progression; self.selectedIndex = selectedIndex; self.isReadOnly = isReadOnly; self.weightUnit = weightUnit; self.log = log; self.startTimed = startTimed
@@ -2254,12 +2445,13 @@ private struct FocusedSetView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: EQLayout.sectionGap) {
             VStack(alignment: .leading, spacing: EQSpacing.md) {
-                EQMetricInput(value: $weightText, label: weightLabel, accessibilityLabel: "\(exercise.nameSnapshot), set \(selectedIndex + 1), weight", keyboard: .decimalPad, valueColor: EQColor.Execution.primaryAction, unitColor: EQColor.Execution.metricUnit)
+                EQMetricInput(value: $weightText, label: weightLabel, accessibilityLabel: "\(exercise.nameSnapshot), set \(selectedIndex + 1), weight", keyboard: .decimalPad, valueColor: EQColor.Execution.primaryAction, unitColor: EQColor.Execution.metricUnit, progressed: progression?.rationale == .increaseWeight, holdLegend: BarbellLoad.legend(weightText, unit: weightUnit), legendColor: EQColor.Execution.metricUnit)
                     .focused($focusedField, equals: .weight)
-                EQMetricInput(value: $valueText, label: progressedValueLabel, accessibilityLabel: "\(exercise.nameSnapshot), set \(selectedIndex + 1), \(valueAccessibilityLabel)", keyboard: .numberPad, valueColor: EQColor.Execution.primaryAction, unitColor: EQColor.Execution.metricUnit)
+                EQMetricInput(value: $valueText, label: valueLabel, accessibilityLabel: "\(exercise.nameSnapshot), set \(selectedIndex + 1), \(valueAccessibilityLabel)", keyboard: .numberPad, valueColor: EQColor.Execution.primaryAction, unitColor: EQColor.Execution.metricUnit, progressed: progression?.rationale == .addRepetitions)
                     .focused($focusedField, equals: .value)
             }
         }
+        .modifier(SetInputKeyboardBar(focusedField: $focusedField))
         .preference(
             key: ExecutionPrimaryActionPreferenceKey.self,
             value: isReadOnly ? nil : ExecutionPrimaryAction(
@@ -2274,8 +2466,7 @@ private struct FocusedSetView: View {
     private var isLogged: Bool { exercise.loggedSets.contains { $0.prescriptionID == prescription.id && $0.completedAt != nil } }
     private var valueLabel: String { if case .duration = prescription.target { return "secs" }; return "reps" }
     private var valueAccessibilityLabel: String { if case .duration = prescription.target { return "seconds" }; return "reps" }
-    private var weightLabel: String { (weightUnit == .pounds ? "lb" : "kg") + (progression?.rationale == .increaseWeight ? " ↑" : "") }
-    private var progressedValueLabel: String { valueLabel + (progression?.rationale == .addRepetitions ? " ↑" : "") }
+    private var weightLabel: String { weightUnit == .pounds ? "lb" : "kg" }
     private func commit() {
         focusedField = nil
         guard let value = Int(valueText), value > 0 else { return }
@@ -2594,69 +2785,30 @@ private struct ExecutionTimerRegion: View {
     var body: some View {
         Group {
             if presentation.isVisible {
-                GeometryReader { proxy in
-                    let compactProgress = ExecutionTimerResponsiveLayout.compactProgress(
-                        for: proxy.size.height
-                    )
-                    ExecutionTimerResponsiveLayout(
-                        compactProgress: compactProgress,
-                        hasPrimaryContext: primaryContext != nil,
-                        hasSecondaryContext: secondaryContext != nil
-                    ) {
-                        HStack(spacing: EQLayout.controlGap) {
-                            Text(title)
-                                .eqTextStyle(.sectionLabel)
-                                .foregroundStyle(tint)
-                            if let sideIndicator {
-                                Text(sideIndicator)
-                                    .eqTextStyle(.sectionLabel)
-                                    .foregroundStyle(tint)
-                                    .padding(.horizontal, EQSpacing.sm * (1 - compactProgress))
-                                    .padding(.vertical, EQSpacing.xxs * (1 - compactProgress))
-                                    .background(
-                                        tint.opacity(0.14 * Double(1 - compactProgress)),
-                                        in: Capsule()
-                                    )
-                                    .accessibilityLabel(sideIndicator.lowercased())
-                            }
-                        }
-
+                // Rest and work share one quiet countdown, styled like the set values.
+                // The overlay pins it to the region's top so it never shifts while the region resizes.
+                Color.clear
+                    .overlay(alignment: .top) {
                         Text(durationText)
-                            .eqTextStyle(.timerMetric(size: timerMetricSize(compactProgress: compactProgress)))
+                            .eqTextStyle(.largeMetric)
                             .monospacedDigit()
                             .contentTransition(reduceMotion ? .opacity : .numericText())
                             .lineLimit(1)
-                            .minimumScaleFactor(0.6)
+                            .fixedSize()
+                            .foregroundStyle(timerColor)
+                            // Grows in place as the wallet uncovers it, and shrinks back under it when the timer ends.
+                            .scaleEffect(reduceMotion ? 1 : 0.4 + (0.6 * visibilityProgress), anchor: .center)
+                            .padding(.top, EQSpacing.lg)
+                            .padding(.horizontal, EQLayout.WorkoutExecution.walletInset)
                             .accessibilityLabel("\(title) time remaining, \(durationText)")
-
-                        Text(primaryContext ?? "")
-                            .eqTextStyle(.body)
-                            .foregroundStyle(timerText.opacity(0.65))
-                            .lineLimit(2)
-                            .opacity(primaryContext == nil ? 0 : 1)
-                            .accessibilityHidden(primaryContext == nil)
-
-                        Text(secondaryContext ?? "")
-                            .eqTextStyle(.caption)
-                            .foregroundStyle(timerText.opacity(0.65))
-                            .lineLimit(2)
-                            .opacity(secondaryContext == nil ? 0 : Double(1 - compactProgress))
-                            .accessibilityHidden(secondaryContext == nil || compactProgress > 0.5)
-
-                        ProgressView(value: totalDuration - remaining, total: totalDuration)
-                            .tint(tint)
                     }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                }
-                .transition(.identity)
+                    .transition(.identity)
             } else {
                 Color.clear
                     .frame(height: 0)
                     .transition(.identity)
             }
         }
-        .foregroundStyle(timerText)
-        .background(timerBackground)
         .allowsHitTesting(visibilityProgress > 0.99)
         .accessibilityHidden(visibilityProgress < 0.99)
         .accessibilityIdentifier("execution-timer-region")
@@ -2666,59 +2818,13 @@ private struct ExecutionTimerRegion: View {
         switch presentation {
         case .hidden: return ""
         case .work(let state, _): return workPhaseLabel(state.phase)
-        case .rest: return "REST"
+        case .rest: return "Rest"
         }
     }
 
-    private var primaryContext: String? {
-        switch presentation {
-        case .hidden: return nil
-        case .work(let state, _): return state.exerciseName
-        case .rest: return nextAction.map { "Up next · \($0)" }
-        }
-    }
-
-    private var secondaryContext: String? {
-        switch presentation {
-        case .hidden: return nil
-        case .work(let state, _): return "Set \(state.setNumber) of \(state.totalSets)"
-        case .rest: return nil
-        }
-    }
-
-    private var sideIndicator: String? {
-        guard case .work(let state, _) = presentation, state.isTwoSided else { return nil }
-        switch state.phase {
-        case .ready: return "2 SIDES"
-        case .firstSide: return "SIDE 1 OF 2"
-        case .switchSides: return "NEXT · SIDE 2"
-        case .secondSide: return "SIDE 2 OF 2"
-        }
-    }
-
-    private var tint: Color {
-        switch presentation {
-        case .hidden: return EQColor.Execution.progressAccent
-        case .work(let state, _): return state.phase == .switchSides ? EQColor.Execution.primaryAction : EQColor.Execution.progressAccent
-        case .rest: return EQColor.Execution.timerText
-        }
-    }
-
-    private var timerText: Color {
-        EQColor.Execution.timerText
-    }
-
-    private var timerBackground: Color {
-        if case .rest = presentation { return EQColor.Execution.restCanvas }
-        return EQColor.Execution.canvas
-    }
-
-    private var totalDuration: TimeInterval {
-        switch presentation {
-        case .hidden: return 1
-        case .work(let state, _): return state.totalDuration
-        case .rest(let state): return state.totalDuration
-        }
+    private var timerColor: Color {
+        // Work matches the Start Timer button fill.
+        presentation.isRest ? EQColor.Execution.restTimerText : EQColor.Execution.primaryAction
     }
 
     private var remaining: TimeInterval {
@@ -2729,21 +2835,19 @@ private struct ExecutionTimerRegion: View {
         }
     }
 
-    private func timerMetricSize(compactProgress: CGFloat) -> CGFloat {
-        let compact = EQLayout.WorkoutExecution.compactTimerMetricSize
-        let expanded = EQLayout.WorkoutExecution.expandedTimerMetricSize
-        return expanded + ((compact - expanded) * compactProgress)
-    }
-
-    // Phase 6B can layer the recovery visual around this shared timer region.
     private var durationText: String { ExecutionTimerFormatting.durationText(for: remaining) }
+
+    private var isTwoSided: Bool {
+        if case .work(let state, _) = presentation { return state.isTwoSided }
+        return false
+    }
 
     private func workPhaseLabel(_ phase: WorkoutWorkTimerPhase) -> String {
         switch phase {
-        case .ready: return "GET READY"
-        case .firstSide: return "WORK"
-        case .switchSides: return "SWITCH SIDES"
-        case .secondSide: return "WORK"
+        case .ready: return "Get ready"
+        case .firstSide: return isTwoSided ? "Work, side 1 of 2" : "Work"
+        case .switchSides: return "Switch sides"
+        case .secondSide: return "Work, side 2 of 2"
         }
     }
 }

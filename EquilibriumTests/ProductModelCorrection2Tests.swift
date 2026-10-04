@@ -84,7 +84,7 @@ final class ProductModelCorrection2Tests: XCTestCase {
         let draft = WorkoutImportDraftConverter.lightweightDraft(from: try XCTUnwrap(parsed.workouts.first), catalog: [EquilibriumFixtures.exercises[0]])
         XCTAssertEqual(draft.exercises.map(\.exerciseID), [EquilibriumFixtures.squatID, nil])
         XCTAssertEqual(draft.exercises.map(\.name), ["Back Squat", "Novel Curl"])
-        XCTAssertTrue(draft.exercises.allSatisfy { $0.prescriptions.isEmpty })
+        XCTAssertEqual(draft.exercises.map(\.prescriptions.count), [3, 2])
     }
 
     func testRecentCopyUsesSelectedStructureButLatestPerExercisePerformance() async throws {

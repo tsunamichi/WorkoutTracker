@@ -29,6 +29,29 @@ final class RepositoryPerformanceQueryTests: XCTestCase {
         XCTAssertNil(missing.latestOccurrence)
     }
 
+    func testRecentCompletedWorkoutsMatchesFullScanPrefix() async throws {
+        let repository = try seededRepository()
+        let full = try await repository.completedWorkouts()
+        for limit in [0, 1, 2, 3, 14, .max] {
+            let recent = try await repository.recentCompletedWorkouts(limit: limit)
+            XCTAssertEqual(recent.map(\.id), Array(full.prefix(limit)).map(\.id), "limit \(limit)")
+        }
+    }
+
+    func testWorkoutHistoryGroupsConsecutiveWorkoutsByMonth() async throws {
+        let repository = try seededRepository()
+        var calendar = Calendar(identifier: .gregorian); calendar.timeZone = TimeZone(identifier: "UTC")!
+        let workouts = try await repository.completedWorkouts()
+        let months = WorkoutHistoryMonth.group(workouts, calendar: calendar)
+        XCTAssertEqual(months.count, 1)
+        XCTAssertEqual(months.first?.workouts.map(\.id), workouts.map(\.id))
+        let first = workouts[0]
+        var older = first; older.completedAt = calendar.date(byAdding: .month, value: -1, to: first.completedAt!)
+        let split = WorkoutHistoryMonth.group([first, older], calendar: calendar)
+        XCTAssertEqual(split.map { $0.workouts.count }, [1, 1])
+        XCTAssertEqual(split[0].title(now: split[0].id, calendar: calendar), split[0].id.formatted(.dateTime.month(.wide)))
+    }
+
     func testHomeWorkoutsMatchesFullScan() async throws {
         let repository = try seededRepository()
         let ready = Workout(id: .init(rawValue: "ready"), titleSnapshot: "Ready", exercises: [], status: .ready, startedAt: nil, completedAt: nil, createdAt: .now, updatedAt: .now)

@@ -15,7 +15,7 @@ struct AddWorkoutSheet: View {
         NavigationStack(path: $path) {
             creationDestination(initialRoute)
                 .navigationDestination(for: CreationRoute.self) { creationDestination($0) }
-        }.presentationDetents([.large]).preferredColorScheme(initialRoute == .recent ? .light : .dark)
+        }.presentationDetents([initialRoute == .recent ? .reuseWorkout : .large]).preferredColorScheme(initialRoute == .recent || initialRoute == .pasteWorkout ? EQColor.colorScheme : .dark)
     }
 
     @ViewBuilder private func creationDestination(_ route: CreationRoute) -> some View {
@@ -82,3 +82,12 @@ private extension WorkoutDraft {
 #Preview("Mixed Builder") { builderPreview(draft: .previewMixed) }
 #Preview("Builder Large Type") { builderPreview(draft: .previewMixed, size: .accessibility3) }
 #endif
+
+private struct ReuseWorkoutDetent: CustomPresentationDetent {
+    // Leaves a 40pt tappable gap above the sheet so tapping outside dismisses it.
+    static func height(in context: Context) -> CGFloat? { context.maxDetentValue - 40 }
+}
+
+extension PresentationDetent {
+    static let reuseWorkout = Self.custom(ReuseWorkoutDetent.self)
+}

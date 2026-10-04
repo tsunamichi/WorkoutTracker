@@ -63,17 +63,21 @@ struct RecentWorkoutPicker: View {
     let repository: any WorkoutRepository; let selection: ([Workout]) -> Void
     let history: any ExerciseHistoryRepository
     init(repository: any WorkoutRepository, history: any ExerciseHistoryRepository, selection: @escaping ([Workout]) -> Void) { self.repository = repository; self.history = history; self.selection = selection }
-    @State private var values: [Workout] = []; @State private var selectedIDs: [WorkoutID] = []; @State private var failed = false; @State private var saving = false
+    @State private var allValues: [Workout] = []; @State private var showsAll = false; @State private var selectedIDs: [WorkoutID] = []; @State private var failed = false; @State private var saving = false
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text("Reuse workout")
-                .eqTextStyle(.screenTitle)
-                .foregroundStyle(EQColor.primaryText)
+            HStack(alignment: .center) {
+                Text("Reuse workout")
+                    .eqTextStyle(.screenTitle)
+                    .foregroundStyle(EQColor.primaryText)
+                Spacer(minLength: EQSpacing.sm)
+                addButton
+            }
                 .padding(.horizontal, EQLayout.screenGutter)
                 .padding(.top, EQLayout.Settings.sheetTopSpacing)
                 .padding(.bottom, EQLayout.Settings.sheetTitleToContentSpacing)
             if values.isEmpty {
-                ContentUnavailableView("No recent workouts", systemImage: "clock.arrow.circlepath", description: Text(failed ? "Recent workouts could not be loaded." : "Completed workouts appear here."))
+                ContentUnavailableView("No recent workouts", systemImage: "clock.arrow.circlepath", description: Text(failed ? "Recent workouts could not be loaded." : allValues.isEmpty ? "Completed workouts appear here." : "No workouts in the past 2 weeks."))
                     .foregroundStyle(EQColor.secondaryText)
                     .frame(maxHeight: .infinity)
             } else {
@@ -91,13 +95,25 @@ struct RecentWorkoutPicker: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .safeAreaInset(edge: .bottom, spacing: 0) { addButton }
+        .safeAreaInset(edge: .bottom, spacing: 0) { seeAllButton }
         .background(EQColor.elevatedSurface)
         .toolbar(.hidden, for: .navigationBar)
         .presentationDragIndicator(.visible)
         .presentationCornerRadius(EQRadius.sheet)
         .presentationBackground(EQColor.elevatedSurface)
-        .task { do { values = Workout.distinctRoutines(try await repository.recentCompletedWorkouts(limit: .max)) } catch { failed = true } }
+        .task { do { allValues = try await repository.recentCompletedWorkouts(limit: .max) } catch { failed = true } }
+    }
+    private var values: [Workout] {
+        if showsAll { return allValues }
+        let cutoff = Calendar.current.date(byAdding: .day, value: -14, to: .now) ?? .distantPast
+        return Workout.distinctRoutines(allValues.filter { ($0.completedAt ?? $0.startedAt ?? .distantPast) >= cutoff })
+    }
+    private func toggleShowsAll() {
+        withAnimation(EQMotion.responsive) {
+            showsAll.toggle()
+            let visible = Set(values.map(\.id))
+            selectedIDs.removeAll { !visible.contains($0) }
+        }
     }
     private func row(_ value: Workout) -> some View {
         let selected = selectedIDs.contains(value.id)
@@ -105,7 +121,7 @@ struct RecentWorkoutPicker: View {
             HStack(spacing: EQLayout.controlGap) {
                 VStack(alignment: .leading, spacing: EQSpacing.xxs) {
                     Text(value.titleSnapshot).eqTextStyle(.listItemTitle).foregroundStyle(EQColor.primaryText).lineLimit(1)
-                    Text(detail(value)).eqTextStyle(.caption).foregroundStyle(EQColor.secondaryText).lineLimit(1)
+                    detailText(value).eqTextStyle(.caption).foregroundStyle(EQColor.secondaryText).lineLimit(1)
                 }
                 Spacer(minLength: 0)
                 Image(systemName: selected ? "checkmark.circle.fill" : "circle")
@@ -115,7 +131,12 @@ struct RecentWorkoutPicker: View {
             }
             .padding(EQSpacing.md)
             .frame(maxWidth: .infinity, minHeight: EQDimension.minimumTouch, alignment: .leading)
-            .background(selected ? EQColor.Home.cardSurface : EQColor.surface, in: RoundedRectangle(cornerRadius: EQRadius.card, style: .continuous))
+            .background(EQColor.cardFill, in: RoundedRectangle(cornerRadius: EQRadius.card, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: EQRadius.card, style: .continuous)
+                    .strokeBorder(EQColor.accent, lineWidth: 1)
+                    .opacity(selected ? 1 : 0)
+            }
             .contentShape(RoundedRectangle(cornerRadius: EQRadius.card, style: .continuous))
         }
         .buttonStyle(.plain)
@@ -124,35 +145,65 @@ struct RecentWorkoutPicker: View {
         .accessibilityAddTraits(selected ? .isSelected : [])
     }
     private var addButton: some View {
-        Button { Task { await addSelected() } } label: {
-            Text(selectedIDs.isEmpty ? "Select workouts" : "Add \(selectedIDs.count) \(selectedIDs.count == 1 ? "workout" : "workouts")")
-                .frame(maxWidth: .infinity, minHeight: EQLayout.WorkoutExecution.primaryActionHeight)
+        let enabled = !selectedIDs.isEmpty && !saving
+        return Button { Task { await addSelected() } } label: {
+            Text(selectedIDs.count > 1 ? "Add \(selectedIDs.count)" : "Add")
+                .lineLimit(1)
+                .fixedSize()
+                .padding(.horizontal, EQSpacing.md)
+                .frame(height: 36)
         }
         .eqPrimaryCTA(
-            tint: selectedIDs.isEmpty ? EQColor.separator : EQColor.accent,
-            foreground: selectedIDs.isEmpty ? EQColor.secondaryText : EQColor.primaryActionSurface
+            tint: enabled ? EQColor.ctaSurface : EQColor.ctaDisabledSurface,
+            foreground: enabled ? EQColor.ctaLabel : EQColor.ctaDisabledLabel
         )
-        .disabled(selectedIDs.isEmpty || saving)
-        .padding(.horizontal, EQLayout.screenGutter)
-        .padding(.top, EQSpacing.sm)
-        .padding(.bottom, EQSpacing.xs)
-        .background(EQColor.elevatedSurface)
+        .frame(minHeight: EQDimension.minimumTouch)
+        .contentShape(Rectangle())
+        .disabled(!enabled)
+        .animation(.easeOut(duration: 0.08), value: selectedIDs.count)
+    }
+    @ViewBuilder private var seeAllButton: some View {
+        if !allValues.isEmpty {
+            VStack(spacing: 0) {
+                Text(showsAll ? "Showing every completed workout" : "Showing workouts from the past 2 weeks")
+                    .eqTextStyle(.legal)
+                    .foregroundStyle(EQColor.secondaryText)
+                    .multilineTextAlignment(.center)
+                Button(showsAll ? "Show less" : "See all") { toggleShowsAll() }
+                    .eqTextStyle(.body)
+                    .foregroundStyle(EQColor.accent)
+                    .buttonStyle(.plain)
+                    .frame(maxWidth: .infinity, minHeight: EQDimension.minimumTouch)
+                    .contentShape(Rectangle())
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.horizontal, EQLayout.screenGutter)
+            .padding(.top, EQSpacing.sm)
+            .padding(.bottom, EQSpacing.xs)
+            .background(EQColor.elevatedSurface)
+        }
     }
     private func toggle(_ id: WorkoutID) {
-        withAnimation(EQMotion.responsive) {
+        withAnimation(.easeOut(duration: 0.08)) {
             if selectedIDs.contains(id) { selectedIDs.removeAll { $0 == id } } else { selectedIDs.append(id) }
         }
         SystemHapticsClient().perform(.selection)
+    }
+    private func detailText(_ value: Workout) -> Text {
+        let count = value.exercises.count
+        let exercises = "\(count) \(count == 1 ? "exercise" : "exercises")"
+        guard let date = value.completedAt ?? value.startedAt else { return Text(exercises) }
+        return Text("\(EQDateText.text(date, style: .caption, includeYear: false)) · \(exercises)")
     }
     private func detail(_ value: Workout) -> String {
         let count = value.exercises.count
         let exercises = "\(count) \(count == 1 ? "exercise" : "exercises")"
         guard let date = value.completedAt ?? value.startedAt else { return exercises }
-        return "\(date.formatted(.dateTime.month(.abbreviated).day())) · \(exercises)"
+        return "\(EQDateText.string(date, includeYear: false)) · \(exercises)"
     }
     private func addSelected(now: Date = .now) async {
         saving = true; defer { saving = false }
-        let chosen = selectedIDs.compactMap { id in values.first { $0.id == id } }
+        let chosen = selectedIDs.compactMap { id in allValues.first { $0.id == id } }
         do {
             var fresh: [Workout] = []
             for (index, historical) in chosen.enumerated() { fresh.append(try await historical.freshCopy(createdAt: now.addingTimeInterval(Double(index) / 1_000), history: history)) }
@@ -168,8 +219,7 @@ extension Workout {
         var seen = Set<String>()
         return workouts.filter { workout in
             let name = workout.titleSnapshot.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-            let exercises = workout.exercises.map(\.exerciseID.rawValue).sorted().joined(separator: "|")
-            return seen.insert("\(name)#\(exercises)").inserted
+            return seen.insert(name).inserted
         }
     }
 

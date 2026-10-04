@@ -4,6 +4,45 @@ import XCTest
 final class WorkoutImportPhase3BTests: XCTestCase {
     private let parser = WorkoutTextParser()
 
+    func testAnyFirstLineIsTheWorkoutTitleEvenWhenNextLineIsInvalid() {
+        let result = parser.parse("1:# Full Expression\nPower block\n- Seated Box Jump — 4×3")
+        XCTAssertEqual(result.workouts.map(\.name), ["1:# Full Expression"])
+        XCTAssertEqual(result.workouts.first?.exercises.count, 1)
+        XCTAssertEqual(result.issues.map(\.lineNumber), [2])
+    }
+
+    func testBareCountIsSingleSetAndSecondsSuffixIsDuration() {
+        let result = parser.parse("Power\n- Walking RDL + Reach - 10\n- Plank — 3×30s\n- Hang: 45 sec")
+        let exercises = result.workouts.first?.exercises ?? []
+        XCTAssertTrue(result.issues.isEmpty)
+        XCTAssertEqual(exercises.map(\.name), ["Walking RDL + Reach", "Plank", "Hang"])
+        XCTAssertEqual(exercises.map(\.prescriptions.count), [1, 3, 1])
+        guard exercises.count == 3 else { return }
+        XCTAssertEqual(exercises[0].prescriptions[0].target, .repetitions(10...10))
+        XCTAssertEqual(exercises[1].prescriptions[0].target, .duration(seconds: 30))
+        XCTAssertEqual(exercises[2].prescriptions[0].target, .duration(seconds: 45))
+    }
+
+    func testSplitTitleSeparatesLeadingHeadingOnly() {
+        let split = parser.splitTitle("\n1:# Full Expression\n\n- Box Jump — 3×5")
+        XCTAssertEqual(split.title, "1:# Full Expression")
+        XCTAssertEqual(split.body, "- Box Jump — 3×5")
+        XCTAssertEqual(parser.splitTitle("- Box Jump — 3×5").title, "")
+    }
+
+    @MainActor func testPasteKeepsParsedSetsRepsDurationsWeightAndRest() async throws {
+        let repository = SwiftDataRepository(container: try PersistenceController.makeContainer(inMemory: true))
+        let result = parser.parse("1:3 Full Expression\n\n- Row — 1x120 sec\n- Wall Tibialis Raise — 2×15\n- Bench — 3×8-10 @ 100 lb, rest 90 sec")
+        let workout = try await WorkoutPasteMaterializer(exercises: repository, workouts: repository, history: repository).materialize(result.workouts)[0]
+        XCTAssertEqual(workout.titleSnapshot, "1:3 Full Expression")
+        XCTAssertEqual(workout.exercises.map(\.prescriptions.count), [1, 2, 3])
+        XCTAssertEqual(workout.exercises[0].prescriptions[0].target, .duration(seconds: 120))
+        XCTAssertEqual(workout.exercises[1].prescriptions[0].target, .repetitions(range: 15...15))
+        XCTAssertEqual(workout.exercises[2].prescriptions[0].target, .repetitions(range: 8...10))
+        XCTAssertEqual(workout.exercises[2].prescriptions[0].suggestedWeight?.pounds, 100)
+        XCTAssertEqual(workout.exercises[2].restDuration, 90)
+    }
+
     func testBasicGrammarWhitespaceBulletsAndBlankLines() throws {
         let result = parser.parse("  Push  \n\n• Bench Press 3x8\nIncline Press 3 x 10\nCable Fly 3×12\nPlank 3x30 sec\n")
         XCTAssertFalse(result.hasBlockingIssues); XCTAssertEqual(result.workouts.count, 1)
@@ -65,6 +104,7 @@ final class WorkoutImportPhase3BTests: XCTestCase {
         let values = try await WorkoutPasteMaterializer(exercises: repository, workouts: repository, history: repository).materialize(result.workouts, now: .init(timeIntervalSince1970: 100))
         XCTAssertEqual(values.count, 1); XCTAssertEqual(values[0].status, .ready); XCTAssertNil(values[0].startedAt); XCTAssertNil(values[0].completedAt)
         XCTAssertTrue(values[0].exercises.flatMap(\.loggedSets).isEmpty)
+        XCTAssertEqual(values[0].exercises.map(\.prescriptions.count), result.workouts[0].exercises.map(\.prescriptions.count))
         let activeIDs = try await repository.activeWorkouts().map(\.id)
         XCTAssertEqual(activeIDs, values.map(\.id))
     }

@@ -15,6 +15,7 @@
 		16B70C02602FD495562624C9 /* RNLegacyImporter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 360E18EE71024F5387A3E97B /* RNLegacyImporter.swift */; };
 		1AB6FE787819CF6F8383318C /* EquilibriumFixtures.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAEC6B830776032B8055E925 /* EquilibriumFixtures.swift */; };
 		25CDD6B9A1488793878B9CC2 /* SettingsViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = C5B2E9347C1FFE9B656A8420 /* SettingsViews.swift */; };
+		2AADF6253CBD772799417591 /* WorkoutHistoryPagingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3044A7A87C381EC1F9F07F3B /* WorkoutHistoryPagingTests.swift */; };
 		2D632C17DE4DC8249142E864 /* RNLegacyTransformer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 68688425AB725476CBE6644C /* RNLegacyTransformer.swift */; };
 		37C99B2DD213294EE53EBCF0 /* CloudKitReadinessPersistenceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1F195843562F172FAB98EE74 /* CloudKitReadinessPersistenceTests.swift */; };
 		38BF3AA040AD02258CDA6FB1 /* DomainValidation.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1EA8773328FB592C0A68093 /* DomainValidation.swift */; };
@@ -47,6 +48,7 @@
 		8B8FA1A32803E2EE1DB8E561 /* WorkoutBuilderModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8BF63A9075C6297C4460E9FF /* WorkoutBuilderModel.swift */; };
 		8BEDD17C92022D698419AE30 /* WorkoutExecution.swift in Sources */ = {isa = PBXBuildFile; fileRef = CEAB3571D2DCE2133A98A266 /* WorkoutExecution.swift */; };
 		96EBD16696CCB8EEFC8F3AB8 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 6D6EEEC5F3CDCA3DBF906F1D /* Assets.xcassets */; };
+		97BC771208A0F608AF8AF39D /* EQNumberPad.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8CF2C6B18F54322BCF338B32 /* EQNumberPad.swift */; };
 		9A63612FAEB97A31E6436EC5 /* PersistenceRecords.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1FED7C3D85B5A6C856556B1 /* PersistenceRecords.swift */; };
 		A05E4B9E40B71DBF689C3751 /* WorkoutExecutionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E35768B38BF1690A1B3E37C0 /* WorkoutExecutionView.swift */; };
 		A0D729C7D4F4793840780879 /* WorkoutImportPhase3BTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = ACF3B316D7BA8A0D3D379187 /* WorkoutImportPhase3BTests.swift */; };
@@ -92,6 +94,7 @@
 		2308BA103AA490F7217C83A1 /* Equilibrium.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Equilibrium.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		2EC9A5F31CB59C7DBC582BCA /* ProductCorrectionProgressionTimerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProductCorrectionProgressionTimerTests.swift; sourceTree = "<group>"; };
 		2F066B641173BDC23B2AE81D /* WorkoutHistoryViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkoutHistoryViews.swift; sourceTree = "<group>"; };
+		3044A7A87C381EC1F9F07F3B /* WorkoutHistoryPagingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkoutHistoryPagingTests.swift; sourceTree = "<group>"; };
 		360E18EE71024F5387A3E97B /* RNLegacyImporter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RNLegacyImporter.swift; sourceTree = "<group>"; };
 		3663B410C047AC7A86DA812E /* RepositoryProtocols.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RepositoryProtocols.swift; sourceTree = "<group>"; };
 		37A7B63C57D8F9E09C7CBE9A /* WorkoutCreationPhase3ATests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkoutCreationPhase3ATests.swift; sourceTree = "<group>"; };
@@ -120,6 +123,7 @@
 		7AE64245A4528398624ED340 /* ReuseWorkoutDistinctTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReuseWorkoutDistinctTests.swift; sourceTree = "<group>"; };
 		87EFDB37B7DD87B8CF47C7ED /* SwiftDataRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwiftDataRepository.swift; sourceTree = "<group>"; };
 		8BF63A9075C6297C4460E9FF /* WorkoutBuilderModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkoutBuilderModel.swift; sourceTree = "<group>"; };
+		8CF2C6B18F54322BCF338B32 /* EQNumberPad.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EQNumberPad.swift; sourceTree = "<group>"; };
 		A62A2C8341DC3EBBDDB1F34A /* WorkoutImportViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkoutImportViews.swift; sourceTree = "<group>"; };
 		AC97FECE817363CCCA92914E /* WorkoutModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkoutModels.swift; sourceTree = "<group>"; };
 		ACF3B316D7BA8A0D3D379187 /* WorkoutImportPhase3BTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkoutImportPhase3BTests.swift; sourceTree = "<group>"; };
@@ -233,6 +237,7 @@
 				37A7B63C57D8F9E09C7CBE9A /* WorkoutCreationPhase3ATests.swift */,
 				509636B9965F71DB1A19AB39 /* WorkoutExecutionPhase2Tests.swift */,
 				79909464AC5DCC92A7C8B6B6 /* WorkoutHistoryImportTests.swift */,
+				3044A7A87C381EC1F9F07F3B /* WorkoutHistoryPagingTests.swift */,
 				ACF3B316D7BA8A0D3D379187 /* WorkoutImportPhase3BTests.swift */,
 			);
 			path = EquilibriumTests;
@@ -347,6 +352,7 @@
 			isa = PBXGroup;
 			children = (
 				143464D458EF033494C851B9 /* DesignTokens.swift */,
+				8CF2C6B18F54322BCF338B32 /* EQNumberPad.swift */,
 			);
 			path = DesignSystem;
 			sourceTree = "<group>";
@@ -568,6 +574,7 @@
 				43E6D221A88C306496986931 /* WorkoutCreationPhase3ATests.swift in Sources */,
 				799695E4B0E454D0AC4E60E3 /* WorkoutExecutionPhase2Tests.swift in Sources */,
 				04A947B7B93272CE4ED09235 /* WorkoutHistoryImportTests.swift in Sources */,
+				2AADF6253CBD772799417591 /* WorkoutHistoryPagingTests.swift in Sources */,
 				A0D729C7D4F4793840780879 /* WorkoutImportPhase3BTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -583,6 +590,7 @@
 				84D5A3EB2F86829E4944C802 /* DesignTokens.swift in Sources */,
 				F5F4D699D13DDCF4298547A3 /* DomainIDs.swift in Sources */,
 				38BF3AA040AD02258CDA6FB1 /* DomainValidation.swift in Sources */,
+				97BC771208A0F608AF8AF39D /* EQNumberPad.swift in Sources */,
 				1433D01F8C32DB9F26FC9820 /* EquilibriumApp.swift in Sources */,
 				1AB6FE787819CF6F8383318C /* EquilibriumFixtures.swift in Sources */,
 				C012CD38BA9899F242A8A9D9 /* FeedbackClients.swift in Sources */,

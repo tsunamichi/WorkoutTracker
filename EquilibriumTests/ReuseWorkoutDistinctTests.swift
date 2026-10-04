@@ -12,11 +12,12 @@ final class ReuseWorkoutDistinctTests: XCTestCase {
         XCTAssertEqual(result.map(\.id.rawValue), ["push-new", "pull"])
     }
 
-    func testSameNameWithDifferentExercisesStaysSeparate() {
+    func testSameNameWithDifferentExercisesCollapses() {
         var a = EquilibriumFixtures.completed(id: "a"); a.titleSnapshot = "Untitled Copy"
         var b = EquilibriumFixtures.completed(id: "b"); b.titleSnapshot = "Untitled Copy"
         b.exercises = b.exercises.map(Self.renamed("other"))
-        XCTAssertEqual(Workout.distinctRoutines([a, b]).map(\.id.rawValue), ["a", "b"])
+        var c = EquilibriumFixtures.completed(id: "c"); c.titleSnapshot = "ISO"
+        XCTAssertEqual(Workout.distinctRoutines([a, b, c]).map(\.id.rawValue), ["a", "c"])
     }
 
     private static func renamed(_ id: String) -> (WorkoutExercise) -> WorkoutExercise {

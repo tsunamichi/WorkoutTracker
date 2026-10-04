@@ -3,11 +3,21 @@ import Foundation
 enum WorkoutImportDraftConverter {
     static func lightweightDraft(from workout: ParsedWorkout, catalog: [ExerciseDefinition]) -> WorkoutDraft {
         .init(name: workout.name, exercises: workout.exercises.map { parsed in
+            let sets = parsed.prescriptions.map(draftSet)
             if let definition = exactMatch(name: parsed.name, catalog: catalog) {
-                return .init(exerciseID: definition.id, name: definition.name)
+                return .init(exerciseID: definition.id, name: definition.name, prescriptions: sets, restDuration: parsed.restDuration)
             }
-            return .init(exerciseID: nil, name: parsed.name.trimmingCharacters(in: .whitespacesAndNewlines))
+            return .init(exerciseID: nil, name: parsed.name.trimmingCharacters(in: .whitespacesAndNewlines), prescriptions: sets, restDuration: parsed.restDuration)
         })
+    }
+
+    private static func draftSet(_ parsed: ParsedSetPrescription) -> DraftSet {
+        let target: DraftSet.Target
+        switch parsed.target {
+        case .repetitions(let range): target = .repetitions(lower: range.lowerBound, upper: range.upperBound)
+        case .duration(let seconds): target = .duration(seconds: seconds)
+        }
+        return .init(id: UUID(), target: target, suggestedPounds: parsed.suggestedPounds)
     }
 
     private static func exactMatch(name: String, catalog: [ExerciseDefinition]) -> ExerciseDefinition? {

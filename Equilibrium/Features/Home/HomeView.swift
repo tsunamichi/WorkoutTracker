@@ -14,6 +14,7 @@ struct HomeView: View {
     @State private var restSessionStore = WorkoutRestSessionStore()
     @State private var homeExecutionProgress: CGFloat = 0
     @State private var transitioningWorkoutID: WorkoutID?
+    @State private var executionHeaderWorkTint: Double = 0
     @State private var workoutCardFrames: [WorkoutID: CGRect] = [:]
     @State private var transitionSourceFrame: CGRect?
     @State private var transitionDestinationFrame: CGRect?
@@ -88,11 +89,13 @@ struct HomeView: View {
                         }
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .onPreferenceChange(ExecutionWorkHeaderTintPreferenceKey.self) { executionHeaderWorkTint = $0 }
                     .overlayPreferenceValue(HomeWorkoutTitleAnchorKey.self) { anchors in
                         HomeWorkoutTitleLayer(
                             workouts: model.workouts,
                             transitioningWorkoutID: transitioningWorkoutID,
-                            anchors: anchors
+                            anchors: anchors,
+                            executionWorkTint: executionHeaderWorkTint
                         )
                     }
                     .scaleEffect(HomeOverlayPresentation.backgroundScale(
@@ -105,8 +108,8 @@ struct HomeView: View {
                         topExtension: model.expandedWorkoutID == nil ? 0 : proxy.safeAreaInsets.top
                     ))
                     .overlay {
-                        Color.black
-                            .opacity(homeOverlayIsPresented ? 0.06 : 0)
+                        EQColor.overlayDim
+                            .opacity(homeOverlayIsPresented ? 1 : 0)
                             .allowsHitTesting(false)
                     }
                     .allowsHitTesting(!homeOverlayOwnsSurface)
@@ -198,6 +201,7 @@ struct HomeView: View {
                 repository: repository,
                 historyRepository: historyRepository,
                 weightUnit: appSettings.weightUnit,
+                isActive: presentedHomeOverlay == .history,
                 dismiss: dismissHomeOverlay
             )
         }
@@ -356,6 +360,8 @@ private struct HomeWorkoutTitleLayer: View {
     let workouts: [Workout]
     let transitioningWorkoutID: WorkoutID?
     let anchors: [HomeWorkoutTitleAnchor: Anchor<CGRect>]
+    /// Matches the execution header while a work timer tints it.
+    var executionWorkTint: Double = 0
 
     var body: some View {
         GeometryReader { proxy in
@@ -372,7 +378,26 @@ private struct HomeWorkoutTitleLayer: View {
                                 : .cardHero
                         )
                         .lineLimit(2)
+                        .foregroundStyle(HomeCardColors(status: workout.status).text)
+                        .overlay {
+                            // Cross-fades into the execution header colour as the title travels.
+                            Text(workout.titleSnapshot)
+                                .eqTextStyle(
+                                    workout.id == transitioningWorkoutID
+                                        ? .transitionDestinationTitle
+                                        : .cardHero
+                                )
+                                .lineLimit(2)
+                                .foregroundStyle(EQColor.Execution.primaryText.mix(
+                                    with: EQColor.Execution.restForegroundSurface,
+                                    by: workout.id == transitioningWorkoutID ? executionWorkTint : 0
+                                ))
+                                .opacity(min(max(titleProgress, 0), 1))
+                        }
                         .scaleEffect(1 - (0.39 * titleProgress), anchor: .center)
+                        // This layer floats above the execution page, so other cards' titles must not
+                        // show through once the page covers the carousel.
+                        .opacity(transitioningWorkoutID == nil || workout.id == transitioningWorkoutID ? 1 : 1 - min(max(progress, 0), 1))
                         .id(HomeWorkoutTransitionIdentity.title(for: workout.id))
                         .position(x: frame.midX, y: frame.midY)
                         .accessibilityHidden(true)
@@ -391,7 +416,7 @@ private struct HomeWorkoutTitleLayer: View {
                             let frame = proxy[countAnchor]
                             Text("\(workout.exercises.count) \(workout.exercises.count == 1 ? "exercise" : "exercises")")
                                 .eqTextStyle(.caption)
-                                .foregroundStyle(EQColor.Home.cardSecondaryText)
+                                .foregroundStyle(HomeCardColors(status: workout.status).secondaryText)
                                 .position(
                                     x: frame.midX - cardFrame.minX,
                                     y: frame.midY - cardFrame.minY
@@ -403,7 +428,7 @@ private struct HomeWorkoutTitleLayer: View {
                             let frame = proxy[statusAnchor]
                             Text(HomeCardPresentation(status: workout.status).stateLabel)
                                 .eqTextStyle(.caption)
-                                .foregroundStyle(EQColor.Home.completedText)
+                                .foregroundStyle(HomeCardColors(status: workout.status).statusText)
                                 .position(
                                     x: frame.midX - cardFrame.minX,
                                     y: frame.midY - cardFrame.minY
@@ -421,7 +446,7 @@ private struct HomeWorkoutTitleLayer: View {
                             )
                             Text("\(index + 1)")
                                 .eqTextStyle(.carouselIndex)
-                                .foregroundStyle(EQColor.Home.indexText)
+                                .foregroundStyle(HomeCardColors(status: workout.status).indexText)
                                 .lineLimit(1)
                                 .minimumScaleFactor(0.5)
                                 .position(
@@ -777,7 +802,7 @@ struct HomeTimerSurfaceButton: View {
                     Image(systemName: systemImage).eqTextStyle(.captionEmphasized)
                 }
             }
-            .foregroundStyle(EQColor.Home.secondaryText)
+            .foregroundStyle(EQColor.Home.timerAffordance)
             .frame(maxWidth: .infinity, minHeight: EQDimension.minimumTouch)
         }
         .buttonStyle(.plain)
@@ -891,6 +916,7 @@ private struct HomeScene: View {
                 Button(action: showHistory) {
                     Image(systemName: "clock.arrow.circlepath")
                         .eqTextStyle(.icon)
+                        .foregroundStyle(EQColor.Home.secondaryText)
                         .frame(width: EQLayout.Home.headerIconSize, height: EQLayout.Home.headerIconSize)
                         .frame(width: EQLayout.Home.headerControlSize, height: EQLayout.Home.headerControlSize)
                         .contentShape(Rectangle())
@@ -919,29 +945,9 @@ private struct HomeScene: View {
     }
 
     private var homeDate: some View {
-        let date = Date.now
-        let day = Calendar.current.component(.day, from: date)
-        let month = date.formatted(.dateTime.month(.wide))
-        let suffix: String = switch day {
-        case 11...13: "th"
-        default: switch day % 10 {
-            case 1: "st"
-            case 2: "nd"
-            case 3: "rd"
-            default: "th"
-            }
-        }
-
-        return HStack(alignment: .firstTextBaseline, spacing: 0) {
-            Text("\(month) \(day)")
-                .eqTextStyle(.screenTitle)
-            Text(suffix)
-                .eqTextStyle(.caption)
-                .baselineOffset(7)
-        }
-        .foregroundStyle(EQColor.Home.secondaryText)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(month) \(day)\(suffix)")
+        EQDateText.text(.now, style: .screenTitle, includeYear: false)
+            .foregroundStyle(EQColor.Home.secondaryText)
+            .accessibilityLabel(EQDateText.string(.now, includeYear: false))
     }
 
     @ViewBuilder private var carousel: some View {
@@ -1257,7 +1263,9 @@ private struct AddWorkoutDrawer: View {
         Button(action: action) {
             VStack(spacing: EQSpacing.sm) {
                 Image(systemName: systemImage)
-                    .eqTextStyle(.sectionTitle)
+                    .resizable()
+                    .scaledToFit()
+                    .fontWeight(.regular)
                     .frame(
                         width: EQLayout.Home.addWorkoutActionIconSize,
                         height: EQLayout.Home.addWorkoutActionIconSize
@@ -1271,7 +1279,7 @@ private struct AddWorkoutDrawer: View {
             )
             .foregroundStyle(EQColor.Home.accent)
             .background(
-                EQColor.Home.cardSurface,
+                EQColor.cardFill,
                 in: RoundedRectangle(cornerRadius: EQRadius.card, style: .continuous)
             )
         }
@@ -1312,7 +1320,7 @@ private struct WorkoutCard: View {
 
             Text("\(workout.exercises.count) \(workout.exercises.count == 1 ? "exercise" : "exercises")")
                 .eqTextStyle(.caption)
-                .foregroundStyle(EQColor.Home.cardSecondaryText)
+                .foregroundStyle(colors.secondaryText)
                 .anchorPreference(key: HomeWorkoutTitleAnchorKey.self, value: .bounds) {
                     [.exerciseCount(workout.id): $0]
                 }
@@ -1329,12 +1337,12 @@ private struct WorkoutCard: View {
         .padding(.horizontal, EQSpacing.lg)
         .padding(.bottom, EQSpacing.lg)
         .padding(.top, EQLayout.Home.cardTopInset)
-        .foregroundStyle(EQColor.Home.primaryText)
+        .foregroundStyle(colors.text)
         .frame(maxWidth: .infinity, minHeight: EQDimension.workoutCardHeight, alignment: .topLeading)
         .background(alignment: .bottomTrailing) {
             Text("\(sequence)")
                 .eqTextStyle(.carouselIndex)
-                .foregroundStyle(EQColor.Home.indexText)
+                .foregroundStyle(colors.indexText)
                 .lineLimit(1)
                 .minimumScaleFactor(0.5)
                 .accessibilityHidden(true)
@@ -1358,7 +1366,7 @@ private struct WorkoutCard: View {
         .background {
             if !isExpanded {
                 RoundedRectangle(cornerRadius: EQRadius.transformingCard, style: .continuous)
-                    .fill(EQColor.Home.cardSurface)
+                    .fill(colors.surface)
             }
         }
         .accessibilityElement(children: .combine)
@@ -1368,7 +1376,33 @@ private struct WorkoutCard: View {
         .accessibilityHidden(isExpanded)
     }
 
-    private var statusColor: Color { EQColor.Home.completedText }
+    private var statusColor: Color { colors.statusText }
+    private var colors: HomeCardColors { .init(status: workout.status) }
+}
+
+/// Completed workouts recede into the same neutral group styling as Settings.
+struct HomeCardColors {
+    let surface: Color
+    let text: Color
+    let secondaryText: Color
+    let statusText: Color
+    let indexText: Color
+
+    init(status: WorkoutStatus) {
+        if status == .completed {
+            surface = EQColor.cardFill
+            text = EQColor.primaryText
+            secondaryText = EQColor.secondaryText
+            statusText = EQColor.secondaryText
+            indexText = EQColor.primaryText
+        } else {
+            surface = EQColor.Home.cardSurface
+            text = EQColor.Home.cardText
+            secondaryText = EQColor.Home.cardSecondaryText
+            statusText = EQColor.Home.completedText
+            indexText = EQColor.Home.indexText
+        }
+    }
 }
 
 #if DEBUG

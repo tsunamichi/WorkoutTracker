@@ -11,30 +11,53 @@ struct SettingsShellView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            EQOverlayPageHeader(title: "Settings", dismiss: dismiss)
-
-            List {
-                Section {
-                    settingsSheetButton("Units", destination: .units)
-                    settingsSheetButton("Timer", destination: .timer)
+            header
+            ScrollView {
+                VStack(alignment: .leading, spacing: EQLayout.exerciseBlockGap) {
+                    card {
+                        settingsSheetButton("Units", destination: .units)
+                        settingsSheetButton("Timer", destination: .timer)
+                    }
+                    card {
+                        NavigationLink {
+                            ProgressionSettingView(repository: progressionRepository, settings: settingsRepository, exercises: exerciseRepository)
+                        } label: { rowLabel("Progression", systemImage: "chevron.right") }
+                        .buttonStyle(.plain)
+                    }
+                    section("THEME") {
+                        card { ThemePicker() }
+                    }
+                    section("ICLOUD SYNC") {
+                        card {
+                            VStack(alignment: .leading, spacing: EQSpacing.xxs) {
+                                Text("Private iCloud sync").eqTextStyle(.listItemTitle)
+                                Text("Equilibrium saves locally first and syncs through your Apple account when iCloud is available. Sync is eventual; backups remain a separate recovery tool.")
+                                    .eqTextStyle(.secondaryBody)
+                                    .foregroundStyle(EQColor.secondaryText)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                            .padding(.vertical, EQSpacing.xs)
+                            .accessibilityElement(children: .combine)
+                        }
+                    }
+                    if let legacyImporter {
+                        section("MIGRATION") {
+                            card {
+                                NavigationLink { RNLegacyImportView(importer: legacyImporter) } label: { rowLabel("Import React Native backup", systemImage: "chevron.right") }
+                                    .buttonStyle(.plain)
+                            }
+                        }
+                    }
                 }
-                Section {
-                    NavigationLink("Progression") { ProgressionSettingView(repository: progressionRepository, settings: settingsRepository, exercises: exerciseRepository) }
-                }
-                Section("iCloud Sync") {
-                    Label("Private iCloud sync", systemImage: "icloud")
-                    Text("Equilibrium saves locally first and syncs through your Apple account when iCloud is available. Sync is eventual; backups remain a separate recovery tool.")
-                        .eqTextStyle(.caption).foregroundStyle(EQColor.secondaryText)
-                }
-                if let legacyImporter { Section("Migration") { NavigationLink("Import React Native backup") { RNLegacyImportView(importer: legacyImporter) } } }
+                .padding(.horizontal, EQLayout.screenGutter)
+                .padding(.top, EQSpacing.md + EQLayout.WorkoutExecution.overviewContentTopInset)
+                .padding(.bottom, EQSpacing.lg)
             }
-            .scrollContentBackground(.hidden)
-            .contentMargins(.top, 0, for: .scrollContent)
-            .listSectionSpacing(EQLayout.Settings.sectionSpacing)
+            .scrollIndicators(.hidden)
         }
+        .foregroundStyle(EQColor.primaryText)
         .background(EQColor.canvas)
         .toolbar(.hidden, for: .navigationBar)
-        .preferredColorScheme(.dark)
         .sheet(item: $presentedSheet) { destination in
             switch destination {
             case .units:
@@ -45,19 +68,100 @@ struct SettingsShellView: View {
         }
     }
 
+    private var header: some View {
+        Button(action: dismiss) {
+            HStack(alignment: .firstTextBaseline, spacing: EQSpacing.xs) {
+                Image(systemName: "chevron.left")
+                Text("Settings").eqTextStyle(.navigationTitle)
+            }
+            .frame(minHeight: EQLayout.minimumTouch)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(EQColor.primaryText)
+        .accessibilityLabel("Back to Home")
+        .frame(maxWidth: .infinity, minHeight: EQLayout.minimumTouch + EQSpacing.sm, alignment: .leading)
+        .padding(.horizontal, EQLayout.screenGutter)
+    }
+
+    private func section<Content: View>(_ label: String, @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: EQSpacing.sm) {
+            Text(label).eqTextStyle(.sectionLabel).foregroundStyle(EQColor.secondaryText)
+            content()
+        }
+    }
+
+    private func card<Content: View>(@ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 0) { content() }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, EQSpacing.md)
+            .padding(.vertical, EQSpacing.xs)
+            .background(EQColor.cardFill, in: RoundedRectangle(cornerRadius: EQRadius.card, style: .continuous))
+    }
+
+    private func rowLabel(_ title: String, systemImage: String) -> some View {
+        HStack {
+            Text(title).eqTextStyle(.listItemTitle)
+            Spacer()
+            Image(systemName: systemImage)
+                .eqTextStyle(.caption)
+                .foregroundStyle(EQColor.secondaryText)
+        }
+        .frame(minHeight: EQLayout.minimumTouch)
+        .contentShape(Rectangle())
+    }
+
     private func settingsSheetButton(_ title: String, destination: SettingsSheetDestination) -> some View {
         Button {
             presentedSheet = destination
         } label: {
-            HStack {
-                Text(title)
-                Spacer()
-                Image(systemName: "chevron.up")
-                    .foregroundStyle(.tertiary)
-            }
-            .contentShape(Rectangle())
+            rowLabel(title, systemImage: "chevron.up")
         }
         .buttonStyle(.plain)
+    }
+}
+
+private struct ThemePicker: View {
+    private let store = EQThemeStore.shared
+
+    var body: some View {
+        ForEach(EQTheme.all) { theme in
+            Button {
+                withAnimation(.easeInOut(duration: 0.25)) { store.select(theme.id) }
+            } label: {
+                HStack(spacing: EQSpacing.sm) {
+                    ThemeSwatch(colors: theme.swatches)
+                    Text(theme.name).eqTextStyle(.listItemTitle)
+                    Spacer()
+                    if store.theme.id == theme.id {
+                        Image(systemName: "checkmark")
+                            .eqTextStyle(.caption)
+                            .foregroundStyle(EQColor.accent)
+                    }
+                }
+                .frame(minHeight: EQLayout.minimumTouch)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("\(theme.name) theme")
+            .accessibilityAddTraits(store.theme.id == theme.id ? .isSelected : [])
+        }
+    }
+}
+
+private struct ThemeSwatch: View {
+    let colors: [Color]
+
+    var body: some View {
+        HStack(spacing: -6) {
+            ForEach(colors.indices, id: \.self) { index in
+                Circle()
+                    .fill(colors[index])
+                    .frame(width: 20, height: 20)
+                    .overlay(Circle().strokeBorder(EQColor.separator, lineWidth: 1))
+            }
+        }
+        .accessibilityHidden(true)
     }
 }
 

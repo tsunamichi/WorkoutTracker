@@ -45,7 +45,7 @@ struct EquilibriumApp: App {
             )
             .environment(environment)
             .fontWeight(.regular)
-            .preferredColorScheme(.light)
+            .preferredColorScheme(EQColor.colorScheme)
         }
             .modelContainer(environment.container)
     }

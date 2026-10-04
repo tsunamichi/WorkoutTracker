@@ -52,10 +52,6 @@ struct WorkoutTextParser: Sendable {
         var current: ParsedWorkout?
         var issues: [ParseIssue] = []
 
-        func nextMeaningfulLine(after index: Int) -> String? {
-            guard index + 1 < lines.count else { return nil }
-            return lines[(index + 1)...].first { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }?.trimmingCharacters(in: .whitespacesAndNewlines)
-        }
         func finishCurrent() {
             guard let value = current else { return }
             if value.exercises.isEmpty {
@@ -80,10 +76,10 @@ struct WorkoutTextParser: Sendable {
                 current?.exercises.append(exercise); continue
             }
             let followsBlank = index == 0 || lines[index - 1].trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            if followsBlank, let next = nextMeaningfulLine(after: index), parseExercise(next, lineNumber: lineNumber + 1) != nil, !looksMalformed(line) {
+            if followsBlank || current == nil, !looksMalformed(line) {
                 finishCurrent(); current = .init(id: UUID(), name: cleanHeading(line), exercises: []); continue
             }
-            let message = looksMalformed(line) ? "Malformed or invalid set prescription." : "Line is not a supported workout heading or exercise prescription."
+            let message = looksMalformed(line) ? "Malformed or invalid set prescription." : "Couldn’t find sets and reps. Use a format like “3×10” or “3×30 sec”."
             issues.append(.init(lineNumber: lineNumber, content: line, message: message))
         }
         finishCurrent()
@@ -102,11 +98,12 @@ struct WorkoutTextParser: Sendable {
         }
         let patterns = [
             #"^(.+?)\s*(?:—|-|:)?\s*(\d+)\s*[x×]\s*(\d+)\s*(?:-|–|\.\.)\s*(\d+)\s*(?:reps?)?$"#,
-            #"^(.+?)\s*(?:—|-|:)?\s*(\d+)\s*[x×]\s*(\d+)\s*(sec|secs|seconds?|min|mins|minutes?)\.?$"#,
+            #"^(.+?)\s*(?:—|-|:)?\s*(\d+)\s*[x×]\s*(\d+)\s*(sec|secs|seconds?|s|min|mins|minutes?)\.?$"#,
             #"^(.+?)\s*(?:—|-|:)?\s*(\d+)\s*[x×]\s*(\d+)\s*(?:reps?)?$"#,
             #"^(.+?)\s*(?:—|-|:)?\s*(\d+)\s+sets?\s+of\s+(\d+)\s*(?:reps?)?$"#,
             #"^(\d+)\s*[x×]\s*(\d+)\s*(?:-|–|\.\.)\s*(\d+)\s+(.+)$"#,
-            #"^(\d+)\s*[x×]\s*(\d+)\s+(.+)$"#
+            #"^(\d+)\s*[x×]\s*(\d+)\s+(.+)$"#,
+            #"^(.+?)(?:\s+(?:—|–|-)|\s*:)\s*(\d+)\s*(sec|secs|seconds?|s|min|mins|minutes?|reps?)?\.?$"#
         ]
         for (patternIndex, pattern) in patterns.enumerated() {
             guard let match = capture(pattern, in: line, caseInsensitive: true) else { continue }
@@ -122,8 +119,13 @@ struct WorkoutTextParser: Sendable {
                 name = match[1]; sets = Int(match[2]) ?? 0; let reps = Int(match[3]) ?? 0; target = .repetitions(reps...reps)
             case 4:
                 sets = Int(match[1]) ?? 0; let low = Int(match[2]) ?? 0, high = Int(match[3]) ?? 0; name = match[4]; target = .repetitions(min(low, high)...max(low, high))
-            default:
+            case 5:
                 sets = Int(match[1]) ?? 0; let reps = Int(match[2]) ?? 0; name = match[3]; target = .repetitions(reps...reps)
+            default:
+                // A bare "Name — 10" is a single set.
+                name = match[1]; sets = 1; let amount = Int(match[2]) ?? 0; let unit = match[3].lowercased()
+                if unit.isEmpty || unit.hasPrefix("rep") { target = .repetitions(amount...amount) }
+                else { target = .duration(seconds: unit.hasPrefix("m") ? amount * 60 : amount) }
             }
             let cleanName = name.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines.union(CharacterSet(charactersIn: "—-:")))
             guard sets > 0, sets <= 99, valid(target), !cleanName.isEmpty else { return nil }
@@ -131,6 +133,17 @@ struct WorkoutTextParser: Sendable {
             return .init(id: UUID(), name: cleanName, prescriptions: Array(repeating: prescription, count: sets), restDuration: rest, lineNumber: lineNumber)
         }
         return nil
+    }
+
+    /// Splits a leading title line from the exercise lines so it can be edited separately.
+    func splitTitle(_ text: String) -> (title: String, body: String) {
+        let lines = text.replacingOccurrences(of: "\r\n", with: "\n").components(separatedBy: "\n")
+        guard let index = lines.firstIndex(where: { !$0.trimmingCharacters(in: .whitespaces).isEmpty }) else { return ("", text) }
+        let line = lines[index].trimmingCharacters(in: .whitespaces)
+        guard parseExercise(line, lineNumber: index + 1) == nil, !isUnsupported(line), !looksMalformed(line) else { return ("", text) }
+        let title = headingName(line) ?? cleanHeading(line)
+        let body = lines[(index + 1)...].drop { $0.trimmingCharacters(in: .whitespaces).isEmpty }.joined(separator: "\n")
+        return (title, body)
     }
 
     private func valid(_ target: ParsedSetPrescription.Target) -> Bool {

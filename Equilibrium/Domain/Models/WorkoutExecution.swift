@@ -73,3 +73,22 @@ public enum WeightText {
         value.rounded() == value ? String(Int(value)) : String(format: "%.1f", value)
     }
 }
+
+/// Plate loading for a standard barbell: whatever exceeds the bar is split across both sides.
+public enum BarbellLoad {
+    public static func barWeight(unit: WeightUnit) -> Double { unit == .pounds ? 45 : 20 }
+
+    public static func perSide(_ text: String, unit: WeightUnit) -> Double? {
+        let normalized = text.trimmingCharacters(in: .whitespacesAndNewlines).replacingOccurrences(of: ",", with: ".")
+        guard let total = Double(normalized), total.isFinite else { return nil }
+        let bar = barWeight(unit: unit)
+        guard total > bar else { return nil }
+        return (total - bar) / 2
+    }
+
+    public static func legend(_ text: String, unit: WeightUnit) -> String? {
+        guard let side = perSide(text, unit: unit) else { return nil }
+        let formatted = side.formatted(.number.precision(.fractionLength(0...2)).grouping(.never))
+        return "\(formatted) \(unit == .pounds ? "lb" : "kg") per side"
+    }
+}

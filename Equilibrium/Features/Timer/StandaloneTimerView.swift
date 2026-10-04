@@ -91,17 +91,116 @@ struct StandaloneTimerFormView: View {
         self.store = store; self.configuration = configuration; self.didSave = didSave
         _name = State(initialValue: configuration?.name ?? ""); _move = State(initialValue: Int(configuration?.moveDuration ?? 30)); _exerciseRest = State(initialValue: Int(configuration?.exerciseRestDuration ?? 30)); _exercises = State(initialValue: configuration?.exercisesPerRound ?? 3); _rounds = State(initialValue: configuration?.rounds ?? 1); _roundRest = State(initialValue: Int(configuration?.roundRestDuration ?? 30))
     }
+    @Environment(\.dismiss) private var dismiss
+    @FocusState private var nameFocused: Bool
+    private var title: String { configuration == nil ? "Create Timer" : "Edit Timer" }
+    private var canSave: Bool { !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
     var body: some View {
-        Form {
-            Section { TextField("Timer name", text: $name) }
-            Section("Exercise") { Stepper("Move for: \(format(move))", value: $move, in: 5...120, step: 5); Stepper("Rest after each exercise: \(format(exerciseRest))", value: $exerciseRest, in: 5...120, step: 5) }
-            Section("Round") { Stepper("Exercises in a round: \(exercises)", value: $exercises, in: 1...20); Stepper("Rounds: \(rounds)", value: $rounds, in: 1...10); Stepper("Rest between rounds: \(format(roundRest))", value: $roundRest, in: 5...180, step: 5) }
-            Button(configuration == nil ? "Create Timer" : "Save Changes") {
-                let value = StandaloneTimerConfiguration(id: configuration?.id ?? UUID().uuidString.lowercased(), name: name.trimmingCharacters(in: .whitespacesAndNewlines), moveDuration: Double(move), exerciseRestDuration: Double(exerciseRest), exercisesPerRound: exercises, rounds: rounds, roundRestDuration: Double(roundRest), createdAt: configuration?.createdAt ?? .now, updatedAt: .now)
-                guard value.isValid else { return }; store.save(value)
-                didSave(value)
-            }.disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-        }.navigationTitle(configuration == nil ? "Create Timer" : "Edit Timer")
+        VStack(alignment: .leading, spacing: 0) {
+            header
+            ScrollView {
+                VStack(alignment: .leading, spacing: EQLayout.exerciseBlockGap) {
+                    TextField("Timer name", text: $name)
+                        .eqTextStyle(.listItemTitle)
+                        .textFieldStyle(.plain)
+                        .focused($nameFocused)
+                        .submitLabel(.done)
+                        .frame(minHeight: EQLayout.minimumTouch)
+                        .padding(.horizontal, EQSpacing.md)
+                        .background(EQColor.cardFill, in: RoundedRectangle(cornerRadius: EQRadius.card, style: .continuous))
+                    section("EXERCISE") {
+                        stepperRow("Move for", format(move), value: $move, range: 5...120, step: 5)
+                        stepperRow("Rest after each exercise", format(exerciseRest), value: $exerciseRest, range: 5...120, step: 5)
+                    }
+                    section("ROUND") {
+                        stepperRow("Exercises in a round", "\(exercises)", value: $exercises, range: 1...20)
+                        stepperRow("Rounds", "\(rounds)", value: $rounds, range: 1...10)
+                        stepperRow("Rest between rounds", format(roundRest), value: $roundRest, range: 5...180, step: 5)
+                    }
+                }
+                .padding(.horizontal, EQLayout.screenGutter)
+                .padding(.top, EQSpacing.md + EQLayout.WorkoutExecution.overviewContentTopInset)
+                .padding(.bottom, EQSpacing.lg)
+            }
+            .scrollIndicators(.hidden)
+            .scrollDismissesKeyboard(.interactively)
+            saveButton
+                .padding(.horizontal, EQLayout.screenGutter)
+                .padding(.bottom, EQSpacing.md)
+        }
+        .foregroundStyle(EQColor.primaryText)
+        .background(EQColor.canvas)
+        .toolbar(.hidden, for: .navigationBar)
+    }
+    private var header: some View {
+        Button { dismiss() } label: {
+            HStack(alignment: .firstTextBaseline, spacing: EQSpacing.xs) {
+                Image(systemName: "chevron.left")
+                Text(title).eqTextStyle(.navigationTitle).lineLimit(1)
+            }
+            .frame(minHeight: EQLayout.minimumTouch)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(EQColor.primaryText)
+        .accessibilityLabel("Back, \(title)")
+        .frame(maxWidth: .infinity, minHeight: EQLayout.minimumTouch + EQSpacing.sm, alignment: .leading)
+        .padding(.horizontal, EQLayout.screenGutter)
+    }
+    private func section<Content: View>(_ label: String, @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: EQSpacing.sm) {
+            Text(label).eqTextStyle(.sectionLabel).foregroundStyle(EQColor.secondaryText)
+            VStack(alignment: .leading, spacing: EQSpacing.sm) { content() }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(EQSpacing.md)
+                .background(EQColor.cardFill, in: RoundedRectangle(cornerRadius: EQRadius.card, style: .continuous))
+        }
+    }
+    private func stepperRow(_ label: String, _ display: String, value: Binding<Int>, range: ClosedRange<Int>, step: Int = 1) -> some View {
+        HStack(spacing: EQSpacing.sm) {
+            VStack(alignment: .leading, spacing: EQSpacing.xxs) {
+                Text(label).eqTextStyle(.secondaryBody).foregroundStyle(EQColor.secondaryText)
+                Text(display).eqTextStyle(.listItemTitle).monospacedDigit()
+            }
+            Spacer(minLength: 0)
+            HStack(spacing: EQSpacing.xs) {
+                stepButton("minus", enabled: value.wrappedValue > range.lowerBound) { value.wrappedValue = max(range.lowerBound, value.wrappedValue - step) }
+                    .accessibilityLabel("Decrease \(label)")
+                stepButton("plus", enabled: value.wrappedValue < range.upperBound) { value.wrappedValue = min(range.upperBound, value.wrappedValue + step) }
+                    .accessibilityLabel("Increase \(label)")
+            }
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityValue(display)
+    }
+    private func stepButton(_ systemImage: String, enabled: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: systemImage)
+                .frame(width: EQLayout.minimumTouch, height: EQLayout.minimumTouch)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .eqTextStyle(.listItemTitle)
+        .foregroundStyle(enabled ? EQColor.primaryText : EQColor.secondaryText.opacity(0.4))
+        .background(EQColor.cardFill, in: RoundedRectangle(cornerRadius: EQRadius.button, style: .continuous))
+        .disabled(!enabled)
+    }
+    private var saveButton: some View {
+        Button { save() } label: {
+            Text(configuration == nil ? "Create Timer" : "Save Changes")
+                .frame(maxWidth: .infinity, minHeight: EQLayout.minimumTouch + EQSpacing.xs)
+                .contentShape(Rectangle())
+        }
+        .eqPrimaryCTA(
+            tint: canSave ? EQColor.ctaSurface : EQColor.ctaDisabledSurface,
+            foreground: canSave ? EQColor.ctaLabel : EQColor.ctaDisabledLabel
+        )
+        .disabled(!canSave)
+    }
+    private func save() {
+        let value = StandaloneTimerConfiguration(id: configuration?.id ?? UUID().uuidString.lowercased(), name: name.trimmingCharacters(in: .whitespacesAndNewlines), moveDuration: Double(move), exerciseRestDuration: Double(exerciseRest), exercisesPerRound: exercises, rounds: rounds, roundRestDuration: Double(roundRest), createdAt: configuration?.createdAt ?? .now, updatedAt: .now)
+        guard value.isValid else { return }; store.save(value)
+        didSave(value)
     }
     private func format(_ seconds: Int) -> String { seconds < 60 ? "\(seconds)s" : seconds % 60 == 0 ? "\(seconds / 60)m" : "\(seconds / 60)m \(seconds % 60)s" }
 }

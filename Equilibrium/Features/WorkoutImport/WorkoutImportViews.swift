@@ -13,8 +13,7 @@ struct ClipboardWorkoutImportView: View {
     var body: some View {
         Group {
             if fallback {
-                WorkoutImportInputView(initialText: initialText) { result in Task { await open(result) } }
-                    .safeAreaInset(edge: .top) { if let fallbackMessage { Text(fallbackMessage).eqTextStyle(.caption).foregroundStyle(EQColor.warning).padding(.horizontal, EQSpacing.lg) } }
+                WorkoutImportInputView(initialText: initialText, message: fallbackMessage) { result in Task { await open(result) } }
             } else { ProgressView("Reading clipboard") }
         }
         .task { await readClipboard() }
@@ -23,7 +22,7 @@ struct ClipboardWorkoutImportView: View {
         let value = UIPasteboard.general.string ?? ""
         initialText = value
         let result = WorkoutTextParser().parse(value)
-        guard !result.hasBlockingIssues, result.workouts.count == 1 else {
+        guard !result.hasBlockingIssues, result.workouts.count == 1, result.workouts.allSatisfy({ !$0.name.isEmpty }) else {
             fallbackMessage = value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "The clipboard is empty. Enter workout text below." : "The clipboard workout needs correction."
             fallback = true; return
         }
@@ -38,45 +37,123 @@ struct ClipboardWorkoutImportView: View {
 
 struct WorkoutImportInputView: View {
     private let editorMinimumHeight: CGFloat = 220
+    let message: String?
     let parsed: (WorkoutParseResult) -> Void
-    @State private var text = ""
+    @State private var title: String
+    @State private var text: String
     @State private var issues: [ParseIssue] = []
-    @FocusState private var editorFocused: Bool
+    @FocusState private var focusedField: Field?
+    private enum Field { case title, body }
 
-    init(initialText: String = "", parsed: @escaping (WorkoutParseResult) -> Void) {
+    init(initialText: String = "", message: String? = nil, parsed: @escaping (WorkoutParseResult) -> Void) {
+        self.message = message
         self.parsed = parsed
-        _text = State(initialValue: initialText)
+        let split = WorkoutTextParser().splitTitle(initialText)
+        _title = State(initialValue: split.title)
+        _text = State(initialValue: split.body)
     }
+
+    private var canParse: Bool { !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
 
     var body: some View {
-        Form {
-            Section {
-                Text("Paste one or more structured workouts. Each named workout will be added separately. Use one exercise per line with sets and repetitions or duration.")
-                    .eqTextStyle(.body).foregroundStyle(EQColor.secondaryText)
-                TextEditor(text: $text)
-                    .frame(minHeight: editorMinimumHeight)
-                    .focused($editorFocused)
-                    .accessibilityLabel("Workout text")
-                    .accessibilityHint("Paste workout names and exercise prescriptions, one per line.")
-                Button("Parse and Review") { parse() }
-                    .frame(maxWidth: .infinity, minHeight: EQDimension.minimumTouch)
-                    .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+        VStack(alignment: .leading, spacing: 0) {
+            Text("Paste workout")
+                .eqTextStyle(.navigationTitle)
+                .frame(maxWidth: .infinity, minHeight: EQLayout.minimumTouch + EQSpacing.sm, alignment: .leading)
+                .padding(.horizontal, EQLayout.screenGutter)
+                .padding(.top, EQSpacing.md)
+                .accessibilityAddTraits(.isHeader)
+            ScrollView {
+                VStack(alignment: .leading, spacing: EQLayout.exerciseBlockGap) {
+                    if let message {
+                        Text(message).eqTextStyle(.secondaryBody).foregroundStyle(EQColor.warning)
+                    }
+                    section("TITLE") {
+                        card {
+                            TextField("Workout title", text: $title)
+                                .eqTextStyle(.listItemTitle)
+                                .focused($focusedField, equals: .title)
+                                .submitLabel(.next)
+                                .onSubmit { focusedField = .body }
+                                .frame(minHeight: EQLayout.minimumTouch)
+                                .accessibilityLabel("Workout title")
+                        }
+                    }
+                    section("EXERCISES") {
+                        card {
+                            TextEditor(text: $text)
+                                .eqTextStyle(.listItemTitle)
+                                .scrollContentBackground(.hidden)
+                                // TextEditor insets its text by ~5pt; align it with the title field.
+                                .padding(.horizontal, -5)
+                                .frame(minHeight: editorMinimumHeight)
+                                .focused($focusedField, equals: .body)
+                                .accessibilityLabel("Exercises")
+                                .accessibilityHint("One exercise per line with sets and repetitions or duration.")
+                        }
+                    }
+                    if !issues.isEmpty {
+                        section("NEEDS CORRECTION") {
+                            card {
+                                VStack(alignment: .leading, spacing: EQSpacing.sm) { ForEach(issues) { ParseIssueRow(issue: $0) } }
+                                    .padding(.vertical, EQSpacing.xs)
+                            }
+                        }
+                    }
+                    Button { parse() } label: {
+                        Text("Parse and Review")
+                            .frame(maxWidth: .infinity, minHeight: EQLayout.minimumTouch + EQSpacing.xs)
+                            .contentShape(Rectangle())
+                    }
+                    .eqPrimaryCTA(
+                        tint: canParse ? EQColor.ctaSurface : EQColor.ctaDisabledSurface,
+                        foreground: canParse ? EQColor.ctaLabel : EQColor.ctaDisabledLabel
+                    )
+                    .disabled(!canParse)
+                }
+                .padding(.horizontal, EQLayout.screenGutter)
+                .padding(.top, EQSpacing.md)
+                .padding(.bottom, EQSpacing.lg)
             }
-            if !issues.isEmpty {
-                Section("Needs correction") { ForEach(issues) { ParseIssueRow(issue: $0) } }
-            }
-            Section("Example") {
-                Text("Push\n\nBench Press 3x8\nIncline Dumbbell Press 3x10\nPlank 3x30 sec")
-                    .font(.body.monospaced()).foregroundStyle(EQColor.secondaryText).textSelection(.enabled)
-            }
+            .scrollIndicators(.hidden)
+            .scrollDismissesKeyboard(.interactively)
         }
-        .scrollContentBackground(.hidden).background(EQColor.canvas).scrollDismissesKeyboard(.interactively)
-        .navigationTitle("Paste workout")
-        .toolbar { ToolbarItemGroup(placement: .keyboard) { Spacer(); Button("Done") { editorFocused = false } } }
+        .foregroundStyle(EQColor.primaryText)
+        .background(EQColor.canvas.ignoresSafeArea())
+        .toolbar(.hidden, for: .navigationBar)
+        .onAppear { if message != nil, canParse { parse(submit: false) } }
+        .toolbar { ToolbarItemGroup(placement: .keyboard) { Spacer(); Button("Done") { focusedField = nil } } }
     }
-    private func parse() {
-        let result = WorkoutTextParser().parse(text)
-        if result.hasBlockingIssues { issues = result.issues; editorFocused = true } else { issues = []; parsed(result) }
+
+    private func section<Content: View>(_ label: String, @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: EQSpacing.sm) {
+            Text(label).eqTextStyle(.sectionLabel).foregroundStyle(EQColor.secondaryText)
+            content()
+        }
+    }
+
+    private func card<Content: View>(@ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 0) { content() }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, EQSpacing.md)
+            .padding(.vertical, EQSpacing.xs)
+            .background(EQColor.cardFill, in: RoundedRectangle(cornerRadius: EQRadius.card, style: .continuous))
+    }
+
+    private func parse(submit: Bool = true) {
+        var result = WorkoutTextParser().parse(text)
+        let name = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !name.isEmpty {
+            if result.workouts.count == 1 { result.workouts[0].name = name }
+            else { for index in result.workouts.indices where result.workouts[index].name.isEmpty { result.workouts[index].name = name } }
+        }
+        if result.workouts.contains(where: { $0.name.isEmpty }) {
+            result.issues.insert(.init(message: "Add a workout title."), at: 0)
+        }
+        if result.hasBlockingIssues || result.workouts.contains(where: { $0.name.isEmpty }) {
+            issues = result.issues
+            if submit { focusedField = name.isEmpty ? .title : .body }
+        } else if submit { issues = []; parsed(result) }
     }
 }
 

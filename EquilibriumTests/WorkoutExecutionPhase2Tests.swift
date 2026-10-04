@@ -1652,12 +1652,14 @@ private final class RecordingHapticsClient: HapticsClient {
 @MainActor
 final class ExecutionPrimaryActionRegressionTests: XCTestCase {
     func testDesignSystemApprovedSemanticPalette() {
-        assertColor(EQColor.productCanvas, hex: 0xFAFAFA)
-        assertColor(EQColor.primaryActionSurface, hex: 0xE0FB60)
-        assertColor(EQColor.deepExecutionSurface, hex: 0x133011)
-        assertColor(EQColor.restActionAccent, hex: 0xFFA424)
-        assertColor(EQColor.textPrimary, hex: 0x1F1F1F)
-        assertColor(EQColor.textSecondary, hex: 0x717171)
+        let grove = EQTheme.grove
+        assertColor(grove.canvas, hex: 0xFAFAFA)
+        assertColor(grove.home.cardSurface, hex: 0xE0FB60)
+        assertColor(grove.execution.foregroundSurface, hex: 0x133011)
+        assertColor(grove.execution.restCanvas, hex: 0xFAFAFA)
+        assertColor(EQTheme.orchid.execution.restForegroundSurface, hex: 0x6A476B)
+        assertColor(grove.primaryText, hex: 0x1F1F1F)
+        assertColor(grove.secondaryText, hex: 0x717171)
     }
 
     func testDesignSystemHomeTypographyUsesSemanticTextStyles() {
@@ -2030,13 +2032,15 @@ final class ExecutionPrimaryActionRegressionTests: XCTestCase {
         XCTAssertGreaterThan(expandedListCard.top, collapsedCard.top)
     }
 
-    func testKeyboardMovesWalletWithoutChangingItsGeometry() {
+    func testKeyboardShrinksWalletAboveKeyboardKeepingItsTop() {
         let keyboard = CGRect(x: 0, y: 500, width: 393, height: 352)
 
         let overlap = ExecutionKeyboardLayout.overlap(keyboardFrame: keyboard)
 
         XCTAssertEqual(overlap, 352, accuracy: 0.001)
-        XCTAssertEqual(ExecutionKeyboardLayout.walletOffset(overlap: overlap), -352, accuracy: 0.001)
+        XCTAssertEqual(ExecutionKeyboardLayout.walletHeight(base: 700, overlap: overlap, minimum: 200), 348, accuracy: 0.001)
+        XCTAssertEqual(ExecutionKeyboardLayout.walletHeight(base: 700, overlap: 0, minimum: 200), 700, accuracy: 0.001)
+        XCTAssertEqual(ExecutionKeyboardLayout.walletHeight(base: 400, overlap: 352, minimum: 200), 200, accuracy: 0.001)
         XCTAssertEqual(
             ExecutionKeyboardLayout.overlap(keyboardFrame: .null),
             0,
@@ -2144,5 +2148,20 @@ final class ExecutionTimingCardHeightTests: XCTestCase {
             header + EQSpacing.xxs + 60 + footer,
             "two-line titles must grow the card"
         )
+    }
+}
+
+final class BarbellLoadTests: XCTestCase {
+    func testPerSideSubtractsBarAndSplitsRemainder() {
+        XCTAssertEqual(BarbellLoad.legend("160", unit: .pounds), "57.5 lb per side")
+        XCTAssertEqual(BarbellLoad.legend("135", unit: .pounds), "45 lb per side")
+        XCTAssertEqual(BarbellLoad.legend("60,5", unit: .kilograms), "20.25 kg per side")
+    }
+
+    func testNoLegendAtOrBelowBarWeight() {
+        XCTAssertNil(BarbellLoad.legend("45", unit: .pounds))
+        XCTAssertNil(BarbellLoad.legend("40", unit: .pounds))
+        XCTAssertNil(BarbellLoad.legend("20", unit: .kilograms))
+        XCTAssertNil(BarbellLoad.legend("", unit: .pounds))
     }
 }

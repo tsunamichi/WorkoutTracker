@@ -228,7 +228,7 @@ final class HomeQueueTests: XCTestCase {
     func testAddWorkoutDrawerUsesTwoOrThreeActionColumns() {
         XCTAssertEqual(HomeAddWorkoutDrawerLayout.columnCount(hasReusableWorkouts: false), 2)
         XCTAssertEqual(HomeAddWorkoutDrawerLayout.columnCount(hasReusableWorkouts: true), 3)
-        XCTAssertEqual(EQLayout.Home.addWorkoutActionIconSize, 40)
+        XCTAssertEqual(EQLayout.Home.addWorkoutActionIconSize, 20)
         XCTAssertEqual(EQLayout.Home.addWorkoutSheetTopSpacing, 40)
         XCTAssertEqual(EQLayout.Home.addWorkoutTitleToCardsSpacing, 40)
         XCTAssertEqual(EQLayout.Home.addWorkoutSheetBottomSpacing, 40)
@@ -396,5 +396,55 @@ final class HomeQueueTests: XCTestCase {
     func testCardMappingAndStableRouteIdentity() {
         XCTAssertEqual(HomeCardPresentation(status: .ready).action, .start); XCTAssertEqual(HomeCardPresentation(status: .completed).action, .view)
         XCTAssertNotEqual(HomeOverlayDestination.history, HomeOverlayDestination.settings)
+    }
+}
+
+final class ThemeSystemTests: XCTestCase {
+    private func makeDefaults() -> UserDefaults {
+        let suite = "ThemeSystemTests.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defaults.removePersistentDomain(forName: suite)
+        return defaults
+    }
+
+    func testGroveIsTheDefaultLightTheme() {
+        let store = EQThemeStore(defaults: makeDefaults())
+        XCTAssertEqual(EQTheme.default.id, .grove)
+        XCTAssertEqual(store.theme.id, .grove)
+        XCTAssertEqual(store.theme.colorScheme, .light)
+    }
+
+    func testSelectionPersistsAcrossStores() {
+        let defaults = makeDefaults()
+        EQThemeStore(defaults: defaults).select(.dusk)
+        let reloaded = EQThemeStore(defaults: defaults)
+        XCTAssertEqual(reloaded.theme.id, .dusk)
+        XCTAssertEqual(reloaded.theme.colorScheme, .dark)
+    }
+
+    func testUnknownStoredThemeFallsBackToDefault() {
+        let defaults = makeDefaults()
+        defaults.set("retired-theme", forKey: EQThemeStore.storageKey)
+        XCTAssertEqual(EQThemeStore(defaults: defaults).theme.id, EQTheme.default.id)
+    }
+
+    func testEveryThemeIDResolvesToAUniquelyNamedTheme() {
+        XCTAssertEqual(Set(EQTheme.all.map(\.id)), Set(EQTheme.ID.allCases))
+        XCTAssertEqual(Set(EQTheme.all.map(\.name)).count, EQTheme.all.count)
+        for id in EQTheme.ID.allCases { XCTAssertEqual(EQTheme.theme(for: id).id, id) }
+    }
+}
+
+final class NumberPadTests: XCTestCase {
+    func testDecimalKeyOnlyAppearsForDecimalInputs() {
+        XCTAssertEqual(EQNumberPadLayout.rows(allowsDecimal: true)[3][0], .decimal)
+        XCTAssertNil(EQNumberPadLayout.rows(allowsDecimal: false)[3][0])
+        XCTAssertEqual(EQNumberPadLayout.rows(allowsDecimal: false).flatMap { $0 }.compactMap { $0 }.count, 11)
+    }
+
+    func testDecimalPointCanOnlyBeTypedOnce() {
+        XCTAssertTrue(EQNumberPadEditing.acceptsDecimal(text: "28", replacing: ""))
+        XCTAssertFalse(EQNumberPadEditing.acceptsDecimal(text: "28.5", replacing: ""))
+        XCTAssertTrue(EQNumberPadEditing.acceptsDecimal(text: "28.5", replacing: "28.5"))
     }
 }

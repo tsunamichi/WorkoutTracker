@@ -107,6 +107,22 @@ public final class SwiftDataRepository: ExerciseRepository, WorkoutRepository, E
         var completedDescriptor = FetchDescriptor<WorkoutRecord>(predicate: #Predicate { $0.statusRaw == completed }); completedDescriptor.fetchLimit = 1
         return (workouts, try context.fetchCount(completedDescriptor) > 0)
     }
+    /// Ranks completed records by date before mapping so only the requested page is converted to domain values.
+    public func recentCompletedWorkouts(limit: Int) async throws -> [Workout] {
+        guard limit > 0 else { return [] }
+        let completed = WorkoutStatus.completed.rawValue
+        let candidates = try context.fetch(FetchDescriptor<WorkoutRecord>(predicate: #Predicate { $0.statusRaw == completed }))
+        var seen = Set<String>(), ids: [String] = []
+        // Over-select so duplicate records whose winner is newer or no longer completed cannot shrink the page.
+        let target = limit > Int.max / 2 ? limit : limit * 2
+        for record in candidates.sorted(by: { ($0.completedAt ?? $0.updatedAt) > ($1.completedAt ?? $1.updatedAt) }) where ids.count < target {
+            if seen.insert(record.id).inserted { ids.append(record.id) }
+        }
+        guard !ids.isEmpty else { return [] }
+        let records = try context.fetch(FetchDescriptor<WorkoutRecord>(predicate: #Predicate { ids.contains($0.id) }))
+        let workouts = try canonical(records, key: \WorkoutRecord.id, updatedAt: \WorkoutRecord.updatedAt).map(WorkoutMapper.domain)
+        return Array(WorkoutHistoryQuery.completed(workouts).prefix(limit))
+    }
     /// Only workouts with an occurrence of the exercise can contribute to its history, so avoid mapping the whole store.
     private func canonicalWorkouts(containing exerciseID: ExerciseID) throws -> [Workout] {
         let raw = exerciseID.rawValue
