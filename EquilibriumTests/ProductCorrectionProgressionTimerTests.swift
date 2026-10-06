@@ -21,11 +21,16 @@ import SwiftData
         var now: TimeInterval = 0
         let configuration = StandaloneTimerConfiguration(name: "Test", moveDuration: 5, exerciseRestDuration: 5, exercisesPerRound: 2, rounds: 2, roundRestDuration: 5)
         let runner = StandaloneIntervalTimer(configuration: configuration, countdown: CountdownTimer(now: { now }))
-        runner.play(); XCTAssertEqual(runner.phase, .move); XCTAssertEqual(runner.exercise, 1); XCTAssertEqual(runner.round, 1)
+        runner.play(); XCTAssertEqual(runner.phase, .preparingMove); XCTAssertEqual(runner.exercise, 1); XCTAssertEqual(runner.round, 1)
+        now += WorkoutWorkTimerTiming.countdownDuration; runner.refresh(); XCTAssertEqual(runner.phase, .move); XCTAssertEqual(runner.remaining, 5)
         now += 5; runner.refresh(); XCTAssertEqual(runner.phase, .exerciseRest)
-        now += 5; runner.refresh(); XCTAssertEqual(runner.phase, .move); XCTAssertEqual(runner.exercise, 2)
+        now += 5; runner.refresh(); XCTAssertEqual(runner.phase, .restExit); XCTAssertEqual(runner.exercise, 2)
+        now += TimerVisualTransitionTiming.restExitDuration; runner.refresh(); XCTAssertEqual(runner.phase, .preparingMove)
+        now += WorkoutWorkTimerTiming.countdownDuration; runner.refresh(); XCTAssertEqual(runner.phase, .move)
         now += 5; runner.refresh(); XCTAssertEqual(runner.phase, .roundRest)
-        now += 5; runner.refresh(); XCTAssertEqual(runner.round, 2); XCTAssertEqual(runner.exercise, 1); XCTAssertEqual(runner.phase, .move)
+        now += 5; runner.refresh(); XCTAssertEqual(runner.round, 2); XCTAssertEqual(runner.exercise, 1); XCTAssertEqual(runner.phase, .restExit)
+        now += TimerVisualTransitionTiming.restExitDuration; runner.refresh(); XCTAssertEqual(runner.phase, .preparingMove)
+        now += WorkoutWorkTimerTiming.countdownDuration; runner.refresh(); XCTAssertEqual(runner.phase, .move)
         now += 20; XCTAssertTrue(runner.refresh()); XCTAssertEqual(runner.state, .completed); XCTAssertEqual(runner.completionFeedbackCount, 1)
         XCTAssertFalse(runner.refresh()); XCTAssertEqual(runner.completionFeedbackCount, 1)
     }
@@ -33,12 +38,14 @@ import SwiftData
     func testPauseResumeSkipResetAndBackgroundReconciliation() {
         var now: TimeInterval = 0
         let runner = StandaloneIntervalTimer(configuration: .init(name: "Test", moveDuration: 5, exerciseRestDuration: 5, exercisesPerRound: 2, rounds: 1, roundRestDuration: 5), countdown: CountdownTimer(now: { now }))
-        runner.play(); now = 2; runner.refresh(); runner.pause(); now = 50; runner.refresh(); XCTAssertEqual(runner.remaining, 3)
-        runner.resume(); runner.skip(); XCTAssertEqual(runner.phase, .exerciseRest)
-        runner.skip(); XCTAssertEqual(runner.exercise, 2); XCTAssertEqual(runner.phase, .move)
-        runner.reset(); XCTAssertEqual(runner.state, .ready); XCTAssertEqual(runner.exercise, 1); XCTAssertEqual(runner.round, 1)
-        runner.play(); now += 20; XCTAssertTrue(runner.refresh()); XCTAssertEqual(runner.state, .completed)
-        runner.restart(); XCTAssertEqual(runner.state, .running); XCTAssertEqual(runner.phase, .move)
+        runner.play(); now = 1; runner.refresh(); runner.pause(); now = 50; runner.refresh()
+        XCTAssertEqual(runner.remaining, WorkoutWorkTimerTiming.countdownDuration - 1, accuracy: 0.001)
+        runner.resume(); runner.skip(); XCTAssertEqual(runner.phase, .move)
+        runner.skip(); XCTAssertEqual(runner.phase, .exerciseRest)
+        runner.skip(); XCTAssertEqual(runner.exercise, 2); XCTAssertEqual(runner.phase, .restExit)
+        runner.reset(); XCTAssertEqual(runner.state, .ready); XCTAssertEqual(runner.phase, .preparingMove); XCTAssertEqual(runner.exercise, 1); XCTAssertEqual(runner.round, 1)
+        runner.play(); now += 30; XCTAssertTrue(runner.refresh()); XCTAssertEqual(runner.state, .completed)
+        runner.restart(); XCTAssertEqual(runner.state, .running); XCTAssertEqual(runner.phase, .preparingMove)
     }
 
     func testTimerExitConfirmationPolicy() {
@@ -46,6 +53,83 @@ import SwiftData
         XCTAssertTrue(StandaloneTimerExitPolicy.requiresConfirmation(for: .running))
         XCTAssertTrue(StandaloneTimerExitPolicy.requiresConfirmation(for: .paused))
         XCTAssertFalse(StandaloneTimerExitPolicy.requiresConfirmation(for: .completed))
+    }
+
+    func testStandaloneRunPresentationMapsMoveAndRestIntoSharedVisualModes() {
+        XCTAssertEqual(
+            StandaloneTimerRunPresentation.visualMode(phase: .preparingMove, state: .ready),
+            .hidden
+        )
+        XCTAssertEqual(
+            StandaloneTimerRunPresentation.visualMode(phase: .preparingMove, state: .running),
+            .workCountdown
+        )
+        XCTAssertEqual(
+            StandaloneTimerRunPresentation.visualMode(phase: .move, state: .running),
+            .work
+        )
+        XCTAssertEqual(
+            StandaloneTimerRunPresentation.visualMode(phase: .exerciseRest, state: .running),
+            .rest
+        )
+        XCTAssertEqual(
+            StandaloneTimerRunPresentation.visualMode(phase: .roundRest, state: .paused),
+            .rest
+        )
+        XCTAssertEqual(
+            StandaloneTimerRunPresentation.visualMode(phase: .restExit, state: .running),
+            .hidden
+        )
+        XCTAssertTrue(StandaloneTimerRunPresentation.usesRestPalette(phase: .restExit))
+        XCTAssertEqual(
+            StandaloneTimerRunPresentation.systemBackgroundStyle(phase: .move),
+            .work
+        )
+        XCTAssertEqual(
+            StandaloneTimerRunPresentation.systemBackgroundStyle(phase: .exerciseRest),
+            .rest
+        )
+        XCTAssertEqual(
+            StandaloneTimerRunPresentation.visualMode(phase: .completed, state: .completed),
+            .hidden
+        )
+        XCTAssertEqual(StandaloneTimerRunPresentation.primaryLabel(for: .ready), "Play")
+        XCTAssertEqual(StandaloneTimerRunPresentation.primaryLabel(for: .running), "Pause")
+        XCTAssertEqual(StandaloneTimerRunPresentation.primaryLabel(for: .paused), "Play")
+        XCTAssertEqual(
+            StandaloneTimerRunPresentation.displayedRemaining(
+                state: .ready,
+                remaining: 0,
+                initialDuration: 30
+            ),
+            30
+        )
+    }
+
+    func testStandalonePreparationHandsOffToAFullWorkInterval() {
+        var now: TimeInterval = 0
+        let runner = StandaloneIntervalTimer(
+            configuration: .init(
+                name: "Preparation",
+                moveDuration: 30,
+                exerciseRestDuration: 10,
+                exercisesPerRound: 1,
+                rounds: 1,
+                roundRestDuration: 10
+            ),
+            countdown: CountdownTimer(now: { now })
+        )
+
+        runner.play()
+        XCTAssertEqual(runner.phase, .preparingMove)
+        XCTAssertEqual(runner.countdown.configuredDuration, WorkoutWorkTimerTiming.countdownDuration)
+
+        now = WorkoutWorkTimerTiming.countdownDuration
+        runner.refresh()
+
+        XCTAssertEqual(runner.phase, .move)
+        XCTAssertEqual(runner.countdown.configuredDuration, 30)
+        XCTAssertEqual(runner.remaining, 30, accuracy: 0.001)
     }
 
     func testTimerConfigurationPersistenceIsSeparateFromWorkoutHistory() async throws {
@@ -188,13 +272,13 @@ import SwiftData
         XCTAssertEqual(model.workTimerState?.phase, .ready)
         XCTAssertEqual(model.foregroundState, .work)
         XCTAssertFalse(try XCTUnwrap(model.workTimerState).isTwoSided)
-        XCTAssertEqual(model.workTimerState?.totalDuration, 5)
+        XCTAssertEqual(model.workTimerState?.totalDuration, WorkoutWorkTimerTiming.countdownDuration)
         XCTAssertNil(model.restState)
-        monotonic = 5; model.refreshRest()
+        monotonic = WorkoutWorkTimerTiming.countdownDuration; model.refreshRest()
         XCTAssertEqual(model.workTimerState?.phase, .firstSide)
         XCTAssertEqual(model.workTimerState?.totalDuration, 45)
         XCTAssertNil(model.restState)
-        monotonic = 50; model.refreshRest()
+        monotonic = WorkoutWorkTimerTiming.countdownDuration + 45; model.refreshRest()
         try await Task.sleep(for: .milliseconds(20))
         XCTAssertNil(model.workTimerState)
         XCTAssertEqual(model.restState?.totalDuration, 60)
@@ -217,10 +301,10 @@ import SwiftData
         model.startWorkTimer(exerciseID: exercise.id, prescriptionID: prescription.id, input: .duration(weight: nil, seconds: 45))
         XCTAssertTrue(try XCTUnwrap(model.workTimerState).isTwoSided)
         XCTAssertEqual(model.workTimerState?.exerciseID, exercise.id)
-        monotonic = 5; model.refreshRest(); XCTAssertEqual(model.workTimerState?.phase, .firstSide)
-        monotonic = 50; model.refreshRest(); XCTAssertEqual(model.workTimerState?.phase, .switchSides); XCTAssertEqual(model.timer.configuredDuration, 10)
-        monotonic = 60; model.refreshRest(); XCTAssertEqual(model.workTimerState?.phase, .secondSide); XCTAssertEqual(model.timer.configuredDuration, 45)
-        monotonic = 105; model.refreshRest()
+        monotonic = WorkoutWorkTimerTiming.countdownDuration; model.refreshRest(); XCTAssertEqual(model.workTimerState?.phase, .firstSide)
+        monotonic = WorkoutWorkTimerTiming.countdownDuration + 45; model.refreshRest(); XCTAssertEqual(model.workTimerState?.phase, .switchSides); XCTAssertEqual(model.timer.configuredDuration, 10)
+        monotonic = WorkoutWorkTimerTiming.countdownDuration + 55; model.refreshRest(); XCTAssertEqual(model.workTimerState?.phase, .secondSide); XCTAssertEqual(model.timer.configuredDuration, 45)
+        monotonic = WorkoutWorkTimerTiming.countdownDuration + 100; model.refreshRest()
         try await Task.sleep(for: .milliseconds(20))
         let persisted = try await repository.workout(id: fixture.id)
         XCTAssertEqual(persisted?.exercises[1].loggedSets.count, 1)

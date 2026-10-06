@@ -60,6 +60,7 @@ final class WorkoutRestSessionStore {
 }
 
 enum WorkoutWorkTimerPhase: Equatable, Sendable { case ready, firstSide, switchSides, secondSide }
+
 struct WorkoutWorkTimerState: Equatable, Sendable {
     let exerciseID: WorkoutExerciseID
     let exerciseName: String
@@ -417,7 +418,7 @@ final class WorkoutExecutionModel {
               case .duration(_, let seconds) = input, seconds > 0 else { return }
         pendingTimedSet = (exerciseID, prescriptionID, input, seconds, exercise.isTwoSided, exercise.nameSnapshot, index + 1, exercise.prescriptions.count)
         workTimerPhase = .ready
-        startTimer(duration: 5)
+        startTimer(duration: WorkoutWorkTimerTiming.countdownDuration)
     }
     func toggleWorkTimerPause() {
         guard workTimerPhase != .ready else { return }
@@ -694,7 +695,9 @@ final class WorkoutExecutionModel {
         timer.start(duration: duration, alreadyElapsed: alreadyElapsed)
         restTask = Task { [weak self] in
             while !Task.isCancelled {
-                try? await Task.sleep(for: .seconds(1))
+                let remaining = self?.timer.currentRemainingDuration ?? 1
+                let refreshInterval = min(max(remaining, 0.05), 1)
+                try? await Task.sleep(for: .seconds(refreshInterval))
                 guard !Task.isCancelled else { return }
                 self?.refreshRest()
                 if self?.restState == nil && self?.workTimerState == nil { return }

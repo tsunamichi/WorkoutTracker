@@ -794,7 +794,7 @@ final class WorkoutExecutionNavigationStateTests: XCTestCase {
             input: .duration(weight: nil, seconds: 45)
         )
 
-        instant = instant.addingTimeInterval(5)
+        instant = instant.addingTimeInterval(WorkoutWorkTimerTiming.countdownDuration)
         model.refreshRest()
         XCTAssertEqual(haptics.events, [.timerStarted])
 
@@ -1736,6 +1736,13 @@ final class ExecutionPrimaryActionRegressionTests: XCTestCase {
         )
         XCTAssertTrue(ExecutionPrimaryActionPhase.work.showsPauseControl)
         XCTAssertFalse(ExecutionPrimaryActionPhase.rest.showsPauseControl)
+        XCTAssertEqual(ExecutionPrimaryActionPhase.work.primaryActionVariant, .filled)
+        XCTAssertEqual(ExecutionPrimaryActionPhase.rest.primaryActionVariant, .outlined)
+        XCTAssertEqual(
+            ExecutionPrimaryActionPhase.work.timerControlWidth,
+            EQLayout.WorkoutExecution.primaryActionTimerWidth
+        )
+        XCTAssertNil(ExecutionPrimaryActionPhase.exercise.timerControlWidth)
     }
 
     func testReduceMotionRemovesSpatialOffsetsWithoutChangingEndStates() {
@@ -1821,6 +1828,8 @@ final class ExecutionPrimaryActionRegressionTests: XCTestCase {
 
         XCTAssertEqual(EQLayout.WorkoutExecution.primaryActionHeight, 56)
         XCTAssertEqual(EQLayout.WorkoutExecution.primaryActionTimerWidth, 152)
+        XCTAssertEqual(EQLayout.WorkoutExecution.walletBorderWidth, 2)
+        XCTAssertEqual(EQLayout.WorkoutExecution.workCardExternalTopGap, 2)
         XCTAssertEqual(EQLayout.WorkoutExecution.primaryActionTopInset, 24)
         XCTAssertEqual(EQLayout.WorkoutExecution.primaryActionHorizontalPadding, EQSpacing.lg)
         XCTAssertGreaterThanOrEqual(EQLayout.minimumTouch, 44)
@@ -1844,7 +1853,9 @@ final class ExecutionPrimaryActionRegressionTests: XCTestCase {
         let headerHeight: CGFloat = 48
         let remainingValues: [TimeInterval] = [5, 4, 3, 60, 59, 600]
         let timerTexts = remainingValues.map(ExecutionTimerFormatting.durationText(for:))
-        XCTAssertEqual(timerTexts, ["0:05", "0:04", "0:03", "1:00", "0:59", "10:00"])
+        XCTAssertEqual(timerTexts, ["00:05", "00:04", "00:03", "01:00", "00:59", "10:00"])
+        XCTAssertTrue(timerTexts.allSatisfy { $0.count == 5 })
+        XCTAssertTrue(timerTexts.allSatisfy { Array($0)[2] == ":" })
 
         let footerHeight = ExecutionPrimaryActionLayout.footerHeight(
             isVisible: true,
@@ -1859,6 +1870,33 @@ final class ExecutionPrimaryActionRegressionTests: XCTestCase {
                 footerHeight: footerHeight
             )
             XCTAssertEqual(headerHeight + viewportHeight, cardHeight - footerHeight, accuracy: 0.001)
+        }
+    }
+
+    func testTimerFormattingKeepsColumnsStableForRollingCountdownTransitions() {
+        let transitions: [(from: TimeInterval, to: TimeInterval, changedColumns: Set<Int>)] = [
+            (30, 29, [3, 4]),
+            (27, 26, [4]),
+            (21, 20, [4]),
+            (20, 19, [3, 4]),
+            (60, 59, [1, 3, 4]),
+            (10, 9, [3, 4]),
+            (3, 2, [4]),
+            (2, 1, [4]),
+            (1, 0, [4])
+        ]
+
+        for transition in transitions {
+            let oldCharacters = Array(ExecutionTimerFormatting.durationText(for: transition.from))
+            let newCharacters = Array(ExecutionTimerFormatting.durationText(for: transition.to))
+            XCTAssertEqual(oldCharacters.count, newCharacters.count)
+            XCTAssertEqual(oldCharacters[2], ":")
+            XCTAssertEqual(newCharacters[2], ":")
+
+            let changedColumns = Set(oldCharacters.indices.filter {
+                oldCharacters[$0] != newCharacters[$0]
+            })
+            XCTAssertEqual(changedColumns, transition.changedColumns)
         }
     }
 

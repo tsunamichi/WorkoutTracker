@@ -558,11 +558,13 @@ enum EQLayout {
         /// icon's column (screen gutter), ignoring their larger tap targets.
         static let trailingIconOutset = walletEdgeInset + walletInset - EQLayout.screenGutter
         static let walletBorderWidth: CGFloat = 2
+        static let workCardExternalTopGap: CGFloat = 2
         static let headerWalletSpacing: CGFloat = 40
         static let overviewHeaderBottomInset = EQSpacing.xs
         static let overviewContentTopInset = EQSpacing.md
         static let exerciseCompactCardHeight: CGFloat = 104
         static let restCardHeight: CGFloat = 180
+        static let standaloneTimerCardHeight: CGFloat = 200
         static let completedSectionTopSpacing: CGFloat = 48
         static let titleToSetsSpacing = EQSpacing.xs
         static let loggedSetSpacing = EQSpacing.xxs
@@ -621,16 +623,27 @@ enum EQDimension {
 }
 
 enum EQMotion {
+    static let objectTransformationDuration: TimeInterval = 0.34
+    static let reducedContentTransitionDuration: TimeInterval = 0.12
+    static let timerDigitRollDuration: TimeInterval = 0.42
     /// Immediate control acknowledgement and small content changes.
     static let responsive = Animation.easeOut(duration: 0.16)
     /// Persistent objects changing size or position, without spring overshoot.
-    static let objectTransformation = Animation.timingCurve(0.22, 0.78, 0.22, 1, duration: 0.34)
+    static let objectTransformation = Animation.timingCurve(
+        0.22,
+        0.78,
+        0.22,
+        1,
+        duration: objectTransformationDuration
+    )
     /// Peer surfaces entering or leaving the viewport.
     static let surfaceReveal = Animation.timingCurve(0.33, 0, 0.2, 1, duration: 0.28)
     /// Content changing inside an object that remains in place.
     static let contentTransition = Animation.easeInOut(duration: 0.22)
+    /// A controlled mechanical roll for deadline-driven countdown digits.
+    static let timerDigitRoll = Animation.easeInOut(duration: timerDigitRollDuration)
     /// Preserves state-change legibility without large spatial motion.
-    static let reducedContentTransition = Animation.easeOut(duration: 0.12)
+    static let reducedContentTransition = Animation.easeOut(duration: reducedContentTransitionDuration)
 }
 
 // MARK: - Reusable primitives
@@ -642,6 +655,27 @@ struct EQSurface: View {
     var body: some View {
         RoundedRectangle(cornerRadius: radius, style: .continuous)
             .fill(color)
+    }
+}
+
+/// Stable, deadline-reactive timer text. Native numeric transitions animate only
+/// changed columns and keep punctuation and unchanged digits fixed in place.
+struct EQRollingTimerText: View {
+    let value: String
+    let reduceMotion: Bool
+
+    var body: some View {
+        Text(value)
+            .monospacedDigit()
+            .contentTransition(
+                reduceMotion
+                    ? .identity
+                    : .numericText(countsDown: true)
+            )
+            .animation(
+                reduceMotion ? nil : EQMotion.timerDigitRoll,
+                value: value
+            )
     }
 }
 
@@ -903,7 +937,7 @@ struct EQMetricInput: View {
     }
 }
 
-enum EQPrimaryCTAVariant {
+enum EQPrimaryCTAVariant: Equatable {
     case filled
     case outlined
 }

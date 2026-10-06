@@ -19,6 +19,7 @@ enum ExecutionWalletVisualState: Equatable {
         case .focusedExercise, .focusedWork, .focusedRest: .focusedExercise
         }
     }
+
 }
 
 enum ExerciseOverviewAction: Equatable {
@@ -139,6 +140,16 @@ enum ExecutionPrimaryActionPhase: Equatable {
     }
 
     var showsPauseControl: Bool { self == .work }
+
+    var timerControlWidth: CGFloat? {
+        self == .work || self == .rest
+            ? EQLayout.WorkoutExecution.primaryActionTimerWidth
+            : nil
+    }
+
+    var primaryActionVariant: EQPrimaryCTAVariant {
+        self == .rest ? .outlined : .filled
+    }
 }
 
 private struct ExecutionPrimaryAction {
@@ -212,6 +223,13 @@ struct ExecutionForegroundCardAnchors: Equatable {
 
 enum ExecutionTimerWalletLayout {
     static let maximumExpandedTimerFraction: CGFloat = 0.25
+
+    static func focusedCardTop(isAccessibilitySize: Bool) -> CGFloat {
+        let headerHeight = isAccessibilitySize
+            ? EQLayout.minimumTouch + (EQSpacing.xl * 2)
+            : EQLayout.minimumTouch + EQSpacing.md
+        return max(0, headerHeight - EQLayout.WorkoutExecution.walletEdgeInset)
+    }
 
     /// Smallest foreground card that shows the IN PROGRESS header, the full exercise
     /// title and the timer action footer without clipping the title.
@@ -453,7 +471,7 @@ struct ExecutionWalletSurfaceLayout: Equatable {
 enum ExecutionTimerFormatting {
     static func durationText(for remaining: TimeInterval) -> String {
         let seconds = max(0, Int(ceil(remaining)))
-        return String(format: "%d:%02d", seconds / 60, seconds % 60)
+        return String(format: "%02d:%02d", seconds / 60, seconds % 60)
     }
 }
 
@@ -729,6 +747,7 @@ final class ExerciseSettingsPresentation {
 struct WorkoutExecutionView: View {
     @State private var model: WorkoutExecutionModel
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.homeExecutionTransitionIsSettled) private var homeTransitionIsSettled
     @State private var dismissRequest = 0
@@ -767,19 +786,29 @@ struct WorkoutExecutionView: View {
     }
 
     var body: some View {
-        ZStack {
-            ExecutionPageCanvas(
-                restProgress: displayedTimerPresentation.isRest ? timerVisibilityProgress : 0,
-                workProgress: displayedTimerPresentation.isWork ? timerVisibilityProgress : 0,
-                drawsBaseCanvas: !usesObjectSurface
-            )
-            .ignoresSafeArea()
-            if let workout = model.workout {
-                content(workout)
-            } else if let error = model.errorMessage {
-                ContentUnavailableView("Workout unavailable", systemImage: "exclamationmark.triangle", description: Text(error))
-            } else {
-                ProgressView("Loading workout")
+        GeometryReader { sceneProxy in
+            let sceneFrame = sceneProxy.frame(in: .global)
+            let fullSceneHeight = sceneProxy.size.height
+                + sceneProxy.safeAreaInsets.top
+                + sceneProxy.safeAreaInsets.bottom
+            let fullSceneTargetY = sceneFrame.minY
+                - sceneProxy.safeAreaInsets.top
+                + (fullSceneHeight * TimerVisualMotion.countdownLaunchHeightScreenRatio)
+
+            ZStack {
+                ExecutionPageCanvas(
+                    restProgress: displayedTimerPresentation.isRest ? timerVisibilityProgress : 0,
+                    workProgress: displayedTimerPresentation.isWork ? timerVisibilityProgress : 0,
+                    drawsBaseCanvas: !usesObjectSurface
+                )
+                .ignoresSafeArea()
+                if let workout = model.workout {
+                    content(workout, fullSceneCenterY: fullSceneTargetY)
+                } else if let error = model.errorMessage {
+                    ContentUnavailableView("Workout unavailable", systemImage: "exclamationmark.triangle", description: Text(error))
+                } else {
+                    ProgressView("Loading workout")
+                }
             }
         }
         .ignoresSafeArea(.keyboard, edges: .bottom)
@@ -937,7 +966,7 @@ struct WorkoutExecutionView: View {
         else { dismissRequest += 1 }
     }
 
-    private func content(_ workout: Workout) -> some View {
+    private func content(_ workout: Workout, fullSceneCenterY: CGFloat) -> some View {
         let surfacePresentation = ExecutionSurfacePresentation.derive(
             workoutStatus: workout.status,
             workTimerState: model.workTimerState,
@@ -981,70 +1010,86 @@ struct WorkoutExecutionView: View {
                     restExpansionProgress: restExpansionProgress
                 )
                 let timerHeight = max(0, proxy.size.height - walletHeight)
+                let globalFrame = proxy.frame(in: .global)
+                let sceneCenterY = max(0, fullSceneCenterY - globalFrame.minY)
 
-                VStack(spacing: 0) {
-                    ExecutionTimerRegion(
-                        presentation: visualTimerPresentation,
-                        nextAction: restNextAction,
+                ZStack(alignment: .top) {
+                    WorkoutTimerVisualLayer(
+                        activePresentation: surfacePresentation.timerRegion,
+                        timer: model.timer,
+                        walletTop: timerHeight + ExecutionTimerWalletLayout.focusedCardTop(
+                            isAccessibilitySize: dynamicTypeSize.isAccessibilitySize
+                        ),
+                        sceneCenterY: sceneCenterY,
+                        walletCollapseProgress: timerProgress,
                         reduceMotion: reduceMotion
                     )
-                    .frame(height: timerHeight)
-                    .clipped()
 
-                    ExecutionWallet(
-                        workout: workout,
-                        model: model,
-                        presentation: walletPresentation,
-                        visualState: visualState,
-                        foregroundState: model.foregroundState,
-                        showsForegroundExercise: displayedForeground != nil,
-                        foregroundPresenceProgress: foregroundPresenceProgress,
-                        reduceMotion: reduceMotion,
-                        transitionSourceFrame: transitionSourceFrame,
-                        reportFrame: reportWalletFrame,
-                        listRow: { exercise, state in
-                            ExerciseListRow(exercise: exercise, state: state, weightUnit: model.weightUnit)
-                        },
-                        selectExercise: { exercise in
-                            guard workout.status == .inProgress else { return }
-                            if ExerciseOverviewInteraction.actions(for: exercise) == [.restoreExercise] {
-                                restoresExercise = exercise
-                                haptics.perform(.selection)
-                                return
-                            }
-                            if performWalletTransition({
-                                let changed = walletPresentation.selectExercise(exercise.id, focus: model.focus)
-                                foregroundFocusProgress = 1
-                                return changed
-                            }) {
-                                haptics.perform(.selection)
-                            }
-                        },
-                        showOverview: showExerciseOverview,
-                        completedSectionToggled: { haptics.perform(.selection) },
-                        showSettings: { presentExerciseSettings(for: $0) },
-                        showFocused: showFocusedExercise,
-                        skipRest: model.skipRest,
-                        skipWork: model.skipWorkTimer,
-                        pauseResumeWork: model.toggleWorkTimerPause,
-                        foregroundHeader: foregroundExerciseHeader,
-                        foregroundContent: foregroundExerciseContent,
-                        foregroundValues: { expandedExerciseControls },
-                        footerControls: { exercise in footerSetCountControls(for: exercise) },
-                        keyboardVisible: keyboardOverlap > 0,
-                        showsRestTint: visualTimerPresentation.isRest,
-                        showsWorkTint: visualTimerPresentation.isWork
-                    )
-                    .frame(height: ExecutionKeyboardLayout.walletHeight(
-                        base: walletHeight,
-                        overlap: keyboardOverlap,
-                        minimum: compactWalletHeight
-                    ))
-                    .frame(height: walletHeight, alignment: .top)
-                    .onPreferenceChange(ExecutionForegroundTitleHeightPreferenceKey.self) {
-                        timingTitleHeight = $0
+                    VStack(spacing: 0) {
+                        ExecutionTimerRegion(
+                            presentation: visualTimerPresentation,
+                            timer: model.timer,
+                            nextAction: restNextAction,
+                            reduceMotion: reduceMotion
+                        )
+                        .frame(height: timerHeight)
+                        .clipped()
+
+                        ExecutionWallet(
+                            workout: workout,
+                            model: model,
+                            presentation: walletPresentation,
+                            visualState: visualState,
+                            foregroundState: model.foregroundState,
+                            showsForegroundExercise: displayedForeground != nil,
+                            foregroundPresenceProgress: foregroundPresenceProgress,
+                            reduceMotion: reduceMotion,
+                            transitionSourceFrame: transitionSourceFrame,
+                            reportFrame: reportWalletFrame,
+                            listRow: { exercise, state in
+                                ExerciseListRow(exercise: exercise, state: state, weightUnit: model.weightUnit)
+                            },
+                            selectExercise: { exercise in
+                                guard workout.status == .inProgress else { return }
+                                if ExerciseOverviewInteraction.actions(for: exercise) == [.restoreExercise] {
+                                    restoresExercise = exercise
+                                    haptics.perform(.selection)
+                                    return
+                                }
+                                if performWalletTransition({
+                                    let changed = walletPresentation.selectExercise(exercise.id, focus: model.focus)
+                                    foregroundFocusProgress = 1
+                                    return changed
+                                }) {
+                                    haptics.perform(.selection)
+                                }
+                            },
+                            showOverview: showExerciseOverview,
+                            completedSectionToggled: { haptics.perform(.selection) },
+                            showSettings: { presentExerciseSettings(for: $0) },
+                            showFocused: showFocusedExercise,
+                            skipRest: model.skipRest,
+                            skipWork: model.skipWorkTimer,
+                            pauseResumeWork: model.toggleWorkTimerPause,
+                            foregroundHeader: foregroundExerciseHeader,
+                            foregroundContent: foregroundExerciseContent,
+                            foregroundValues: { expandedExerciseControls },
+                            footerControls: { exercise in footerSetCountControls(for: exercise) },
+                            keyboardVisible: keyboardOverlap > 0,
+                            showsRestTint: visualTimerPresentation.isRest,
+                            showsWorkTint: visualTimerPresentation.isWork
+                        )
+                        .frame(height: ExecutionKeyboardLayout.walletHeight(
+                            base: walletHeight,
+                            overlap: keyboardOverlap,
+                            minimum: compactWalletHeight
+                        ))
+                        .frame(height: walletHeight, alignment: .top)
+                        .onPreferenceChange(ExecutionForegroundTitleHeightPreferenceKey.self) {
+                            timingTitleHeight = $0
+                        }
+                        .modifier(ForegroundFocusTransitionModifier(progress: foregroundFocusProgress))
                     }
-                    .modifier(ForegroundFocusTransitionModifier(progress: foregroundFocusProgress))
                 }
             }
         }
@@ -1475,20 +1520,15 @@ private struct ExecutionWallet<ListRow: View, ForegroundHeader: View, Foreground
 
     private func restBlend(_ color: Color, _ rest: Color) -> Color { color.mix(with: rest, by: restTint) }
     private var overviewTextColor: Color { restBlend(EQColor.Execution.overviewText, EQColor.Execution.restCardText) }
-    /// The IN PROGRESS card takes the same rest styling during rest and work intervals.
-    private var timingTint: Double { max(restTint, workTint) }
     private var foregroundTextColor: Color {
-        EQColor.Execution.foregroundText.mix(with: EQColor.Execution.restCardText, by: timingTint)
+        EQColor.Execution.foregroundText.mix(with: EQColor.Execution.restCardText, by: restTint)
     }
     private var foregroundSurfaceColor: Color {
-        EQColor.Execution.foregroundSurface.mix(with: EQColor.Execution.restForegroundSurface, by: timingTint)
+        EQColor.Execution.foregroundSurface.mix(with: EQColor.Execution.restForegroundSurface, by: restTint)
     }
 
     var body: some View {
         GeometryReader { proxy in
-            let headerHeight = dynamicTypeSize.isAccessibilitySize
-                ? EQLayout.minimumTouch + (EQSpacing.xl * 2)
-                : EQLayout.minimumTouch + EQSpacing.md
             let defaultCompactHeight = dynamicTypeSize.isAccessibilitySize
                 ? EQLayout.WorkoutExecution.restCardHeight
                 : EQLayout.WorkoutExecution.exerciseCompactCardHeight
@@ -1513,7 +1553,9 @@ private struct ExecutionWallet<ListRow: View, ForegroundHeader: View, Foreground
             )
             let walletWidth = max(0, currentFrame.width)
             let walletHeight = max(0, currentFrame.height)
-            let focusedTop = keyboardVisible ? 0 : max(0, headerHeight - EQLayout.WorkoutExecution.walletEdgeInset)
+            let focusedTop = keyboardVisible ? 0 : ExecutionTimerWalletLayout.focusedCardTop(
+                isAccessibilitySize: dynamicTypeSize.isAccessibilitySize
+            )
             let restCompactHeight = max(
                 defaultCompactHeight,
                 EQLayout.WorkoutExecution.restCardHeight
@@ -1570,7 +1612,10 @@ private struct ExecutionWallet<ListRow: View, ForegroundHeader: View, Foreground
                                 drawsBorder: true,
                                 borderColor: EQColor.Execution.walletBorder
                                     .mix(with: EQColor.Execution.restCanvas, by: restTint)
-                                    .mix(with: EQColor.Execution.foregroundSurface, by: workTint)
+                                    .mix(with: EQColor.Execution.primaryAction, by: workTint),
+                                externalTopGapColor: EQColor.Execution.foregroundSurface,
+                                externalTopGap: EQLayout.WorkoutExecution.workCardExternalTopGap
+                                    * CGFloat(workTint)
                             ))
                             .contentShape(RoundedRectangle(cornerRadius: EQRadius.walletSurface, style: .continuous))
                             .offset(y: foregroundLayout.top + compactEntranceOffset + foregroundDismissalOffset)
@@ -2038,7 +2083,6 @@ private struct ExecutionWallet<ListRow: View, ForegroundHeader: View, Foreground
     }
 
     private func unifiedActionControls(_ primaryAction: ExecutionPrimaryAction?) -> some View {
-        let isResting = visualState == .focusedRest
         let hasExerciseAction = foregroundState == .exercise
             && !model.isReadOnly
             && !model.awaitsExerciseSelection
@@ -2072,9 +2116,9 @@ private struct ExecutionWallet<ListRow: View, ForegroundHeader: View, Foreground
         case .work: "Skips the current work interval"
         case .rest: "Ends the current rest"
         }
-        let timerWidth: CGFloat? = phase == .work || phase == .rest
-            ? EQLayout.WorkoutExecution.primaryActionTimerWidth
-            : nil
+        let timerWidth = phase.timerControlWidth
+        let actionTint = EQColor.Execution.primaryAction
+            .mix(with: EQColor.Execution.restCardText, by: restTint)
         let phaseAnimation: Animation? = reduceMotion ? nil : EQMotion.objectTransformation
         let footerHeight = ExecutionPrimaryActionLayout.footerHeight(
             isVisible: true,
@@ -2102,9 +2146,9 @@ private struct ExecutionWallet<ListRow: View, ForegroundHeader: View, Foreground
                     .frame(width: timerWidth, height: EQLayout.WorkoutExecution.primaryActionHeight)
             }
             .eqPrimaryCTA(
-                tint: EQColor.Execution.primaryAction.mix(with: EQColor.Execution.restCardText, by: timingTint),
+                tint: actionTint,
                 foreground: foregroundSurfaceColor,
-                variant: isResting || phase == .work ? .outlined : .filled
+                variant: phase.primaryActionVariant
             )
             .accessibilityHint(hint)
             .accessibilityIdentifier(ExecutionPrimaryActionIdentity(workoutID: workout.id).accessibilityIdentifier)
@@ -2116,12 +2160,14 @@ private struct ExecutionWallet<ListRow: View, ForegroundHeader: View, Foreground
                         .contentTransition(reduceMotion ? .identity : .interpolate)
                         .lineLimit(1)
                         .fixedSize(horizontal: true, vertical: false)
-                        .padding(.horizontal, EQLayout.WorkoutExecution.primaryActionHorizontalPadding)
                         .frame(minWidth: EQLayout.minimumTouch)
-                        .frame(height: EQLayout.WorkoutExecution.primaryActionHeight)
+                        .frame(
+                            width: timerWidth,
+                            height: EQLayout.WorkoutExecution.primaryActionHeight
+                        )
                 }
                 .eqPrimaryCTA(
-                    tint: foregroundTextColor,
+                    tint: actionTint,
                     foreground: foregroundSurfaceColor,
                     variant: .outlined
                 )
@@ -2156,6 +2202,8 @@ private struct ExecutionWallet<ListRow: View, ForegroundHeader: View, Foreground
 private struct ExecutionWalletShapeModifier: ViewModifier {
     var drawsBorder = false
     var borderColor: Color = EQColor.Execution.walletBorder
+    var externalTopGapColor: Color = .clear
+    var externalTopGap: CGFloat = 0
 
     @ViewBuilder func body(content: Content) -> some View {
         if #available(iOS 26.0, *) {
@@ -2167,11 +2215,11 @@ private struct ExecutionWalletShapeModifier: ViewModifier {
                 .clipShape(shape)
                 .overlay {
                     if drawsBorder {
-                        shape.stroke(
-                            borderColor,
-                            lineWidth: EQLayout.WorkoutExecution.walletBorderWidth
-                        )
+                        insetBorder(for: shape)
                     }
+                }
+                .overlay(alignment: .top) {
+                    externalTopGapStrip
                 }
         } else {
             let shape = RoundedRectangle(cornerRadius: EQRadius.walletSurface, style: .continuous)
@@ -2179,12 +2227,34 @@ private struct ExecutionWalletShapeModifier: ViewModifier {
                 .clipShape(shape)
                 .overlay {
                     if drawsBorder {
-                        shape.stroke(
-                            borderColor,
-                            lineWidth: EQLayout.WorkoutExecution.walletBorderWidth
-                        )
+                        insetBorder(for: shape)
                     }
                 }
+                .overlay(alignment: .top) {
+                    externalTopGapStrip
+                }
+        }
+    }
+
+    private func insetBorder<S: Shape>(for shape: S) -> some View {
+        shape
+            .stroke(
+                borderColor,
+                lineWidth: EQLayout.WorkoutExecution.walletBorderWidth * 2
+            )
+            .mask(shape)
+    }
+
+    @ViewBuilder
+    private var externalTopGapStrip: some View {
+        if externalTopGap > 0 {
+            Rectangle()
+                .fill(externalTopGapColor)
+                .frame(height: externalTopGap)
+                // The card border is inset, so this strip can end flush at the card's
+                // outer boundary while preserving the full requested gap above it.
+                .offset(y: -externalTopGap)
+                .allowsHitTesting(false)
         }
     }
 }
@@ -2290,6 +2360,7 @@ private struct SetInputKeyboardBar: ViewModifier {
             }
         }
     }
+
 }
 
 private struct FirstSetView: View {
@@ -2779,28 +2850,48 @@ private struct ExerciseSettingsToggleStyle: ToggleStyle {
 private struct ExecutionTimerRegion: View {
     @Environment(\.timerVisibilityProgress) private var visibilityProgress
     let presentation: ExecutionTimerRegionPresentation
+    let timer: CountdownTimer
     let nextAction: String?
     let reduceMotion: Bool
 
     var body: some View {
         Group {
             if presentation.isVisible {
-                // Rest and work share one quiet countdown, styled like the set values.
-                // The overlay pins it to the region's top so it never shifts while the region resizes.
                 Color.clear
                     .overlay(alignment: .top) {
-                        Text(durationText)
-                            .eqTextStyle(.largeMetric)
-                            .monospacedDigit()
-                            .contentTransition(reduceMotion ? .opacity : .numericText())
-                            .lineLimit(1)
-                            .fixedSize()
-                            .foregroundStyle(timerColor)
-                            // Grows in place as the wallet uncovers it, and shrinks back under it when the timer ends.
-                            .scaleEffect(reduceMotion ? 1 : 0.4 + (0.6 * visibilityProgress), anchor: .center)
-                            .padding(.top, EQSpacing.lg)
-                            .padding(.horizontal, EQLayout.WorkoutExecution.walletInset)
-                            .accessibilityLabel("\(title) time remaining, \(durationText)")
+                        Group {
+                            if isWorkCountdown {
+                                TimelineView(.animation(
+                                    minimumInterval: 1.0 / 30.0,
+                                    paused: timer.state != .running
+                                )) { _ in
+                                    let number = TimerVisualMotion.countdownNumber(
+                                        timerProgress: timer.normalizedProgress
+                                    )
+                                    EQRollingTimerText(
+                                        value: number.formatted(),
+                                        reduceMotion: reduceMotion
+                                    )
+                                    .eqTextStyle(.largeMetric)
+                                    .accessibilityLabel("Work countdown")
+                                    .accessibilityValue("\(countdownSeconds)")
+                                }
+                            } else {
+                                EQRollingTimerText(
+                                    value: durationText,
+                                    reduceMotion: reduceMotion
+                                )
+                                    .eqTextStyle(.largeMetric)
+                                    .accessibilityLabel("\(title) time remaining, \(durationText)")
+                            }
+                        }
+                        .lineLimit(1)
+                        .fixedSize()
+                        .foregroundStyle(timerColor)
+                        // Grows in place as the wallet uncovers it, and shrinks back under it when the timer ends.
+                        .scaleEffect(reduceMotion ? 1 : 0.4 + (0.6 * visibilityProgress), anchor: .center)
+                        .padding(.top, EQSpacing.lg)
+                        .padding(.horizontal, EQLayout.WorkoutExecution.walletInset)
                     }
                     .transition(.identity)
             } else {
@@ -2823,8 +2914,16 @@ private struct ExecutionTimerRegion: View {
     }
 
     private var timerColor: Color {
-        // Work matches the Start Timer button fill.
-        presentation.isRest ? EQColor.Execution.restTimerText : EQColor.Execution.primaryAction
+        ExecutionTimerVisualStyle.color(for: presentation)
+    }
+
+    private var isWorkCountdown: Bool {
+        guard case .work(let state, _) = presentation else { return false }
+        return state.phase == .ready
+    }
+
+    private var countdownSeconds: Int {
+        TimerVisualMotion.countdownNumber(timerProgress: timer.normalizedProgress)
     }
 
     private var remaining: TimeInterval {
@@ -2844,7 +2943,7 @@ private struct ExecutionTimerRegion: View {
 
     private func workPhaseLabel(_ phase: WorkoutWorkTimerPhase) -> String {
         switch phase {
-        case .ready: return "Get ready"
+        case .ready: return "Work countdown"
         case .firstSide: return isTwoSided ? "Work, side 1 of 2" : "Work"
         case .switchSides: return "Switch sides"
         case .secondSide: return "Work, side 2 of 2"

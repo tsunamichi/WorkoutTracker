@@ -591,6 +591,7 @@ private struct HomeTimerContainer<HomeContent: View, TimerContent: View>: View {
     let timerContent: TimerContent
     @State private var interactiveProgress: CGFloat?
     @State private var surfacePullBlocksInteraction = false
+    @State private var timerSystemBackground: StandaloneTimerSystemBackgroundStyle = .homeCanvas
 
     init(
         primarySurface: Binding<HomePrimarySurface>,
@@ -631,7 +632,10 @@ private struct HomeTimerContainer<HomeContent: View, TimerContent: View>: View {
             .animation(reduceMotion ? EQMotion.reducedContentTransition : EQMotion.surfaceReveal, value: primarySurface)
             .simultaneousGesture(surfacePullGesture(height: proxy.size.height))
         }
-        .background(EQColor.Home.canvas)
+        .onPreferenceChange(StandaloneTimerSystemBackgroundPreferenceKey.self) {
+            timerSystemBackground = $0
+        }
+        .background(timerSystemBackground.color.ignoresSafeArea())
     }
 
     private func timerOpacity(progress: CGFloat) -> Double {

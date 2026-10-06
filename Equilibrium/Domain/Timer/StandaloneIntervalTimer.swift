@@ -21,7 +21,7 @@ public struct StandaloneTimerConfiguration: Identifiable, Codable, Hashable, Sen
     private static func valid(_ value: TimeInterval, range: ClosedRange<Int>) -> Bool { value.isFinite && value.rounded() == value && Int(value) % 5 == 0 && range.contains(Int(value)) }
 }
 
-public enum StandaloneTimerPhase: String, Equatable, Sendable { case move, exerciseRest, roundRest, completed }
+public enum StandaloneTimerPhase: String, Equatable, Sendable { case preparingMove, move, exerciseRest, roundRest, restExit, completed }
 public enum StandaloneTimerRunState: Equatable, Sendable { case ready, running, paused, completed }
 
 public enum StandaloneTimerExitPolicy {
@@ -34,7 +34,7 @@ public enum StandaloneTimerExitPolicy {
 public final class StandaloneIntervalTimer {
     public let configuration: StandaloneTimerConfiguration
     public let countdown: CountdownTimer
-    public private(set) var phase: StandaloneTimerPhase = .move
+    public private(set) var phase: StandaloneTimerPhase = .preparingMove
     public private(set) var exercise = 1
     public private(set) var round = 1
     public private(set) var state: StandaloneTimerRunState = .ready
@@ -50,7 +50,7 @@ public final class StandaloneIntervalTimer {
     public func pause() { guard state == .running else { return }; countdown.pause(); state = .paused }
     public func resume() { guard state == .paused else { return }; countdown.resume(); state = .running }
     public func skip() { guard state == .running || state == .paused else { return }; advance(overrun: 0, continueRunning: state == .running) }
-    public func reset() { countdown.cancel(); phase = .move; exercise = 1; round = 1; state = .ready }
+    public func reset() { countdown.cancel(); phase = .preparingMove; exercise = 1; round = 1; state = .ready }
     public func restart() { reset(); play() }
     @discardableResult public func refresh() -> Bool {
         guard state == .running, countdown.refresh() else { return false }
@@ -67,22 +67,35 @@ public final class StandaloneIntervalTimer {
         finishOnce()
     }
     private var durationForPhase: TimeInterval {
-        switch phase { case .move: configuration.moveDuration; case .exerciseRest: configuration.exerciseRestDuration; case .roundRest: configuration.roundRestDuration; case .completed: 0 }
+        switch phase {
+        case .preparingMove: WorkoutWorkTimerTiming.countdownDuration
+        case .move: configuration.moveDuration
+        case .exerciseRest: configuration.exerciseRestDuration
+        case .roundRest: configuration.roundRestDuration
+        case .restExit: TimerVisualTransitionTiming.restExitDuration
+        case .completed: 0
+        }
     }
     private func advance(overrun: TimeInterval, continueRunning: Bool) {
         advancePosition()
         guard phase != .completed else { finishOnce(); return }
+        // A paused Skip Rest still performs the visual gravity exit immediately.
+        // Its preparation clock stays paused at the beginning until Play resumes it.
+        if phase == .restExit, !continueRunning { advancePosition() }
         if continueRunning { state = .running; startCurrentPhase(alreadyElapsed: overrun) }
         else { countdown.start(duration: durationForPhase); countdown.pause(); state = .paused }
     }
     private func advancePosition() {
         switch phase {
+        case .preparingMove:
+            phase = .move
         case .move:
             if exercise < configuration.exercisesPerRound { phase = .exerciseRest }
             else if round < configuration.rounds { phase = .roundRest }
             else { phase = .completed }
-        case .exerciseRest: exercise += 1; phase = .move
-        case .roundRest: round += 1; exercise = 1; phase = .move
+        case .exerciseRest: exercise += 1; phase = .restExit
+        case .roundRest: round += 1; exercise = 1; phase = .restExit
+        case .restExit: phase = .preparingMove
         case .completed: break
         }
     }

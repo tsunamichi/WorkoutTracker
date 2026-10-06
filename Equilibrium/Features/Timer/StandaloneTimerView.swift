@@ -9,6 +9,31 @@ enum StandaloneTimerNavigationPolicy {
 
 enum TimerRoute: Hashable { case create, edit(String), run(String) }
 
+enum StandaloneTimerSystemBackgroundStyle: Equatable {
+    case homeCanvas
+    case work
+    case rest
+
+    var color: Color {
+        switch self {
+        case .homeCanvas: EQColor.Home.canvas
+        case .work: EQColor.Execution.foregroundSurface
+        case .rest: EQColor.Execution.restCanvas
+        }
+    }
+}
+
+struct StandaloneTimerSystemBackgroundPreferenceKey: PreferenceKey {
+    static let defaultValue: StandaloneTimerSystemBackgroundStyle = .homeCanvas
+
+    static func reduce(
+        value: inout StandaloneTimerSystemBackgroundStyle,
+        nextValue: () -> StandaloneTimerSystemBackgroundStyle
+    ) {
+        value = nextValue()
+    }
+}
+
 struct StandaloneTimerView: View {
     private let store: any StandaloneTimerConfigurationStore
     @Binding private var path: [TimerRoute]
@@ -205,6 +230,45 @@ struct StandaloneTimerFormView: View {
     private func format(_ seconds: Int) -> String { seconds < 60 ? "\(seconds)s" : seconds % 60 == 0 ? "\(seconds / 60)m" : "\(seconds / 60)m \(seconds % 60)s" }
 }
 
+enum StandaloneTimerRunPresentation {
+    static func visualMode(
+        phase: StandaloneTimerPhase,
+        state: StandaloneTimerRunState
+    ) -> TimerVisualMode {
+        guard state != .completed else { return .hidden }
+        switch phase {
+        case .preparingMove:
+            return state == .ready ? .hidden : .workCountdown
+        case .move: return .work
+        case .exerciseRest, .roundRest: return .rest
+        case .restExit: return .hidden
+        case .completed: return .hidden
+        }
+    }
+
+    static func usesRestPalette(phase: StandaloneTimerPhase) -> Bool {
+        phase == .exerciseRest || phase == .roundRest || phase == .restExit
+    }
+
+    static func systemBackgroundStyle(
+        phase: StandaloneTimerPhase
+    ) -> StandaloneTimerSystemBackgroundStyle {
+        usesRestPalette(phase: phase) ? .rest : .work
+    }
+
+    static func primaryLabel(for state: StandaloneTimerRunState) -> String {
+        state == .running ? "Pause" : "Play"
+    }
+
+    static func displayedRemaining(
+        state: StandaloneTimerRunState,
+        remaining: TimeInterval,
+        initialDuration: TimeInterval
+    ) -> TimeInterval {
+        state == .ready ? initialDuration : remaining
+    }
+}
+
 struct StandaloneTimerRunView: View {
     @State private var runner: StandaloneIntervalTimer
     @State private var ticks: Task<Void, Never>?
@@ -213,32 +277,81 @@ struct StandaloneTimerRunView: View {
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     init(configuration: StandaloneTimerConfiguration) { _runner = State(initialValue: StandaloneIntervalTimer(configuration: configuration, haptics: SystemHapticsClient(), audio: SystemAudioFeedbackClient())) }
+
     var body: some View {
-        VStack(spacing: EQSpacing.xl) {
-            Spacer()
-            Text(runner.phase == .move ? "MOVE" : runner.phase == .exerciseRest ? "REST" : runner.phase == .roundRest ? "ROUND REST" : "COMPLETE").eqTextStyle(.sectionTitle).foregroundStyle(runner.phase == .move ? EQColor.accent : EQColor.rest)
-            Text(display).eqTextStyle(.largeMetric).monospacedDigit().contentTransition(reduceMotion ? .opacity : .numericText()).accessibilityLabel("\(Int(ceil(runner.remaining))) seconds remaining")
-            HStack { metric("Exercise", "\(runner.exercise)/\(runner.configuration.exercisesPerRound)"); metric("Round", "\(runner.round)/\(runner.configuration.rounds)") }
-            HStack {
-                Button(primaryLabel) { primary() }.buttonStyle(.borderedProminent)
-                Button("Skip") { runner.skip(); runTicks() }.buttonStyle(.bordered).disabled(runner.state == .ready || runner.state == .completed)
-                Menu("Options", systemImage: "ellipsis") { Button("Reset") { runner.reset(); runTicks() }; Button("Restart") { runner.restart(); runTicks() } }
-            }.frame(minHeight: EQDimension.minimumTouch)
-            if runner.state == .completed { Text("Timer complete").eqTextStyle(.screenTitle) }
-            Spacer()
-            Text("Standalone timers never create workout or history records.").eqTextStyle(.caption).foregroundStyle(EQColor.secondaryText)
-        }
-        .padding(EQSpacing.xl)
-        .navigationTitle(runner.configuration.name)
-        .navigationBarBackButtonHidden(StandaloneTimerExitPolicy.requiresConfirmation(for: runner.state))
-        .toolbar {
-            if StandaloneTimerExitPolicy.requiresConfirmation(for: runner.state) {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button { requestExit() } label: { Label("Timer", systemImage: "chevron.left") }
-                        .accessibilityHint("Asks before ending the active timer")
+        GeometryReader { sceneProxy in
+            let sceneFrame = sceneProxy.frame(in: .global)
+            let fullSceneHeight = sceneProxy.size.height
+                + sceneProxy.safeAreaInsets.top
+                + sceneProxy.safeAreaInsets.bottom
+            let fullSceneTargetY = sceneFrame.minY
+                - sceneProxy.safeAreaInsets.top
+                + (fullSceneHeight * TimerVisualMotion.countdownLaunchHeightScreenRatio)
+
+            ZStack {
+                pageColor
+                    .ignoresSafeArea()
+
+                VStack(spacing: 0) {
+                    runHeader
+                    Spacer()
+                        .frame(height: EQLayout.WorkoutExecution.headerWalletSpacing)
+
+                    GeometryReader { proxy in
+                        let cardHeight = min(
+                            EQLayout.WorkoutExecution.standaloneTimerCardHeight,
+                            proxy.size.height * 0.32
+                        )
+                        let cardTop = max(
+                            0,
+                            proxy.size.height - cardHeight - EQLayout.WorkoutExecution.walletEdgeInset
+                        )
+                        let globalFrame = proxy.frame(in: .global)
+                        let shapeCenterY = max(0, fullSceneTargetY - globalFrame.minY)
+
+                        ZStack(alignment: .top) {
+                            TimerVisualLayer(
+                                requestedMode: visualMode,
+                                timer: runner.countdown,
+                                workColor: EQColor.Execution.primaryAction,
+                                restColor: EQColor.Execution.restTimerText,
+                                walletTop: cardTop,
+                                sceneCenterY: shapeCenterY,
+                                walletCollapseProgress: 1,
+                                reduceMotion: reduceMotion
+                            )
+
+                            EQRollingTimerText(value: display, reduceMotion: reduceMotion)
+                                .eqTextStyle(.largeMetric)
+                                .foregroundStyle(timerColor)
+                                .lineLimit(1)
+                                .fixedSize()
+                                .position(
+                                    x: proxy.size.width / 2,
+                                    y: min(max(EQSpacing.xxxl, cardTop * 0.20), cardTop - EQSpacing.xxxl)
+                                )
+                                .accessibilityLabel(timerAccessibilityLabel)
+
+                            VStack(spacing: 0) {
+                                Spacer(minLength: 0)
+                                collapsedCard
+                                    .frame(height: cardHeight)
+                                    .padding(.horizontal, EQLayout.WorkoutExecution.walletEdgeInset)
+                                    .padding(.bottom, EQLayout.WorkoutExecution.walletEdgeInset)
+                            }
+                        }
+                    }
                 }
             }
+            .animation(reduceMotion ? nil : EQMotion.objectTransformation, value: isRestPhase)
         }
+        .background(pageColor.ignoresSafeArea())
+        .preference(
+            key: StandaloneTimerSystemBackgroundPreferenceKey.self,
+            value: StandaloneTimerRunPresentation.systemBackgroundStyle(phase: runner.phase)
+        )
+        .navigationBarBackButtonHidden(true)
+        .toolbar(.hidden, for: .navigationBar)
         .alert("End timer?", isPresented: $confirmsExit) {
             Button("Keep Timer", role: .cancel) {}
             Button("End Timer", role: .destructive) { endAndDismiss() }
@@ -246,14 +359,179 @@ struct StandaloneTimerRunView: View {
         .onDisappear { ticks?.cancel() }
         .onChange(of: scenePhase) { _, phase in if phase == .active { runner.refresh(); runTicks() } }
     }
-    private var display: String { let seconds = max(0, Int(ceil(runner.remaining))); return String(format: "%d:%02d", seconds / 60, seconds % 60) }
-    private var primaryLabel: String { switch runner.state { case .ready: "Play"; case .running: "Pause"; case .paused: "Resume"; case .completed: "Restart" } }
-    private func primary() { switch runner.state { case .ready: runner.play(); case .running: runner.pause(); case .paused: runner.resume(); case .completed: runner.restart() }; runTicks() }
+
+    private var runHeader: some View {
+        HStack(spacing: EQLayout.controlGap) {
+            Button(action: requestExit) {
+                HStack(spacing: EQSpacing.xs) {
+                    Image(systemName: "chevron.left")
+                    Text(runner.configuration.name)
+                        .eqTextStyle(.navigationTitle)
+                        .lineLimit(1)
+                }
+                .frame(minHeight: EQLayout.minimumTouch)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Back, \(runner.configuration.name)")
+            .accessibilityHint(StandaloneTimerExitPolicy.requiresConfirmation(for: runner.state)
+                ? "Asks before ending the active timer"
+                : "Returns to saved timers")
+
+            Spacer(minLength: EQLayout.controlGap)
+        }
+        .foregroundStyle(timerColor)
+        .padding(.horizontal, EQLayout.screenGutter)
+        .frame(maxWidth: .infinity, minHeight: EQLayout.minimumTouch + EQSpacing.sm)
+    }
+
+    private var visualMode: TimerVisualMode {
+        StandaloneTimerRunPresentation.visualMode(phase: runner.phase, state: runner.state)
+    }
+
+    private var isRestPhase: Bool {
+        StandaloneTimerRunPresentation.usesRestPalette(phase: runner.phase)
+    }
+
+    private var pageColor: Color {
+        isRestPhase ? EQColor.Execution.restCanvas : EQColor.Execution.foregroundSurface
+    }
+
+    private var cardSurfaceColor: Color {
+        isRestPhase ? EQColor.Execution.restForegroundSurface : EQColor.Execution.foregroundSurface
+    }
+
+    private var cardTextColor: Color {
+        isRestPhase ? EQColor.Execution.restCardText : EQColor.Execution.foregroundText
+    }
+
+    private var timerColor: Color {
+        isRestPhase ? EQColor.Execution.restTimerText : EQColor.Execution.primaryAction
+    }
+
+    private var displayedRemaining: TimeInterval {
+        StandaloneTimerRunPresentation.displayedRemaining(
+            state: runner.state,
+            remaining: runner.remaining,
+            initialDuration: runner.configuration.moveDuration
+        )
+    }
+
+    private var display: String {
+        if runner.phase == .restExit {
+            return ExecutionTimerFormatting.durationText(for: 0)
+        }
+        if runner.phase == .preparingMove, runner.state != .ready {
+            return String(TimerVisualMotion.countdownNumber(
+                timerProgress: runner.countdown.normalizedProgress
+            ))
+        }
+        return ExecutionTimerFormatting.durationText(for: displayedRemaining)
+    }
+
+    private var timerAccessibilityLabel: String {
+        if runner.phase == .restExit {
+            return "Rest complete"
+        }
+        if runner.phase == .preparingMove, runner.state != .ready {
+            return "Work begins in \(display)"
+        }
+        return "\(Int(ceil(displayedRemaining))) seconds remaining"
+    }
+
+    private var collapsedCard: some View {
+        let shape = RoundedRectangle(cornerRadius: EQRadius.walletSurface, style: .continuous)
+        return VStack(spacing: EQSpacing.lg) {
+            HStack(spacing: 0) {
+                metric("Exercise", "\(runner.exercise)/\(runner.configuration.exercisesPerRound)")
+                metric("Round", "\(runner.round)/\(runner.configuration.rounds)")
+            }
+
+            HStack(spacing: EQLayout.controlGap) {
+                timerButton(
+                    StandaloneTimerRunPresentation.primaryLabel(for: runner.state),
+                    variant: .filled,
+                    isEnabled: runner.state != .completed,
+                    action: primary
+                )
+                timerButton(
+                    "Skip",
+                    variant: .outlined,
+                    isEnabled: runner.state == .running || runner.state == .paused
+                ) {
+                    runner.skip()
+                    runTicks()
+                }
+                timerButton("Restart", variant: .outlined, isEnabled: true) {
+                    runner.restart()
+                    runTicks()
+                }
+            }
+        }
+        .padding(EQLayout.WorkoutExecution.walletInset)
+        .foregroundStyle(cardTextColor)
+        .background(cardSurfaceColor, in: shape)
+        .overlay {
+            shape.strokeBorder(timerColor, lineWidth: EQLayout.WorkoutExecution.walletBorderWidth)
+        }
+        .overlay(alignment: .top) {
+            if !isRestPhase {
+                Rectangle()
+                    .fill(pageColor)
+                    .frame(height: EQLayout.WorkoutExecution.workCardExternalTopGap)
+                    .offset(y: -EQLayout.WorkoutExecution.workCardExternalTopGap)
+                    .allowsHitTesting(false)
+            }
+        }
+    }
+
+    private func timerButton(
+        _ title: String,
+        variant: EQPrimaryCTAVariant,
+        isEnabled: Bool,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            Text(title)
+                .lineLimit(1)
+                .minimumScaleFactor(0.75)
+                .frame(maxWidth: .infinity)
+                .frame(height: EQLayout.WorkoutExecution.primaryActionHeight)
+        }
+        .eqPrimaryCTA(
+            tint: timerColor,
+            foreground: cardSurfaceColor,
+            variant: variant
+        )
+        .disabled(!isEnabled)
+        .opacity(isEnabled ? 1 : 0.38)
+    }
+
+    private func primary() {
+        switch runner.state {
+        case .ready: runner.play()
+        case .running: runner.pause()
+        case .paused: runner.resume()
+        case .completed: break
+        }
+        runTicks()
+    }
+
     private func requestExit() {
         if StandaloneTimerExitPolicy.requiresConfirmation(for: runner.state) { confirmsExit = true }
         else { dismiss() }
     }
     private func endAndDismiss() { ticks?.cancel(); ticks = nil; runner.reset(); dismiss() }
     private func runTicks() { ticks?.cancel(); guard runner.state == .running else { return }; ticks = Task { while !Task.isCancelled && runner.state == .running { try? await Task.sleep(for: .milliseconds(200)); runner.refresh() } } }
-    private func metric(_ title: String, _ value: String) -> some View { VStack { Text(value).eqTextStyle(.sectionTitle); Text(title).eqTextStyle(.caption).foregroundStyle(EQColor.secondaryText) }.frame(maxWidth: .infinity).eqCard() }
+    private func metric(_ title: String, _ value: String) -> some View {
+        VStack(spacing: EQSpacing.xxs) {
+            Text(value)
+                .eqTextStyle(.sectionTitle)
+                .monospacedDigit()
+            Text(title)
+                .eqTextStyle(.caption)
+                .foregroundStyle(cardTextColor.opacity(0.68))
+        }
+        .frame(maxWidth: .infinity)
+    }
 }

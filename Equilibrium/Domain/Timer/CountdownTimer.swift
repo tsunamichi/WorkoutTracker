@@ -3,6 +3,23 @@ import Observation
 
 public enum CountdownTimerState: String, Equatable, Sendable { case idle, running, paused, completed }
 
+/// Shared preparation timing for every work timer surface. The preparation phase
+/// and the work interval both use `CountdownTimer`; this only describes how long
+/// the existing clock remains in its preparation phase.
+enum WorkoutWorkTimerTiming {
+    static let preparationLeadInDuration: TimeInterval = 0.34
+    static let countdownShapeCount = 3
+    static let countdownShapeFlightDuration: TimeInterval = 1.0
+    static let countdownCircleEntranceDuration: TimeInterval = 0.5
+    static let countdownDuration = preparationLeadInDuration
+        + (2 * countdownShapeFlightDuration)
+        + countdownCircleEntranceDuration
+}
+
+enum TimerVisualTransitionTiming {
+    static let restExitDuration: TimeInterval = 0.65
+}
+
 @MainActor @Observable
 public final class CountdownTimer {
     public private(set) var configuredDuration: TimeInterval = 0
@@ -15,6 +32,16 @@ public final class CountdownTimer {
 
     public init(now: @escaping () -> TimeInterval = { ProcessInfo.processInfo.systemUptime }) { self.now = now }
     public var elapsedDuration: TimeInterval { max(0, configuredDuration - remainingDuration) }
+    /// The deadline-derived remaining time at the instant it is read. This keeps
+    /// continuous visuals synchronized without introducing a second display timer.
+    public var currentRemainingDuration: TimeInterval {
+        guard state == .running, let deadline else { return remainingDuration }
+        return max(0, deadline - now())
+    }
+    public var normalizedProgress: Double {
+        guard configuredDuration > 0 else { return state == .completed ? 1 : 0 }
+        return min(max((configuredDuration - currentRemainingDuration) / configuredDuration, 0), 1)
+    }
 
     public func start(duration: TimeInterval, alreadyElapsed: TimeInterval = 0) {
         guard duration.isFinite, duration > 0 else { cancel(); return }
