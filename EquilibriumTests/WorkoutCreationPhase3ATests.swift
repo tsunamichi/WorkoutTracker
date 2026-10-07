@@ -46,3 +46,130 @@ final class WorkoutCreationPhase3ATests: XCTestCase {
 
     private func makeRepository() -> SwiftDataRepository { SwiftDataRepository(container: try! PersistenceController.makeContainer(inMemory: true)) }
 }
+
+@MainActor
+final class ExerciseResolverTests: XCTestCase {
+    private let canonical = ExerciseDefinition(
+        id: .init(rawValue: "incline-dumbbell-press"),
+        name: "Incline Dumbbell Press",
+        normalizedName: "incline dumbbell press",
+        aliases: ["Incline DB Chest Press"],
+        equipment: "Dumbbell",
+        category: "Chest",
+        isCustom: false,
+        archivedAt: nil
+    )
+
+    func testCanonicalNameAliasAbbreviationTokenOrderAndMinorTypoResolveTogether() {
+        assertMatch("Incline Dumbbell Press", expected: .exactMatch(canonical))
+        assertMatch("Incline DB Chest Press", expected: .exactMatch(canonical))
+        assertPreferredMatch("Incline DB Press")
+        assertPreferredMatch("DB Incline Press")
+        assertPreferredMatch("Dumbbell Incline Bench Press")
+        assertPreferredMatch("Incline Dumbell Press")
+    }
+
+    func testNormalizationFoldsCaseWhitespacePunctuationAndDiacritics() {
+        XCTAssertEqual(ExerciseResolver.normalizedName("  CAFÉ—DB  Press "), "cafe dumbbell press")
+        XCTAssertEqual(ExerciseResolver.search("db press", in: [canonical]).map(\.id), [canonical.id])
+    }
+
+    func testMeaningfulExerciseVariationsNeverBecomeAutomaticMatches() {
+        for name in [
+            "Incline Smith Machine Press",
+            "Single-arm Incline Dumbbell Press",
+            "Cable Incline Press"
+        ] {
+            switch ExerciseResolver.resolve(name, in: [canonical]) {
+            case .exactMatch, .highConfidenceMatch:
+                XCTFail("\(name) must remain a distinct exercise")
+            case .possibleMatches, .noMatch:
+                break
+            }
+        }
+    }
+
+    func testAmbiguousMatchesRequireExplicitCreationConfirmation() async throws {
+        let repository = makeRepository()
+        let barbell = definition("Incline Barbell Press", id: "incline-barbell")
+        try await repository.saveExercise(canonical)
+        try await repository.saveExercise(barbell)
+
+        let guarded = try await repository.resolveCreationRequest(named: "Incline Press")
+        guard case .confirmationRequired(let name, let matches) = guarded else {
+            return XCTFail("Expected an ambiguity guard")
+        }
+        XCTAssertEqual(name, "Incline Press")
+        XCTAssertEqual(Set(matches.map(\.id)), Set([canonical.id, barbell.id]))
+        let guardedCatalog = try await repository.allExercises()
+        XCTAssertEqual(guardedCatalog.count, 2)
+
+        let confirmed = try await repository.resolveCreationRequest(named: "Incline Press", createIfAmbiguous: true)
+        guard case .created(let created) = confirmed else { return XCTFail("Expected explicit custom creation") }
+        XCTAssertEqual(created.name, "Incline Press")
+        let confirmedCatalog = try await repository.allExercises()
+        XCTAssertEqual(confirmedCatalog.count, 3)
+    }
+
+    func testHighConfidenceCreationReusesCanonicalAndPersistsLearnedAlias() async throws {
+        let container = try PersistenceController.makeContainer(inMemory: true)
+        let repository = SwiftDataRepository(container: container)
+        try await repository.saveExercise(canonical)
+
+        let resolution = try await repository.resolveCreationRequest(named: "DB Incline Press")
+        guard case .existing(let existing) = resolution else { return XCTFail("Expected canonical reuse") }
+        XCTAssertEqual(existing.id, canonical.id)
+        let catalog = try await repository.allExercises()
+        XCTAssertEqual(catalog.count, 1)
+
+        let reopenedRepository = SwiftDataRepository(container: container)
+        let persistedResult = try await reopenedRepository.exercise(id: canonical.id)
+        let persisted = try XCTUnwrap(persistedResult)
+        XCTAssertTrue(persisted.aliases.contains("DB Incline Press"))
+        guard case .exactMatch(let learned) = ExerciseResolver.resolve("DB Incline Press", in: [persisted]) else {
+            return XCTFail("Expected persisted alias to resolve exactly")
+        }
+        XCTAssertEqual(learned.id, canonical.id)
+    }
+
+    func testLearningAliasDoesNotRewriteCompletedWorkoutIdentity() async throws {
+        let repository = makeRepository()
+        try await repository.saveExercise(canonical)
+        var completed = EquilibriumFixtures.completed(id: "resolver-history")
+        completed.exercises[0] = WorkoutExercise(
+            id: completed.exercises[0].id,
+            exerciseID: canonical.id,
+            nameSnapshot: canonical.name,
+            prescriptions: completed.exercises[0].prescriptions,
+            loggedSets: completed.exercises[0].loggedSets,
+            restDuration: completed.exercises[0].restDuration,
+            skippedAt: completed.exercises[0].skippedAt
+        )
+        try await repository.create(completed)
+
+        _ = try await repository.resolveCreationRequest(named: "DB Incline Press")
+        let historyResult = try await repository.workout(id: completed.id)
+        let history = try XCTUnwrap(historyResult)
+        XCTAssertEqual(history.exercises[0].exerciseID, canonical.id)
+        XCTAssertEqual(history.exercises[0].nameSnapshot, "Incline Dumbbell Press")
+    }
+
+    private func assertPreferredMatch(_ name: String, file: StaticString = #filePath, line: UInt = #line) {
+        guard case .highConfidenceMatch(let exercise) = ExerciseResolver.resolve(name, in: [canonical]) else {
+            return XCTFail("Expected high-confidence match for \(name)", file: file, line: line)
+        }
+        XCTAssertEqual(exercise.id, canonical.id, file: file, line: line)
+    }
+
+    private func assertMatch(_ name: String, expected: ExerciseResolution, file: StaticString = #filePath, line: UInt = #line) {
+        XCTAssertEqual(ExerciseResolver.resolve(name, in: [canonical]), expected, file: file, line: line)
+    }
+
+    private func definition(_ name: String, id: String) -> ExerciseDefinition {
+        .init(id: .init(rawValue: id), name: name, normalizedName: ExerciseResolver.normalizedName(name), aliases: [], equipment: nil, category: nil, isCustom: false, archivedAt: nil)
+    }
+
+    private func makeRepository() -> SwiftDataRepository {
+        SwiftDataRepository(container: try! PersistenceController.makeContainer(inMemory: true))
+    }
+}

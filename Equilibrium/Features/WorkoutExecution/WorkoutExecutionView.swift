@@ -755,6 +755,8 @@ struct WorkoutExecutionView: View {
     @State private var confirmsReset = false
     @State private var confirmsDelete = false
     @State private var editsRestDuration = false
+    @State private var addsExercise = false
+    @State private var pendingAddedExerciseSettingsID: WorkoutExerciseID?
     @State private var setSwipeEdge: Edge = .trailing
     @State private var restoresExercise: WorkoutExercise?
     @State private var exerciseSettingsPresentation = ExerciseSettingsPresentation()
@@ -768,6 +770,7 @@ struct WorkoutExecutionView: View {
     @State private var displayedTimerPresentation: ExecutionTimerRegionPresentation = .hidden
     @State private var keyboardFrame: CGRect = .null
     private let historyRepository: (any ExerciseHistoryRepository)?
+    private let exerciseRepository: (any ExerciseRepository)?
     private let onExit: (() -> Void)?
     private let usesObjectSurface: Bool
     private let transitionSourceFrame: CGRect?
@@ -776,13 +779,15 @@ struct WorkoutExecutionView: View {
 
     init(id: WorkoutID, initialWorkout: Workout? = nil, repository: any WorkoutRepository, historyRepository: (any ExerciseHistoryRepository)? = nil, progressionRepository: (any ProgressionRepository)? = nil, exerciseRepository: (any ExerciseRepository)? = nil, settingsRepository: (any SettingsRepository)? = nil, weightUnit: WeightUnit = .pounds, defaultRestDuration: TimeInterval = 90, restSessionStore: WorkoutRestSessionStore? = nil, transitionSourceFrame: CGRect? = nil, reportWalletFrame: ((CGRect) -> Void)? = nil, haptics: (any HapticsClient)? = nil, didPersist: @escaping (Workout) -> Void = { _ in }, onExit: (() -> Void)? = nil, usesObjectSurface: Bool = false) {
         let resolvedHaptics = haptics ?? SystemHapticsClient()
+        let resolvedExerciseRepository = exerciseRepository ?? (repository as? SwiftDataRepository)
         self.historyRepository = historyRepository ?? (repository as? SwiftDataRepository)
+        self.exerciseRepository = resolvedExerciseRepository
         self.onExit = onExit
         self.usesObjectSurface = usesObjectSurface
         self.transitionSourceFrame = transitionSourceFrame
         self.reportWalletFrame = reportWalletFrame
         self.haptics = resolvedHaptics
-        _model = State(initialValue: WorkoutExecutionModel(workoutID: id, initialWorkout: initialWorkout, repository: repository, historyRepository: historyRepository ?? (repository as? SwiftDataRepository), progressionRepository: progressionRepository ?? (repository as? SwiftDataRepository), exerciseRepository: exerciseRepository ?? (repository as? SwiftDataRepository), settingsRepository: settingsRepository ?? (repository as? SwiftDataRepository), weightUnit: weightUnit, defaultRestDuration: defaultRestDuration, restSessionStore: restSessionStore, haptics: resolvedHaptics, audio: SystemAudioFeedbackClient(), didPersist: didPersist))
+        _model = State(initialValue: WorkoutExecutionModel(workoutID: id, initialWorkout: initialWorkout, repository: repository, historyRepository: historyRepository ?? (repository as? SwiftDataRepository), progressionRepository: progressionRepository ?? (repository as? SwiftDataRepository), exerciseRepository: resolvedExerciseRepository, settingsRepository: settingsRepository ?? (repository as? SwiftDataRepository), weightUnit: weightUnit, defaultRestDuration: defaultRestDuration, restSessionStore: restSessionStore, haptics: resolvedHaptics, audio: SystemAudioFeedbackClient(), didPersist: didPersist))
     }
 
     var body: some View {
@@ -869,6 +874,21 @@ struct WorkoutExecutionView: View {
                 guidance: "This is the app default for exercises without a custom rest duration. An active countdown is unchanged."
             ) { seconds in await model.setGlobalRestDuration(seconds) }
         }
+        .sheet(isPresented: $addsExercise) {
+            if let exerciseRepository {
+                ExercisePickerView(
+                    repository: exerciseRepository,
+                    history: historyRepository,
+                    mode: .add(existingExerciseIDs: Set(model.workout?.exercises.map(\.exerciseID) ?? [])),
+                    style: .execution
+                ) { exercise in
+                    addExercise(exercise)
+                }
+            }
+        }
+        .onChange(of: addsExercise) { _, isPresented in
+            if !isPresented { presentPendingAddedExerciseSettingsIfReady() }
+        }
         // In-app bottom sheet: its surface is exactly as tall as its content, and rows
         // revealed inside it grow the surface upward in the same transaction.
         .overlay {
@@ -881,7 +901,13 @@ struct WorkoutExecutionView: View {
                         .transition(.opacity)
                 }
                 if let exerciseID = exerciseSettingsPresentation.exerciseID {
-                    ExerciseSettingsView(exerciseID: exerciseID, model: model, onDismiss: exerciseSettingsPresentation.dismiss)
+                    ExerciseSettingsView(
+                        exerciseID: exerciseID,
+                        model: model,
+                        exerciseRepository: exerciseRepository,
+                        historyRepository: historyRepository,
+                        onDismiss: exerciseSettingsPresentation.dismiss
+                    )
                         .id(exerciseID)
                         .transition(.move(edge: .bottom))
                 }
@@ -1064,6 +1090,7 @@ struct WorkoutExecutionView: View {
                                     haptics.perform(.selection)
                                 }
                             },
+                            addExercise: { addsExercise = true },
                             showOverview: showExerciseOverview,
                             completedSectionToggled: { haptics.perform(.selection) },
                             showSettings: { presentExerciseSettings(for: $0) },
@@ -1375,6 +1402,20 @@ struct WorkoutExecutionView: View {
         exerciseSettingsPresentation.present(exerciseID: exercise.id)
     }
 
+    private func addExercise(_ exercise: ExerciseDefinition) {
+        Task {
+            guard let occurrenceID = await model.addExercise(exercise) else { return }
+            pendingAddedExerciseSettingsID = occurrenceID
+            presentPendingAddedExerciseSettingsIfReady()
+        }
+    }
+
+    private func presentPendingAddedExerciseSettingsIfReady() {
+        guard !addsExercise, let occurrenceID = pendingAddedExerciseSettingsID else { return }
+        pendingAddedExerciseSettingsID = nil
+        exerciseSettingsPresentation.present(exerciseID: occurrenceID)
+    }
+
     private func showExerciseOverview() {
         if model.restState != nil {
             if performWalletTransition({
@@ -1487,6 +1528,7 @@ private struct ExecutionWallet<ListRow: View, ForegroundHeader: View, Foreground
     let reportFrame: ((CGRect) -> Void)?
     let listRow: (WorkoutExercise, ExerciseState) -> ListRow
     let selectExercise: (WorkoutExercise) -> Void
+    let addExercise: () -> Void
     let showOverview: () -> Void
     let completedSectionToggled: () -> Void
     let showSettings: (WorkoutExercise) -> Void
@@ -1797,34 +1839,33 @@ private struct ExecutionWallet<ListRow: View, ForegroundHeader: View, Foreground
     private var exerciseListHeader: some View {
         let canShowOverview = showsForegroundExercise
             && (visualState == .focusedExercise || visualState == .exerciseOverview || visualState == .focusedRest)
-        return Button {
-            if canShowOverview { showOverview() }
-        } label: {
-            exerciseListHeaderLabel
-        }
-        .buttonStyle(.plain)
-        .allowsHitTesting(canShowOverview)
-        .accessibilityHint(
-            canShowOverview
-                ? (presentation.mode == .focusedExercise ? "Shows the full exercise list" : "Exercise list is already visible")
-                : (workout.status == .completed ? "Completed workout exercise overview" : "Exercise overview is unavailable during rest")
-        )
-    }
+        return HStack(spacing: EQLayout.controlGap) {
+            Button {
+                if canShowOverview { showOverview() }
+            } label: {
+                Text("EXERCISES")
+                    .eqTextStyle(.sectionLabel)
+                    .foregroundStyle(overviewTextColor)
+                    .frame(maxWidth: .infinity, minHeight: EQLayout.minimumTouch, alignment: .leading)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .allowsHitTesting(canShowOverview)
+            .accessibilityLabel("Exercises")
+            .accessibilityHint(
+                canShowOverview
+                    ? (presentation.mode == .focusedExercise ? "Shows the full exercise list" : "Exercise list is already visible")
+                    : (workout.status == .completed ? "Completed workout exercise overview" : "Exercise overview is unavailable during rest")
+            )
 
-    private var exerciseListHeaderLabel: some View {
-        EQSectionHeader(title: "EXERCISES", color: overviewTextColor) {
-            Text(model.progress.fraction, format: .percent.precision(.fractionLength(0)))
-                .eqTextStyle(.sectionLabel)
-                .monospacedDigit()
-                .opacity(presentation.mode == .exerciseOverview ? 1 : 0)
-            exerciseProgressCircle
-                .frame(width: EQLayout.iconSize)
+            if model.showsExecutionOptions {
+                EQIconButton(systemImage: "plus", alignment: .trailing, action: addExercise)
+                .foregroundStyle(overviewTextColor)
                 .offset(x: EQLayout.WorkoutExecution.trailingIconOutset)
+                .accessibilityLabel("Add exercise")
+                .accessibilityHint("Opens the exercise picker")
+            }
         }
-        .contentShape(Rectangle())
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Exercises")
-        .accessibilityValue(Text(model.progress.fraction, format: .percent.precision(.fractionLength(0))))
     }
 
     private var completedDisclosureRow: some View {
@@ -1849,14 +1890,6 @@ private struct ExecutionWallet<ListRow: View, ForegroundHeader: View, Foreground
         .accessibilityLabel(ExecutionCompletedSectionPresentation.title(completedCount: completedExercises.count))
         .accessibilityValue(completedSectionPresentation.isExpanded ? "Expanded" : "Collapsed")
         .accessibilityHint(completedSectionPresentation.isExpanded ? "Collapses completed exercises" : "Expands completed exercises")
-    }
-
-    private var exerciseProgressCircle: some View {
-        EQCircularProgressIndicator(
-            progress: model.progress.fraction,
-            tint: restBlend(EQColor.Execution.progressAccent, EQColor.Execution.restCardText),
-            track: overviewTextColor.opacity(0.18)
-        )
     }
 
     private var remainingExercises: [WorkoutExercise] {
@@ -2129,31 +2162,6 @@ private struct ExecutionWallet<ListRow: View, ForegroundHeader: View, Foreground
         )
 
         return HStack(spacing: EQLayout.controlGap) {
-            Button {
-                switch phase {
-                case .hidden: break
-                case .exercise: primaryAction?.perform()
-                case .work: skipWork()
-                case .rest: skipRest()
-                }
-            } label: {
-                Text(title)
-                    .contentTransition(reduceMotion ? .identity : .interpolate)
-                    .lineLimit(1)
-                    .fixedSize(horizontal: true, vertical: false)
-                    .padding(.horizontal, timerWidth == nil ? EQLayout.WorkoutExecution.primaryActionHorizontalPadding : 0)
-                    .frame(minWidth: EQLayout.minimumTouch)
-                    .frame(width: timerWidth, height: EQLayout.WorkoutExecution.primaryActionHeight)
-            }
-            .eqPrimaryCTA(
-                tint: actionTint,
-                foreground: foregroundSurfaceColor,
-                variant: phase.primaryActionVariant
-            )
-            .accessibilityHint(hint)
-            .accessibilityIdentifier(ExecutionPrimaryActionIdentity(workoutID: workout.id).accessibilityIdentifier)
-            .id(ExecutionPrimaryActionIdentity(workoutID: workout.id))
-
             if phase.showsPauseControl {
                 Button(action: pauseResumeWork) {
                     Text(model.timer.state == .paused ? "Resume" : "Pause")
@@ -2169,11 +2177,55 @@ private struct ExecutionWallet<ListRow: View, ForegroundHeader: View, Foreground
                 .eqPrimaryCTA(
                     tint: actionTint,
                     foreground: foregroundSurfaceColor,
-                    variant: .outlined
+                    variant: .filled
                 )
                 .disabled(model.workTimerState?.phase == .ready)
                 .accessibilityHint(model.timer.state == .paused ? "Resumes the work timer" : "Pauses the work timer")
+                .accessibilityIdentifier(ExecutionPrimaryActionIdentity(workoutID: workout.id).accessibilityIdentifier)
+                .id(ExecutionPrimaryActionIdentity(workoutID: workout.id))
+
+                Button(action: skipWork) {
+                    Text("Skip")
+                        .contentTransition(reduceMotion ? .identity : .interpolate)
+                        .lineLimit(1)
+                        .fixedSize(horizontal: true, vertical: false)
+                        .frame(minWidth: EQLayout.minimumTouch)
+                        .frame(
+                            width: timerWidth,
+                            height: EQLayout.WorkoutExecution.primaryActionHeight
+                        )
+                }
+                .eqPrimaryCTA(
+                    tint: actionTint,
+                    foreground: foregroundSurfaceColor,
+                    variant: .outlined
+                )
+                .accessibilityHint("Skips the current work interval")
                 .transition(reduceMotion ? .identity : .move(edge: .trailing))
+            } else {
+                Button {
+                    switch phase {
+                    case .hidden, .work: break
+                    case .exercise: primaryAction?.perform()
+                    case .rest: skipRest()
+                    }
+                } label: {
+                    Text(title)
+                        .contentTransition(reduceMotion ? .identity : .interpolate)
+                        .lineLimit(1)
+                        .fixedSize(horizontal: true, vertical: false)
+                        .padding(.horizontal, timerWidth == nil ? EQLayout.WorkoutExecution.primaryActionHorizontalPadding : 0)
+                        .frame(minWidth: EQLayout.minimumTouch)
+                        .frame(width: timerWidth, height: EQLayout.WorkoutExecution.primaryActionHeight)
+                }
+                .eqPrimaryCTA(
+                    tint: actionTint,
+                    foreground: foregroundSurfaceColor,
+                    variant: phase.primaryActionVariant
+                )
+                .accessibilityHint(hint)
+                .accessibilityIdentifier(ExecutionPrimaryActionIdentity(workoutID: workout.id).accessibilityIdentifier)
+                .id(ExecutionPrimaryActionIdentity(workoutID: workout.id))
             }
 
             if phase == .exercise, hasExerciseAction, let exercise = model.currentExercise {
@@ -2199,7 +2251,7 @@ private struct ExecutionWallet<ListRow: View, ForegroundHeader: View, Foreground
 
 }
 
-private struct ExecutionWalletShapeModifier: ViewModifier {
+struct ExecutionWalletShapeModifier: ViewModifier {
     var drawsBorder = false
     var borderColor: Color = EQColor.Execution.walletBorder
     var externalTopGapColor: Color = .clear
@@ -2560,6 +2612,8 @@ private struct FocusedSetView: View {
 private struct ExerciseSettingsView: View {
     let exerciseID: WorkoutExerciseID
     let model: WorkoutExecutionModel
+    let exerciseRepository: (any ExerciseRepository)?
+    let historyRepository: (any ExerciseHistoryRepository)?
     let onDismiss: () -> Void
     @State private var dragOffset: CGFloat = 0
     @State private var timeBased: Bool
@@ -2567,16 +2621,24 @@ private struct ExerciseSettingsView: View {
     @State private var editsRestDuration = false
     @State private var profile: AutoProgressionProfile = .none
     @State private var loadedProfile: AutoProgressionProfile?
-    @State private var choices: [ExerciseDefinition] = []
+    @State private var swapsExercise = false
     @State private var confirmsSkip = false
     @State private var confirmsRemove = false
     @State private var endedByAction = false
     private let initialTimeBased: Bool
     private let initialTwoSided: Bool
 
-    init(exerciseID: WorkoutExerciseID, model: WorkoutExecutionModel, onDismiss: @escaping () -> Void) {
+    init(
+        exerciseID: WorkoutExerciseID,
+        model: WorkoutExecutionModel,
+        exerciseRepository: (any ExerciseRepository)?,
+        historyRepository: (any ExerciseHistoryRepository)?,
+        onDismiss: @escaping () -> Void
+    ) {
         self.exerciseID = exerciseID
         self.model = model
+        self.exerciseRepository = exerciseRepository
+        self.historyRepository = historyRepository
         self.onDismiss = onDismiss
         let exercise = model.exercise(id: exerciseID)
         initialTimeBased = exercise?.isTimeBased ?? false
@@ -2616,9 +2678,28 @@ private struct ExerciseSettingsView: View {
                 guidance: "This custom duration applies to every set and future workout occurrence of this exercise. An active countdown is unchanged."
             ) { seconds in await model.setExerciseRestDuration(exerciseID: exerciseID, seconds: seconds) }
         }
+        .sheet(isPresented: $swapsExercise) {
+            if let exerciseRepository, let exercise {
+                ExercisePickerView(
+                    repository: exerciseRepository,
+                    history: historyRepository,
+                    mode: .swap(
+                        existingExerciseIDs: Set(model.workout?.exercises.map(\.exerciseID) ?? []),
+                        replacing: exercise.exerciseID
+                    ),
+                    style: .execution
+                ) { definition in
+                    endedByAction = true
+                    Task {
+                        if await model.swapExercise(occurrenceID: exerciseID, with: definition) {
+                            onDismiss()
+                        }
+                    }
+                }
+            }
+        }
         .accessibilityIdentifier("exercise-settings-sheet-\(exerciseID.rawValue)")
         .task(id: exercise?.exerciseID) {
-            choices = await model.availableExercises()
             if let exercise {
                 let value = await model.progressionProfile(for: exercise)
                 profile = value
@@ -2768,17 +2849,12 @@ private struct ExerciseSettingsView: View {
 
     private func actionButtons(_ exercise: WorkoutExercise) -> some View {
         HStack(spacing: EQLayout.controlGap) {
-            Menu {
-                ForEach(choices.filter { $0.id != exercise.exerciseID }) { definition in
-                    Button(definition.name) {
-                        endedByAction = true
-                        Task { if await model.swapExercise(occurrenceID: exerciseID, with: definition) { onDismiss() } }
-                    }
-                }
-            } label: {
+            Button { swapsExercise = true } label: {
                 Text("Swap")
                     .eqOutlinedControl(tint: EQColor.Execution.foregroundText)
             }
+            .buttonStyle(.plain)
+            .disabled(exerciseRepository == nil)
             .frame(maxWidth: .infinity)
             .accessibilityHint("Replaces this exercise in the current workout")
 

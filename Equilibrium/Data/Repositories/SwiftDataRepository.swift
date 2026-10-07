@@ -47,9 +47,7 @@ public final class SwiftDataRepository: ExerciseRepository, WorkoutRepository, E
             .sorted { $0.name == $1.name ? $0.id < $1.id : $0.name < $1.name }
     }
     public func searchExercises(_ query: String) async throws -> [ExerciseDefinition] {
-        let needle = Self.normalizeExerciseName(query)
-        guard !needle.isEmpty else { return try await allExercises() }
-        return try await allExercises().filter { $0.normalizedName.contains(needle) || $0.aliases.contains { Self.normalizeExerciseName($0).contains(needle) } }
+        ExerciseResolver.search(query, in: try await allExercises())
     }
     public func latestExerciseLog(exerciseID: ExerciseID) async throws -> LatestExerciseLog? {
         guard let occurrence = try await exercisePerformance(exerciseID: exerciseID).latestOccurrence else { return nil }
@@ -80,7 +78,7 @@ public final class SwiftDataRepository: ExerciseRepository, WorkoutRepository, E
         try context.fetch(FetchDescriptor<ExerciseDefinitionRecord>(predicate: #Predicate { $0.id == id }))
     }
     public nonisolated static func normalizeExerciseName(_ value: String) -> String {
-        value.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: .current).lowercased().split(whereSeparator: { !$0.isLetter && !$0.isNumber }).joined(separator: " ")
+        ExerciseResolver.normalizedName(value)
     }
 
     // MARK: Workouts
@@ -255,6 +253,24 @@ public final class SwiftDataRepository: ExerciseRepository, WorkoutRepository, E
         workout.updatedAt = date
         context.delete(exercise)
         try saveOrRollback(); return try WorkoutMapper.domain(from: workout)
+    }
+    public func appendExercise(workoutID: WorkoutID, exercise: WorkoutExercise, at date: Date = .now) async throws -> Workout {
+        guard let record = winner(try workoutRecords(workoutID.rawValue), updatedAt: \WorkoutRecord.updatedAt) else { throw RepositoryError.notFound }
+        guard record.statusRaw == WorkoutStatus.inProgress.rawValue else {
+            throw record.statusRaw == WorkoutStatus.completed.rawValue
+                ? RepositoryError.immutableCompletedWorkout
+                : RepositoryError.workoutNotInProgress
+        }
+        var workout = try WorkoutMapper.domain(from: record)
+        guard !workout.exercises.contains(where: { $0.exerciseID == exercise.exerciseID }) else {
+            throw RepositoryError.duplicateExerciseInWorkout
+        }
+        workout.exercises.append(exercise)
+        workout.updatedAt = date
+        try DomainValidator.validate(workout)
+        apply(workout, to: record)
+        try saveOrRollback()
+        return try WorkoutMapper.domain(from: record)
     }
     public func editCompletedSet(workoutID: WorkoutID, exerciseID: WorkoutExerciseID, prescriptionID: SetID, input: SetLogInput, at date: Date = .now) async throws -> Workout {
         let (workout, exercise) = try mutableExercise(workoutID, exerciseID)

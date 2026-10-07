@@ -1644,6 +1644,120 @@ final class WorkoutExecutionNavigationStateTests: XCTestCase {
 }
 
 @MainActor
+final class ActiveWorkoutExercisePickerIntegrationTests: XCTestCase {
+    func testAddingDuringActiveWorkoutAppendsUpcomingAndPreservesCurrentExercise() async throws {
+        let repository = makeRepository()
+        let fixture = EquilibriumFixtures.mixed(id: "picker-add-active")
+        let addedDefinition = definition("Cable Row", id: "cable-row")
+        try await repository.create(fixture)
+        try await repository.saveExercise(addedDefinition)
+        let model = WorkoutExecutionModel(
+            workoutID: fixture.id,
+            repository: repository,
+            historyRepository: repository,
+            exerciseRepository: repository
+        )
+        await model.activate()
+        let currentID = try XCTUnwrap(model.currentExercise?.id)
+        let focusedID = model.focusedExerciseID
+
+        let addedResult = await model.addExercise(addedDefinition)
+        let addedID = try XCTUnwrap(addedResult)
+
+        XCTAssertEqual(model.workout?.exercises.last?.id, addedID)
+        XCTAssertEqual(model.workout?.exercises.last?.exerciseID, addedDefinition.id)
+        XCTAssertEqual(model.states[addedID], .upcoming)
+        XCTAssertEqual(model.currentExercise?.id, currentID)
+        XCTAssertEqual(model.focusedExerciseID, focusedID)
+        let persisted = try await repository.workout(id: fixture.id)
+        XCTAssertEqual(persisted?.exercises.last?.id, addedID)
+    }
+
+    func testDuplicateExerciseCannotBeAddedThroughPickerOrMutation() async throws {
+        let repository = makeRepository()
+        let fixture = EquilibriumFixtures.mixed(id: "picker-add-duplicate")
+        try await repository.create(fixture)
+        let model = WorkoutExecutionModel(workoutID: fixture.id, repository: repository, exerciseRepository: repository)
+        await model.activate()
+        let existing = definition(fixture.exercises[0].nameSnapshot, id: fixture.exercises[0].exerciseID.rawValue)
+        let originalCount = try XCTUnwrap(model.workout?.exercises.count)
+        let mode = SharedExercisePickerMode.add(existingExerciseIDs: Set(fixture.exercises.map(\.exerciseID)))
+
+        XCTAssertEqual(mode.disabledReason(for: existing), "Already in workout")
+        let duplicateResult = await model.addExercise(existing)
+        XCTAssertNil(duplicateResult)
+        XCTAssertEqual(model.workout?.exercises.count, originalCount)
+
+        let duplicateOccurrence = WorkoutExercise(
+            id: .new(), exerciseID: existing.id, nameSnapshot: existing.name,
+            prescriptions: [], loggedSets: [], restDuration: nil, skippedAt: nil
+        )
+        do {
+            _ = try await repository.appendExercise(workoutID: fixture.id, exercise: duplicateOccurrence, at: .now)
+            XCTFail("Expected repository duplicate protection")
+        } catch {
+            XCTAssertEqual(error as? RepositoryError, .duplicateExerciseInWorkout)
+        }
+    }
+
+    func testSwapModeUsesSharedAvailabilityAndRetainsSwapMutationIdentity() async throws {
+        let repository = makeRepository()
+        let fixture = EquilibriumFixtures.mixed(id: "picker-swap")
+        let replacement = definition("Chest Supported Row", id: "chest-supported-row")
+        try await repository.create(fixture)
+        try await repository.saveExercise(replacement)
+        let model = WorkoutExecutionModel(
+            workoutID: fixture.id,
+            repository: repository,
+            historyRepository: repository,
+            exerciseRepository: repository
+        )
+        await model.activate()
+        let outgoing = fixture.exercises[1]
+        let otherExisting = definition(fixture.exercises[0].nameSnapshot, id: fixture.exercises[0].exerciseID.rawValue)
+        let mode = SharedExercisePickerMode.swap(
+            existingExerciseIDs: Set(fixture.exercises.map(\.exerciseID)),
+            replacing: outgoing.exerciseID
+        )
+
+        XCTAssertEqual(mode.disabledReason(for: otherExisting), "Already in workout")
+        XCTAssertNil(mode.disabledReason(for: replacement))
+        let didSwap = await model.swapExercise(occurrenceID: outgoing.id, with: replacement)
+        XCTAssertTrue(didSwap)
+        let swapped = try XCTUnwrap(model.exercise(id: outgoing.id))
+        XCTAssertEqual(swapped.id, outgoing.id)
+        XCTAssertEqual(swapped.exerciseID, replacement.id)
+        XCTAssertEqual(swapped.nameSnapshot, replacement.name)
+    }
+
+    func testAppendingToCompletedWorkoutRemainsImmutable() async throws {
+        let repository = makeRepository()
+        let completed = EquilibriumFixtures.completed(id: "picker-completed")
+        try await repository.create(completed)
+        let occurrence = WorkoutExercise(
+            id: .new(), exerciseID: .new(), nameSnapshot: "New Exercise",
+            prescriptions: [], loggedSets: [], restDuration: nil, skippedAt: nil
+        )
+        do {
+            _ = try await repository.appendExercise(workoutID: completed.id, exercise: occurrence, at: .now)
+            XCTFail("Expected completed workout immutability")
+        } catch {
+            XCTAssertEqual(error as? RepositoryError, .immutableCompletedWorkout)
+        }
+        let persisted = try await repository.workout(id: completed.id)
+        XCTAssertEqual(persisted, completed)
+    }
+
+    private func definition(_ name: String, id: String) -> ExerciseDefinition {
+        .init(id: .init(rawValue: id), name: name, normalizedName: ExerciseResolver.normalizedName(name), aliases: [], equipment: nil, category: nil, isCustom: false, archivedAt: nil)
+    }
+
+    private func makeRepository() -> SwiftDataRepository {
+        SwiftDataRepository(container: try! PersistenceController.makeContainer(inMemory: true))
+    }
+}
+
+@MainActor
 private final class RecordingHapticsClient: HapticsClient {
     private(set) var events: [HapticFeedback] = []
     func perform(_ feedback: HapticFeedback) { events.append(feedback) }

@@ -94,9 +94,7 @@ struct SettingsShellView: View {
     private func card<Content: View>(@ViewBuilder content: () -> Content) -> some View {
         VStack(alignment: .leading, spacing: 0) { content() }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, EQSpacing.md)
-            .padding(.vertical, EQSpacing.xs)
-            .background(EQColor.cardFill, in: RoundedRectangle(cornerRadius: EQRadius.card, style: .continuous))
+            .eqGroupedCard()
     }
 
     private func rowLabel(_ title: String, systemImage: String) -> some View {

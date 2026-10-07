@@ -488,7 +488,55 @@ final class WorkoutExecutionModel {
         }
         catch { errorMessage = message(for: error); return false }
     }
-    func availableExercises() async -> [ExerciseDefinition] { (try? await exerciseRepository?.allExercises()) ?? [] }
+    func addExercise(_ definition: ExerciseDefinition) async -> WorkoutExerciseID? {
+        guard showsExecutionOptions, let workout else { return nil }
+        guard !workout.exercises.contains(where: { $0.exerciseID == definition.id }) else {
+            errorMessage = "This exercise is already in the workout."
+            return nil
+        }
+        let preservedFocus = focusedExerciseID
+        let preservedCurrent = currentExercise?.id
+        let preservedPrescription = currentPrescription?.id
+        let history = try? await historyRepository?.latestExerciseLog(exerciseID: definition.id)
+        let inherited = history?.sets.map(Self.inheritedPrescription) ?? []
+        let isTimeBased = inherited.first.map { prescription in
+            if case .duration = prescription.target { return true }
+            return false
+        } ?? false
+        let occurrence = WorkoutExercise(
+            id: .new(),
+            exerciseID: definition.id,
+            nameSnapshot: definition.name,
+            prescriptions: inherited,
+            loggedSets: [],
+            restDuration: nil,
+            skippedAt: nil,
+            isTimeBased: isTimeBased
+        )
+        do {
+            let updated = try await repository.appendExercise(
+                workoutID: workoutID,
+                exercise: occurrence,
+                at: now()
+            )
+            accept(updated)
+            reconcileSelection(
+                focusedExerciseID: preservedFocus,
+                currentExerciseID: preservedCurrent,
+                prescriptionID: preservedPrescription
+            )
+            if let settingsRepository {
+                exerciseRestDurations[definition.id] = try? await settingsRepository.exerciseRestDuration(for: definition.id)
+            }
+            await loadSuggestions(for: updated)
+            errorMessage = nil
+            return occurrence.id
+        } catch {
+            errorMessage = message(for: error)
+            return nil
+        }
+    }
+
     func progressionProfile(for exercise: WorkoutExercise) async -> AutoProgressionProfile { (try? await progressionRepository?.progressionConfiguration().assignments[exercise.exerciseID]) ?? .none }
     func updateExerciseSettings(
         exerciseID: WorkoutExerciseID,
@@ -517,6 +565,10 @@ final class WorkoutExecutionModel {
         guard var value = workout,
               let index = value.exercises.firstIndex(where: { $0.id == occurrenceID }),
               value.exercises[index].skippedAt == nil else { return false }
+        guard !value.exercises.contains(where: { $0.id != occurrenceID && $0.exerciseID == definition.id }) else {
+            errorMessage = "This exercise is already in the workout."
+            return false
+        }
         let old = value.exercises[index]
         let history = try? await historyRepository?.latestExerciseLog(exerciseID: definition.id)
         let inherited = history?.sets.map { set -> SetPrescription in
@@ -542,6 +594,14 @@ final class WorkoutExecutionModel {
             errorMessage = nil
             return true
         } catch { errorMessage = message(for: error); return false }
+    }
+
+    private static func inheritedPrescription(_ set: LoggedSet) -> SetPrescription {
+        if let duration = set.duration {
+            return .init(id: .new(), target: .duration(seconds: duration), suggestedWeight: set.weight)
+        }
+        let repetitions = max(1, set.repetitions ?? 1)
+        return .init(id: .new(), target: .repetitions(range: repetitions...repetitions), suggestedWeight: set.weight)
     }
     func removeExercise(_ occurrenceID: WorkoutExerciseID) async -> Bool {
         guard workout?.exercises.contains(where: { $0.id == occurrenceID && $0.skippedAt == nil }) == true else { return false }
@@ -817,6 +877,8 @@ final class WorkoutExecutionModel {
         case .exerciseSkipped: return "Restore this exercise before logging or editing sets."
         case .invalidSetInput: return "Enter a valid set value."
         case .invalidRestDuration, .invalidSettings: return "Choose a rest duration from 15 seconds to 5 minutes."
+        case .duplicateExerciseInWorkout: return "This exercise is already in the workout."
+        case .invalidExerciseName: return "Enter an exercise name."
             default: return "The workout could not be updated."
         }
     }

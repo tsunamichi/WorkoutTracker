@@ -61,7 +61,16 @@ struct WorkoutBuilderView: View {
             if model.draft.isMeaningful { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { discardPresented = true } } }
             ToolbarItem(placement: .confirmationAction) { Button("Create workout") { Task { if let value = await model.create() { created(value) } } }.disabled(!model.canCommit || model.isSaving) }
         }
-        .sheet(isPresented: $pickerPresented) { ExercisePickerView(repository: exercises, history: history) { model.add($0); pickerPresented = false } }
+        .sheet(isPresented: $pickerPresented) {
+            ExercisePickerView(
+                repository: exercises,
+                history: history,
+                mode: .add(existingExerciseIDs: Set(model.draft.exercises.compactMap(\.exerciseID)))
+            ) {
+                model.add($0)
+                pickerPresented = false
+            }
+        }
         .confirmationDialog("Discard this workout?", isPresented: $discardPresented) { Button("Discard Changes", role: .destructive) { dismiss() }; Button("Keep Editing", role: .cancel) {} } message: { Text("Your unsaved builder changes will be lost.") }
     }
 }

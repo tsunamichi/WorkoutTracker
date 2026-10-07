@@ -73,10 +73,13 @@ final class WorkoutBuilderModel {
             if let id = draftExercise.exerciseID, let existing = try await exercises.exercise(id: id) { definition = existing }
             else {
                 let clean = draftExercise.name.trimmingCharacters(in: .whitespacesAndNewlines)
-                if let existing = try await exercises.searchExercises(clean).first(where: { $0.normalizedName == SwiftDataRepository.normalizeExerciseName(clean) }) { definition = existing }
-                else {
-                    definition = .init(id: .new(), name: clean, normalizedName: SwiftDataRepository.normalizeExerciseName(clean), aliases: [], equipment: nil, category: nil, isCustom: true, archivedAt: nil)
-                    try await exercises.saveExercise(definition)
+                switch try await exercises.resolveCreationRequest(named: clean) {
+                case .existing(let existing), .created(let existing):
+                    definition = existing
+                case .confirmationRequired:
+                    // Builder drafts never silently create a plausible duplicate. Interactive
+                    // creation resolves this choice in the shared exercise picker first.
+                    throw RepositoryError.duplicateExerciseName
                 }
             }
             let prescriptions: [SetPrescription]

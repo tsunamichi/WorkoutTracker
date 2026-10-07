@@ -47,7 +47,14 @@ final class AppEnvironment {
         if ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil {
             return try AppEnvironment(container: PersistenceController.makeContainer())
         }
+#if targetEnvironment(simulator)
+        // Simulator apps are signed without iCloud entitlements. Constructing a
+        // CloudKit-backed container there traps before SwiftData can throw and
+        // use its local fallback, so open the same named store locally instead.
+        return try AppEnvironment(container: PersistenceController.makeContainer())
+#else
         let startup = try PersistenceController.makeLiveContainer()
         return try AppEnvironment(container: startup.container, persistenceStartupMode: startup.mode)
+#endif
     }
 }

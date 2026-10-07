@@ -9,6 +9,7 @@ struct HomeView: View {
     private let progressionRepository: any ProgressionRepository
     @State private var appSettings = AppSettings(weightUnit: .pounds, defaultRestDuration: 90)
     @State private var timerPath: [TimerRoute] = []
+    @State private var timerNavigationTransitionIsActive = false
     @State private var presentedHomeOverlay: HomeOverlayDestination?
     @State private var homeOverlayTransitionIsActive = false
     @State private var restSessionStore = WorkoutRestSessionStore()
@@ -43,10 +44,14 @@ struct HomeView: View {
         HomeTimerContainer(
             primarySurface: $model.primarySurface,
             reduceMotion: reduceMotion,
-            clipsToBounds: transitioningWorkoutID == nil && !homeOverlayOwnsSurface,
+            clipsToBounds: transitioningWorkoutID == nil
+                && !homeOverlayOwnsSurface
+                && timerPath.isEmpty
+                && !timerNavigationTransitionIsActive,
             allowsSurfacePull: transitioningWorkoutID == nil
                 && model.expandedWorkoutID == nil
                 && timerPath.isEmpty
+                && !timerNavigationTransitionIsActive
                 && !homeOverlayOwnsSurface
         ) {
             GeometryReader { proxy in
@@ -138,9 +143,29 @@ struct HomeView: View {
                 .modifier(HomeExecutionTransitionModifier(progress: homeExecutionProgress))
             }
         } timer: {
-            NavigationStack(path: $timerPath) {
-                StandaloneTimerView(store: timerStore, path: $timerPath) { model.primarySurface = .home }
-                    .navigationDestination(for: TimerRoute.self) { timerDestination($0) }
+            GeometryReader { proxy in
+                ZStack {
+                    TimerNavigationRoot(
+                        isDestinationPresented: !timerPath.isEmpty,
+                        reduceMotion: reduceMotion
+                    ) {
+                        StandaloneTimerView(store: timerStore, path: $timerPath) {
+                            model.primarySurface = .home
+                        }
+                    }
+
+                    if let route = timerPath.last {
+                        timerDestination(route)
+                            .id(route)
+                            .frame(width: proxy.size.width, height: proxy.size.height)
+                            .transition(reduceMotion ? .opacity : .move(edge: .trailing))
+                            .zIndex(1)
+                    }
+                }
+                .animation(
+                    reduceMotion ? EQMotion.reducedContentTransition : EQMotion.surfaceReveal,
+                    value: timerPath
+                )
             }
         }
         .sheet(isPresented: $model.isAddWorkoutDrawerPresented, onDismiss: model.presentPendingCreationRoute) {
@@ -219,19 +244,34 @@ struct HomeView: View {
     @ViewBuilder private func timerDestination(_ route: TimerRoute) -> some View {
         switch route {
         case .create:
-            StandaloneTimerFormView(store: timerStore) { created in
+            StandaloneTimerFormView(store: timerStore, onDismiss: popTimerRoute) { created in
                 timerPath = StandaloneTimerNavigationPolicy.replacingCreation(in: timerPath, withRunID: created.id)
             }
         case .edit(let id):
             if let configuration = timerStore.configurations().first(where: { $0.id == id }) {
-                StandaloneTimerFormView(store: timerStore, configuration: configuration) { _ in
-                    if !timerPath.isEmpty { timerPath.removeLast() }
-                }
-            } else { ContentUnavailableView("Timer unavailable", systemImage: "timer") }
+                StandaloneTimerFormView(
+                    store: timerStore,
+                    configuration: configuration,
+                    onDismiss: popTimerRoute
+                ) { _ in popTimerRoute() }
+            } else { TimerUnavailableView(dismiss: popTimerRoute) }
         case .run(let id):
             if let configuration = timerStore.configurations().first(where: { $0.id == id }) {
-                StandaloneTimerRunView(configuration: configuration)
-            } else { ContentUnavailableView("Timer unavailable", systemImage: "timer") }
+                StandaloneTimerRunView(configuration: configuration, onDismiss: popTimerRoute)
+            } else { TimerUnavailableView(dismiss: popTimerRoute) }
+        }
+    }
+
+    private func popTimerRoute() {
+        guard !timerPath.isEmpty else { return }
+        timerNavigationTransitionIsActive = true
+        withAnimation(
+            reduceMotion ? EQMotion.reducedContentTransition : EQMotion.surfaceReveal,
+            completionCriteria: .logicallyComplete
+        ) {
+            _ = timerPath.removeLast()
+        } completion: {
+            timerNavigationTransitionIsActive = false
         }
     }
 
@@ -326,6 +366,74 @@ enum HomeOverlayDestination: Hashable {
 enum HomeOverlayPresentation {
     static func backgroundScale(isPresented: Bool, reduceMotion: Bool) -> CGFloat {
         isPresented && !reduceMotion ? EQLayout.Home.overlayBackgroundScale : 1
+    }
+}
+
+private struct TimerNavigationRoot<Content: View>: View {
+    let isDestinationPresented: Bool
+    let reduceMotion: Bool
+    @ViewBuilder let content: () -> Content
+
+    var body: some View {
+        GeometryReader { proxy in
+            let topInset = proxy.safeAreaInsets.top
+            let bottomInset = proxy.safeAreaInsets.bottom
+
+            ZStack {
+                // Keep the saved-timers canvas behind its scaled surface so a
+                // destination cannot recolour the exposed safe-area edges.
+                EQColor.canvas
+                    .ignoresSafeArea()
+
+                ZStack {
+                    EQColor.canvas
+                        .ignoresSafeArea()
+                    content()
+                }
+                .frame(width: proxy.size.width, height: proxy.size.height)
+                .scaleEffect(HomeOverlayPresentation.backgroundScale(
+                    isPresented: isDestinationPresented,
+                    reduceMotion: reduceMotion
+                ))
+                .clipShape(HomeOverlayBackgroundClipShape(
+                    cornerRadius: isDestinationPresented ? EQRadius.largeSurface : 0,
+                    bottomExtension: bottomInset,
+                    topExtension: topInset
+                ))
+                .allowsHitTesting(!isDestinationPresented)
+            }
+            .animation(
+                reduceMotion ? EQMotion.reducedContentTransition : EQMotion.surfaceReveal,
+                value: isDestinationPresented
+            )
+        }
+    }
+}
+
+private struct TimerUnavailableView: View {
+    let dismiss: () -> Void
+
+    var body: some View {
+        VStack(spacing: 0) {
+            Button(action: dismiss) {
+                Image(systemName: "chevron.left")
+                    .eqTextStyle(.icon)
+                    .frame(
+                        width: EQLayout.minimumTouch,
+                        height: EQLayout.minimumTouch,
+                        alignment: .leading
+                    )
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, EQLayout.screenGutter)
+
+            ContentUnavailableView("Timer unavailable", systemImage: "timer")
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+        .foregroundStyle(EQColor.primaryText)
+        .background(EQColor.canvas.ignoresSafeArea())
     }
 }
 

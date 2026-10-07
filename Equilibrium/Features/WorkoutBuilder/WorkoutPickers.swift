@@ -1,61 +1,403 @@
 import SwiftUI
 
+enum SharedExercisePickerMode: Equatable {
+    case add(existingExerciseIDs: Set<ExerciseID>)
+    case swap(existingExerciseIDs: Set<ExerciseID>, replacing: ExerciseID)
+
+    var title: String {
+        switch self {
+        case .add: "Add Exercise"
+        case .swap: "Swap Exercise"
+        }
+    }
+
+    var isAdd: Bool {
+        if case .add = self { return true }
+        return false
+    }
+
+    func disabledReason(for exercise: ExerciseDefinition) -> String? {
+        let existing: Set<ExerciseID>
+        switch self {
+        case .add(let ids), .swap(let ids, _): existing = ids
+        }
+        return existing.contains(exercise.id) ? "Already in workout" : nil
+    }
+}
+
+enum ExercisePickerStyle {
+    case standard
+    case execution
+}
+
 struct ExercisePickerView: View {
     let repository: any ExerciseRepository
-    let history: any ExerciseHistoryRepository
+    let history: (any ExerciseHistoryRepository)?
+    let mode: SharedExercisePickerMode
+    let style: ExercisePickerStyle
     let selection: (ExerciseDefinition) -> Void
-    @State private var results: [ExerciseDefinition] = []
+    @State private var catalog: [ExerciseDefinition] = []
     @State private var query = ""
     @State private var contexts: [ExerciseID: LatestExerciseLog] = [:]
     @State private var errorMessage: String?
+    @State private var createsCustomExercise = false
+    @FocusState private var searchIsFocused: Bool
     @Environment(\.dismiss) private var dismiss
+
+    init(
+        repository: any ExerciseRepository,
+        history: (any ExerciseHistoryRepository)? = nil,
+        mode: SharedExercisePickerMode = .add(existingExerciseIDs: []),
+        style: ExercisePickerStyle = .standard,
+        selection: @escaping (ExerciseDefinition) -> Void
+    ) {
+        self.repository = repository
+        self.history = history
+        self.mode = mode
+        self.style = style
+        self.selection = selection
+    }
+
     var body: some View {
         NavigationStack {
-            List {
-                ForEach(results) { exercise in
-                    Button { selection(exercise); dismiss() } label: {
-                        VStack(alignment: .leading, spacing: EQSpacing.xxs) {
-                            Text(exercise.name).eqTextStyle(.listItemTitle).foregroundStyle(EQColor.primaryText)
-                            if let context = contexts[exercise.id], let set = context.sets.last {
-                                Text(contextText(set, date: context.occurredAt)).eqTextStyle(.caption).foregroundStyle(EQColor.secondaryText)
-                            }
-                        }.frame(maxWidth: .infinity, minHeight: EQDimension.minimumTouch, alignment: .leading)
-                    }.accessibilityLabel(exercise.name)
+            pickerContent
+            .navigationDestination(isPresented: $createsCustomExercise) {
+                CustomExerciseCreationView(repository: repository, initialName: cleanQuery, style: style) { exercise in
+                    choose(exercise)
                 }
-                if canCreate { Button { Task { await createInline() } } label: { Label("Create \"\(cleanQuery)\"", systemImage: "plus.circle") }.frame(minHeight: EQDimension.minimumTouch) }
+                .toolbar(.visible, for: .navigationBar)
             }
-            .overlay { if results.isEmpty { ContentUnavailableView.search(text: query) } }
-            .searchable(text: $query, prompt: "Search your exercises")
-            .onChange(of: query) { _, _ in Task { await load() } }.task { await load() }
-            .scrollContentBackground(.hidden).background(EQColor.canvas).navigationTitle("Your Exercises")
-            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } } }
             .alert("Exercise unavailable", isPresented: .init(get: { errorMessage != nil }, set: { if !$0 { errorMessage = nil } })) { Button("OK") {} } message: { Text(errorMessage ?? "") }
-        }.preferredColorScheme(.dark)
+        }
+        .presentationDetents(presentationDetents)
+        .presentationDragIndicator(style == .execution && !mode.isAdd ? .hidden : .visible)
+        .presentationBackground(pickerBackground)
+        .presentationCornerRadius(EQRadius.sheet)
+        .preferredColorScheme(.dark)
+    }
+
+    @ViewBuilder
+    private var pickerContent: some View {
+        if style == .execution {
+            VStack(alignment: .leading, spacing: 0) {
+                executionHeader
+                executionSearchField
+                executionExerciseList
+            }
+            .background(EQColor.Execution.foregroundSurface)
+            .foregroundStyle(EQColor.Execution.foregroundText)
+            .toolbar(.hidden, for: .navigationBar)
+        } else {
+            exerciseList
+                .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search exercises and aliases")
+                .background(EQColor.canvas)
+                .navigationTitle(mode.title)
+                .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } } }
+        }
+    }
+
+    private var executionHeader: some View {
+        HStack(alignment: .top, spacing: EQLayout.controlGap) {
+            Text(mode.title)
+                .eqTextStyle(.screenTitle)
+                .frame(minHeight: EQLayout.minimumTouch)
+                .accessibilityAddTraits(.isHeader)
+            Spacer()
+            if !mode.isAdd {
+                Button { dismiss() } label: {
+                    Image(systemName: "chevron.down")
+                        .eqTextStyle(.icon)
+                        .frame(width: EQLayout.iconSize, height: EQLayout.iconSize)
+                        .frame(width: EQLayout.minimumTouch, height: EQLayout.minimumTouch, alignment: .trailing)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Close \(mode.title)")
+            }
+        }
+        .padding(.horizontal, EQLayout.WorkoutExecution.walletInset)
+        .padding(.top, EQSpacing.xl)
+        .padding(.bottom, EQSpacing.lg)
+    }
+
+    private var executionSearchField: some View {
+        HStack(spacing: EQSpacing.sm) {
+            Image(systemName: "magnifyingglass")
+                .symbolRenderingMode(.monochrome)
+                .foregroundStyle(searchIconColor)
+            TextField(
+                "",
+                text: $query,
+                prompt: Text("Search exercises and aliases")
+                    .foregroundStyle(EQColor.Execution.foregroundSecondaryText)
+            )
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+                .foregroundStyle(EQColor.Execution.foregroundText)
+                .focused($searchIsFocused)
+        }
+        .padding(.horizontal, EQSpacing.md)
+        .frame(minHeight: EQLayout.minimumTouch + EQSpacing.xs)
+        .background {
+            RoundedRectangle(cornerRadius: EQRadius.control)
+                .fill(Color.black.opacity(0.04))
+        }
+        .overlay {
+            RoundedRectangle(cornerRadius: EQRadius.control)
+                .stroke(searchBorderColor, lineWidth: 1.5)
+        }
+        .padding(.horizontal, EQLayout.WorkoutExecution.walletInset)
+        .padding(.bottom, EQSpacing.md)
+        .animation(.easeInOut(duration: 0.2), value: searchFieldIsActive)
+    }
+
+    private var exerciseList: some View {
+        List {
+            if offersCustomCreation {
+                Button { createsCustomExercise = true } label: {
+                    Label("Create \"\(cleanQuery)\"", systemImage: "plus.circle")
+                        .frame(maxWidth: .infinity, minHeight: EQDimension.minimumTouch, alignment: .leading)
+                }
+                .listRowBackground(rowBackground)
+                .listRowInsets(rowInsets)
+                .listRowSeparator(.hidden)
+            }
+            if results.isEmpty, !offersCustomCreation {
+                ContentUnavailableView.search(text: query)
+                    .listRowBackground(Color.clear)
+                    .listRowInsets(rowInsets)
+                    .listRowSeparator(.hidden)
+            }
+            ForEach(results) { exercise in
+                let disabledReason = mode.disabledReason(for: exercise)
+                Button { choose(exercise) } label: {
+                    HStack(spacing: EQLayout.controlGap) {
+                        VStack(alignment: .leading, spacing: EQSpacing.xxs) {
+                            Text(exercise.name).eqTextStyle(.listItemTitle).foregroundStyle(primaryText)
+                            if let disabledReason {
+                                Text(disabledReason).eqTextStyle(.caption).foregroundStyle(secondaryText)
+                            } else if let context = contexts[exercise.id], let set = context.sets.last {
+                                Text(contextText(set, date: context.occurredAt)).eqTextStyle(.caption).foregroundStyle(secondaryText)
+                            }
+                        }
+                        Spacer(minLength: 0)
+                    }
+                    .frame(maxWidth: .infinity, minHeight: EQDimension.minimumTouch, alignment: .leading)
+                }
+                .disabled(disabledReason != nil)
+                .accessibilityLabel(exercise.name)
+                .accessibilityValue(disabledReason ?? "Available")
+                .listRowBackground(rowBackground)
+                .listRowInsets(rowInsets)
+                .listRowSeparator(.hidden)
+            }
+        }
+        .task { await load() }
+        .scrollContentBackground(.hidden)
+        .background(pickerBackground)
+        .tint(primaryText)
+    }
+
+    private var executionExerciseList: some View {
+        ScrollView {
+            LazyVStack(spacing: 0) {
+                if offersCustomCreation {
+                    Button { createsCustomExercise = true } label: {
+                        Label("Create \"\(cleanQuery)\"", systemImage: "plus.circle")
+                            .frame(maxWidth: .infinity, minHeight: EQDimension.minimumTouch, alignment: .leading)
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.horizontal, EQSpacing.lg)
+                }
+                if results.isEmpty, !offersCustomCreation {
+                    ContentUnavailableView.search(text: query)
+                        .padding(.horizontal, EQSpacing.lg)
+                }
+                ForEach(results) { exercise in
+                    executionExerciseRow(exercise)
+                }
+            }
+        }
+        .task { await load() }
+        .background(EQColor.Execution.foregroundSurface)
+        .tint(EQColor.Execution.foregroundText)
+    }
+
+    private func executionExerciseRow(_ exercise: ExerciseDefinition) -> some View {
+        let disabledReason = mode.disabledReason(for: exercise)
+        return Button { choose(exercise) } label: {
+            HStack(spacing: EQLayout.controlGap) {
+                VStack(alignment: .leading, spacing: EQSpacing.xxs) {
+                    Text(exercise.name)
+                        .eqTextStyle(.listItemTitle)
+                        .foregroundStyle(EQColor.Execution.foregroundText)
+                    if let disabledReason {
+                        Text(disabledReason)
+                            .eqTextStyle(.caption)
+                            .foregroundStyle(EQColor.Execution.foregroundSecondaryText)
+                    } else if let context = contexts[exercise.id], let set = context.sets.last {
+                        Text(contextText(set, date: context.occurredAt))
+                            .eqTextStyle(.caption)
+                            .foregroundStyle(EQColor.Execution.foregroundSecondaryText)
+                    }
+                }
+                Spacer(minLength: 0)
+            }
+            .frame(maxWidth: .infinity, minHeight: EQDimension.minimumTouch, alignment: .leading)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(disabledReason != nil)
+        .accessibilityLabel(exercise.name)
+        .accessibilityValue(disabledReason ?? "Available")
+        .padding(.horizontal, EQSpacing.lg)
+    }
+
+    private var results: [ExerciseDefinition] {
+        let matches = ExerciseResolver.search(query, in: catalog)
+        guard cleanQuery.isEmpty else { return matches }
+        return matches.filter { mode.disabledReason(for: $0) == nil }
     }
     private var cleanQuery: String { query.trimmingCharacters(in: .whitespacesAndNewlines) }
-    private var canCreate: Bool { !cleanQuery.isEmpty && !results.contains { $0.normalizedName == SwiftDataRepository.normalizeExerciseName(cleanQuery) } }
+    private var searchFieldIsActive: Bool { searchIsFocused || !cleanQuery.isEmpty }
+    private var searchIconColor: Color {
+        searchFieldIsActive
+            ? EQColor.Execution.foregroundText.opacity(1)
+            : EQColor.Execution.foregroundSecondaryText
+    }
+    private var searchBorderColor: Color {
+        searchFieldIsActive
+            ? EQColor.Execution.foregroundText.opacity(1)
+            : Color.black.opacity(0.08)
+    }
+    private var offersCustomCreation: Bool { !cleanQuery.isEmpty && results.isEmpty }
+    private var presentationDetents: Set<PresentationDetent> {
+        style == .execution && mode.isAdd ? [.fraction(0.95)] : [.large]
+    }
+    private var pickerBackground: Color { style == .execution ? EQColor.Execution.foregroundSurface : EQColor.canvas }
+    private var rowBackground: Color { style == .execution ? .clear : EQColor.elevatedSurface }
+    private var rowInsets: EdgeInsets {
+        EdgeInsets(top: 0, leading: EQSpacing.lg, bottom: 0, trailing: EQSpacing.lg)
+    }
+    private var primaryText: Color { style == .execution ? EQColor.Execution.foregroundText : EQColor.primaryText }
+    private var secondaryText: Color { style == .execution ? EQColor.Execution.foregroundSecondaryText : EQColor.secondaryText }
+
     private func load() async {
         do {
-            results = try await repository.searchExercises(query)
+            catalog = try await repository.allExercises()
+            guard let history else { return }
             var loaded: [ExerciseID: LatestExerciseLog] = [:]
-            for result in results { if let value = try await history.latestExerciseLog(exerciseID: result.id) { loaded[result.id] = value } }
+            for result in catalog { if let value = try await history.latestExerciseLog(exerciseID: result.id) { loaded[result.id] = value } }
             contexts = loaded
         } catch { errorMessage = "Exercises could not be loaded." }
     }
-    private func createInline() async {
-        let normalized = SwiftDataRepository.normalizeExerciseName(cleanQuery)
-        do {
-            if let existing = try await repository.searchExercises(cleanQuery).first(where: { $0.normalizedName == normalized }) { selection(existing); dismiss(); return }
-            let value = ExerciseDefinition(id: .new(), name: cleanQuery, normalizedName: normalized, aliases: [], equipment: nil, category: nil, isCustom: true, archivedAt: nil)
-            try await repository.saveExercise(value); selection(value); dismiss()
-        } catch RepositoryError.duplicateExerciseName {
-            if let existing = try? await repository.searchExercises(cleanQuery).first(where: { $0.normalizedName == normalized }) { selection(existing); dismiss() }
-        } catch { errorMessage = "The exercise could not be created." }
-    }
+
+    private func choose(_ exercise: ExerciseDefinition) { selection(exercise); dismiss() }
+
     private func contextText(_ set: LoggedSet, date: Date) -> String {
         let formatter = DateFormatter(); formatter.dateFormat = "MMM d"
         if let reps = set.repetitions { return "\(WeightText.value(set.weight, unit: .pounds)) lb × \(reps) · \(formatter.string(from: date))" }
         return "\(Int(set.duration ?? 0)) sec · \(formatter.string(from: date))"
+    }
+}
+
+private struct CustomExerciseCreationView: View {
+    private struct SimilarMatch: Identifiable {
+        let id = UUID()
+        let enteredName: String
+        let matches: [ExerciseDefinition]
+    }
+
+    let repository: any ExerciseRepository
+    let selection: (ExerciseDefinition) -> Void
+    let style: ExercisePickerStyle
+    @State private var name: String
+    @State private var similarMatch: SimilarMatch?
+    @State private var isSaving = false
+    @State private var errorMessage: String?
+    @Environment(\.dismiss) private var dismiss
+
+    init(
+        repository: any ExerciseRepository,
+        initialName: String = "",
+        style: ExercisePickerStyle = .standard,
+        selection: @escaping (ExerciseDefinition) -> Void
+    ) {
+        self.repository = repository
+        self.selection = selection
+        self.style = style
+        _name = State(initialValue: initialName)
+    }
+
+    var body: some View {
+        Form {
+            Section {
+                TextField("Exercise name", text: $name)
+                    .textInputAutocapitalization(.words)
+                    .submitLabel(.done)
+                    .onSubmit { Task { await submit() } }
+            } footer: {
+                Text("Names are checked against canonical exercises and aliases before a custom exercise is created.")
+            }
+            .listRowBackground(formBackground)
+        }
+        .scrollContentBackground(.hidden)
+        .background(formBackground)
+        .foregroundStyle(formText)
+        .tint(formText)
+        .navigationTitle("Custom Exercise")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+            ToolbarItem(placement: .confirmationAction) {
+                Button("Create") { Task { await submit() } }
+                    .disabled(cleanName.isEmpty || isSaving)
+            }
+        }
+        .alert(item: $similarMatch) { match in
+            Alert(
+                title: Text("Similar exercise found"),
+                message: Text(similarMessage(match.matches)),
+                primaryButton: .default(Text("Use existing exercise")) {
+                    Task { await useExisting(match) }
+                },
+                secondaryButton: .default(Text("Create a different exercise")) {
+                    Task { await submit(createIfAmbiguous: true) }
+                }
+            )
+        }
+        .alert("Exercise unavailable", isPresented: .init(get: { errorMessage != nil }, set: { if !$0 { errorMessage = nil } })) {
+            Button("OK") {}
+        } message: {
+            Text(errorMessage ?? "")
+        }
+    }
+
+    private var cleanName: String { name.trimmingCharacters(in: .whitespacesAndNewlines) }
+    private var formBackground: Color { style == .execution ? EQColor.Execution.foregroundSurface : EQColor.canvas }
+    private var formText: Color { style == .execution ? EQColor.Execution.foregroundText : EQColor.primaryText }
+
+    private func submit(createIfAmbiguous: Bool = false) async {
+        guard !cleanName.isEmpty, !isSaving else { return }
+        isSaving = true; defer { isSaving = false }
+        do {
+            switch try await repository.resolveCreationRequest(named: cleanName, createIfAmbiguous: createIfAmbiguous) {
+            case .existing(let exercise), .created(let exercise): selection(exercise)
+            case .confirmationRequired(let enteredName, let matches):
+                similarMatch = .init(enteredName: enteredName, matches: matches)
+            }
+        } catch { errorMessage = "The exercise could not be created." }
+    }
+
+    private func useExisting(_ match: SimilarMatch) async {
+        guard let exercise = match.matches.first else { return }
+        do { selection(try await repository.learnAlias(match.enteredName, for: exercise)) }
+        catch { errorMessage = "The exercise could not be updated." }
+    }
+
+    private func similarMessage(_ matches: [ExerciseDefinition]) -> String {
+        let names = matches.prefix(3).map(\.name).joined(separator: ", ")
+        return matches.count == 1 ? "Use \(names), or confirm that this is a different exercise." : "Possible matches: \(names). Use the closest match, or confirm that this is a different exercise."
     }
 }
 

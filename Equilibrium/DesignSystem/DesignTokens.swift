@@ -986,6 +986,20 @@ struct EQCardModifier: ViewModifier {
     }
 }
 
+struct EQGroupedCardModifier: ViewModifier {
+    let verticalPadding: CGFloat
+
+    func body(content: Content) -> some View {
+        content
+            .padding(.horizontal, EQSpacing.md)
+            .padding(.vertical, verticalPadding)
+            .background(
+                EQColor.cardFill,
+                in: RoundedRectangle(cornerRadius: EQRadius.card, style: .continuous)
+            )
+    }
+}
+
 extension View {
     func eqCard(
         elevated: Bool = false,
@@ -994,6 +1008,11 @@ extension View {
         border: Color? = nil
     ) -> some View {
         modifier(EQCardModifier(elevated: elevated, surface: surface, text: text, border: border))
+    }
+
+    /// A grouped content surface used by Settings and similarly structured lists.
+    func eqGroupedCard(verticalPadding: CGFloat = EQSpacing.xs) -> some View {
+        modifier(EQGroupedCardModifier(verticalPadding: verticalPadding))
     }
 
     func eqPrimaryCTA(
