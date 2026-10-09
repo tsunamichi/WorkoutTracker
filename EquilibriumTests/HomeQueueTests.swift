@@ -326,6 +326,51 @@ final class HomeQueueTests: XCTestCase {
         XCTAssertLessThanOrEqual(geometry.cardWidth, geometry.containerWidth)
     }
 
+    func testWorkoutTitleLayoutUsesCardWidthAndCompensatesForExecutionScale() {
+        let sourceSize = CGSize(width: 300, height: 68)
+        let sourceScale = HomeWorkoutTitleTransitionLayout.scale(progress: 0)
+        XCTAssertEqual(sourceScale, 1)
+        XCTAssertEqual(
+            HomeWorkoutTitleTransitionLayout.unscaledSize(for: sourceSize, scale: sourceScale),
+            sourceSize
+        )
+
+        let destinationSize = CGSize(width: 220, height: 24)
+        let destinationScale = HomeWorkoutTitleTransitionLayout.scale(progress: 1)
+        let unscaled = HomeWorkoutTitleTransitionLayout.unscaledSize(
+            for: destinationSize,
+            scale: destinationScale
+        )
+        XCTAssertEqual(destinationScale, 0.61, accuracy: 0.0001)
+        XCTAssertEqual(unscaled.width * destinationScale, destinationSize.width, accuracy: 0.0001)
+        XCTAssertEqual(unscaled.height * destinationScale, destinationSize.height, accuracy: 0.0001)
+
+        let reverseTransition = HomeWorkoutTitleTransitionLayout.unscaledSize(
+            for: CGSize(width: 250, height: 30),
+            scale: 0.8,
+            minimumHeight: sourceSize.height
+        )
+        XCTAssertEqual(reverseTransition.height, sourceSize.height)
+    }
+
+    func testFloatingWorkoutTitleIsReservedForTheExecutionTransition() {
+        let first = WorkoutID(rawValue: "first")
+        let second = WorkoutID(rawValue: "second")
+
+        XCTAssertFalse(HomeWorkoutTitleTransitionLayout.usesFloatingTitle(
+            workoutID: first,
+            transitioningWorkoutID: nil
+        ))
+        XCTAssertTrue(HomeWorkoutTitleTransitionLayout.usesFloatingTitle(
+            workoutID: first,
+            transitioningWorkoutID: first
+        ))
+        XCTAssertFalse(HomeWorkoutTitleTransitionLayout.usesFloatingTitle(
+            workoutID: second,
+            transitioningWorkoutID: first
+        ))
+    }
+
     func testCompletionDuringExpandedExecutionRemainsOnHomeTodayAfterExit() async throws {
         let repository = SwiftDataRepository(container: try PersistenceController.makeContainer(inMemory: true))
         let fixture = ready("expanded-completion", createdAt: date(2))

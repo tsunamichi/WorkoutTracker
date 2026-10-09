@@ -109,6 +109,62 @@ final class Phase4FinalCorrectionTests: XCTestCase {
         catch { XCTAssertEqual(error as? RepositoryError, .immutableCompletedWorkout) }
     }
 
+    func testRenameUpdatesCurrentFutureAndCompletedRoutineOccurrencesOnly() async throws {
+        let repository = makeRepository()
+        var current = EquilibriumFixtures.inProgress(id: "rename-current")
+        current.titleSnapshot = "Posterior Chain Emphasis"
+        var future = EquilibriumFixtures.ready(id: "rename-future")
+        future.titleSnapshot = " posterior chain emphasis "
+        var past = EquilibriumFixtures.completed(id: "rename-past")
+        past.titleSnapshot = "POSTERIOR CHAIN EMPHASIS"
+        var unrelated = EquilibriumFixtures.ready(id: "rename-unrelated")
+        unrelated.titleSnapshot = "Upper Pull"
+        try await repository.materializeAtomically([current, future, past, unrelated])
+
+        var persistedCurrent: Workout?
+        let model = WorkoutExecutionModel(
+            workoutID: current.id,
+            repository: repository,
+            now: { self.now },
+            didPersist: { persistedCurrent = $0 }
+        )
+        await model.activate()
+
+        let renamed = await model.renameWorkout(to: "Posterior Strength")
+        XCTAssertTrue(renamed)
+        XCTAssertEqual(model.workout?.titleSnapshot, "Posterior Strength")
+        XCTAssertEqual(persistedCurrent?.titleSnapshot, "Posterior Strength")
+
+        let all = try await repository.allWorkouts()
+        let renamedIDs = Set(all.filter { $0.titleSnapshot == "Posterior Strength" }.map(\.id))
+        XCTAssertEqual(renamedIDs, Set([current.id, future.id, past.id]))
+        XCTAssertEqual(all.first(where: { $0.id == unrelated.id })?.titleSnapshot, "Upper Pull")
+        XCTAssertEqual(all.first(where: { $0.id == past.id })?.status, .completed)
+        XCTAssertEqual(
+            all.first(where: { $0.id == past.id })?.exercises.flatMap(\.loggedSets),
+            past.exercises.flatMap(\.loggedSets)
+        )
+    }
+
+    func testRenameRejectsAnotherRoutineNameWithoutPartialChanges() async throws {
+        let repository = makeRepository()
+        var current = EquilibriumFixtures.inProgress(id: "rename-collision-current")
+        current.titleSnapshot = "Routine A"
+        var other = EquilibriumFixtures.ready(id: "rename-collision-other")
+        other.titleSnapshot = "Routine B"
+        try await repository.materializeAtomically([current, other])
+        let model = WorkoutExecutionModel(workoutID: current.id, repository: repository, now: { self.now })
+        await model.activate()
+
+        let renamed = await model.renameWorkout(to: " routine b ")
+        XCTAssertFalse(renamed)
+        XCTAssertEqual(model.errorMessage, "Another workout routine already uses that name.")
+        let retainedCurrent = try await repository.workout(id: current.id)
+        let retainedOther = try await repository.workout(id: other.id)
+        XCTAssertEqual(retainedCurrent?.titleSnapshot, "Routine A")
+        XCTAssertEqual(retainedOther?.titleSnapshot, "Routine B")
+    }
+
     func testWorkoutMenuRestEditPersistsCanonicalGlobalDefaultAndDrivesSubsequentRest() async throws {
         let url = TestSupport.temporaryStoreURL()
         var container: ModelContainer? = try PersistenceController.makeContainer(storageURL: url)

@@ -474,11 +474,21 @@ private struct HomeWorkoutTitleLayer: View {
     var body: some View {
         GeometryReader { proxy in
             ForEach(workouts) { workout in
-                if let source = anchors[.source(workout.id)] {
+                if HomeWorkoutTitleTransitionLayout.usesFloatingTitle(
+                    workoutID: workout.id,
+                    transitioningWorkoutID: transitioningWorkoutID
+                ),
+                   let source = anchors[.source(workout.id)] {
                     let sourceFrame = proxy[source]
                     let destinationFrame = anchors[.destination(workout.id)].map { proxy[$0] } ?? sourceFrame
                     let titleProgress = workout.id == transitioningWorkoutID ? progress : 0
                     let frame = sourceFrame.interpolated(to: destinationFrame, progress: titleProgress)
+                    let titleScale = HomeWorkoutTitleTransitionLayout.scale(progress: titleProgress)
+                    let layoutSize = HomeWorkoutTitleTransitionLayout.unscaledSize(
+                        for: frame.size,
+                        scale: titleScale,
+                        minimumHeight: sourceFrame.height
+                    )
                     Text(workout.titleSnapshot)
                         .eqTextStyle(
                             workout.id == transitioningWorkoutID
@@ -502,7 +512,17 @@ private struct HomeWorkoutTitleLayer: View {
                                 ))
                                 .opacity(min(max(titleProgress, 0), 1))
                         }
-                        .scaleEffect(1 - (0.39 * titleProgress), anchor: .center)
+                        // The card anchor is the available title column, not the title's
+                        // unconstrained intrinsic width. Dividing by the animated scale keeps
+                        // that visible column stable while still giving the settled execution
+                        // title enough pre-scale width to remain on one line when it fits.
+                        .frame(
+                            width: layoutSize.width,
+                            height: layoutSize.height,
+                            alignment: .leading
+                        )
+                        .clipped()
+                        .scaleEffect(titleScale, anchor: .center)
                         // This layer floats above the execution page, so other cards' titles must not
                         // show through once the page covers the carousel.
                         .opacity(transitioningWorkoutID == nil || workout.id == transitioningWorkoutID ? 1 : 1 - min(max(progress, 0), 1))
@@ -604,6 +624,37 @@ private extension CGRect {
             y: minY + ((destination.minY - minY) * value),
             width: width + ((destination.width - width) * value),
             height: height + ((destination.height - height) * value)
+        )
+    }
+}
+
+enum HomeWorkoutTitleTransitionLayout {
+    static let settledScale: CGFloat = 0.61
+
+    static func usesFloatingTitle(
+        workoutID: WorkoutID,
+        transitioningWorkoutID: WorkoutID?
+    ) -> Bool {
+        workoutID == transitioningWorkoutID
+    }
+
+    static func scale(progress: CGFloat) -> CGFloat {
+        let value = min(max(progress, 0), 1)
+        return 1 - ((1 - settledScale) * value)
+    }
+
+    static func unscaledSize(
+        for visibleSize: CGSize,
+        scale: CGFloat,
+        minimumHeight: CGFloat = 0
+    ) -> CGSize {
+        let safeScale = max(scale, .leastNonzeroMagnitude)
+        return CGSize(
+            width: max(0, visibleSize.width) / safeScale,
+            // Width follows the moving title column. Height keeps the card's two-line
+            // capacity for the whole round trip so reverse navigation reflows directly
+            // instead of briefly truncating before the source frame finishes expanding.
+            height: max(max(0, visibleSize.height) / safeScale, max(0, minimumHeight))
         )
     }
 }
@@ -1424,8 +1475,13 @@ private struct WorkoutCard: View {
                 Text(workout.titleSnapshot)
                     .eqTextStyle(.cardHero)
                     .lineLimit(2)
-                    .hidden()
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    // The card owns its title while browsing so scrollTransition scales
+                    // the text and its layout together. The floating title layer takes over
+                    // only while this card transforms into the execution surface.
+                    .opacity(isExpanded ? 0 : 1)
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
             .anchorPreference(key: HomeWorkoutTitleAnchorKey.self, value: .bounds) {
                 [.source(workout.id): $0]
             }

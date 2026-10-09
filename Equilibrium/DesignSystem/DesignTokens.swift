@@ -437,6 +437,8 @@ struct EQTextStyle {
     static let captionEmphasized = EQTextStyle(size: 15, weight: .bold)
     static let legal = EQTextStyle(size: 10)
     static let navigationTitle = EQTextStyle(size: 20)
+    /// The settled title rendered by the Home-to-Execution transition layer.
+    static let executionNavigationTitle = EQTextStyle(size: 17)
     static let cardHero = EQTextStyle(size: 28, weight: .medium)
     static let listItemTitle = EQTextStyle(size: 16)
     static let icon = EQTextStyle(size: 20)
@@ -541,6 +543,9 @@ enum EQLayout {
     static let cardInset = EQSpacing.lg
     static let sectionGap = EQSpacing.lg
     static let exerciseBlockGap = EQSpacing.lg
+    static let groupedCardGap = EQSpacing.md
+    /// Vertical separation before a new eyebrow-labeled group across app surfaces.
+    static let labeledGroupGap = EQSpacing.xl
     static let controlGap = EQSpacing.sm
     static let minimumTouch: CGFloat = 44
     static let inputHeight: CGFloat = 48
@@ -599,12 +604,24 @@ enum EQLayout {
         static let overlayBackgroundScale: CGFloat = 0.96
     }
 
+    enum ExerciseOptions {
+        /// One persistent drawer geometry for every exercise-options destination.
+        static let preferredSheetHeight: CGFloat = 644
+        static let minimumTopInset = EQSpacing.lg
+        static let topInset: CGFloat = 28
+        static let headerHeight: CGFloat = 56
+        static let backTitleSpacing: CGFloat = 20
+        static let headerToContentSpacing = EQSpacing.xxxl
+        static let actionsTopSpacing: CGFloat = 56
+        static let bottomInset = EQSpacing.lg
+    }
+
     enum OverlayPage {
         static let titleToContentSpacing = EQSpacing.xxl
     }
 
     enum Settings {
-        static let sectionSpacing = EQSpacing.xxl
+        static let sectionSpacing = EQLayout.labeledGroupGap
         static let sheetTopSpacing = EQSpacing.xxl
         static let sheetTitleToContentSpacing = EQSpacing.lg
     }
@@ -988,13 +1005,14 @@ struct EQCardModifier: ViewModifier {
 
 struct EQGroupedCardModifier: ViewModifier {
     let verticalPadding: CGFloat
+    let fill: Color
 
     func body(content: Content) -> some View {
         content
             .padding(.horizontal, EQSpacing.md)
             .padding(.vertical, verticalPadding)
             .background(
-                EQColor.cardFill,
+                fill,
                 in: RoundedRectangle(cornerRadius: EQRadius.card, style: .continuous)
             )
     }
@@ -1011,8 +1029,11 @@ extension View {
     }
 
     /// A grouped content surface used by Settings and similarly structured lists.
-    func eqGroupedCard(verticalPadding: CGFloat = EQSpacing.xs) -> some View {
-        modifier(EQGroupedCardModifier(verticalPadding: verticalPadding))
+    func eqGroupedCard(
+        verticalPadding: CGFloat = EQSpacing.xs,
+        fill: Color = EQColor.cardFill
+    ) -> some View {
+        modifier(EQGroupedCardModifier(verticalPadding: verticalPadding, fill: fill))
     }
 
     func eqPrimaryCTA(
@@ -1030,7 +1051,7 @@ extension View {
             .contentShape(RoundedRectangle(cornerRadius: EQRadius.button, style: .continuous))
             .overlay {
                 RoundedRectangle(cornerRadius: EQRadius.button, style: .continuous)
-                    .stroke(tint, lineWidth: 1)
+                    .strokeBorder(tint, lineWidth: 1)
             }
     }
 }

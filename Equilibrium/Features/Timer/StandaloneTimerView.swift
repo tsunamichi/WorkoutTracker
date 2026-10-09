@@ -168,7 +168,7 @@ struct StandaloneTimerFormView: View {
         VStack(alignment: .leading, spacing: 0) {
             header
             ScrollView {
-                VStack(alignment: .leading, spacing: EQLayout.exerciseBlockGap) {
+                VStack(alignment: .leading, spacing: EQLayout.labeledGroupGap) {
                     TextField("Timer name", text: $name)
                         .eqTextStyle(.listItemTitle)
                         .textFieldStyle(.plain)

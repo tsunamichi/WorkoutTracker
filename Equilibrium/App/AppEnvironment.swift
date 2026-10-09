@@ -19,6 +19,7 @@ final class AppEnvironment {
         self.container = container
         self.persistenceStartupMode = persistenceStartupMode
         let repository = SwiftDataRepository(container: container)
+        try repository.consolidateDuplicateExercises()
         workoutRepository = repository; exerciseRepository = repository; exerciseHistoryRepository = repository; backupRepository = repository
         settingsRepository = repository; progressionRepository = repository
         timerStore = SwiftDataStandaloneTimerStore(repository: repository)

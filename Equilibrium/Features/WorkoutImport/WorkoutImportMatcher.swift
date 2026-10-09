@@ -1,5 +1,37 @@
 import Foundation
 
+enum WorkoutPasteMaterializationError: LocalizedError {
+    case workout(name: String, underlying: any Error)
+    case persistence(underlying: any Error)
+
+    var errorDescription: String? {
+        switch self {
+        case .workout(let name, let underlying):
+            return "Couldn’t add \u{201c}\(name)\u{201d}. \(Self.detail(for: underlying))"
+        case .persistence(let underlying):
+            return "The workout was prepared but couldn’t be saved. \(Self.detail(for: underlying))"
+        }
+    }
+
+    private static func detail(for error: any Error) -> String {
+        guard let repositoryError = error as? RepositoryError else {
+            return "No changes were saved. Try again."
+        }
+        switch repositoryError {
+        case .duplicateExerciseName:
+            return "One of its exercise names conflicts with an exercise already in your library."
+        case .duplicateExerciseInWorkout:
+            return "The same exercise appears more than once."
+        case .invalidExerciseName:
+            return "One of its exercises needs a valid name."
+        case .invalidSetInput:
+            return "One of its set prescriptions is invalid."
+        default:
+            return "No changes were saved. Try again."
+        }
+    }
+}
+
 enum WorkoutImportDraftConverter {
     static func lightweightDraft(from workout: ParsedWorkout, catalog: [ExerciseDefinition]) -> WorkoutDraft {
         .init(name: workout.name, exercises: workout.exercises.map { parsed in
@@ -49,9 +81,26 @@ struct WorkoutPasteMaterializer {
         for (index, parsedWorkout) in parsed.enumerated() {
             let draft = WorkoutImportDraftConverter.lightweightDraft(from: parsedWorkout, catalog: catalog)
             let model = WorkoutBuilderModel(draft: draft, exercises: exercises, workouts: workouts, history: history)
-            values.append(try await model.makeWorkout(now: now.addingTimeInterval(Double(index) / 1_000)))
+            do {
+                values.append(try await model.makeWorkout(
+                    now: now.addingTimeInterval(Double(index) / 1_000),
+                    // Paste is already an explicit request to use each entered exercise name.
+                    // There is no interactive ambiguity confirmation in this flow, so a
+                    // plausible-but-not-confident match remains a distinct custom exercise.
+                    createAmbiguousExercises: true
+                ))
+            } catch {
+                throw WorkoutPasteMaterializationError.workout(
+                    name: parsedWorkout.name.isEmpty ? "Untitled Workout" : parsedWorkout.name,
+                    underlying: error
+                )
+            }
         }
-        try await workouts.materializeAtomically(values)
+        do {
+            try await workouts.materializeAtomically(values)
+        } catch {
+            throw WorkoutPasteMaterializationError.persistence(underlying: error)
+        }
         return values
     }
 }

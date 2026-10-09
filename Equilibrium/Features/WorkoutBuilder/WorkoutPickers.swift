@@ -35,8 +35,10 @@ struct ExercisePickerView: View {
     let history: (any ExerciseHistoryRepository)?
     let mode: SharedExercisePickerMode
     let style: ExercisePickerStyle
+    let embedsInNavigationStack: Bool
     let selection: (ExerciseDefinition) -> Void
-    @State private var catalog: [ExerciseDefinition] = []
+    @State private var loadedExercises: [ExerciseDefinition] = []
+    @State private var loadedQuery: String?
     @State private var query = ""
     @State private var contexts: [ExerciseID: LatestExerciseLog] = [:]
     @State private var errorMessage: String?
@@ -49,42 +51,62 @@ struct ExercisePickerView: View {
         history: (any ExerciseHistoryRepository)? = nil,
         mode: SharedExercisePickerMode = .add(existingExerciseIDs: []),
         style: ExercisePickerStyle = .standard,
+        embedsInNavigationStack: Bool = false,
         selection: @escaping (ExerciseDefinition) -> Void
     ) {
         self.repository = repository
         self.history = history
         self.mode = mode
         self.style = style
+        self.embedsInNavigationStack = embedsInNavigationStack
         self.selection = selection
     }
 
+    @ViewBuilder
     var body: some View {
-        NavigationStack {
-            pickerContent
-            .navigationDestination(isPresented: $createsCustomExercise) {
-                CustomExerciseCreationView(repository: repository, initialName: cleanQuery, style: style) { exercise in
-                    choose(exercise)
-                }
-                .toolbar(.visible, for: .navigationBar)
+        if embedsInNavigationStack {
+            pickerNavigationContent
+                .preferredColorScheme(.dark)
+                .task(id: cleanQuery) { await load(query: cleanQuery) }
+        } else {
+            NavigationStack {
+                pickerNavigationContent
             }
-            .alert("Exercise unavailable", isPresented: .init(get: { errorMessage != nil }, set: { if !$0 { errorMessage = nil } })) { Button("OK") {} } message: { Text(errorMessage ?? "") }
+            .presentationDetents(presentationDetents)
+            .presentationDragIndicator(style == .execution && !mode.isAdd ? .hidden : .visible)
+            .presentationBackground(pickerBackground)
+            .presentationCornerRadius(EQRadius.sheet)
+            .preferredColorScheme(.dark)
+            .task(id: cleanQuery) { await load(query: cleanQuery) }
         }
-        .presentationDetents(presentationDetents)
-        .presentationDragIndicator(style == .execution && !mode.isAdd ? .hidden : .visible)
-        .presentationBackground(pickerBackground)
-        .presentationCornerRadius(EQRadius.sheet)
-        .preferredColorScheme(.dark)
+    }
+
+    private var pickerNavigationContent: some View {
+        pickerContent
+        .navigationDestination(isPresented: $createsCustomExercise) {
+            CustomExerciseCreationView(repository: repository, initialName: cleanQuery, style: style) { exercise in
+                choose(exercise)
+            }
+            .toolbar(.visible, for: .navigationBar)
+        }
+        .alert("Exercise unavailable", isPresented: .init(get: { errorMessage != nil }, set: { if !$0 { errorMessage = nil } })) {
+            Button("OK") {}
+        } message: {
+            Text(errorMessage ?? "")
+        }
     }
 
     @ViewBuilder
     private var pickerContent: some View {
         if style == .execution {
             VStack(alignment: .leading, spacing: 0) {
-                executionHeader
+                if !embedsInNavigationStack {
+                    executionHeader
+                }
                 executionSearchField
                 executionExerciseList
             }
-            .background(EQColor.Execution.foregroundSurface)
+            .background(executionBackground)
             .foregroundStyle(EQColor.Execution.foregroundText)
             .toolbar(.hidden, for: .navigationBar)
         } else {
@@ -115,7 +137,7 @@ struct ExercisePickerView: View {
                 .accessibilityLabel("Close \(mode.title)")
             }
         }
-        .padding(.horizontal, EQLayout.WorkoutExecution.walletInset)
+        .padding(.horizontal, executionContentInset)
         .padding(.top, EQSpacing.xl)
         .padding(.bottom, EQSpacing.lg)
     }
@@ -134,7 +156,15 @@ struct ExercisePickerView: View {
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
                 .foregroundStyle(EQColor.Execution.foregroundText)
+                .tint(EQColor.Execution.foregroundText)
+                .accentColor(EQColor.Execution.foregroundText)
                 .focused($searchIsFocused)
+                .onReceive(NotificationCenter.default.publisher(for: UITextField.textDidBeginEditingNotification)) { notification in
+                    // SwiftUI's tint can be lost when this field is hosted inside a sheet.
+                    // Set the backing field as well so its insertion point matches the text.
+                    guard let field = notification.object as? UITextField else { return }
+                    field.tintColor = UIColor(EQColor.Execution.foregroundText)
+                }
         }
         .padding(.horizontal, EQSpacing.md)
         .frame(minHeight: EQLayout.minimumTouch + EQSpacing.xs)
@@ -148,7 +178,6 @@ struct ExercisePickerView: View {
         }
         .padding(.horizontal, EQLayout.WorkoutExecution.walletInset)
         .padding(.bottom, EQSpacing.md)
-        .animation(.easeInOut(duration: 0.2), value: searchFieldIsActive)
     }
 
     private var exerciseList: some View {
@@ -162,7 +191,7 @@ struct ExercisePickerView: View {
                 .listRowInsets(rowInsets)
                 .listRowSeparator(.hidden)
             }
-            if results.isEmpty, !offersCustomCreation {
+            if results.isEmpty, !offersCustomCreation, loadedQuery == cleanQuery {
                 ContentUnavailableView.search(text: query)
                     .listRowBackground(Color.clear)
                     .listRowInsets(rowInsets)
@@ -175,9 +204,9 @@ struct ExercisePickerView: View {
                         VStack(alignment: .leading, spacing: EQSpacing.xxs) {
                             Text(exercise.name).eqTextStyle(.listItemTitle).foregroundStyle(primaryText)
                             if let disabledReason {
-                                Text(disabledReason).eqTextStyle(.caption).foregroundStyle(secondaryText)
+                                Text(disabledReason).eqTextStyle(.sectionLabel).foregroundStyle(secondaryText)
                             } else if let context = contexts[exercise.id], let set = context.sets.last {
-                                Text(contextText(set, date: context.occurredAt)).eqTextStyle(.caption).foregroundStyle(secondaryText)
+                                Text(contextText(set, date: context.occurredAt)).eqTextStyle(.sectionLabel).foregroundStyle(secondaryText)
                             }
                         }
                         Spacer(minLength: 0)
@@ -192,7 +221,6 @@ struct ExercisePickerView: View {
                 .listRowSeparator(.hidden)
             }
         }
-        .task { await load() }
         .scrollContentBackground(.hidden)
         .background(pickerBackground)
         .tint(primaryText)
@@ -203,23 +231,22 @@ struct ExercisePickerView: View {
             LazyVStack(spacing: 0) {
                 if offersCustomCreation {
                     Button { createsCustomExercise = true } label: {
-                        Label("Create \"\(cleanQuery)\"", systemImage: "plus.circle")
+                    Label("Create \"\(cleanQuery)\"", systemImage: "plus.circle")
                             .frame(maxWidth: .infinity, minHeight: EQDimension.minimumTouch, alignment: .leading)
                     }
                     .buttonStyle(.plain)
-                    .padding(.horizontal, EQSpacing.lg)
+                    .padding(.horizontal, executionContentInset)
                 }
-                if results.isEmpty, !offersCustomCreation {
+                if results.isEmpty, !offersCustomCreation, loadedQuery == cleanQuery {
                     ContentUnavailableView.search(text: query)
-                        .padding(.horizontal, EQSpacing.lg)
+                        .padding(.horizontal, executionContentInset)
                 }
                 ForEach(results) { exercise in
                     executionExerciseRow(exercise)
                 }
             }
         }
-        .task { await load() }
-        .background(EQColor.Execution.foregroundSurface)
+        .background(executionBackground)
         .tint(EQColor.Execution.foregroundText)
     }
 
@@ -233,11 +260,11 @@ struct ExercisePickerView: View {
                         .foregroundStyle(EQColor.Execution.foregroundText)
                     if let disabledReason {
                         Text(disabledReason)
-                            .eqTextStyle(.caption)
+                            .eqTextStyle(.sectionLabel)
                             .foregroundStyle(EQColor.Execution.foregroundSecondaryText)
                     } else if let context = contexts[exercise.id], let set = context.sets.last {
                         Text(contextText(set, date: context.occurredAt))
-                            .eqTextStyle(.caption)
+                            .eqTextStyle(.sectionLabel)
                             .foregroundStyle(EQColor.Execution.foregroundSecondaryText)
                     }
                 }
@@ -250,13 +277,14 @@ struct ExercisePickerView: View {
         .disabled(disabledReason != nil)
         .accessibilityLabel(exercise.name)
         .accessibilityValue(disabledReason ?? "Available")
-        .padding(.horizontal, EQSpacing.lg)
+        .padding(.horizontal, executionContentInset)
+        .padding(.vertical, EQSpacing.xs)
     }
 
     private var results: [ExerciseDefinition] {
-        let matches = ExerciseResolver.search(query, in: catalog)
-        guard cleanQuery.isEmpty else { return matches }
-        return matches.filter { mode.disabledReason(for: $0) == nil }
+        guard loadedQuery == cleanQuery else { return [] }
+        guard cleanQuery.isEmpty else { return loadedExercises }
+        return loadedExercises.filter { mode.disabledReason(for: $0) == nil }
     }
     private var cleanQuery: String { query.trimmingCharacters(in: .whitespacesAndNewlines) }
     private var searchFieldIsActive: Bool { searchIsFocused || !cleanQuery.isEmpty }
@@ -270,29 +298,57 @@ struct ExercisePickerView: View {
             ? EQColor.Execution.foregroundText.opacity(1)
             : Color.black.opacity(0.08)
     }
-    private var offersCustomCreation: Bool { !cleanQuery.isEmpty && results.isEmpty }
+    private var offersCustomCreation: Bool { !cleanQuery.isEmpty && loadedQuery == cleanQuery && results.isEmpty }
     private var presentationDetents: Set<PresentationDetent> {
         style == .execution && mode.isAdd ? [.fraction(0.95)] : [.large]
+    }
+    private var executionContentInset: CGFloat {
+        embedsInNavigationStack ? 0 : EQLayout.WorkoutExecution.walletInset
+    }
+    private var executionBackground: Color {
+        EQColor.Execution.foregroundSurface
     }
     private var pickerBackground: Color { style == .execution ? EQColor.Execution.foregroundSurface : EQColor.canvas }
     private var rowBackground: Color { style == .execution ? .clear : EQColor.elevatedSurface }
     private var rowInsets: EdgeInsets {
-        EdgeInsets(top: 0, leading: EQSpacing.lg, bottom: 0, trailing: EQSpacing.lg)
+        EdgeInsets(top: EQSpacing.xs, leading: EQSpacing.lg, bottom: EQSpacing.xs, trailing: EQSpacing.lg)
     }
     private var primaryText: Color { style == .execution ? EQColor.Execution.foregroundText : EQColor.primaryText }
     private var secondaryText: Color { style == .execution ? EQColor.Execution.foregroundSecondaryText : EQColor.secondaryText }
 
-    private func load() async {
+    private func load(query: String) async {
         do {
-            catalog = try await repository.allExercises()
-            guard let history else { return }
-            var loaded: [ExerciseID: LatestExerciseLog] = [:]
-            for result in catalog { if let value = try await history.latestExerciseLog(exerciseID: result.id) { loaded[result.id] = value } }
+            if query.isEmpty {
+                // Keep the main actor free for sheet presentation and the first search-field tap.
+                // Typing cancels this task and immediately switches to the shorter search debounce.
+                try await Task.sleep(for: .milliseconds(300))
+            } else {
+                try await Task.sleep(for: .milliseconds(120))
+            }
+            let exercises = if query.isEmpty {
+                try await repository.recentExercises(limit: 6)
+            } else {
+                Array(try await repository.searchExercises(query).prefix(50))
+            }
+            try Task.checkCancellation()
+            loadedExercises = exercises
+            loadedQuery = query
+            guard let history else { contexts = [:]; return }
+            // Commit the rows first so sheet presentation and keyboard focus are never
+            // held up by secondary history context.
+            try await Task.sleep(for: .milliseconds(250))
+            let loaded = try await history.latestExerciseLogs(exerciseIDs: Set(exercises.map(\.id)))
+            try Task.checkCancellation()
             contexts = loaded
+        } catch is CancellationError {
+            return
         } catch { errorMessage = "Exercises could not be loaded." }
     }
 
-    private func choose(_ exercise: ExerciseDefinition) { selection(exercise); dismiss() }
+    private func choose(_ exercise: ExerciseDefinition) {
+        selection(exercise)
+        if !embedsInNavigationStack { dismiss() }
+    }
 
     private func contextText(_ set: LoggedSet, date: Date) -> String {
         let formatter = DateFormatter(); formatter.dateFormat = "MMM d"

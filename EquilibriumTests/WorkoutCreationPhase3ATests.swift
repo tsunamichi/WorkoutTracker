@@ -132,6 +132,18 @@ final class ExerciseResolverTests: XCTestCase {
         XCTAssertEqual(learned.id, canonical.id)
     }
 
+    func testNewExerciseSpellsOutDumbbellAndKeepsDBAsSearchAlias() async throws {
+        let repository = makeRepository()
+
+        let resolution = try await repository.resolveCreationRequest(named: "Chest DB Squeeze")
+
+        guard case .created(let created) = resolution else { return XCTFail("Expected a new exercise") }
+        XCTAssertEqual(created.name, "Chest Dumbbell Squeeze")
+        XCTAssertEqual(created.aliases, ["Chest DB Squeeze"])
+        let matches = try await repository.searchExercises("chest db squeeze")
+        XCTAssertEqual(matches.map(\.id), [created.id])
+    }
+
     func testLearningAliasDoesNotRewriteCompletedWorkoutIdentity() async throws {
         let repository = makeRepository()
         try await repository.saveExercise(canonical)

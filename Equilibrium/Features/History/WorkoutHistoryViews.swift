@@ -97,7 +97,7 @@ struct WorkoutHistoryView: View {
                 ContentUnavailableView("No completed workouts", systemImage: "clock.arrow.circlepath", description: Text("Completed workouts will appear here."))
             } else {
                 ScrollView {
-                    LazyVStack(alignment: .leading, spacing: EQLayout.exerciseBlockGap) {
+                    LazyVStack(alignment: .leading, spacing: EQLayout.labeledGroupGap) {
                         ForEach(model.months) { month in
                             VStack(alignment: .leading, spacing: EQSpacing.sm) {
                                 Text(month.title().uppercased()).eqTextStyle(.sectionLabel).foregroundStyle(EQColor.secondaryText)
@@ -364,48 +364,47 @@ final class ExercisePerformanceModel {
 }
 
 struct ExercisePerformanceView: View {
-    @State private var model: ExercisePerformanceModel
+    let exerciseID: ExerciseID
+    let repository: any ExerciseHistoryRepository
     let fallbackName: String
     let weightUnit: WeightUnit
     @Environment(\.dismiss) private var dismiss
-    init(exerciseID: ExerciseID, fallbackName: String, repository: any ExerciseHistoryRepository, weightUnit: WeightUnit) {
-        _model = State(initialValue: .init(exerciseID: exerciseID, repository: repository)); self.fallbackName = fallbackName; self.weightUnit = weightUnit
+
+    init(
+        exerciseID: ExerciseID,
+        fallbackName: String,
+        repository: any ExerciseHistoryRepository,
+        weightUnit: WeightUnit
+    ) {
+        self.exerciseID = exerciseID
+        self.repository = repository
+        self.fallbackName = fallbackName
+        self.weightUnit = weightUnit
     }
-    private var title: String { model.performance?.displayName ?? fallbackName }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             header
-            ScrollView {
-                if let performance = model.performance {
-                    if performance.occurrences.isEmpty {
-                        ContentUnavailableView("No previous performance", systemImage: "chart.xyaxis.line", description: Text("Completed working sets will appear here."))
-                    } else {
-                        VStack(alignment: .leading, spacing: EQLayout.exerciseBlockGap) {
-                            prCard(performance)
-                            PerformanceTrendView(family: performance.activeMetricFamily, points: performance.trend, weightUnit: weightUnit)
-                            occurrences(performance)
-                        }
-                        .padding(.horizontal, EQLayout.screenGutter)
-                        .padding(.top, EQSpacing.md + EQLayout.WorkoutExecution.overviewContentTopInset)
-                        .padding(.bottom, EQSpacing.lg)
-                    }
-                } else if model.errorMessage == nil { ProgressView("Loading performance").padding(.top, EQSpacing.xl) }
-            }
-            .scrollIndicators(.hidden)
+            ExercisePerformanceContent(
+                exerciseID: exerciseID,
+                repository: repository,
+                weightUnit: weightUnit,
+                style: .standalone
+            )
+            .padding(.horizontal, EQLayout.screenGutter)
+            .padding(.top, EQSpacing.md + EQLayout.WorkoutExecution.overviewContentTopInset)
         }
-        .overlay { if let message = model.errorMessage { ContentUnavailableView("Performance unavailable", systemImage: "exclamationmark.triangle", description: Text(message)) } }
         .foregroundStyle(EQColor.primaryText)
         .background(EQColor.canvas)
         .toolbar(.hidden, for: .navigationBar)
-        .task { await model.load() }
-        .onReceive(NotificationCenter.default.publisher(for: .equilibriumRepositoryDidChange)) { _ in Task { await model.load() } }
     }
+
     private var header: some View {
         Button { dismiss() } label: {
             HStack(alignment: .firstTextBaseline, spacing: EQSpacing.xs) {
                 Image(systemName: "chevron.left")
                 VStack(alignment: .leading, spacing: EQSpacing.xxs) {
-                    Text(title).eqTextStyle(.navigationTitle).lineLimit(1)
+                    Text(fallbackName).eqTextStyle(.navigationTitle).lineLimit(1)
                     Text("Performance").eqTextStyle(.secondaryBody).foregroundStyle(EQColor.secondaryText)
                 }
             }
@@ -414,25 +413,125 @@ struct ExercisePerformanceView: View {
         }
         .buttonStyle(.plain)
         .foregroundStyle(EQColor.primaryText)
-        .accessibilityLabel("Back, \(title) performance")
+        .accessibilityLabel("Back, \(fallbackName) performance")
         .frame(maxWidth: .infinity, minHeight: EQLayout.minimumTouch + EQSpacing.sm, alignment: .leading)
         .padding(.horizontal, EQLayout.screenGutter)
     }
+}
+
+struct ExercisePerformanceContentStyle {
+    let primaryText: Color
+    let secondaryText: Color
+    let cardFill: Color
+    let chartLine: Color
+    let chartPoint: Color
+
+    static var standalone: Self {
+        Self(
+            primaryText: EQColor.primaryText,
+            secondaryText: EQColor.secondaryText,
+            cardFill: EQColor.cardFill,
+            chartLine: EQColor.chartLine,
+            chartPoint: EQColor.chartPoint
+        )
+    }
+
+    static var exerciseOptions: Self {
+        Self(
+            primaryText: EQColor.Execution.foregroundText,
+            secondaryText: EQColor.Execution.foregroundSecondaryText,
+            cardFill: Color.black.opacity(0.04),
+            chartLine: EQColor.Execution.foregroundText,
+            chartPoint: EQColor.Execution.foregroundText.opacity(0.65)
+        )
+    }
+}
+
+struct ExercisePerformanceContent: View {
+    @State private var model: ExercisePerformanceModel
+    let weightUnit: WeightUnit
+    let style: ExercisePerformanceContentStyle
+
+    init(
+        exerciseID: ExerciseID,
+        repository: any ExerciseHistoryRepository,
+        weightUnit: WeightUnit,
+        style: ExercisePerformanceContentStyle
+    ) {
+        _model = State(initialValue: .init(exerciseID: exerciseID, repository: repository))
+        self.weightUnit = weightUnit
+        self.style = style
+    }
+
+    var body: some View {
+        ScrollView {
+            Group {
+                if let message = model.errorMessage {
+                    emptyState(
+                        title: "Performance unavailable",
+                        description: message
+                    )
+                } else if let performance = model.performance {
+                    if performance.occurrences.isEmpty {
+                        emptyState(
+                            title: "No previous performance",
+                            description: "Completed working sets will appear here."
+                        )
+                    } else {
+                        VStack(alignment: .leading, spacing: EQLayout.labeledGroupGap) {
+                            prCard(performance)
+                            PerformanceTrendView(
+                                family: performance.activeMetricFamily,
+                                points: performance.trend,
+                                weightUnit: weightUnit,
+                                style: style
+                            )
+                            occurrences(performance)
+                        }
+                        .padding(.bottom, EQSpacing.lg)
+                    }
+                } else {
+                    ProgressView("Loading performance")
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .scrollIndicators(.hidden)
+        .foregroundStyle(style.primaryText)
+        .task { await model.load() }
+        .onReceive(NotificationCenter.default.publisher(for: .equilibriumRepositoryDidChange)) { _ in
+            Task { await model.load() }
+        }
+    }
+
+    private func emptyState(title: String, description: String) -> some View {
+        VStack(alignment: .leading, spacing: EQSpacing.xxs) {
+            Text(title)
+                .eqTextStyle(.listItemTitle)
+            Text(description)
+                .eqTextStyle(.secondaryBody)
+                .foregroundStyle(style.secondaryText)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
     private func prCard(_ performance: ExercisePerformance) -> some View {
         VStack(alignment: .leading, spacing: EQLayout.WorkoutExecution.titleToSetsSpacing) {
-            Text("PERSONAL RECORD").eqTextStyle(.sectionLabel).foregroundStyle(EQColor.secondaryText)
+            Text("PERSONAL RECORD").eqTextStyle(.sectionLabel).foregroundStyle(style.secondaryText)
             Text(prText(performance.personalRecord)).eqTextStyle(.screenTitle)
         }
-        .performanceCard()
+        .performanceCard(fill: style.cardFill)
     }
+
     private func occurrences(_ performance: ExercisePerformance) -> some View {
         VStack(alignment: .leading, spacing: EQSpacing.sm) {
-            Text("WORKING SET HISTORY").eqTextStyle(.sectionLabel).foregroundStyle(EQColor.secondaryText)
+            Text("WORKING SET HISTORY").eqTextStyle(.sectionLabel).foregroundStyle(style.secondaryText)
             ForEach(performance.occurrences.reversed()) { occurrence in
                 VStack(alignment: .leading, spacing: EQLayout.WorkoutExecution.titleToSetsSpacing) {
                     VStack(alignment: .leading, spacing: EQSpacing.xxs) {
                         Text(occurrence.workoutTitleSnapshot).eqTextStyle(.listItemTitle)
-                        EQDateText.text(occurrence.occurredAt, style: .secondaryBody, includeYear: false).foregroundStyle(EQColor.secondaryText)
+                        EQDateText.text(occurrence.occurredAt, style: .secondaryBody, includeYear: false).foregroundStyle(style.secondaryText)
                     }
                     VStack(alignment: .leading, spacing: EQLayout.WorkoutExecution.loggedSetSpacing) {
                         ForEach(Array(occurrence.sets.enumerated()), id: \.element.id) { index, set in
@@ -441,15 +540,16 @@ struct ExercisePerformanceView: View {
                                 Text(performanceSetText(set))
                             }
                             .eqTextStyle(.secondaryBody)
-                            .foregroundStyle(EQColor.secondaryText)
+                            .foregroundStyle(style.secondaryText)
                             .accessibilityElement(children: .combine)
                         }
                     }
                 }
-                .performanceCard()
+                .performanceCard(fill: style.cardFill)
             }
         }
     }
+
     private func prText(_ record: ExercisePersonalRecord?) -> String {
         guard let record else { return "No PR yet" }
         switch record {
@@ -469,10 +569,10 @@ struct ExercisePerformanceView: View {
 }
 
 private extension View {
-    func performanceCard() -> some View {
+    func performanceCard(fill: Color) -> some View {
         frame(maxWidth: .infinity, alignment: .leading)
             .padding(EQSpacing.md)
-            .background(EQColor.cardFill, in: RoundedRectangle(cornerRadius: EQRadius.card, style: .continuous))
+            .background(fill, in: RoundedRectangle(cornerRadius: EQRadius.card, style: .continuous))
     }
 }
 
@@ -487,6 +587,7 @@ private struct PerformanceTrendView: View {
     let family: ExercisePerformanceMetricFamily?
     let points: [ExerciseTrendPoint]
     let weightUnit: WeightUnit
+    let style: ExercisePerformanceContentStyle
     private var selected: [(ExerciseTrendPoint, Double)] {
         guard let family else { return [] }
         switch family {
@@ -497,13 +598,13 @@ private struct PerformanceTrendView: View {
     }
     var body: some View {
         VStack(alignment: .leading, spacing: EQSpacing.sm) {
-            Text("TREND").eqTextStyle(.sectionLabel).foregroundStyle(EQColor.secondaryText)
-            if selected.isEmpty { Text("No trend data").eqTextStyle(.secondaryBody).foregroundStyle(EQColor.secondaryText) }
+            Text("TREND").eqTextStyle(.sectionLabel).foregroundStyle(style.secondaryText)
+            if selected.isEmpty { Text("No trend data").eqTextStyle(.secondaryBody).foregroundStyle(style.secondaryText) }
             else if selected.count == 1 { Text("One completed occurrence · \(valueText(selected[0]))").eqTextStyle(.secondaryBody) }
             else {
                 Chart(selected, id: \.0.id) { item in
-                    LineMark(x: .value("Date", item.0.occurredAt), y: .value(metricLabel, item.1)).foregroundStyle(EQColor.chartLine)
-                    PointMark(x: .value("Date", item.0.occurredAt), y: .value(metricLabel, item.1)).foregroundStyle(EQColor.chartPoint)
+                    LineMark(x: .value("Date", item.0.occurredAt), y: .value(metricLabel, item.1)).foregroundStyle(style.chartLine)
+                    PointMark(x: .value("Date", item.0.occurredAt), y: .value(metricLabel, item.1)).foregroundStyle(style.chartPoint)
                 }.frame(height: EQLayout.Performance.chartHeight).accessibilityHidden(true)
             }
             VStack(alignment: .leading, spacing: EQLayout.WorkoutExecution.loggedSetSpacing) {
@@ -514,10 +615,10 @@ private struct PerformanceTrendView: View {
                         Text(valueText(item))
                     }
                     .eqTextStyle(.secondaryBody)
-                    .foregroundStyle(EQColor.secondaryText)
+                    .foregroundStyle(style.secondaryText)
                 }
             }
-        }.performanceCard()
+        }.performanceCard(fill: style.cardFill)
     }
     private var metricLabel: String {
         guard let value = selected.last?.0.value else { return "Performance" }
@@ -531,4 +632,3 @@ private struct PerformanceTrendView: View {
         }
     }
 }
-

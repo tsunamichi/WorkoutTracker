@@ -143,6 +143,80 @@ final class ExerciseSettingsPhase5Tests: XCTestCase {
         SwiftDataRepository(container: try PersistenceController.makeContainer(inMemory: true))
     }
 
+    func testExerciseOptionsNavigationAlwaysOpensAndReopensAtRoot() {
+        let presentation = ExerciseOptionsPresentation()
+        let first = WorkoutExerciseID(rawValue: "options-first")
+
+        presentation.present(exerciseID: first)
+        XCTAssertTrue(presentation.path.isEmpty)
+
+        presentation.show(.performance)
+        XCTAssertEqual(presentation.path, [.performance])
+        presentation.dismiss()
+        XCTAssertFalse(presentation.isPresented)
+        XCTAssertTrue(presentation.path.isEmpty)
+
+        presentation.present(exerciseID: first)
+        XCTAssertTrue(presentation.path.isEmpty)
+    }
+
+    func testExerciseOptionsShellGeometryAndRouteTitlesAreStable() {
+        let availableHeight: CGFloat = 844
+        let expectedHeight = ExerciseOptionsSheetGeometry.height(availableHeight: availableHeight)
+
+        XCTAssertEqual(expectedHeight, EQLayout.ExerciseOptions.preferredSheetHeight)
+        XCTAssertEqual(EQLayout.ExerciseOptions.topInset, 28)
+        XCTAssertEqual(EQLayout.ExerciseOptions.backTitleSpacing, 20)
+        XCTAssertEqual(EQTextStyle.executionNavigationTitle.size, 17)
+        XCTAssertEqual(EQLayout.ExerciseOptions.headerToContentSpacing, 48)
+        XCTAssertEqual(EQLayout.ExerciseOptions.actionsTopSpacing, 56)
+        XCTAssertEqual(EQLayout.ExerciseOptions.bottomInset, 24)
+        XCTAssertEqual(EQLayout.labeledGroupGap, 32)
+        XCTAssertEqual(EQLayout.Settings.sectionSpacing, 32)
+        for route in [
+            ExerciseOptionsRoute.performance,
+            .autoProgression,
+            .restDuration,
+            .swap
+        ] {
+            // Route is intentionally not an input to shell geometry.
+            XCTAssertEqual(
+                ExerciseOptionsSheetGeometry.height(availableHeight: availableHeight),
+                expectedHeight,
+                "\(route) must remain inside the persistent shell"
+            )
+        }
+        XCTAssertEqual(ExerciseOptionsRoute.performance.title, "Performance")
+        XCTAssertEqual(ExerciseOptionsRoute.autoProgression.title, "Auto Progression")
+        XCTAssertEqual(ExerciseOptionsRoute.restDuration.title, "Rest Duration")
+        XCTAssertEqual(ExerciseOptionsRoute.swap.title, "Swap Exercise")
+    }
+
+    func testExerciseOptionsShellGeometryPreservesMinimumTopInsetOnShortScreens() {
+        let availableHeight: CGFloat = 600
+
+        XCTAssertEqual(
+            ExerciseOptionsSheetGeometry.height(availableHeight: availableHeight),
+            availableHeight - EQLayout.ExerciseOptions.minimumTopInset
+        )
+    }
+
+    func testExerciseOptionsBackAndExerciseChangeResetNavigation() {
+        let presentation = ExerciseOptionsPresentation()
+        let first = WorkoutExerciseID(rawValue: "options-first")
+        let second = WorkoutExerciseID(rawValue: "options-second")
+
+        presentation.present(exerciseID: first)
+        presentation.show(.restDuration)
+        presentation.showRoot()
+        XCTAssertTrue(presentation.path.isEmpty)
+
+        presentation.show(.autoProgression)
+        presentation.present(exerciseID: second)
+        XCTAssertEqual(presentation.exerciseID, second)
+        XCTAssertTrue(presentation.path.isEmpty)
+    }
+
     func testOpeningAndDismissingSettingsPreservesWorkoutExerciseSetAndExpandedWallet() async throws {
         let repository = try repository()
         let fixture = EquilibriumFixtures.midWorkout(id: "phase5-presentation")
@@ -154,7 +228,7 @@ final class ExerciseSettingsPhase5Tests: XCTestCase {
         model.selectSet(at: 1)
         let selectedSetID = try XCTUnwrap(model.currentPrescription?.id)
         let wallet = ExecutionWalletPresentation(initialMode: .focusedExercise)
-        let settings = ExerciseSettingsPresentation()
+        let settings = ExerciseOptionsPresentation()
 
         settings.present(exerciseID: exercise.id)
         XCTAssertEqual(settings.exerciseID, exercise.id)
@@ -352,6 +426,40 @@ final class ExerciseSettingsPhase5Tests: XCTestCase {
         )
         XCTAssertEqual(removed.exercises.map(\.id), [fixture.exercises[0].id])
         XCTAssertNotNil(removed.exercises[0].skippedAt)
+    }
+
+    func testScopedRemovalUpdatesCurrentAndSavedFutureRoutineWithoutChangingHistoryOrOtherRoutines() async throws {
+        let repository = try repository()
+        var current = EquilibriumFixtures.mixed(id: "remove-scope-current")
+        current.titleSnapshot = "Upper A"
+        var future = EquilibriumFixtures.mixed(id: "remove-scope-future")
+        future.titleSnapshot = current.titleSnapshot
+        var other = EquilibriumFixtures.mixed(id: "remove-scope-other")
+        other.titleSnapshot = "Upper B"
+        var completed = EquilibriumFixtures.completed(id: "remove-scope-completed")
+        completed.titleSnapshot = current.titleSnapshot
+
+        for workout in [current, future, other, completed] { try await repository.create(workout) }
+        current = try await repository.startWorkout(id: current.id, at: .init(timeIntervalSince1970: 10))
+        let removedDefinitionID = current.exercises[0].exerciseID
+
+        let result = try await repository.removeExercise(
+            workoutID: current.id,
+            exerciseID: current.exercises[0].id,
+            scope: .currentAndFutureWorkouts,
+            at: .init(timeIntervalSince1970: 20)
+        )
+
+        let loadedFuture = try await repository.workout(id: future.id)
+        let loadedOther = try await repository.workout(id: other.id)
+        let loadedCompleted = try await repository.workout(id: completed.id)
+        let persistedFuture = try XCTUnwrap(loadedFuture)
+        let persistedOther = try XCTUnwrap(loadedOther)
+        let persistedCompleted = try XCTUnwrap(loadedCompleted)
+        XCTAssertFalse(result.exercises.contains { $0.exerciseID == removedDefinitionID })
+        XCTAssertFalse(persistedFuture.exercises.contains { $0.exerciseID == removedDefinitionID })
+        XCTAssertTrue(persistedOther.exercises.contains { $0.exerciseID == removedDefinitionID })
+        XCTAssertTrue(persistedCompleted.exercises.contains { $0.exerciseID == removedDefinitionID })
     }
 
     func testCompletedWorkoutCannotBeStructurallyChangedByExerciseSettings() async throws {
@@ -571,6 +679,18 @@ final class WorkoutExecutionNavigationStateTests: XCTestCase {
         XCTAssertTrue(presentation.showsActionFooter(for: .rest))
         XCTAssertEqual(presentation.resolvedMode(for: .rest), .exerciseOverview)
         XCTAssertTrue(presentation.showsActionFooter(for: .work))
+    }
+
+    func testAddExerciseIsUnavailableWhileForegroundCardIsExpandedOrTransitioning() {
+        let presentation = ExecutionWalletPresentation()
+
+        // The expansion target disables the action immediately, even before its first frame moves.
+        XCTAssertFalse(presentation.allowsAddExercise(for: .exercise, focusProgress: 0))
+        XCTAssertFalse(presentation.allowsAddExercise(for: .exercise, focusProgress: 1))
+
+        XCTAssertTrue(presentation.showExerciseOverview())
+        XCTAssertFalse(presentation.allowsAddExercise(for: .exercise, focusProgress: 0.5))
+        XCTAssertTrue(presentation.allowsAddExercise(for: .exercise, focusProgress: 0))
     }
 
     func testWalletFocusedOverviewRoundTripPreservesCanonicalForegroundIdentity() async throws {
@@ -915,7 +1035,7 @@ final class WorkoutExecutionNavigationStateTests: XCTestCase {
         XCTAssertEqual(execution.workout, canonicalWorkout)
     }
 
-    func testExerciseSettingsPresentationPreservesCanonicalExerciseWalletAndHomeState() async throws {
+    func testExerciseOptionsPresentationPreservesCanonicalExerciseWalletAndHomeState() async throws {
         let repository = SwiftDataRepository(container: try PersistenceController.makeContainer(inMemory: true))
         let fixture = EquilibriumFixtures.midWorkout(id: "settings-presentation")
         try await repository.create(fixture)
@@ -929,7 +1049,7 @@ final class WorkoutExecutionNavigationStateTests: XCTestCase {
         let canonicalExerciseID = try XCTUnwrap(execution.currentExercise?.id)
         let wallet = ExecutionWalletPresentation()
         wallet.showExerciseOverview()
-        let settings = ExerciseSettingsPresentation()
+        let settings = ExerciseOptionsPresentation()
 
         settings.present(exerciseID: canonicalExerciseID)
 
@@ -950,7 +1070,7 @@ final class WorkoutExecutionNavigationStateTests: XCTestCase {
         XCTAssertEqual(home.expandedWorkoutID, fixture.id)
     }
 
-    func testExerciseSettingsPresentationDoesNotCancelActiveRest() async throws {
+    func testExerciseOptionsPresentationDoesNotCancelActiveRest() async throws {
         let repository = SwiftDataRepository(container: try PersistenceController.makeContainer(inMemory: true))
         let fixture = EquilibriumFixtures.mixed(id: "settings-rest")
         try await repository.create(fixture)
@@ -963,7 +1083,7 @@ final class WorkoutExecutionNavigationStateTests: XCTestCase {
         )
         let canonicalWorkout = try XCTUnwrap(execution.workout)
         let restBeforePresentation = try XCTUnwrap(execution.restState)
-        let settings = ExerciseSettingsPresentation()
+        let settings = ExerciseOptionsPresentation()
 
         settings.present(exerciseID: fixture.exercises[0].id)
         settings.dismiss()

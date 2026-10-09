@@ -66,14 +66,20 @@ final class WorkoutBuilderModel {
         } catch { errorMessage = "The workout could not be added." }
         return nil
     }
-    func makeWorkout(now: Date = .now) async throws -> Workout {
+    func makeWorkout(
+        now: Date = .now,
+        createAmbiguousExercises: Bool = false
+    ) async throws -> Workout {
         var workoutExercises: [WorkoutExercise] = []
         for draftExercise in draft.exercises {
             let definition: ExerciseDefinition
             if let id = draftExercise.exerciseID, let existing = try await exercises.exercise(id: id) { definition = existing }
             else {
                 let clean = draftExercise.name.trimmingCharacters(in: .whitespacesAndNewlines)
-                switch try await exercises.resolveCreationRequest(named: clean) {
+                switch try await exercises.resolveCreationRequest(
+                    named: clean,
+                    createIfAmbiguous: createAmbiguousExercises
+                ) {
                 case .existing(let existing), .created(let existing):
                     definition = existing
                 case .confirmationRequired:

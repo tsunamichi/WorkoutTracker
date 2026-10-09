@@ -461,6 +461,22 @@ final class WorkoutExecutionModel {
         } catch { errorMessage = message(for: error); return false }
     }
 
+    func renameWorkout(to name: String) async -> Bool {
+        do {
+            let renamed = try await repository.renameWorkoutOccurrences(
+                id: workoutID,
+                to: name,
+                at: now()
+            )
+            accept(renamed)
+            errorMessage = nil
+            return true
+        } catch {
+            errorMessage = message(for: error)
+            return false
+        }
+    }
+
     func deleteWorkout() async -> Bool {
         do { try await repository.deleteWorkout(id: workoutID); stopTimer(); errorMessage = nil; return true }
         catch { errorMessage = message(for: error); return false }
@@ -603,10 +619,18 @@ final class WorkoutExecutionModel {
         let repetitions = max(1, set.repetitions ?? 1)
         return .init(id: .new(), target: .repetitions(range: repetitions...repetitions), suggestedWeight: set.weight)
     }
-    func removeExercise(_ occurrenceID: WorkoutExerciseID) async -> Bool {
+    func removeExercise(
+        _ occurrenceID: WorkoutExerciseID,
+        scope: WorkoutExerciseRemovalScope = .currentWorkout
+    ) async -> Bool {
         guard workout?.exercises.contains(where: { $0.id == occurrenceID && $0.skippedAt == nil }) == true else { return false }
         do {
-            let value = try await repository.removeExercise(workoutID: workoutID, exerciseID: occurrenceID, at: now())
+            let value = try await repository.removeExercise(
+                workoutID: workoutID,
+                exerciseID: occurrenceID,
+                scope: scope,
+                at: now()
+            )
             accept(value)
             if restingExercise?.id == occurrenceID { stopTimer() }
             else { restSessionStore.clear(workoutID: workoutID, exerciseID: occurrenceID) }
@@ -878,7 +902,9 @@ final class WorkoutExecutionModel {
         case .invalidSetInput: return "Enter a valid set value."
         case .invalidRestDuration, .invalidSettings: return "Choose a rest duration from 15 seconds to 5 minutes."
         case .duplicateExerciseInWorkout: return "This exercise is already in the workout."
+        case .duplicateWorkoutName: return "Another workout routine already uses that name."
         case .invalidExerciseName: return "Enter an exercise name."
+        case .invalidWorkoutName: return "Enter a workout name."
             default: return "The workout could not be updated."
         }
     }

@@ -31,7 +31,11 @@ struct ClipboardWorkoutImportView: View {
     private func open(_ result: WorkoutParseResult) async {
         guard !result.workouts.isEmpty else { fallback = true; return }
         do { ready(try await WorkoutPasteMaterializer(exercises: exercises, workouts: workouts, history: history).materialize(result.workouts)) }
-        catch { fallbackMessage = "The workouts could not be added. Try again."; fallback = true }
+        catch {
+            fallbackMessage = (error as? LocalizedError)?.errorDescription
+                ?? "The workouts could not be added. No changes were saved. Try again."
+            fallback = true
+        }
     }
 }
 
@@ -64,7 +68,7 @@ struct WorkoutImportInputView: View {
                 .padding(.top, EQSpacing.md)
                 .accessibilityAddTraits(.isHeader)
             ScrollView {
-                VStack(alignment: .leading, spacing: EQLayout.exerciseBlockGap) {
+                VStack(alignment: .leading, spacing: EQLayout.labeledGroupGap) {
                     if let message {
                         Text(message).eqTextStyle(.secondaryBody).foregroundStyle(EQColor.warning)
                     }

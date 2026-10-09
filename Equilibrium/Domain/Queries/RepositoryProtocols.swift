@@ -2,11 +2,24 @@ import Foundation
 
 public protocol ExerciseRepository: Sendable {
     func allExercises() async throws -> [ExerciseDefinition]
+    func recentExercises(limit: Int) async throws -> [ExerciseDefinition]
     func searchExercises(_ query: String) async throws -> [ExerciseDefinition]
     func exercise(id: ExerciseID) async throws -> ExerciseDefinition?
     func saveExercise(_ exercise: ExerciseDefinition) async throws
     func archiveExercise(id: ExerciseID, at date: Date) async throws
 }
+
+public extension ExerciseRepository {
+    func recentExercises(limit: Int) async throws -> [ExerciseDefinition] {
+        guard limit > 0 else { return [] }
+        return Array(try await allExercises().prefix(limit))
+    }
+}
+public enum WorkoutExerciseRemovalScope: Sendable {
+    case currentWorkout
+    case currentAndFutureWorkouts
+}
+
 public protocol WorkoutRepository: Sendable {
     func activeWorkouts() async throws -> [Workout]
     func workout(id: WorkoutID) async throws -> Workout?
@@ -20,10 +33,11 @@ public protocol WorkoutRepository: Sendable {
     func removeSet(workoutID: WorkoutID, exerciseID: WorkoutExerciseID, prescriptionID: SetID, at date: Date) async throws -> Workout
     func completeWorkout(id: WorkoutID, at date: Date) async throws -> Workout
     func resetWorkout(id: WorkoutID, at date: Date) async throws -> Workout
+    func renameWorkoutOccurrences(id: WorkoutID, to name: String, at date: Date) async throws -> Workout
     func deleteWorkout(id: WorkoutID) async throws
     func skipExercise(workoutID: WorkoutID, exerciseID: WorkoutExerciseID, at date: Date) async throws -> Workout
     func restoreExercise(workoutID: WorkoutID, exerciseID: WorkoutExerciseID, at date: Date) async throws -> Workout
-    func removeExercise(workoutID: WorkoutID, exerciseID: WorkoutExerciseID, at date: Date) async throws -> Workout
+    func removeExercise(workoutID: WorkoutID, exerciseID: WorkoutExerciseID, scope: WorkoutExerciseRemovalScope, at date: Date) async throws -> Workout
     func appendExercise(workoutID: WorkoutID, exercise: WorkoutExercise, at date: Date) async throws -> Workout
     func editCompletedSet(workoutID: WorkoutID, exerciseID: WorkoutExerciseID, prescriptionID: SetID, input: SetLogInput, at date: Date) async throws -> Workout
     func recentCompletedWorkouts(limit: Int) async throws -> [Workout]
@@ -41,7 +55,18 @@ public struct LatestExerciseLog: Equatable, Sendable {
 
 public protocol ExerciseHistoryRepository: Sendable {
     func latestExerciseLog(exerciseID: ExerciseID) async throws -> LatestExerciseLog?
+    func latestExerciseLogs(exerciseIDs: Set<ExerciseID>) async throws -> [ExerciseID: LatestExerciseLog]
     func exercisePerformance(exerciseID: ExerciseID) async throws -> ExercisePerformance
+}
+
+public extension ExerciseHistoryRepository {
+    func latestExerciseLogs(exerciseIDs: Set<ExerciseID>) async throws -> [ExerciseID: LatestExerciseLog] {
+        var result: [ExerciseID: LatestExerciseLog] = [:]
+        for exerciseID in exerciseIDs {
+            if let log = try await latestExerciseLog(exerciseID: exerciseID) { result[exerciseID] = log }
+        }
+        return result
+    }
 }
 public protocol SettingsRepository: Sendable {
     func settings() async throws -> AppSettings
@@ -71,7 +96,7 @@ public protocol BackupRepository: Sendable {
     func exportBackup(exportedAt: Date, sourceDeviceID: String) async throws -> EquilibriumBackupV2
     func restoreBackup(_ backup: EquilibriumBackupV2) async throws
 }
-public enum RepositoryError: Error, Equatable { case notFound, immutableCompletedWorkout, workoutNotInProgress, exerciseSkipped, prescriptionNotFound, cannotRemoveCompletedSet, invalidSetInput, invalidRestDuration, invalidSettings, invalidProgressionConfiguration, incompleteWorkout, duplicateIdentifier, duplicateExerciseName, duplicateExerciseInWorkout, invalidExerciseName, invalidBackup }
+public enum RepositoryError: Error, Equatable { case notFound, immutableCompletedWorkout, workoutNotInProgress, exerciseSkipped, prescriptionNotFound, cannotRemoveCompletedSet, invalidSetInput, invalidRestDuration, invalidSettings, invalidProgressionConfiguration, incompleteWorkout, duplicateIdentifier, duplicateExerciseName, duplicateExerciseInWorkout, duplicateWorkoutName, invalidExerciseName, invalidWorkoutName, invalidBackup }
 
 public enum ExerciseResolution: Equatable, Sendable {
     case exactMatch(ExerciseDefinition)
@@ -163,6 +188,11 @@ public enum ExerciseResolver {
 
     public static func normalizedName(_ value: String) -> String {
         normalizedTokens(value).joined(separator: " ")
+    }
+
+    /// Product-facing exercise titles spell out DB; the abbreviation remains valid for search aliases.
+    public static func canonicalDisplayName(_ value: String) -> String {
+        value.replacingOccurrences(of: #"(?i)\bDBs?\b"#, with: "Dumbbell", options: .regularExpression)
     }
 
     private static func candidate(for query: String, exercise: ExerciseDefinition) -> Candidate {
@@ -290,11 +320,12 @@ public extension ExerciseRepository {
         case .possibleMatches(let matches) where !createIfAmbiguous:
             return .confirmationRequired(name: name, matches: matches)
         case .possibleMatches, .noMatch:
+            let displayName = ExerciseResolver.canonicalDisplayName(name)
             let exercise = ExerciseDefinition(
                 id: .new(),
-                name: name,
-                normalizedName: ExerciseResolver.normalizedName(name),
-                aliases: [],
+                name: displayName,
+                normalizedName: ExerciseResolver.normalizedName(displayName),
+                aliases: displayName == name ? [] : [name],
                 equipment: nil,
                 category: nil,
                 isCustom: true,
@@ -319,6 +350,15 @@ public extension ExerciseRepository {
 }
 
 public extension WorkoutRepository {
+    func removeExercise(workoutID: WorkoutID, exerciseID: WorkoutExerciseID, at date: Date) async throws -> Workout {
+        try await removeExercise(
+            workoutID: workoutID,
+            exerciseID: exerciseID,
+            scope: .currentWorkout,
+            at: date
+        )
+    }
+
     func homeWorkouts(completedSince: Date) async throws -> (workouts: [Workout], hasCompletedWorkouts: Bool) {
         let all = try await allWorkouts()
         return (all.filter { $0.status != .completed || ($0.completedAt.map { $0 >= completedSince } ?? false) }, all.contains { $0.status == .completed })

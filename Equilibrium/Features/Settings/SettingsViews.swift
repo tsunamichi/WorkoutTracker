@@ -13,7 +13,7 @@ struct SettingsShellView: View {
         VStack(alignment: .leading, spacing: 0) {
             header
             ScrollView {
-                VStack(alignment: .leading, spacing: EQLayout.exerciseBlockGap) {
+                VStack(alignment: .leading, spacing: EQLayout.groupedCardGap) {
                     card {
                         settingsSheetButton("Units", destination: .units)
                         settingsSheetButton("Timer", destination: .timer)
@@ -26,19 +26,6 @@ struct SettingsShellView: View {
                     }
                     section("THEME") {
                         card { ThemePicker() }
-                    }
-                    section("ICLOUD SYNC") {
-                        card {
-                            VStack(alignment: .leading, spacing: EQSpacing.xxs) {
-                                Text("Private iCloud sync").eqTextStyle(.listItemTitle)
-                                Text("Equilibrium saves locally first and syncs through your Apple account when iCloud is available. Sync is eventual; backups remain a separate recovery tool.")
-                                    .eqTextStyle(.secondaryBody)
-                                    .foregroundStyle(EQColor.secondaryText)
-                                    .fixedSize(horizontal: false, vertical: true)
-                            }
-                            .padding(.vertical, EQSpacing.xs)
-                            .accessibilityElement(children: .combine)
-                        }
                     }
                     if let legacyImporter {
                         section("MIGRATION") {
@@ -89,6 +76,7 @@ struct SettingsShellView: View {
             Text(label).eqTextStyle(.sectionLabel).foregroundStyle(EQColor.secondaryText)
             content()
         }
+        .padding(.top, EQLayout.Settings.sectionSpacing - EQLayout.groupedCardGap)
     }
 
     private func card<Content: View>(@ViewBuilder content: () -> Content) -> some View {

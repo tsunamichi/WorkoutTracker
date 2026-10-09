@@ -52,6 +52,20 @@ final class WorkoutImportPhase3BTests: XCTestCase {
         guard case .duration(seconds: 30) = result.workouts[0].exercises[3].prescriptions[0].target else { return XCTFail("Expected duration") }
     }
 
+    func testPosteriorChainWorkoutParsesEveryExerciseAndTarget() throws {
+        let result = parser.parse(WorkoutImportFixtures.posteriorChain)
+
+        XCTAssertFalse(result.hasBlockingIssues)
+        XCTAssertTrue(result.issues.isEmpty)
+        let workout = try XCTUnwrap(result.workouts.first)
+        XCTAssertEqual(workout.name, "Posterior Chain Emphasis")
+        XCTAssertEqual(workout.exercises.count, 13)
+        XCTAssertEqual(workout.exercises.map(\.prescriptions.count), [1, 2, 2, 1, 1, 3, 3, 4, 3, 3, 3, 3, 3])
+        XCTAssertEqual(workout.exercises[0].prescriptions[0].target, .duration(seconds: 120))
+        XCTAssertEqual(workout.exercises[5].prescriptions[0].target, .duration(seconds: 5))
+        XCTAssertEqual(workout.exercises[11].prescriptions[0].target, .repetitions(10...12))
+    }
+
     func testSeparatorsRangesSetsOfWeightAndRest() throws {
         let result = parser.parse("Strength\n\nBench Press — 3 x 8-12 @ 100 lb, rest 90 sec\nPlank: 2 sets of 30 reps")
         XCTAssertFalse(result.hasBlockingIssues)
@@ -107,6 +121,28 @@ final class WorkoutImportPhase3BTests: XCTestCase {
         XCTAssertEqual(values[0].exercises.map(\.prescriptions.count), result.workouts[0].exercises.map(\.prescriptions.count))
         let activeIDs = try await repository.activeWorkouts().map(\.id)
         XCTAssertEqual(activeIDs, values.map(\.id))
+    }
+
+    @MainActor func testPasteMaterializesExplicitPosteriorChainVariantsWithoutInteractiveConfirmation() async throws {
+        let repository = SwiftDataRepository(container: try PersistenceController.makeContainer(inMemory: true))
+        let seed = EquilibriumFixtures.defaultSeed()
+        for definition in seed.definitions { try await repository.saveExercise(definition) }
+        let result = parser.parse(WorkoutImportFixtures.posteriorChain)
+
+        let workouts = try await WorkoutPasteMaterializer(
+            exercises: repository,
+            workouts: repository,
+            history: repository
+        ).materialize(result.workouts, now: .init(timeIntervalSince1970: 100))
+
+        let workout = try XCTUnwrap(workouts.first)
+        XCTAssertEqual(workout.titleSnapshot, "Posterior Chain Emphasis")
+        XCTAssertEqual(workout.exercises.count, 13)
+        XCTAssertEqual(workout.exercises[1].nameSnapshot, "Wall Tibialis Raise")
+        XCTAssertEqual(workout.exercises[4].nameSnapshot, "Walking RDL + Reach")
+        XCTAssertEqual(workout.exercises[12].nameSnapshot, "Dumbbell Hammer Curl")
+        let activeWorkoutIDs = try await repository.activeWorkouts().map(\.id)
+        XCTAssertEqual(activeWorkoutIDs, workouts.map(\.id))
     }
 
     @MainActor func testPasteMaterializesTwoWorkoutsInParsedOrder() async throws {

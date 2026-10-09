@@ -38,6 +38,56 @@ public final class SwiftDataRepository: ExerciseRepository, WorkoutRepository, E
     // MARK: Exercise definitions
 
     public func allExercises() async throws -> [ExerciseDefinition] { try canonicalExerciseRecords(includeArchived: false).map(DefinitionMapper.domain) }
+    public func recentExercises(limit: Int) async throws -> [ExerciseDefinition] {
+        guard limit > 0 else { return [] }
+
+        let completed = WorkoutStatus.completed.rawValue
+        var workoutDescriptor = FetchDescriptor<WorkoutRecord>(
+            predicate: #Predicate { $0.statusRaw == completed },
+            sortBy: [
+                SortDescriptor(\WorkoutRecord.completedAt, order: .reverse),
+                SortDescriptor(\WorkoutRecord.updatedAt, order: .reverse)
+            ]
+        )
+        workoutDescriptor.fetchLimit = max(24, limit * 4)
+        let workouts = try context.fetch(workoutDescriptor)
+
+        var seen = Set<String>()
+        var recentIDs: [String] = []
+        for workout in workouts {
+            for occurrence in (workout.exercises ?? []).sorted(by: { $0.position < $1.position }) {
+                if seen.insert(occurrence.exerciseID).inserted {
+                    recentIDs.append(occurrence.exerciseID)
+                }
+                if recentIDs.count == limit { break }
+            }
+            if recentIDs.count == limit { break }
+        }
+
+        var definitionsByID: [String: ExerciseDefinition] = [:]
+        if !recentIDs.isEmpty {
+            let records = try context.fetch(FetchDescriptor<ExerciseDefinitionRecord>(predicate: #Predicate { recentIDs.contains($0.id) }))
+            for record in canonical(records, key: \ExerciseDefinitionRecord.id, updatedAt: \ExerciseDefinitionRecord.updatedAt) where record.archivedAt == nil {
+                definitionsByID[record.id] = DefinitionMapper.domain(from: record)
+            }
+        }
+        var result = recentIDs.compactMap { definitionsByID[$0] }
+
+        if result.count < limit {
+            let archived: Date? = nil
+            var fallbackDescriptor = FetchDescriptor<ExerciseDefinitionRecord>(
+                predicate: #Predicate { $0.archivedAt == archived },
+                sortBy: [SortDescriptor(\ExerciseDefinitionRecord.name)]
+            )
+            fallbackDescriptor.fetchLimit = max(limit * 2, limit)
+            let fallback = canonical(try context.fetch(fallbackDescriptor), key: \ExerciseDefinitionRecord.id, updatedAt: \ExerciseDefinitionRecord.updatedAt)
+            for record in fallback where seen.insert(record.id).inserted {
+                result.append(DefinitionMapper.domain(from: record))
+                if result.count == limit { break }
+            }
+        }
+        return result
+    }
     func persistedExerciseDefinitions() throws -> [ExerciseDefinition] { try allPersistedExercises() }
     private func allPersistedExercises() throws -> [ExerciseDefinition] { try canonicalExerciseRecords(includeArchived: true).map(DefinitionMapper.domain) }
     private func canonicalExerciseRecords(includeArchived: Bool) throws -> [ExerciseDefinitionRecord] {
@@ -52,6 +102,23 @@ public final class SwiftDataRepository: ExerciseRepository, WorkoutRepository, E
     public func latestExerciseLog(exerciseID: ExerciseID) async throws -> LatestExerciseLog? {
         guard let occurrence = try await exercisePerformance(exerciseID: exerciseID).latestOccurrence else { return nil }
         return .init(exerciseID: exerciseID, workoutID: occurrence.workoutID, occurredAt: occurrence.occurredAt, sets: occurrence.sets)
+    }
+    public func latestExerciseLogs(exerciseIDs: Set<ExerciseID>) async throws -> [ExerciseID: LatestExerciseLog] {
+        guard !exerciseIDs.isEmpty else { return [:] }
+        let rawIDs = exerciseIDs.map(\.rawValue)
+        let occurrences = try context.fetch(FetchDescriptor<WorkoutExerciseRecord>(predicate: #Predicate { rawIDs.contains($0.exerciseID) }))
+        let workoutIDs = Array(Set(occurrences.compactMap { $0.workout?.id }))
+        guard !workoutIDs.isEmpty else { return [:] }
+
+        let completed = WorkoutStatus.completed.rawValue
+        let records = try context.fetch(FetchDescriptor<WorkoutRecord>(predicate: #Predicate {
+            workoutIDs.contains($0.id) && $0.statusRaw == completed
+        }))
+        let workouts = try canonical(records, key: \WorkoutRecord.id, updatedAt: \WorkoutRecord.updatedAt).map(WorkoutMapper.domain)
+        return Dictionary(uniqueKeysWithValues: exerciseIDs.compactMap { exerciseID in
+            guard let occurrence = ExercisePerformanceQuery.performance(exerciseID: exerciseID, workouts: workouts).latestOccurrence else { return nil }
+            return (exerciseID, LatestExerciseLog(exerciseID: exerciseID, workoutID: occurrence.workoutID, occurredAt: occurrence.occurredAt, sets: occurrence.sets))
+        })
     }
     public func exercisePerformance(exerciseID: ExerciseID) async throws -> ExercisePerformance {
         ExercisePerformanceQuery.performance(exerciseID: exerciseID, workouts: try canonicalWorkouts(containing: exerciseID))
@@ -79,6 +146,95 @@ public final class SwiftDataRepository: ExerciseRepository, WorkoutRepository, E
     }
     public nonisolated static func normalizeExerciseName(_ value: String) -> String {
         ExerciseResolver.normalizedName(value)
+    }
+
+    public nonisolated static func normalizeWorkoutTitle(_ value: String) -> String {
+        value.trimmingCharacters(in: .whitespacesAndNewlines)
+            .folding(options: [.caseInsensitive, .diacriticInsensitive], locale: Locale(identifier: "en_US_POSIX"))
+            .lowercased()
+    }
+
+    /// Repairs historical imports that created separate definitions for equivalent
+    /// abbreviations (for example, "Incline DB Press" and "Incline Dumbbell Press").
+    /// It also expands DB in standalone display names. Workout occurrences are relinked
+    /// before duplicate definitions are removed, so every existing set remains in history.
+    func consolidateDuplicateExercises(at date: Date = .now) throws {
+        let allRecords = try context.fetch(FetchDescriptor<ExerciseDefinitionRecord>())
+        let records = canonical(allRecords, key: \ExerciseDefinitionRecord.id, updatedAt: \ExerciseDefinitionRecord.updatedAt)
+        let groups = Dictionary(grouping: records) { Self.normalizeExerciseName($0.name) }
+            .values
+            .filter { group in
+                group.count > 1 || group.contains { Self.expandingExerciseAbbreviations(in: $0.name) != $0.name }
+            }
+        guard !groups.isEmpty else { return }
+
+        let occurrences = try context.fetch(FetchDescriptor<WorkoutExerciseRecord>())
+        let progression = try context.fetch(FetchDescriptor<ProgressionAssignmentRecord>())
+        let settings = try context.fetch(FetchDescriptor<SettingValueRecord>())
+
+        for group in groups {
+            let winner = group.sorted(by: Self.preferredCanonicalExercise).first!
+            let losers = group.filter { $0.id != winner.id }
+            let losingIDs = Set(losers.map(\.id))
+            let involvedIDs = losingIDs.union([winner.id])
+            let canonicalName = Self.expandingExerciseAbbreviations(in: winner.name)
+
+            let aliasCandidates = group.flatMap { [$0.name] + $0.aliases }
+            var seenAliases = Set([Self.normalizeExerciseName(canonicalName)])
+            winner.aliases = aliasCandidates.filter { candidate in
+                let normalized = Self.normalizeExerciseName(candidate)
+                return !normalized.isEmpty && seenAliases.insert(normalized + "|" + candidate.lowercased()).inserted && candidate != canonicalName
+            }
+            winner.name = canonicalName
+            winner.normalizedName = Self.normalizeExerciseName(canonicalName)
+            winner.equipment = winner.equipment ?? group.compactMap(\.equipment).first
+            winner.category = winner.category ?? group.compactMap(\.category).first
+            winner.isCustom = group.allSatisfy(\.isCustom)
+            winner.archivedAt = group.allSatisfy({ $0.archivedAt != nil }) ? group.compactMap(\.archivedAt).max() : nil
+            winner.updatedAt = date
+
+            for occurrence in occurrences where losingIDs.contains(occurrence.exerciseID) {
+                occurrence.exerciseID = winner.id
+                occurrence.nameSnapshot = canonicalName
+                occurrence.updatedAt = max(occurrence.updatedAt, date)
+            }
+            for occurrence in occurrences where occurrence.exerciseID == winner.id && occurrence.nameSnapshot != canonicalName {
+                occurrence.nameSnapshot = canonicalName
+                occurrence.updatedAt = max(occurrence.updatedAt, date)
+            }
+
+            let assignments = progression.filter { involvedIDs.contains($0.exerciseID) }
+            if let selected = assignments.max(by: { $0.updatedAt < $1.updatedAt }) {
+                for record in assignments { context.delete(record) }
+                context.insert(ProgressionAssignmentRecord(exerciseID: winner.id, profileRaw: selected.profileRaw, updatedAt: max(selected.updatedAt, date)))
+            }
+
+            let restKeys = Set(involvedIDs.map { SettingKey.exerciseRestDuration(.init(rawValue: $0)) })
+            let restSettings = settings.filter { restKeys.contains($0.key) }
+            if let selected = restSettings.max(by: { $0.updatedAt < $1.updatedAt }) {
+                for record in restSettings { context.delete(record) }
+                context.insert(SettingValueRecord(key: SettingKey.exerciseRestDuration(.init(rawValue: winner.id)), value: selected.value, updatedAt: max(selected.updatedAt, date)))
+            }
+
+            for loser in losers {
+                for record in allRecords where record.id == loser.id { context.delete(record) }
+            }
+        }
+        try saveOrRollback()
+    }
+
+    private nonisolated static func preferredCanonicalExercise(_ lhs: ExerciseDefinitionRecord, _ rhs: ExerciseDefinitionRecord) -> Bool {
+        if (lhs.archivedAt == nil) != (rhs.archivedAt == nil) { return lhs.archivedAt == nil }
+        let lhsExpanded = expandingExerciseAbbreviations(in: lhs.name) == lhs.name
+        let rhsExpanded = expandingExerciseAbbreviations(in: rhs.name) == rhs.name
+        if lhsExpanded != rhsExpanded { return lhsExpanded }
+        if lhs.isCustom != rhs.isCustom { return !lhs.isCustom }
+        if lhs.updatedAt != rhs.updatedAt { return lhs.updatedAt > rhs.updatedAt }
+        return lhs.id < rhs.id
+    }
+
+    private nonisolated static func expandingExerciseAbbreviations(in name: String) -> String {
+        ExerciseResolver.canonicalDisplayName(name)
     }
 
     // MARK: Workouts
@@ -222,6 +378,44 @@ public final class SwiftDataRepository: ExerciseRepository, WorkoutRepository, E
         for exercise in record.exercises ?? [] { for log in exercise.loggedSets ?? [] { context.delete(log) }; exercise.loggedSets = []; exercise.skippedAt = nil; exercise.updatedAt = date }
         record.updatedAt = date; try saveOrRollback(); return try WorkoutMapper.domain(from: record)
     }
+    public func renameWorkoutOccurrences(
+        id: WorkoutID,
+        to rawName: String,
+        at date: Date = .now
+    ) async throws -> Workout {
+        let name = rawName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty else { throw RepositoryError.invalidWorkoutName }
+        guard let current = winner(
+            try workoutRecords(id.rawValue),
+            updatedAt: \WorkoutRecord.updatedAt
+        ) else { throw RepositoryError.notFound }
+
+        // Native v1 stores independent workout snapshots rather than a template ID.
+        // The normalized title is the existing routine identity used by reuse and
+        // future-occurrence operations, so rename every status for the same identity.
+        let records = canonical(
+            try context.fetch(FetchDescriptor<WorkoutRecord>()),
+            key: \WorkoutRecord.id,
+            updatedAt: \WorkoutRecord.updatedAt
+        )
+        let oldKey = Self.normalizeWorkoutTitle(current.titleSnapshot)
+        let newKey = Self.normalizeWorkoutTitle(name)
+        guard !records.contains(where: {
+            Self.normalizeWorkoutTitle($0.titleSnapshot) == newKey
+                && Self.normalizeWorkoutTitle($0.titleSnapshot) != oldKey
+        }) else { throw RepositoryError.duplicateWorkoutName }
+
+        let targets = records.filter { Self.normalizeWorkoutTitle($0.titleSnapshot) == oldKey }
+        for target in targets {
+            target.titleSnapshot = name
+            target.updatedAt = date
+        }
+        try saveOrRollback()
+        guard let renamed = targets.first(where: { $0.id == id.rawValue }) else {
+            throw RepositoryError.notFound
+        }
+        return try WorkoutMapper.domain(from: renamed)
+    }
     public func deleteWorkout(id: WorkoutID) async throws {
         guard let record = winner(try workoutRecords(id.rawValue), updatedAt: \WorkoutRecord.updatedAt) else { throw RepositoryError.notFound }
         guard record.statusRaw != WorkoutStatus.completed.rawValue else { throw RepositoryError.immutableCompletedWorkout }
@@ -241,17 +435,48 @@ public final class SwiftDataRepository: ExerciseRepository, WorkoutRepository, E
         exercise.updatedAt = date; workout.updatedAt = date
         try saveOrRollback(); return try WorkoutMapper.domain(from: workout)
     }
-    public func removeExercise(workoutID: WorkoutID, exerciseID: WorkoutExerciseID, at date: Date = .now) async throws -> Workout {
+    public func removeExercise(
+        workoutID: WorkoutID,
+        exerciseID: WorkoutExerciseID,
+        scope: WorkoutExerciseRemovalScope,
+        at date: Date = .now
+    ) async throws -> Workout {
         let (workout, exercise) = try mutableExercise(workoutID, exerciseID)
         guard workout.statusRaw == WorkoutStatus.inProgress.rawValue else { throw workout.statusRaw == WorkoutStatus.completed.rawValue ? RepositoryError.immutableCompletedWorkout : RepositoryError.workoutNotInProgress }
-        let remaining = (workout.exercises ?? []).filter { $0 !== exercise }
-        for (position, item) in remaining.sorted(by: { $0.position < $1.position }).enumerated() {
-            item.position = position
-            item.updatedAt = date
+
+        let targets: [WorkoutRecord]
+        switch scope {
+        case .currentWorkout:
+            targets = [workout]
+        case .currentAndFutureWorkouts:
+            // Native v1 stores independent workout snapshots rather than a template ID.
+            // Exact title plus ready status is the retained routine identity for saved future instances.
+            let title = workout.titleSnapshot
+            let ready = WorkoutStatus.ready.rawValue
+            let candidates = try context.fetch(FetchDescriptor<WorkoutRecord>(predicate: #Predicate {
+                $0.titleSnapshot == title && $0.statusRaw == ready
+            }))
+            let future = canonical(candidates, key: \WorkoutRecord.id, updatedAt: \WorkoutRecord.updatedAt)
+                .filter { $0.id != workout.id }
+            targets = [workout] + future
         }
-        workout.exercises = remaining
-        workout.updatedAt = date
-        context.delete(exercise)
+
+        for target in targets {
+            let removed = (target.exercises ?? []).filter {
+                target.id == workout.id ? $0.id == exercise.id : $0.exerciseID == exercise.exerciseID
+            }
+            guard !removed.isEmpty else { continue }
+            let remaining = (target.exercises ?? []).filter { item in
+                !removed.contains { $0 === item }
+            }
+            for (position, item) in remaining.sorted(by: { $0.position < $1.position }).enumerated() {
+                item.position = position
+                item.updatedAt = date
+            }
+            target.exercises = remaining
+            target.updatedAt = date
+            for item in removed { context.delete(item) }
+        }
         try saveOrRollback(); return try WorkoutMapper.domain(from: workout)
     }
     public func appendExercise(workoutID: WorkoutID, exercise: WorkoutExercise, at date: Date = .now) async throws -> Workout {
