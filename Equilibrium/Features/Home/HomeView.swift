@@ -549,6 +549,29 @@ struct HomeWorkoutTitleAnchorKey: PreferenceKey {
     }
 }
 
+/// Binary visibility for the floating workout-page title. Both frames are
+/// resolved by `HomeWorkoutTitleLayer` from live anchors in the same coordinate
+/// space, so the decision follows the Settings shell's presentation-frame top.
+enum WorkoutPageTitleOcclusion {
+    /// Hides a point before the card visibly reaches the text, avoiding a single
+    /// overlap frame from the card and the title's antialiased glyph edges.
+    static let overlapTolerance: CGFloat = 1
+
+    static func isVisible(titleFrame: CGRect, coveringSurfaceFrame: CGRect?) -> Bool {
+        guard titleFrame.width > 0,
+              titleFrame.height > 0,
+              let coveringSurfaceFrame,
+              coveringSurfaceFrame.width > 0,
+              coveringSurfaceFrame.height > 0,
+              coveringSurfaceFrame.maxX > titleFrame.minX,
+              coveringSurfaceFrame.minX < titleFrame.maxX else {
+            return true
+        }
+
+        return coveringSurfaceFrame.minY > titleFrame.maxY + overlapTolerance
+    }
+}
+
 private struct HomeWorkoutTitleLayer: View {
     @Environment(\.homeExecutionTransitionProgress) private var progress
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -571,62 +594,65 @@ private struct HomeWorkoutTitleLayer: View {
                        let destinationFrame = anchors[.destination(workout.id)].map { proxy[$0] } ?? sourceFrame
                        let titleProgress = workout.id == transitioningWorkoutID ? progress : 0
                        let frame = sourceFrame.interpolated(to: destinationFrame, progress: titleProgress)
-                        // The focused Settings shell is the stable owner signal for
-                        // this endpoint. While it exists, remove only the actual
-                        // floating page-title composition; carousel metadata and the
-                        // hidden execution-header layout anchor remain untouched.
-                        let focusedSettingsTitleIsVisible = !(
-                            workout.id == transitioningWorkoutID
-                                && anchors[.focusedExerciseSettingsSurface] != nil
-                        )
+                        let settingsSurfaceFrame = anchors[.focusedExerciseSettingsSurface].map { proxy[$0] }
+                        let focusedSettingsTitleIsVisible = workout.id != transitioningWorkoutID
+                            || WorkoutPageTitleOcclusion.isVisible(
+                                titleFrame: frame,
+                                coveringSurfaceFrame: settingsSurfaceFrame
+                            )
                         let titleScale = HomeWorkoutTitleTransitionLayout.scale(progress: titleProgress)
                         let layoutSize = HomeWorkoutTitleTransitionLayout.unscaledSize(
                             for: frame.size,
                             scale: titleScale,
                             minimumHeight: sourceFrame.height
                         )
-                        if focusedSettingsTitleIsVisible {
-                            Text(workout.titleSnapshot)
-                                .eqTextStyle(
-                                    workout.id == transitioningWorkoutID
-                                        ? .transitionDestinationTitle
-                                        : .cardHero
-                                )
-                                .lineLimit(2)
-                                .foregroundStyle(HomeCardColors(status: workout.status).text)
-                                .overlay {
-                                    // Cross-fades into the execution header colour as the title travels.
-                                    Text(workout.titleSnapshot)
-                                        .eqTextStyle(
-                                            workout.id == transitioningWorkoutID
-                                                ? .transitionDestinationTitle
-                                                : .cardHero
-                                        )
-                                        .lineLimit(2)
-                                        .foregroundStyle(EQColor.Execution.primaryText.mix(
-                                            with: EQColor.Execution.restForegroundSurface,
-                                            by: workout.id == transitioningWorkoutID ? executionWorkTint : 0
-                                        ))
-                                        .opacity(min(max(titleProgress, 0), 1))
-                                }
-                                // The card anchor is the available title column, not the title's
-                                // unconstrained intrinsic width. Dividing by the animated scale keeps
-                                // that visible column stable while still giving the settled execution
-                                // title enough pre-scale width to remain on one line when it fits.
-                                .frame(
-                                    width: layoutSize.width,
-                                    height: layoutSize.height,
-                                    alignment: .leading
-                                )
-                                .clipped()
-                                .scaleEffect(titleScale, anchor: .center)
-                                // This layer floats above the execution page, so other cards' titles must not
-                                // show through once the page covers the carousel.
-                                .opacity(transitioningWorkoutID == nil || workout.id == transitioningWorkoutID ? 1 : 1 - min(max(progress, 0), 1))
-                                .id(HomeWorkoutTransitionIdentity.title(for: workout.id))
-                                .position(x: frame.midX, y: frame.midY)
-                                .accessibilityHidden(true)
-                        }
+                        Text(workout.titleSnapshot)
+                            .eqTextStyle(
+                                workout.id == transitioningWorkoutID
+                                    ? .transitionDestinationTitle
+                                    : .cardHero
+                            )
+                            .lineLimit(2)
+                            .foregroundStyle(HomeCardColors(status: workout.status).text)
+                            .overlay {
+                                // Cross-fades into the execution header colour as the title travels.
+                                Text(workout.titleSnapshot)
+                                    .eqTextStyle(
+                                        workout.id == transitioningWorkoutID
+                                            ? .transitionDestinationTitle
+                                            : .cardHero
+                                    )
+                                    .lineLimit(2)
+                                    .foregroundStyle(EQColor.Execution.primaryText.mix(
+                                        with: EQColor.Execution.restForegroundSurface,
+                                        by: workout.id == transitioningWorkoutID ? executionWorkTint : 0
+                                    ))
+                                    .opacity(min(max(titleProgress, 0), 1))
+                            }
+                            // The card anchor is the available title column, not the title's
+                            // unconstrained intrinsic width. Dividing by the animated scale keeps
+                            // that visible column stable while still giving the settled execution
+                            // title enough pre-scale width to remain on one line when it fits.
+                            .frame(
+                                width: layoutSize.width,
+                                height: layoutSize.height,
+                                alignment: .leading
+                            )
+                            .clipped()
+                            .scaleEffect(titleScale, anchor: .center)
+                            // This layer floats above the execution page, so other cards' titles must not
+                            // show through once the page covers the carousel.
+                            .opacity(transitioningWorkoutID == nil || workout.id == transitioningWorkoutID ? 1 : 1 - min(max(progress, 0), 1))
+                            // Keep the renderer mounted, but make this binary geometric
+                            // decision immediate rather than inheriting Settings' animation.
+                            .opacity(focusedSettingsTitleIsVisible ? 1 : 0)
+                            .transaction { transaction in
+                                transaction.animation = nil
+                                transaction.disablesAnimations = true
+                            }
+                            .id(HomeWorkoutTransitionIdentity.title(for: workout.id))
+                            .position(x: frame.midX, y: frame.midY)
+                            .accessibilityHidden(true)
                     }
                 }
 
