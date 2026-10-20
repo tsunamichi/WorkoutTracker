@@ -707,10 +707,12 @@ enum ExecutionForegroundEntry {
 
     static func arrival(walletTransitionProgress: CGFloat, entryProgress: CGFloat) -> CGFloat {
         // On Home return, the minimized card starts travelling as soon as the
-        // wallet begins shrinking and is fully below the wallet before the final
-        // carousel handoff. Home → execution is unchanged because `entryProgress`
-        // remains zero until the wallet reaches full size.
-        let exitArrival = min(max((walletTransitionProgress - 0.18) / 0.82, 0), 1)
+        // wallet begins shrinking and is fully below the wallet before the Home
+        // content/wallet handoff begins at 0.78. Home → execution is unchanged
+        // because `entryProgress` remains zero until the wallet reaches full size.
+        let exitArrival: CGFloat = walletTransitionProgress >= 0.999
+            ? 1
+            : min(max((walletTransitionProgress - 0.78) / 0.22, 0), 1)
         return min(min(max(entryProgress, 0), 1), exitArrival)
     }
 

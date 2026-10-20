@@ -648,6 +648,10 @@ private struct HomeWorkoutTitleLayer: View {
                         // This layer floats above the execution page, so other cards' titles must not
                         // show through once the page covers the carousel.
                         .opacity(transitioningWorkoutID == nil || workout.id == transitioningWorkoutID ? 1 : 1 - min(max(progress, 0), 1))
+                        // The page title consists of the base and tinted crossfade
+                        // Text views above. Flatten them before applying coverage
+                        // alpha so neither representation can bypass it.
+                        .compositingGroup()
                         // Settings hides only the floating workout-name pixels that
                         // its real opaque surface has reached. Carousel metadata and
                         // the Home ↔ execution title transition remain independent.
