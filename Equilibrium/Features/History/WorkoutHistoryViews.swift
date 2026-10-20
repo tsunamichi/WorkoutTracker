@@ -100,7 +100,7 @@ struct WorkoutHistoryView: View {
                     LazyVStack(alignment: .leading, spacing: EQLayout.labeledGroupGap) {
                         ForEach(model.months) { month in
                             VStack(alignment: .leading, spacing: EQSpacing.sm) {
-                                Text(month.title().uppercased()).eqTextStyle(.sectionLabel).foregroundStyle(EQColor.secondaryText)
+                                Text(month.title().uppercased()).eqTextStyle(.sectionLabel).foregroundStyle(EQColor.contentSecondary)
                                 VStack(alignment: .leading, spacing: 0) {
                                     ForEach(month.workouts) { workout in
                                         NavigationLink(value: workout.id) { WorkoutHistoryRow(workout: workout) }
@@ -109,7 +109,7 @@ struct WorkoutHistoryView: View {
                                 }
                                 .padding(.horizontal, EQSpacing.md)
                                 .padding(.vertical, EQSpacing.xs)
-                                .background(EQColor.cardFill, in: RoundedRectangle(cornerRadius: EQRadius.card, style: .continuous))
+                                .background(EQColor.surfaceHighlightLight, in: RoundedRectangle(cornerRadius: EQRadius.card, style: .continuous))
                             }
                         }
                         if model.hasAnyWorkouts {
@@ -118,7 +118,7 @@ struct WorkoutHistoryView: View {
                                     ? "Showing workouts from the past \(model.visibleWeeks) weeks"
                                     : "Showing every completed workout")
                                     .eqTextStyle(.legal)
-                                    .foregroundStyle(EQColor.secondaryText)
+                                    .foregroundStyle(EQColor.contentSecondary)
                                     .multilineTextAlignment(.center)
                                 if model.hasOlderWorkouts {
                                     Button("Load \(WorkoutHistoryModel.pageWeeks) more weeks") {
@@ -141,14 +141,14 @@ struct WorkoutHistoryView: View {
                 .scrollIndicators(.hidden)
             }
         }
-        .foregroundStyle(EQColor.primaryText)
+        .foregroundStyle(EQColor.contentPrimary)
         .navigationDestination(for: WorkoutID.self) { id in
             if let workout = model.workout(id: id) {
                 CompletedWorkoutDetailView(workout: workout, repository: workoutRepository, historyRepository: historyRepository, weightUnit: unit)
             }
         }
         .overlay { if let message = model.errorMessage { ContentUnavailableView("History unavailable", systemImage: "exclamationmark.triangle", description: Text(message)) } }
-        .background(EQColor.canvas).toolbar(.hidden, for: .navigationBar).task(id: isActive) { await model.loadIfNeeded() }
+        .background(EQColor.background).toolbar(.hidden, for: .navigationBar).task(id: isActive) { await model.loadIfNeeded() }
         .onReceive(NotificationCenter.default.publisher(for: .equilibriumRepositoryDidChange)) { _ in
             if isActive { Task { await model.load() } } else { model.invalidate() }
         }
@@ -163,7 +163,7 @@ struct WorkoutHistoryView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .foregroundStyle(EQColor.primaryText)
+        .foregroundStyle(EQColor.contentPrimary)
         .accessibilityLabel("Back to Home")
         .frame(maxWidth: .infinity, minHeight: EQLayout.minimumTouch + EQSpacing.sm, alignment: .leading)
         .padding(.horizontal, EQLayout.screenGutter)
@@ -177,10 +177,10 @@ private struct WorkoutHistoryRow: View {
         HStack {
             VStack(alignment: .leading, spacing: EQSpacing.xxs) {
                 Text(workout.titleSnapshot).eqTextStyle(.listItemTitle).lineLimit(1)
-                EQDateText.dayText(date, style: .secondaryBody).foregroundStyle(EQColor.secondaryText)
+                EQDateText.dayText(date, style: .secondaryBody).foregroundStyle(EQColor.contentSecondary)
             }
             Spacer(minLength: EQSpacing.xs)
-            Image(systemName: "chevron.right").eqTextStyle(.caption).foregroundStyle(EQColor.secondaryText)
+            Image(systemName: "chevron.right").eqTextStyle(.caption).foregroundStyle(EQColor.contentSecondary)
         }
         .padding(.vertical, EQSpacing.xs)
         .frame(minHeight: EQLayout.minimumTouch)
@@ -214,11 +214,11 @@ struct CompletedWorkoutDetailView: View {
                 .padding(.horizontal, EQLayout.screenGutter)
                 .padding(.top, EQSpacing.md)
                 .padding(.bottom, EQSpacing.lg)
-                .foregroundStyle(EQColor.primaryText)
+                .foregroundStyle(EQColor.contentPrimary)
             }
             .scrollIndicators(.hidden)
         }
-        .background(EQColor.canvas).toolbar(.hidden, for: .navigationBar)
+        .background(EQColor.background).toolbar(.hidden, for: .navigationBar)
         .onReceive(NotificationCenter.default.publisher(for: .equilibriumRepositoryDidChange)) { _ in
             Task { if let refreshed = try? await repository.workout(id: workout.id) { workout = refreshed } }
         }
@@ -240,7 +240,7 @@ struct CompletedWorkoutDetailView: View {
                 } label: {
                     Image(systemName: "chart.xyaxis.line")
                         .eqTextStyle(.caption)
-                        .foregroundStyle(EQColor.secondaryText)
+                        .foregroundStyle(EQColor.contentSecondary)
                         .frame(width: EQLayout.minimumTouch, height: EQLayout.iconSize, alignment: .trailing)
                         .contentShape(Rectangle())
                 }
@@ -248,7 +248,7 @@ struct CompletedWorkoutDetailView: View {
                 .accessibilityLabel("\(exercise.nameSnapshot) performance")
             }
             if sets.isEmpty {
-                Text("No completed sets").eqTextStyle(.secondaryBody).foregroundStyle(EQColor.secondaryText)
+                Text("No completed sets").eqTextStyle(.secondaryBody).foregroundStyle(EQColor.contentSecondary)
             } else {
                 VStack(alignment: .leading, spacing: EQLayout.WorkoutExecution.loggedSetSpacing) {
                     ForEach(Array(sets.enumerated()), id: \.element.id) { setIndex, set in
@@ -261,7 +261,7 @@ struct CompletedWorkoutDetailView: View {
                                 Spacer(minLength: 0)
                             }
                             .eqTextStyle(.secondaryBody)
-                            .foregroundStyle(EQColor.secondaryText)
+                            .foregroundStyle(EQColor.contentSecondary)
                             .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
@@ -280,14 +280,14 @@ struct CompletedWorkoutDetailView: View {
                 VStack(alignment: .leading, spacing: EQSpacing.xxs) {
                     Text(workout.titleSnapshot).eqTextStyle(.navigationTitle).lineLimit(1)
                     EQDateText.text(WorkoutHistoryQuery.completionDate(workout), style: .secondaryBody, includeYear: false)
-                        .foregroundStyle(EQColor.secondaryText)
+                        .foregroundStyle(EQColor.contentSecondary)
                 }
             }
             .frame(minHeight: EQLayout.minimumTouch)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .foregroundStyle(EQColor.primaryText)
+        .foregroundStyle(EQColor.contentPrimary)
         .accessibilityLabel("Back to Workout History, \(workout.titleSnapshot), \(EQDateText.string(WorkoutHistoryQuery.completionDate(workout), includeYear: false))")
         .frame(maxWidth: .infinity, minHeight: EQLayout.minimumTouch + EQSpacing.sm, alignment: .leading)
         .padding(.horizontal, EQLayout.screenGutter)
@@ -333,6 +333,7 @@ private struct CompletedSetEditor: View {
                             .accessibilityLabel(target.set.duration == nil ? "Reps" : "Seconds")
                     }
                 }
+                .listRowBackground(EQColor.surfaceInput)
             }
             .navigationTitle("Edit Set \(target.setNumber)")
             .toolbar {
@@ -394,8 +395,8 @@ struct ExercisePerformanceView: View {
             .padding(.horizontal, EQLayout.screenGutter)
             .padding(.top, EQSpacing.md + EQLayout.WorkoutExecution.overviewContentTopInset)
         }
-        .foregroundStyle(EQColor.primaryText)
-        .background(EQColor.canvas)
+        .foregroundStyle(EQColor.contentPrimary)
+        .background(EQColor.background)
         .toolbar(.hidden, for: .navigationBar)
     }
 
@@ -405,14 +406,14 @@ struct ExercisePerformanceView: View {
                 Image(systemName: "chevron.left")
                 VStack(alignment: .leading, spacing: EQSpacing.xxs) {
                     Text(fallbackName).eqTextStyle(.navigationTitle).lineLimit(1)
-                    Text("Performance").eqTextStyle(.secondaryBody).foregroundStyle(EQColor.secondaryText)
+                    Text("Performance").eqTextStyle(.secondaryBody).foregroundStyle(EQColor.contentSecondary)
                 }
             }
             .frame(minHeight: EQLayout.minimumTouch)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .foregroundStyle(EQColor.primaryText)
+        .foregroundStyle(EQColor.contentPrimary)
         .accessibilityLabel("Back, \(fallbackName) performance")
         .frame(maxWidth: .infinity, minHeight: EQLayout.minimumTouch + EQSpacing.sm, alignment: .leading)
         .padding(.horizontal, EQLayout.screenGutter)
@@ -428,11 +429,11 @@ struct ExercisePerformanceContentStyle {
 
     static var standalone: Self {
         Self(
-            primaryText: EQColor.primaryText,
-            secondaryText: EQColor.secondaryText,
-            cardFill: EQColor.cardFill,
-            chartLine: EQColor.chartLine,
-            chartPoint: EQColor.chartPoint
+            primaryText: EQColor.contentPrimary,
+            secondaryText: EQColor.contentSecondary,
+            cardFill: EQColor.surfaceHighlightLight,
+            chartLine: EQColor.accent,
+            chartPoint: EQColor.accentMuted
         )
     }
 
@@ -440,9 +441,9 @@ struct ExercisePerformanceContentStyle {
         Self(
             primaryText: EQColor.Execution.foregroundText,
             secondaryText: EQColor.Execution.foregroundSecondaryText,
-            cardFill: Color.black.opacity(0.04),
+            cardFill: EQColor.surfaceHighlightDark,
             chartLine: EQColor.Execution.foregroundText,
-            chartPoint: EQColor.Execution.foregroundText.opacity(0.65)
+            chartPoint: EQColor.accentMuted
         )
     }
 }

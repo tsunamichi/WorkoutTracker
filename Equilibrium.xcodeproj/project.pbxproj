@@ -7,6 +7,9 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		A10000000000000000000002 /* GeneratedDesignTokens.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000001 /* GeneratedDesignTokens.swift */; };
+		A10000000000000000000004 /* DesignTokenTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000003 /* DesignTokenTests.swift */; };
+		B20000000000000000000002 /* ContextualActionMenu.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000000000000000000001 /* ContextualActionMenu.swift */; };
 		04A947B7B93272CE4ED09235 /* WorkoutHistoryImportTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79909464AC5DCC92A7C8B6B6 /* WorkoutHistoryImportTests.swift */; };
 		05E8EC79F238CC71D2F8E5C3 /* WorkoutTimerVisuals.swift in Sources */ = {isa = PBXBuildFile; fileRef = D998E5F2131071C40EFF28FD /* WorkoutTimerVisuals.swift */; };
 		063EBABF6B916CAD52811F07 /* StandaloneIntervalTimer.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7DCFD43CC8459B474AA2C0B /* StandaloneIntervalTimer.swift */; };
@@ -85,6 +88,9 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		A10000000000000000000001 /* GeneratedDesignTokens.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GeneratedDesignTokens.swift; sourceTree = "<group>"; };
+		A10000000000000000000003 /* DesignTokenTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesignTokenTests.swift; sourceTree = "<group>"; };
+		B20000000000000000000001 /* ContextualActionMenu.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContextualActionMenu.swift; sourceTree = "<group>"; };
 		03473FDD21C1CCF68C84BD81 /* WorkoutShareText.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkoutShareText.swift; sourceTree = "<group>"; };
 		05DBD6A4BFCF0802AB6028F7 /* HomeModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeModel.swift; sourceTree = "<group>"; };
 		09BE5531E9365510D3FF1433 /* FeedbackClients.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeedbackClients.swift; sourceTree = "<group>"; };
@@ -227,6 +233,7 @@
 			children = (
 				B95F758DA5D9FFC871964924 /* BackupTests.swift */,
 				1F195843562F172FAB98EE74 /* CloudKitReadinessPersistenceTests.swift */,
+				A10000000000000000000003 /* DesignTokenTests.swift */,
 				53BCE0202AD2BCB96CA4E8A1 /* DefaultWorkoutSeedTests.swift */,
 				6053E003FFA1884518E84211 /* DomainFoundationTests.swift */,
 				141939A1C8633C9BDFAAED86 /* HistoryPerformancePhase4Tests.swift */,
@@ -357,7 +364,9 @@
 		62A949CD827B8903E47F390F /* DesignSystem */ = {
 			isa = PBXGroup;
 			children = (
+				B20000000000000000000001 /* ContextualActionMenu.swift */,
 				143464D458EF033494C851B9 /* DesignTokens.swift */,
+				A10000000000000000000001 /* GeneratedDesignTokens.swift */,
 				8CF2C6B18F54322BCF338B32 /* EQNumberPad.swift */,
 			);
 			path = DesignSystem;
@@ -564,6 +573,7 @@
 			files = (
 				15ED3206DAC1E9B4CFD15505 /* BackupTests.swift in Sources */,
 				37C99B2DD213294EE53EBCF0 /* CloudKitReadinessPersistenceTests.swift in Sources */,
+				A10000000000000000000004 /* DesignTokenTests.swift in Sources */,
 				EE9B07E98D74B0AF68AF2A0A /* DefaultWorkoutSeedTests.swift in Sources */,
 				77FC569B7C086E9DCF4EA7AD /* DomainFoundationTests.swift in Sources */,
 				445489AF18781FE3AD1F754D /* HistoryPerformancePhase4Tests.swift in Sources */,
@@ -590,11 +600,13 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				B20000000000000000000002 /* ContextualActionMenu.swift in Sources */,
 				C96A2D80860DF2ACC6E9855C /* AppEnvironment.swift in Sources */,
 				C81EE51BA72D2AF7C075052F /* BackupCodec.swift in Sources */,
 				567B3923F3C22BF03D3323A8 /* CountdownTimer.swift in Sources */,
 				CF0794FAC938EB21FD604330 /* DefinitionMapper.swift in Sources */,
 				84D5A3EB2F86829E4944C802 /* DesignTokens.swift in Sources */,
+				A10000000000000000000002 /* GeneratedDesignTokens.swift in Sources */,
 				F5F4D699D13DDCF4298547A3 /* DomainIDs.swift in Sources */,
 				38BF3AA040AD02258CDA6FB1 /* DomainValidation.swift in Sources */,
 				97BC771208A0F608AF8AF39D /* EQNumberPad.swift in Sources */,

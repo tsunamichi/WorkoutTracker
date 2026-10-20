@@ -44,7 +44,7 @@ struct EquilibriumApp: App {
                 timerStore: environment.timerStore
             )
             .environment(environment)
-            .fontWeight(.regular)
+            .environment(EQThemeStore.shared)
             .preferredColorScheme(EQColor.colorScheme)
         }
             .modelContainer(environment.container)

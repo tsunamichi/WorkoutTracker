@@ -62,7 +62,7 @@ struct StandaloneTimerView: View {
                 VStack(alignment: .leading, spacing: EQSpacing.xxl) {
                     Text(configurations.isEmpty ? "No timers yet" : "Saved Timers")
                         .eqTextStyle(.sectionTitle)
-                        .foregroundStyle(EQColor.primaryText)
+                        .foregroundStyle(EQColor.contentPrimary)
 
                     VStack(spacing: EQSpacing.sm) {
                         ForEach(configurations) { configuration in
@@ -87,8 +87,8 @@ struct StandaloneTimerView: View {
                 }
             }
         }
-        .foregroundStyle(EQColor.primaryText)
-        .background(EQColor.canvas)
+        .foregroundStyle(EQColor.contentPrimary)
+        .background(EQColor.background)
         .toolbar(.hidden, for: .navigationBar)
         .onAppear { reload() }
             .onReceive(NotificationCenter.default.publisher(for: .equilibriumRepositoryDidChange)) { _ in reload() }
@@ -109,7 +109,7 @@ struct StandaloneTimerView: View {
                         .lineLimit(2)
                     Text("\(configuration.exercisesPerRound) exercises × \(configuration.rounds) rounds")
                         .eqTextStyle(.caption)
-                        .foregroundStyle(EQColor.secondaryText)
+                        .foregroundStyle(EQColor.contentSecondary)
                 }
                 .frame(maxWidth: .infinity, minHeight: EQDimension.minimumTouch, alignment: .leading)
                 .contentShape(Rectangle())
@@ -176,7 +176,7 @@ struct StandaloneTimerFormView: View {
                         .submitLabel(.done)
                         .frame(minHeight: EQLayout.minimumTouch)
                         .padding(.horizontal, EQSpacing.md)
-                        .background(EQColor.cardFill, in: RoundedRectangle(cornerRadius: EQRadius.card, style: .continuous))
+                        .background(EQColor.surfaceInput, in: RoundedRectangle(cornerRadius: EQRadius.card, style: .continuous))
                     section("EXERCISE") {
                         stepperRow("Move for", format(move), value: $move, range: 5...120, step: 5)
                         stepperRow("Rest after each exercise", format(exerciseRest), value: $exerciseRest, range: 5...120, step: 5)
@@ -197,8 +197,8 @@ struct StandaloneTimerFormView: View {
                 .padding(.horizontal, EQLayout.screenGutter)
                 .padding(.bottom, EQSpacing.md)
         }
-        .foregroundStyle(EQColor.primaryText)
-        .background(EQColor.canvas)
+        .foregroundStyle(EQColor.contentPrimary)
+        .background(EQColor.background)
         .toolbar(.hidden, for: .navigationBar)
     }
     private var header: some View {
@@ -211,24 +211,24 @@ struct StandaloneTimerFormView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .foregroundStyle(EQColor.primaryText)
+        .foregroundStyle(EQColor.contentPrimary)
         .accessibilityLabel("Back, \(title)")
         .frame(maxWidth: .infinity, minHeight: EQLayout.minimumTouch + EQSpacing.sm, alignment: .leading)
         .padding(.horizontal, EQLayout.screenGutter)
     }
     private func section<Content: View>(_ label: String, @ViewBuilder content: () -> Content) -> some View {
         VStack(alignment: .leading, spacing: EQSpacing.sm) {
-            Text(label).eqTextStyle(.sectionLabel).foregroundStyle(EQColor.secondaryText)
+            Text(label).eqTextStyle(.sectionLabel).foregroundStyle(EQColor.contentSecondary)
             VStack(alignment: .leading, spacing: EQSpacing.sm) { content() }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(EQSpacing.md)
-                .background(EQColor.cardFill, in: RoundedRectangle(cornerRadius: EQRadius.card, style: .continuous))
+                .background(EQColor.surfaceHighlightLight, in: RoundedRectangle(cornerRadius: EQRadius.card, style: .continuous))
         }
     }
     private func stepperRow(_ label: String, _ display: String, value: Binding<Int>, range: ClosedRange<Int>, step: Int = 1) -> some View {
         HStack(spacing: EQSpacing.sm) {
             VStack(alignment: .leading, spacing: EQSpacing.xxs) {
-                Text(label).eqTextStyle(.secondaryBody).foregroundStyle(EQColor.secondaryText)
+                Text(label).eqTextStyle(.secondaryBody).foregroundStyle(EQColor.contentSecondary)
                 Text(display).eqTextStyle(.listItemTitle).monospacedDigit()
             }
             Spacer(minLength: 0)
@@ -250,8 +250,8 @@ struct StandaloneTimerFormView: View {
         }
         .buttonStyle(.plain)
         .eqTextStyle(.listItemTitle)
-        .foregroundStyle(enabled ? EQColor.primaryText : EQColor.secondaryText.opacity(0.4))
-        .background(EQColor.cardFill, in: RoundedRectangle(cornerRadius: EQRadius.button, style: .continuous))
+        .foregroundStyle(enabled ? EQColor.contentPrimary : EQColor.ctaDisabledLabel)
+        .background(EQColor.surfaceHighlightLight, in: RoundedRectangle(cornerRadius: EQRadius.button, style: .continuous))
         .disabled(!enabled)
     }
     private var saveButton: some View {
@@ -455,6 +455,10 @@ struct StandaloneTimerRunView: View {
         isRestPhase ? EQColor.Execution.restCardText : EQColor.Execution.foregroundText
     }
 
+    private var cardSecondaryTextColor: Color {
+        isRestPhase ? EQColor.Execution.restCardText : EQColor.disabledText
+    }
+
     private var timerColor: Color {
         isRestPhase ? EQColor.Execution.restTimerText : EQColor.Execution.primaryAction
     }
@@ -582,7 +586,7 @@ struct StandaloneTimerRunView: View {
                 .monospacedDigit()
             Text(title)
                 .eqTextStyle(.caption)
-                .foregroundStyle(cardTextColor.opacity(0.68))
+                .foregroundStyle(cardSecondaryTextColor)
         }
         .frame(maxWidth: .infinity)
     }

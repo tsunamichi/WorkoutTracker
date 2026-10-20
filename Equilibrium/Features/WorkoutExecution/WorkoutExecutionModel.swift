@@ -519,11 +519,12 @@ final class WorkoutExecutionModel {
             if case .duration = prescription.target { return true }
             return false
         } ?? false
+        let plannedSets = inherited.isEmpty ? [Self.initialPrescription(isTimeBased: isTimeBased)] : inherited
         let occurrence = WorkoutExercise(
             id: .new(),
             exerciseID: definition.id,
             nameSnapshot: definition.name,
-            prescriptions: inherited,
+            prescriptions: plannedSets,
             loggedSets: [],
             restDuration: nil,
             skippedAt: nil,
@@ -593,7 +594,8 @@ final class WorkoutExecutionModel {
             return .init(id: .new(), target: .repetitions(range: repetitions...repetitions), suggestedWeight: set.weight)
         } ?? []
         let inheritedTimeBased = inherited.first.map { if case .duration = $0.target { true } else { false } } ?? old.isTimeBased
-        value.exercises[index] = WorkoutExercise(id: old.id, exerciseID: definition.id, nameSnapshot: definition.name, prescriptions: inherited, loggedSets: [], restDuration: old.restDuration, skippedAt: nil, isTimeBased: inheritedTimeBased, isTwoSided: old.isTwoSided); value.updatedAt = now()
+        let plannedSets = inherited.isEmpty ? [Self.initialPrescription(isTimeBased: inheritedTimeBased)] : inherited
+        value.exercises[index] = WorkoutExercise(id: old.id, exerciseID: definition.id, nameSnapshot: definition.name, prescriptions: plannedSets, loggedSets: [], restDuration: old.restDuration, skippedAt: nil, isTimeBased: inheritedTimeBased, isTwoSided: old.isTwoSided); value.updatedAt = now()
         do {
             try await repository.update(value)
             accept(value)
@@ -618,6 +620,12 @@ final class WorkoutExecutionModel {
         }
         let repetitions = max(1, set.repetitions ?? 1)
         return .init(id: .new(), target: .repetitions(range: repetitions...repetitions), suggestedWeight: set.weight)
+    }
+
+    private static func initialPrescription(isTimeBased: Bool) -> SetPrescription {
+        isTimeBased
+            ? .init(id: .new(), target: .duration(seconds: 30), suggestedWeight: nil)
+            : .init(id: .new(), target: .repetitions(range: 1...1), suggestedWeight: nil)
     }
     func removeExercise(
         _ occurrenceID: WorkoutExerciseID,

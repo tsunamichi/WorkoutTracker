@@ -47,6 +47,7 @@ struct WorkoutBuilderView: View {
         @Bindable var model = model
         Form {
             Section("Workout") { TextField("Workout name", text: $model.draft.name).accessibilityLabel("Workout name") }
+                .listRowBackground(EQColor.surfaceInput)
             Section("Exercises") {
                 ForEach($model.draft.exercises) { $exercise in
                     HStack { Text(exercise.name).eqTextStyle(.exerciseTitle); Spacer(); Menu("Move") { Button("Move up") { model.moveExercise(id: exercise.id, direction: -1) }; Button("Move down") { model.moveExercise(id: exercise.id, direction: 1) } } }
@@ -55,7 +56,7 @@ struct WorkoutBuilderView: View {
             }
             if let error = model.errorMessage { Section { Label(error, systemImage: "exclamationmark.triangle").foregroundStyle(EQColor.warning) } }
         }
-        .scrollContentBackground(.hidden).background(EQColor.canvas).scrollDismissesKeyboard(.interactively)
+        .scrollContentBackground(.hidden).background(EQColor.background).scrollDismissesKeyboard(.interactively)
         .navigationTitle("Workout Builder").navigationBarBackButtonHidden(model.draft.isMeaningful)
         .toolbar {
             if model.draft.isMeaningful { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { discardPresented = true } } }

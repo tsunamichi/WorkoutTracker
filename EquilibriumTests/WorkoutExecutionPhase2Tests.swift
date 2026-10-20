@@ -143,8 +143,8 @@ final class ExerciseSettingsPhase5Tests: XCTestCase {
         SwiftDataRepository(container: try PersistenceController.makeContainer(inMemory: true))
     }
 
-    func testExerciseOptionsNavigationAlwaysOpensAndReopensAtRoot() {
-        let presentation = ExerciseOptionsPresentation()
+    func testExerciseCardSettingsNavigationAlwaysOpensAndReopensAtRoot() {
+        let presentation = ExerciseCardPresentation()
         let first = WorkoutExerciseID(rawValue: "options-first")
 
         presentation.present(exerciseID: first)
@@ -152,22 +152,29 @@ final class ExerciseSettingsPhase5Tests: XCTestCase {
 
         presentation.show(.performance)
         XCTAssertEqual(presentation.path, [.performance])
+        XCTAssertEqual(presentation.navigationDirection, .forward)
+        presentation.pop()
+        XCTAssertTrue(presentation.path.isEmpty)
+        XCTAssertEqual(presentation.navigationDirection, .backward)
+
+        presentation.show(.performance)
         presentation.dismiss()
-        XCTAssertFalse(presentation.isPresented)
+        XCTAssertFalse(presentation.showsSettings)
+        XCTAssertEqual(presentation.mode, .execution)
         XCTAssertTrue(presentation.path.isEmpty)
 
         presentation.present(exerciseID: first)
         XCTAssertTrue(presentation.path.isEmpty)
     }
 
-    func testExerciseOptionsShellGeometryAndRouteTitlesAreStable() {
-        let availableHeight: CGFloat = 844
-        let expectedHeight = ExerciseOptionsSheetGeometry.height(availableHeight: availableHeight)
+    func testExerciseSettingsUsesCardModeAndStableContentRhythm() {
+        let presentation = ExerciseCardPresentation()
+        let exerciseID = WorkoutExerciseID(rawValue: "card-settings")
 
-        XCTAssertEqual(expectedHeight, EQLayout.ExerciseOptions.preferredSheetHeight)
-        XCTAssertEqual(EQLayout.ExerciseOptions.topInset, 28)
-        XCTAssertEqual(EQLayout.ExerciseOptions.backTitleSpacing, 20)
-        XCTAssertEqual(EQTextStyle.executionNavigationTitle.size, 17)
+        XCTAssertEqual(presentation.mode, .execution)
+        presentation.present(exerciseID: exerciseID)
+        XCTAssertEqual(presentation.mode, .settings)
+        XCTAssertTrue(presentation.showsSettings)
         XCTAssertEqual(EQLayout.ExerciseOptions.headerToContentSpacing, 48)
         XCTAssertEqual(EQLayout.ExerciseOptions.actionsTopSpacing, 56)
         XCTAssertEqual(EQLayout.ExerciseOptions.bottomInset, 24)
@@ -176,33 +183,165 @@ final class ExerciseSettingsPhase5Tests: XCTestCase {
         for route in [
             ExerciseOptionsRoute.performance,
             .autoProgression,
-            .restDuration,
-            .swap
+            .restDuration
         ] {
-            // Route is intentionally not an input to shell geometry.
-            XCTAssertEqual(
-                ExerciseOptionsSheetGeometry.height(availableHeight: availableHeight),
-                expectedHeight,
-                "\(route) must remain inside the persistent shell"
-            )
+            presentation.show(route)
+            XCTAssertEqual(presentation.mode, .settings)
+            presentation.showRoot()
         }
         XCTAssertEqual(ExerciseOptionsRoute.performance.title, "Performance")
         XCTAssertEqual(ExerciseOptionsRoute.autoProgression.title, "Auto Progression")
         XCTAssertEqual(ExerciseOptionsRoute.restDuration.title, "Rest Duration")
-        XCTAssertEqual(ExerciseOptionsRoute.swap.title, "Swap Exercise")
     }
 
-    func testExerciseOptionsShellGeometryPreservesMinimumTopInsetOnShortScreens() {
-        let availableHeight: CGFloat = 600
+    func testExerciseCardModeMotionUsesStrictMidpointHandoff() {
+        XCTAssertEqual(ExerciseCardModeMotion.executionVisibility(0), 1, accuracy: 0.001)
+        XCTAssertEqual(ExerciseCardModeMotion.settingsVisibility(0), 0, accuracy: 0.001)
+        XCTAssertEqual(
+            ExerciseCardModeMotion.settingsOffset(0),
+            0,
+            accuracy: 0.001
+        )
 
         XCTAssertEqual(
-            ExerciseOptionsSheetGeometry.height(availableHeight: availableHeight),
-            availableHeight - EQLayout.ExerciseOptions.minimumTopInset
+            ExerciseCardModeMotion.settingsVisibility(ExerciseCardModeMotion.incomingStart),
+            0,
+            accuracy: 0.001
+        )
+        XCTAssertEqual(
+            ExerciseCardModeMotion.executionVisibility(ExerciseCardModeMotion.incomingStart),
+            0,
+            accuracy: 0.001
+        )
+
+        XCTAssertEqual(ExerciseCardModeMotion.executionVisibility(1), 0, accuracy: 0.001)
+        XCTAssertEqual(ExerciseCardModeMotion.settingsVisibility(1), 1, accuracy: 0.001)
+        XCTAssertEqual(ExerciseCardModeMotion.settingsOffset(1), 0, accuracy: 0.001)
+        XCTAssertEqual(ExerciseCardModeMotion.contentOffset, 12)
+        XCTAssertEqual(ExerciseCardModeMotion.nestedOffset, 16)
+    }
+
+    func testFocusedExerciseSettingsExpandsFromMeasuredCardIntoSafeAreaFrame() {
+        let container = CGRect(x: 0, y: 0, width: 390, height: 844)
+        let safeArea = EdgeInsets(top: 47, leading: 0, bottom: 34, trailing: 0)
+        let source = CGRect(x: 8, y: 612, width: 374, height: 224)
+        let destination = ExerciseFocusedExpansionLayout.destinationFrame(
+            containerFrame: container,
+            safeAreaInsets: safeArea
+        )
+
+        XCTAssertEqual(destination, CGRect(x: 8, y: 47, width: 374, height: 789))
+        XCTAssertEqual(
+            ExerciseFocusedExpansionLayout.frame(from: source, to: destination, progress: 0),
+            source
+        )
+        XCTAssertEqual(
+            ExerciseFocusedExpansionLayout.frame(from: source, to: destination, progress: 1),
+            destination
+        )
+        XCTAssertEqual(
+            ExerciseFocusedExpansionLayout.frame(from: source, to: destination, progress: 0.5),
+            CGRect(x: 8, y: 329.5, width: 374, height: 506.5)
         )
     }
 
-    func testExerciseOptionsBackAndExerciseChangeResetNavigation() {
-        let presentation = ExerciseOptionsPresentation()
+    func testFocusedExerciseSettingsDoesNotApplySafeAreaTwiceWhenContainerIsAlreadyInset() {
+        let container = CGRect(x: 0, y: 59, width: 390, height: 785)
+        let safeArea = EdgeInsets(top: 47, leading: 0, bottom: 34, trailing: 0)
+
+        let destination = ExerciseFocusedExpansionLayout.destinationFrame(
+            containerFrame: container,
+            safeAreaInsets: safeArea
+        )
+
+        XCTAssertEqual(destination, CGRect(x: 8, y: 59, width: 374, height: 777))
+    }
+
+    func testFocusedExerciseNameMovesIntoExpandedHeaderWithoutChangingIdentity() {
+        let surface = CGRect(x: 8, y: 55, width: 374, height: 781)
+        let sourceTitle = CGRect(x: 32, y: 640, width: 240, height: 29)
+
+        let destination = ExerciseFocusedExpansionLayout.titleDestinationFrame(
+            surfaceFrame: surface,
+            sourceTitleFrame: sourceTitle
+        )
+
+        XCTAssertEqual(destination.minX, surface.minX + EQLayout.WorkoutExecution.walletInset)
+        XCTAssertEqual(destination.minY, surface.minY + EQSpacing.lg)
+        XCTAssertEqual(
+            destination.width,
+            sourceTitle.width * ExerciseFocusedExpansionLayout.titleScale,
+            accuracy: 0.001
+        )
+    }
+
+    func testFocusedSettingsExpansionKeepsTheSourceBottomAnchored() {
+        let measuredSource = CGRect(x: 20, y: 476, width: 350, height: 1_424)
+        let destination = CGRect(x: 8, y: 55, width: 374, height: 1_973)
+
+        let source = ExerciseFocusedExpansionLayout.bottomAnchoredSourceFrame(
+            measuredSource: measuredSource,
+            destination: destination
+        )
+
+        XCTAssertEqual(source.minX, measuredSource.minX)
+        XCTAssertEqual(source.minY, measuredSource.minY)
+        XCTAssertEqual(source.width, measuredSource.width)
+        XCTAssertEqual(source.maxY, destination.maxY)
+
+        let halfway = ExerciseFocusedExpansionLayout.frame(
+            from: source,
+            to: destination,
+            progress: 0.5
+        )
+        XCTAssertEqual(halfway.maxY, destination.maxY, accuracy: 0.001)
+    }
+
+    func testFocusedExerciseNameUsesTheSameProgressAsTheCardSurface() {
+        XCTAssertEqual(ExerciseFocusedExpansionMotion.titleProgress(0), 0)
+        XCTAssertEqual(
+            ExerciseFocusedExpansionMotion.titleProgress(0.5),
+            0.5
+        )
+        XCTAssertEqual(ExerciseFocusedExpansionMotion.titleProgress(1), 1)
+        XCTAssertEqual(
+            ExerciseFocusedExpansionMotion.focusedContentVisibility(
+                ExerciseFocusedExpansionMotion.contentRevealStart
+            ),
+            0
+        )
+    }
+
+    func testFocusedExerciseSettingsStagesPersistentTitleBeforeDestinationContent() {
+        XCTAssertEqual(ExerciseFocusedExpansionMotion.titleProgress(0), 0, accuracy: 0.001)
+        XCTAssertEqual(
+            ExerciseFocusedExpansionMotion.titleProgress(1),
+            1,
+            accuracy: 0.001
+        )
+        XCTAssertEqual(
+            ExerciseFocusedExpansionMotion.focusedContentVisibility(ExerciseFocusedExpansionMotion.contentRevealStart),
+            0,
+            accuracy: 0.001
+        )
+        XCTAssertEqual(ExerciseFocusedExpansionMotion.focusedContentVisibility(1), 1, accuracy: 0.001)
+    }
+
+    func testExerciseSettingsDismissResetsCardModeAndRoute() {
+        let presentation = ExerciseCardPresentation()
+        presentation.present(exerciseID: WorkoutExerciseID(rawValue: "dismiss-settings"))
+        presentation.show(.performance)
+
+        presentation.dismiss()
+
+        XCTAssertEqual(presentation.mode, .execution)
+        XCTAssertFalse(presentation.showsSettings)
+        XCTAssertNil(presentation.exerciseID)
+        XCTAssertTrue(presentation.path.isEmpty)
+    }
+
+    func testExerciseCardSettingsBackAndExerciseChangeResetNavigation() {
+        let presentation = ExerciseCardPresentation()
         let first = WorkoutExerciseID(rawValue: "options-first")
         let second = WorkoutExerciseID(rawValue: "options-second")
 
@@ -210,6 +349,7 @@ final class ExerciseSettingsPhase5Tests: XCTestCase {
         presentation.show(.restDuration)
         presentation.showRoot()
         XCTAssertTrue(presentation.path.isEmpty)
+        XCTAssertEqual(presentation.navigationDirection, .backward)
 
         presentation.show(.autoProgression)
         presentation.present(exerciseID: second)
@@ -228,7 +368,7 @@ final class ExerciseSettingsPhase5Tests: XCTestCase {
         model.selectSet(at: 1)
         let selectedSetID = try XCTUnwrap(model.currentPrescription?.id)
         let wallet = ExecutionWalletPresentation(initialMode: .focusedExercise)
-        let settings = ExerciseOptionsPresentation()
+        let settings = ExerciseCardPresentation()
 
         settings.present(exerciseID: exercise.id)
         XCTAssertEqual(settings.exerciseID, exercise.id)
@@ -301,6 +441,87 @@ final class ExerciseSettingsPhase5Tests: XCTestCase {
         let removedOverride = try await repository.exerciseRestDuration(for: exercise.exerciseID)
         XCTAssertNil(removedOverride)
         model.skipRest()
+    }
+
+    func testRestOverrideEqualToDefaultRemainsExplicitUntilReset() async throws {
+        let repository = try repository()
+        let fixture = EquilibriumFixtures.mixed(id: "rest-equal-default")
+        try await repository.create(fixture)
+        try await repository.saveDefaultRestDuration(120)
+        let model = WorkoutExecutionModel(
+            workoutID: fixture.id,
+            repository: repository,
+            defaultRestDuration: 90
+        )
+        await model.activate()
+        let exercise = fixture.exercises[0]
+
+        let savedOverride = await model.setExerciseRestDuration(exerciseID: exercise.id, seconds: 120)
+        XCTAssertTrue(savedOverride)
+        XCTAssertEqual(model.exerciseRestDurationOverride(for: exercise.id), 120)
+
+        let changedDefault = await model.setGlobalRestDuration(150)
+        XCTAssertTrue(changedDefault)
+        XCTAssertEqual(model.effectiveRestDuration(for: exercise.id), 120)
+
+        let clearedOverride = await model.setExerciseRestDuration(exerciseID: exercise.id, seconds: nil)
+        XCTAssertTrue(clearedOverride)
+        XCTAssertNil(model.exerciseRestDurationOverride(for: exercise.id))
+        XCTAssertEqual(model.effectiveRestDuration(for: exercise.id), 150)
+    }
+
+    func testDurationScaleBuildsIndependentMinuteAndSecondWheels() {
+        XCTAssertEqual(RestDurationScale.snapped(1), 15)
+        XCTAssertEqual(RestDurationScale.snapped(92), 90)
+        XCTAssertEqual(RestDurationScale.snapped(999), 300)
+        XCTAssertEqual(RestDurationScale.components(for: 265).minutes, 4)
+        XCTAssertEqual(RestDurationScale.components(for: 265).seconds, 25)
+        XCTAssertEqual(RestDurationScale.duration(minutes: 4, seconds: 25), 265)
+        XCTAssertNil(RestDurationScale.duration(minutes: 0, seconds: 10))
+        XCTAssertNil(RestDurationScale.duration(minutes: 5, seconds: 5))
+        XCTAssertNil(RestDurationScale.duration(minutes: 4, seconds: 23))
+        XCTAssertEqual(RestDurationScale.minuteValues(forSeconds: 0), [1, 2, 3, 4, 5])
+        XCTAssertEqual(RestDurationScale.minuteValues(forSeconds: 25), [0, 1, 2, 3, 4])
+        XCTAssertEqual(
+            RestDurationScale.secondValues(forMinutes: 0),
+            [15, 20, 25, 30, 35, 40, 45, 50, 55]
+        )
+        XCTAssertEqual(
+            RestDurationScale.secondValues(forMinutes: 5),
+            [0]
+        )
+    }
+
+    func testDurationWheelMotionUsesVerticalDetentsMomentumAndBounds() {
+        XCTAssertEqual(
+            DurationWheelMotion.index(startingAt: 2, translation: -31, count: 6),
+            2
+        )
+        XCTAssertEqual(
+            DurationWheelMotion.index(startingAt: 2, translation: -32, count: 6),
+            3
+        )
+        XCTAssertEqual(
+            DurationWheelMotion.index(startingAt: 2, translation: 64, count: 6),
+            1
+        )
+        XCTAssertEqual(
+            DurationWheelMotion.index(startingAt: 5, translation: -640, count: 6),
+            5
+        )
+        XCTAssertEqual(
+            DurationWheelMotion.index(startingAt: 0, translation: 640, count: 6),
+            0
+        )
+        XCTAssertEqual(
+            DurationWheelMotion.projectedIndex(
+                startingAt: 2,
+                translation: -20,
+                predictedTranslation: -100,
+                count: 6
+            ),
+            3
+        )
     }
 
     func testExerciseRestOverridePersistsAcrossWorkoutOccurrencesByStableExerciseID() async throws {
@@ -1035,7 +1256,7 @@ final class WorkoutExecutionNavigationStateTests: XCTestCase {
         XCTAssertEqual(execution.workout, canonicalWorkout)
     }
 
-    func testExerciseOptionsPresentationPreservesCanonicalExerciseWalletAndHomeState() async throws {
+    func testExerciseCardSettingsPreservesCanonicalExerciseWalletAndHomeState() async throws {
         let repository = SwiftDataRepository(container: try PersistenceController.makeContainer(inMemory: true))
         let fixture = EquilibriumFixtures.midWorkout(id: "settings-presentation")
         try await repository.create(fixture)
@@ -1049,11 +1270,11 @@ final class WorkoutExecutionNavigationStateTests: XCTestCase {
         let canonicalExerciseID = try XCTUnwrap(execution.currentExercise?.id)
         let wallet = ExecutionWalletPresentation()
         wallet.showExerciseOverview()
-        let settings = ExerciseOptionsPresentation()
+        let settings = ExerciseCardPresentation()
 
         settings.present(exerciseID: canonicalExerciseID)
 
-        XCTAssertTrue(settings.isPresented)
+        XCTAssertTrue(settings.showsSettings)
         XCTAssertEqual(settings.exerciseID, canonicalExerciseID)
         XCTAssertEqual(execution.workout, canonicalWorkout)
         XCTAssertEqual(execution.currentExercise?.id, canonicalExerciseID)
@@ -1062,7 +1283,7 @@ final class WorkoutExecutionNavigationStateTests: XCTestCase {
 
         settings.dismiss()
 
-        XCTAssertFalse(settings.isPresented)
+        XCTAssertFalse(settings.showsSettings)
         XCTAssertNil(settings.exerciseID)
         XCTAssertEqual(execution.workout, canonicalWorkout)
         XCTAssertEqual(execution.currentExercise?.id, canonicalExerciseID)
@@ -1070,7 +1291,7 @@ final class WorkoutExecutionNavigationStateTests: XCTestCase {
         XCTAssertEqual(home.expandedWorkoutID, fixture.id)
     }
 
-    func testExerciseOptionsPresentationDoesNotCancelActiveRest() async throws {
+    func testExerciseCardSettingsPresentationDoesNotCancelActiveRest() async throws {
         let repository = SwiftDataRepository(container: try PersistenceController.makeContainer(inMemory: true))
         let fixture = EquilibriumFixtures.mixed(id: "settings-rest")
         try await repository.create(fixture)
@@ -1083,7 +1304,7 @@ final class WorkoutExecutionNavigationStateTests: XCTestCase {
         )
         let canonicalWorkout = try XCTUnwrap(execution.workout)
         let restBeforePresentation = try XCTUnwrap(execution.restState)
-        let settings = ExerciseOptionsPresentation()
+        let settings = ExerciseCardPresentation()
 
         settings.present(exerciseID: fixture.exercises[0].id)
         settings.dismiss()
@@ -1886,14 +2107,14 @@ private final class RecordingHapticsClient: HapticsClient {
 @MainActor
 final class ExecutionPrimaryActionRegressionTests: XCTestCase {
     func testDesignSystemApprovedSemanticPalette() {
-        let grove = EQTheme.grove
-        assertColor(grove.canvas, hex: 0xFAFAFA)
-        assertColor(grove.home.cardSurface, hex: 0xE0FB60)
-        assertColor(grove.execution.foregroundSurface, hex: 0x133011)
-        assertColor(grove.execution.restCanvas, hex: 0xFAFAFA)
-        assertColor(EQTheme.orchid.execution.restForegroundSurface, hex: 0x6A476B)
-        assertColor(grove.primaryText, hex: 0x1F1F1F)
-        assertColor(grove.secondaryText, hex: 0x717171)
+        let theme = EQTheme.mint
+        assertColor(theme.background, hex: 0x4F4AFF)
+        assertColor(theme.home.cardSurface, hex: 0xF0FFE2)
+        assertColor(theme.execution.foregroundSurface, hex: 0xF0FFE2)
+        assertColor(theme.execution.restCanvas, hex: 0x4F4AFF)
+        assertColor(theme.execution.restForegroundSurface, hex: 0x7673F5)
+        assertColor(theme.contentPrimary, hex: 0xFBFBFF)
+        assertColor(theme.contentSecondary, hex: 0xE4E4FA)
     }
 
     func testDesignSystemHomeTypographyUsesSemanticTextStyles() {
@@ -1901,14 +2122,14 @@ final class ExecutionPrimaryActionRegressionTests: XCTestCase {
         XCTAssertEqual(EQTextStyle.screenTitle.weight, .medium)
         XCTAssertEqual(EQTextStyle.cardHero.size, 28)
         XCTAssertEqual(EQTextStyle.cardHero.weight, .medium)
-        XCTAssertEqual(EQTextStyle.caption.size, 15)
+        XCTAssertEqual(EQTextStyle.caption.size, 14)
         XCTAssertEqual(EQTextStyle.caption.weight, .regular)
-        XCTAssertEqual(EQTextStyle.sectionLabel.size, 12)
+        XCTAssertEqual(EQTextStyle.sectionLabel.size, 11)
         XCTAssertEqual(EQTextStyle.sectionLabel.weight, .regular)
         XCTAssertEqual(EQTextStyle.listItemTitle.size, 16)
         XCTAssertEqual(EQTextStyle.listItemTitle.weight, .regular)
         XCTAssertEqual(EQTextStyle.carouselIndex.size, 300)
-        XCTAssertEqual(EQTextStyle.carouselIndex.weight, .black)
+        XCTAssertEqual(EQTextStyle.carouselIndex.weight, .medium)
         XCTAssertEqual(EQTextStyle.carouselIndex.design, .default)
         XCTAssertEqual(EQLayout.Home.carouselIndexOverflowFraction, 0.20)
         XCTAssertEqual(EQLayout.Home.carouselIndexVerticalOffset, 20)

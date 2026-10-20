@@ -63,9 +63,9 @@ struct EQNumberPad: View {
 
     @ViewBuilder private func label(for key: EQNumberPadKey) -> some View {
         switch key {
-        case .digit(let value): Text("\(value)").font(.system(size: 28)).monospacedDigit()
-        case .decimal: Text(".").font(.system(size: 28))
-        case .delete: Image(systemName: "delete.left").font(.system(size: 22))
+        case .digit(let value): Text("\(value)").eqTextStyle(EQTypography.headingCard).monospacedDigit()
+        case .decimal: Text(".").eqTextStyle(EQTypography.headingCard)
+        case .delete: Image(systemName: "delete.left").eqTextStyle(EQTypography.headingSection)
         }
     }
 

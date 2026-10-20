@@ -73,7 +73,7 @@ struct WorkoutImportInputView: View {
                         Text(message).eqTextStyle(.secondaryBody).foregroundStyle(EQColor.warning)
                     }
                     section("TITLE") {
-                        card {
+                        card(fill: EQColor.surfaceInput) {
                             TextField("Workout title", text: $title)
                                 .eqTextStyle(.listItemTitle)
                                 .focused($focusedField, equals: .title)
@@ -84,7 +84,7 @@ struct WorkoutImportInputView: View {
                         }
                     }
                     section("EXERCISES") {
-                        card {
+                        card(fill: EQColor.surfaceInput) {
                             TextEditor(text: $text)
                                 .eqTextStyle(.listItemTitle)
                                 .scrollContentBackground(.hidden)
@@ -122,8 +122,8 @@ struct WorkoutImportInputView: View {
             .scrollIndicators(.hidden)
             .scrollDismissesKeyboard(.interactively)
         }
-        .foregroundStyle(EQColor.primaryText)
-        .background(EQColor.canvas.ignoresSafeArea())
+        .foregroundStyle(EQColor.contentPrimary)
+        .background(EQColor.background.ignoresSafeArea())
         .toolbar(.hidden, for: .navigationBar)
         .onAppear { if message != nil, canParse { parse(submit: false) } }
         .toolbar { ToolbarItemGroup(placement: .keyboard) { Spacer(); Button("Done") { focusedField = nil } } }
@@ -131,17 +131,20 @@ struct WorkoutImportInputView: View {
 
     private func section<Content: View>(_ label: String, @ViewBuilder content: () -> Content) -> some View {
         VStack(alignment: .leading, spacing: EQSpacing.sm) {
-            Text(label).eqTextStyle(.sectionLabel).foregroundStyle(EQColor.secondaryText)
+            Text(label).eqTextStyle(.sectionLabel).foregroundStyle(EQColor.contentSecondary)
             content()
         }
     }
 
-    private func card<Content: View>(@ViewBuilder content: () -> Content) -> some View {
+    private func card<Content: View>(
+        fill: Color = EQColor.surfaceHighlightLight,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
         VStack(alignment: .leading, spacing: 0) { content() }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, EQSpacing.md)
             .padding(.vertical, EQSpacing.xs)
-            .background(EQColor.cardFill, in: RoundedRectangle(cornerRadius: EQRadius.card, style: .continuous))
+            .background(fill, in: RoundedRectangle(cornerRadius: EQRadius.card, style: .continuous))
     }
 
     private func parse(submit: Bool = true) {
@@ -167,7 +170,7 @@ struct ParseIssueRow: View {
         Label {
             VStack(alignment: .leading, spacing: EQSpacing.xxs) {
                 Text(issue.lineNumber.map { "Line \($0): \(issue.message)" } ?? issue.message)
-                if let content = issue.content { Text(content).eqTextStyle(.caption).foregroundStyle(EQColor.secondaryText) }
+                if let content = issue.content { Text(content).eqTextStyle(.caption).foregroundStyle(EQColor.contentSecondary) }
             }
         } icon: { Image(systemName: issue.severity == .error ? "xmark.circle.fill" : "exclamationmark.triangle.fill") }
         .foregroundStyle(EQColor.warning).accessibilityElement(children: .combine)

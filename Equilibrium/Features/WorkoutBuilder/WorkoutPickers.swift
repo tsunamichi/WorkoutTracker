@@ -112,7 +112,7 @@ struct ExercisePickerView: View {
         } else {
             exerciseList
                 .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search exercises and aliases")
-                .background(EQColor.canvas)
+                .background(EQColor.background)
                 .navigationTitle(mode.title)
                 .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } } }
         }
@@ -170,7 +170,7 @@ struct ExercisePickerView: View {
         .frame(minHeight: EQLayout.minimumTouch + EQSpacing.xs)
         .background {
             RoundedRectangle(cornerRadius: EQRadius.control)
-                .fill(Color.black.opacity(0.04))
+                .fill(EQColor.surfaceHighlightDark)
         }
         .overlay {
             RoundedRectangle(cornerRadius: EQRadius.control)
@@ -290,13 +290,13 @@ struct ExercisePickerView: View {
     private var searchFieldIsActive: Bool { searchIsFocused || !cleanQuery.isEmpty }
     private var searchIconColor: Color {
         searchFieldIsActive
-            ? EQColor.Execution.foregroundText.opacity(1)
+            ? EQColor.Execution.foregroundText
             : EQColor.Execution.foregroundSecondaryText
     }
     private var searchBorderColor: Color {
         searchFieldIsActive
-            ? EQColor.Execution.foregroundText.opacity(1)
-            : Color.black.opacity(0.08)
+            ? EQColor.Execution.foregroundText
+            : EQColor.disabledText
     }
     private var offersCustomCreation: Bool { !cleanQuery.isEmpty && loadedQuery == cleanQuery && results.isEmpty }
     private var presentationDetents: Set<PresentationDetent> {
@@ -308,13 +308,13 @@ struct ExercisePickerView: View {
     private var executionBackground: Color {
         EQColor.Execution.foregroundSurface
     }
-    private var pickerBackground: Color { style == .execution ? EQColor.Execution.foregroundSurface : EQColor.canvas }
-    private var rowBackground: Color { style == .execution ? .clear : EQColor.elevatedSurface }
+    private var pickerBackground: Color { style == .execution ? EQColor.Execution.foregroundSurface : EQColor.background }
+    private var rowBackground: Color { style == .execution ? .clear : EQColor.surfaceEmphasis }
     private var rowInsets: EdgeInsets {
         EdgeInsets(top: EQSpacing.xs, leading: EQSpacing.lg, bottom: EQSpacing.xs, trailing: EQSpacing.lg)
     }
-    private var primaryText: Color { style == .execution ? EQColor.Execution.foregroundText : EQColor.primaryText }
-    private var secondaryText: Color { style == .execution ? EQColor.Execution.foregroundSecondaryText : EQColor.secondaryText }
+    private var primaryText: Color { style == .execution ? EQColor.Execution.foregroundText : EQColor.contentPrimary }
+    private var secondaryText: Color { style == .execution ? EQColor.Execution.foregroundSecondaryText : EQColor.contentSecondary }
 
     private func load(query: String) async {
         do {
@@ -395,7 +395,7 @@ private struct CustomExerciseCreationView: View {
             } footer: {
                 Text("Names are checked against canonical exercises and aliases before a custom exercise is created.")
             }
-            .listRowBackground(formBackground)
+            .listRowBackground(EQColor.surfaceInput)
         }
         .scrollContentBackground(.hidden)
         .background(formBackground)
@@ -430,8 +430,8 @@ private struct CustomExerciseCreationView: View {
     }
 
     private var cleanName: String { name.trimmingCharacters(in: .whitespacesAndNewlines) }
-    private var formBackground: Color { style == .execution ? EQColor.Execution.foregroundSurface : EQColor.canvas }
-    private var formText: Color { style == .execution ? EQColor.Execution.foregroundText : EQColor.primaryText }
+    private var formBackground: Color { style == .execution ? EQColor.Execution.foregroundSurface : EQColor.background }
+    private var formText: Color { style == .execution ? EQColor.Execution.foregroundText : EQColor.contentPrimary }
 
     private func submit(createIfAmbiguous: Bool = false) async {
         guard !cleanName.isEmpty, !isSaving else { return }
@@ -467,7 +467,7 @@ struct RecentWorkoutPicker: View {
             HStack(alignment: .center) {
                 Text("Reuse workout")
                     .eqTextStyle(.screenTitle)
-                    .foregroundStyle(EQColor.primaryText)
+                    .foregroundStyle(EQColor.contentPrimary)
                 Spacer(minLength: EQSpacing.sm)
                 addButton
             }
@@ -476,7 +476,7 @@ struct RecentWorkoutPicker: View {
                 .padding(.bottom, EQLayout.Settings.sheetTitleToContentSpacing)
             if values.isEmpty {
                 ContentUnavailableView("No recent workouts", systemImage: "clock.arrow.circlepath", description: Text(failed ? "Recent workouts could not be loaded." : allValues.isEmpty ? "Completed workouts appear here." : "No workouts in the past 2 weeks."))
-                    .foregroundStyle(EQColor.secondaryText)
+                    .foregroundStyle(EQColor.contentSecondary)
                     .frame(maxHeight: .infinity)
             } else {
                 // List cancels row taps when a drag turns into a scroll; a plain ScrollView can fire them.
@@ -494,11 +494,11 @@ struct RecentWorkoutPicker: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .safeAreaInset(edge: .bottom, spacing: 0) { seeAllButton }
-        .background(EQColor.elevatedSurface)
+        .background(EQColor.surfaceEmphasis)
         .toolbar(.hidden, for: .navigationBar)
         .presentationDragIndicator(.visible)
         .presentationCornerRadius(EQRadius.sheet)
-        .presentationBackground(EQColor.elevatedSurface)
+        .presentationBackground(EQColor.surfaceEmphasis)
         .task { do { allValues = try await repository.recentCompletedWorkouts(limit: .max) } catch { failed = true } }
     }
     private var values: [Workout] {
@@ -518,18 +518,18 @@ struct RecentWorkoutPicker: View {
         return Button { toggle(value.id) } label: {
             HStack(spacing: EQLayout.controlGap) {
                 VStack(alignment: .leading, spacing: EQSpacing.xxs) {
-                    Text(value.titleSnapshot).eqTextStyle(.listItemTitle).foregroundStyle(EQColor.primaryText).lineLimit(1)
-                    detailText(value).eqTextStyle(.caption).foregroundStyle(EQColor.secondaryText).lineLimit(1)
+                    Text(value.titleSnapshot).eqTextStyle(.listItemTitle).foregroundStyle(EQColor.contentPrimary).lineLimit(1)
+                    detailText(value).eqTextStyle(.caption).foregroundStyle(EQColor.contentSecondary).lineLimit(1)
                 }
                 Spacer(minLength: 0)
                 Image(systemName: selected ? "checkmark.circle.fill" : "circle")
                     .eqTextStyle(.icon)
-                    .foregroundStyle(selected ? EQColor.accent : EQColor.separator)
+                    .foregroundStyle(selected ? EQColor.accent : EQColor.surfaceHighlightLight)
                     .frame(width: EQLayout.iconSize, height: EQLayout.iconSize)
             }
             .padding(EQSpacing.md)
             .frame(maxWidth: .infinity, minHeight: EQDimension.minimumTouch, alignment: .leading)
-            .background(EQColor.cardFill, in: RoundedRectangle(cornerRadius: EQRadius.card, style: .continuous))
+            .background(EQColor.surfaceHighlightLight, in: RoundedRectangle(cornerRadius: EQRadius.card, style: .continuous))
             .overlay {
                 RoundedRectangle(cornerRadius: EQRadius.card, style: .continuous)
                     .strokeBorder(EQColor.accent, lineWidth: 1)
@@ -558,14 +558,14 @@ struct RecentWorkoutPicker: View {
         .frame(minHeight: EQDimension.minimumTouch)
         .contentShape(Rectangle())
         .disabled(!enabled)
-        .animation(.easeOut(duration: 0.08), value: selectedIDs.count)
+                    .animation(EQMotion.selectionFeedback, value: selectedIDs.count)
     }
     @ViewBuilder private var seeAllButton: some View {
         if !allValues.isEmpty {
             VStack(spacing: 0) {
                 Text(showsAll ? "Showing every completed workout" : "Showing workouts from the past 2 weeks")
                     .eqTextStyle(.legal)
-                    .foregroundStyle(EQColor.secondaryText)
+                    .foregroundStyle(EQColor.contentSecondary)
                     .multilineTextAlignment(.center)
                 Button(showsAll ? "Show less" : "See all") { toggleShowsAll() }
                     .eqTextStyle(.body)
@@ -578,11 +578,11 @@ struct RecentWorkoutPicker: View {
             .padding(.horizontal, EQLayout.screenGutter)
             .padding(.top, EQSpacing.sm)
             .padding(.bottom, EQSpacing.xs)
-            .background(EQColor.elevatedSurface)
+            .background(EQColor.surfaceEmphasis)
         }
     }
     private func toggle(_ id: WorkoutID) {
-        withAnimation(.easeOut(duration: 0.08)) {
+            withAnimation(EQMotion.selectionFeedback) {
             if selectedIDs.contains(id) { selectedIDs.removeAll { $0 == id } } else { selectedIDs.append(id) }
         }
         SystemHapticsClient().perform(.selection)

@@ -24,8 +24,10 @@ struct SettingsShellView: View {
                         } label: { rowLabel("Progression", systemImage: "chevron.right") }
                         .buttonStyle(.plain)
                     }
-                    section("THEME") {
-                        card { ThemePicker() }
+                    if EQTheme.all.count > 1 {
+                        section("THEME") {
+                            card { ThemePicker() }
+                        }
                     }
                     if let legacyImporter {
                         section("MIGRATION") {
@@ -42,8 +44,8 @@ struct SettingsShellView: View {
             }
             .scrollIndicators(.hidden)
         }
-        .foregroundStyle(EQColor.primaryText)
-        .background(EQColor.canvas)
+        .foregroundStyle(EQColor.contentPrimary)
+        .background(EQColor.background)
         .toolbar(.hidden, for: .navigationBar)
         .sheet(item: $presentedSheet) { destination in
             switch destination {
@@ -65,7 +67,7 @@ struct SettingsShellView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .foregroundStyle(EQColor.primaryText)
+        .foregroundStyle(EQColor.contentPrimary)
         .accessibilityLabel("Back to Home")
         .frame(maxWidth: .infinity, minHeight: EQLayout.minimumTouch + EQSpacing.sm, alignment: .leading)
         .padding(.horizontal, EQLayout.screenGutter)
@@ -73,7 +75,7 @@ struct SettingsShellView: View {
 
     private func section<Content: View>(_ label: String, @ViewBuilder content: () -> Content) -> some View {
         VStack(alignment: .leading, spacing: EQSpacing.sm) {
-            Text(label).eqTextStyle(.sectionLabel).foregroundStyle(EQColor.secondaryText)
+            Text(label).eqTextStyle(.sectionLabel).foregroundStyle(EQColor.contentSecondary)
             content()
         }
         .padding(.top, EQLayout.Settings.sectionSpacing - EQLayout.groupedCardGap)
@@ -91,7 +93,7 @@ struct SettingsShellView: View {
             Spacer()
             Image(systemName: systemImage)
                 .eqTextStyle(.caption)
-                .foregroundStyle(EQColor.secondaryText)
+                .foregroundStyle(EQColor.contentSecondary)
         }
         .frame(minHeight: EQLayout.minimumTouch)
         .contentShape(Rectangle())
@@ -108,12 +110,12 @@ struct SettingsShellView: View {
 }
 
 private struct ThemePicker: View {
-    private let store = EQThemeStore.shared
+    @Environment(EQThemeStore.self) private var store
 
     var body: some View {
         ForEach(EQTheme.all) { theme in
             Button {
-                withAnimation(.easeInOut(duration: 0.25)) { store.select(theme.id) }
+                withAnimation(EQMotion.themeChange) { store.select(theme.id) }
             } label: {
                 HStack(spacing: EQSpacing.sm) {
                     ThemeSwatch(colors: theme.swatches)
@@ -144,7 +146,7 @@ private struct ThemeSwatch: View {
                 Circle()
                     .fill(colors[index])
                     .frame(width: 20, height: 20)
-                    .overlay(Circle().strokeBorder(EQColor.separator, lineWidth: 1))
+                    .overlay(Circle().strokeBorder(EQColor.surfaceHighlightLight, lineWidth: 1))
             }
         }
         .accessibilityHidden(true)
@@ -193,7 +195,7 @@ private struct UnitsSettingView: View {
         SettingsBottomSheet(title: "Units") {
             Form {
                 Picker("Weight unit", selection: $unit) { Text("Pounds (lb)").tag(WeightUnit.pounds); Text("Kilograms (kg)").tag(WeightUnit.kilograms) }.pickerStyle(.inline)
-                Section { Text("Workout entries and progression increments use this unit for presentation. Canonical weight remains pounds.").eqTextStyle(.caption).foregroundStyle(EQColor.secondaryText) }
+                Section { Text("Workout entries and progression increments use this unit for presentation. Canonical weight remains pounds.").eqTextStyle(.caption).foregroundStyle(EQColor.contentSecondary) }
             }
             .scrollContentBackground(.hidden)
         }
@@ -215,7 +217,7 @@ private struct TimerSettingView: View {
                     Slider(value: $seconds, in: 15...300, step: 5).accessibilityValue(text)
                     Button("Save") { Task { try? await repository.saveDefaultRestDuration(seconds) } }
                 }
-                Section { Text("Exercise-specific rest duration wins. Changing this setting does not rewrite workouts or restart an active countdown.").eqTextStyle(.caption).foregroundStyle(EQColor.secondaryText) }
+                Section { Text("Exercise-specific rest duration wins. Changing this setting does not rewrite workouts or restart an active countdown.").eqTextStyle(.caption).foregroundStyle(EQColor.contentSecondary) }
             }
             .scrollContentBackground(.hidden)
         }
@@ -238,11 +240,11 @@ private struct SettingsBottomSheet<Content: View>: View {
             content()
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(EQColor.elevatedSurface)
+        .background(EQColor.surfaceEmphasis)
         .presentationDetents([.medium])
         .presentationDragIndicator(.visible)
         .presentationCornerRadius(EQRadius.sheet)
-        .presentationBackground(EQColor.elevatedSurface)
+        .presentationBackground(EQColor.surfaceEmphasis)
     }
 }
 
@@ -265,13 +267,13 @@ private struct ProgressionSettingView: View {
         Form {
             Section { Toggle("Enable progression", isOn: $model.configuration.isEnabled).onChange(of: model.configuration.isEnabled) { _, _ in Task { await model.saveEnabled() } } }
             Section("Automatic progression") {
-                Text("Assignments use the stable exercise identity and apply anywhere that exercise appears.").eqTextStyle(.caption).foregroundStyle(EQColor.secondaryText)
+                Text("Assignments use the stable exercise identity and apply anywhere that exercise appears.").eqTextStyle(.caption).foregroundStyle(EQColor.contentSecondary)
                 ForEach(model.exercises) { exercise in
                     Picker(exercise.name, selection: profile(exercise.id)) { ForEach(AutoProgressionProfile.allCases, id: \.self) { Text($0.title).tag($0) } }
                 }
             }
             if let error = model.error { Section { Text(error).foregroundStyle(EQColor.warning) } }
-        }.scrollContentBackground(.hidden).background(EQColor.canvas).navigationTitle("Progression").task { await model.load() }
+        }.scrollContentBackground(.hidden).background(EQColor.background).navigationTitle("Progression").task { await model.load() }
             .onReceive(NotificationCenter.default.publisher(for: .equilibriumRepositoryDidChange)) { _ in Task { await model.load() } }
     }
     private func profile(_ exerciseID: ExerciseID) -> Binding<AutoProgressionProfile> { .init(get: { model.configuration.assignments[exerciseID] ?? .none }, set: { let profile = $0; model.configuration.assign(profile, to: exerciseID); Task { await model.save(profile, for: exerciseID) } }) }

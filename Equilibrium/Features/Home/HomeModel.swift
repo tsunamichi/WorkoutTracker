@@ -11,8 +11,6 @@ final class HomeModel {
     private(set) var hasReusableWorkouts = false
     var primarySurface: HomePrimarySurface = .home
     private(set) var expandedWorkoutID: WorkoutID?
-    var isAddWorkoutDrawerPresented = false
-    private var pendingCreationRoute: CreationRoute?
     var creationRoute: CreationRoute?
     init(repository: any WorkoutRepository, now: @escaping () -> Date = { .now }, calendar: Calendar = .autoupdatingCurrent) {
         loadSnapshot = { try await repository.homeWorkouts(completedSince: $0) }
@@ -54,17 +52,6 @@ final class HomeModel {
 
     func endExecution() {
         expandedWorkoutID = nil
-    }
-
-    func selectCreationRoute(_ route: CreationRoute) {
-        pendingCreationRoute = route
-        isAddWorkoutDrawerPresented = false
-    }
-
-    func presentPendingCreationRoute() {
-        guard let pendingCreationRoute else { return }
-        self.pendingCreationRoute = nil
-        creationRoute = pendingCreationRoute
     }
 
     func nextLocalDayRefreshDelay() -> Duration {

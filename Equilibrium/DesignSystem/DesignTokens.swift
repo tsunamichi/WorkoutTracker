@@ -5,11 +5,17 @@ import SwiftUI
 /// A complete set of semantic colour roles. Views never reference raw hex values;
 /// they read roles through `EQColor`, which resolves against the active theme.
 struct EQTheme: Identifiable, Equatable {
-    enum ID: String, CaseIterable, Identifiable {
-        case grove
-        case dusk
-        case orchid
+    struct ID: RawRepresentable, Hashable, Identifiable {
+        let rawValue: String
         var id: String { rawValue }
+
+        init(rawValue: String) {
+            self.rawValue = rawValue
+        }
+
+        static let mint = Self(rawValue: EQGeneratedThemes.mint.id)
+        static let lotso = Self(rawValue: EQGeneratedThemes.lotso.id)
+        static let pink = Self(rawValue: EQGeneratedThemes.pink.id)
     }
 
     struct HomeRoles: Equatable {
@@ -67,225 +73,113 @@ struct EQTheme: Identifiable, Equatable {
     /// Representative colours shown in the theme picker.
     let swatches: [Color]
 
-    var canvas: Color
+    var background: Color
     var surface: Color
-    var elevatedSurface: Color
-    var cardFill: Color
-    var primaryText: Color
-    var secondaryText: Color
-    var separator: Color
+    var surfaceEmphasis: Color
     var accent: Color
-    var success: Color
-    var warning: Color
-    var rest: Color
-    var overlayDim: Color
-    var ctaSurface: Color
-    var ctaLabel: Color
-    var ctaDisabledSurface: Color
-    var ctaDisabledLabel: Color
-    var chartLine: Color
-    var chartPoint: Color
+    var accentMuted: Color
+    var contentPrimary: Color
+    var contentSecondary: Color
+    var contentOnAccent: Color
+    var overlay: Color
+    var disabledText: Color
+    var surfaceHighlightLight: Color
+    var surfaceHighlightDark: Color
+    var surfaceInput: Color
     var home: HomeRoles
     var execution: ExecutionRoles
 
-    static let all: [EQTheme] = [.grove, .dusk, .orchid]
-    static let `default` = EQTheme.grove
+    static let all: [EQTheme] = EQGeneratedThemes.selectable.map { mode in
+        EQTheme.generated(id: ID(rawValue: mode.id), mode: mode)
+    }
+    static let `default` = EQTheme.mint
 
     static func theme(for id: ID) -> EQTheme {
-        all.first { $0.id == id } ?? .default
+        all.first(where: { $0.id == id }) ?? .default
     }
 }
 
 extension EQTheme {
-    private enum GrovePalette {
-        static let canvas = EQColor.rgb(0xFAFAFA)
-        static let lime = EQColor.rgb(0xE0FB60)
-        static let forest = EQColor.rgb(0x133011)
-        static let orange = EQColor.rgb(0xFFA424)
-        static let orangeDeep = EQColor.rgb(0xEA9000)
-        static let ink = EQColor.rgb(0x1F1F1F)
-        static let graphite = EQColor.rgb(0x717171)
-    }
+    static let mint = generated(id: .mint, mode: EQGeneratedThemes.mint)
+    static let lotso = generated(id: .lotso, mode: EQGeneratedThemes.lotso)
+    static let pink = generated(id: .pink, mode: EQGeneratedThemes.pink)
 
-    /// The original Equilibrium palette: lime and forest green on a light canvas.
-    static let grove: EQTheme = {
-        typealias P = GrovePalette
+    private static func generated(id: ID, mode: EQGeneratedThemeMode) -> EQTheme {
+        let colors = mode.colors
+        let background = colors.background.color
+        let surface = colors.surface.color
+        let surfaceEmphasis = colors.surfaceEmphasis.color
+        let accent = colors.accent.color
+        let accentMuted = colors.accentMuted.color
+        let contentPrimary = colors.contentPrimary.color
+        let contentSecondary = colors.contentSecondary.color
+        let contentOnAccent = colors.contentOnAccent.color
+        let overlay = colors.overlay.color
+        let disabledText = colors.disabledText.color
+        let highlightLight = colors.surfaceHighlightLight.color
+        let highlightDark = colors.surfaceHighlightDark.color
+        let surfaceInput = colors.surfaceInput.color
+
         return EQTheme(
-            id: .grove,
-            name: "Grove",
-            colorScheme: .light,
-            swatches: [P.canvas, P.lime, P.forest, P.orange],
-            canvas: P.canvas,
-            surface: .white,
-            elevatedSurface: EQColor.rgb(0xF1F1F1),
-            cardFill: Color.black.opacity(0.04),
-            primaryText: P.ink,
-            secondaryText: P.graphite,
-            separator: P.ink.opacity(0.12),
-            accent: P.forest,
-            success: P.forest,
-            warning: P.orange,
-            rest: P.orange,
-            overlayDim: Color.black.opacity(0.06),
-            ctaSurface: P.forest,
-            ctaLabel: P.orange,
-            ctaDisabledSurface: Color.black.opacity(0.04),
-            ctaDisabledLabel: P.graphite,
-            chartLine: P.forest,
-            chartPoint: P.orange,
-            home: HomeRoles(
-                canvas: P.canvas,
-                cardSurface: P.lime,
-                cardText: P.ink,
-                primaryText: P.ink,
-                secondaryText: P.graphite,
-                cardSecondaryText: P.forest,
-                accent: P.forest,
-                completedText: P.forest,
-                indexText: P.forest.opacity(0.96),
-                timerAffordance: P.graphite
-            ),
-            execution: ExecutionRoles(
-                canvas: P.canvas,
-                overviewSurface: P.lime,
-                overviewDimmedSurface: P.lime,
-                foregroundSurface: P.forest,
-                restCanvas: P.canvas,
-                restOverviewSurface: P.canvas.mix(with: .black, by: 0.04),
-                restForegroundSurface: P.canvas.mix(with: P.ink, by: 0.10),
-                restCardText: P.graphite,
-                restTimerText: P.ink,
-                primaryText: P.ink,
-                secondaryText: P.graphite,
-                overviewText: P.forest,
-                overviewSecondaryText: P.forest.opacity(0.56),
-                foregroundText: P.lime,
-                foregroundSecondaryText: P.lime.opacity(0.30),
-                timerText: P.forest,
-                separator: P.forest.opacity(0.22),
-                walletBorder: P.canvas,
-                progressAccent: P.forest,
-                success: P.forest,
-                warning: P.orange,
-                primaryAction: P.orange,
-                metricUnit: P.orange,
-                settingsScrim: Color.black.opacity(0.4),
-                restAccent: P.orange,
-                destructive: P.orange
-            )
-        )
-    }()
-
-    /// Palette for the dark lime-on-canvas family of themes. Only the base hues
-    /// vary between themes; the role mapping in `darkLimeTheme` is shared.
-    private struct DarkLimePalette {
-        var canvas: Color
-        var elevated: Color
-        var lavender: Color
-        var lavenderMuted: Color
-        var lavenderDim: Color
-        /// IN PROGRESS surface while resting.
-        var restSurface: Color
-        var lime = EQColor.rgb(0xE1FF7D)
-        var olive = EQColor.rgb(0xA6BE53)
-        var orange = EQColor.rgb(0xFFA424)
-        var orangeDeep = EQColor.rgb(0xEA9000)
-    }
-
-    private static func darkLimeTheme(id: ID, name: String, palette P: DarkLimePalette) -> EQTheme {
-        EQTheme(
             id: id,
-            name: name,
+            name: mode.displayName,
             colorScheme: .dark,
-            swatches: [P.canvas, P.lime, P.olive, P.lavender],
-            canvas: P.canvas,
-            surface: P.elevated,
-            elevatedSurface: P.elevated,
-            cardFill: Color.white.opacity(0.06),
-            primaryText: P.lavender,
-            secondaryText: P.lavenderDim,
-            separator: P.lavender.opacity(0.14),
-            accent: P.lime,
-            success: P.lime,
-            warning: P.orange,
-            rest: P.orange,
-            overlayDim: Color.black.opacity(0.16),
-            ctaSurface: P.lime,
-            ctaLabel: P.canvas,
-            ctaDisabledSurface: Color.white.opacity(0.06),
-            ctaDisabledLabel: P.lavenderDim,
-            chartLine: P.lime,
-            chartPoint: P.orange,
+            swatches: [background, accent, accentMuted, contentPrimary],
+            background: background,
+            surface: surface,
+            surfaceEmphasis: surfaceEmphasis,
+            accent: accent,
+            accentMuted: accentMuted,
+            contentPrimary: contentPrimary,
+            contentSecondary: contentSecondary,
+            contentOnAccent: contentOnAccent,
+            overlay: overlay,
+            disabledText: disabledText,
+            surfaceHighlightLight: highlightLight,
+            surfaceHighlightDark: highlightDark,
+            surfaceInput: surfaceInput,
             home: HomeRoles(
-                canvas: P.canvas,
-                cardSurface: P.lime,
-                cardText: P.canvas,
-                primaryText: P.lavender,
-                secondaryText: P.lavenderMuted,
-                cardSecondaryText: P.canvas,
-                accent: P.lime,
-                completedText: P.canvas,
-                indexText: P.canvas,
-                timerAffordance: P.lime
+                canvas: background,
+                cardSurface: accent,
+                cardText: contentOnAccent,
+                primaryText: contentPrimary,
+                secondaryText: contentSecondary,
+                cardSecondaryText: contentOnAccent,
+                accent: accent,
+                completedText: contentOnAccent,
+                indexText: contentOnAccent,
+                timerAffordance: accent
             ),
             execution: ExecutionRoles(
-                canvas: P.canvas,
-                overviewSurface: P.lime,
-                overviewDimmedSurface: P.olive,
-                foregroundSurface: P.lime,
-                restCanvas: P.canvas,
-                restOverviewSurface: P.canvas.mix(with: .white, by: 0.06),
-                restForegroundSurface: P.restSurface,
-                restCardText: P.lavenderMuted,
-                restTimerText: P.lavender,
-                primaryText: P.lavenderMuted,
-                secondaryText: P.lavenderMuted,
-                overviewText: P.canvas,
-                overviewSecondaryText: P.canvas.opacity(0.56),
-                foregroundText: P.canvas,
-                foregroundSecondaryText: P.canvas.opacity(0.40),
-                timerText: P.canvas,
-                separator: P.canvas.opacity(0.22),
-                walletBorder: P.canvas,
-                progressAccent: P.canvas,
-                success: P.canvas,
-                warning: P.orange,
-                primaryAction: P.canvas,
-                metricUnit: P.canvas,
-                settingsScrim: Color.black.opacity(0.4),
-                restAccent: P.orange,
-                destructive: P.orange
+                canvas: background,
+                overviewSurface: accent,
+                overviewDimmedSurface: accentMuted,
+                foregroundSurface: accent,
+                restCanvas: background,
+                restOverviewSurface: surface,
+                restForegroundSurface: surfaceEmphasis,
+                restCardText: contentSecondary,
+                restTimerText: contentPrimary,
+                primaryText: contentPrimary,
+                secondaryText: contentSecondary,
+                overviewText: contentOnAccent,
+                overviewSecondaryText: disabledText,
+                foregroundText: contentOnAccent,
+                foregroundSecondaryText: disabledText,
+                timerText: contentOnAccent,
+                separator: highlightDark,
+                walletBorder: background,
+                progressAccent: contentOnAccent,
+                success: contentOnAccent,
+                warning: contentOnAccent,
+                primaryAction: contentOnAccent,
+                metricUnit: contentOnAccent,
+                settingsScrim: overlay,
+                restAccent: accent,
+                destructive: contentOnAccent
             )
         )
     }
-
-    /// Lime and olive surfaces on a deep purple canvas.
-    static let dusk = darkLimeTheme(
-        id: .dusk,
-        name: "Dusk",
-        palette: DarkLimePalette(
-            canvas: EQColor.rgb(0x332C49),
-            elevated: EQColor.rgb(0x3E3657),
-            lavender: EQColor.rgb(0xE4E1EB),
-            lavenderMuted: EQColor.rgb(0xC3BED3),
-            lavenderDim: EQColor.rgb(0xA39DB5),
-            restSurface: EQColor.rgb(0x57476B)
-        )
-    )
-
-    /// Dusk's lime surfaces on a warmer plum canvas with pink-tinted text.
-    static let orchid = darkLimeTheme(
-        id: .orchid,
-        name: "Orchid",
-        palette: DarkLimePalette(
-            canvas: EQColor.rgb(0x462C49),
-            elevated: EQColor.rgb(0x513657),
-            lavender: EQColor.rgb(0xF4E4F3),
-            lavenderMuted: EQColor.rgb(0xD3BED2),
-            lavenderDim: EQColor.rgb(0xB39DB4),
-            restSurface: EQColor.rgb(0x6A476B)
-        )
-    )
 }
 
 /// Owns the active theme. `EQColor` reads through this observable store, so any
@@ -303,7 +197,7 @@ final class EQThemeStore {
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
-        let stored = defaults.string(forKey: Self.storageKey).flatMap(EQTheme.ID.init(rawValue:))
+        let stored = defaults.string(forKey: Self.storageKey).map(EQTheme.ID.init(rawValue:))
         theme = EQTheme.theme(for: stored ?? EQTheme.default.id)
     }
 
@@ -317,6 +211,22 @@ final class EQThemeStore {
 
 enum EQColor {
     static var theme: EQTheme { EQThemeStore.shared.theme }
+
+    /// Design-token semantic roles. Feature views should prefer these names;
+    /// contextual Home/Execution roles below are mappings, not extra palettes.
+    static var background: Color { theme.background }
+    static var surface: Color { theme.surface }
+    static var surfaceEmphasis: Color { theme.surfaceEmphasis }
+    static var accent: Color { theme.accent }
+    static var accentMuted: Color { theme.accentMuted }
+    static var contentPrimary: Color { theme.contentPrimary }
+    static var contentSecondary: Color { theme.contentSecondary }
+    static var contentOnAccent: Color { theme.contentOnAccent }
+    static var overlay: Color { theme.overlay }
+    static var disabledText: Color { theme.disabledText }
+    static var surfaceHighlightLight: Color { theme.surfaceHighlightLight }
+    static var surfaceHighlightDark: Color { theme.surfaceHighlightDark }
+    static var surfaceInput: Color { theme.surfaceInput }
 
     enum Home {
         private static var roles: EQTheme.HomeRoles { EQColor.theme.home }
@@ -358,106 +268,162 @@ enum EQColor {
         static var warning: Color { roles.warning }
         static var primaryAction: Color { roles.primaryAction }
         static var metricUnit: Color { roles.metricUnit }
-        /// Dims the execution screen behind the exercise settings sheet.
+        /// Dims execution content behind the in-progress card while it shows Settings.
         static var settingsScrim: Color { roles.settingsScrim }
         static var restAccent: Color { roles.restAccent }
         static var destructive: Color { roles.destructive }
     }
 
-    // General application roles. Feature contexts refine these where surfaces carry
-    // stronger meaning, such as Workout Execution's wallet.
+    // Contextual component roles derived exclusively from the semantic tokens above.
     static var colorScheme: ColorScheme { theme.colorScheme }
-    static var canvas: Color { theme.canvas }
-    static var surface: Color { theme.surface }
-    static var elevatedSurface: Color { theme.elevatedSurface }
-    /// Fill for grouped content cards that sit directly on the canvas.
-    static var cardFill: Color { theme.cardFill }
-    static var primaryText: Color { theme.primaryText }
-    static var secondaryText: Color { theme.secondaryText }
-    static var separator: Color { theme.separator }
-    static var accent: Color { theme.accent }
-    static var success: Color { theme.success }
-    static var warning: Color { theme.warning }
-    static var rest: Color { theme.rest }
-    /// Dims a surface that sits behind a presented overlay.
-    static var overlayDim: Color { theme.overlayDim }
-    static var ctaSurface: Color { theme.ctaSurface }
-    static var ctaLabel: Color { theme.ctaLabel }
-    static var ctaDisabledSurface: Color { theme.ctaDisabledSurface }
-    static var ctaDisabledLabel: Color { theme.ctaDisabledLabel }
-    static var chartLine: Color { theme.chartLine }
-    static var chartPoint: Color { theme.chartPoint }
+    static var success: Color { accent }
+    static var warning: Color { accent }
+    static var ctaSurface: Color { accent }
+    static var ctaLabel: Color { contentOnAccent }
+    static var ctaDisabledSurface: Color { surfaceHighlightLight }
+    static var ctaDisabledLabel: Color { contentSecondary }
 
-    static func rgb(_ value: UInt32, opacity: Double = 1) -> Color {
-        Color(
-            .sRGB,
-            red: Double((value >> 16) & 0xFF) / 255,
-            green: Double((value >> 8) & 0xFF) / 255,
-            blue: Double(value & 0xFF) / 255,
-            opacity: opacity
-        )
-    }
+}
+
+enum EQTypographyScaling {
+    case fixed
+    case dynamic(relativeTo: Font.TextStyle, maximumScale: CGFloat)
 }
 
 struct EQTextStyle {
     let size: CGFloat
+    let lineHeight: CGFloat
     let weight: Font.Weight
     let design: Font.Design
     let tracking: CGFloat
-    let lineSpacing: CGFloat
+    let usesAutomaticLineHeight: Bool
+    let scaling: EQTypographyScaling
 
     init(
         size: CGFloat,
+        lineHeight: CGFloat? = nil,
         weight: Font.Weight = .regular,
         design: Font.Design = .default,
         tracking: CGFloat = 0,
-        lineSpacing: CGFloat = 0
+        usesAutomaticLineHeight: Bool = false,
+        scaling: EQTypographyScaling = .fixed
     ) {
         self.size = size
+        self.lineHeight = lineHeight ?? size
         self.weight = weight
         self.design = design
         self.tracking = tracking
-        self.lineSpacing = lineSpacing
+        self.usesAutomaticLineHeight = usesAutomaticLineHeight
+        self.scaling = scaling
+    }
+
+    init(
+        token: EQGeneratedTypographyToken,
+        relativeTo textStyle: Font.TextStyle,
+        maximumScale: CGFloat
+    ) {
+        size = token.size
+        lineHeight = token.lineHeight
+        weight = Self.fontWeight(token.weight)
+        design = .default
+        tracking = token.letterSpacing
+        usesAutomaticLineHeight = token.usesAutomaticLineHeight
+        scaling = .dynamic(relativeTo: textStyle, maximumScale: maximumScale)
     }
 
     var font: Font {
         .system(size: size, weight: weight, design: design)
     }
 
-    static let display = EQTextStyle(size: 56)
-    static let screenTitle = EQTextStyle(size: 24, weight: .medium)
-    static let sectionTitle = EQTextStyle(size: 28)
-    static let exerciseTitle = EQTextStyle(size: 30)
-    static let largeMetric = EQTextStyle(size: 72)
-    static let metricUnit = EQTextStyle(size: 72, weight: .thin)
-    static let body = EQTextStyle(size: 17)
-    static let secondaryBody = EQTextStyle(size: 15)
-    static let sectionLabel = EQTextStyle(size: 12)
-    static let caption = EQTextStyle(size: 15)
-    static let captionEmphasized = EQTextStyle(size: 15, weight: .bold)
-    static let legal = EQTextStyle(size: 10)
-    static let navigationTitle = EQTextStyle(size: 20)
+    private static func fontWeight(_ value: Int) -> Font.Weight {
+        switch value {
+        case 100: .ultraLight
+        case 200: .thin
+        case 300: .light
+        case 500: .medium
+        case 600: .semibold
+        case 700: .bold
+        case 800: .heavy
+        case 900: .black
+        default: .regular
+        }
+    }
+
+    // Compatibility aliases keep feature code source-stable while all reusable
+    // specifications resolve to generated Figma tokens.
+    static let display = EQTypography.displayTimer
+    static let screenTitle = EQTypography.headingPage
+    static let sectionTitle = EQTypography.headingCard
+    static let exerciseTitle = EQTypography.headingCard
+    static let largeMetric = EQTypography.displayValue
+    static let metricUnit = EQTypography.displayUnit
+    static let body = EQTypography.bodyDefault
+    static let secondaryBody = EQTypography.bodySmall
+    static let sectionLabel = EQTypography.labelOverline
+    static let caption = EQTypography.bodySmall
+    static let captionEmphasized = EQTypography.labelAction
+    static let legal = EQTypography.labelOverline
+    static let navigationTitle = EQTypography.headingSection
     /// The settled title rendered by the Home-to-Execution transition layer.
-    static let executionNavigationTitle = EQTextStyle(size: 17)
-    static let cardHero = EQTextStyle(size: 28, weight: .medium)
-    static let listItemTitle = EQTextStyle(size: 16)
-    static let icon = EQTextStyle(size: 20)
-    static let carouselIndex = EQTextStyle(size: 300, weight: .black)
-    static let transitionDestinationTitle = EQTextStyle(size: 28)
+    static let executionNavigationTitle = EQTypography.bodyDefault
+    static let cardHero = EQTypography.headingCard
+    static let listItemTitle = EQTypography.bodyDefault
+    /// SF Symbol sizing is component geometry rather than text typography.
+    static let icon = EQTextStyle(size: EQGeneratedTypography.headingSection.size)
+    static let carouselIndex = EQTypography.displayIndex
+    static let transitionDestinationTitle = EQTypography.headingCard
 
     static func timerMetric(size: CGFloat) -> EQTextStyle {
-        EQTextStyle(size: size, design: .rounded)
+        EQTextStyle(
+            size: size,
+            lineHeight: size * EQGeneratedTypography.displayTimer.lineHeight / EQGeneratedTypography.displayTimer.size,
+            design: .rounded,
+            scaling: .dynamic(relativeTo: .largeTitle, maximumScale: 1.25)
+        )
     }
+}
+
+enum EQTypography {
+    static let displayPR = EQTextStyle(token: EQGeneratedTypography.displayPr, relativeTo: .largeTitle, maximumScale: 1.5)
+    static let displayTimer = EQTextStyle(token: EQGeneratedTypography.displayTimer, relativeTo: .largeTitle, maximumScale: 1.25)
+    static let displayIndex = EQTextStyle(token: EQGeneratedTypography.displayIndex, relativeTo: .largeTitle, maximumScale: 1)
+    static let displayUnit = EQTextStyle(token: EQGeneratedTypography.displayUnit, relativeTo: .largeTitle, maximumScale: 1.25)
+    static let displayValue = EQTextStyle(token: EQGeneratedTypography.displayValue, relativeTo: .largeTitle, maximumScale: 1.25)
+    static let headingPage = EQTextStyle(token: EQGeneratedTypography.headingPage, relativeTo: .title2, maximumScale: 1.5)
+    static let headingCard = EQTextStyle(token: EQGeneratedTypography.headingCard, relativeTo: .title, maximumScale: 1.7)
+    static let headingSection = EQTextStyle(token: EQGeneratedTypography.headingSection, relativeTo: .title3, maximumScale: 2)
+    static let bodyLarge = EQTextStyle(token: EQGeneratedTypography.bodyLarge, relativeTo: .title3, maximumScale: 2.2)
+    static let bodyDefault = EQTextStyle(token: EQGeneratedTypography.bodyDefault, relativeTo: .body, maximumScale: 3)
+    static let bodySmall = EQTextStyle(token: EQGeneratedTypography.bodySmall, relativeTo: .subheadline, maximumScale: 3)
+    static let labelAction = EQTextStyle(token: EQGeneratedTypography.labelAction, relativeTo: .body, maximumScale: 2.5)
+    static let labelOverline = EQTextStyle(token: EQGeneratedTypography.labelOverline, relativeTo: .caption2, maximumScale: 2)
 }
 
 private struct EQTextStyleModifier: ViewModifier {
     let style: EQTextStyle
+    @ScaledMetric private var scaledSize: CGFloat
+
+    init(style: EQTextStyle) {
+        self.style = style
+        switch style.scaling {
+        case .fixed:
+            _scaledSize = ScaledMetric(wrappedValue: style.size)
+        case .dynamic(let textStyle, _):
+            _scaledSize = ScaledMetric(wrappedValue: style.size, relativeTo: textStyle)
+        }
+    }
 
     func body(content: Content) -> some View {
+        let maximumScale: CGFloat = switch style.scaling {
+        case .fixed: 1
+        case .dynamic(_, let maximumScale): maximumScale
+        }
+        let effectiveSize = min(scaledSize, style.size * maximumScale)
+        let scale = effectiveSize / style.size
         content
-            .font(style.font)
-            .tracking(style.tracking)
-            .lineSpacing(style.lineSpacing)
+            .font(.system(size: effectiveSize, weight: style.weight, design: style.design))
+            .tracking(style.tracking * scale)
+            .lineSpacing(style.usesAutomaticLineHeight ? 0 : max(0, (style.lineHeight - style.size) * scale))
     }
 }
 
@@ -595,22 +561,13 @@ enum EQLayout {
         static let carouselIndexParallax = EQSpacing.xxxl
         static let carouselIndexOverflowFraction: CGFloat = 0.20
         static let carouselIndexVerticalOffset: CGFloat = 20
-        static let addWorkoutActionIconSize: CGFloat = 20
-        static let addWorkoutActionCardHeight: CGFloat = 120
-        static let addWorkoutSheetTopSpacing: CGFloat = 40
-        static let addWorkoutTitleToCardsSpacing: CGFloat = 40
-        static let addWorkoutSheetBottomSpacing: CGFloat = 40
-        static let addWorkoutSheetHeight: CGFloat = 269
+        static let contextualMenuTriggerSize: CGFloat = 56
+        static let contextualMenuOverswipeThreshold: CGFloat = 64
         static let overlayBackgroundScale: CGFloat = 0.96
     }
 
     enum ExerciseOptions {
-        /// One persistent drawer geometry for every exercise-options destination.
-        static let preferredSheetHeight: CGFloat = 644
-        static let minimumTopInset = EQSpacing.lg
-        static let topInset: CGFloat = 28
-        static let headerHeight: CGFloat = 56
-        static let backTitleSpacing: CGFloat = 20
+        /// Content rhythm inside the persistent in-progress exercise card.
         static let headerToContentSpacing = EQSpacing.xxxl
         static let actionsTopSpacing: CGFloat = 56
         static let bottomInset = EQSpacing.lg
@@ -645,6 +602,9 @@ enum EQMotion {
     static let timerDigitRollDuration: TimeInterval = 0.42
     /// Immediate control acknowledgement and small content changes.
     static let responsive = Animation.easeOut(duration: 0.16)
+    static let microTransition = Animation.easeOut(duration: 0.18)
+    static let selectionFeedback = Animation.easeOut(duration: 0.08)
+    static let themeChange = Animation.easeInOut(duration: 0.25)
     /// Persistent objects changing size or position, without spring overshoot.
     static let objectTransformation = Animation.timingCurve(
         0.22,
@@ -698,7 +658,7 @@ struct EQRollingTimerText: View {
 
 struct EQSectionHeader<Trailing: View>: View {
     let title: String
-    var color = EQColor.primaryText
+    var color = EQColor.contentPrimary
     @ViewBuilder let trailing: () -> Trailing
 
     var body: some View {
@@ -716,7 +676,7 @@ struct EQSectionHeader<Trailing: View>: View {
 struct EQDisclosureRow: View {
     let title: String
     let isExpanded: Bool
-    var color = EQColor.secondaryText
+    var color = EQColor.contentSecondary
     var animation: Animation?
     var iconTrailingOffset: CGFloat = 0
 
@@ -743,7 +703,7 @@ struct EQDisclosureRow: View {
 struct EQCircularProgressIndicator: View {
     let progress: Double
     var tint = EQColor.accent
-    var track = EQColor.secondaryText.opacity(0.3)
+    var track = EQColor.surface
     var size = EQLayout.ProgressIndicator.compactSize
     var lineWidth = EQLayout.ProgressIndicator.lineWidth
 
@@ -751,7 +711,7 @@ struct EQCircularProgressIndicator: View {
         let fraction = min(max(progress, 0), 1)
         ZStack {
             if fraction == 0 {
-                Circle().stroke(tint.opacity(0.42), lineWidth: lineWidth)
+                Circle().stroke(EQColor.accentMuted, lineWidth: lineWidth)
             } else {
                 Circle().fill(track)
                 EQProgressSector(progress: fraction)
@@ -792,7 +752,7 @@ private struct EQProgressSector: Shape {
 }
 
 struct EQSettingsGlyph: View {
-    var color = EQColor.secondaryText
+    var color = EQColor.contentSecondary
 
     var body: some View {
         ZStack {
@@ -825,13 +785,13 @@ struct EQOverlayPageHeader: View {
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .foregroundStyle(EQColor.primaryText)
+            .foregroundStyle(EQColor.contentPrimary)
             .accessibilityLabel("Back to Home")
             .padding(.horizontal, EQLayout.screenGutter)
 
             Text(title)
                 .eqTextStyle(.screenTitle)
-                .foregroundStyle(EQColor.primaryText)
+                .foregroundStyle(EQColor.contentPrimary)
                 .padding(.horizontal, EQLayout.screenGutter)
                 .padding(.top, EQSpacing.lg)
                 .padding(.bottom, EQLayout.OverlayPage.titleToContentSpacing)
@@ -865,13 +825,13 @@ struct EQMetricInput: View {
     let label: String
     let accessibilityLabel: String
     let keyboard: UIKeyboardType
-    var valueColor = EQColor.primaryText
-    var unitColor = EQColor.secondaryText
+    var valueColor = EQColor.contentPrimary
+    var unitColor = EQColor.contentSecondary
     /// Marks an auto-progressed value with a superscript arrow on the unit.
     var progressed = false
     /// Shown above the value only while the row is held; a tap still edits the value.
     var holdLegend: String?
-    var legendColor = EQColor.secondaryText
+    var legendColor = EQColor.contentSecondary
     @State private var isHolding = false
 
     /// Cap height of the unit text, so the arrow's top lines up with the top of the label like an exponent.
@@ -879,10 +839,9 @@ struct EQMetricInput: View {
 
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: EQSpacing.xs) {
-            TextField(text: $value, prompt: Text("0").foregroundStyle(valueColor.opacity(0.2))) { EmptyView() }
+            TextField(text: $value, prompt: Text("0").foregroundStyle(unitColor)) { EmptyView() }
                 .keyboardType(keyboard)
                 .eqTextStyle(.largeMetric)
-                .fontWeight(EQTextStyle.largeMetric.weight)
                 .monospacedDigit()
                 .textFieldStyle(.plain)
                 .foregroundStyle(valueColor)
@@ -908,12 +867,10 @@ struct EQMetricInput: View {
                 }
             Text(label.lowercased())
                 .eqTextStyle(.metricUnit)
-                // The app root sets `.fontWeight(.regular)`, which overrides the style's weight.
-                .fontWeight(EQTextStyle.metricUnit.weight)
                 .foregroundStyle(unitColor)
             if progressed {
                 Image(systemName: "arrow.up")
-                    .font(.system(size: 18, weight: .regular))
+                    .eqTextStyle(EQTypography.headingSection)
                     .foregroundStyle(unitColor)
                     .alignmentGuide(.firstTextBaseline) { _ in Self.unitCapHeight }
                     .padding(.leading, -EQSpacing.xxs)
@@ -933,7 +890,7 @@ struct EQMetricInput: View {
                     .fixedSize()
                     .opacity(isHolding ? 1 : 0)
                     .offset(y: -Self.legendLift + (isHolding ? 0 : EQSpacing.xxs))
-                    .animation(.easeOut(duration: 0.18), value: isHolding)
+                    .animation(EQMotion.microTransition, value: isHolding)
                     .allowsHitTesting(false)
                     .accessibilityHidden(true)
             }
@@ -991,14 +948,14 @@ struct EQCardModifier: ViewModifier {
     func body(content: Content) -> some View {
         content
             .padding(EQSpacing.md)
-            .foregroundStyle(text ?? EQColor.primaryText)
+            .foregroundStyle(text ?? EQColor.contentPrimary)
             .background(
-                surface ?? (elevated ? EQColor.elevatedSurface : EQColor.surface),
+                surface ?? (elevated ? EQColor.surfaceEmphasis : EQColor.surface),
                 in: RoundedRectangle(cornerRadius: EQRadius.card, style: .continuous)
             )
             .overlay {
                 RoundedRectangle(cornerRadius: EQRadius.card, style: .continuous)
-                    .stroke(border ?? EQColor.separator)
+                    .stroke(border ?? EQColor.surfaceHighlightLight)
             }
     }
 }
@@ -1031,14 +988,14 @@ extension View {
     /// A grouped content surface used by Settings and similarly structured lists.
     func eqGroupedCard(
         verticalPadding: CGFloat = EQSpacing.xs,
-        fill: Color = EQColor.cardFill
+        fill: Color = EQColor.surfaceHighlightLight
     ) -> some View {
         modifier(EQGroupedCardModifier(verticalPadding: verticalPadding, fill: fill))
     }
 
     func eqPrimaryCTA(
         tint: Color,
-        foreground: Color = EQColor.primaryText,
+        foreground: Color = EQColor.contentPrimary,
         variant: EQPrimaryCTAVariant = .filled
     ) -> some View {
         buttonStyle(EQPrimaryCTAButtonStyle(tint: tint, foreground: foreground, variant: variant))

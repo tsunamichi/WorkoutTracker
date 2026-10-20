@@ -1,4 +1,5 @@
 import XCTest
+import SwiftUI
 @testable import Equilibrium
 
 @MainActor
@@ -107,15 +108,6 @@ final class HomeQueueTests: XCTestCase {
         XCTAssertEqual(model.workouts.map(\.id), [first.id, second.id, third.id])
     }
 
-    func testAddWorkoutPresentationDefersTheSelectedFlowUntilDrawerDismisses() {
-        let model = HomeModel(loadWorkouts: { [] }, now: { self.date(20) }, calendar: calendar)
-        model.isAddWorkoutDrawerPresented = true
-        model.selectCreationRoute(.pasteWorkout)
-        XCTAssertFalse(model.isAddWorkoutDrawerPresented); XCTAssertNil(model.creationRoute)
-        model.presentPendingCreationRoute()
-        XCTAssertEqual(model.creationRoute, .pasteWorkout)
-    }
-
     func testReuseAvailabilityRequiresACompletedCanonicalWorkout() async {
         let noReuse = HomeModel(loadWorkouts: { [self.ready("active", createdAt: self.date(2))] }, now: { self.date(20) }, calendar: calendar)
         await noReuse.load()
@@ -204,34 +196,99 @@ final class HomeQueueTests: XCTestCase {
         )
     }
 
-    func testAddWorkoutTransitionWaitsForSettledFinalCarouselPosition() {
-        XCTAssertFalse(
-            HomeAddWorkoutVisibility.showsCarouselDestination(
-                isAtAddWorkoutCard: true,
-                scrollIsIdle: false
-            )
+    func testTrailingOverswipeRequiresAnIntentionalGestureThatBeginsOnTheFinalCard() {
+        XCTAssertFalse(HomeCarouselTrailingOverswipe.qualifies(
+            beganAtFinalCard: false,
+            translation: CGSize(width: -100, height: 0),
+            layoutDirection: .leftToRight
+        ))
+        XCTAssertFalse(HomeCarouselTrailingOverswipe.qualifies(
+            beganAtFinalCard: true,
+            translation: CGSize(width: -63, height: 0),
+            layoutDirection: .leftToRight
+        ))
+        XCTAssertFalse(HomeCarouselTrailingOverswipe.qualifies(
+            beganAtFinalCard: true,
+            translation: CGSize(width: -80, height: 90),
+            layoutDirection: .leftToRight
+        ))
+        XCTAssertTrue(HomeCarouselTrailingOverswipe.qualifies(
+            beganAtFinalCard: true,
+            translation: CGSize(width: -64, height: 8),
+            layoutDirection: .leftToRight
+        ))
+        XCTAssertTrue(HomeCarouselTrailingOverswipe.qualifies(
+            beganAtFinalCard: true,
+            translation: CGSize(width: 64, height: 8),
+            layoutDirection: .rightToLeft
+        ))
+    }
+
+    func testContextualMenuRevealAndDismissalOrdersFollowExpansionDirection() {
+        XCTAssertEqual((0..<3).map {
+            ContextualActionMenuAnimationOrder.revealRank(for: $0, count: 3, direction: .upward)
+        }, [2, 1, 0])
+        XCTAssertEqual((0..<3).map {
+            ContextualActionMenuAnimationOrder.dismissalRank(for: $0, count: 3, direction: .upward)
+        }, [0, 1, 2])
+        XCTAssertEqual((0..<3).map {
+            ContextualActionMenuAnimationOrder.revealRank(for: $0, count: 3, direction: .downward)
+        }, [0, 1, 2])
+    }
+
+    func testContextualMenuDirectionAdaptsToAvailableSpace() {
+        XCTAssertEqual(
+            ContextualActionMenuLayout.resolvedDirection(
+                preferred: .upward,
+                triggerFrame: CGRect(x: 300, y: 60, width: 56, height: 56),
+                containerHeight: 800,
+                safeAreaTop: 20,
+                safeAreaBottom: 34,
+                edgePadding: 24,
+                triggerSpacing: 16,
+                requiredHeight: 160
+            ),
+            .downward
         )
-        XCTAssertFalse(
-            HomeAddWorkoutVisibility.showsCarouselDestination(
-                isAtAddWorkoutCard: false,
-                scrollIsIdle: true
-            )
-        )
-        XCTAssertTrue(
-            HomeAddWorkoutVisibility.showsCarouselDestination(
-                isAtAddWorkoutCard: true,
-                scrollIsIdle: true
-            )
+        XCTAssertEqual(
+            ContextualActionMenuLayout.resolvedDirection(
+                preferred: .upward,
+                triggerFrame: CGRect(x: 300, y: 700, width: 56, height: 56),
+                containerHeight: 800,
+                safeAreaTop: 20,
+                safeAreaBottom: 34,
+                edgePadding: 24,
+                triggerSpacing: 16,
+                requiredHeight: 160
+            ),
+            .upward
         )
     }
 
-    func testAddWorkoutDrawerUsesTwoOrThreeActionColumns() {
-        XCTAssertEqual(HomeAddWorkoutDrawerLayout.columnCount(hasReusableWorkouts: false), 2)
-        XCTAssertEqual(HomeAddWorkoutDrawerLayout.columnCount(hasReusableWorkouts: true), 3)
-        XCTAssertEqual(EQLayout.Home.addWorkoutActionIconSize, 20)
-        XCTAssertEqual(EQLayout.Home.addWorkoutSheetTopSpacing, 40)
-        XCTAssertEqual(EQLayout.Home.addWorkoutTitleToCardsSpacing, 40)
-        XCTAssertEqual(EQLayout.Home.addWorkoutSheetBottomSpacing, 40)
+    func testContextualMenuViewportAlignsToTheRealTriggerAndSafeMargins() {
+        let viewport = ContextualActionMenuLayout.viewport(
+            direction: .upward,
+            alignment: .trailing,
+            triggerFrame: CGRect(x: 300, y: 700, width: 56, height: 56),
+            containerSize: CGSize(width: 390, height: 844),
+            safeAreaInsets: EdgeInsets(top: 47, leading: 0, bottom: 34, trailing: 0),
+            edgePadding: 24,
+            triggerSpacing: 16
+        )
+        XCTAssertEqual(viewport.minX, 24)
+        XCTAssertEqual(viewport.maxX, 356)
+        XCTAssertEqual(viewport.minY, 71)
+        XCTAssertEqual(viewport.maxY, 684)
+    }
+
+    func testContextualMenuGroupsAddSpacingOnlyAtGroupBoundaries() {
+        XCTAssertEqual(
+            ContextualActionMenuLayout.groupBreakCount([
+                "editing", "editing", "editing", "destruction", "destruction"
+            ]),
+            1
+        )
+        XCTAssertEqual(ContextualActionMenuLayout.groupBreakCount([nil, nil, nil]), 0)
     }
 
     func testSettingsOverlayShrinksHomeWithoutMovingIt() {
@@ -452,19 +509,26 @@ final class ThemeSystemTests: XCTestCase {
         return defaults
     }
 
-    func testGroveIsTheDefaultLightTheme() {
+    func testMintIsTheDefaultAndEveryExportedThemeIsEnabled() {
         let store = EQThemeStore(defaults: makeDefaults())
-        XCTAssertEqual(EQTheme.default.id, .grove)
-        XCTAssertEqual(store.theme.id, .grove)
-        XCTAssertEqual(store.theme.colorScheme, .light)
+        XCTAssertEqual(EQTheme.default.id, .mint)
+        XCTAssertEqual(store.theme.id, .mint)
+        XCTAssertEqual(store.theme.colorScheme, .dark)
+        XCTAssertEqual(Set(EQTheme.all.map(\.id)), Set([.mint, .lotso, .pink]))
     }
 
     func testSelectionPersistsAcrossStores() {
         let defaults = makeDefaults()
-        EQThemeStore(defaults: defaults).select(.dusk)
+        EQThemeStore(defaults: defaults).select(.pink)
         let reloaded = EQThemeStore(defaults: defaults)
-        XCTAssertEqual(reloaded.theme.id, .dusk)
+        XCTAssertEqual(reloaded.theme.id, .pink)
         XCTAssertEqual(reloaded.theme.colorScheme, .dark)
+    }
+
+    func testLegacyStoredThemeMigratesToTheGeneratedDefault() {
+        let defaults = makeDefaults()
+        defaults.set("orchid", forKey: EQThemeStore.storageKey)
+        XCTAssertEqual(EQThemeStore(defaults: defaults).theme.id, .mint)
     }
 
     func testUnknownStoredThemeFallsBackToDefault() {
@@ -474,9 +538,9 @@ final class ThemeSystemTests: XCTestCase {
     }
 
     func testEveryThemeIDResolvesToAUniquelyNamedTheme() {
-        XCTAssertEqual(Set(EQTheme.all.map(\.id)), Set(EQTheme.ID.allCases))
+        XCTAssertEqual(Set(EQTheme.all.map(\.id)).count, EQTheme.all.count)
         XCTAssertEqual(Set(EQTheme.all.map(\.name)).count, EQTheme.all.count)
-        for id in EQTheme.ID.allCases { XCTAssertEqual(EQTheme.theme(for: id).id, id) }
+        for id in EQTheme.all.map(\.id) { XCTAssertEqual(EQTheme.theme(for: id).id, id) }
     }
 }
 

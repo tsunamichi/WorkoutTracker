@@ -1,0 +1,888 @@
+{
+  "Primitives": {
+    "purple": {
+      "700": {
+        "$type": "color",
+        "$value": "#70466d",
+        "$description": "Exact source palette value: #70466D",
+        "$extensions": {
+          "mode": {}
+        }
+      },
+      "800": {
+        "$type": "color",
+        "$value": "#533554",
+        "$description": "Exact source palette value: #533554",
+        "$extensions": {
+          "mode": {}
+        }
+      },
+      "900": {
+        "$type": "color",
+        "$value": "#4b2c4c",
+        "$description": "Exact source palette value: #4B2C4C",
+        "$extensions": {
+          "mode": {}
+        }
+      }
+    },
+    "lime": {
+      "400": {
+        "$type": "color",
+        "$value": "#d6ff8b",
+        "$description": "Exact source palette value: #D8FF66",
+        "$extensions": {
+          "mode": {}
+        }
+      },
+      "600": {
+        "$type": "color",
+        "$value": "#b3d96d",
+        "$description": "Exact source palette value: #9FBF3C",
+        "$extensions": {
+          "mode": {}
+        }
+      }
+    },
+    "lavender": {
+      "50": {
+        "$type": "color",
+        "$value": "#fff8ff",
+        "$description": "Exact source palette value: #FFF8FF",
+        "$extensions": {
+          "mode": {}
+        }
+      },
+      "200": {
+        "$type": "color",
+        "$value": "#d3bad5",
+        "$description": "Exact source palette value: #D3BAD5",
+        "$extensions": {
+          "mode": {}
+        }
+      }
+    },
+    "black": {
+      "alpha-40": {
+        "$type": "color",
+        "$value": "#00000066",
+        "$description": "",
+        "$extensions": {
+          "mode": {}
+        }
+      },
+      "alpha-24": {
+        "$type": "color",
+        "$value": "#0000003d",
+        "$description": "",
+        "$extensions": {
+          "mode": {}
+        }
+      },
+      "alpha-04": {
+        "$type": "color",
+        "$value": "#0000000a",
+        "$description": "Exact source palette value: #000000 / 4%",
+        "$extensions": {
+          "mode": {}
+        }
+      }
+    },
+    "white": {
+      "white-04": {
+        "$type": "color",
+        "$value": "#ffffff0a",
+        "$description": "",
+        "$extensions": {
+          "mode": {}
+        }
+      },
+      "white-24": {
+        "$type": "color",
+        "$value": "#ffffff3d",
+        "$description": "",
+        "$extensions": {
+          "mode": {}
+        }
+      }
+    },
+    "navy": {
+      "50": {
+        "$type": "color",
+        "$value": "#e5e6f7",
+        "$description": "",
+        "$extensions": {
+          "mode": {}
+        }
+      },
+      "200": {
+        "$type": "color",
+        "$value": "#b4b6db",
+        "$description": "",
+        "$extensions": {
+          "mode": {}
+        }
+      },
+      "700": {
+        "$type": "color",
+        "$value": "#254f6c",
+        "$description": "",
+        "$extensions": {
+          "mode": {}
+        }
+      },
+      "800": {
+        "$type": "color",
+        "$value": "#193e58",
+        "$description": "",
+        "$extensions": {
+          "mode": {}
+        }
+      },
+      "900": {
+        "$type": "color",
+        "$value": "#15344a",
+        "$description": "",
+        "$extensions": {
+          "mode": {}
+        }
+      }
+    },
+    "pink": {
+      "400": {
+        "$type": "color",
+        "$value": "#fae4d9",
+        "$description": "",
+        "$extensions": {
+          "mode": {}
+        }
+      },
+      "600": {
+        "$type": "color",
+        "$value": "#c4a697",
+        "$description": "",
+        "$extensions": {
+          "mode": {}
+        }
+      }
+    },
+    "electric": {
+      "50": {
+        "$type": "color",
+        "$value": "#fbfbff",
+        "$description": "",
+        "$extensions": {
+          "mode": {}
+        }
+      },
+      "200": {
+        "$type": "color",
+        "$value": "#e4e4fa",
+        "$description": "",
+        "$extensions": {
+          "mode": {}
+        }
+      },
+      "700": {
+        "$type": "color",
+        "$value": "#7673f5",
+        "$description": "",
+        "$extensions": {
+          "mode": {}
+        }
+      },
+      "800": {
+        "$type": "color",
+        "$value": "#5e5aff",
+        "$description": "",
+        "$extensions": {
+          "mode": {}
+        }
+      },
+      "900": {
+        "$type": "color",
+        "$value": "#4f4aff",
+        "$description": "",
+        "$extensions": {
+          "mode": {}
+        }
+      }
+    },
+    "mint": {
+      "400": {
+        "$type": "color",
+        "$value": "#f0ffe2",
+        "$description": "",
+        "$extensions": {
+          "mode": {}
+        }
+      },
+      "600": {
+        "$type": "color",
+        "$value": "#cadeb7",
+        "$description": "",
+        "$extensions": {
+          "mode": {}
+        }
+      }
+    },
+    "lotso": {
+      "50": {
+        "$type": "color",
+        "$value": "#fbecf3",
+        "$description": "",
+        "$extensions": {
+          "mode": {}
+        }
+      },
+      "200": {
+        "$type": "color",
+        "$value": "#f8c6de",
+        "$description": "",
+        "$extensions": {
+          "mode": {}
+        }
+      },
+      "700": {
+        "$type": "color",
+        "$value": "#bd678f",
+        "$description": "",
+        "$extensions": {
+          "mode": {}
+        }
+      },
+      "800": {
+        "$type": "color",
+        "$value": "#cb2572",
+        "$description": "",
+        "$extensions": {
+          "mode": {}
+        }
+      },
+      "900": {
+        "$type": "color",
+        "$value": "#bd0058",
+        "$description": "",
+        "$extensions": {
+          "mode": {}
+        }
+      }
+    }
+  },
+  "Semantic Colors": {
+    "background": {
+      "$type": "color",
+      "$value": "{Primitives.lotso.900}",
+      "$description": "Default application background: Home, Rest and Workout History. Theme 2 and Theme 3 are pending real palettes; currently use the available Purple / Lime aliases as fallback, not distinct themes.",
+      "$extensions": {
+        "mode": {
+          "Lotso": "{Primitives.lotso.900}",
+          "Pink": "{Primitives.navy.900}",
+          "Mint": "{Primitives.electric.900}"
+        }
+      }
+    },
+    "surface": {
+      "$type": "color",
+      "$value": "{Primitives.lotso.800}",
+      "$description": "Grouped cards and secondary containers, including history lists and the resting exercise group. Theme 2 and Theme 3 are pending real palettes; currently use the available Purple / Lime aliases as fallback, not distinct themes.",
+      "$extensions": {
+        "mode": {
+          "Lotso": "{Primitives.lotso.800}",
+          "Pink": "{Primitives.navy.800}",
+          "Mint": "{Primitives.electric.800}"
+        }
+      }
+    },
+    "surface-emphasis": {
+      "$type": "color",
+      "$value": "{Primitives.lotso.700}",
+      "$description": "Visually emphasized containers, including the current exercise panel in Rest. Theme 2 and Theme 3 are pending real palettes; currently use the available Purple / Lime aliases as fallback, not distinct themes.",
+      "$extensions": {
+        "mode": {
+          "Lotso": "{Primitives.lotso.700}",
+          "Pink": "{Primitives.navy.700}",
+          "Mint": "{Primitives.electric.700}"
+        }
+      }
+    },
+    "accent": {
+      "$type": "color",
+      "$value": "{Primitives.lime.400}",
+      "$description": "Strategic highlights, primary actions, selected states, Home workout cards and full-screen active workout backgrounds. Theme 2 and Theme 3 are pending real palettes; currently use the available Purple / Lime aliases as fallback, not distinct themes.",
+      "$extensions": {
+        "mode": {
+          "Lotso": "{Primitives.lime.400}",
+          "Pink": "{Primitives.pink.400}",
+          "Mint": "{Primitives.mint.400}"
+        }
+      }
+    },
+    "accent-muted": {
+      "$type": "color",
+      "$value": "{Primitives.lime.600}",
+      "$description": "Lower-emphasis accent treatments; not a disabled-state token. Exact palette value retained; usage is provisional pending editable screens. Theme 2 and Theme 3 are pending real palettes; currently use the available Purple / Lime aliases as fallback, not distinct themes.",
+      "$extensions": {
+        "mode": {
+          "Lotso": "{Primitives.lime.600}",
+          "Pink": "{Primitives.pink.600}",
+          "Mint": "{Primitives.mint.600}"
+        }
+      }
+    },
+    "content-secondary": {
+      "$type": "color",
+      "$value": "{Primitives.lotso.200}",
+      "$description": "Supporting text, dates, metadata and less prominent icons on standard backgrounds. Theme 2 and Theme 3 are pending real palettes; currently use the available Purple / Lime aliases as fallback, not distinct themes.",
+      "$extensions": {
+        "mode": {
+          "Lotso": "{Primitives.lotso.200}",
+          "Pink": "{Primitives.navy.200}",
+          "Mint": "{Primitives.electric.200}"
+        }
+      }
+    },
+    "content-primary": {
+      "$type": "color",
+      "$value": "{Primitives.lotso.50}",
+      "$description": "Primary text, icons and timer content on standard purple backgrounds. Theme 2 and Theme 3 are pending real palettes; currently use the available Purple / Lime aliases as fallback, not distinct themes.",
+      "$extensions": {
+        "mode": {
+          "Lotso": "{Primitives.lotso.50}",
+          "Pink": "{Primitives.navy.50}",
+          "Mint": "{Primitives.electric.50}"
+        }
+      }
+    },
+    "overlay": {
+      "$type": "color",
+      "$value": "{Primitives.black.alpha-40}",
+      "$description": "Black at 4% opacity for subtle overlay treatments. Preserve transparency; not an opaque gray and not a modal scrim. Theme 2 and Theme 3 are pending real palettes; currently use the available Purple / Lime aliases as fallback, not distinct themes.",
+      "$extensions": {
+        "mode": {
+          "Lotso": "{Primitives.black.alpha-40}",
+          "Pink": "{Primitives.black.alpha-40}",
+          "Mint": "{Primitives.black.alpha-40}"
+        }
+      }
+    },
+    "disabled-text": {
+      "$type": "color",
+      "$value": "{Primitives.black.alpha-24}",
+      "$description": "",
+      "$extensions": {
+        "mode": {
+          "Lotso": "{Primitives.black.alpha-24}",
+          "Pink": "{Primitives.black.alpha-24}",
+          "Mint": "{Primitives.black.alpha-24}"
+        }
+      }
+    },
+    "content-on-accent": {
+      "$type": "color",
+      "$value": "{Primitives.lotso.900}",
+      "$description": "Dark text and graphics on lime accent surfaces, including workout card labels and active-workout timers. Theme 2 and Theme 3 are pending real palettes; currently use the available Purple / Lime aliases as fallback, not distinct themes.",
+      "$extensions": {
+        "mode": {
+          "Lotso": "{Primitives.lotso.900}",
+          "Pink": "{Primitives.navy.900}",
+          "Mint": "{Primitives.electric.900}"
+        }
+      }
+    },
+    "surface-highlight-light": {
+      "$type": "color",
+      "$value": "{Primitives.white.white-04}",
+      "$description": "",
+      "$extensions": {
+        "mode": {
+          "Lotso": "{Primitives.white.white-04}",
+          "Pink": "{Primitives.white.white-04}",
+          "Mint": "{Primitives.white.white-04}"
+        }
+      }
+    },
+    "surface-highlight-dark": {
+      "$type": "color",
+      "$value": "{Primitives.black.alpha-04}",
+      "$description": "",
+      "$extensions": {
+        "mode": {
+          "Lotso": "{Primitives.black.alpha-04}",
+          "Pink": "{Primitives.black.alpha-04}",
+          "Mint": "{Primitives.black.alpha-04}"
+        }
+      }
+    },
+    "surface-input": {
+      "$type": "color",
+      "$value": "{Primitives.white.white-24}",
+      "$description": "",
+      "$extensions": {
+        "mode": {
+          "Lotso": "{Primitives.white.white-24}",
+          "Pink": "{Primitives.white.white-24}",
+          "Mint": "{Primitives.white.white-24}"
+        }
+      }
+    }
+  },
+  "Typography-styles": {
+    "display": {
+      "pr": {
+        "$type": "typography",
+        "$value": {
+          "fontFamily": "SF Pro Display",
+          "fontWeight": 400,
+          "fontStyle": "normal",
+          "fontSize": {
+            "value": 40,
+            "unit": "px"
+          },
+          "lineHeight": "auto",
+          "letterSpacing": "0%",
+          "paragraphSpacing": {
+            "value": 0,
+            "unit": "px"
+          },
+          "paragraphIndent": {
+            "value": 0,
+            "unit": "px"
+          },
+          "textDecoration": "NONE",
+          "textCase": "ORIGINAL"
+        },
+        "$description": "",
+        "$extensions": {
+          "styleId": "S:2c8ffa96c2f95407d6d18c4db98404d031d64212,"
+        }
+      },
+      "timer": {
+        "$type": "typography",
+        "$value": {
+          "fontFamily": "SF Pro Display",
+          "fontWeight": 400,
+          "fontStyle": "normal",
+          "fontSize": {
+            "value": 72,
+            "unit": "px"
+          },
+          "lineHeight": {
+            "value": 80,
+            "unit": "px"
+          },
+          "letterSpacing": {
+            "value": 0,
+            "unit": "px"
+          },
+          "paragraphSpacing": {
+            "value": 0,
+            "unit": "px"
+          },
+          "paragraphIndent": {
+            "value": 0,
+            "unit": "px"
+          },
+          "textDecoration": "NONE",
+          "textCase": "ORIGINAL"
+        },
+        "$description": "Timer numerals and workout numeric metrics. Draft visual estimate from screenshots; exact selected font settings unavailable. Color independent: bind text fills separately to Semantic Colors. Draft pending review against editable current screens. Dynamic Type needs native iOS implementation and accessibility-size testing; these Figma styles are fixed design sizes.",
+        "$extensions": {
+          "styleId": "S:fd4ac579c1a07dff7e7f812e1ccc385238eff735,"
+        }
+      },
+      "index": {
+        "$type": "typography",
+        "$value": {
+          "fontFamily": "SF Pro Display",
+          "fontWeight": 500,
+          "fontStyle": "normal",
+          "fontSize": {
+            "value": 300,
+            "unit": "px"
+          },
+          "lineHeight": {
+            "value": 300,
+            "unit": "px"
+          },
+          "letterSpacing": {
+            "value": 0,
+            "unit": "px"
+          },
+          "paragraphSpacing": {
+            "value": 0,
+            "unit": "px"
+          },
+          "paragraphIndent": {
+            "value": 0,
+            "unit": "px"
+          },
+          "textDecoration": "NONE",
+          "textCase": "ORIGINAL"
+        },
+        "$description": "Expressive oversized workout-card count. Size and weight confirmed in nearby legacy Home, not selected screenshots. Proposed safe single-line height 300; legacy 56px height is a layout-sensitive exception, do not auto-apply. Color independent: bind text fills separately to Semantic Colors. Draft pending review against editable current screens. Dynamic Type needs native iOS implementation and accessibility-size testing; these Figma styles are fixed design sizes.",
+        "$extensions": {
+          "styleId": "S:ba299155079032df8d4321d0e2dbc0cc4b8d85b9,"
+        }
+      },
+      "unit": {
+        "$type": "typography",
+        "$value": {
+          "fontFamily": "SF Pro Display",
+          "fontWeight": 100,
+          "fontStyle": "normal",
+          "fontSize": {
+            "value": 72,
+            "unit": "px"
+          },
+          "lineHeight": {
+            "value": 80,
+            "unit": "px"
+          },
+          "letterSpacing": {
+            "value": 0,
+            "unit": "px"
+          },
+          "paragraphSpacing": {
+            "value": 0,
+            "unit": "px"
+          },
+          "paragraphIndent": {
+            "value": 0,
+            "unit": "px"
+          },
+          "textDecoration": "NONE",
+          "textCase": "ORIGINAL"
+        },
+        "$description": "Thin units paired with timer-scale numeric metrics, e.g. 120 secs / 0 lb. Additional style preserves mixed-weight number/unit expression; screenshot-derived draft. Color independent: bind text fills separately to Semantic Colors. Draft pending review against editable current screens. Dynamic Type needs native iOS implementation and accessibility-size testing; these Figma styles are fixed design sizes.",
+        "$extensions": {
+          "styleId": "S:ddd72c9516b51602dbf0196d147ea0320e6e7533,"
+        }
+      },
+      "value": {
+        "$type": "typography",
+        "$value": {
+          "fontFamily": "SF Pro Display",
+          "fontWeight": 400,
+          "fontStyle": "normal",
+          "fontSize": {
+            "value": 72,
+            "unit": "px"
+          },
+          "lineHeight": {
+            "value": 80,
+            "unit": "px"
+          },
+          "letterSpacing": {
+            "value": 0,
+            "unit": "px"
+          },
+          "paragraphSpacing": {
+            "value": 0,
+            "unit": "px"
+          },
+          "paragraphIndent": {
+            "value": 0,
+            "unit": "px"
+          },
+          "textDecoration": "NONE",
+          "textCase": "ORIGINAL"
+        },
+        "$description": "Thin units paired with timer-scale numeric metrics, e.g. 120 secs / 0 lb. Additional style preserves mixed-weight number/unit expression; screenshot-derived draft. Color independent: bind text fills separately to Semantic Colors. Draft pending review against editable current screens. Dynamic Type needs native iOS implementation and accessibility-size testing; these Figma styles are fixed design sizes.",
+        "$extensions": {
+          "styleId": "S:7e9a8223eb66ad546a234306ba04d79aa3f6aca1,"
+        }
+      }
+    },
+    "heading": {
+      "page": {
+        "$type": "typography",
+        "$value": {
+          "fontFamily": "SF Pro Display",
+          "fontWeight": 500,
+          "fontStyle": "normal",
+          "fontSize": {
+            "value": 24,
+            "unit": "px"
+          },
+          "lineHeight": {
+            "value": 36,
+            "unit": "px"
+          },
+          "letterSpacing": {
+            "value": 0,
+            "unit": "px"
+          },
+          "paragraphSpacing": {
+            "value": 0,
+            "unit": "px"
+          },
+          "paragraphIndent": {
+            "value": 0,
+            "unit": "px"
+          },
+          "textDecoration": "NONE",
+          "textCase": "ORIGINAL"
+        },
+        "$description": "Page-level heading. Exact 24/36 Medium observed in nearby legacy Home; selected screenshot typography unconfirmed. Color independent: bind text fills separately to Semantic Colors. Draft pending review against editable current screens. Dynamic Type needs native iOS implementation and accessibility-size testing; these Figma styles are fixed design sizes.",
+        "$extensions": {
+          "styleId": "S:93a59fba0f19cc3ed851f85211d108e1e872b8e6,"
+        }
+      },
+      "card": {
+        "$type": "typography",
+        "$value": {
+          "fontFamily": "SF Pro Display",
+          "fontWeight": 500,
+          "fontStyle": "normal",
+          "fontSize": {
+            "value": 28,
+            "unit": "px"
+          },
+          "lineHeight": {
+            "value": 36,
+            "unit": "px"
+          },
+          "letterSpacing": {
+            "value": 0,
+            "unit": "px"
+          },
+          "paragraphSpacing": {
+            "value": 0,
+            "unit": "px"
+          },
+          "paragraphIndent": {
+            "value": 0,
+            "unit": "px"
+          },
+          "textDecoration": "NONE",
+          "textCase": "ORIGINAL"
+        },
+        "$description": "Workout card titles. Exact 28/36 Medium observed in nearby legacy Home; retain 28.8/32.4 Regular exception until a design decision. Color independent: bind text fills separately to Semantic Colors. Draft pending review against editable current screens. Dynamic Type needs native iOS implementation and accessibility-size testing; these Figma styles are fixed design sizes.",
+        "$extensions": {
+          "styleId": "S:b426d1761bcca81b1715cfc0923952babfef5845,"
+        }
+      },
+      "section": {
+        "$type": "typography",
+        "$value": {
+          "fontFamily": "SF Pro Display",
+          "fontWeight": 400,
+          "fontStyle": "normal",
+          "fontSize": {
+            "value": 20,
+            "unit": "px"
+          },
+          "lineHeight": {
+            "value": 24,
+            "unit": "px"
+          },
+          "letterSpacing": {
+            "value": 0,
+            "unit": "px"
+          },
+          "paragraphSpacing": {
+            "value": 0,
+            "unit": "px"
+          },
+          "paragraphIndent": {
+            "value": 0,
+            "unit": "px"
+          },
+          "textDecoration": "NONE",
+          "textCase": "ORIGINAL"
+        },
+        "$description": "Section-level headings. 20/24 Medium exists on legacy Timer label, not proof of this role; proposed semantic reuse pending review. Color independent: bind text fills separately to Semantic Colors. Draft pending review against editable current screens. Dynamic Type needs native iOS implementation and accessibility-size testing; these Figma styles are fixed design sizes.",
+        "$extensions": {
+          "styleId": "S:76466bf85094dc7bf3aa98197787416f2f7a101f,"
+        }
+      }
+    },
+    "body": {
+      "large": {
+        "$type": "typography",
+        "$value": {
+          "fontFamily": "SF Pro Text",
+          "fontWeight": 400,
+          "fontStyle": "normal",
+          "fontSize": {
+            "value": 20,
+            "unit": "px"
+          },
+          "lineHeight": {
+            "value": 28,
+            "unit": "px"
+          },
+          "letterSpacing": {
+            "value": 0,
+            "unit": "px"
+          },
+          "paragraphSpacing": {
+            "value": 0,
+            "unit": "px"
+          },
+          "paragraphIndent": {
+            "value": 0,
+            "unit": "px"
+          },
+          "textDecoration": "NONE",
+          "textCase": "ORIGINAL"
+        },
+        "$description": "Prominent exercise names and information, visually estimated draft. Color independent: bind text fills separately to Semantic Colors. Draft pending review against editable current screens. Dynamic Type needs native iOS implementation and accessibility-size testing; these Figma styles are fixed design sizes.",
+        "$extensions": {
+          "styleId": "S:c0f65cce95fcf7bf3b6b7f4c194f75c5b6414df8,"
+        }
+      },
+      "default": {
+        "$type": "typography",
+        "$value": {
+          "fontFamily": "SF Pro Text",
+          "fontWeight": 400,
+          "fontStyle": "normal",
+          "fontSize": {
+            "value": 16,
+            "unit": "px"
+          },
+          "lineHeight": {
+            "value": 24,
+            "unit": "px"
+          },
+          "letterSpacing": {
+            "value": 0,
+            "unit": "px"
+          },
+          "paragraphSpacing": {
+            "value": 0,
+            "unit": "px"
+          },
+          "paragraphIndent": {
+            "value": 0,
+            "unit": "px"
+          },
+          "textDecoration": "NONE",
+          "textCase": "ORIGINAL"
+        },
+        "$description": "Standard settings, list rows, dates and descriptions. Proposed baseline; not exact screenshot extraction. Color independent: bind text fills separately to Semantic Colors. Draft pending review against editable current screens. Dynamic Type needs native iOS implementation and accessibility-size testing; these Figma styles are fixed design sizes.",
+        "$extensions": {
+          "styleId": "S:5be7ad9f6cb01016eb5b3fb1dfee2459fee52d92,"
+        }
+      },
+      "small": {
+        "$type": "typography",
+        "$value": {
+          "fontFamily": "SF Pro Text",
+          "fontWeight": 400,
+          "fontStyle": "normal",
+          "fontSize": {
+            "value": 14,
+            "unit": "px"
+          },
+          "lineHeight": {
+            "value": 20,
+            "unit": "px"
+          },
+          "letterSpacing": {
+            "value": 0,
+            "unit": "px"
+          },
+          "paragraphSpacing": {
+            "value": 0,
+            "unit": "px"
+          },
+          "paragraphIndent": {
+            "value": 0,
+            "unit": "px"
+          },
+          "textDecoration": "NONE",
+          "textCase": "ORIGINAL"
+        },
+        "$description": "Supporting information and compact metadata. Legacy 14 Medium confirmed, but legacy line height is Auto; 20px is proposed. Color independent: bind text fills separately to Semantic Colors. Draft pending review against editable current screens. Dynamic Type needs native iOS implementation and accessibility-size testing; these Figma styles are fixed design sizes.",
+        "$extensions": {
+          "styleId": "S:14036d53b551b2c5cf277550f1bfa1270bf8752a,"
+        }
+      }
+    },
+    "label": {
+      "action": {
+        "$type": "typography",
+        "$value": {
+          "fontFamily": "SF Pro Text",
+          "fontWeight": 500,
+          "fontStyle": "normal",
+          "fontSize": {
+            "value": 16,
+            "unit": "px"
+          },
+          "lineHeight": {
+            "value": 20,
+            "unit": "px"
+          },
+          "letterSpacing": {
+            "value": 0,
+            "unit": "px"
+          },
+          "paragraphSpacing": {
+            "value": 0,
+            "unit": "px"
+          },
+          "paragraphIndent": {
+            "value": 0,
+            "unit": "px"
+          },
+          "textDecoration": "NONE",
+          "textCase": "ORIGINAL"
+        },
+        "$description": "Button and compact action labels. Screenshot-derived draft; not proof of source settings. Color independent: bind text fills separately to Semantic Colors. Draft pending review against editable current screens. Dynamic Type needs native iOS implementation and accessibility-size testing; these Figma styles are fixed design sizes.",
+        "$extensions": {
+          "styleId": "S:1de65ea7b304920c07a1b63f8027cb06f6e9f3dd,"
+        }
+      },
+      "overline": {
+        "$type": "typography",
+        "$value": {
+          "fontFamily": "SF Pro Text",
+          "fontWeight": 400,
+          "fontStyle": "normal",
+          "fontSize": {
+            "value": 11,
+            "unit": "px"
+          },
+          "lineHeight": {
+            "value": 16,
+            "unit": "px"
+          },
+          "letterSpacing": {
+            "value": 0,
+            "unit": "px"
+          },
+          "paragraphSpacing": {
+            "value": 0,
+            "unit": "px"
+          },
+          "paragraphIndent": {
+            "value": 0,
+            "unit": "px"
+          },
+          "textDecoration": "NONE",
+          "textCase": "ORIGINAL"
+        },
+        "$description": "Compact overlines such as IN PROGRESS, EXERCISES, SETTINGS. Uppercase is authored content, not forced text case. Screenshot-derived draft; do not use for essential reading at accessibility sizes. Color independent: bind text fills separately to Semantic Colors. Draft pending review against editable current screens. Dynamic Type needs native iOS implementation and accessibility-size testing; these Figma styles are fixed design sizes.",
+        "$extensions": {
+          "styleId": "S:6c64161610f98553e626d3b2d9b1ff7db4678106,"
+        }
+      }
+    }
+  },
+  "$extensions": {
+    "tokens-bruecke-meta": {
+      "useDTCG": true,
+      "spec": "https://www.designtokens.org/tr/2025.10/format/",
+      "colorMode": "hex",
+      "variableCollections": [
+        "Primitives",
+        "Semantic Colors"
+      ],
+      "createdAt": "2026-10-14T19:55:02.154Z"
+    }
+  }
+}
