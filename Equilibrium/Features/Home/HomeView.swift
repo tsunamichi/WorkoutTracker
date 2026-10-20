@@ -688,17 +688,19 @@ private struct HomeWorkoutTitleLayer: View {
                 }
             }
             .mask {
-                ZStack {
-                    Rectangle().fill(.white)
-                    if let surfaceAnchor = anchors[.focusedExerciseSettingsSurface] {
-                        let surfaceFrame = proxy[surfaceAnchor]
-                        RoundedRectangle(cornerRadius: EQRadius.walletSurface, style: .continuous)
-                            .frame(width: surfaceFrame.width, height: surfaceFrame.height)
-                            .position(x: surfaceFrame.midX, y: surfaceFrame.midY)
-                            .blendMode(.destinationOut)
+                if let surfaceAnchor = anchors[.focusedExerciseSettingsSurface] {
+                    let surfaceFrame = proxy[surfaceAnchor]
+                    Path { path in
+                        path.addRect(CGRect(origin: .zero, size: proxy.size))
+                        path.addPath(
+                            RoundedRectangle(cornerRadius: EQRadius.walletSurface, style: .continuous)
+                                .path(in: surfaceFrame)
+                        )
                     }
+                    .fill(.white, style: FillStyle(eoFill: true))
+                } else {
+                    Rectangle().fill(.white)
                 }
-                .compositingGroup()
             }
         }
         .allowsHitTesting(false)

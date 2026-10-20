@@ -1514,6 +1514,7 @@ struct WorkoutExecutionView: View {
                             settingsPresented: showsExerciseSettings,
                             settingsTransitionProgress: exerciseSettingsTransitionProgress,
                             settingsSnapshot: exerciseSettingsTransitionSnapshot,
+                            foregroundTitleFrame: exerciseSettingsSourceTitleFrame,
                             settingsDestinationFrame: exerciseSettingsTransitionSnapshot?.destinationFrame
                                 ?? ExerciseFocusedExpansionLayout.destinationFrame(
                                     containerFrame: sceneFrame,
@@ -1802,6 +1803,11 @@ struct WorkoutExecutionView: View {
             Text(exerciseName)
                 .eqTextStyle(.screenTitle)
                 .lineLimit(2)
+                // The persistent title renderer owns the visible exercise name once
+                // this source frame has been measured. Keep this instance mounted as
+                // a layout and geometry placeholder so the compact card never reflows.
+                .opacity(exerciseSettingsSourceTitleFrame.width > 0 ? 0 : 1)
+                .accessibilityHidden(exerciseSettingsSourceTitleFrame.width > 0)
                 // Keep the real source title fully laid out while the focused surface
                 // is requested. The opaque surface covers it, while the scene-level
                 // shared title begins from this exact measured geometry above it.
@@ -2199,6 +2205,7 @@ private struct ExecutionWallet<ListRow: View, ForegroundHeader: View, Foreground
     let settingsPresented: Bool
     let settingsTransitionProgress: CGFloat
     let settingsSnapshot: ExerciseSettingsTransitionSnapshot?
+    let foregroundTitleFrame: CGRect
     let settingsDestinationFrame: CGRect
     let reduceMotion: Bool
     let transitionSourceFrame: CGRect?
@@ -2465,8 +2472,56 @@ private struct ExecutionWallet<ListRow: View, ForegroundHeader: View, Foreground
                     .accessibilityIdentifier("execution-current-exercise-card-\(workout.id.rawValue)")
             }
             focusedForegroundHost(proxy: proxy, renderedForegroundFrame: renderedForegroundFrame, focusedProgress: progress)
+
+            persistentExerciseTitle(proxy: proxy)
+                .zIndex(21)
         }
         .frame(width: proxy.size.width, height: proxy.size.height, alignment: .topLeading)
+    }
+
+    /// The only visible exercise-name renderer. It stays in the wallet's common
+    /// coordinate space while the original compact and Settings layouts keep their
+    /// own invisible placeholders for measurement and spacing.
+    @ViewBuilder
+    private func persistentExerciseTitle(proxy: GeometryProxy) -> some View {
+        let sourceFrame = settingsSnapshot?.titleFrame ?? foregroundTitleFrame
+        let titleName = settingsSnapshot
+            .flatMap { model.exercise(id: $0.exerciseID)?.nameSnapshot }
+            ?? model.currentExercise?.nameSnapshot
+
+        if let titleName, sourceFrame.width > 0, sourceFrame.height > 0 {
+            let destinationFrame = ExerciseFocusedExpansionLayout.titleDestinationFrame(
+                surfaceFrame: settingsDestinationFrame,
+                sourceTitleFrame: sourceFrame
+            )
+            let transitionIsActive = settingsPresented && settingsSnapshot != nil
+            let globalFrame = transitionIsActive
+                ? ExerciseFocusedExpansionLayout.frame(
+                    from: sourceFrame,
+                    to: destinationFrame,
+                    progress: settingsTransitionProgress
+                )
+                : sourceFrame
+            let containerFrame = proxy.frame(in: .global)
+            let localFrame = globalFrame.offsetBy(dx: -containerFrame.minX, dy: -containerFrame.minY)
+            let scale = transitionIsActive
+                ? 1 + ((ExerciseFocusedExpansionLayout.titleScale - 1) * settingsTransitionProgress)
+                : 1
+
+            Text(titleName)
+                .eqTextStyle(.screenTitle)
+                .lineLimit(2)
+                .frame(width: sourceFrame.width, height: sourceFrame.height, alignment: .topLeading)
+                .scaleEffect(scale, anchor: .topLeading)
+                .foregroundStyle(
+                    EQColor.Execution.foregroundText.mix(
+                        with: EQColor.Execution.foregroundSecondaryText,
+                        by: Double(transitionIsActive ? settingsTransitionProgress : 0)
+                    )
+                )
+                .position(x: localFrame.midX, y: localFrame.midY)
+                .accessibilityHidden(true)
+        }
     }
 
     /// The compact card's opaque surface. The caller supplies only its existing
@@ -2525,17 +2580,6 @@ private struct ExecutionWallet<ListRow: View, ForegroundHeader: View, Foreground
             dx: -containerFrame.minX,
             dy: -containerFrame.minY
         )
-        let destinationTitleFrame = ExerciseFocusedExpansionLayout.titleDestinationFrame(
-            surfaceFrame: settingsDestinationFrame,
-            sourceTitleFrame: snapshot.titleFrame
-        )
-        let currentTitleFrame = ExerciseFocusedExpansionLayout.frame(
-            from: snapshot.titleFrame,
-            to: destinationTitleFrame,
-            progress: settingsTransitionProgress
-        )
-        let localTitleFrame = currentTitleFrame.offsetBy(dx: -containerFrame.minX, dy: -containerFrame.minY)
-        let titleScale = 1 + ((ExerciseFocusedExpansionLayout.titleScale - 1) * settingsTransitionProgress)
         let settingsVisibility = ExerciseCardModeMotion.settingsVisibility(settingsTransitionProgress)
         let executionVisibility = ExerciseCardModeMotion.executionVisibility(settingsTransitionProgress)
 
@@ -2607,23 +2651,6 @@ private struct ExecutionWallet<ListRow: View, ForegroundHeader: View, Foreground
                     group: .settings
                 ))
 
-            Text(exercise.nameSnapshot)
-                .eqTextStyle(.screenTitle)
-                .lineLimit(2)
-                .frame(
-                    width: snapshot.titleFrame.width,
-                    height: snapshot.titleFrame.height,
-                    alignment: .topLeading
-                )
-                .scaleEffect(titleScale, anchor: .topLeading)
-                .foregroundStyle(
-                    EQColor.Execution.foregroundText.mix(
-                        with: EQColor.Execution.foregroundSecondaryText,
-                        by: Double(settingsTransitionProgress)
-                    )
-                )
-                .position(x: localTitleFrame.midX, y: localTitleFrame.midY)
-                .accessibilityHidden(true)
         }
         .frame(width: localFrame.width, height: localFrame.height)
         .modifier(ExecutionWalletShapeModifier(
