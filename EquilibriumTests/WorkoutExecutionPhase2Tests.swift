@@ -2619,7 +2619,8 @@ final class ExecutionForegroundEntryTests: XCTestCase {
     func testCardRidesWalletOutOnExit() {
         XCTAssertEqual(ExecutionForegroundEntry.arrival(walletTransitionProgress: 1, entryProgress: 1), 1)
         XCTAssertLessThan(ExecutionForegroundEntry.arrival(walletTransitionProgress: 0.85, entryProgress: 1), 1)
-        XCTAssertEqual(ExecutionForegroundEntry.arrival(walletTransitionProgress: 0.5, entryProgress: 1), 0)
+        XCTAssertLessThan(ExecutionForegroundEntry.arrival(walletTransitionProgress: 0.5, entryProgress: 1), 0.5)
+        XCTAssertEqual(ExecutionForegroundEntry.arrival(walletTransitionProgress: 0.18, entryProgress: 1), 0)
     }
 
     func testExpandedCardSlidesFullyOutOfWallet() {

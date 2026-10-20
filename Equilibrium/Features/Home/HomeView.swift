@@ -549,6 +549,33 @@ struct HomeWorkoutTitleAnchorKey: PreferenceKey {
     }
 }
 
+/// Computes the remaining visible portion of the floating workout-page title
+/// from the actual focused Settings surface. Both rectangles are resolved by
+/// `HomeWorkoutTitleLayer` in its own coordinate space, so no Settings progress
+/// needs to be published back into Home.
+enum WorkoutPageTitleCoverage {
+    static func visibility(titleFrame: CGRect, coveringSurfaceFrame: CGRect?) -> CGFloat {
+        guard titleFrame.width > 0,
+              titleFrame.height > 0,
+              let coveringSurfaceFrame,
+              coveringSurfaceFrame.width > 0,
+              coveringSurfaceFrame.height > 0,
+              coveringSurfaceFrame.maxX > titleFrame.minX,
+              coveringSurfaceFrame.minX < titleFrame.maxX else {
+            return 1
+        }
+
+        // The surface is opaque from its animated top edge through its bottom.
+        // It covers none of the title while below it, then consumes the title's
+        // vertical extent continuously as that edge travels upward.
+        let coveredFraction = min(
+            max((titleFrame.maxY - coveringSurfaceFrame.minY) / titleFrame.height, 0),
+            1
+        )
+        return 1 - coveredFraction
+    }
+}
+
 private struct HomeWorkoutTitleLayer: View {
     @Environment(\.homeExecutionTransitionProgress) private var progress
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -570,12 +597,14 @@ private struct HomeWorkoutTitleLayer: View {
                         let sourceFrame = proxy[source]
                         let destinationFrame = anchors[.destination(workout.id)].map { proxy[$0] } ?? sourceFrame
                         let titleProgress = workout.id == transitioningWorkoutID ? progress : 0
-                        // The focused Settings surface exists for the entire open /
-                        // close lifecycle. It is a stable, non-animated signal that
-                        // affects only this floating workout-name composition.
-                        let hidesForExerciseSettings = workout.id == transitioningWorkoutID
-                            && anchors[.focusedExerciseSettingsSurface] != nil
                         let frame = sourceFrame.interpolated(to: destinationFrame, progress: titleProgress)
+                        let settingsSurfaceFrame = anchors[.focusedExerciseSettingsSurface].map { proxy[$0] }
+                        let settingsCoverageVisibility = workout.id == transitioningWorkoutID
+                            ? WorkoutPageTitleCoverage.visibility(
+                                titleFrame: frame,
+                                coveringSurfaceFrame: settingsSurfaceFrame
+                            )
+                            : 1
                         let titleScale = HomeWorkoutTitleTransitionLayout.scale(progress: titleProgress)
                         let layoutSize = HomeWorkoutTitleTransitionLayout.unscaledSize(
                             for: frame.size,
@@ -619,7 +648,10 @@ private struct HomeWorkoutTitleLayer: View {
                         // This layer floats above the execution page, so other cards' titles must not
                         // show through once the page covers the carousel.
                         .opacity(transitioningWorkoutID == nil || workout.id == transitioningWorkoutID ? 1 : 1 - min(max(progress, 0), 1))
-                        .opacity(hidesForExerciseSettings ? 0 : 1)
+                        // Settings hides only the floating workout-name pixels that
+                        // its real opaque surface has reached. Carousel metadata and
+                        // the Home ↔ execution title transition remain independent.
+                        .opacity(Double(settingsCoverageVisibility))
                         .id(HomeWorkoutTransitionIdentity.title(for: workout.id))
                         .position(x: frame.midX, y: frame.midY)
                             .accessibilityHidden(true)
@@ -691,22 +723,6 @@ private struct HomeWorkoutTitleLayer: View {
                     .position(x: cardFrame.midX, y: cardFrame.midY)
                     .accessibilityHidden(true)
                     }
-                }
-            }
-            .compositingGroup()
-            .mask {
-                if let surfaceAnchor = anchors[.focusedExerciseSettingsSurface] {
-                    let surfaceFrame = proxy[surfaceAnchor]
-                    Path { path in
-                        path.addRect(CGRect(origin: .zero, size: proxy.size))
-                        path.addPath(
-                            RoundedRectangle(cornerRadius: EQRadius.walletSurface, style: .continuous)
-                                .path(in: surfaceFrame)
-                        )
-                    }
-                    .fill(.white, style: FillStyle(eoFill: true))
-                } else {
-                    Rectangle().fill(.white)
                 }
             }
         }

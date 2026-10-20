@@ -428,6 +428,43 @@ final class HomeQueueTests: XCTestCase {
         ))
     }
 
+    func testWorkoutPageTitleVisibilityTracksFocusedSurfaceCoverage() {
+        let title = CGRect(x: 24, y: 104, width: 180, height: 28)
+
+        XCTAssertEqual(
+            WorkoutPageTitleCoverage.visibility(
+                titleFrame: title,
+                coveringSurfaceFrame: CGRect(x: 16, y: 160, width: 360, height: 500)
+            ),
+            1,
+            accuracy: 0.0001
+        )
+        XCTAssertEqual(
+            WorkoutPageTitleCoverage.visibility(
+                titleFrame: title,
+                coveringSurfaceFrame: CGRect(x: 16, y: 118, width: 360, height: 500)
+            ),
+            0.5,
+            accuracy: 0.0001
+        )
+        XCTAssertEqual(
+            WorkoutPageTitleCoverage.visibility(
+                titleFrame: title,
+                coveringSurfaceFrame: CGRect(x: 16, y: 90, width: 360, height: 500)
+            ),
+            0,
+            accuracy: 0.0001
+        )
+        XCTAssertEqual(
+            WorkoutPageTitleCoverage.visibility(
+                titleFrame: title,
+                coveringSurfaceFrame: CGRect(x: 220, y: 90, width: 120, height: 500)
+            ),
+            1,
+            accuracy: 0.0001
+        )
+    }
+
     func testCompletionDuringExpandedExecutionRemainsOnHomeTodayAfterExit() async throws {
         let repository = SwiftDataRepository(container: try PersistenceController.makeContainer(inMemory: true))
         let fixture = ready("expanded-completion", createdAt: date(2))
