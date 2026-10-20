@@ -687,6 +687,7 @@ private struct HomeWorkoutTitleLayer: View {
                     }
                 }
             }
+            .compositingGroup()
             .mask {
                 if let surfaceAnchor = anchors[.focusedExerciseSettingsSurface] {
                     let surfaceFrame = proxy[surfaceAnchor]

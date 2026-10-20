@@ -1514,7 +1514,6 @@ struct WorkoutExecutionView: View {
                             settingsPresented: showsExerciseSettings,
                             settingsTransitionProgress: exerciseSettingsTransitionProgress,
                             settingsSnapshot: exerciseSettingsTransitionSnapshot,
-                            foregroundTitleFrame: exerciseSettingsSourceTitleFrame,
                             settingsDestinationFrame: exerciseSettingsTransitionSnapshot?.destinationFrame
                                 ?? ExerciseFocusedExpansionLayout.destinationFrame(
                                     containerFrame: sceneFrame,
@@ -1803,11 +1802,6 @@ struct WorkoutExecutionView: View {
             Text(exerciseName)
                 .eqTextStyle(.screenTitle)
                 .lineLimit(2)
-                // The persistent title renderer owns the visible exercise name once
-                // this source frame has been measured. Keep this instance mounted as
-                // a layout and geometry placeholder so the compact card never reflows.
-                .opacity(exerciseSettingsSourceTitleFrame.width > 0 ? 0 : 1)
-                .accessibilityHidden(exerciseSettingsSourceTitleFrame.width > 0)
                 // Keep the real source title fully laid out while the focused surface
                 // is requested. The opaque surface covers it, while the scene-level
                 // shared title begins from this exact measured geometry above it.
@@ -2205,7 +2199,6 @@ private struct ExecutionWallet<ListRow: View, ForegroundHeader: View, Foreground
     let settingsPresented: Bool
     let settingsTransitionProgress: CGFloat
     let settingsSnapshot: ExerciseSettingsTransitionSnapshot?
-    let foregroundTitleFrame: CGRect
     let settingsDestinationFrame: CGRect
     let reduceMotion: Bool
     let transitionSourceFrame: CGRect?
@@ -2479,34 +2472,29 @@ private struct ExecutionWallet<ListRow: View, ForegroundHeader: View, Foreground
         .frame(width: proxy.size.width, height: proxy.size.height, alignment: .topLeading)
     }
 
-    /// The only visible exercise-name renderer. It stays in the wallet's common
-    /// coordinate space while the original compact and Settings layouts keep their
-    /// own invisible placeholders for measurement and spacing.
+    /// A title-only transition renderer. The compact and expanded execution states
+    /// retain their established title layout; this renderer takes visual ownership
+    /// only for the measured execution-to-Settings transformation.
     @ViewBuilder
     private func persistentExerciseTitle(proxy: GeometryProxy) -> some View {
-        let sourceFrame = settingsSnapshot?.titleFrame ?? foregroundTitleFrame
-        let titleName = settingsSnapshot
-            .flatMap { model.exercise(id: $0.exerciseID)?.nameSnapshot }
-            ?? model.currentExercise?.nameSnapshot
-
-        if let titleName, sourceFrame.width > 0, sourceFrame.height > 0 {
+        if settingsPresented,
+           let snapshot = settingsSnapshot,
+           let titleName = model.exercise(id: snapshot.exerciseID)?.nameSnapshot,
+           snapshot.titleFrame.width > 0,
+           snapshot.titleFrame.height > 0 {
+            let sourceFrame = snapshot.titleFrame
             let destinationFrame = ExerciseFocusedExpansionLayout.titleDestinationFrame(
                 surfaceFrame: settingsDestinationFrame,
                 sourceTitleFrame: sourceFrame
             )
-            let transitionIsActive = settingsPresented && settingsSnapshot != nil
-            let globalFrame = transitionIsActive
-                ? ExerciseFocusedExpansionLayout.frame(
-                    from: sourceFrame,
-                    to: destinationFrame,
-                    progress: settingsTransitionProgress
-                )
-                : sourceFrame
+            let globalFrame = ExerciseFocusedExpansionLayout.frame(
+                from: sourceFrame,
+                to: destinationFrame,
+                progress: settingsTransitionProgress
+            )
             let containerFrame = proxy.frame(in: .global)
             let localFrame = globalFrame.offsetBy(dx: -containerFrame.minX, dy: -containerFrame.minY)
-            let scale = transitionIsActive
-                ? 1 + ((ExerciseFocusedExpansionLayout.titleScale - 1) * settingsTransitionProgress)
-                : 1
+            let scale = 1 + ((ExerciseFocusedExpansionLayout.titleScale - 1) * settingsTransitionProgress)
 
             Text(titleName)
                 .eqTextStyle(.screenTitle)
@@ -2516,7 +2504,7 @@ private struct ExecutionWallet<ListRow: View, ForegroundHeader: View, Foreground
                 .foregroundStyle(
                     EQColor.Execution.foregroundText.mix(
                         with: EQColor.Execution.foregroundSecondaryText,
-                        by: Double(transitionIsActive ? settingsTransitionProgress : 0)
+                        by: Double(settingsTransitionProgress)
                     )
                 )
                 .position(x: localFrame.midX, y: localFrame.midY)
