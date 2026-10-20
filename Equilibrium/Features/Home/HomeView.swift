@@ -1,3 +1,4 @@
+import Foundation
 import SwiftUI
 
 struct HomeView: View {
@@ -581,6 +582,17 @@ private struct HomeWorkoutTitleLayer: View {
     /// Matches the execution header while a work timer tints it.
     var executionWorkTint: Double = 0
 
+    /// Launch-only diagnostic used to identify whether the floating base/tinted
+    /// pair below is the renderer visible above focused exercise Settings.
+    /// It is intentionally not connected to Settings state or release builds.
+    private var debugHidesFloatingWorkoutTitle: Bool {
+        #if DEBUG
+        ProcessInfo.processInfo.arguments.contains("-debugHideFloatingWorkoutTitle")
+        #else
+        false
+        #endif
+    }
+
     var body: some View {
         GeometryReader { proxy in
             ZStack(alignment: .topLeading) {
@@ -643,6 +655,10 @@ private struct HomeWorkoutTitleLayer: View {
                             // This layer floats above the execution page, so other cards' titles must not
                             // show through once the page covers the carousel.
                             .opacity(transitioningWorkoutID == nil || workout.id == transitioningWorkoutID ? 1 : 1 - min(max(progress, 0), 1))
+                            // DEBUG diagnostic: hides only this known base/tinted title
+                            // composition, leaving carousel metadata, the hidden execution
+                            // layout anchor, and the Settings exercise title untouched.
+                            .opacity(debugHidesFloatingWorkoutTitle ? 0 : 1)
                             // Keep the renderer mounted, but make this binary geometric
                             // decision immediate rather than inheriting Settings' animation.
                             .opacity(focusedSettingsTitleIsVisible ? 1 : 0)
