@@ -570,6 +570,11 @@ private struct HomeWorkoutTitleLayer: View {
                         let sourceFrame = proxy[source]
                         let destinationFrame = anchors[.destination(workout.id)].map { proxy[$0] } ?? sourceFrame
                         let titleProgress = workout.id == transitioningWorkoutID ? progress : 0
+                        // The focused Settings surface exists for the entire open /
+                        // close lifecycle. It is a stable, non-animated signal that
+                        // affects only this floating workout-name composition.
+                        let hidesForExerciseSettings = workout.id == transitioningWorkoutID
+                            && anchors[.focusedExerciseSettingsSurface] != nil
                         let frame = sourceFrame.interpolated(to: destinationFrame, progress: titleProgress)
                         let titleScale = HomeWorkoutTitleTransitionLayout.scale(progress: titleProgress)
                         let layoutSize = HomeWorkoutTitleTransitionLayout.unscaledSize(
@@ -614,6 +619,7 @@ private struct HomeWorkoutTitleLayer: View {
                         // This layer floats above the execution page, so other cards' titles must not
                         // show through once the page covers the carousel.
                         .opacity(transitioningWorkoutID == nil || workout.id == transitioningWorkoutID ? 1 : 1 - min(max(progress, 0), 1))
+                        .opacity(hidesForExerciseSettings ? 0 : 1)
                         .id(HomeWorkoutTransitionIdentity.title(for: workout.id))
                         .position(x: frame.midX, y: frame.midY)
                             .accessibilityHidden(true)

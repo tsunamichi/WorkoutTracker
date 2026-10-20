@@ -265,14 +265,16 @@ final class ExerciseSettingsPhase5Tests: XCTestCase {
             surfaceFrame: surface,
             sourceTitleFrame: sourceTitle
         )
+        let eyebrowSlot = ExerciseFocusedExpansionLayout.settingsEyebrowSlot(surfaceFrame: surface)
 
-        XCTAssertEqual(destination.minX, surface.minX + EQLayout.WorkoutExecution.walletInset)
-        XCTAssertEqual(destination.minY, surface.minY + EQSpacing.lg)
+        XCTAssertEqual(destination.minX, eyebrowSlot.minX)
+        XCTAssertEqual(destination.midY, eyebrowSlot.midY, accuracy: 0.001)
         XCTAssertEqual(
             destination.width,
             sourceTitle.width * ExerciseFocusedExpansionLayout.titleScale,
             accuracy: 0.001
         )
+        XCTAssertEqual(destination.height, sourceTitle.height * ExerciseFocusedExpansionLayout.titleScale)
     }
 
     func testFocusedSettingsExpansionKeepsTheSourceBottomAnchored() {

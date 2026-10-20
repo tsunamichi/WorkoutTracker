@@ -67,12 +67,29 @@ enum ExerciseFocusedExpansionLayout {
         )
     }
 
-    static func titleDestinationFrame(surfaceFrame: CGRect, sourceTitleFrame: CGRect) -> CGRect {
+    /// The exact space reserved by `FocusedExerciseSettingsSurface.header` while the
+    /// transition renderer owns the exercise name.
+    static func settingsEyebrowSlot(surfaceFrame: CGRect) -> CGRect {
         CGRect(
             x: surfaceFrame.minX + EQLayout.WorkoutExecution.walletInset,
             y: surfaceFrame.minY + EQSpacing.lg,
+            width: max(0, surfaceFrame.width - (EQLayout.WorkoutExecution.walletInset * 2)),
+            height: EQTextStyle.secondaryBody.lineHeight
+        )
+    }
+
+    static func titleDestinationFrame(surfaceFrame: CGRect, sourceTitleFrame: CGRect) -> CGRect {
+        let eyebrowSlot = settingsEyebrowSlot(surfaceFrame: surfaceFrame)
+        let titleSize = CGSize(
             width: sourceTitleFrame.width * titleScale,
             height: sourceTitleFrame.height * titleScale
+        )
+
+        return CGRect(
+            x: eyebrowSlot.minX,
+            y: eyebrowSlot.midY - (titleSize.height / 2),
+            width: titleSize.width,
+            height: titleSize.height
         )
     }
 }
@@ -1839,27 +1856,35 @@ struct WorkoutExecutionView: View {
         return model.currentExercise
     }
 
-    /// Geometry readers report the foreground card before its wallet `offset` is
-    /// applied. Keep the title's local relationship to that raw card, then project
-    /// it onto the rendered card frame used by the focused surface.
+    /// Capture the normal production title after SwiftUI has applied its complete
+    /// execution-card layout. The focused title takes over from this exact global
+    /// rectangle, so it must not be reconstructed through a separate card frame.
     private func updateExerciseSettingsSourceTitleFrame() {
+        guard exerciseSettingsMeasuredTitleFrame.width > 0,
+              exerciseSettingsMeasuredTitleFrame.height > 0 else { return }
+
+        exerciseSettingsSourceTitleFrame = exerciseSettingsMeasuredTitleFrame
+
+        #if DEBUG
         guard exerciseSettingsMeasuredSourceFrame.width > 0,
               exerciseSettingsMeasuredSourceFrame.height > 0,
               exerciseSettingsSourceFrame.width > 0,
-              exerciseSettingsSourceFrame.height > 0,
-              exerciseSettingsMeasuredTitleFrame.width > 0,
-              exerciseSettingsMeasuredTitleFrame.height > 0 else { return }
+              exerciseSettingsSourceFrame.height > 0 else { return }
 
-        let titleOffset = CGPoint(
-            x: exerciseSettingsMeasuredTitleFrame.minX - exerciseSettingsMeasuredSourceFrame.minX,
-            y: exerciseSettingsMeasuredTitleFrame.minY - exerciseSettingsMeasuredSourceFrame.minY
-        )
-        exerciseSettingsSourceTitleFrame = CGRect(
-            x: exerciseSettingsSourceFrame.minX + titleOffset.x,
-            y: exerciseSettingsSourceFrame.minY + titleOffset.y,
+        let legacyProjectedFrame = CGRect(
+            x: exerciseSettingsSourceFrame.minX
+                + (exerciseSettingsMeasuredTitleFrame.minX - exerciseSettingsMeasuredSourceFrame.minX),
+            y: exerciseSettingsSourceFrame.minY
+                + (exerciseSettingsMeasuredTitleFrame.minY - exerciseSettingsMeasuredSourceFrame.minY),
             width: exerciseSettingsMeasuredTitleFrame.width,
             height: exerciseSettingsMeasuredTitleFrame.height
         )
+        let delta = CGPoint(
+            x: exerciseSettingsMeasuredTitleFrame.minX - legacyProjectedFrame.minX,
+            y: exerciseSettingsMeasuredTitleFrame.minY - legacyProjectedFrame.minY
+        )
+        print("[SettingsTitleGeometry] direct source=\(exerciseSettingsMeasuredTitleFrame); legacy projected=\(legacyProjectedFrame); delta=\(delta)")
+        #endif
     }
 
     private var foregroundExerciseName: String? {
@@ -1985,6 +2010,21 @@ struct WorkoutExecutionView: View {
             destinationFrame: exerciseSettingsDestinationFrame
         )
 
+        #if DEBUG
+        let eyebrowSlot = ExerciseFocusedExpansionLayout.settingsEyebrowSlot(
+            surfaceFrame: exerciseSettingsDestinationFrame
+        )
+        let destinationTitleFrame = ExerciseFocusedExpansionLayout.titleDestinationFrame(
+            surfaceFrame: exerciseSettingsDestinationFrame,
+            sourceTitleFrame: exerciseSettingsSourceTitleFrame
+        )
+        print(
+            "[SettingsTitleGeometry] opening normal=\(exerciseSettingsMeasuredTitleFrame); "
+                + "frozen=\(exerciseSettingsSourceTitleFrame); renderer@0=\(exerciseSettingsSourceTitleFrame); "
+                + "eyebrow slot=\(eyebrowSlot); renderer@1=\(destinationTitleFrame)"
+        )
+        #endif
+
         // Source frames are frozen before presentation state creates the focused
         // shell. At progress zero the new shell and its shared title therefore occupy
         // precisely the same geometry as the currently rendered execution card.
@@ -2010,6 +2050,15 @@ struct WorkoutExecutionView: View {
         guard exerciseCardPresentation.exerciseID != nil else { return }
         exerciseSettingsTransitionGeneration += 1
         let generation = exerciseSettingsTransitionGeneration
+
+        #if DEBUG
+        if let snapshot = exerciseSettingsTransitionSnapshot {
+            print(
+                "[SettingsTitleGeometry] closing renderer before handoff target=\(snapshot.titleFrame); "
+                    + "normal measured source=\(exerciseSettingsMeasuredTitleFrame)"
+            )
+        }
+        #endif
 
         if reduceMotion {
             exerciseSettingsTransitionProgress = 0
@@ -2344,51 +2393,57 @@ private struct ExecutionWallet<ListRow: View, ForegroundHeader: View, Foreground
                     .position(x: currentFrame.midX, y: currentFrame.midY)
                     .accessibilityIdentifier("execution-exercise-list-card-\(workout.id.rawValue)")
 
-                // This host intentionally sits outside the wallet's clipped list surface.
-                // Its source and destination rectangles are global, so composing it in
-                // the wallet GeometryReader's coordinate space avoids applying the
-                // wallet inset a second time and lets the opaque shell cover the header.
-                persistentForegroundCardHost(
-                    proxy: proxy,
-                    progress: progress,
-                    walletWidth: walletWidth,
-                    walletOriginX: currentFrame.minX,
-                    foregroundLayout: foregroundLayout,
-                    compactArrival: compactArrival,
-                    compactEntranceOffset: compactEntranceOffset,
-                    foregroundDismissalOffset: foregroundDismissalOffset,
-                    executionSettingsVisibility: executionSettingsVisibility,
-                    renderedForegroundFrame: renderedForegroundFrame
-                )
+                // The host remains in the wallet's common coordinate space so its
+                // Settings destination can cover the page header. Outside Settings,
+                // the foreground presentation is clipped by the *animated* wallet
+                // boundary so it exits through that surface instead of over Home.
+                walletConstrainedForegroundPresentation(
+                    ZStack(alignment: .topLeading) {
+                    persistentForegroundCardHost(
+                        proxy: proxy,
+                        progress: progress,
+                        walletWidth: walletWidth,
+                        walletOriginX: currentFrame.minX,
+                        foregroundLayout: foregroundLayout,
+                        compactArrival: compactArrival,
+                        compactEntranceOffset: compactEntranceOffset,
+                        foregroundDismissalOffset: foregroundDismissalOffset,
+                        executionSettingsVisibility: executionSettingsVisibility,
+                        renderedForegroundFrame: renderedForegroundFrame
+                    )
 
-                stationaryExecutionValuesViewport(
-                    cardWidth: walletWidth,
-                    cardHeight: foregroundLayout.height,
-                    cardTop: foregroundLayout.top + compactEntranceOffset + foregroundDismissalOffset,
-                    focusProgress: progress
-                )
-                .offset(x: currentFrame.minX, y: currentFrame.minY)
-                .zIndex(2)
+                    stationaryExecutionValuesViewport(
+                        cardWidth: walletWidth,
+                        cardHeight: foregroundLayout.height,
+                        cardTop: foregroundLayout.top + compactEntranceOffset + foregroundDismissalOffset,
+                        focusProgress: progress
+                    )
+                    .offset(x: currentFrame.minX, y: currentFrame.minY)
+                    .zIndex(2)
 
-                Color.clear
-                    .frame(width: walletWidth, height: walletHeight)
-                    .overlay {
-                    unifiedActionControls(primaryAction)
-                        // The production footer stays at its captured execution
-                        // coordinates while the persistent host expands around it.
-                        // It is visual-only during the transition and disappears at
-                        // the same deterministic midpoint as the other execution
-                        // content.
-                        .opacity(keyboardVisible ? 0 : 1)
-                        .modifier(ExerciseSettingsContentVisibilityModifier(
-                            progress: settingsTransitionProgress,
-                            group: .execution
-                        ))
-                        .allowsHitTesting(!keyboardVisible && !settingsPresented && executionSettingsVisibility > 0.99)
-                        .accessibilityHidden(keyboardVisible || settingsPresented || executionSettingsVisibility < 0.01)
-                        .offset(y: showsForegroundExercise ? compactEntranceOffset + foregroundDismissalOffset : 0)
+                    Color.clear
+                        .frame(width: walletWidth, height: walletHeight)
+                        .overlay {
+                        unifiedActionControls(primaryAction)
+                            // The production footer stays at its captured execution
+                            // coordinates while the persistent host expands around it.
+                            // It is visual-only during the transition and disappears at
+                            // the same deterministic midpoint as the other execution
+                            // content.
+                            .opacity(keyboardVisible ? 0 : 1)
+                            .modifier(ExerciseSettingsContentVisibilityModifier(
+                                progress: settingsTransitionProgress,
+                                group: .execution
+                            ))
+                            .allowsHitTesting(!keyboardVisible && !settingsPresented && executionSettingsVisibility > 0.99)
+                            .accessibilityHidden(keyboardVisible || settingsPresented || executionSettingsVisibility < 0.01)
+                            .offset(y: showsForegroundExercise ? compactEntranceOffset + foregroundDismissalOffset : 0)
+                        }
+                        .position(x: currentFrame.midX, y: currentFrame.midY)
                     }
-                    .position(x: currentFrame.midX, y: currentFrame.midY)
+                    .frame(width: proxy.size.width, height: proxy.size.height, alignment: .topLeading),
+                    walletFrame: currentFrame
+                )
 
             }
             .frame(width: proxy.size.width, height: proxy.size.height, alignment: .topLeading)
@@ -2426,6 +2481,43 @@ private struct ExecutionWallet<ListRow: View, ForegroundHeader: View, Foreground
         EQSurface(color: overviewSurfaceColor, radius: EQRadius.walletSurface)
     }
 
+    /// Applies the wallet clip only while Home ↔ execution geometry is in flight.
+    /// Settings has no mask modifier at all, so its common-coordinate host can
+    /// extend beyond the wallet for its complete open / close lifecycle.
+    @ViewBuilder
+    private func walletConstrainedForegroundPresentation<Content: View>(
+        _ content: Content,
+        walletFrame: CGRect
+    ) -> some View {
+        if !settingsPresented && homeTransitionProgress < 0.999 {
+            content.mask {
+                walletForegroundPresentationMask(walletFrame: walletFrame)
+            }
+        } else {
+            content
+        }
+    }
+
+    /// Matches the wallet's visible rounded boundary while foreground content
+    /// enters or leaves through the Home ↔ execution matched presentation.
+    @ViewBuilder
+    private func walletForegroundPresentationMask(walletFrame: CGRect) -> some View {
+        if #available(iOS 26.0, *) {
+            ConcentricRectangle(
+                uniformTopCorners: .fixed(EQRadius.walletSurface),
+                uniformBottomCorners: .concentric(minimum: .fixed(EQRadius.walletSurface))
+            )
+            .fill(.white)
+            .frame(width: walletFrame.width, height: walletFrame.height)
+            .position(x: walletFrame.midX, y: walletFrame.midY)
+        } else {
+            RoundedRectangle(cornerRadius: EQRadius.walletSurface, style: .continuous)
+                .fill(.white)
+                .frame(width: walletFrame.width, height: walletFrame.height)
+                .position(x: walletFrame.midX, y: walletFrame.midY)
+        }
+    }
+
     /// The normal execution card's permanent owner. It remains mounted while the
     /// legacy focused Settings host is active, so Settings presentation no longer
     /// removes or recreates the compact card subtree.
@@ -2445,7 +2537,11 @@ private struct ExecutionWallet<ListRow: View, ForegroundHeader: View, Foreground
         ZStack(alignment: .topLeading) {
             if showsForegroundExercise {
                 compactForegroundCardShell(
-                foregroundCard(progress: progress, showsValues: false),
+                foregroundCard(
+                    progress: progress,
+                    hidesTransitionedHeader: true,
+                    showsValues: false
+                ),
                 width: walletWidth,
                 height: foregroundLayout.height
             )
@@ -2465,6 +2561,13 @@ private struct ExecutionWallet<ListRow: View, ForegroundHeader: View, Foreground
                     .accessibilityIdentifier("execution-current-exercise-card-\(workout.id.rawValue)")
             }
             focusedForegroundHost(proxy: proxy, renderedForegroundFrame: renderedForegroundFrame, focusedProgress: progress)
+
+            persistentExecutionHeader(
+                proxy: proxy,
+                focusedProgress: progress,
+                renderedForegroundFrame: renderedForegroundFrame
+            )
+            .zIndex(22)
 
             persistentExerciseTitle(proxy: proxy)
                 .zIndex(21)
@@ -2495,21 +2598,90 @@ private struct ExecutionWallet<ListRow: View, ForegroundHeader: View, Foreground
             let containerFrame = proxy.frame(in: .global)
             let localFrame = globalFrame.offsetBy(dx: -containerFrame.minX, dy: -containerFrame.minY)
             let scale = 1 + ((ExerciseFocusedExpansionLayout.titleScale - 1) * settingsTransitionProgress)
+            // `globalFrame` describes the title's visible, scaled bounds. The text
+            // itself retains the execution title's unscaled layout size and scales
+            // from its leading/top edge, so position that unscaled layout from the
+            // interpolated visible origin instead of the scaled frame's midpoint.
+            // This keeps both ownership handoff endpoints pixel-aligned.
+            let layoutCenter = CGPoint(
+                x: localFrame.minX + (sourceFrame.width / 2),
+                y: localFrame.minY + (sourceFrame.height / 2)
+            )
 
             Text(titleName)
                 .eqTextStyle(.screenTitle)
                 .lineLimit(2)
                 .frame(width: sourceFrame.width, height: sourceFrame.height, alignment: .topLeading)
                 .scaleEffect(scale, anchor: .topLeading)
-                .foregroundStyle(
-                    EQColor.Execution.foregroundText.mix(
-                        with: EQColor.Execution.foregroundSecondaryText,
-                        by: Double(settingsTransitionProgress)
-                    )
-                )
-                .position(x: localFrame.midX, y: localFrame.midY)
+                // The exercise name is shared transition chrome, not Settings
+                // secondary content. It retains the production execution colour for
+                // the full trajectory.
+                .foregroundStyle(EQColor.Execution.foregroundText)
+                .position(x: layoutCenter.x, y: layoutCenter.y)
                 .accessibilityHidden(true)
         }
+    }
+
+    /// The execution header stays mounted in the wallet's common coordinate space.
+    /// It follows the focused shell's top edge when Settings expands, while its
+    /// visibility is driven by the same frame-interpolated progress as values and
+    /// the independent footer.
+    @ViewBuilder
+    private func persistentExecutionHeader(
+        proxy: GeometryProxy,
+        focusedProgress: CGFloat,
+        renderedForegroundFrame: CGRect
+    ) -> some View {
+        if showsForegroundExercise {
+            let globalFrame = executionHeaderFrame(renderedForegroundFrame: renderedForegroundFrame)
+            let containerFrame = proxy.frame(in: .global)
+            let localFrame = globalFrame.offsetBy(dx: -containerFrame.minX, dy: -containerFrame.minY)
+            let executionVisibility = ExerciseCardModeMotion.executionVisibility(settingsTransitionProgress)
+            let headerWidth = max(0, localFrame.width - (EQLayout.WorkoutExecution.walletInset * 2))
+
+            foregroundHeader(focusedProgress, isLeavingRest ? 1 : 0)
+                // This header now lives beside `foregroundCard`, so it no longer
+                // inherits the compact card's execution foreground environment.
+                // Reapply that existing theme-aware treatment without changing
+                // its shared transition visibility.
+                .foregroundStyle(foregroundTextColor)
+                .tint(foregroundTextColor)
+                .frame(
+                    width: headerWidth,
+                    height: EQLayout.minimumTouch,
+                    alignment: .leading
+                )
+                .position(
+                    x: localFrame.minX + EQLayout.WorkoutExecution.walletInset + (headerWidth / 2),
+                    y: localFrame.minY + EQSpacing.xxs + (EQLayout.minimumTouch / 2)
+                )
+                .modifier(ExerciseSettingsContentVisibilityModifier(
+                    progress: settingsTransitionProgress,
+                    group: .execution
+                ))
+                .allowsHitTesting(!settingsPresented && executionVisibility > 0.99)
+                .accessibilityHidden(settingsPresented || executionVisibility < 0.01)
+        } else {
+            EmptyView()
+        }
+    }
+
+    private func executionHeaderFrame(renderedForegroundFrame: CGRect) -> CGRect {
+        guard settingsPresented,
+              let snapshot = settingsSnapshot,
+              settingsDestinationFrame.width > 0 else {
+            return renderedForegroundFrame
+        }
+
+        let sourceFrame = ExerciseFocusedExpansionLayout.bottomAnchoredSourceFrame(
+            measuredSource: snapshot.cardFrame,
+            destination: settingsDestinationFrame
+        )
+        return ExerciseFocusedExpansionLayout.frame(
+            from: sourceFrame,
+            to: settingsDestinationFrame,
+            progress: settingsTransitionProgress
+        )
     }
 
     /// The compact card's opaque surface. The caller supplies only its existing
@@ -2574,50 +2746,21 @@ private struct ExecutionWallet<ListRow: View, ForegroundHeader: View, Foreground
         ZStack {
             EQColor.Execution.foregroundSurface
 
-            Text("IN PROGRESS")
-                .eqTextStyle(.sectionLabel)
-                .foregroundStyle(foregroundTextColor)
-                .frame(
-                    width: localFrame.width - (EQLayout.WorkoutExecution.walletInset * 2),
-                    height: EQLayout.minimumTouch,
-                    alignment: .leading
-                )
-                .position(
-                    x: EQLayout.WorkoutExecution.walletInset
-                        + ((localFrame.width - (EQLayout.WorkoutExecution.walletInset * 2)) / 2),
-                    y: EQSpacing.xxs + (EQLayout.minimumTouch / 2)
-                )
-                .modifier(ExerciseSettingsContentVisibilityModifier(
-                    progress: settingsTransitionProgress,
-                    group: .execution
-                ))
-                .allowsHitTesting(false)
-                .accessibilityHidden(executionVisibility < 0.01)
-
-            // This one anchor remains attached to the shell's top-right inset;
-            // only the glyph/function changes as progress crosses the midpoint.
-            ZStack(alignment: .trailing) {
-                Image(systemName: "slider.horizontal.3")
+            // The persistent execution header owns IN PROGRESS and the sliders
+            // glyph. This focused host retains only the incoming close control.
+            Button(action: dismissSettings) {
+                Image(systemName: "xmark")
                     .eqTextStyle(.icon)
-                    .modifier(ExerciseSettingsContentVisibilityModifier(
-                        progress: settingsTransitionProgress,
-                        group: .execution
-                    ))
-
-                Button(action: dismissSettings) {
-                    Image(systemName: "xmark")
-                        .eqTextStyle(.icon)
-                        .frame(width: EQLayout.minimumTouch, height: EQLayout.minimumTouch, alignment: .trailing)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Close exercise settings")
-                .modifier(ExerciseSettingsContentVisibilityModifier(
-                    progress: settingsTransitionProgress,
-                    group: .settings
-                ))
-                .allowsHitTesting(settingsVisibility > 0.99)
-                .accessibilityHidden(settingsVisibility < 0.01)
+                    .frame(width: EQLayout.minimumTouch, height: EQLayout.minimumTouch, alignment: .trailing)
             }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Close exercise settings")
+            .modifier(ExerciseSettingsContentVisibilityModifier(
+                progress: settingsTransitionProgress,
+                group: .settings
+            ))
+            .allowsHitTesting(settingsVisibility > 0.99)
+            .accessibilityHidden(settingsVisibility < 0.01)
             .foregroundStyle(foregroundTextColor)
             .frame(width: EQLayout.minimumTouch, height: EQLayout.minimumTouch, alignment: .trailing)
             .position(
@@ -2950,7 +3093,7 @@ private struct ExecutionWallet<ListRow: View, ForegroundHeader: View, Foreground
 
     private func foregroundCard(
         progress: CGFloat,
-        hidesTransitionedChrome: Bool = false,
+        hidesTransitionedHeader: Bool = false,
         showsValues: Bool = true
     ) -> some View {
         let isFocused = progress > 0.99
@@ -2999,8 +3142,8 @@ private struct ExecutionWallet<ListRow: View, ForegroundHeader: View, Foreground
                 )
                 : anchors.contentHeight
             VStack(alignment: .leading, spacing: 0) {
-                executionCardHeader(progress: progress, isLeavingRest: isLeavingRest, accessibilityHeaderPadding: accessibilityHeaderPadding, collapsedTitleLift: collapsedTitleLift, hidesTransitionedChrome: hidesTransitionedChrome)
-                executionCardContentViewport(height: contentViewportHeight, isFocused: isFocused, settingsHasTakenOwnership: executionSettingsHasTakenOwnership, hidesTransitionedChrome: hidesTransitionedChrome)
+                executionCardHeader(progress: progress, isLeavingRest: isLeavingRest, accessibilityHeaderPadding: accessibilityHeaderPadding, collapsedTitleLift: collapsedTitleLift, hidesTransitionedChrome: hidesTransitionedHeader)
+                executionCardContentViewport(height: contentViewportHeight, isFocused: isFocused, settingsHasTakenOwnership: executionSettingsHasTakenOwnership, hidesTransitionedChrome: false)
             }
             .frame(width: proxy.size.width, height: proxy.size.height, alignment: .topLeading)
             .overlay(alignment: .topLeading) {
