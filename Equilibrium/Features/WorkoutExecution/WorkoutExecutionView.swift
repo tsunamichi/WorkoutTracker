@@ -1,3 +1,4 @@
+import Foundation
 import SwiftUI
 import UIKit
 import Observation
@@ -720,6 +721,61 @@ enum ExecutionForegroundEntry {
     /// edge from wherever it currently sits, so an expanded card leaves as one sheet.
     static func slideDistance(walletHeight: CGFloat, cardTop: CGFloat, gap: CGFloat) -> CGFloat {
         max(0, walletHeight - cardTop) + gap
+    }
+}
+
+/// DEBUG-only instrumentation for identifying which execution surface remains
+/// visible during the Home return. It is enabled only by the explicit launch
+/// argument and never participates in production layout or animation.
+private enum ExecutionWalletExitDiagnostics {
+    static var isEnabled: Bool {
+        #if DEBUG
+        ProcessInfo.processInfo.arguments.contains("-debugWalletExitSurfaces")
+        #else
+        false
+        #endif
+    }
+}
+
+private struct ExecutionWalletExitProbe: View {
+    let progress: CGFloat
+    let walletFrame: CGRect
+    let foregroundFrame: CGRect
+    let foregroundMounted: Bool
+    let settingsPresented: Bool
+
+    @State private var reportedBuckets: Set<Int> = []
+
+    private var bucket: Int? {
+        let samples: [CGFloat] = [1, 0.8, 0.6, 0.4, 0.2, 0]
+        guard let nearest = samples.enumerated().min(by: {
+            abs($0.element - progress) < abs($1.element - progress)
+        }), abs(nearest.element - progress) <= 0.025 else {
+            return nil
+        }
+        return nearest.offset
+    }
+
+    private var intersection: CGRect {
+        walletFrame.intersection(foregroundFrame)
+    }
+
+    var body: some View {
+        Color.clear
+            .frame(width: 1, height: 1)
+            .onChange(of: bucket, initial: true) { _, bucket in
+                guard ExecutionWalletExitDiagnostics.isEnabled,
+                      let bucket,
+                      !reportedBuckets.contains(bucket) else { return }
+                reportedBuckets.insert(bucket)
+                print(
+                    "[WalletExitProbe] p=\(progress) settings=\(settingsPresented) "
+                        + "foregroundMounted=\(foregroundMounted) wallet=\(walletFrame) "
+                        + "foreground=\(foregroundFrame) intersection=\(intersection)"
+                )
+            }
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
     }
 }
 
@@ -2398,6 +2454,13 @@ private struct ExecutionWallet<ListRow: View, ForegroundHeader: View, Foreground
                     .modifier(ExecutionWalletShapeModifier())
                     .position(x: currentFrame.midX, y: currentFrame.midY)
                     .accessibilityIdentifier("execution-exercise-list-card-\(workout.id.rawValue)")
+                    .overlay {
+                        if ExecutionWalletExitDiagnostics.isEnabled {
+                            RoundedRectangle(cornerRadius: EQRadius.walletSurface, style: .continuous)
+                                .stroke(.cyan, lineWidth: 2)
+                                .allowsHitTesting(false)
+                        }
+                    }
 
                 // The host remains in the wallet's common coordinate space so its
                 // Settings destination can cover the page header. Outside Settings,
@@ -2451,6 +2514,21 @@ private struct ExecutionWallet<ListRow: View, ForegroundHeader: View, Foreground
                     walletFrame: currentFrame
                 )
 
+                if ExecutionWalletExitDiagnostics.isEnabled {
+                    walletForegroundPresentationOutline(walletFrame: currentFrame)
+                        .allowsHitTesting(false)
+                        .accessibilityHidden(true)
+                        .zIndex(100)
+                }
+
+                ExecutionWalletExitProbe(
+                    progress: homeTransitionProgress,
+                    walletFrame: currentGlobalFrame,
+                    foregroundFrame: renderedForegroundFrame,
+                    foregroundMounted: showsForegroundExercise,
+                    settingsPresented: settingsPresented
+                )
+
             }
             .frame(width: proxy.size.width, height: proxy.size.height, alignment: .topLeading)
         }
@@ -2495,7 +2573,7 @@ private struct ExecutionWallet<ListRow: View, ForegroundHeader: View, Foreground
         _ content: Content,
         walletFrame: CGRect
     ) -> some View {
-        if !settingsPresented && homeTransitionProgress < 0.999 {
+        if !settingsPresented {
             content.mask {
                 walletForegroundPresentationMask(walletFrame: walletFrame)
             }
@@ -2519,6 +2597,24 @@ private struct ExecutionWallet<ListRow: View, ForegroundHeader: View, Foreground
         } else {
             RoundedRectangle(cornerRadius: EQRadius.walletSurface, style: .continuous)
                 .fill(.white)
+                .frame(width: walletFrame.width, height: walletFrame.height)
+                .position(x: walletFrame.midX, y: walletFrame.midY)
+        }
+    }
+
+    @ViewBuilder
+    private func walletForegroundPresentationOutline(walletFrame: CGRect) -> some View {
+        if #available(iOS 26.0, *) {
+            ConcentricRectangle(
+                uniformTopCorners: .fixed(EQRadius.walletSurface),
+                uniformBottomCorners: .concentric(minimum: .fixed(EQRadius.walletSurface))
+            )
+            .stroke(.yellow, lineWidth: 2)
+            .frame(width: walletFrame.width, height: walletFrame.height)
+            .position(x: walletFrame.midX, y: walletFrame.midY)
+        } else {
+            RoundedRectangle(cornerRadius: EQRadius.walletSurface, style: .continuous)
+                .stroke(.yellow, lineWidth: 2)
                 .frame(width: walletFrame.width, height: walletFrame.height)
                 .position(x: walletFrame.midX, y: walletFrame.midY)
         }
@@ -2556,6 +2652,13 @@ private struct ExecutionWallet<ListRow: View, ForegroundHeader: View, Foreground
                     y: foregroundLayout.top + compactEntranceOffset + foregroundDismissalOffset
                 )
                 .opacity(settingsPresented ? 0 : executionSettingsVisibility)
+                .overlay {
+                    if ExecutionWalletExitDiagnostics.isEnabled {
+                        RoundedRectangle(cornerRadius: EQRadius.walletSurface, style: .continuous)
+                            .stroke(.pink, lineWidth: 3)
+                            .allowsHitTesting(false)
+                    }
+                }
                 .accessibilityHidden(compactArrival < 0.99)
                 .onGeometryChange(for: CGRect.self) { geometry in
                     geometry.frame(in: .global)
