@@ -5,6 +5,42 @@ import SwiftUI
 
 @MainActor
 final class WorkoutExecutionRepositoryTests: XCTestCase {
+    func testHomeExecutionGeometryUsesOneProgressForWalletAndForegroundExit() {
+        let input = HomeExecutionPresentationGeometry.Input(
+            homeWalletFrame: CGRect(x: 16, y: 600, width: 360, height: 140),
+            executionWalletFrame: CGRect(x: 16, y: 40, width: 360, height: 700),
+            foregroundTop: 430,
+            foregroundSize: CGSize(width: 360, height: 230),
+            foregroundClearance: 12
+        )
+
+        let execution = HomeExecutionPresentationGeometry.resolve(input: input, progress: 1)
+        let exitThreshold = HomeExecutionPresentationGeometry.resolve(input: input, progress: 0.78)
+        let home = HomeExecutionPresentationGeometry.resolve(input: input, progress: 0)
+
+        XCTAssertEqual(execution.walletFrame, input.executionWalletFrame)
+        XCTAssertEqual(execution.foregroundTranslation, 0, accuracy: 0.001)
+        XCTAssertNil(exitThreshold.visibleForegroundIntersection)
+        XCTAssertNil(home.visibleForegroundIntersection)
+    }
+
+    func testHomeExecutionGeometryDoesNotReenterWalletAfterExitThreshold() {
+        let input = HomeExecutionPresentationGeometry.Input(
+            homeWalletFrame: CGRect(x: 0, y: 500, width: 360, height: 160),
+            executionWalletFrame: CGRect(x: 0, y: 20, width: 360, height: 700),
+            foregroundTop: 400,
+            foregroundSize: CGSize(width: 360, height: 240),
+            foregroundClearance: 12
+        )
+
+        for progress: CGFloat in stride(from: 0.78, through: 0, by: -0.02) {
+            XCTAssertNil(
+                HomeExecutionPresentationGeometry.resolve(input: input, progress: progress).visibleForegroundIntersection,
+                "foreground re-entered the wallet at progress \(progress)"
+            )
+        }
+    }
+
     private func repository() throws -> SwiftDataRepository { SwiftDataRepository(container: try PersistenceController.makeContainer(inMemory: true)) }
 
     func testPlannedStartsWithTimestampAndInProgressResumesWithoutChangingIt() async throws {

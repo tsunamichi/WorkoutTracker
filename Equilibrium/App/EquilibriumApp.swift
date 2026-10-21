@@ -35,6 +35,20 @@ struct EquilibriumApp: App {
     }
     var body: some Scene {
         WindowGroup {
+#if DEBUG
+            if ProcessInfo.processInfo.arguments.contains("-debugHomeExecutionGeometryProof") {
+                HomeExecutionGeometryProofScene()
+            } else {
+                homeView
+            }
+#else
+            homeView
+#endif
+        }
+            .modelContainer(environment.container)
+    }
+
+    private var homeView: some View {
             HomeView(
                 repository: environment.workoutRepository,
                 exerciseRepository: environment.exerciseRepository,
@@ -46,7 +60,5 @@ struct EquilibriumApp: App {
             .environment(environment)
             .environment(EQThemeStore.shared)
             .preferredColorScheme(EQColor.colorScheme)
-        }
-            .modelContainer(environment.container)
     }
 }
