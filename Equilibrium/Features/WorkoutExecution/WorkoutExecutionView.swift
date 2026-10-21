@@ -1208,17 +1208,19 @@ struct WorkoutExecutionView: View {
     private let exerciseRepository: (any ExerciseRepository)?
     private let onExit: (() -> Void)?
     private let usesObjectSurface: Bool
+    private let homeExecutionProgress: CGFloat
     private let transitionSourceFrame: CGRect?
     private let reportWalletFrame: ((CGRect) -> Void)?
     private let haptics: any HapticsClient
 
-    init(id: WorkoutID, initialWorkout: Workout? = nil, repository: any WorkoutRepository, historyRepository: (any ExerciseHistoryRepository)? = nil, progressionRepository: (any ProgressionRepository)? = nil, exerciseRepository: (any ExerciseRepository)? = nil, settingsRepository: (any SettingsRepository)? = nil, weightUnit: WeightUnit = .pounds, defaultRestDuration: TimeInterval = 90, restSessionStore: WorkoutRestSessionStore? = nil, transitionSourceFrame: CGRect? = nil, reportWalletFrame: ((CGRect) -> Void)? = nil, haptics: (any HapticsClient)? = nil, didPersist: @escaping (Workout) -> Void = { _ in }, onExit: (() -> Void)? = nil, usesObjectSurface: Bool = false) {
+    init(id: WorkoutID, initialWorkout: Workout? = nil, repository: any WorkoutRepository, historyRepository: (any ExerciseHistoryRepository)? = nil, progressionRepository: (any ProgressionRepository)? = nil, exerciseRepository: (any ExerciseRepository)? = nil, settingsRepository: (any SettingsRepository)? = nil, weightUnit: WeightUnit = .pounds, defaultRestDuration: TimeInterval = 90, restSessionStore: WorkoutRestSessionStore? = nil, homeExecutionProgress: CGFloat = 1, transitionSourceFrame: CGRect? = nil, reportWalletFrame: ((CGRect) -> Void)? = nil, haptics: (any HapticsClient)? = nil, didPersist: @escaping (Workout) -> Void = { _ in }, onExit: (() -> Void)? = nil, usesObjectSurface: Bool = false) {
         let resolvedHaptics = haptics ?? SystemHapticsClient()
         let resolvedExerciseRepository = exerciseRepository ?? (repository as? SwiftDataRepository)
         self.historyRepository = historyRepository ?? (repository as? SwiftDataRepository)
         self.exerciseRepository = resolvedExerciseRepository
         self.onExit = onExit
         self.usesObjectSurface = usesObjectSurface
+        self.homeExecutionProgress = homeExecutionProgress
         self.transitionSourceFrame = transitionSourceFrame
         self.reportWalletFrame = reportWalletFrame
         self.haptics = resolvedHaptics
@@ -1713,6 +1715,7 @@ struct WorkoutExecutionView: View {
                                     safeAreaInsets: safeAreaInsets
                                 ),
                             reduceMotion: reduceMotion,
+                            homeTransitionProgress: homeExecutionProgress,
                             transitionSourceFrame: transitionSourceFrame,
                             reportFrame: reportWalletFrame,
                             reportForegroundFrame: { frame in
@@ -2406,7 +2409,6 @@ private struct ExecutionDismissOnRequest: ViewModifier {
 
 private struct ExecutionWallet<ListRow: View, ForegroundHeader: View, ForegroundContent: View, ForegroundValues: View, FooterControls: View, SettingsContent: View>: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
-    @Environment(\.homeExecutionTransitionProgress) private var homeTransitionProgress
     @Environment(\.foregroundFocusProgress) private var focusProgress
     @Environment(\.timerVisibilityProgress) private var timerVisibilityProgress
     @State private var foregroundTitleHeight: CGFloat = 0
@@ -2426,6 +2428,7 @@ private struct ExecutionWallet<ListRow: View, ForegroundHeader: View, Foreground
     let settingsSnapshot: ExerciseSettingsTransitionSnapshot?
     let settingsDestinationFrame: CGRect
     let reduceMotion: Bool
+    let homeTransitionProgress: CGFloat
     let transitionSourceFrame: CGRect?
     let reportFrame: ((CGRect) -> Void)?
     let reportForegroundFrame: (CGRect) -> Void
@@ -2500,6 +2503,10 @@ private struct ExecutionWallet<ListRow: View, ForegroundHeader: View, Foreground
                 progress: homeTransitionProgress
             )
             let currentFrame = currentGlobalFrame.offsetBy(
+                dx: -containerFrame.minX,
+                dy: -containerFrame.minY
+            )
+            let destinationLocalFrame = destinationFrame.offsetBy(
                 dx: -containerFrame.minX,
                 dy: -containerFrame.minY
             )
@@ -2598,37 +2605,58 @@ private struct ExecutionWallet<ListRow: View, ForegroundHeader: View, Foreground
                         baseForegroundFrame: baseForegroundFrame
                     )
                 } else {
-                    // The normal foreground presentation is an overlay *inside* the
-                    // wallet surface before its shape modifier. This makes the shell,
-                    // values, footer, and header share the wallet's final clip rather
-                    // than relying on a parallel animated mask.
-                    ZStack(alignment: .topLeading) {
-                        walletSurfaceContent(
-                            compactHeight: compactHeight,
-                            walletWidth: walletWidth,
-                            walletHeight: walletHeight,
-                            foregroundLayout: foregroundLayout
-                        )
+                    // Home ↔ execution uses one animatable renderer. It owns the
+                    // wallet viewport, the foreground-only exit translation, and
+                    // the final clip in one presentation-frame evaluation.
+                    let stableWalletWidth = max(0, destinationLocalFrame.width)
+                    let stableWalletHeight = max(0, destinationLocalFrame.height)
+                    let stableForegroundLayout = ExecutionWalletSurfaceLayout.resolve(
+                        walletHeight: stableWalletHeight,
+                        focusedTop: focusedTop,
+                        compactHeight: compactHeight,
+                        focusProgress: progress
+                    )
+                    let rendererInput = HomeExecutionPresentationGeometry.Input(
+                        homeWalletFrame: sourceFrame.offsetBy(
+                            dx: -containerFrame.minX,
+                            dy: -containerFrame.minY
+                        ),
+                        executionWalletFrame: destinationLocalFrame,
+                        foregroundTop: stableForegroundLayout.top,
+                        foregroundSize: CGSize(width: stableWalletWidth, height: stableForegroundLayout.height),
+                        foregroundClearance: EQSpacing.md
+                    )
 
-                        foregroundPresentation(
-                            proxy: proxy,
-                            progress: progress,
-                            walletWidth: walletWidth,
-                            walletHeight: walletHeight,
-                            walletOriginX: currentFrame.minX,
-                            walletOriginY: currentFrame.minY,
-                            foregroundLayout: foregroundLayout,
-                            compactArrival: compactArrival,
-                            foregroundExitTranslation: foregroundExitTranslation,
-                            foregroundDismissalOffset: foregroundDismissalOffset,
-                            executionSettingsVisibility: executionSettingsVisibility,
-                            baseForegroundFrame: baseForegroundFrame
-                        )
-                        .offset(x: -currentFrame.minX, y: -currentFrame.minY)
-                    }
-                    .frame(width: walletWidth, height: walletHeight, alignment: .topLeading)
-                    .modifier(ExecutionWalletShapeModifier())
-                    .position(x: currentFrame.midX, y: currentFrame.midY)
+                    UnifiedHomeExecutionRenderer(
+                        progress: homeTransitionProgress,
+                        input: rendererInput,
+                        canvasSize: CGSize(width: stableWalletWidth, height: stableWalletHeight),
+                        cornerRadius: EQRadius.walletSurface,
+                        borderColor: EQColor.Execution.walletBorder
+                            .mix(with: EQColor.Execution.restCanvas, by: restTint)
+                            .mix(with: EQColor.Execution.primaryAction, by: workTint),
+                        borderWidth: EQLayout.WorkoutExecution.walletBorderWidth * 2,
+                        surface: { canvasSize in
+                            walletSurfaceContent(
+                                compactHeight: compactHeight,
+                                walletWidth: canvasSize.width,
+                                walletHeight: canvasSize.height,
+                                foregroundLayout: stableForegroundLayout
+                            )
+                        },
+                        foreground: { geometry in
+                            normalForegroundPresentation(
+                                proxy: proxy,
+                                progress: progress,
+                                walletWidth: stableWalletWidth,
+                                walletHeight: stableWalletHeight,
+                                foregroundLayout: stableForegroundLayout,
+                                compactArrival: geometry.foregroundArrival,
+                                foregroundDismissalOffset: foregroundDismissalOffset,
+                                executionSettingsVisibility: executionSettingsVisibility
+                            )
+                        }
+                    )
                 }
 
                 if ExecutionWalletExitDiagnostics.isEnabled {
@@ -2764,6 +2792,88 @@ private struct ExecutionWallet<ListRow: View, ForegroundHeader: View, Foreground
                 .position(x: walletOriginX + (walletWidth / 2), y: walletOriginY + (walletHeight / 2))
         }
         .frame(width: proxy.size.width, height: proxy.size.height, alignment: .topLeading)
+    }
+
+    /// The normal, clipped Home ↔ execution foreground region. All stateful
+    /// production subtrees remain mounted exactly once; the unified renderer
+    /// above applies their shared exit translation after this region is composed.
+    @ViewBuilder
+    private func normalForegroundPresentation(
+        proxy: GeometryProxy,
+        progress: CGFloat,
+        walletWidth: CGFloat,
+        walletHeight: CGFloat,
+        foregroundLayout: ExecutionWalletSurfaceLayout,
+        compactArrival: CGFloat,
+        foregroundDismissalOffset: CGFloat,
+        executionSettingsVisibility: CGFloat
+    ) -> some View {
+        ZStack(alignment: .topLeading) {
+            if showsForegroundExercise {
+                compactForegroundCardShell(
+                    foregroundCard(
+                        progress: progress,
+                        hidesTransitionedHeader: true,
+                        showsValues: false
+                    ),
+                    width: walletWidth,
+                    height: foregroundLayout.height
+                )
+                .offset(y: foregroundLayout.top + foregroundDismissalOffset)
+                .opacity(executionSettingsVisibility)
+                .accessibilityHidden(compactArrival < 0.99)
+                .onGeometryChange(for: CGRect.self) { geometry in
+                    geometry.frame(in: .global)
+                } action: { frame in
+                    reportForegroundFrame(frame)
+                    reportForegroundVisualFrame(frame)
+                }
+                .zIndex(1)
+                .accessibilityIdentifier("execution-current-exercise-card-\(workout.id.rawValue)")
+            }
+
+            stationaryExecutionValuesViewport(
+                cardWidth: walletWidth,
+                cardHeight: foregroundLayout.height,
+                cardTop: foregroundLayout.top + foregroundDismissalOffset,
+                focusProgress: progress
+            )
+            .zIndex(2)
+
+            if showsForegroundExercise {
+                let headerWidth = max(0, walletWidth - (EQLayout.WorkoutExecution.walletInset * 2))
+                foregroundHeader(progress, isLeavingRest ? 1 : 0)
+                    .foregroundStyle(foregroundTextColor)
+                    .tint(foregroundTextColor)
+                    .frame(width: headerWidth, height: EQLayout.minimumTouch, alignment: .leading)
+                    .position(
+                        x: EQLayout.WorkoutExecution.walletInset + (headerWidth / 2),
+                        y: foregroundLayout.top + foregroundDismissalOffset + EQSpacing.xxs + (EQLayout.minimumTouch / 2)
+                    )
+                    .modifier(ExerciseSettingsContentVisibilityModifier(
+                        progress: settingsTransitionProgress,
+                        group: .execution
+                    ))
+                    .allowsHitTesting(executionSettingsVisibility > 0.99)
+                    .accessibilityHidden(executionSettingsVisibility < 0.01)
+                    .zIndex(22)
+            }
+
+            Color.clear
+                .frame(width: walletWidth, height: walletHeight)
+                .overlay {
+                    unifiedActionControls(primaryAction)
+                        .opacity(keyboardVisible ? 0 : 1)
+                        .modifier(ExerciseSettingsContentVisibilityModifier(
+                            progress: settingsTransitionProgress,
+                            group: .execution
+                        ))
+                        .allowsHitTesting(!keyboardVisible && executionSettingsVisibility > 0.99)
+                        .accessibilityHidden(keyboardVisible || executionSettingsVisibility < 0.01)
+                        .offset(y: showsForegroundExercise ? foregroundDismissalOffset : 0)
+                }
+        }
+        .frame(width: walletWidth, height: walletHeight, alignment: .topLeading)
     }
 
     @ViewBuilder

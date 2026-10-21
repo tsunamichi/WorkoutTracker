@@ -101,6 +101,7 @@ struct HomeView: View {
                                     weightUnit: appSettings.weightUnit,
                                     defaultRestDuration: appSettings.defaultRestDuration,
                                     restSessionStore: restSessionStore,
+                                    homeExecutionProgress: homeExecutionProgress,
                                     transitionSourceFrame: transitionSourceFrame,
                                     reportWalletFrame: reportWalletFrame,
                                     didPersist: model.applyPersistedWorkout,
@@ -1463,6 +1464,7 @@ private struct ExpandedWorkoutExecutionContainer: View {
     let weightUnit: WeightUnit
     let defaultRestDuration: TimeInterval
     let restSessionStore: WorkoutRestSessionStore
+    let homeExecutionProgress: CGFloat
     let transitionSourceFrame: CGRect?
     let reportWalletFrame: (CGRect) -> Void
     let didPersist: (Workout) -> Void
@@ -1480,6 +1482,7 @@ private struct ExpandedWorkoutExecutionContainer: View {
             weightUnit: weightUnit,
             defaultRestDuration: defaultRestDuration,
             restSessionStore: restSessionStore,
+            homeExecutionProgress: homeExecutionProgress,
             transitionSourceFrame: transitionSourceFrame,
             reportWalletFrame: reportWalletFrame,
             didPersist: didPersist,

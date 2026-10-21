@@ -32,6 +32,7 @@ struct HomeExecutionPresentationGeometry: Equatable {
     let progress: CGFloat
     let walletFrame: CGRect
     let foregroundBaseFrame: CGRect
+    let foregroundArrival: CGFloat
     let foregroundTranslation: CGFloat
     let foregroundFrame: CGRect
     let visibleForegroundIntersection: CGRect?
@@ -69,6 +70,7 @@ struct HomeExecutionPresentationGeometry: Equatable {
             progress: resolvedProgress,
             walletFrame: walletFrame,
             foregroundBaseFrame: foregroundBaseFrame,
+            foregroundArrival: foregroundArrival,
             foregroundTranslation: translation,
             foregroundFrame: foregroundFrame,
             visibleForegroundIntersection: intersection.isNull || intersection.isEmpty ? nil : intersection
@@ -82,6 +84,49 @@ struct HomeExecutionPresentationGeometry: Equatable {
             width: source.width + ((destination.width - source.width) * progress),
             height: source.height + ((destination.height - source.height) * progress)
         )
+    }
+}
+
+/// Production-capable counterpart of the DEBUG proof. Its only animatable value
+/// is the Home ↔ execution presentation progress; the wallet viewport, the
+/// foreground-only translation, and the final rounded clip are all resolved in
+/// this one rendering evaluation.
+struct UnifiedHomeExecutionRenderer<Surface: View, Foreground: View>: View, Animatable {
+    var progress: CGFloat
+    let input: HomeExecutionPresentationGeometry.Input
+    let canvasSize: CGSize
+    let cornerRadius: CGFloat
+    let borderColor: Color
+    let borderWidth: CGFloat
+    let surface: (CGSize) -> Surface
+    let foreground: (HomeExecutionPresentationGeometry) -> Foreground
+
+    var animatableData: CGFloat {
+        get { progress }
+        set { progress = newValue }
+    }
+
+    var body: some View {
+        let geometry = HomeExecutionPresentationGeometry.resolve(input: input, progress: progress)
+
+        ZStack(alignment: .topLeading) {
+            surface(canvasSize)
+                .frame(width: canvasSize.width, height: canvasSize.height, alignment: .topLeading)
+
+            foreground(geometry)
+                .frame(width: canvasSize.width, height: canvasSize.height, alignment: .topLeading)
+                // Intentionally applies to the foreground region only. The list
+                // canvas remains in wallet-local coordinates throughout resize.
+                .offset(y: geometry.foregroundTranslation)
+        }
+        .frame(width: canvasSize.width, height: canvasSize.height, alignment: .topLeading)
+        .frame(width: geometry.walletFrame.width, height: geometry.walletFrame.height, alignment: .topLeading)
+        .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                .stroke(borderColor, lineWidth: borderWidth)
+        }
+        .position(x: geometry.walletFrame.midX, y: geometry.walletFrame.midY)
     }
 }
 
