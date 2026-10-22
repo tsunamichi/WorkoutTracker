@@ -812,6 +812,78 @@ private enum ExecutionWalletExitDiagnostics {
     }
 }
 
+/// DEBUG-only evidence for the Settings-dismissal footer regression.  It records
+/// the *rendered* footer bounds together with the state that determines its
+/// reveal, rather than inferring visibility from the Settings recording.
+private enum ExecutionFooterDismissalDiagnostics {
+    static let samplesKey = "debug.executionFooterDismissalSamples"
+
+    static var isEnabled: Bool {
+        #if DEBUG
+        ProcessInfo.processInfo.arguments.contains("-debugExecutionFooterDismissal")
+        #else
+        false
+        #endif
+    }
+
+    static func append(_ sample: String) {
+        guard isEnabled else { return }
+        var samples = UserDefaults.standard.stringArray(forKey: samplesKey) ?? []
+        samples.append(sample)
+        UserDefaults.standard.set(samples, forKey: samplesKey)
+        print("[ExecutionFooterProbe] \(sample)")
+    }
+
+    static func reset() {
+        guard isEnabled else { return }
+        UserDefaults.standard.set([], forKey: samplesKey)
+    }
+}
+
+private struct ExecutionFooterDismissalProbe: ViewModifier {
+    let settingsPresented: Bool
+    let settingsProgress: CGFloat
+    let focusProgress: CGFloat
+    let hasPrimaryAction: Bool
+    let showsExerciseFooter: Bool
+    let revealProgress: CGFloat
+    let phase: ExecutionPrimaryActionPhase
+
+    @State private var frame: CGRect = .zero
+
+    private func describe(_ value: CGFloat) -> String {
+        String(format: "%.3f", Double(value))
+    }
+
+    private func record(_ reason: String) {
+        guard ExecutionFooterDismissalDiagnostics.isEnabled else { return }
+        ExecutionFooterDismissalDiagnostics.append(
+            "reason=\(reason) settings=\(settingsPresented) settingsP=\(describe(settingsProgress)) "
+                + "focusP=\(describe(focusProgress)) action=\(hasPrimaryAction) "
+                + "showsFooter=\(showsExerciseFooter) reveal=\(describe(revealProgress)) "
+                + "phase=\(String(describing: phase)) frame=(x:\(describe(frame.minX)),y:\(describe(frame.minY)),w:\(describe(frame.width)),h:\(describe(frame.height)))"
+        )
+    }
+
+    func body(content: Content) -> some View {
+        content
+            .onGeometryChange(for: CGRect.self) { proxy in
+                proxy.frame(in: .global)
+            } action: { newFrame in
+                frame = newFrame
+                record("geometry")
+            }
+            .onChange(of: settingsPresented, initial: true) { _, _ in record("settings") }
+            .onChange(of: settingsPresented) { _, presented in
+                if presented { ExecutionFooterDismissalDiagnostics.reset() }
+            }
+            .onChange(of: settingsProgress) { _, _ in record("settings-progress") }
+            .onChange(of: focusProgress) { _, _ in record("focus-progress") }
+            .onChange(of: hasPrimaryAction) { _, _ in record("primary-action") }
+            .onChange(of: showsExerciseFooter) { _, _ in record("footer-mode") }
+    }
+}
+
 private struct ExecutionWalletExitProbe: View {
     let progress: CGFloat
     let walletFrame: CGRect
@@ -2872,6 +2944,10 @@ private struct ExecutionWallet<ListRow: View, ForegroundHeader: View, Foreground
                         .accessibilityHidden(keyboardVisible || executionSettingsVisibility < 0.01)
                         .offset(y: showsForegroundExercise ? foregroundDismissalOffset : 0)
                 }
+                // The focused card and values view deliberately use z-indices 1 and 2.
+                // Keep the one unified footer above that opaque card so its bottom
+                // action remains visible after Settings returns to this renderer.
+                .zIndex(3)
         }
         .frame(width: walletWidth, height: walletHeight, alignment: .topLeading)
     }
@@ -3804,6 +3880,15 @@ private struct ExecutionWallet<ListRow: View, ForegroundHeader: View, Foreground
             .animation(phaseAnimation, value: phase)
             .opacity(Double(executionVisibility))
         }
+        .modifier(ExecutionFooterDismissalProbe(
+            settingsPresented: settingsPresented,
+            settingsProgress: settingsTransitionProgress,
+            focusProgress: focusProgress,
+            hasPrimaryAction: primaryAction != nil,
+            showsExerciseFooter: showsExerciseFooter,
+            revealProgress: revealProgress,
+            phase: phase
+        ))
     }
 
     private var foregroundBackground: some View {
