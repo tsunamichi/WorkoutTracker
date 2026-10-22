@@ -35,15 +35,7 @@ struct EquilibriumApp: App {
     }
     var body: some Scene {
         WindowGroup {
-#if DEBUG
-            if ProcessInfo.processInfo.arguments.contains("-debugHomeExecutionGeometryProof") {
-                HomeExecutionGeometryProofScene()
-            } else {
-                homeView
-            }
-#else
             homeView
-#endif
         }
             .modelContainer(environment.container)
     }

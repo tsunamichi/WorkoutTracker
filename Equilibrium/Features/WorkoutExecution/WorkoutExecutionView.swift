@@ -772,199 +772,6 @@ private struct ExecutionForegroundExitTranslationModifier: ViewModifier, Animata
     }
 }
 
-/// Keeps the foreground clip on the same presentation-frame timeline as the
-/// foreground exit. The execution wallet's ordinary body is intentionally not
-/// guaranteed to be evaluated for every frame of Home's animatable progress.
-/// Without this modifier, the card can use a frame-correct exit while its mask
-/// still presents an older, larger wallet rectangle.
-/// DEBUG-only instrumentation for identifying which execution surface remains
-/// visible during the Home return. It is enabled only by the explicit launch
-/// argument and never participates in production layout or animation.
-private enum ExecutionWalletExitDiagnostics {
-    static let samplesKey = "debug.walletExitReturnSamples"
-
-    static var isEnabled: Bool {
-        #if DEBUG
-        ProcessInfo.processInfo.arguments.contains("-debugWalletExitSurfaces")
-        #else
-        false
-        #endif
-    }
-
-    static func resetReturnSamples() {
-        UserDefaults.standard.set(
-            ["build=\(buildIdentity()) args=\(ProcessInfo.processInfo.arguments)"],
-            forKey: samplesKey
-        )
-    }
-
-    static func append(_ sample: String) {
-        var samples = UserDefaults.standard.stringArray(forKey: samplesKey) ?? []
-        samples.append(sample)
-        UserDefaults.standard.set(samples, forKey: samplesKey)
-    }
-
-    private static func buildIdentity() -> String {
-        let bundle = Bundle.main
-        return "\(bundle.bundleIdentifier ?? "unknown") "
-            + "\(bundle.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "?") "
-            + "(\(bundle.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "?"))"
-    }
-}
-
-/// DEBUG-only evidence for the Settings-dismissal footer regression.  It records
-/// the *rendered* footer bounds together with the state that determines its
-/// reveal, rather than inferring visibility from the Settings recording.
-private enum ExecutionFooterDismissalDiagnostics {
-    static let samplesKey = "debug.executionFooterDismissalSamples"
-
-    static var isEnabled: Bool {
-        #if DEBUG
-        ProcessInfo.processInfo.arguments.contains("-debugExecutionFooterDismissal")
-        #else
-        false
-        #endif
-    }
-
-    static func append(_ sample: String) {
-        guard isEnabled else { return }
-        var samples = UserDefaults.standard.stringArray(forKey: samplesKey) ?? []
-        samples.append(sample)
-        UserDefaults.standard.set(samples, forKey: samplesKey)
-        print("[ExecutionFooterProbe] \(sample)")
-    }
-
-    static func reset() {
-        guard isEnabled else { return }
-        UserDefaults.standard.set([], forKey: samplesKey)
-    }
-}
-
-private struct ExecutionFooterDismissalProbe: ViewModifier {
-    let settingsPresented: Bool
-    let settingsProgress: CGFloat
-    let focusProgress: CGFloat
-    let hasPrimaryAction: Bool
-    let showsExerciseFooter: Bool
-    let revealProgress: CGFloat
-    let phase: ExecutionPrimaryActionPhase
-
-    @State private var frame: CGRect = .zero
-
-    private func describe(_ value: CGFloat) -> String {
-        String(format: "%.3f", Double(value))
-    }
-
-    private func record(_ reason: String) {
-        guard ExecutionFooterDismissalDiagnostics.isEnabled else { return }
-        ExecutionFooterDismissalDiagnostics.append(
-            "reason=\(reason) settings=\(settingsPresented) settingsP=\(describe(settingsProgress)) "
-                + "focusP=\(describe(focusProgress)) action=\(hasPrimaryAction) "
-                + "showsFooter=\(showsExerciseFooter) reveal=\(describe(revealProgress)) "
-                + "phase=\(String(describing: phase)) frame=(x:\(describe(frame.minX)),y:\(describe(frame.minY)),w:\(describe(frame.width)),h:\(describe(frame.height)))"
-        )
-    }
-
-    func body(content: Content) -> some View {
-        content
-            .onGeometryChange(for: CGRect.self) { proxy in
-                proxy.frame(in: .global)
-            } action: { newFrame in
-                frame = newFrame
-                record("geometry")
-            }
-            .onChange(of: settingsPresented, initial: true) { _, _ in record("settings") }
-            .onChange(of: settingsPresented) { _, presented in
-                if presented { ExecutionFooterDismissalDiagnostics.reset() }
-            }
-            .onChange(of: settingsProgress) { _, _ in record("settings-progress") }
-            .onChange(of: focusProgress) { _, _ in record("focus-progress") }
-            .onChange(of: hasPrimaryAction) { _, _ in record("primary-action") }
-            .onChange(of: showsExerciseFooter) { _, _ in record("footer-mode") }
-    }
-}
-
-private struct ExecutionWalletExitProbe: View {
-    let progress: CGFloat
-    let walletFrame: CGRect
-    let foregroundFrame: CGRect
-    let foregroundMounted: Bool
-    let settingsPresented: Bool
-
-    @State private var isCapturingReturn = false
-    @State private var reportedReturnBuckets: Set<Int> = []
-
-    private var bucket: Int? {
-        let samples: [CGFloat] = [1, 0.8, 0.6, 0.4, 0.2, 0]
-        guard let nearest = samples.enumerated().min(by: {
-            abs($0.element - progress) < abs($1.element - progress)
-        }), abs(nearest.element - progress) <= 0.025 else {
-            return nil
-        }
-        return nearest.offset
-    }
-
-    private var intersection: CGRect {
-        walletFrame.intersection(foregroundFrame)
-    }
-
-    private func frameDescription(_ frame: CGRect) -> String {
-        String(
-            format: "(x:%.2f,y:%.2f,w:%.2f,h:%.2f)",
-            Double(frame.minX), Double(frame.minY), Double(frame.width), Double(frame.height)
-        )
-    }
-
-    private func record(bucket: Int, label: String) {
-        let expectedVisible = foregroundMounted
-            && !settingsPresented
-            && !intersection.isNull
-            && intersection.width > 0
-            && intersection.height > 0
-        let sample = "[WalletExitProbe] label=\(label) bucket=\(bucket) "
-            + "p=\(String(format: "%.4f", Double(progress))) "
-            + "wallet=\(frameDescription(walletFrame)) "
-            + "foreground=\(frameDescription(foregroundFrame)) "
-            + "mask=\(frameDescription(walletFrame)) "
-            + "intersection=\(frameDescription(intersection)) "
-            + "foregroundMounted=\(foregroundMounted) settings=\(settingsPresented) "
-            + "expectedVisibleAfterMask=\(expectedVisible)"
-        ExecutionWalletExitDiagnostics.append(sample)
-        print(sample)
-    }
-
-    var body: some View {
-        Color.clear
-            .frame(width: 1, height: 1)
-            .onChange(of: progress, initial: true) { oldProgress, newProgress in
-                guard ExecutionWalletExitDiagnostics.isEnabled else { return }
-
-                // Home → execution increases progress. Arm only after that endpoint,
-                // then reset and sample the first genuinely descending frame.
-                if newProgress >= 0.999 {
-                    isCapturingReturn = false
-                    reportedReturnBuckets.removeAll()
-                    return
-                }
-                guard oldProgress > newProgress else { return }
-
-                if !isCapturingReturn {
-                    isCapturingReturn = true
-                    reportedReturnBuckets.removeAll()
-                    ExecutionWalletExitDiagnostics.resetReturnSamples()
-                }
-                guard let bucket, !reportedReturnBuckets.contains(bucket) else { return }
-                reportedReturnBuckets.insert(bucket)
-                record(
-                    bucket: bucket,
-                    label: newProgress <= 0.025 ? "immediately-before-teardown" : "return"
-                )
-            }
-            .allowsHitTesting(false)
-            .accessibilityHidden(true)
-    }
-}
-
 private enum HomeExecutionReveal {
     static func progress(
         _ masterProgress: CGFloat,
@@ -2620,16 +2427,6 @@ private struct ExecutionWallet<ListRow: View, ForegroundHeader: View, Foreground
                 cardTop: foregroundLayout.top,
                 gap: EQSpacing.md
             )
-            // Retained for DEBUG frame reporting only. The rendered offset is
-            // evaluated by `foregroundExitTranslation` from its animatable
-            // presentation value, rather than by this ordinary view body.
-            let compactEntranceOffset = ExecutionForegroundExitTranslationModifier.offset(
-                homeTransitionProgress: homeTransitionProgress,
-                entryProgress: foregroundEntryProgress,
-                walletHeight: walletHeight,
-                cardTop: foregroundLayout.top,
-                gap: EQSpacing.md
-            )
             let presence = min(max(foregroundPresenceProgress, 0), 1)
             let executionSettingsVisibility = ExerciseCardModeMotion.executionVisibility(
                 settingsTransitionProgress
@@ -2646,10 +2443,6 @@ private struct ExecutionWallet<ListRow: View, ForegroundHeader: View, Foreground
                     + foregroundDismissalOffset,
                 width: walletWidth,
                 height: foregroundLayout.height
-            )
-            let renderedForegroundFrame = baseForegroundFrame.offsetBy(
-                dx: 0,
-                dy: compactEntranceOffset
             )
             ZStack(alignment: .topLeading) {
                 if settingsPresented {
@@ -2731,23 +2524,6 @@ private struct ExecutionWallet<ListRow: View, ForegroundHeader: View, Foreground
                     )
                 }
 
-                if ExecutionWalletExitDiagnostics.isEnabled {
-                    walletForegroundPresentationOutline(walletFrame: currentFrame)
-                        .allowsHitTesting(false)
-                        .accessibilityHidden(true)
-                        .zIndex(100)
-                }
-
-                if ExecutionWalletExitDiagnostics.isEnabled {
-                    ExecutionWalletExitProbe(
-                        progress: homeTransitionProgress,
-                        walletFrame: currentGlobalFrame,
-                        foregroundFrame: renderedForegroundFrame,
-                        foregroundMounted: showsForegroundExercise,
-                        settingsPresented: settingsPresented
-                    )
-                }
-
             }
             .frame(width: proxy.size.width, height: proxy.size.height, alignment: .topLeading)
         }
@@ -2799,13 +2575,6 @@ private struct ExecutionWallet<ListRow: View, ForegroundHeader: View, Foreground
             // During a work interval the list tucks down behind the IN PROGRESS card.
             .offset(y: showsForegroundExercise ? (foregroundLayout.top + EQSpacing.lg) * CGFloat(workTint) : 0)
             .accessibilityIdentifier("execution-exercise-list-card-\(workout.id.rawValue)")
-            .overlay {
-                if ExecutionWalletExitDiagnostics.isEnabled {
-                    RoundedRectangle(cornerRadius: EQRadius.walletSurface, style: .continuous)
-                        .stroke(.cyan, lineWidth: 2)
-                        .allowsHitTesting(false)
-                }
-            }
     }
 
     @ViewBuilder
@@ -2952,24 +2721,6 @@ private struct ExecutionWallet<ListRow: View, ForegroundHeader: View, Foreground
         .frame(width: walletWidth, height: walletHeight, alignment: .topLeading)
     }
 
-    @ViewBuilder
-    private func walletForegroundPresentationOutline(walletFrame: CGRect) -> some View {
-        if #available(iOS 26.0, *) {
-            ConcentricRectangle(
-                uniformTopCorners: .fixed(EQRadius.walletSurface),
-                uniformBottomCorners: .concentric(minimum: .fixed(EQRadius.walletSurface))
-            )
-            .stroke(.yellow, lineWidth: 2)
-            .frame(width: walletFrame.width, height: walletFrame.height)
-            .position(x: walletFrame.midX, y: walletFrame.midY)
-        } else {
-            RoundedRectangle(cornerRadius: EQRadius.walletSurface, style: .continuous)
-                .stroke(.yellow, lineWidth: 2)
-                .frame(width: walletFrame.width, height: walletFrame.height)
-                .position(x: walletFrame.midX, y: walletFrame.midY)
-        }
-    }
-
     /// The normal execution card's permanent owner. It remains mounted while the
     /// legacy focused Settings host is active, so Settings presentation no longer
     /// removes or recreates the compact card subtree.
@@ -3003,13 +2754,6 @@ private struct ExecutionWallet<ListRow: View, ForegroundHeader: View, Foreground
                 )
                 .modifier(foregroundExitTranslation)
                 .opacity(settingsPresented ? 0 : executionSettingsVisibility)
-                .overlay {
-                    if ExecutionWalletExitDiagnostics.isEnabled {
-                        RoundedRectangle(cornerRadius: EQRadius.walletSurface, style: .continuous)
-                            .stroke(.pink, lineWidth: 3)
-                            .allowsHitTesting(false)
-                    }
-                }
                 .accessibilityHidden(compactArrival < 0.99)
                 .onGeometryChange(for: CGRect.self) { geometry in
                     geometry.frame(in: .global)
@@ -3880,15 +3624,6 @@ private struct ExecutionWallet<ListRow: View, ForegroundHeader: View, Foreground
             .animation(phaseAnimation, value: phase)
             .opacity(Double(executionVisibility))
         }
-        .modifier(ExecutionFooterDismissalProbe(
-            settingsPresented: settingsPresented,
-            settingsProgress: settingsTransitionProgress,
-            focusProgress: focusProgress,
-            hasPrimaryAction: primaryAction != nil,
-            showsExerciseFooter: showsExerciseFooter,
-            revealProgress: revealProgress,
-            phase: phase
-        ))
     }
 
     private var foregroundBackground: some View {
