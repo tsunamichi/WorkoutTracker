@@ -41,6 +41,28 @@ final class WorkoutExecutionRepositoryTests: XCTestCase {
         }
     }
 
+    func testHomeExecutionGeometryRecoversAfterInterruptedRoundTrips() {
+        let input = HomeExecutionPresentationGeometry.Input(
+            homeWalletFrame: CGRect(x: 16, y: 600, width: 360, height: 140),
+            executionWalletFrame: CGRect(x: 16, y: 40, width: 360, height: 700),
+            foregroundTop: 430,
+            foregroundSize: CGSize(width: 360, height: 230),
+            foregroundClearance: 12
+        )
+        let expectedExecution = HomeExecutionPresentationGeometry.resolve(input: input, progress: 1)
+        let expectedHome = HomeExecutionPresentationGeometry.resolve(input: input, progress: 0)
+
+        // These values model a reversal while either endpoint is still animating.
+        for progress: CGFloat in [0, 0.42, 0.91, 0.36, 1, 0.64, 0.18, 1, 0] {
+            let geometry = HomeExecutionPresentationGeometry.resolve(input: input, progress: progress)
+            XCTAssertGreaterThanOrEqual(geometry.walletFrame.width, 0)
+            XCTAssertGreaterThanOrEqual(geometry.walletFrame.height, 0)
+        }
+
+        XCTAssertEqual(HomeExecutionPresentationGeometry.resolve(input: input, progress: 1), expectedExecution)
+        XCTAssertEqual(HomeExecutionPresentationGeometry.resolve(input: input, progress: 0), expectedHome)
+    }
+
     private func repository() throws -> SwiftDataRepository { SwiftDataRepository(container: try PersistenceController.makeContainer(inMemory: true)) }
 
     func testPlannedStartsWithTimestampAndInProgressResumesWithoutChangingIt() async throws {
@@ -421,6 +443,40 @@ final class ExerciseSettingsPhase5Tests: XCTestCase {
         XCTAssertEqual(model.focusedExerciseID, exercise.id)
         XCTAssertEqual(model.currentPrescription?.id, selectedSetID)
         XCTAssertEqual(wallet.mode, .focusedExercise)
+    }
+
+    func testRepeatedSettingsCyclesPreserveLoggedSetAndFocusedSelection() async throws {
+        let repository = try repository()
+        let fixture = EquilibriumFixtures.ready(id: "repeated-settings-cycles")
+        try await repository.create(fixture)
+        let model = WorkoutExecutionModel(workoutID: fixture.id, repository: repository)
+        await model.activate()
+        let exercise = fixture.exercises[0]
+        let prescription = exercise.prescriptions[0]
+        await model.log(
+            exerciseID: exercise.id,
+            prescriptionID: prescription.id,
+            input: .repetitions(weight: .init(pounds: 135), repetitions: 8)
+        )
+        model.skipRest()
+        model.focus(exercise.id)
+        model.selectSet(at: 0)
+        let wallet = ExecutionWalletPresentation(initialMode: .focusedExercise)
+        let settings = ExerciseCardPresentation()
+
+        for _ in 0..<5 {
+            settings.present(exerciseID: exercise.id)
+            settings.dismiss()
+
+            let loggedSet = try XCTUnwrap(model.workout?.exercises[0].loggedSets.first)
+            XCTAssertEqual(loggedSet.prescriptionID, prescription.id)
+            XCTAssertEqual(try XCTUnwrap(loggedSet.weight).pounds, 135, accuracy: 0.001)
+            XCTAssertEqual(loggedSet.repetitions, 8)
+            XCTAssertEqual(model.focusedExerciseID, exercise.id)
+            XCTAssertEqual(model.currentPrescription?.id, prescription.id)
+            XCTAssertEqual(wallet.mode, .focusedExercise)
+            XCTAssertFalse(settings.showsSettings)
+        }
     }
 
     func testRestInheritanceOverrideAllSetsAndActiveCountdownSnapshot() async throws {
