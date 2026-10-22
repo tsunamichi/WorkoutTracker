@@ -22,6 +22,8 @@ struct HomeView: View {
     @State private var transitionSourceFrame: CGRect?
     @State private var transitionDestinationFrame: CGRect?
     @State private var homeActionMenuIsPresented = false
+    @State private var executionSettingsBackdropProgress: CGFloat = 0
+    @State private var executionSettingsPresentation = ExecutionSettingsPresentationBridge()
     private let timerStore: any StandaloneTimerConfigurationStore
     private let legacyImporter: RNLegacyImporter?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -104,6 +106,7 @@ struct HomeView: View {
                                     homeExecutionProgress: homeExecutionProgress,
                                     transitionSourceFrame: transitionSourceFrame,
                                     reportWalletFrame: reportWalletFrame,
+                                    settingsPresentationBridge: executionSettingsPresentation,
                                     didPersist: model.applyPersistedWorkout,
                                     exit: endExecution
                                 )
@@ -115,6 +118,10 @@ struct HomeView: View {
                         .onPreferenceChange(ExecutionWorkHeaderTintPreferenceKey.self) { executionHeaderWorkTint = $0 }
                         .onPreferenceChange(ExecutionContextualMenuPresentedPreferenceKey.self) {
                             executionContextualMenuIsPresented = $0
+                        }
+                        .onPreferenceChange(ExecutionSettingsBackdropProgressPreferenceKey.self) {
+                            executionSettingsBackdropProgress = $0
+                            executionSettingsPresentation.progress = $0
                         }
                         .overlayPreferenceValue(HomeWorkoutTitleAnchorKey.self) { anchors in
                             HomeWorkoutTitleLayer(
@@ -133,6 +140,17 @@ struct HomeView: View {
                                     ? EQMotion.reducedContentTransitionDuration
                                     : ContextualActionMenuMotion().backdropDuration),
                                 value: executionContextualMenuIsPresented
+                            )
+                        }
+                        .overlay {
+                            HomeExecutionSettingsBackdrop(
+                                progress: executionSettingsBackdropProgress,
+                                isPresented: executionSettingsPresentation.input != nil
+                            )
+                        }
+                        .overlay {
+                            HomeExerciseSettingsPresentationLayer(
+                                bridge: executionSettingsPresentation
                             )
                         }
                         .scaleEffect(HomeOverlayPresentation.backgroundScale(
@@ -555,8 +573,9 @@ struct HomeWorkoutTitleAnchorKey: PreferenceKey {
 /// resolved by `HomeWorkoutTitleLayer` from live anchors in the same coordinate
 /// space, so the decision follows the Settings shell's presentation-frame top.
 enum WorkoutPageTitleOcclusion {
-    /// Hides a point before the card visibly reaches the text, avoiding a single
-    /// overlap frame from the card and the title's antialiased glyph edges.
+    /// The Settings surface now remains inside the wallet, so this only prevents
+    /// a single antialiased overlap frame when another covering surface actually
+    /// reaches the floating title.
     static let overlapTolerance: CGFloat = 1
 
     static func isVisible(titleFrame: CGRect, coveringSurfaceFrame: CGRect?) -> Bool {
@@ -571,6 +590,30 @@ enum WorkoutPageTitleOcclusion {
         }
 
         return coveringSurfaceFrame.minY > titleFrame.maxY + overlapTolerance
+    }
+}
+
+/// Settings is presented by the scene-level layer that follows this backdrop.
+/// Keeping the backdrop whole avoids mask-compositing seams and guarantees that
+/// every part of the underlying Home/execution scene receives identical dimming.
+private struct HomeExecutionSettingsBackdrop: View {
+    let progress: CGFloat
+    let isPresented: Bool
+
+    var body: some View {
+        let opacity = isPresented ? Double(min(max(progress, 0), 1)) : 0
+        ZStack {
+            ForEach(
+                Array(ContextualActionMenuAppearance.backdropPassOpacities.enumerated()),
+                id: \.offset
+            ) { _, passOpacity in
+                EQColor.overlay
+                    .opacity(passOpacity * opacity)
+            }
+        }
+        .ignoresSafeArea()
+        .allowsHitTesting(isPresented)
+        .accessibilityHidden(true)
     }
 }
 
@@ -1467,6 +1510,7 @@ private struct ExpandedWorkoutExecutionContainer: View {
     let homeExecutionProgress: CGFloat
     let transitionSourceFrame: CGRect?
     let reportWalletFrame: (CGRect) -> Void
+    let settingsPresentationBridge: ExecutionSettingsPresentationBridge
     let didPersist: (Workout) -> Void
     let exit: () -> Void
 
@@ -1485,6 +1529,7 @@ private struct ExpandedWorkoutExecutionContainer: View {
             homeExecutionProgress: homeExecutionProgress,
             transitionSourceFrame: transitionSourceFrame,
             reportWalletFrame: reportWalletFrame,
+            settingsPresentationBridge: settingsPresentationBridge,
             didPersist: didPersist,
             onExit: exit,
             usesObjectSurface: true

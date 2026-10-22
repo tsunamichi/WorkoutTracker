@@ -335,26 +335,33 @@ final class ExerciseSettingsPhase5Tests: XCTestCase {
         XCTAssertEqual(destination.height, sourceTitle.height * ExerciseFocusedExpansionLayout.titleScale)
     }
 
-    func testFocusedSettingsExpansionKeepsTheSourceBottomAnchored() {
+    func testFocusedSettingsExpansionBeginsAtMeasuredForegroundFrame() {
         let measuredSource = CGRect(x: 20, y: 476, width: 350, height: 1_424)
         let destination = CGRect(x: 8, y: 55, width: 374, height: 1_973)
 
-        let source = ExerciseFocusedExpansionLayout.bottomAnchoredSourceFrame(
-            measuredSource: measuredSource,
-            destination: destination
+        XCTAssertEqual(
+            ExerciseFocusedExpansionLayout.frame(
+                from: measuredSource,
+                to: destination,
+                progress: 0
+            ),
+            measuredSource
         )
 
-        XCTAssertEqual(source.minX, measuredSource.minX)
-        XCTAssertEqual(source.minY, measuredSource.minY)
-        XCTAssertEqual(source.width, measuredSource.width)
-        XCTAssertEqual(source.maxY, destination.maxY)
-
         let halfway = ExerciseFocusedExpansionLayout.frame(
-            from: source,
+            from: measuredSource,
             to: destination,
             progress: 0.5
         )
-        XCTAssertEqual(halfway.maxY, destination.maxY, accuracy: 0.001)
+        XCTAssertEqual(halfway, CGRect(x: 14, y: 265.5, width: 362, height: 1_698.5))
+        XCTAssertEqual(
+            ExerciseFocusedExpansionLayout.frame(
+                from: measuredSource,
+                to: destination,
+                progress: 1
+            ),
+            destination
+        )
     }
 
     func testFocusedExerciseNameUsesTheSameProgressAsTheCardSurface() {

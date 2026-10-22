@@ -16,11 +16,57 @@ enum ExerciseCardPresentationMode: Equatable {
 /// Geometry captured from the live execution card before focused Settings changes
 /// any presentation state. It is intentionally immutable for the complete open /
 /// close lifecycle so preference updates cannot move the transition's origin.
-private struct ExerciseSettingsTransitionSnapshot: Equatable {
+struct ExerciseSettingsTransitionSnapshot: Equatable {
     let exerciseID: WorkoutExerciseID
     let cardFrame: CGRect
     let titleFrame: CGRect
     let destinationFrame: CGRect
+}
+
+/// A deliberately narrow bridge from the execution-owned Settings state to
+/// Home's scene-level presentation stack. It carries presentation inputs only:
+/// workout state remains in `WorkoutExecutionModel`, and the Settings surface is
+/// rendered exactly once by `HomeExerciseSettingsPresentationLayer`.
+@MainActor @Observable
+final class ExecutionSettingsPresentationBridge {
+    var input: ExecutionSettingsPresentationInput?
+    var progress: CGFloat = 0
+
+    func present(_ input: ExecutionSettingsPresentationInput) {
+        self.input = input
+        progress = 0
+    }
+
+    func updateNavigation(
+        route: ExerciseOptionsRoute?,
+        direction: ExerciseOptionsNavigationDirection
+    ) {
+        guard var input else { return }
+        input.route = route
+        input.navigationDirection = direction
+        self.input = input
+    }
+
+    func dismiss() {
+        input = nil
+        progress = 0
+    }
+}
+
+struct ExecutionSettingsPresentationInput {
+    let snapshot: ExerciseSettingsTransitionSnapshot
+    let exerciseName: String
+    let model: WorkoutExecutionModel
+    let exerciseRepository: (any ExerciseRepository)?
+    let historyRepository: (any ExerciseHistoryRepository)?
+    let path: Binding<[ExerciseOptionsRoute]>
+    var route: ExerciseOptionsRoute?
+    var navigationDirection: ExerciseOptionsNavigationDirection
+    let onBack: () -> Void
+    let onClose: () -> Void
+    let onSwap: () -> Void
+    let durationStepFeedback: () -> Void
+    let allowsSaving: () -> Bool
 }
 
 enum ExerciseFocusedExpansionLayout {
@@ -49,23 +95,6 @@ enum ExerciseFocusedExpansionLayout {
 
     static func frame(from source: CGRect, to destination: CGRect, progress: CGFloat) -> CGRect {
         source.walletInterpolated(to: destination, progress: progress)
-    }
-
-    /// The visible in-progress object includes the action region that is composited at
-    /// the bottom of the wallet. The measured content card stops above that region, so
-    /// extend the transition source to the focused surface's fixed bottom edge. This
-    /// keeps the object bottom-anchored and prevents the old action region from reading
-    /// as a second card during expansion.
-    static func bottomAnchoredSourceFrame(
-        measuredSource: CGRect,
-        destination: CGRect
-    ) -> CGRect {
-        CGRect(
-            x: measuredSource.minX,
-            y: measuredSource.minY,
-            width: measuredSource.width,
-            height: max(measuredSource.height, destination.maxY - measuredSource.minY)
-        )
     }
 
     /// The exact space reserved by `FocusedExerciseSettingsSurface.header` while the
@@ -168,6 +197,226 @@ enum ExerciseCardModeMotion {
     private static func normalized(_ value: CGFloat, from start: CGFloat, through end: CGFloat) -> CGFloat {
         guard end > start else { return value >= end ? 1 : 0 }
         return min(max((value - start) / (end - start), 0), 1)
+    }
+}
+
+/// Reports the existing Settings transition progress to Home so its single
+/// backdrop can compose above Home chrome and around the unchanged Settings host.
+struct ExecutionSettingsBackdropProgressPreferenceKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = max(value, nextValue())
+    }
+}
+
+/// The normal foreground's final frame after `UnifiedHomeExecutionRenderer` has
+/// resolved and positioned its wallet. This is distinct from a child geometry
+/// read taken before that renderer applies its outer position.
+struct ExecutionRenderedForegroundFramePreferenceKey: PreferenceKey {
+    static var defaultValue: CGRect = .zero
+    static func reduce(value: inout CGRect, nextValue: () -> CGRect) {
+        let next = nextValue()
+        if next.width > 0, next.height > 0 { value = next }
+    }
+}
+
+private struct ExecutionSettingsBackdropProgressModifier: AnimatableModifier {
+    var progress: CGFloat
+
+    var animatableData: CGFloat {
+        get { progress }
+        set { progress = newValue }
+    }
+
+    func body(content: Content) -> some View {
+        content.preference(
+            key: ExecutionSettingsBackdropProgressPreferenceKey.self,
+            value: min(max(progress, 0), 1)
+        )
+    }
+}
+
+/// The sole Settings surface, intentionally rendered by Home above its one
+/// full-screen backdrop. Its inputs are frozen by the execution owner before the
+/// transition begins, so this outer placement does not create a second stateful
+/// card or a competing animation timeline.
+struct HomeExerciseSettingsPresentationLayer: View {
+    let bridge: ExecutionSettingsPresentationBridge
+
+    var body: some View {
+        GeometryReader { proxy in
+            if let input = bridge.input {
+                Color.clear
+                    .modifier(HomeSettingsPresentationGeometryModifier(
+                        progress: bridge.progress,
+                        input: input,
+                        containerFrame: proxy.frame(in: .global)
+                    ))
+            }
+        }
+    }
+}
+
+/// Resolves the Settings shell from one interpolated rectangle during SwiftUI's
+/// animatable rendering pass. The Home-level host must not rely on ordinary body
+/// layout updates for width, height, and position independently: that is what
+/// previously allowed its shell to translate before it had grown.
+private struct HomeSettingsPresentationGeometryModifier: AnimatableModifier {
+    var progress: CGFloat
+    let input: ExecutionSettingsPresentationInput
+    let containerFrame: CGRect
+
+    var animatableData: CGFloat {
+        get { progress }
+        set { progress = newValue }
+    }
+
+    func body(content: Content) -> some View {
+        let renderedProgress = min(max(progress, 0), 1)
+        let snapshot = input.snapshot
+        let globalFrame = ExerciseFocusedExpansionLayout.frame(
+            from: snapshot.cardFrame,
+            to: snapshot.destinationFrame,
+            progress: renderedProgress
+        )
+        let localFrame = globalFrame.offsetBy(
+            dx: -containerFrame.minX,
+            dy: -containerFrame.minY
+        )
+        let localDestinationFrame = snapshot.destinationFrame.offsetBy(
+            dx: -containerFrame.minX,
+            dy: -containerFrame.minY
+        )
+        // This is expressed in the animated shell's local coordinate space. It
+        // lets the external Settings presentation use the same lower contour as
+        // the normal wallet without changing the shell's interpolated frame.
+        let walletClipFrame = localDestinationFrame.offsetBy(
+            dx: -localFrame.minX,
+            dy: -localFrame.minY
+        )
+        let settingsVisibility = ExerciseCardModeMotion.settingsVisibility(renderedProgress)
+        let executionVisibility = ExerciseCardModeMotion.executionVisibility(renderedProgress)
+
+        ZStack {
+            content.hidden()
+
+            ZStack {
+                EQColor.Execution.foregroundSurface
+
+                Button(action: input.onClose) {
+                    Image(systemName: "xmark")
+                        .eqTextStyle(.icon)
+                        .frame(
+                            width: EQLayout.minimumTouch,
+                            height: EQLayout.minimumTouch,
+                            alignment: .trailing
+                        )
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Close exercise settings")
+                .modifier(ExerciseSettingsContentVisibilityModifier(
+                    progress: renderedProgress,
+                    group: .settings
+                ))
+                .allowsHitTesting(settingsVisibility > 0.99)
+                .accessibilityHidden(settingsVisibility < 0.01)
+                .foregroundStyle(EQColor.Execution.foregroundText)
+                .frame(width: EQLayout.minimumTouch, height: EQLayout.minimumTouch, alignment: .trailing)
+                .position(
+                    x: localFrame.width - EQLayout.WorkoutExecution.walletInset - (EQLayout.minimumTouch / 2),
+                    y: EQSpacing.xxs + (EQLayout.minimumTouch / 2)
+                )
+                .accessibilityHidden(settingsVisibility < 0.01 && executionVisibility < 0.01)
+
+                FocusedExerciseSettingsSurface(
+                    exerciseName: input.exerciseName,
+                    reservesTransitionedExerciseName: true,
+                    route: input.route,
+                    path: input.path,
+                    navigationDirection: input.navigationDirection,
+                    exerciseID: snapshot.exerciseID,
+                    model: input.model,
+                    exerciseRepository: input.exerciseRepository,
+                    historyRepository: input.historyRepository,
+                    onBack: input.onBack,
+                    onClose: input.onClose,
+                    onSwap: input.onSwap,
+                    durationStepFeedback: input.durationStepFeedback,
+                    allowsSaving: input.allowsSaving(),
+                    showsCloseControl: false
+                )
+                .frame(width: localDestinationFrame.width, height: localDestinationFrame.height)
+                .offset(
+                    x: localDestinationFrame.midX - localFrame.midX,
+                    y: localDestinationFrame.midY - localFrame.midY
+                )
+                .allowsHitTesting(settingsVisibility > 0.99)
+                .accessibilityHidden(settingsVisibility < 0.99)
+                .modifier(ExerciseSettingsContentVisibilityModifier(
+                    progress: renderedProgress,
+                    group: .settings
+                ))
+            }
+            .frame(width: localFrame.width, height: localFrame.height)
+            .modifier(ExecutionWalletShapeModifier(
+                drawsBorder: true,
+                borderColor: EQColor.Execution.walletBorder,
+                roundsBottomCorners: false
+            ))
+            .modifier(BottomAnchoredWalletShapeModifier(
+                walletFrame: walletClipFrame,
+                drawsBorder: true,
+                borderColor: EQColor.Execution.walletBorder
+            ))
+            .contentShape(RoundedRectangle(cornerRadius: EQRadius.walletSurface, style: .continuous))
+            .position(x: localFrame.midX, y: localFrame.midY)
+            .accessibilityIdentifier("execution-focused-exercise-settings-\(snapshot.exerciseID.rawValue)")
+
+            transitioningExerciseTitle(
+                name: input.exerciseName,
+                snapshot: snapshot,
+                progress: renderedProgress,
+                containerFrame: containerFrame
+            )
+            .zIndex(1)
+
+        }
+    }
+
+    private func transitioningExerciseTitle(
+        name: String,
+        snapshot: ExerciseSettingsTransitionSnapshot,
+        progress: CGFloat,
+        containerFrame: CGRect
+    ) -> some View {
+        let sourceFrame = snapshot.titleFrame
+        let destinationFrame = ExerciseFocusedExpansionLayout.titleDestinationFrame(
+            surfaceFrame: snapshot.destinationFrame,
+            sourceTitleFrame: sourceFrame
+        )
+        let globalFrame = ExerciseFocusedExpansionLayout.frame(
+            from: sourceFrame,
+            to: destinationFrame,
+            progress: progress
+        )
+        let localFrame = globalFrame.offsetBy(
+            dx: -containerFrame.minX,
+            dy: -containerFrame.minY
+        )
+        let scale = 1 + ((ExerciseFocusedExpansionLayout.titleScale - 1) * progress)
+        let layoutCenter = CGPoint(
+            x: localFrame.minX + (sourceFrame.width / 2),
+            y: localFrame.minY + (sourceFrame.height / 2)
+        )
+
+        return Text(name)
+            .eqTextStyle(.screenTitle)
+            .lineLimit(2)
+            .frame(width: sourceFrame.width, height: sourceFrame.height, alignment: .topLeading)
+            .scaleEffect(scale, anchor: .topLeading)
+            .foregroundStyle(EQColor.Execution.foregroundText)
+            .position(x: layoutCenter.x, y: layoutCenter.y)
+            .accessibilityHidden(true)
     }
 }
 
@@ -1070,8 +1319,8 @@ struct WorkoutExecutionView: View {
     @State private var exerciseSettingsTargetIsPresented = false
     @State private var exerciseSettingsTransitionGeneration = 0
     @State private var exerciseSettingsTransitionSnapshot: ExerciseSettingsTransitionSnapshot?
-    @State private var exerciseSettingsMeasuredSourceFrame: CGRect = .zero
     @State private var exerciseSettingsSourceFrame: CGRect = .zero
+    @State private var exerciseSettingsRenderedForegroundFrame: CGRect = .zero
     @State private var exerciseSettingsMeasuredTitleFrame: CGRect = .zero
     @State private var exerciseSettingsSourceTitleFrame: CGRect = .zero
     @State private var exerciseSettingsDestinationFrame: CGRect = .zero
@@ -1091,8 +1340,9 @@ struct WorkoutExecutionView: View {
     private let transitionSourceFrame: CGRect?
     private let reportWalletFrame: ((CGRect) -> Void)?
     private let haptics: any HapticsClient
+    private let settingsPresentationBridge: ExecutionSettingsPresentationBridge
 
-    init(id: WorkoutID, initialWorkout: Workout? = nil, repository: any WorkoutRepository, historyRepository: (any ExerciseHistoryRepository)? = nil, progressionRepository: (any ProgressionRepository)? = nil, exerciseRepository: (any ExerciseRepository)? = nil, settingsRepository: (any SettingsRepository)? = nil, weightUnit: WeightUnit = .pounds, defaultRestDuration: TimeInterval = 90, restSessionStore: WorkoutRestSessionStore? = nil, homeExecutionProgress: CGFloat = 1, transitionSourceFrame: CGRect? = nil, reportWalletFrame: ((CGRect) -> Void)? = nil, haptics: (any HapticsClient)? = nil, didPersist: @escaping (Workout) -> Void = { _ in }, onExit: (() -> Void)? = nil, usesObjectSurface: Bool = false) {
+    init(id: WorkoutID, initialWorkout: Workout? = nil, repository: any WorkoutRepository, historyRepository: (any ExerciseHistoryRepository)? = nil, progressionRepository: (any ProgressionRepository)? = nil, exerciseRepository: (any ExerciseRepository)? = nil, settingsRepository: (any SettingsRepository)? = nil, weightUnit: WeightUnit = .pounds, defaultRestDuration: TimeInterval = 90, restSessionStore: WorkoutRestSessionStore? = nil, homeExecutionProgress: CGFloat = 1, transitionSourceFrame: CGRect? = nil, reportWalletFrame: ((CGRect) -> Void)? = nil, settingsPresentationBridge: ExecutionSettingsPresentationBridge, haptics: (any HapticsClient)? = nil, didPersist: @escaping (Workout) -> Void = { _ in }, onExit: (() -> Void)? = nil, usesObjectSurface: Bool = false) {
         let resolvedHaptics = haptics ?? SystemHapticsClient()
         let resolvedExerciseRepository = exerciseRepository ?? (repository as? SwiftDataRepository)
         self.historyRepository = historyRepository ?? (repository as? SwiftDataRepository)
@@ -1102,6 +1352,7 @@ struct WorkoutExecutionView: View {
         self.homeExecutionProgress = homeExecutionProgress
         self.transitionSourceFrame = transitionSourceFrame
         self.reportWalletFrame = reportWalletFrame
+        self.settingsPresentationBridge = settingsPresentationBridge
         self.haptics = resolvedHaptics
         _model = State(initialValue: WorkoutExecutionModel(workoutID: id, initialWorkout: initialWorkout, repository: repository, historyRepository: historyRepository ?? (repository as? SwiftDataRepository), progressionRepository: progressionRepository ?? (repository as? SwiftDataRepository), exerciseRepository: resolvedExerciseRepository, settingsRepository: settingsRepository ?? (repository as? SwiftDataRepository), weightUnit: weightUnit, defaultRestDuration: defaultRestDuration, restSessionStore: restSessionStore, haptics: resolvedHaptics, audio: SystemAudioFeedbackClient(), didPersist: didPersist))
     }
@@ -1161,6 +1412,7 @@ struct WorkoutExecutionView: View {
         .navigationBarBackButtonHidden()
         .modifier(ExecutionDismissOnRequest(request: dismissRequest))
         .task { await model.activate() }
+        .onDisappear { settingsPresentationBridge.dismiss() }
         .onReceive(NotificationCenter.default.publisher(for: .equilibriumRepositoryDidChange)) { notification in
             // The model already applied its own saves; reloading here would block the main thread mid-transition.
             guard RepositoryChangeOrigin.of(notification) == .external else { return }
@@ -1283,6 +1535,18 @@ struct WorkoutExecutionView: View {
             if exerciseCardPresentation.exerciseID != currentExerciseID {
                 exerciseCardPresentation.present(exerciseID: currentExerciseID)
             }
+        }
+        .onChange(of: exerciseCardPresentation.path) { _, path in
+            settingsPresentationBridge.updateNavigation(
+                route: path.last,
+                direction: exerciseCardPresentation.navigationDirection
+            )
+        }
+        .onChange(of: exerciseCardPresentation.navigationDirection) { _, direction in
+            settingsPresentationBridge.updateNavigation(
+                route: exerciseCardPresentation.path.last,
+                direction: direction
+            )
         }
     }
 
@@ -1589,21 +1853,24 @@ struct WorkoutExecutionView: View {
                             settingsTransitionProgress: exerciseSettingsTransitionProgress,
                             settingsSnapshot: exerciseSettingsTransitionSnapshot,
                             settingsDestinationFrame: exerciseSettingsTransitionSnapshot?.destinationFrame
-                                ?? ExerciseFocusedExpansionLayout.destinationFrame(
-                                    containerFrame: sceneFrame,
-                                    safeAreaInsets: safeAreaInsets
-                                ),
+                                ?? exerciseSettingsDestinationFrame,
                             reduceMotion: reduceMotion,
                             homeTransitionProgress: homeExecutionProgress,
                             transitionSourceFrame: transitionSourceFrame,
                             reportFrame: reportWalletFrame,
-                            reportForegroundFrame: { frame in
+                            reportSettingsDestinationFrame: { frame in
                                 guard !exerciseSettingsTargetIsPresented else { return }
-                                exerciseSettingsMeasuredSourceFrame = frame
-                                updateExerciseSettingsSourceTitleFrame()
+                                exerciseSettingsDestinationFrame = frame
                             },
                             reportForegroundVisualFrame: { frame in
                                 guard !exerciseSettingsTargetIsPresented else { return }
+                                guard exerciseSettingsRenderedForegroundFrame == .zero else { return }
+                                exerciseSettingsSourceFrame = frame
+                                updateExerciseSettingsSourceTitleFrame()
+                            },
+                            reportRenderedForegroundFrame: { frame in
+                                guard !exerciseSettingsTargetIsPresented else { return }
+                                exerciseSettingsRenderedForegroundFrame = frame
                                 exerciseSettingsSourceFrame = frame
                                 updateExerciseSettingsSourceTitleFrame()
                             },
@@ -1638,33 +1905,6 @@ struct WorkoutExecutionView: View {
                             foregroundValues: { expandedExerciseControls },
                             primaryAction: executionPrimaryAction,
                             footerControls: { exercise in footerSetCountControls(for: exercise) },
-                            settingsContent: { exercise, exerciseID in
-                                FocusedExerciseSettingsSurface(
-                                    exerciseName: exercise.nameSnapshot,
-                                    reservesTransitionedExerciseName: true,
-                                    route: exerciseCardPresentation.path.last,
-                                    path: Binding(
-                                        get: { exerciseCardPresentation.path },
-                                        set: { exerciseCardPresentation.setPath($0) }
-                                    ),
-                                    navigationDirection: exerciseCardPresentation.navigationDirection,
-                                    exerciseID: exerciseID,
-                                    model: model,
-                                    exerciseRepository: exerciseRepository,
-                                    historyRepository: historyRepository,
-                                    onBack: {
-                                        withAnimation(nestedSettingsAnimation) {
-                                            exerciseCardPresentation.pop()
-                                        }
-                                    },
-                                    onClose: dismissExerciseSettings,
-                                    onSwap: { swapsExercise = true },
-                                    durationStepFeedback: { haptics.perform(.selection) },
-                                    allowsSaving: !exerciseSettingsEndedByExternalAction,
-                                    showsCloseControl: false
-                                )
-                            },
-                            dismissSettings: dismissExerciseSettings,
                             keyboardVisible: keyboardOverlap > 0,
                             showsRestTint: visualTimerPresentation.isRest,
                             showsWorkTint: visualTimerPresentation.isWork
@@ -1684,20 +1924,6 @@ struct WorkoutExecutionView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .onAppear {
-            guard !exerciseSettingsTargetIsPresented else { return }
-            exerciseSettingsDestinationFrame = ExerciseFocusedExpansionLayout.destinationFrame(
-                containerFrame: sceneFrame,
-                safeAreaInsets: safeAreaInsets
-            )
-        }
-        .onChange(of: sceneFrame) { _, frame in
-            guard !exerciseSettingsTargetIsPresented else { return }
-            exerciseSettingsDestinationFrame = ExerciseFocusedExpansionLayout.destinationFrame(
-                containerFrame: frame,
-                safeAreaInsets: safeAreaInsets
-            )
-        }
         .modifier(TimerVisibilityTransitionModifier(progress: timerVisibilityProgress))
         .onAppear {
             if surfacePresentation.timerRegion.isVisible {
@@ -1923,26 +2149,6 @@ struct WorkoutExecutionView: View {
 
         exerciseSettingsSourceTitleFrame = exerciseSettingsMeasuredTitleFrame
 
-        #if DEBUG
-        guard exerciseSettingsMeasuredSourceFrame.width > 0,
-              exerciseSettingsMeasuredSourceFrame.height > 0,
-              exerciseSettingsSourceFrame.width > 0,
-              exerciseSettingsSourceFrame.height > 0 else { return }
-
-        let legacyProjectedFrame = CGRect(
-            x: exerciseSettingsSourceFrame.minX
-                + (exerciseSettingsMeasuredTitleFrame.minX - exerciseSettingsMeasuredSourceFrame.minX),
-            y: exerciseSettingsSourceFrame.minY
-                + (exerciseSettingsMeasuredTitleFrame.minY - exerciseSettingsMeasuredSourceFrame.minY),
-            width: exerciseSettingsMeasuredTitleFrame.width,
-            height: exerciseSettingsMeasuredTitleFrame.height
-        )
-        let delta = CGPoint(
-            x: exerciseSettingsMeasuredTitleFrame.minX - legacyProjectedFrame.minX,
-            y: exerciseSettingsMeasuredTitleFrame.minY - legacyProjectedFrame.minY
-        )
-        print("[SettingsTitleGeometry] direct source=\(exerciseSettingsMeasuredTitleFrame); legacy projected=\(legacyProjectedFrame); delta=\(delta)")
-        #endif
     }
 
     private var foregroundExerciseName: String? {
@@ -2068,20 +2274,12 @@ struct WorkoutExecutionView: View {
             destinationFrame: exerciseSettingsDestinationFrame
         )
 
-        #if DEBUG
-        let eyebrowSlot = ExerciseFocusedExpansionLayout.settingsEyebrowSlot(
-            surfaceFrame: exerciseSettingsDestinationFrame
-        )
-        let destinationTitleFrame = ExerciseFocusedExpansionLayout.titleDestinationFrame(
-            surfaceFrame: exerciseSettingsDestinationFrame,
-            sourceTitleFrame: exerciseSettingsSourceTitleFrame
-        )
-        print(
-            "[SettingsTitleGeometry] opening normal=\(exerciseSettingsMeasuredTitleFrame); "
-                + "frozen=\(exerciseSettingsSourceTitleFrame); renderer@0=\(exerciseSettingsSourceTitleFrame); "
-                + "eyebrow slot=\(eyebrowSlot); renderer@1=\(destinationTitleFrame)"
-        )
-        #endif
+        if let snapshot = exerciseSettingsTransitionSnapshot {
+            settingsPresentationBridge.present(settingsPresentationInput(
+                snapshot: snapshot,
+                exercise: exercise
+            ))
+        }
 
         // Source frames are frozen before presentation state creates the focused
         // shell. At progress zero the new shell and its shared title therefore occupy
@@ -2109,20 +2307,12 @@ struct WorkoutExecutionView: View {
         exerciseSettingsTransitionGeneration += 1
         let generation = exerciseSettingsTransitionGeneration
 
-        #if DEBUG
-        if let snapshot = exerciseSettingsTransitionSnapshot {
-            print(
-                "[SettingsTitleGeometry] closing renderer before handoff target=\(snapshot.titleFrame); "
-                    + "normal measured source=\(exerciseSettingsMeasuredTitleFrame)"
-            )
-        }
-        #endif
-
         if reduceMotion {
             exerciseSettingsTransitionProgress = 0
             exerciseCardPresentation.dismiss()
             exerciseSettingsTransitionSnapshot = nil
             exerciseSettingsTargetIsPresented = false
+            settingsPresentationBridge.dismiss()
         } else {
             withAnimation(EQMotion.objectTransformation) {
                 exerciseSettingsTransitionProgress = 0
@@ -2132,8 +2322,37 @@ struct WorkoutExecutionView: View {
                 exerciseCardPresentation.dismiss()
                 exerciseSettingsTransitionSnapshot = nil
                 exerciseSettingsTargetIsPresented = false
+                settingsPresentationBridge.dismiss()
             }
         }
+    }
+
+    private func settingsPresentationInput(
+        snapshot: ExerciseSettingsTransitionSnapshot,
+        exercise: WorkoutExercise
+    ) -> ExecutionSettingsPresentationInput {
+        ExecutionSettingsPresentationInput(
+            snapshot: snapshot,
+            exerciseName: exercise.nameSnapshot,
+            model: model,
+            exerciseRepository: exerciseRepository,
+            historyRepository: historyRepository,
+            path: Binding(
+                get: { exerciseCardPresentation.path },
+                set: { exerciseCardPresentation.setPath($0) }
+            ),
+            route: exerciseCardPresentation.path.last,
+            navigationDirection: exerciseCardPresentation.navigationDirection,
+            onBack: {
+                withAnimation(nestedSettingsAnimation) {
+                    exerciseCardPresentation.pop()
+                }
+            },
+            onClose: dismissExerciseSettings,
+            onSwap: { swapsExercise = true },
+            durationStepFeedback: { haptics.perform(.selection) },
+            allowsSaving: { !exerciseSettingsEndedByExternalAction }
+        )
     }
 
     private func addExercise(_ exercise: ExerciseDefinition) {
@@ -2286,7 +2505,7 @@ private struct ExecutionDismissOnRequest: ViewModifier {
     }
 }
 
-private struct ExecutionWallet<ListRow: View, ForegroundHeader: View, ForegroundContent: View, ForegroundValues: View, FooterControls: View, SettingsContent: View>: View {
+private struct ExecutionWallet<ListRow: View, ForegroundHeader: View, ForegroundContent: View, ForegroundValues: View, FooterControls: View>: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.foregroundFocusProgress) private var focusProgress
     @Environment(\.timerVisibilityProgress) private var timerVisibilityProgress
@@ -2310,8 +2529,11 @@ private struct ExecutionWallet<ListRow: View, ForegroundHeader: View, Foreground
     let homeTransitionProgress: CGFloat
     let transitionSourceFrame: CGRect?
     let reportFrame: ((CGRect) -> Void)?
-    let reportForegroundFrame: (CGRect) -> Void
+    /// The Settings destination is the live outer wallet frame, captured before
+    /// Settings changes the presentation hierarchy.
+    let reportSettingsDestinationFrame: (CGRect) -> Void
     let reportForegroundVisualFrame: (CGRect) -> Void
+    let reportRenderedForegroundFrame: (CGRect) -> Void
     let listRow: (WorkoutExercise, ExerciseState) -> ListRow
     let selectExercise: (WorkoutExercise) -> Void
     let addExercise: () -> Void
@@ -2327,8 +2549,6 @@ private struct ExecutionWallet<ListRow: View, ForegroundHeader: View, Foreground
     let foregroundValues: () -> ForegroundValues
     let primaryAction: ExecutionPrimaryAction?
     let footerControls: (WorkoutExercise) -> FooterControls
-    let settingsContent: (WorkoutExercise, WorkoutExerciseID) -> SettingsContent
-    let dismissSettings: () -> Void
     /// While typing, the foreground card claims the whole wallet so the inputs fit above the keyboard.
     var keyboardVisible = false
     /// True while the timer region shows rest, including while it collapses away.
@@ -2496,11 +2716,9 @@ private struct ExecutionWallet<ListRow: View, ForegroundHeader: View, Foreground
                         progress: homeTransitionProgress,
                         input: rendererInput,
                         canvasSize: CGSize(width: stableWalletWidth, height: stableWalletHeight),
-                        cornerRadius: EQRadius.walletSurface,
                         borderColor: EQColor.Execution.walletBorder
                             .mix(with: EQColor.Execution.restCanvas, by: restTint)
                             .mix(with: EQColor.Execution.primaryAction, by: workTint),
-                        borderWidth: EQLayout.WorkoutExecution.walletBorderWidth * 2,
                         surface: { canvasSize in
                             walletSurfaceContent(
                                 compactHeight: compactHeight,
@@ -2520,6 +2738,13 @@ private struct ExecutionWallet<ListRow: View, ForegroundHeader: View, Foreground
                                 foregroundDismissalOffset: foregroundDismissalOffset,
                                 executionSettingsVisibility: executionSettingsVisibility
                             )
+                            .preference(
+                                key: ExecutionRenderedForegroundFramePreferenceKey.self,
+                                value: geometry.foregroundFrame.offsetBy(
+                                    dx: containerFrame.minX,
+                                    dy: containerFrame.minY
+                                )
+                            )
                         }
                     )
                 }
@@ -2527,6 +2752,9 @@ private struct ExecutionWallet<ListRow: View, ForegroundHeader: View, Foreground
             }
             .frame(width: proxy.size.width, height: proxy.size.height, alignment: .topLeading)
         }
+        .modifier(ExecutionSettingsBackdropProgressModifier(
+            progress: settingsPresented ? settingsTransitionProgress : 0
+        ))
         .onGeometryChange(for: CGRect.self) { proxy in
             let frame = proxy.frame(in: .global)
             return CGRect(
@@ -2537,6 +2765,11 @@ private struct ExecutionWallet<ListRow: View, ForegroundHeader: View, Foreground
             )
         } action: { frame in
             reportFrame?(frame)
+            reportSettingsDestinationFrame(frame)
+        }
+        .onPreferenceChange(ExecutionRenderedForegroundFramePreferenceKey.self) { frame in
+            guard frame.width > 0, frame.height > 0 else { return }
+            reportRenderedForegroundFrame(frame)
         }
         .id("execution-wallet-\(workout.id.rawValue)")
         .onAppear {
@@ -2666,7 +2899,6 @@ private struct ExecutionWallet<ListRow: View, ForegroundHeader: View, Foreground
                 .onGeometryChange(for: CGRect.self) { geometry in
                     geometry.frame(in: .global)
                 } action: { frame in
-                    reportForegroundFrame(frame)
                     reportForegroundVisualFrame(frame)
                 }
                 .zIndex(1)
@@ -2758,14 +2990,11 @@ private struct ExecutionWallet<ListRow: View, ForegroundHeader: View, Foreground
                 .onGeometryChange(for: CGRect.self) { geometry in
                     geometry.frame(in: .global)
                 } action: { frame in
-                    reportForegroundFrame(frame)
                     reportForegroundVisualFrame(frame)
                 }
                 .zIndex(1)
                     .accessibilityIdentifier("execution-current-exercise-card-\(workout.id.rawValue)")
             }
-            focusedForegroundHost(proxy: proxy, focusedProgress: progress)
-
             persistentExecutionHeader(
                 proxy: proxy,
                 focusedProgress: progress,
@@ -2774,57 +3003,8 @@ private struct ExecutionWallet<ListRow: View, ForegroundHeader: View, Foreground
             )
             .zIndex(22)
 
-            persistentExerciseTitle(proxy: proxy)
-                .zIndex(21)
         }
         .frame(width: proxy.size.width, height: proxy.size.height, alignment: .topLeading)
-    }
-
-    /// A title-only transition renderer. The compact and expanded execution states
-    /// retain their established title layout; this renderer takes visual ownership
-    /// only for the measured execution-to-Settings transformation.
-    @ViewBuilder
-    private func persistentExerciseTitle(proxy: GeometryProxy) -> some View {
-        if settingsPresented,
-           let snapshot = settingsSnapshot,
-           let titleName = model.exercise(id: snapshot.exerciseID)?.nameSnapshot,
-           snapshot.titleFrame.width > 0,
-           snapshot.titleFrame.height > 0 {
-            let sourceFrame = snapshot.titleFrame
-            let destinationFrame = ExerciseFocusedExpansionLayout.titleDestinationFrame(
-                surfaceFrame: settingsDestinationFrame,
-                sourceTitleFrame: sourceFrame
-            )
-            let globalFrame = ExerciseFocusedExpansionLayout.frame(
-                from: sourceFrame,
-                to: destinationFrame,
-                progress: settingsTransitionProgress
-            )
-            let containerFrame = proxy.frame(in: .global)
-            let localFrame = globalFrame.offsetBy(dx: -containerFrame.minX, dy: -containerFrame.minY)
-            let scale = 1 + ((ExerciseFocusedExpansionLayout.titleScale - 1) * settingsTransitionProgress)
-            // `globalFrame` describes the title's visible, scaled bounds. The text
-            // itself retains the execution title's unscaled layout size and scales
-            // from its leading/top edge, so position that unscaled layout from the
-            // interpolated visible origin instead of the scaled frame's midpoint.
-            // This keeps both ownership handoff endpoints pixel-aligned.
-            let layoutCenter = CGPoint(
-                x: localFrame.minX + (sourceFrame.width / 2),
-                y: localFrame.minY + (sourceFrame.height / 2)
-            )
-
-            Text(titleName)
-                .eqTextStyle(.screenTitle)
-                .lineLimit(2)
-                .frame(width: sourceFrame.width, height: sourceFrame.height, alignment: .topLeading)
-                .scaleEffect(scale, anchor: .topLeading)
-                // The exercise name is shared transition chrome, not Settings
-                // secondary content. It retains the production execution colour for
-                // the full trajectory.
-                .foregroundStyle(EQColor.Execution.foregroundText)
-                .position(x: layoutCenter.x, y: layoutCenter.y)
-                .accessibilityHidden(true)
-        }
     }
 
     /// The execution header stays mounted in the wallet's common coordinate space.
@@ -2880,12 +3060,8 @@ private struct ExecutionWallet<ListRow: View, ForegroundHeader: View, Foreground
             return baseForegroundFrame
         }
 
-        let sourceFrame = ExerciseFocusedExpansionLayout.bottomAnchoredSourceFrame(
-            measuredSource: snapshot.cardFrame,
-            destination: settingsDestinationFrame
-        )
         return ExerciseFocusedExpansionLayout.frame(
-            from: sourceFrame,
+            from: snapshot.cardFrame,
             to: settingsDestinationFrame,
             progress: settingsTransitionProgress
         )
@@ -2908,100 +3084,10 @@ private struct ExecutionWallet<ListRow: View, ForegroundHeader: View, Foreground
                     .mix(with: EQColor.Execution.primaryAction, by: workTint),
                 externalTopGapColor: EQColor.Execution.foregroundSurface,
                 externalTopGap: EQLayout.WorkoutExecution.workCardExternalTopGap
-                    * CGFloat(workTint)
+                    * CGFloat(workTint),
+                roundsBottomCorners: false
             ))
             .contentShape(RoundedRectangle(cornerRadius: EQRadius.walletSurface, style: .continuous))
-    }
-
-    /// The foreground card's focused representation lives beside the wallet's
-    /// structural placeholder, in the wallet's own coordinate space.  Keeping this
-    /// host here avoids the old scene-level card/title handoff: one owner renders the
-    /// opaque surface, the execution representation, the settings destination, and
-    /// the shared title for the complete focused lifecycle.
-    @ViewBuilder
-    private func focusedForegroundHost(
-        proxy: GeometryProxy,
-        focusedProgress: CGFloat
-    ) -> some View {
-        if settingsPresented,
-           let snapshot = settingsSnapshot,
-           snapshot.exerciseID == model.currentExercise?.id,
-           let exercise = model.exercise(id: snapshot.exerciseID),
-           snapshot.cardFrame.width > 0,
-           snapshot.titleFrame.width > 0,
-           settingsDestinationFrame.width > 0 {
-
-        let sourceFrame = ExerciseFocusedExpansionLayout.bottomAnchoredSourceFrame(
-            measuredSource: snapshot.cardFrame,
-            destination: settingsDestinationFrame
-        )
-        let globalFrame = ExerciseFocusedExpansionLayout.frame(
-            from: sourceFrame,
-            to: settingsDestinationFrame,
-            progress: settingsTransitionProgress
-        )
-        let containerFrame = proxy.frame(in: .global)
-        let localFrame = globalFrame.offsetBy(dx: -containerFrame.minX, dy: -containerFrame.minY)
-        let localDestinationFrame = settingsDestinationFrame.offsetBy(
-            dx: -containerFrame.minX,
-            dy: -containerFrame.minY
-        )
-        let settingsVisibility = ExerciseCardModeMotion.settingsVisibility(settingsTransitionProgress)
-        let executionVisibility = ExerciseCardModeMotion.executionVisibility(settingsTransitionProgress)
-
-        ZStack {
-            EQColor.Execution.foregroundSurface
-
-            // The persistent execution header owns IN PROGRESS and the sliders
-            // glyph. This focused host retains only the incoming close control.
-            Button(action: dismissSettings) {
-                Image(systemName: "xmark")
-                    .eqTextStyle(.icon)
-                    .frame(width: EQLayout.minimumTouch, height: EQLayout.minimumTouch, alignment: .trailing)
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Close exercise settings")
-            .modifier(ExerciseSettingsContentVisibilityModifier(
-                progress: settingsTransitionProgress,
-                group: .settings
-            ))
-            .allowsHitTesting(settingsVisibility > 0.99)
-            .accessibilityHidden(settingsVisibility < 0.01)
-            .foregroundStyle(foregroundTextColor)
-            .frame(width: EQLayout.minimumTouch, height: EQLayout.minimumTouch, alignment: .trailing)
-            .position(
-                x: localFrame.width - EQLayout.WorkoutExecution.walletInset - (EQLayout.minimumTouch / 2),
-                y: EQSpacing.xxs + (EQLayout.minimumTouch / 2)
-            )
-            .accessibilityHidden(settingsVisibility < 0.01 && executionVisibility < 0.01)
-
-            settingsContent(exercise, snapshot.exerciseID)
-                .frame(width: localDestinationFrame.width, height: localDestinationFrame.height)
-                .offset(
-                    x: localDestinationFrame.midX - localFrame.midX,
-                    y: localDestinationFrame.midY - localFrame.midY
-                )
-                .allowsHitTesting(settingsVisibility > 0.99)
-                .accessibilityHidden(settingsVisibility < 0.99)
-                .modifier(ExerciseSettingsContentVisibilityModifier(
-                    progress: settingsTransitionProgress,
-                    group: .settings
-                ))
-
-        }
-        .frame(width: localFrame.width, height: localFrame.height)
-        .modifier(ExecutionWalletShapeModifier(
-            drawsBorder: true,
-            borderColor: EQColor.Execution.walletBorder
-        ))
-        .contentShape(RoundedRectangle(cornerRadius: EQRadius.walletSurface, style: .continuous))
-        .position(x: localFrame.midX, y: localFrame.midY)
-        .zIndex(20)
-        .anchorPreference(key: HomeWorkoutTitleAnchorKey.self, value: .bounds) {
-            [.focusedExerciseSettingsSurface: $0]
-        }
-        .accessibilityIdentifier("execution-focused-exercise-settings-\(snapshot.exerciseID.rawValue)")
-        }
     }
 
     private var overviewSurfaceColor: Color {
@@ -3009,9 +3095,10 @@ private struct ExecutionWallet<ListRow: View, ForegroundHeader: View, Foreground
         let surface = EQColor.Execution.overviewSurface
             .mix(with: EQColor.Execution.overviewDimmedSurface, by: dim)
             .mix(with: EQColor.Execution.restOverviewSurface, by: restTint)
-        // Completed workouts leave Home on the neutral card fill, so blend from it as the wallet grows.
-        guard model.isReadOnly else { return surface }
-        return HomeCardColors(status: .completed).surface
+        // The unified renderer begins at the actual Home card. Keep its painted
+        // surface on that same timeline so the returning card never exposes the
+        // execution fill at the handoff endpoint.
+        return HomeCardColors(status: workout.status).surface
             .mix(with: surface, by: Double(min(max(homeTransitionProgress, 0), 1)))
     }
 
@@ -3094,22 +3181,22 @@ private struct ExecutionWallet<ListRow: View, ForegroundHeader: View, Foreground
     }
 
     private var headerRevealProgress: CGFloat {
-        HomeExecutionReveal.progress(homeTransitionProgress, from: 0.78, through: 0.88)
+        HomeExecutionReveal.progress(homeTransitionProgress, from: 0.86, through: 0.94)
     }
 
     private var headerRevealOpacity: Double { Double(headerRevealProgress) }
 
     private func rowRevealProgress(index: Int) -> CGFloat {
-        let start = min(0.90, 0.82 + (CGFloat(min(index, 4)) * 0.018))
-        return HomeExecutionReveal.progress(homeTransitionProgress, from: start, through: min(1, start + 0.10))
+        let start = min(0.95, 0.90 + (CGFloat(min(index, 4)) * 0.012))
+        return HomeExecutionReveal.progress(homeTransitionProgress, from: start, through: min(1, start + 0.05))
     }
 
     private var completedSectionRevealProgress: CGFloat {
-        HomeExecutionReveal.progress(homeTransitionProgress, from: 0.87, through: 0.97)
+        HomeExecutionReveal.progress(homeTransitionProgress, from: 0.92, through: 0.98)
     }
 
     private func completedRowRevealProgress(index: Int) -> CGFloat {
-        let start = min(0.94, 0.89 + (CGFloat(min(index, 3)) * 0.018))
+        let start = min(0.97, 0.94 + (CGFloat(min(index, 3)) * 0.01))
         return HomeExecutionReveal.progress(homeTransitionProgress, from: start, through: 1)
     }
 
@@ -3657,9 +3744,33 @@ struct ExecutionWalletShapeModifier: ViewModifier {
     var borderColor: Color = EQColor.Execution.walletBorder
     var externalTopGapColor: Color = .clear
     var externalTopGap: CGFloat = 0
+    /// Bottom-anchored foreground cards inherit the wallet's outer bottom
+    /// corners from the parent clip. Rounding them again exposes the list
+    /// surface through the two lower corner cutouts.
+    var roundsBottomCorners = true
 
     @ViewBuilder func body(content: Content) -> some View {
-        if #available(iOS 26.0, *) {
+        if !roundsBottomCorners {
+            let shape = UnevenRoundedRectangle(
+                cornerRadii: .init(
+                    topLeading: EQRadius.walletSurface,
+                    bottomLeading: 0,
+                    bottomTrailing: 0,
+                    topTrailing: EQRadius.walletSurface
+                ),
+                style: .continuous
+            )
+            content
+                .clipShape(shape)
+                .overlay {
+                    if drawsBorder {
+                        insetBorder(for: shape)
+                    }
+                }
+                .overlay(alignment: .top) {
+                    externalTopGapStrip
+                }
+        } else if #available(iOS 26.0, *) {
             let shape = ConcentricRectangle(
                 uniformTopCorners: .fixed(EQRadius.walletSurface),
                 uniformBottomCorners: .concentric(minimum: .fixed(EQRadius.walletSurface))
@@ -3709,6 +3820,52 @@ struct ExecutionWalletShapeModifier: ViewModifier {
                 .offset(y: -externalTopGap)
                 .allowsHitTesting(false)
         }
+    }
+}
+
+/// Applies the wallet's resolved outer contour in the local coordinate space of
+/// a bottom-anchored child. The child may grow upward, but its lower silhouette
+/// must remain identical to the normal wallet that owns the execution card.
+private struct BottomAnchoredWalletShapeModifier: ViewModifier {
+    let walletFrame: CGRect
+    var drawsBorder = false
+    var borderColor: Color = EQColor.Execution.walletBorder
+
+    @ViewBuilder func body(content: Content) -> some View {
+        let shape = BottomAnchoredWalletShape(walletFrame: walletFrame)
+        content
+            .clipShape(shape)
+            .overlay {
+                if drawsBorder {
+                    shape
+                        .stroke(
+                            borderColor,
+                            lineWidth: EQLayout.WorkoutExecution.walletBorderWidth * 2
+                        )
+                        .mask(shape)
+                }
+            }
+    }
+}
+
+/// A translated copy of the shared wallet shape. `walletFrame` is allowed to
+/// extend above the receiving view: clipping naturally intersects that outer
+/// path with the animated shell while retaining the wallet's actual bottom
+/// corners.
+private struct BottomAnchoredWalletShape: Shape {
+    let walletFrame: CGRect
+
+    func path(in _: CGRect) -> Path {
+        if #available(iOS 26.0, *) {
+            return ConcentricRectangle(
+                uniformTopCorners: .fixed(EQRadius.walletSurface),
+                uniformBottomCorners: .concentric(minimum: .fixed(EQRadius.walletSurface))
+            )
+            .path(in: walletFrame)
+        }
+
+        return RoundedRectangle(cornerRadius: EQRadius.walletSurface, style: .continuous)
+            .path(in: walletFrame)
     }
 }
 
@@ -5159,7 +5316,13 @@ private struct ExecutionTimerRegion: View {
 @MainActor private func executionPreview(_ workout: Workout, size: DynamicTypeSize = .large) -> some View {
     let container = try! PersistenceController.makeContainer(inMemory: true)
     container.mainContext.insert(WorkoutMapper.record(from: workout)); try! container.mainContext.save()
-    return NavigationStack { WorkoutExecutionView(id: workout.id, repository: SwiftDataRepository(container: container)) }
+    return NavigationStack {
+        WorkoutExecutionView(
+            id: workout.id,
+            repository: SwiftDataRepository(container: container),
+            settingsPresentationBridge: .init()
+        )
+    }
         .modelContainer(container).preferredColorScheme(.dark).dynamicTypeSize(size)
 }
 #Preview("Ready workout") { executionPreview(EquilibriumFixtures.ready()) }
