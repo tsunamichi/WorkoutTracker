@@ -178,13 +178,13 @@ struct StandaloneTimerFormView: View {
                         .padding(.horizontal, EQSpacing.md)
                         .background(EQColor.surfaceInput, in: RoundedRectangle(cornerRadius: EQRadius.card, style: .continuous))
                     section("EXERCISE") {
-                        stepperRow("Move for", format(move), value: $move, range: 5...120, step: 5)
-                        stepperRow("Rest after each exercise", format(exerciseRest), value: $exerciseRest, range: 5...120, step: 5)
+                        durationPickerRow("Move for", value: $move, range: 5...120)
+                        durationPickerRow("Rest after each exercise", value: $exerciseRest, range: 5...120)
                     }
                     section("ROUND") {
                         stepperRow("Exercises in a round", "\(exercises)", value: $exercises, range: 1...20)
                         stepperRow("Rounds", "\(rounds)", value: $rounds, range: 1...10)
-                        stepperRow("Rest between rounds", format(roundRest), value: $roundRest, range: 5...180, step: 5)
+                        durationPickerRow("Rest between rounds", value: $roundRest, range: 5...180)
                     }
                 }
                 .padding(.horizontal, EQLayout.screenGutter)
@@ -241,6 +241,30 @@ struct StandaloneTimerFormView: View {
         }
         .accessibilityElement(children: .contain)
         .accessibilityValue(display)
+    }
+    private func durationPickerRow(
+        _ label: String,
+        value: Binding<Int>,
+        range: ClosedRange<Int>
+    ) -> some View {
+        VStack(alignment: .leading, spacing: EQSpacing.xs) {
+            Text(label)
+                .eqTextStyle(.secondaryBody)
+                .foregroundStyle(EQColor.contentSecondary)
+
+            DurationPicker(
+                seconds: Binding(
+                    get: { TimeInterval(value.wrappedValue) },
+                    set: { value.wrappedValue = Int($0.rounded()) }
+                ),
+                configuration: .init(
+                    range: TimeInterval(range.lowerBound)...TimeInterval(range.upperBound),
+                    step: 5
+                )
+            )
+            .accessibilityValue(format(value.wrappedValue))
+        }
+        .accessibilityElement(children: .contain)
     }
     private func stepButton(_ systemImage: String, enabled: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {

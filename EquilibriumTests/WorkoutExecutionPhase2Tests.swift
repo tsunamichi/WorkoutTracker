@@ -571,58 +571,38 @@ final class ExerciseSettingsPhase5Tests: XCTestCase {
         XCTAssertEqual(model.effectiveRestDuration(for: exercise.id), 150)
     }
 
-    func testDurationScaleBuildsIndependentMinuteAndSecondWheels() {
-        XCTAssertEqual(RestDurationScale.snapped(1), 15)
-        XCTAssertEqual(RestDurationScale.snapped(92), 90)
-        XCTAssertEqual(RestDurationScale.snapped(999), 300)
-        XCTAssertEqual(RestDurationScale.components(for: 265).minutes, 4)
-        XCTAssertEqual(RestDurationScale.components(for: 265).seconds, 25)
-        XCTAssertEqual(RestDurationScale.duration(minutes: 4, seconds: 25), 265)
-        XCTAssertNil(RestDurationScale.duration(minutes: 0, seconds: 10))
-        XCTAssertNil(RestDurationScale.duration(minutes: 5, seconds: 5))
-        XCTAssertNil(RestDurationScale.duration(minutes: 4, seconds: 23))
-        XCTAssertEqual(RestDurationScale.minuteValues(forSeconds: 0), [1, 2, 3, 4, 5])
-        XCTAssertEqual(RestDurationScale.minuteValues(forSeconds: 25), [0, 1, 2, 3, 4])
+    func testNativeDurationPickerConfigurationPreservesRestDurationRules() {
+        let configuration = DurationPickerConfiguration.restDuration
+        XCTAssertEqual(configuration.snapped(1), 15)
+        XCTAssertEqual(configuration.snapped(92), 90)
+        XCTAssertEqual(configuration.snapped(999), 300)
+        XCTAssertEqual(configuration.components(for: 265).minutes, 4)
+        XCTAssertEqual(configuration.components(for: 265).seconds, 25)
+        XCTAssertEqual(configuration.duration(hours: 0, minutes: 4, seconds: 25), 265)
+        XCTAssertNil(configuration.duration(hours: 0, minutes: 0, seconds: 10))
+        XCTAssertNil(configuration.duration(hours: 0, minutes: 5, seconds: 5))
+        XCTAssertNil(configuration.duration(hours: 0, minutes: 4, seconds: 23))
+        XCTAssertEqual(configuration.minuteValues(hours: 0, seconds: 0), [1, 2, 3, 4, 5])
+        XCTAssertEqual(configuration.minuteValues(hours: 0, seconds: 25), [0, 1, 2, 3, 4])
         XCTAssertEqual(
-            RestDurationScale.secondValues(forMinutes: 0),
+            configuration.secondValues(hours: 0, minutes: 0),
             [15, 20, 25, 30, 35, 40, 45, 50, 55]
         )
         XCTAssertEqual(
-            RestDurationScale.secondValues(forMinutes: 5),
+            configuration.secondValues(hours: 0, minutes: 5),
             [0]
         )
     }
 
-    func testDurationWheelMotionUsesVerticalDetentsMomentumAndBounds() {
-        XCTAssertEqual(
-            DurationWheelMotion.index(startingAt: 2, translation: -31, count: 6),
-            2
+    func testNativeDurationPickerConfigurationSupportsHourPrecision() {
+        let configuration = DurationPickerConfiguration(
+            range: 0...7_200,
+            step: 5
         )
-        XCTAssertEqual(
-            DurationWheelMotion.index(startingAt: 2, translation: -32, count: 6),
-            3
-        )
-        XCTAssertEqual(
-            DurationWheelMotion.index(startingAt: 2, translation: 64, count: 6),
-            1
-        )
-        XCTAssertEqual(
-            DurationWheelMotion.index(startingAt: 5, translation: -640, count: 6),
-            5
-        )
-        XCTAssertEqual(
-            DurationWheelMotion.index(startingAt: 0, translation: 640, count: 6),
-            0
-        )
-        XCTAssertEqual(
-            DurationWheelMotion.projectedIndex(
-                startingAt: 2,
-                translation: -20,
-                predictedTranslation: -100,
-                count: 6
-            ),
-            3
-        )
+        XCTAssertTrue(configuration.showsHours)
+        XCTAssertEqual(configuration.components(for: 3_665), .init(hours: 1, minutes: 1, seconds: 5))
+        XCTAssertEqual(configuration.duration(hours: 1, minutes: 1, seconds: 5), 3_665)
+        XCTAssertNil(configuration.duration(hours: 2, minutes: 0, seconds: 5))
     }
 
     func testExerciseRestOverridePersistsAcrossWorkoutOccurrencesByStableExerciseID() async throws {

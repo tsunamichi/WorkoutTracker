@@ -296,6 +296,12 @@ private struct HomeSettingsPresentationGeometryModifier: AnimatableModifier {
             dx: -containerFrame.minX,
             dy: -containerFrame.minY
         )
+        // The shared exercise title resolves to this exact eyebrow slot at the
+        // Settings destination. Use the same reference for the external close
+        // control so both visible elements share one vertical center.
+        let localExerciseNameSlot = ExerciseFocusedExpansionLayout.settingsEyebrowSlot(
+            surfaceFrame: CGRect(origin: .zero, size: localFrame.size)
+        )
         // This is expressed in the animated shell's local coordinate space. It
         // lets the external Settings presentation use the same lower contour as
         // the normal wallet without changing the shell's interpolated frame.
@@ -316,8 +322,9 @@ private struct HomeSettingsPresentationGeometryModifier: AnimatableModifier {
             ZStack {
                 EQColor.Execution.foregroundSurface
 
-                Button(action: input.onClose) {
-                    Image(systemName: "xmark")
+                let isNestedRoute = input.route != nil
+                Button(action: isNestedRoute ? input.onBack : input.onClose) {
+                    Image(systemName: isNestedRoute ? "chevron.left" : "xmark")
                         .eqTextStyle(.icon)
                         .frame(
                             width: EQLayout.minimumTouch,
@@ -326,7 +333,7 @@ private struct HomeSettingsPresentationGeometryModifier: AnimatableModifier {
                         )
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("Close exercise settings")
+                .accessibilityLabel(isNestedRoute ? "Back to exercise settings" : "Close exercise settings")
                 .modifier(ExerciseSettingsContentVisibilityModifier(
                     progress: renderedProgress,
                     group: .settings,
@@ -338,7 +345,7 @@ private struct HomeSettingsPresentationGeometryModifier: AnimatableModifier {
                 .frame(width: EQLayout.minimumTouch, height: EQLayout.minimumTouch, alignment: .trailing)
                 .position(
                     x: localFrame.width - EQLayout.WorkoutExecution.walletInset - (EQLayout.minimumTouch / 2),
-                    y: EQSpacing.xxs + (EQLayout.minimumTouch / 2)
+                    y: localExerciseNameSlot.midY
                 )
                 .accessibilityHidden(settingsVisibility < 0.01 && executionVisibility < 0.01)
 
@@ -357,7 +364,8 @@ private struct HomeSettingsPresentationGeometryModifier: AnimatableModifier {
                     onSwap: input.onSwap,
                     durationStepFeedback: input.durationStepFeedback,
                     allowsSaving: input.allowsSaving(),
-                    showsCloseControl: false
+                    showsCloseControl: false,
+                    showsBackControl: false
                 )
                 .frame(width: localDestinationFrame.width, height: localDestinationFrame.height)
                 .offset(
@@ -1331,6 +1339,10 @@ struct WorkoutExecutionView: View {
     @State private var restoresExercise: WorkoutExercise?
     @State private var exerciseCardPresentation = ExerciseCardPresentation()
     @State private var exerciseSettingsTransitionProgress: CGFloat = 0
+    /// The card shell returns immediately after Settings collapses. Its live
+    /// values/footer stay mounted and use this short post-handoff reveal so they
+    /// do not pop in on the same presentation frame as the shell.
+    @State private var executionContentReturnOpacity: CGFloat = 1
     @State private var exerciseSettingsTargetIsPresented = false
     @State private var exerciseSettingsTransitionGeneration = 0
     @State private var exerciseSettingsTransitionSnapshot: ExerciseSettingsTransitionSnapshot?
@@ -1550,18 +1562,6 @@ struct WorkoutExecutionView: View {
             if exerciseCardPresentation.exerciseID != currentExerciseID {
                 exerciseCardPresentation.present(exerciseID: currentExerciseID)
             }
-        }
-        .onChange(of: exerciseCardPresentation.path) { _, path in
-            settingsPresentationBridge.updateNavigation(
-                route: path.last,
-                direction: exerciseCardPresentation.navigationDirection
-            )
-        }
-        .onChange(of: exerciseCardPresentation.navigationDirection) { _, direction in
-            settingsPresentationBridge.updateNavigation(
-                route: exerciseCardPresentation.path.last,
-                direction: direction
-            )
         }
     }
 
@@ -1866,6 +1866,7 @@ struct WorkoutExecutionView: View {
                             foregroundPresenceProgress: foregroundPresenceProgress,
                             settingsPresented: showsExerciseSettings,
                             settingsTransitionProgress: exerciseSettingsTransitionProgress,
+                            executionContentReturnOpacity: executionContentReturnOpacity,
                             settingsSnapshot: exerciseSettingsTransitionSnapshot,
                             settingsDestinationFrame: exerciseSettingsTransitionSnapshot?.destinationFrame
                                 ?? exerciseSettingsDestinationFrame,
@@ -2271,6 +2272,8 @@ struct WorkoutExecutionView: View {
 
         exerciseSettingsTransitionGeneration += 1
         let generation = exerciseSettingsTransitionGeneration
+        // Cancels an in-flight return reveal when Settings is opened again.
+        executionContentReturnOpacity = 1
         exerciseSettingsEndedByExternalAction = false
 
         // The sliders control belongs to the visible in-progress card. Do not
@@ -2325,6 +2328,7 @@ struct WorkoutExecutionView: View {
 
         if reduceMotion {
             exerciseSettingsTransitionProgress = 0
+            executionContentReturnOpacity = 1
             exerciseCardPresentation.dismiss()
             exerciseSettingsTransitionSnapshot = nil
             exerciseSettingsTargetIsPresented = false
@@ -2335,10 +2339,22 @@ struct WorkoutExecutionView: View {
             } completion: {
                 guard exerciseSettingsTransitionGeneration == generation,
                       exerciseSettingsTransitionProgress <= 0.001 else { return }
+                // Commit an invisible normal-content frame before releasing the
+                // external Settings shell. The subsequent task-yield is a
+                // presentation-phase boundary, not a timed delay.
+                executionContentReturnOpacity = 0
                 exerciseCardPresentation.dismiss()
                 exerciseSettingsTransitionSnapshot = nil
                 exerciseSettingsTargetIsPresented = false
                 settingsPresentationBridge.dismiss()
+                Task { @MainActor in
+                    await Task.yield()
+                    guard exerciseSettingsTransitionGeneration == generation,
+                          !exerciseSettingsTargetIsPresented else { return }
+                    withAnimation(.easeOut(duration: 0.18)) {
+                        executionContentReturnOpacity = 1
+                    }
+                }
             }
         }
     }
@@ -2355,19 +2371,33 @@ struct WorkoutExecutionView: View {
             historyRepository: historyRepository,
             path: Binding(
                 get: { exerciseCardPresentation.path },
-                set: { exerciseCardPresentation.setPath($0) }
+                set: { path in
+                    exerciseCardPresentation.setPath(path)
+                    updateSettingsPresentationNavigation()
+                }
             ),
             route: exerciseCardPresentation.path.last,
             navigationDirection: exerciseCardPresentation.navigationDirection,
             onBack: {
                 withAnimation(nestedSettingsAnimation) {
                     exerciseCardPresentation.pop()
+                    updateSettingsPresentationNavigation()
                 }
             },
             onClose: dismissExerciseSettings,
             onSwap: { swapsExercise = true },
             durationStepFeedback: { haptics.perform(.selection) },
             allowsSaving: { !exerciseSettingsEndedByExternalAction }
+        )
+    }
+
+    /// Keep the route identity and transition direction in one transaction. The
+    /// Home-level Settings host otherwise receives the page change later via an
+    /// observer, after SwiftUI has already resolved the transition direction.
+    private func updateSettingsPresentationNavigation() {
+        settingsPresentationBridge.updateNavigation(
+            route: exerciseCardPresentation.path.last,
+            direction: exerciseCardPresentation.navigationDirection
         )
     }
 
@@ -2539,6 +2569,7 @@ private struct ExecutionWallet<ListRow: View, ForegroundHeader: View, Foreground
     let foregroundPresenceProgress: CGFloat
     let settingsPresented: Bool
     let settingsTransitionProgress: CGFloat
+    let executionContentReturnOpacity: CGFloat
     let settingsSnapshot: ExerciseSettingsTransitionSnapshot?
     let settingsDestinationFrame: CGRect
     let reduceMotion: Bool
@@ -2703,6 +2734,7 @@ private struct ExecutionWallet<ListRow: View, ForegroundHeader: View, Foreground
                         foregroundExitTranslation: foregroundExitTranslation,
                         foregroundDismissalOffset: foregroundDismissalOffset,
                         executionSettingsVisibility: executionSettingsVisibility,
+                        executionContentOpacity: executionContentReturnOpacity,
                         baseForegroundFrame: baseForegroundFrame
                     )
                 } else {
@@ -2749,7 +2781,8 @@ private struct ExecutionWallet<ListRow: View, ForegroundHeader: View, Foreground
                                 foregroundLayout: stableForegroundLayout,
                                 compactArrival: geometry.foregroundArrival,
                                 foregroundDismissalOffset: foregroundDismissalOffset,
-                                executionSettingsVisibility: executionSettingsVisibility
+                                executionSettingsVisibility: executionSettingsVisibility,
+                                executionContentOpacity: executionContentReturnOpacity
                             )
                             .preference(
                                 key: ExecutionRenderedForegroundFramePreferenceKey.self,
@@ -2836,6 +2869,7 @@ private struct ExecutionWallet<ListRow: View, ForegroundHeader: View, Foreground
         foregroundExitTranslation: ExecutionForegroundExitTranslationModifier,
         foregroundDismissalOffset: CGFloat,
         executionSettingsVisibility: CGFloat,
+        executionContentOpacity: CGFloat,
         baseForegroundFrame: CGRect
     ) -> some View {
         ZStack(alignment: .topLeading) {
@@ -2860,6 +2894,7 @@ private struct ExecutionWallet<ListRow: View, ForegroundHeader: View, Foreground
             )
             .offset(x: walletOriginX, y: walletOriginY)
             .modifier(foregroundExitTranslation)
+            .opacity(executionContentOpacity)
             .zIndex(2)
 
             Color.clear
@@ -2867,6 +2902,7 @@ private struct ExecutionWallet<ListRow: View, ForegroundHeader: View, Foreground
                 .overlay {
                     unifiedActionControls(primaryAction)
                         .opacity(keyboardVisible ? 0 : 1)
+                        .opacity(executionContentOpacity)
                         .modifier(ExerciseSettingsContentVisibilityModifier(
                             progress: settingsTransitionProgress,
                             group: .execution
@@ -2893,7 +2929,8 @@ private struct ExecutionWallet<ListRow: View, ForegroundHeader: View, Foreground
         foregroundLayout: ExecutionWalletSurfaceLayout,
         compactArrival: CGFloat,
         foregroundDismissalOffset: CGFloat,
-        executionSettingsVisibility: CGFloat
+        executionSettingsVisibility: CGFloat,
+        executionContentOpacity: CGFloat
     ) -> some View {
         ZStack(alignment: .topLeading) {
             if showsForegroundExercise {
@@ -2924,6 +2961,7 @@ private struct ExecutionWallet<ListRow: View, ForegroundHeader: View, Foreground
                 cardTop: foregroundLayout.top + foregroundDismissalOffset,
                 focusProgress: progress
             )
+            .opacity(executionContentOpacity)
             .zIndex(2)
 
             if showsForegroundExercise {
@@ -2950,6 +2988,7 @@ private struct ExecutionWallet<ListRow: View, ForegroundHeader: View, Foreground
                 .overlay {
                     unifiedActionControls(primaryAction)
                         .opacity(keyboardVisible ? 0 : 1)
+                        .opacity(executionContentOpacity)
                         .modifier(ExerciseSettingsContentVisibilityModifier(
                             progress: settingsTransitionProgress,
                             group: .execution
@@ -3921,7 +3960,7 @@ private struct RestDurationEditor: View {
     let guidance: String
     let save: (TimeInterval) async -> Bool
     init(initialSeconds: TimeInterval, guidance: String, save: @escaping (TimeInterval) async -> Bool) {
-        _seconds = State(initialValue: RestDurationScale.snapped(initialSeconds))
+        _seconds = State(initialValue: DurationPickerConfiguration.restDuration.snapped(initialSeconds))
         self.guidance = guidance
         self.save = save
     }
@@ -3974,12 +4013,11 @@ private struct RestDurationValueControls: View {
             Text(durationText)
                 .eqTextStyle(.largeMetric)
                 .monospacedDigit()
-            Slider(
-                value: $seconds,
-                in: RestDurationScale.minimum...RestDurationScale.maximum,
-                step: RestDurationScale.step
+            DurationPicker(
+                seconds: $seconds,
+                configuration: .restDuration
             )
-                .accessibilityValue(durationText)
+            .accessibilityValue(durationText)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -4247,9 +4285,11 @@ private struct FocusedExerciseSettingsSurface: View {
     let onSwap: () -> Void
     let durationStepFeedback: () -> Void
     let allowsSaving: Bool
-    /// The persistent transforming host owns the root close affordance. Nested
-    /// navigation retains its back affordance in this production header.
+    /// The persistent transforming host owns the card-level close/back affordance.
     let showsCloseControl: Bool
+    /// The outer Settings presentation owns the card-level back affordance so
+    /// its placement stays aligned with the moving exercise-name geometry.
+    var showsBackControl = true
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -4300,7 +4340,7 @@ private struct FocusedExerciseSettingsSurface: View {
             .accessibilityLabel("\(exerciseName), \(route?.title ?? "Settings")")
 
             HStack(spacing: EQSpacing.xs) {
-                if route != nil {
+                if route != nil, showsBackControl {
                     EQIconButton(systemImage: "chevron.left", alignment: .trailing, action: onBack)
                         .accessibilityLabel("Back to exercise settings")
                 }
@@ -4375,8 +4415,6 @@ private struct ExerciseOptionsCardContent: View {
         ZStack(alignment: .topLeading) {
             navigationContent
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                .id(path.last)
-                .transition(navigationTransition)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .clipped()
@@ -4421,28 +4459,37 @@ private struct ExerciseOptionsCardContent: View {
     private var navigationContent: some View {
         if let route = path.last {
             destination(route)
+                .id(route)
+                .transition(destinationNavigationTransition)
         } else if let exercise {
             rootContent(exercise)
+                .id("exercise-settings-root")
+                .transition(rootNavigationTransition)
         } else {
             ContentUnavailableView("Exercise unavailable", systemImage: "exclamationmark.triangle")
         }
     }
 
-    private var navigationTransition: AnyTransition {
+    /// Page position is intrinsic to the page rather than to the most recently
+    /// rendered navigation direction. SwiftUI retains an outgoing view's
+    /// transition from its prior render, so a shared direction-driven transition
+    /// can send the root page the wrong way after a previous back navigation.
+    private var rootNavigationTransition: AnyTransition {
         guard !reduceMotion else { return .opacity }
         let distance = ExerciseCardModeMotion.nestedOffset
-        switch navigationDirection {
-        case .forward:
-            return .asymmetric(
-                insertion: .offset(x: distance).combined(with: .opacity),
-                removal: .offset(x: -distance).combined(with: .opacity)
-            )
-        case .backward:
-            return .asymmetric(
-                insertion: .offset(x: -distance).combined(with: .opacity),
-                removal: .offset(x: distance).combined(with: .opacity)
-            )
-        }
+        return .asymmetric(
+            insertion: .offset(x: -distance).combined(with: .opacity),
+            removal: .offset(x: -distance).combined(with: .opacity)
+        )
+    }
+
+    private var destinationNavigationTransition: AnyTransition {
+        guard !reduceMotion else { return .opacity }
+        let distance = ExerciseCardModeMotion.nestedOffset
+        return .asymmetric(
+            insertion: .offset(x: distance).combined(with: .opacity),
+            removal: .offset(x: distance).combined(with: .opacity)
+        )
     }
 
     private func rootContent(_ exercise: WorkoutExercise) -> some View {
@@ -4741,7 +4788,6 @@ private struct AutoProgressionOptionsContent: View {
 private struct ExerciseRestDurationOptionsContent: View {
     @State private var seconds: Double
     @State private var hasOverride: Bool
-    @State private var hasUncommittedInteraction = false
     @State private var persistenceTask: Task<Void, Never>?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let workoutDefaultSeconds: TimeInterval
@@ -4755,7 +4801,7 @@ private struct ExerciseRestDurationOptionsContent: View {
         selectionFeedback: @escaping () -> Void
     ) {
         _seconds = State(
-            initialValue: RestDurationScale.snapped(
+            initialValue: DurationPickerConfiguration.restDuration.snapped(
                 initialOverride ?? workoutDefaultSeconds
             )
         )
@@ -4766,59 +4812,55 @@ private struct ExerciseRestDurationOptionsContent: View {
     }
 
     var body: some View {
-        GeometryReader { proxy in
-            VStack(spacing: 0) {
-                DualWheelDurationPicker(
-                    value: seconds,
-                    onChange: { value in
-                        seconds = value
-                        hasUncommittedInteraction = true
-                    },
-                    onCommit: persistOverride,
-                    selectionFeedback: selectionFeedback
-                )
-                .frame(height: pickerHeight(for: proxy.size.height))
+        VStack(spacing: 0) {
+            Spacer(minLength: EQSpacing.md)
 
-                Spacer(minLength: EQSpacing.md)
+            DurationPicker(
+                seconds: Binding(
+                    get: { seconds },
+                    set: selectDuration
+                ),
+                configuration: .restDuration
+            )
 
-                resetAction
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .padding(.bottom, EQLayout.ExerciseOptions.bottomInset)
+            Spacer(minLength: EQSpacing.md)
+
+            resetAction
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .padding(.bottom, EQLayout.ExerciseOptions.bottomInset)
         .animation(reduceMotion ? EQMotion.reducedContentTransition : EQMotion.contentTransition, value: hasOverride)
         .onChange(of: workoutDefaultSeconds) { _, newDefault in
-            guard !hasOverride, !hasUncommittedInteraction else { return }
-            let updated = RestDurationScale.snapped(newDefault)
+            guard !hasOverride else { return }
+            let updated = DurationPickerConfiguration.restDuration.snapped(newDefault)
             if reduceMotion {
                 seconds = updated
             } else {
                 withAnimation(EQMotion.contentTransition) { seconds = updated }
             }
         }
-        .onDisappear {
-            guard hasUncommittedInteraction else { return }
-            persistOverride(seconds)
-        }
     }
 
     private func persistOverride(_ value: TimeInterval) {
-        let value = RestDurationScale.snapped(value)
+        let value = DurationPickerConfiguration.restDuration.snapped(value)
         seconds = value
         hasOverride = true
-        hasUncommittedInteraction = false
         enqueueSave(value)
     }
 
+    private func selectDuration(_ value: TimeInterval) {
+        guard value != seconds else { return }
+        selectionFeedback()
+        persistOverride(value)
+    }
+
     private func resetToWorkoutDefault() {
-        hasUncommittedInteraction = false
         hasOverride = false
-        let inheritedValue = RestDurationScale.snapped(workoutDefaultSeconds)
+        let inheritedValue = DurationPickerConfiguration.restDuration.snapped(workoutDefaultSeconds)
         if reduceMotion {
             seconds = inheritedValue
         } else {
-            withAnimation(EQMotion.contentTransition) { seconds = inheritedValue }
+            withAnimation(.easeOut(duration: 0.18)) { seconds = inheritedValue }
         }
         enqueueSave(nil)
     }
@@ -4839,364 +4881,29 @@ private struct ExerciseRestDurationOptionsContent: View {
     @ViewBuilder
     private var resetAction: some View {
         if hasOverride {
-            Button("Use workout default (\(durationText(workoutDefaultSeconds)))") {
+            Button {
                 resetToWorkoutDefault()
+            } label: {
+                Text("Use workout default (\(durationText(workoutDefaultSeconds)))")
+                    .eqOutlinedControl(tint: EQColor.Execution.foregroundText)
+                    .eqTextStyle(.listItemTitle)
             }
             .buttonStyle(.plain)
-            .eqTextStyle(.secondaryBody)
-            .foregroundStyle(EQColor.Execution.foregroundSecondaryText)
-            .frame(minHeight: EQLayout.minimumTouch)
+            .frame(maxWidth: .infinity)
             .padding(.horizontal, EQLayout.WorkoutExecution.walletInset)
             .transition(.opacity)
             .accessibilityLabel("Use workout default, \(durationText(workoutDefaultSeconds))")
             .accessibilityHint("Removes the exercise override so future workout default changes apply")
         } else {
             Color.clear
-                .frame(height: EQLayout.minimumTouch)
+                // Reserve the outlined-control height even when the override
+                // action is absent, so changing its visibility cannot shift
+                // the wheel above it.
+                .frame(height: EQLayout.WorkoutExecution.primaryActionHeight)
                 .accessibilityHidden(true)
         }
     }
 
-    private func pickerHeight(for availableHeight: CGFloat) -> CGFloat {
-        min(
-            440,
-            max(
-                300,
-                availableHeight
-                    - EQLayout.minimumTouch
-                    - EQSpacing.md
-                    - EQLayout.ExerciseOptions.bottomInset
-            )
-        )
-    }
-}
-
-enum RestDurationScale {
-    static let minimum: TimeInterval = 15
-    static let maximum: TimeInterval = 300
-    static let step: TimeInterval = 5
-
-    static func snapped(_ value: TimeInterval) -> TimeInterval {
-        let stepped = (value / step).rounded() * step
-        return min(max(stepped, minimum), maximum)
-    }
-
-    static func components(for value: TimeInterval) -> (minutes: Int, seconds: Int) {
-        let totalSeconds = Int(snapped(value).rounded())
-        return (totalSeconds / 60, totalSeconds % 60)
-    }
-
-    static func duration(minutes: Int, seconds: Int) -> TimeInterval? {
-        guard (0..<60).contains(seconds), seconds.isMultiple(of: Int(step)) else {
-            return nil
-        }
-        let duration = TimeInterval((minutes * 60) + seconds)
-        guard duration >= minimum, duration <= maximum else { return nil }
-        return duration
-    }
-
-    static func minuteValues(forSeconds seconds: Int) -> [Int] {
-        let maximumMinutes = Int(maximum) / 60
-        return Array(0...maximumMinutes).filter {
-            duration(minutes: $0, seconds: seconds) != nil
-        }
-    }
-
-    static func secondValues(forMinutes minutes: Int) -> [Int] {
-        stride(from: 0, through: 55, by: Int(step)).filter {
-            duration(minutes: minutes, seconds: $0) != nil
-        }
-    }
-}
-
-enum DurationWheelMotion {
-    static let stepDistance: CGFloat = 64
-    static let momentumContribution: CGFloat = 0.3
-
-    static func index(
-        startingAt startIndex: Int,
-        translation: CGFloat,
-        count: Int
-    ) -> Int {
-        guard count > 0 else { return 0 }
-        let stepDelta = Int((-translation / stepDistance).rounded())
-        return min(max(startIndex + stepDelta, 0), count - 1)
-    }
-
-    static func projectedIndex(
-        startingAt startIndex: Int,
-        translation: CGFloat,
-        predictedTranslation: CGFloat,
-        count: Int
-    ) -> Int {
-        let projection = translation
-            + ((predictedTranslation - translation) * momentumContribution)
-        return index(startingAt: startIndex, translation: projection, count: count)
-    }
-}
-
-private struct DualWheelDurationPicker: View {
-    let value: TimeInterval
-    let onChange: (TimeInterval) -> Void
-    let onCommit: (TimeInterval) -> Void
-    let selectionFeedback: () -> Void
-
-    var body: some View {
-        let components = RestDurationScale.components(for: value)
-        let minuteValues = RestDurationScale.minuteValues(forSeconds: components.seconds)
-        let secondValues = RestDurationScale.secondValues(forMinutes: components.minutes)
-
-        GeometryReader { proxy in
-            HStack(spacing: 0) {
-                CurvedDurationWheel(
-                    side: .left,
-                    values: minuteValues,
-                    selection: components.minutes,
-                    displayText: { String($0) },
-                    accessibilityLabel: "Minutes",
-                    accessibilityValue: minuteAccessibilityValue(components.minutes),
-                    onChange: { minutes in
-                        update(minutes: minutes, seconds: components.seconds, commit: false)
-                    },
-                    onCommit: { minutes in
-                        update(minutes: minutes, seconds: components.seconds, commit: true)
-                    },
-                    selectionFeedback: selectionFeedback
-                )
-                .frame(width: proxy.size.width / 2, height: proxy.size.height)
-
-                CurvedDurationWheel(
-                    side: .right,
-                    values: secondValues,
-                    selection: components.seconds,
-                    displayText: { String(format: "%02d", $0) },
-                    accessibilityLabel: "Seconds",
-                    accessibilityValue: secondAccessibilityValue(components.seconds),
-                    onChange: { seconds in
-                        update(minutes: components.minutes, seconds: seconds, commit: false)
-                    },
-                    onCommit: { seconds in
-                        update(minutes: components.minutes, seconds: seconds, commit: true)
-                    },
-                    selectionFeedback: selectionFeedback
-                )
-                .frame(width: proxy.size.width / 2, height: proxy.size.height)
-            }
-
-            Text(":")
-                .eqTextStyle(EQTextStyle(size: 52, weight: .medium))
-                .monospacedDigit()
-                .foregroundStyle(EQColor.Execution.foregroundText)
-                .position(x: proxy.size.width / 2, y: proxy.size.height / 2)
-                .accessibilityHidden(true)
-        }
-        .clipped()
-    }
-
-    private func update(minutes: Int, seconds: Int, commit: Bool) {
-        guard let duration = RestDurationScale.duration(minutes: minutes, seconds: seconds) else {
-            return
-        }
-        if commit {
-            onCommit(duration)
-        } else if duration != value {
-            onChange(duration)
-        }
-    }
-
-    private func minuteAccessibilityValue(_ minutes: Int) -> String {
-        "\(minutes) \(minutes == 1 ? "minute" : "minutes")"
-    }
-
-    private func secondAccessibilityValue(_ seconds: Int) -> String {
-        "\(seconds) \(seconds == 1 ? "second" : "seconds")"
-    }
-}
-
-private struct CurvedDurationWheel: View {
-    enum Side {
-        case left
-        case right
-    }
-
-    let side: Side
-    let values: [Int]
-    let selection: Int
-    let displayText: (Int) -> String
-    let accessibilityLabel: String
-    let accessibilityValue: String
-    let onChange: (Int) -> Void
-    let onCommit: (Int) -> Void
-    let selectionFeedback: () -> Void
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var dragStartIndex: Int?
-    @State private var lastReportedIndex: Int?
-    @State private var residualOffset: CGFloat = 0
-    @State private var changedDuringDrag = false
-
-    var body: some View {
-        GeometryReader { proxy in
-            // The wheels remain much wider than their half-card viewports, but fit
-            // vertically so their circular silhouette never ends in a flat crop.
-            let radius = max(1, (proxy.size.height / 2) - 2)
-            let centerGap: CGFloat = min(30, proxy.size.width * 0.15)
-            let centerX = side == .left
-                ? proxy.size.width - centerGap - radius
-                : centerGap + radius
-            let center = CGPoint(x: centerX, y: proxy.size.height / 2)
-            let numberRadius = radius - min(52, radius * 0.18)
-
-            ZStack {
-                Circle()
-                    .fill(EQColor.surfaceHighlightDark)
-                    .overlay {
-                        Circle()
-                            .stroke(
-                                EQColor.disabledText,
-                                lineWidth: 1
-                            )
-                    }
-                    .frame(width: radius * 2, height: radius * 2)
-                    .position(center)
-                    .accessibilityHidden(true)
-
-                ForEach(Array(values.enumerated()), id: \.element) { index, wheelValue in
-                    let selectedIndex = values.firstIndex(of: selection) ?? 0
-                    let arcDistance = CGFloat(index - selectedIndex)
-                        * DurationWheelMotion.stepDistance
-                        + residualOffset
-                    let angle = arcDistance / numberRadius
-                    let horizontalDistance = numberRadius * cos(angle)
-                    let verticalDistance = numberRadius * sin(angle)
-                    let x = side == .left
-                        ? center.x + horizontalDistance
-                        : center.x - horizontalDistance
-                    let emphasis = emphasis(for: arcDistance)
-                    let arcVisibility = arcVisibility(for: angle)
-
-                    Text(displayText(wheelValue))
-                        .eqTextStyle(EQTextStyle(size: 52, weight: .medium))
-                        .monospacedDigit()
-                        .foregroundStyle(
-                            EQColor.Execution.foregroundText.opacity(
-                                emphasis.opacity * arcVisibility
-                            )
-                        )
-                        .scaleEffect(emphasis.scale)
-                        .position(x: x, y: center.y + verticalDistance)
-                        .accessibilityHidden(true)
-                }
-            }
-            .contentShape(Rectangle())
-            .gesture(dragGesture)
-        }
-        .clipped()
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(accessibilityLabel)
-        .accessibilityValue(accessibilityValue)
-        .accessibilityHint("Swipe up or down to adjust")
-        .accessibilityAdjustableAction { direction in
-            adjustAccessibilitySelection(direction)
-        }
-    }
-
-    private var selectedIndex: Int {
-        values.firstIndex(of: selection) ?? 0
-    }
-
-    private var dragGesture: some Gesture {
-        DragGesture(minimumDistance: 4)
-            .onChanged { gesture in
-                if dragStartIndex == nil {
-                    dragStartIndex = selectedIndex
-                    lastReportedIndex = selectedIndex
-                    changedDuringDrag = false
-                }
-                guard let dragStartIndex else { return }
-                let newIndex = DurationWheelMotion.index(
-                    startingAt: dragStartIndex,
-                    translation: gesture.translation.height,
-                    count: values.count
-                )
-                let newSelection = values[newIndex]
-                if newIndex != lastReportedIndex {
-                    onChange(newSelection)
-                    selectionFeedback()
-                    lastReportedIndex = newIndex
-                    changedDuringDrag = true
-                }
-
-                let consumedDistance = CGFloat(newIndex - dragStartIndex)
-                    * DurationWheelMotion.stepDistance
-                let rawOffset = gesture.translation.height + consumedDistance
-                let maximumOffset = DurationWheelMotion.stepDistance * 0.48
-                residualOffset = min(max(rawOffset, -maximumOffset), maximumOffset)
-            }
-            .onEnded { gesture in
-                guard let dragStartIndex else { return }
-                let finalIndex = DurationWheelMotion.projectedIndex(
-                    startingAt: dragStartIndex,
-                    translation: gesture.translation.height,
-                    predictedTranslation: gesture.predictedEndTranslation.height,
-                    count: values.count
-                )
-                let finalSelection = values[finalIndex]
-                if finalIndex != lastReportedIndex {
-                    onChange(finalSelection)
-                    selectionFeedback()
-                    lastReportedIndex = finalIndex
-                    changedDuringDrag = true
-                }
-
-                if reduceMotion {
-                    residualOffset = 0
-                } else {
-                    withAnimation(EQMotion.microTransition) {
-                        residualOffset = 0
-                    }
-                }
-                self.dragStartIndex = nil
-                lastReportedIndex = nil
-                if changedDuringDrag {
-                    onCommit(finalSelection)
-                }
-                changedDuringDrag = false
-            }
-    }
-
-    private func emphasis(for distance: CGFloat) -> (opacity: Double, scale: CGFloat) {
-        let steps = min(abs(distance) / DurationWheelMotion.stepDistance, 4)
-        return (
-            opacity: max(0.14, 1 - (Double(steps) * 0.22)),
-            scale: max(0.62, 1 - (steps * 0.11))
-        )
-    }
-
-    private func arcVisibility(for angle: CGFloat) -> Double {
-        let absoluteAngle = abs(angle)
-        let fadeStart = CGFloat.pi * 0.4
-        let fadeEnd = CGFloat.pi / 2
-        guard absoluteAngle > fadeStart else { return 1 }
-        guard absoluteAngle < fadeEnd else { return 0 }
-        return Double(1 - ((absoluteAngle - fadeStart) / (fadeEnd - fadeStart)))
-    }
-
-    private func adjustAccessibilitySelection(_ direction: AccessibilityAdjustmentDirection) {
-        let delta: Int
-        switch direction {
-        case .increment:
-            delta = 1
-        case .decrement:
-            delta = -1
-        @unknown default:
-            return
-        }
-        let newIndex = min(max(selectedIndex + delta, 0), values.count - 1)
-        guard newIndex != selectedIndex else { return }
-        let newSelection = values[newIndex]
-        onCommit(newSelection)
-        selectionFeedback()
-    }
 }
 
 private struct ExerciseSettingsToggleStyle: ToggleStyle {

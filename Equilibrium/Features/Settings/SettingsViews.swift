@@ -214,7 +214,8 @@ private struct TimerSettingView: View {
             Form {
                 Section("Default rest duration") {
                     Text(text).eqTextStyle(.largeMetric).monospacedDigit().accessibilityLabel("Default rest duration, \(text)")
-                    Slider(value: $seconds, in: 15...300, step: 5).accessibilityValue(text)
+                    DurationPicker(seconds: $seconds, configuration: .restDuration)
+                        .accessibilityValue(text)
                     Button("Save") { Task { try? await repository.saveDefaultRestDuration(seconds) } }
                 }
                 Section { Text("Exercise-specific rest duration wins. Changing this setting does not rewrite workouts or restart an active countdown.").eqTextStyle(.caption).foregroundStyle(EQColor.contentSecondary) }
