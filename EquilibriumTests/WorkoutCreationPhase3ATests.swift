@@ -3,6 +3,48 @@ import XCTest
 
 @MainActor
 final class WorkoutCreationPhase3ATests: XCTestCase {
+    func testExercisePickerOffersCreationUnlessAResultMatchesTheWholeQuery() {
+        let hammerCurl = ExerciseDefinition(
+            id: .init(rawValue: "hammer-curl"),
+            name: "Hammer Curl",
+            normalizedName: "hammer curl",
+            aliases: ["Neutral Curl"],
+            equipment: nil,
+            category: nil,
+            isCustom: false,
+            archivedAt: nil
+        )
+
+        XCTAssertTrue(
+            ExercisePickerCreationPolicy.offersCustomCreation(
+                query: "preacher curl",
+                loadedQuery: "preacher curl",
+                results: [hammerCurl]
+            )
+        )
+        XCTAssertFalse(
+            ExercisePickerCreationPolicy.offersCustomCreation(
+                query: " hammer curl ",
+                loadedQuery: "hammer curl",
+                results: [hammerCurl]
+            )
+        )
+        XCTAssertFalse(
+            ExercisePickerCreationPolicy.offersCustomCreation(
+                query: "neutral curl",
+                loadedQuery: "neutral curl",
+                results: [hammerCurl]
+            )
+        )
+        XCTAssertFalse(
+            ExercisePickerCreationPolicy.offersCustomCreation(
+                query: "preacher curl",
+                loadedQuery: "preacher",
+                results: [hammerCurl]
+            )
+        )
+    }
+
     func testExplicitDraftPrescriptionsOverrideHistoryAndReceiveFreshIDs() async throws {
         let repository = makeRepository(); for exercise in EquilibriumFixtures.exercises { try await repository.saveExercise(exercise) }
         try await repository.create(EquilibriumFixtures.completed(id: "competing-history"))

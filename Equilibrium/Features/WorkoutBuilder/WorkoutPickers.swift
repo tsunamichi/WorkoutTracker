@@ -30,6 +30,27 @@ enum ExercisePickerStyle {
     case execution
 }
 
+/// Search results remain available while creating a distinct exercise. Creation
+/// is withheld only when the entered name already resolves to the exact
+/// canonical name or alias of a displayed result.
+enum ExercisePickerCreationPolicy {
+    static func offersCustomCreation(
+        query: String,
+        loadedQuery: String?,
+        results: [ExerciseDefinition]
+    ) -> Bool {
+        let cleanQuery = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !cleanQuery.isEmpty, loadedQuery == cleanQuery else { return false }
+
+        let normalizedQuery = ExerciseResolver.normalizedName(cleanQuery)
+        let hasExactMatch = results.contains { exercise in
+            exercise.normalizedName == normalizedQuery
+                || exercise.aliases.contains { ExerciseResolver.normalizedName($0) == normalizedQuery }
+        }
+        return !hasExactMatch
+    }
+}
+
 struct ExercisePickerView: View {
     let repository: any ExerciseRepository
     let history: (any ExerciseHistoryRepository)?
@@ -298,7 +319,13 @@ struct ExercisePickerView: View {
             ? EQColor.Execution.foregroundText
             : EQColor.disabledText
     }
-    private var offersCustomCreation: Bool { !cleanQuery.isEmpty && loadedQuery == cleanQuery && results.isEmpty }
+    private var offersCustomCreation: Bool {
+        ExercisePickerCreationPolicy.offersCustomCreation(
+            query: query,
+            loadedQuery: loadedQuery,
+            results: results
+        )
+    }
     private var presentationDetents: Set<PresentationDetent> {
         style == .execution && mode.isAdd ? [.fraction(0.95)] : [.large]
     }

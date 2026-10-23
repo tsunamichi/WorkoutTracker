@@ -92,7 +92,6 @@ struct UnifiedHomeExecutionRenderer<Surface: View, Foreground: View>: View, Anim
     var progress: CGFloat
     let input: HomeExecutionPresentationGeometry.Input
     let canvasSize: CGSize
-    let borderColor: Color
     let surface: (CGSize) -> Surface
     let foreground: (HomeExecutionPresentationGeometry) -> Foreground
 
@@ -117,12 +116,9 @@ struct UnifiedHomeExecutionRenderer<Surface: View, Foreground: View>: View, Anim
         .frame(width: canvasSize.width, height: canvasSize.height, alignment: .topLeading)
         .frame(width: geometry.walletFrame.width, height: geometry.walletFrame.height, alignment: .topLeading)
         // The normal wallet and the expanded Settings surface share this exact
-        // outer shape. It supplies the device-concentric lower corners once,
+        // outer clip. It supplies the device-concentric lower corners once,
         // while the bottom-anchored foreground shell remains square at its base.
-        .modifier(ExecutionWalletShapeModifier(
-            drawsBorder: true,
-            borderColor: borderColor
-        ))
+        .modifier(ExecutionWalletShapeModifier())
         .position(x: geometry.walletFrame.midX, y: geometry.walletFrame.midY)
     }
 }

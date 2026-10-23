@@ -31,10 +31,12 @@ struct ExerciseSettingsTransitionSnapshot: Equatable {
 final class ExecutionSettingsPresentationBridge {
     var input: ExecutionSettingsPresentationInput?
     var progress: CGFloat = 0
+    var isDismissing = false
 
     func present(_ input: ExecutionSettingsPresentationInput) {
         self.input = input
         progress = 0
+        isDismissing = false
     }
 
     func updateNavigation(
@@ -50,6 +52,11 @@ final class ExecutionSettingsPresentationBridge {
     func dismiss() {
         input = nil
         progress = 0
+        isDismissing = false
+    }
+
+    func beginDismissal() {
+        isDismissing = true
     }
 }
 
@@ -249,6 +256,7 @@ struct HomeExerciseSettingsPresentationLayer: View {
                 Color.clear
                     .modifier(HomeSettingsPresentationGeometryModifier(
                         progress: bridge.progress,
+                        isDismissing: bridge.isDismissing,
                         input: input,
                         containerFrame: proxy.frame(in: .global)
                     ))
@@ -263,6 +271,7 @@ struct HomeExerciseSettingsPresentationLayer: View {
 /// previously allowed its shell to translate before it had grown.
 private struct HomeSettingsPresentationGeometryModifier: AnimatableModifier {
     var progress: CGFloat
+    let isDismissing: Bool
     let input: ExecutionSettingsPresentationInput
     let containerFrame: CGRect
 
@@ -294,6 +303,10 @@ private struct HomeSettingsPresentationGeometryModifier: AnimatableModifier {
             dx: -localFrame.minX,
             dy: -localFrame.minY
         )
+        let settingsBorderColor = EQColor.Execution.walletBorder.mix(
+            with: EQColor.Execution.foregroundSurface,
+            by: Double(renderedProgress)
+        )
         let settingsVisibility = ExerciseCardModeMotion.settingsVisibility(renderedProgress)
         let executionVisibility = ExerciseCardModeMotion.executionVisibility(renderedProgress)
 
@@ -316,7 +329,8 @@ private struct HomeSettingsPresentationGeometryModifier: AnimatableModifier {
                 .accessibilityLabel("Close exercise settings")
                 .modifier(ExerciseSettingsContentVisibilityModifier(
                     progress: renderedProgress,
-                    group: .settings
+                    group: .settings,
+                    hidesSettingsImmediately: isDismissing
                 ))
                 .allowsHitTesting(settingsVisibility > 0.99)
                 .accessibilityHidden(settingsVisibility < 0.01)
@@ -354,19 +368,19 @@ private struct HomeSettingsPresentationGeometryModifier: AnimatableModifier {
                 .accessibilityHidden(settingsVisibility < 0.99)
                 .modifier(ExerciseSettingsContentVisibilityModifier(
                     progress: renderedProgress,
-                    group: .settings
+                    group: .settings,
+                    hidesSettingsImmediately: isDismissing
                 ))
             }
             .frame(width: localFrame.width, height: localFrame.height)
             .modifier(ExecutionWalletShapeModifier(
                 drawsBorder: true,
-                borderColor: EQColor.Execution.walletBorder,
+                borderColor: settingsBorderColor,
                 roundsBottomCorners: false
             ))
             .modifier(BottomAnchoredWalletShapeModifier(
                 walletFrame: walletClipFrame,
-                drawsBorder: true,
-                borderColor: EQColor.Execution.walletBorder
+                drawsBorder: false
             ))
             .contentShape(RoundedRectangle(cornerRadius: EQRadius.walletSurface, style: .continuous))
             .position(x: localFrame.midX, y: localFrame.midY)
@@ -432,6 +446,7 @@ private struct ExerciseSettingsContentVisibilityModifier: AnimatableModifier {
 
     var progress: CGFloat
     let group: Group
+    var hidesSettingsImmediately = false
 
     var animatableData: CGFloat {
         get { progress }
@@ -441,7 +456,7 @@ private struct ExerciseSettingsContentVisibilityModifier: AnimatableModifier {
     func body(content: Content) -> some View {
         let opacity: CGFloat = switch group {
         case .execution: ExerciseCardModeMotion.executionVisibility(progress)
-        case .settings: ExerciseCardModeMotion.settingsVisibility(progress)
+        case .settings: hidesSettingsImmediately ? 0 : ExerciseCardModeMotion.settingsVisibility(progress)
         }
         content.opacity(opacity)
     }
@@ -2306,6 +2321,7 @@ struct WorkoutExecutionView: View {
         guard exerciseCardPresentation.exerciseID != nil else { return }
         exerciseSettingsTransitionGeneration += 1
         let generation = exerciseSettingsTransitionGeneration
+        settingsPresentationBridge.beginDismissal()
 
         if reduceMotion {
             exerciseSettingsTransitionProgress = 0
@@ -2716,9 +2732,6 @@ private struct ExecutionWallet<ListRow: View, ForegroundHeader: View, Foreground
                         progress: homeTransitionProgress,
                         input: rendererInput,
                         canvasSize: CGSize(width: stableWalletWidth, height: stableWalletHeight),
-                        borderColor: EQColor.Execution.walletBorder
-                            .mix(with: EQColor.Execution.restCanvas, by: restTint)
-                            .mix(with: EQColor.Execution.primaryAction, by: workTint),
                         surface: { canvasSize in
                             walletSurfaceContent(
                                 compactHeight: compactHeight,
@@ -3764,7 +3777,7 @@ struct ExecutionWalletShapeModifier: ViewModifier {
                 .clipShape(shape)
                 .overlay {
                     if drawsBorder {
-                        insetBorder(for: shape)
+                        outsideBorder(for: shape)
                     }
                 }
                 .overlay(alignment: .top) {
@@ -3779,7 +3792,7 @@ struct ExecutionWalletShapeModifier: ViewModifier {
                 .clipShape(shape)
                 .overlay {
                     if drawsBorder {
-                        insetBorder(for: shape)
+                        outsideBorder(for: shape)
                     }
                 }
                 .overlay(alignment: .top) {
@@ -3791,7 +3804,7 @@ struct ExecutionWalletShapeModifier: ViewModifier {
                 .clipShape(shape)
                 .overlay {
                     if drawsBorder {
-                        insetBorder(for: shape)
+                        outsideBorder(for: shape)
                     }
                 }
                 .overlay(alignment: .top) {
@@ -3800,13 +3813,17 @@ struct ExecutionWalletShapeModifier: ViewModifier {
         }
     }
 
-    private func insetBorder<S: Shape>(for shape: S) -> some View {
-        shape
-            .stroke(
-                borderColor,
-                lineWidth: EQLayout.WorkoutExecution.walletBorderWidth * 2
-            )
-            .mask(shape)
+    /// The wallet fill owns its exact frame. Draw the equal-width stroke beyond
+    /// that frame so it does not visually consume the card's interior.
+    private func outsideBorder<S: Shape>(for shape: S) -> some View {
+        GeometryReader { proxy in
+            let width = EQLayout.WorkoutExecution.walletBorderWidth
+            let borderFrame = proxy.frame(in: .local).insetBy(dx: -(width / 2), dy: -(width / 2))
+            shape
+                .path(in: borderFrame)
+                .stroke(borderColor, lineWidth: width)
+        }
+        .allowsHitTesting(false)
     }
 
     @ViewBuilder
@@ -3837,12 +3854,14 @@ private struct BottomAnchoredWalletShapeModifier: ViewModifier {
             .clipShape(shape)
             .overlay {
                 if drawsBorder {
-                    shape
+                    let width = EQLayout.WorkoutExecution.walletBorderWidth
+                    BottomAnchoredWalletShape(
+                        walletFrame: walletFrame.insetBy(dx: -(width / 2), dy: -(width / 2))
+                    )
                         .stroke(
                             borderColor,
-                            lineWidth: EQLayout.WorkoutExecution.walletBorderWidth * 2
+                            lineWidth: width
                         )
-                        .mask(shape)
                 }
             }
     }
