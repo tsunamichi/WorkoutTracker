@@ -1,5 +1,13 @@
 import Foundation
 import SwiftUI
+#if DEBUG
+import OSLog
+
+private let homeMenuDiagnostics = Logger(
+    subsystem: "com.tsunamichi.equilibrium",
+    category: "HomeActionMenu"
+)
+#endif
 
 struct HomeView: View {
     @State private var model: HomeModel
@@ -53,7 +61,12 @@ struct HomeView: View {
                 direction: .upward,
                 alignment: .trailing,
                 actionSpacing: EQSpacing.sm
-            )
+            ),
+            presentedTrigger: { isPresented in
+                HomeAddWorkoutMenuTrigger(isMenuPresented: isPresented)
+                    .accessibilityLabel("Close add workout menu")
+                    .accessibilityHint("Closes the action menu")
+            }
         ) {
             HomeTimerContainer(
                 primarySurface: $model.primarySurface,
@@ -136,9 +149,11 @@ struct HomeView: View {
                                     : 1
                             )
                             .animation(
-                                .easeOut(duration: reduceMotion
-                                    ? EQMotion.reducedContentTransitionDuration
-                                    : ContextualActionMenuMotion().backdropDuration),
+                                reduceMotion
+                                    ? EQMotion.reducedContentTransition
+                                    : ContextualActionMenuMotion().backdropAnimation(
+                                        isPresented: executionContextualMenuIsPresented
+                                    ),
                                 value: executionContextualMenuIsPresented
                             )
                         }
@@ -222,6 +237,11 @@ struct HomeView: View {
         .sheet(item: $model.creationRoute) { route in
             AddWorkoutSheet(initialRoute: route, exercises: exerciseRepository, workouts: repository, history: historyRepository) { created in
                 model.applyPersistedWorkouts(created)
+            }
+            .onAppear {
+                #if DEBUG
+                homeMenuDiagnostics.notice("creation sheet rendered")
+                #endif
             }
         }
         .task {
@@ -422,8 +442,14 @@ struct HomeView: View {
     }
 
     private func openCreationRoute(_ route: CreationRoute) {
+        #if DEBUG
+        homeMenuDiagnostics.notice("Create action assigning creation route")
+        #endif
         homeActionMenuIsPresented = false
         model.creationRoute = route
+        #if DEBUG
+        homeMenuDiagnostics.notice("Create action assigned creation route")
+        #endif
     }
 
     private func openTimer() {
@@ -1210,6 +1236,59 @@ private enum HomeCarouselPosition: Hashable {
     case workout(WorkoutID)
 }
 
+private struct HomeAddWorkoutMenuTrigger: View {
+    private static let openingRotationDuration: TimeInterval = 0.14
+    private static let closingRotationDuration: TimeInterval = 0.10
+
+    let isMenuPresented: Bool
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var rotation: Double = 0
+
+    var body: some View {
+        Image(systemName: "plus")
+            .eqTextStyle(EQTypography.headingSection)
+            .rotationEffect(.degrees(rotation))
+            .frame(
+                width: EQLayout.Home.contextualMenuTriggerSize,
+                height: EQLayout.Home.contextualMenuTriggerSize
+            )
+            .foregroundStyle(EQColor.contentOnAccent)
+            .background(
+                EQColor.Home.cardSurface,
+                in: RoundedRectangle(cornerRadius: EQRadius.button, style: .continuous)
+            )
+            .contentShape(RoundedRectangle(cornerRadius: EQRadius.button, style: .continuous))
+            .onAppear { prepareInitialRotation() }
+            .onChange(of: isMenuPresented) { _, isPresented in
+                updateRotation(to: isPresented)
+            }
+    }
+
+    private func prepareInitialRotation() {
+        guard isMenuPresented, !reduceMotion else {
+            rotation = isMenuPresented ? 45 : 0
+            return
+        }
+        withAnimation(.easeOut(duration: Self.openingRotationDuration)) {
+            rotation = 45
+        }
+    }
+
+    private func updateRotation(to isPresented: Bool) {
+        let target = isPresented ? 45.0 : 0.0
+        guard !reduceMotion else {
+            rotation = target
+            return
+        }
+        let animation = isPresented
+            ? Animation.easeOut(duration: Self.openingRotationDuration)
+            : Animation.easeIn(duration: Self.closingRotationDuration)
+        withAnimation(animation) {
+            rotation = target
+        }
+    }
+}
+
 private struct HomeScene: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.homeSurfacePullBlocksInteraction) private var surfacePullBlocksInteraction
@@ -1438,18 +1517,7 @@ private struct HomeScene: View {
             accessibilityHint: "Shows options to create, import, or reuse a workout",
             toggle: toggleAddWorkoutMenu
         ) {
-            Image(systemName: "plus")
-                .eqTextStyle(EQTypography.headingSection)
-                .frame(
-                    width: EQLayout.Home.contextualMenuTriggerSize,
-                    height: EQLayout.Home.contextualMenuTriggerSize
-                )
-                .foregroundStyle(EQColor.contentOnAccent)
-                .background(
-                    EQColor.Home.cardSurface,
-                    in: RoundedRectangle(cornerRadius: EQRadius.button, style: .continuous)
-                )
-                .contentShape(RoundedRectangle(cornerRadius: EQRadius.button, style: .continuous))
+            HomeAddWorkoutMenuTrigger(isMenuPresented: false)
         }
     }
 

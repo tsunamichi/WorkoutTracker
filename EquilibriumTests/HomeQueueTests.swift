@@ -224,16 +224,13 @@ final class HomeQueueTests: XCTestCase {
         ))
     }
 
-    func testContextualMenuRevealAndDismissalOrdersFollowExpansionDirection() {
-        XCTAssertEqual((0..<3).map {
-            ContextualActionMenuAnimationOrder.revealRank(for: $0, count: 3, direction: .upward)
-        }, [2, 1, 0])
-        XCTAssertEqual((0..<3).map {
-            ContextualActionMenuAnimationOrder.dismissalRank(for: $0, count: 3, direction: .upward)
-        }, [0, 1, 2])
-        XCTAssertEqual((0..<3).map {
-            ContextualActionMenuAnimationOrder.revealRank(for: $0, count: 3, direction: .downward)
-        }, [0, 1, 2])
+    func testContextualMenuMotionUsesResponsiveGroupedDefaults() {
+        let motion = ContextualActionMenuMotion()
+
+        XCTAssertEqual(motion.openingDuration, 0.20)
+        XCTAssertEqual(motion.closingDuration, 0.14)
+        XCTAssertEqual(motion.backdropDuration, 0.16)
+        XCTAssertEqual(motion.translation, EQSpacing.xs)
     }
 
     func testContextualMenuDirectionAdaptsToAvailableSpace() {

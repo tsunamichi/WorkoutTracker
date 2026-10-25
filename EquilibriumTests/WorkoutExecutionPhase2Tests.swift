@@ -668,6 +668,33 @@ final class ExerciseSettingsPhase5Tests: XCTestCase {
         XCTAssertNil(model.focusedExerciseID, "Skipping must not automatically focus the next exercise")
     }
 
+    func testSkippingFinalUnresolvedExerciseAutoCompletesWorkout() async throws {
+        let repository = try repository()
+        let fixture = EquilibriumFixtures.mixed(id: "skip-final-unresolved")
+        try await repository.create(fixture)
+        let model = WorkoutExecutionModel(workoutID: fixture.id, repository: repository)
+        await model.activate()
+
+        let loggedExercise = fixture.exercises[0]
+        for (index, prescription) in loggedExercise.prescriptions.enumerated() {
+            await model.log(
+                exerciseID: loggedExercise.id,
+                prescriptionID: prescription.id,
+                input: .repetitions(weight: nil, repetitions: 8)
+            )
+            if index < loggedExercise.prescriptions.count - 1 { model.skipRest() }
+        }
+
+        XCTAssertEqual(model.workout?.status, .inProgress)
+
+        let skipped = await model.skipExercise(fixture.exercises[1].id)
+
+        XCTAssertTrue(skipped)
+        XCTAssertTrue(model.didAutoComplete)
+        XCTAssertEqual(model.workout?.status, .completed)
+        XCTAssertNotNil(model.workout?.exercises[1].skippedAt)
+    }
+
     func testSkippedOccurrenceIsExcludedFromExposureProgressionAndPersonalRecords() throws {
         var included = EquilibriumFixtures.completed(id: "phase5-included")
         included.completedAt = Date(timeIntervalSince1970: 100)

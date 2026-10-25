@@ -1103,8 +1103,20 @@ private struct ExecutionWorkHeaderTintModifier: ViewModifier, Animatable {
 
 private struct ExecutionHeaderSettingsGlyph: View {
     @Environment(\.executionWorkHeaderTint) private var tint
+
     var body: some View {
         EQSettingsGlyph(color: EQColor.Execution.secondaryText.mix(with: EQColor.Execution.restForegroundSurface, by: tint))
+    }
+}
+
+private struct ExecutionContextualMenuCloseGlyph: View {
+    var alignment: Alignment = .center
+
+    var body: some View {
+        Image(systemName: "xmark")
+            .eqTextStyle(.icon)
+            .foregroundStyle(EQColor.contentPrimary)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: alignment)
     }
 }
 
@@ -1389,7 +1401,14 @@ struct WorkoutExecutionView: View {
             isPresented: contextualMenuIsPresented,
             actions: contextualMenuActions,
             configuration: contextualMenuConfiguration,
-            triggerID: contextualMenuTriggerID
+            triggerID: contextualMenuTriggerID,
+            presentedTrigger: { _ in
+                ExecutionContextualMenuCloseGlyph(
+                    alignment: contextualMenu.context == .workout ? .center : .trailing
+                )
+                    .accessibilityLabel("Close options")
+                    .accessibilityHint("Closes the action menu")
+            }
         ) {
             executionSurface
         }
@@ -1585,7 +1604,8 @@ struct WorkoutExecutionView: View {
                 direction: .upward,
                 alignment: .trailing,
                 actionSpacing: EQSpacing.xs,
-                actionGroupSpacing: EQSpacing.lg
+                actionGroupSpacing: EQSpacing.lg,
+                alignsPresentedTriggerWithTrailingActions: true
             )
         case .workout:
             ContextualActionMenuConfiguration(
@@ -1762,9 +1782,26 @@ struct WorkoutExecutionView: View {
                     toggle: { toggleContextualMenu(.workout) }
                 ) {
                     ExecutionHeaderSettingsGlyph()
-                        .frame(width: EQLayout.minimumTouch, height: EQLayout.minimumTouch, alignment: .center)
+                        // Match the wallet controls' 32 pt visual column while the
+                        // outer frame retains the execution header's 44 pt hit target.
+                        // The contextual-menu anchor is attached to this inner
+                        // control, so the backdrop cutout follows the visible glyph.
+                        .frame(
+                            width: EQLayout.Home.headerControlSize,
+                            height: EQLayout.Home.headerControlSize,
+                            alignment: .center
+                        )
                         .contentShape(Rectangle())
                 }
+                .frame(
+                    width: EQLayout.minimumTouch,
+                    height: EQLayout.minimumTouch,
+                    alignment: .trailing
+                )
+                // Wallet controls right-align their glyphs inside a 44 pt target;
+                // this centered 32 pt header control therefore needs half of that
+                // visual outset to share their final glyph axis.
+                .offset(x: EQLayout.WorkoutExecution.trailingIconOutset / 2)
                 .modifier(executionChromeRevealEffect)
             }
         }
@@ -2624,6 +2661,13 @@ private struct ExecutionWallet<ListRow: View, ForegroundHeader: View, Foreground
     private var foregroundSurfaceColor: Color {
         EQColor.Execution.foregroundSurface.mix(with: EQColor.Execution.restForegroundSurface, by: restTint)
     }
+    /// The parent wallet and its internal foreground divider use one resolved
+    /// color, so timer tinting cannot create competing outlines.
+    private var walletBorderColor: Color {
+        EQColor.Execution.walletBorder
+            .mix(with: EQColor.Execution.restCanvas, by: restTint)
+            .mix(with: EQColor.Execution.primaryAction, by: workTint)
+    }
     private var canAddExerciseFromOverview: Bool {
         presentation.allowsAddExercise(for: foregroundState, focusProgress: focusProgress)
     }
@@ -2764,6 +2808,8 @@ private struct ExecutionWallet<ListRow: View, ForegroundHeader: View, Foreground
                         progress: homeTransitionProgress,
                         input: rendererInput,
                         canvasSize: CGSize(width: stableWalletWidth, height: stableWalletHeight),
+                        walletBorderColor: walletBorderColor,
+                        drawsWalletBorder: visualState != .focusedWork,
                         surface: { canvasSize in
                             walletSurfaceContent(
                                 compactHeight: compactHeight,
@@ -2836,7 +2882,10 @@ private struct ExecutionWallet<ListRow: View, ForegroundHeader: View, Foreground
     }
 
     private var walletSurface: some View {
-        EQSurface(color: overviewSurfaceColor, radius: EQRadius.walletSurface)
+        // The surrounding `ExecutionWalletShapeModifier` is the sole outer
+        // contour owner. A second rounded fill here drifts from that contour
+        // while timer-driven wallet height is interpolating.
+        Rectangle().fill(overviewSurfaceColor)
     }
 
     @ViewBuilder
@@ -3126,18 +3175,18 @@ private struct ExecutionWallet<ListRow: View, ForegroundHeader: View, Foreground
         width: CGFloat,
         height: CGFloat
     ) -> some View {
-        content
+        let isWorkTimer = visualState == .focusedWork
+        return content
             .frame(width: width, height: height, alignment: .top)
             .background(foregroundBackground)
             .modifier(ExecutionWalletShapeModifier(
+                // Work presents the compact region as the one outlined surface;
+                // normal/rest retain the wallet outline plus their internal divider.
                 drawsBorder: true,
-                borderColor: EQColor.Execution.walletBorder
-                    .mix(with: EQColor.Execution.restCanvas, by: restTint)
-                    .mix(with: EQColor.Execution.primaryAction, by: workTint),
-                externalTopGapColor: EQColor.Execution.foregroundSurface,
-                externalTopGap: EQLayout.WorkoutExecution.workCardExternalTopGap
-                    * CGFloat(workTint),
-                roundsBottomCorners: false
+                borderPlacement: .inside,
+                borderEdges: isWorkTimer ? .all : .top,
+                borderColor: walletBorderColor,
+                roundsBottomCorners: isWorkTimer
             ))
             .contentShape(RoundedRectangle(cornerRadius: EQRadius.walletSurface, style: .continuous))
     }
@@ -3766,7 +3815,9 @@ private struct ExecutionWallet<ListRow: View, ForegroundHeader: View, Foreground
     }
 
     private var foregroundBackground: some View {
-        EQSurface(color: foregroundSurfaceColor, radius: EQRadius.walletSurface)
+        // The foreground shell's shape modifier owns its top edge, while the
+        // unified wallet clip owns its device-concentric lower corners.
+        Rectangle().fill(foregroundSurfaceColor)
     }
 
 }
@@ -3791,8 +3842,48 @@ private struct ExecutionPrimaryActionFooter<Content: View>: View {
     }
 }
 
+enum ExecutionWalletBorderPlacement {
+    case inside
+    case outside
+}
+
+enum ExecutionWalletBorderEdges {
+    case all
+    case top
+}
+
+/// The foreground is a region within the wallet, not another outer shell. It
+/// contributes only the rounded boundary that separates its content from the
+/// overview above it.
+private struct ExecutionWalletTopDivider: Shape {
+    func path(in rect: CGRect) -> Path {
+        let radius = min(EQRadius.walletSurface, min(rect.width, rect.height) / 2)
+        var path = Path()
+        path.move(to: CGPoint(x: rect.minX, y: rect.minY + radius))
+        path.addArc(
+            center: CGPoint(x: rect.minX + radius, y: rect.minY + radius),
+            radius: radius,
+            startAngle: .degrees(180),
+            endAngle: .degrees(270),
+            clockwise: false
+        )
+        path.addLine(to: CGPoint(x: rect.maxX - radius, y: rect.minY))
+        path.addArc(
+            center: CGPoint(x: rect.maxX - radius, y: rect.minY + radius),
+            radius: radius,
+            startAngle: .degrees(270),
+            endAngle: .degrees(0),
+            clockwise: false
+        )
+        path.addLine(to: CGPoint(x: rect.maxX, y: rect.minY + radius))
+        return path
+    }
+}
+
 struct ExecutionWalletShapeModifier: ViewModifier {
     var drawsBorder = false
+    var borderPlacement: ExecutionWalletBorderPlacement = .outside
+    var borderEdges: ExecutionWalletBorderEdges = .all
     var borderColor: Color = EQColor.Execution.walletBorder
     var externalTopGapColor: Color = .clear
     var externalTopGap: CGFloat = 0
@@ -3816,7 +3907,7 @@ struct ExecutionWalletShapeModifier: ViewModifier {
                 .clipShape(shape)
                 .overlay {
                     if drawsBorder {
-                        outsideBorder(for: shape)
+                        border(for: shape)
                     }
                 }
                 .overlay(alignment: .top) {
@@ -3831,7 +3922,7 @@ struct ExecutionWalletShapeModifier: ViewModifier {
                 .clipShape(shape)
                 .overlay {
                     if drawsBorder {
-                        outsideBorder(for: shape)
+                        border(for: shape)
                     }
                 }
                 .overlay(alignment: .top) {
@@ -3843,7 +3934,7 @@ struct ExecutionWalletShapeModifier: ViewModifier {
                 .clipShape(shape)
                 .overlay {
                     if drawsBorder {
-                        outsideBorder(for: shape)
+                        border(for: shape)
                     }
                 }
                 .overlay(alignment: .top) {
@@ -3863,6 +3954,34 @@ struct ExecutionWalletShapeModifier: ViewModifier {
                 .stroke(borderColor, lineWidth: width)
         }
         .allowsHitTesting(false)
+    }
+
+    /// Foreground shells animate against other wallet surfaces. Their stroke
+    /// must remain within the shell's resolved path so it cannot leak into an
+    /// overlapping timer/overview frame during a geometry transition.
+    private func insideBorder<S: Shape>(for shape: S) -> some View {
+        shape
+            .stroke(borderColor, lineWidth: EQLayout.WorkoutExecution.walletBorderWidth)
+            .clipShape(shape)
+            .allowsHitTesting(false)
+    }
+
+    @ViewBuilder
+    private func border<S: Shape>(for shape: S) -> some View {
+        switch borderEdges {
+        case .all:
+            switch borderPlacement {
+            case .inside:
+                insideBorder(for: shape)
+            case .outside:
+                outsideBorder(for: shape)
+            }
+        case .top:
+            ExecutionWalletTopDivider()
+                .stroke(borderColor, lineWidth: EQLayout.WorkoutExecution.walletBorderWidth)
+                .clipShape(shape)
+                .allowsHitTesting(false)
+        }
     }
 
     @ViewBuilder

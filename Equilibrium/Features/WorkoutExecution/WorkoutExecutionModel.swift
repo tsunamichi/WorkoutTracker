@@ -667,6 +667,9 @@ final class WorkoutExecutionModel {
                 selectedSetIndex = 0
                 completedExerciseAwaitingSelectionID = occurrenceID
             }
+            if WorkoutExecutionQuery.canComplete(value), await autoCompleteIfEligible(value) {
+                return true
+            }
             haptics.perform(.exerciseSkipped)
             errorMessage = nil
             return true

@@ -525,8 +525,8 @@ enum EQLayout {
     enum WorkoutExecution {
         static let walletInset = EQSpacing.lg
         static let walletEdgeInset = EQSpacing.xs
-        /// Shifts trailing icons inside the wallet so they share the header settings
-        /// icon's column (screen gutter), ignoring their larger tap targets.
+        /// Shifts trailing controls into the wallet's shared visual-control column,
+        /// ignoring their larger tap targets.
         static let trailingIconOutset = walletEdgeInset + walletInset - EQLayout.screenGutter
         static let walletBorderWidth: CGFloat = 2
         static let workCardExternalTopGap: CGFloat = 2

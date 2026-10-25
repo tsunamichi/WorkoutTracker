@@ -1,4 +1,24 @@
 import SwiftUI
+#if DEBUG
+import OSLog
+
+private enum ContextualActionMenuDiagnostics {
+    static let logger = Logger(
+        subsystem: "com.tsunamichi.equilibrium",
+        category: "ContextualActionMenu"
+    )
+
+    static func record(_ message: String) {
+        logger.notice("\(message, privacy: .public)")
+    }
+}
+
+private func contextualMenuDiagnostic(_ message: String) {
+    ContextualActionMenuDiagnostics.record(message)
+}
+#else
+private func contextualMenuDiagnostic(_: String) {}
+#endif
 
 enum ContextualActionMenuDirection: Equatable {
     case upward
@@ -48,18 +68,23 @@ struct ContextualActionMenuAction: Identifiable {
 }
 
 struct ContextualActionMenuMotion {
-    var backdropDuration: TimeInterval = 0.20
-    var actionDuration: TimeInterval = 0.30
-    var closingDuration: TimeInterval = 0.18
-    var stagger: TimeInterval = 0.05
-    var translation: CGFloat = EQSpacing.md
+    var backdropDuration: TimeInterval = 0.16
+    var openingDuration: TimeInterval = 0.20
+    var closingDuration: TimeInterval = 0.14
+    var translation: CGFloat = EQSpacing.xs
 
-    func actionAnimation(isPresented: Bool, delay: TimeInterval) -> Animation {
+    func actionAnimation(isPresented: Bool) -> Animation {
         if isPresented {
-            .spring(duration: actionDuration, bounce: 0.04).delay(delay)
+            .easeOut(duration: openingDuration)
         } else {
-            .easeOut(duration: closingDuration).delay(delay)
+            .easeIn(duration: closingDuration)
         }
+    }
+
+    func backdropAnimation(isPresented: Bool) -> Animation {
+        isPresented
+            ? .easeOut(duration: backdropDuration)
+            : .easeIn(duration: backdropDuration)
     }
 }
 
@@ -78,30 +103,10 @@ struct ContextualActionMenuConfiguration {
     var triggerSpacing: CGFloat = EQSpacing.md
     var edgePadding: CGFloat = EQLayout.screenGutter
     var minimumActionHeight: CGFloat = EQLayout.minimumTouch
-    var triggerHoleRadius: CGFloat = EQRadius.button
+    /// Keeps a presented trigger visually aligned with trailing menu labels when
+    /// the originating control belongs to a different visual column.
+    var alignsPresentedTriggerWithTrailingActions = false
     var motion = ContextualActionMenuMotion()
-}
-
-enum ContextualActionMenuAnimationOrder {
-    static func revealRank(
-        for index: Int,
-        count: Int,
-        direction: ContextualActionMenuDirection
-    ) -> Int {
-        guard count > 0 else { return 0 }
-        return switch direction {
-        case .upward: max(0, count - 1 - index)
-        case .downward: max(0, index)
-        }
-    }
-
-    static func dismissalRank(
-        for index: Int,
-        count: Int,
-        direction: ContextualActionMenuDirection
-    ) -> Int {
-        max(0, count - 1 - revealRank(for: index, count: count, direction: direction))
-    }
 }
 
 enum ContextualActionMenuLayout {
@@ -179,6 +184,7 @@ enum ContextualActionMenuLayout {
             height: max(0, verticalRange.upperBound - verticalRange.lowerBound)
         )
     }
+
 }
 
 private enum ContextualActionMenuAnchor {
@@ -215,29 +221,115 @@ struct ContextualActionMenuTrigger<Label: View>: View {
     }
 }
 
-struct ContextualActionMenu<Content: View>: View {
+struct ContextualActionMenu<Content: View, PresentedTrigger: View>: View {
     @Binding var isPresented: Bool
     let actions: [ContextualActionMenuAction]
     var configuration = ContextualActionMenuConfiguration()
     var triggerID: String = ContextualActionMenuAnchor.defaultID
+    @ViewBuilder let presentedTrigger: (Bool) -> PresentedTrigger
     @ViewBuilder let content: () -> Content
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var presentedTriggerIsVisible = false
+    @State private var presentedTriggerVisibilityGeneration = 0
+
+    init(
+        isPresented: Binding<Bool>,
+        actions: [ContextualActionMenuAction],
+        configuration: ContextualActionMenuConfiguration = ContextualActionMenuConfiguration(),
+        triggerID: String = ContextualActionMenuAnchor.defaultID,
+        @ViewBuilder presentedTrigger: @escaping (Bool) -> PresentedTrigger,
+        @ViewBuilder content: @escaping () -> Content
+    ) {
+        _isPresented = isPresented
+        self.actions = actions
+        self.configuration = configuration
+        self.triggerID = triggerID
+        self.presentedTrigger = presentedTrigger
+        self.content = content
+    }
 
     var body: some View {
         content()
             .overlayPreferenceValue(ContextualActionMenuTriggerAnchorKey.self) { anchors in
                 GeometryReader { proxy in
                     if let anchor = anchors[triggerID] {
-                        ContextualActionMenuOverlay(
-                            isPresented: $isPresented,
-                            actions: actions,
-                            configuration: configuration,
-                            triggerFrame: proxy[anchor],
-                            containerSize: proxy.size,
-                            safeAreaInsets: proxy.safeAreaInsets
-                        )
+                        let presentedTriggerSize = configuration.alignsPresentedTriggerWithTrailingActions
+                            ? CGSize(
+                                width: configuration.minimumActionHeight,
+                                height: configuration.minimumActionHeight
+                            )
+                            : proxy[anchor].size
+                        ZStack {
+                            ContextualActionMenuOverlay(
+                                isPresented: $isPresented,
+                                actions: actions,
+                                configuration: configuration,
+                                triggerFrame: proxy[anchor],
+                                containerSize: proxy.size,
+                                safeAreaInsets: proxy.safeAreaInsets
+                            )
+
+                            if presentedTriggerIsVisible {
+                                Button {
+                                    contextualMenuDiagnostic("close button received tap; dismissing menu")
+                                    isPresented = false
+                                } label: {
+                                    presentedTrigger(isPresented)
+                                        .frame(
+                                            width: presentedTriggerSize.width,
+                                            height: presentedTriggerSize.height
+                                        )
+                                        .contentShape(Rectangle())
+                                }
+                                .buttonStyle(.plain)
+                                .position(
+                                    x: configuration.alignsPresentedTriggerWithTrailingActions
+                                        ? proxy[anchor].maxX - (presentedTriggerSize.width / 2)
+                                        : proxy[anchor].midX,
+                                    y: proxy[anchor].midY
+                                )
+                            }
+                        }
                     }
                 }
             }
+            .onChange(of: isPresented, initial: true) { _, isPresented in
+                contextualMenuDiagnostic("presentation changed: \(isPresented ? "shown" : "hidden")")
+                updatePresentedTriggerVisibility(for: isPresented)
+            }
+    }
+
+    private func updatePresentedTriggerVisibility(for isPresented: Bool) {
+        presentedTriggerVisibilityGeneration += 1
+        let generation = presentedTriggerVisibilityGeneration
+        guard !reduceMotion, !isPresented else {
+            presentedTriggerIsVisible = isPresented
+            return
+        }
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: UInt64(configuration.motion.closingDuration * 1_000_000_000))
+            guard generation == presentedTriggerVisibilityGeneration, !isPresented else { return }
+            presentedTriggerIsVisible = false
+        }
+    }
+}
+
+extension ContextualActionMenu where PresentedTrigger == EmptyView {
+    init(
+        isPresented: Binding<Bool>,
+        actions: [ContextualActionMenuAction],
+        configuration: ContextualActionMenuConfiguration = ContextualActionMenuConfiguration(),
+        triggerID: String = ContextualActionMenuAnchor.defaultID,
+        @ViewBuilder content: @escaping () -> Content
+    ) {
+        self.init(
+            isPresented: isPresented,
+            actions: actions,
+            configuration: configuration,
+            triggerID: triggerID,
+            presentedTrigger: { _ in EmptyView() },
+            content: content
+        )
     }
 }
 
@@ -300,10 +392,15 @@ private struct ContextualActionMenuOverlay: View {
         .accessibilityAction(.escape, dismiss)
         .onChange(of: isPresented, initial: true) { _, presented in
             guard presented else {
+                contextualMenuDiagnostic("overlay hidden")
                 actionsAreRevealed = false
                 focusedActionID = nil
                 return
             }
+            contextualMenuDiagnostic(
+                "overlay shown: trigger=\(triggerFrame.debugDescription) "
+                    + "viewport=\(menuViewport.debugDescription)"
+            )
             actionsAreRevealed = false
             Task { @MainActor in
                 await Task.yield()
@@ -322,14 +419,7 @@ private struct ContextualActionMenuOverlay: View {
                 Array(ContextualActionMenuAppearance.backdropPassOpacities.enumerated()),
                 id: \.offset
             ) { _, passOpacity in
-                ContextualActionMenuBackdropShape(
-                    hole: triggerFrame.offsetBy(
-                        dx: -fullScreenBounds.minX,
-                        dy: -fullScreenBounds.minY
-                    ),
-                    cornerRadius: configuration.triggerHoleRadius
-                )
-                .fill(EQColor.overlay, style: FillStyle(eoFill: true))
+                EQColor.overlay
                 .opacity(isPresented ? passOpacity : 0)
                 .frame(width: fullScreenBounds.width, height: fullScreenBounds.height)
                 .position(x: fullScreenBounds.midX, y: fullScreenBounds.midY)
@@ -338,7 +428,9 @@ private struct ContextualActionMenuOverlay: View {
             dismissRegions
         }
         .animation(
-            .easeOut(duration: reduceMotion ? EQMotion.reducedContentTransitionDuration : configuration.motion.backdropDuration),
+            reduceMotion
+                ? EQMotion.reducedContentTransition
+                : configuration.motion.backdropAnimation(isPresented: isPresented),
             value: isPresented
         )
         .accessibilityHidden(true)
@@ -383,7 +475,7 @@ private struct ContextualActionMenuOverlay: View {
     private var actionStack: some View {
         VStack(alignment: stackAlignment, spacing: configuration.actionSpacing) {
             ForEach(Array(actions.enumerated()), id: \.element.id) { index, action in
-                actionButton(action, index: index)
+                actionButton(action)
                     .padding(.top, beginsNewGroup(at: index) ? configuration.actionGroupSpacing : 0)
             }
         }
@@ -393,31 +485,33 @@ private struct ContextualActionMenuOverlay: View {
         index > 0 && actions[index - 1].groupID != actions[index].groupID
     }
 
-    private func actionButton(_ action: ContextualActionMenuAction, index: Int) -> some View {
-        let rank = actionsAreRevealed
-            ? ContextualActionMenuAnimationOrder.revealRank(for: index, count: actions.count, direction: direction)
-            : ContextualActionMenuAnimationOrder.dismissalRank(for: index, count: actions.count, direction: direction)
+    private func actionButton(_ action: ContextualActionMenuAction) -> some View {
         let animation = reduceMotion
             ? EQMotion.reducedContentTransition
-            : configuration.motion.actionAnimation(
-                isPresented: actionsAreRevealed,
-                delay: TimeInterval(rank) * configuration.motion.stagger
-            )
+            : configuration.motion.actionAnimation(isPresented: actionsAreRevealed)
 
         return Button(role: action.role.buttonRole) {
             guard isPresented, action.isEnabled else { return }
+            contextualMenuDiagnostic("button received tap: \(action.id)")
             SystemHapticsClient().perform(.selection)
             isPresented = false
+            contextualMenuDiagnostic("button dismissed menu: \(action.id)")
             action.action()
+            contextualMenuDiagnostic("button action closure returned: \(action.id)")
         } label: {
             Text(action.title)
                 .eqTextStyle(EQTypography.headingCard)
                 .multilineTextAlignment(textAlignment)
                 .fixedSize(horizontal: false, vertical: true)
-                .frame(minHeight: configuration.minimumActionHeight)
-                .contentShape(Rectangle())
+                .frame(
+                    maxWidth: .infinity,
+                    minHeight: configuration.minimumActionHeight,
+                    alignment: horizontalAlignment
+                )
         }
         .buttonStyle(.plain)
+        .frame(maxWidth: .infinity, alignment: horizontalAlignment)
+        .contentShape(Rectangle())
         .disabled(!action.isEnabled)
         .foregroundStyle(action.isEnabled ? EQColor.contentPrimary : EQColor.contentSecondary)
         .opacity(actionsAreRevealed ? 1 : 0)
@@ -465,21 +559,8 @@ private struct ContextualActionMenuOverlay: View {
 
     private func dismiss() {
         guard isPresented else { return }
+        contextualMenuDiagnostic("backdrop received tap; dismissing menu")
         isPresented = false
-    }
-}
-
-private struct ContextualActionMenuBackdropShape: Shape {
-    let hole: CGRect
-    let cornerRadius: CGFloat
-
-    func path(in rect: CGRect) -> Path {
-        var path = Path(rect)
-        path.addRoundedRect(
-            in: hole.intersection(rect),
-            cornerSize: CGSize(width: cornerRadius, height: cornerRadius)
-        )
-        return path
     }
 }
 
