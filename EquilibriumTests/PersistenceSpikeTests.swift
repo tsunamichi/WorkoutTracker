@@ -57,4 +57,81 @@ final class PersistenceSpikeTests: XCTestCase {
         let repetitions = try await repository.workout(id: workout.id)?.exercises[0].loggedSets.first?.repetitions
         XCTAssertEqual(repetitions, 9)
     }
+
+    func testLegacyTerminalWorkoutReconcilesCompletedAndPreservesTerminalTimestamp() async throws {
+        let repository = SwiftDataRepository(container: try PersistenceController.makeContainer(inMemory: true))
+        let completedAt = Date(timeIntervalSince1970: 1_000)
+        let skippedAt = Date(timeIntervalSince1970: 1_100)
+        let legacy = legacyWorkout(id: "legacy-terminal", completedAt: completedAt, skippedAt: skippedAt)
+        try await repository.create(legacy)
+
+        let stored = try await repository.workout(id: legacy.id)
+        let repaired = try XCTUnwrap(stored)
+        XCTAssertEqual(repaired.status, .completed)
+        XCTAssertEqual(repaired.completedAt, skippedAt)
+        XCTAssertEqual(repaired.exercises[0].loggedSets.count, 1)
+        XCTAssertEqual(repaired.exercises[1].skippedAt, skippedAt)
+        let active = try await repository.activeWorkouts()
+        XCTAssertTrue(active.isEmpty)
+
+        // A second read is a no-op and does not create another occurrence.
+        let repeatedStored = try await repository.workout(id: legacy.id)
+        let repeated = try XCTUnwrap(repeatedStored)
+        XCTAssertEqual(repeated, repaired)
+        let all = try await repository.allWorkouts()
+        XCTAssertEqual(all.map(\.id), [legacy.id])
+    }
+
+    func testLegacyIncompleteWorkoutIsNotAutoCompleted() async throws {
+        let repository = SwiftDataRepository(container: try PersistenceController.makeContainer(inMemory: true))
+        let legacy = legacyWorkout(id: "legacy-incomplete", completedAt: Date(timeIntervalSince1970: 1_000), skippedAt: nil)
+        try await repository.create(legacy)
+
+        let stored = try await repository.workout(id: legacy.id)
+        let loaded = try XCTUnwrap(stored)
+        XCTAssertEqual(loaded.status, .inProgress)
+        XCTAssertNil(loaded.completedAt)
+        let active = try await repository.activeWorkouts()
+        XCTAssertEqual(active.map(\.id), [legacy.id])
+    }
+
+    func testLegacyCompletionRepairSurvivesRelaunchAndHonorsHomeCompletionDate() async throws {
+        let url = TestSupport.temporaryStoreURL()
+        let completion = Date(timeIntervalSince1970: 1_000)
+        let legacy = legacyWorkout(id: "legacy-relaunch", completedAt: completion, skippedAt: completion)
+        do {
+            let repository = SwiftDataRepository(container: try PersistenceController.makeContainer(storageURL: url))
+            try await repository.create(legacy)
+            _ = try await repository.homeWorkouts(completedSince: completion)
+        }
+
+        let reopened = SwiftDataRepository(container: try PersistenceController.makeContainer(storageURL: url))
+        let stored = try await reopened.workout(id: legacy.id)
+        let repaired = try XCTUnwrap(stored)
+        XCTAssertEqual(repaired.status, .completed)
+        XCTAssertEqual(repaired.completedAt, completion)
+        let laterHome = try await reopened.homeWorkouts(completedSince: completion.addingTimeInterval(1))
+        XCTAssertTrue(laterHome.workouts.isEmpty)
+    }
+
+    private func legacyWorkout(id: String, completedAt: Date, skippedAt: Date?) -> Workout {
+        let firstPrescription = SetPrescription(id: .init(rawValue: "\(id)-first-set"), target: .repetitions(range: 8...8), suggestedWeight: nil)
+        let secondPrescription = SetPrescription(id: .init(rawValue: "\(id)-second-set"), target: .repetitions(range: 8...8), suggestedWeight: nil)
+        let first = WorkoutExercise(
+            id: .init(rawValue: "\(id)-first"), exerciseID: .init(rawValue: "\(id)-first-definition"), nameSnapshot: "Completed",
+            prescriptions: [firstPrescription],
+            loggedSets: [.init(id: .init(rawValue: "\(id)-log"), prescriptionID: firstPrescription.id, weight: nil, repetitions: 8, duration: nil, completedAt: completedAt)],
+            restDuration: nil,
+            skippedAt: nil
+        )
+        let second = WorkoutExercise(
+            id: .init(rawValue: "\(id)-second"), exerciseID: .init(rawValue: "\(id)-second-definition"), nameSnapshot: "Skipped",
+            prescriptions: [secondPrescription], loggedSets: [], restDuration: nil, skippedAt: skippedAt
+        )
+        return Workout(
+            id: .init(rawValue: id), titleSnapshot: "Full Upper Body", exercises: [first, second], status: .inProgress,
+            startedAt: completedAt.addingTimeInterval(-60), completedAt: nil,
+            createdAt: completedAt.addingTimeInterval(-120), updatedAt: completedAt
+        )
+    }
 }

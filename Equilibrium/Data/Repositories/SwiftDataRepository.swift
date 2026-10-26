@@ -242,16 +242,22 @@ public final class SwiftDataRepository: ExerciseRepository, WorkoutRepository, E
     public func activeWorkouts() async throws -> [Workout] { try canonicalWorkouts().filter { $0.status != .completed } }
     public func workout(id: WorkoutID) async throws -> Workout? {
         guard let record = winner(try workoutRecords(id.rawValue), updatedAt: \WorkoutRecord.updatedAt) else { return nil }
+        if try reconcileLegacyCompletionState(for: record) { try saveOrRollback() }
         return try WorkoutMapper.domain(from: record)
     }
     public func allWorkouts() async throws -> [Workout] { try canonicalWorkouts() }
     private func canonicalWorkouts() throws -> [Workout] {
         let records = try context.fetch(FetchDescriptor<WorkoutRecord>())
-        return try canonical(records, key: \WorkoutRecord.id, updatedAt: \WorkoutRecord.updatedAt)
+        let canonicalRecords = canonical(records, key: \WorkoutRecord.id, updatedAt: \WorkoutRecord.updatedAt)
+        try reconcileLegacyCompletionStates(in: canonicalRecords)
+        return try canonicalRecords
             .map(WorkoutMapper.domain)
             .sorted { $0.createdAt == $1.createdAt ? $0.id.rawValue < $1.id.rawValue : $0.createdAt < $1.createdAt }
     }
     public func homeWorkouts(completedSince: Date) async throws -> (workouts: [Workout], hasCompletedWorkouts: Bool) {
+        // Reconcile before applying the status-based fetch predicate. Otherwise a legacy
+        // terminal workout remains eligible as an active Home card forever.
+        try reconcileLegacyCompletionStates(in: canonical(try context.fetch(FetchDescriptor<WorkoutRecord>()), key: \WorkoutRecord.id, updatedAt: \WorkoutRecord.updatedAt))
         let completed = WorkoutStatus.completed.rawValue, never = Date.distantPast
         let candidates = try context.fetch(FetchDescriptor<WorkoutRecord>(predicate: #Predicate { $0.statusRaw != completed || ($0.completedAt ?? never) >= completedSince }))
         let ids = Array(Set(candidates.map { $0.id }))
@@ -284,7 +290,46 @@ public final class SwiftDataRepository: ExerciseRepository, WorkoutRepository, E
         let ids = Array(Set(occurrences.compactMap { $0.workout?.id }))
         guard !ids.isEmpty else { return [] }
         let records = try context.fetch(FetchDescriptor<WorkoutRecord>(predicate: #Predicate { ids.contains($0.id) }))
-        return try canonical(records, key: \WorkoutRecord.id, updatedAt: \WorkoutRecord.updatedAt).map(WorkoutMapper.domain)
+        let canonicalRecords = canonical(records, key: \WorkoutRecord.id, updatedAt: \WorkoutRecord.updatedAt)
+        try reconcileLegacyCompletionStates(in: canonicalRecords)
+        return try canonicalRecords.map(WorkoutMapper.domain)
+    }
+
+    /// Repairs records written before skipped exercises participated in workout
+    /// completion. The canonical domain query remains the single source of truth;
+    /// this only promotes an already-terminal in-progress occurrence.
+    ///
+    /// `completedAt` is derived from the final known terminal event (a completed
+    /// set or skipped exercise), never from the current clock. That makes the
+    /// migration idempotent and keeps Home's "completed today" rule historical.
+    private func reconcileLegacyCompletionStates(in records: [WorkoutRecord]) throws {
+        var didChange = false
+        for record in records {
+            didChange = try reconcileLegacyCompletionState(for: record) || didChange
+        }
+        if didChange { try saveOrRollback() }
+    }
+
+    @discardableResult
+    private func reconcileLegacyCompletionState(for record: WorkoutRecord) throws -> Bool {
+        guard record.statusRaw == WorkoutStatus.inProgress.rawValue else { return false }
+        let workout = try WorkoutMapper.domain(from: record)
+        guard WorkoutExecutionQuery.canComplete(workout) else { return false }
+
+        let terminalDates = workout.exercises.flatMap { exercise -> [Date] in
+            if let skippedAt = exercise.skippedAt { return [skippedAt] }
+            return exercise.loggedSets.compactMap(\.completedAt)
+        }
+        guard let recoveredCompletedAt = terminalDates.max() else { return false }
+
+        record.statusRaw = WorkoutStatus.completed.rawValue
+        // A non-nil value would be an already-persisted historical value. Preserve it
+        // instead of replacing it with the inferred terminal event.
+        if record.completedAt == nil { record.completedAt = recoveredCompletedAt }
+        // Do not invent a new timestamp for this data correction. CloudKit still
+        // observes the status/completion-field mutation as a normal record update.
+        record.updatedAt = max(record.updatedAt, record.completedAt ?? recoveredCompletedAt)
+        return true
     }
     private func workoutRecords(_ id: String) throws -> [WorkoutRecord] {
         try context.fetch(FetchDescriptor<WorkoutRecord>(predicate: #Predicate { $0.id == id }))
