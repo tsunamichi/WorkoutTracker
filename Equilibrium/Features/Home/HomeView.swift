@@ -446,10 +446,18 @@ struct HomeView: View {
         homeMenuDiagnostics.notice("Create action assigning creation route")
         #endif
         homeActionMenuIsPresented = false
-        model.creationRoute = route
-        #if DEBUG
-        homeMenuDiagnostics.notice("Create action assigned creation route")
-        #endif
+        // The contextual menu owns the transaction that dismisses its overlay.
+        // Present the native sheet in the next render transaction so UIKit receives
+        // an unambiguous sheet presentation instead of coalescing it with the menu's
+        // directional exit animation (which is especially noticeable on hardware).
+        Task { @MainActor in
+            await Task.yield()
+            guard !homeActionMenuIsPresented else { return }
+            model.creationRoute = route
+            #if DEBUG
+            homeMenuDiagnostics.notice("Create action assigned creation route")
+            #endif
+        }
     }
 
     private func openTimer() {
@@ -458,13 +466,18 @@ struct HomeView: View {
     }
 
     private func endExecution() {
+        guard let exitingWorkoutID = model.expandedWorkoutID else { return }
         withAnimation(
             reduceMotion ? EQMotion.reducedContentTransition : EQMotion.objectTransformation,
             completionCriteria: .logicallyComplete
         ) {
             homeExecutionProgress = 0
         } completion: {
-            guard homeExecutionProgress == 0 else { return }
+            // `homeExecutionProgress` is rendered through an AnimatableModifier,
+            // so comparing its presentation value here can leave Home's interaction
+            // gate closed after a completed workout returns. The selected workout
+            // identity is the stable lifecycle token for this specific exit.
+            guard model.expandedWorkoutID == exitingWorkoutID else { return }
             model.endExecution()
             transitioningWorkoutID = nil
             transitionSourceFrame = nil

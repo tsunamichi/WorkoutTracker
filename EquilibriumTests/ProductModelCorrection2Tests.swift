@@ -4,6 +4,53 @@ import SwiftData
 
 @MainActor
 final class ProductModelCorrection2Tests: XCTestCase {
+    func testExerciseDetailsPersistOnCanonicalDefinitionAcrossRepositoryReload() async throws {
+        let container = try PersistenceController.makeContainer(inMemory: true)
+        let repository = SwiftDataRepository(container: container)
+        let id = ExerciseID(rawValue: "exercise-details-canonical")
+        var definition = ExerciseDefinition(id: id, name: "Cable Row", normalizedName: "cable row", aliases: [], equipment: nil, category: nil, isCustom: true, archivedAt: nil)
+        definition.notes = "Keep your ribs down."
+        definition.youtubeVideoID = "dQw4w9WgXcQ"
+        try await repository.saveExercise(definition)
+
+        let reopened = SwiftDataRepository(container: container)
+        let loaded = try await reopened.exercise(id: id)
+        let persisted = try XCTUnwrap(loaded)
+        XCTAssertEqual(persisted.notes, "Keep your ribs down.")
+        XCTAssertEqual(persisted.youtubeVideoID, "dQw4w9WgXcQ")
+    }
+
+    func testYouTubeURLNormalizationAcceptsSupportedURLsAndRejectsOthers() {
+        let expected = "dQw4w9WgXcQ"
+        XCTAssertEqual(YouTubeVideoReference.videoID(from: "https://www.youtube.com/watch?v=\(expected)"), expected)
+        XCTAssertEqual(YouTubeVideoReference.videoID(from: "https://youtu.be/\(expected)?si=abc"), expected)
+        XCTAssertEqual(YouTubeVideoReference.videoID(from: "https://youtube.com/shorts/\(expected)"), expected)
+        XCTAssertEqual(YouTubeVideoReference.videoID(from: "https://www.youtube.com/embed/\(expected)"), expected)
+        XCTAssertNil(YouTubeVideoReference.videoID(from: "https://example.com/watch?v=\(expected)"))
+        XCTAssertNil(YouTubeVideoReference.videoID(from: "https://youtube.com/watch?v=not-a-video-id"))
+    }
+
+    func testExerciseDetailsFieldUpdatesRemainIndependent() async throws {
+        let repository = makeRepository()
+        let id = ExerciseID(rawValue: "exercise-details-independent-fields")
+        var definition = ExerciseDefinition(id: id, name: "Split Squat", normalizedName: "split squat", aliases: [], equipment: nil, category: nil, isCustom: true, archivedAt: nil, notes: "Initial note", youtubeVideoID: "dQw4w9WgXcQ")
+        try await repository.saveExercise(definition)
+
+        definition.notes = "Updated note"
+        try await repository.saveExercise(definition)
+        let loadedAfterNotesSave = try await repository.exercise(id: id)
+        var persisted = try XCTUnwrap(loadedAfterNotesSave)
+        XCTAssertEqual(persisted.notes, "Updated note")
+        XCTAssertEqual(persisted.youtubeVideoID, "dQw4w9WgXcQ")
+
+        persisted.youtubeVideoID = nil
+        try await repository.saveExercise(persisted)
+        let loadedAfterVideoClear = try await repository.exercise(id: id)
+        let clearedVideo = try XCTUnwrap(loadedAfterVideoClear)
+        XCTAssertEqual(clearedVideo.notes, "Updated note")
+        XCTAssertNil(clearedVideo.youtubeVideoID)
+    }
+
     func testFreshProductionEnvironmentSeedsDefaultsAndExerciseNeedsOnlyName() async throws {
         let environment = try AppEnvironment(container: try PersistenceController.makeContainer(inMemory: true))
         let seededExercises = try await environment.exerciseRepository.allExercises()

@@ -239,6 +239,9 @@ final class ExerciseSettingsPhase5Tests: XCTestCase {
         XCTAssertEqual(EQLayout.labeledGroupGap, 32)
         XCTAssertEqual(EQLayout.Settings.sectionSpacing, 32)
         for route in [
+            ExerciseOptionsRoute.details,
+            .editNotes,
+            .editVideo,
             ExerciseOptionsRoute.performance,
             .autoProgression,
             .restDuration
@@ -247,6 +250,12 @@ final class ExerciseSettingsPhase5Tests: XCTestCase {
             XCTAssertEqual(presentation.mode, .settings)
             presentation.showRoot()
         }
+        XCTAssertEqual(ExerciseOptionsRoute.details.title, "Details")
+        XCTAssertEqual(ExerciseOptionsRoute.editNotes.title, "Edit notes")
+        XCTAssertEqual(ExerciseOptionsRoute.editVideo.title, "Edit video")
+        XCTAssertTrue(ExerciseOptionsRoute.editNotes.isDetailsEditor)
+        XCTAssertTrue(ExerciseOptionsRoute.editVideo.isDetailsEditor)
+        XCTAssertFalse(ExerciseOptionsRoute.details.isDetailsEditor)
         XCTAssertEqual(ExerciseOptionsRoute.performance.title, "Performance")
         XCTAssertEqual(ExerciseOptionsRoute.autoProgression.title, "Auto Progression")
         XCTAssertEqual(ExerciseOptionsRoute.restDuration.title, "Rest Duration")
@@ -844,12 +853,12 @@ final class SkippedExercisePhase5CorrectionTests: XCTestCase {
         let completedRow = ExerciseListRowPresentation.resolve(state: .completed)
         XCTAssertTrue(skippedRow.strikethrough)
         XCTAssertEqual(skippedRow.emphasis, .reduced)
-        XCTAssertFalse(skippedRow.showsLoggedSets)
+        XCTAssertEqual(skippedRow.trailingIcon, .none)
         XCTAssertFalse(completedRow.strikethrough)
         XCTAssertEqual(completedRow.emphasis, .standard)
-        XCTAssertTrue(completedRow.showsLoggedSets)
-        XCTAssertFalse(ExerciseListRowPresentation.resolve(state: .current).showsLoggedSets)
-        XCTAssertFalse(ExerciseListRowPresentation.resolve(state: .upcoming).showsLoggedSets)
+        XCTAssertEqual(completedRow.trailingIcon, .checkmark)
+        XCTAssertEqual(ExerciseListRowPresentation.resolve(state: .current).trailingIcon, .currentIndicator)
+        XCTAssertEqual(ExerciseListRowPresentation.resolve(state: .upcoming).trailingIcon, .none)
     }
 
     func testSkippedExerciseSelectionExposesOnlyRestore() {
@@ -2327,49 +2336,6 @@ final class ExecutionPrimaryActionRegressionTests: XCTestCase {
         )
     }
 
-    func testCompletedDisclosureDefaultsCollapsedAndUsesExerciseCountOnly() {
-        var presentation = ExecutionCompletedSectionPresentation()
-
-        XCTAssertFalse(presentation.isExpanded)
-        XCTAssertEqual(
-            ExecutionCompletedSectionPresentation.title(completedCount: 4),
-            "COMPLETED [4]"
-        )
-        XCTAssertFalse(ExecutionCompletedSectionPresentation.title(completedCount: 4).contains("/"))
-
-        presentation.toggle()
-        XCTAssertTrue(presentation.isExpanded)
-        presentation.toggle()
-        XCTAssertFalse(presentation.isExpanded)
-
-        XCTAssertFalse(
-            ExecutionCompletedSectionPresentation().isExpanded,
-            "Re-entering execution creates a collapsed Completed section"
-        )
-    }
-
-    func testCompletedDisclosureMotionUsesTrailingSpringCadence() {
-        XCTAssertEqual(ExecutionCompletedSectionMotion.insertionOffset, 18)
-        XCTAssertEqual(ExecutionCompletedSectionMotion.expansionStagger, 0.055)
-        XCTAssertEqual(ExecutionCompletedSectionMotion.collapseStagger, 0.035)
-        XCTAssertEqual(ExecutionCompletedSectionMotion.expansionResponse, 0.40)
-        XCTAssertEqual(ExecutionCompletedSectionMotion.expansionDampingFraction, 0.78)
-        XCTAssertEqual(ExecutionCompletedSectionMotion.collapseResponse, 0.30)
-        XCTAssertEqual(ExecutionCompletedSectionMotion.collapseDampingFraction, 0.84)
-        XCTAssertEqual(
-            ExecutionCompletedSectionMotion.stepDelay(reduceMotion: false, expanding: true),
-            0.055
-        )
-        XCTAssertEqual(
-            ExecutionCompletedSectionMotion.stepDelay(reduceMotion: false, expanding: false),
-            0.035
-        )
-        XCTAssertEqual(
-            ExecutionCompletedSectionMotion.stepDelay(reduceMotion: true, expanding: true),
-            0
-        )
-    }
-
     func testTimerFooterReservesViewportAroundDesignSystemActionHeight() {
         let walletHeight = EQLayout.WorkoutExecution.restCardHeight + EQLayout.minimumTouch
         let focusedTop = EQLayout.minimumTouch + EQSpacing.md - EQSpacing.xxs
@@ -2398,7 +2364,6 @@ final class ExecutionPrimaryActionRegressionTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(EQLayout.minimumTouch, 44)
         XCTAssertEqual(EQLayout.WorkoutExecution.primaryActionBottomInset, 24)
         XCTAssertEqual(EQLayout.exerciseBlockGap, 24)
-        XCTAssertEqual(EQLayout.WorkoutExecution.completedSectionTopSpacing, 48)
         XCTAssertEqual(EQLayout.WorkoutExecution.titleToSetsSpacing, 8)
         XCTAssertEqual(EQLayout.WorkoutExecution.loggedSetSpacing, 4)
         XCTAssertEqual(

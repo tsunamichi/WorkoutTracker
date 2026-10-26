@@ -37,9 +37,9 @@ enum WorkoutImportDraftConverter {
         .init(name: workout.name, exercises: workout.exercises.map { parsed in
             let sets = parsed.prescriptions.map(draftSet)
             if let definition = exactMatch(name: parsed.name, catalog: catalog) {
-                return .init(exerciseID: definition.id, name: definition.name, prescriptions: sets, restDuration: parsed.restDuration)
+                return .init(exerciseID: definition.id, name: definition.name, prescriptions: sets, restDuration: parsed.restDuration, isTimeBased: parsed.isTimeBased, isTwoSided: parsed.isTwoSided)
             }
-            return .init(exerciseID: nil, name: parsed.name.trimmingCharacters(in: .whitespacesAndNewlines), prescriptions: sets, restDuration: parsed.restDuration)
+            return .init(exerciseID: nil, name: parsed.name.trimmingCharacters(in: .whitespacesAndNewlines), prescriptions: sets, restDuration: parsed.restDuration, isTimeBased: parsed.isTimeBased, isTwoSided: parsed.isTwoSided)
         })
     }
 
@@ -78,17 +78,20 @@ struct WorkoutPasteMaterializer {
     func materialize(_ parsed: [ParsedWorkout], now: Date = .now) async throws -> [Workout] {
         let catalog = try await exercises.allExercises()
         var values: [Workout] = []
+        var importedPairs: [(ParsedWorkout, Workout)] = []
         for (index, parsedWorkout) in parsed.enumerated() {
             let draft = WorkoutImportDraftConverter.lightweightDraft(from: parsedWorkout, catalog: catalog)
             let model = WorkoutBuilderModel(draft: draft, exercises: exercises, workouts: workouts, history: history)
             do {
-                values.append(try await model.makeWorkout(
+                let value = try await model.makeWorkout(
                     now: now.addingTimeInterval(Double(index) / 1_000),
                     // Paste is already an explicit request to use each entered exercise name.
                     // There is no interactive ambiguity confirmation in this flow, so a
                     // plausible-but-not-confident match remains a distinct custom exercise.
                     createAmbiguousExercises: true
-                ))
+                )
+                values.append(value)
+                importedPairs.append((parsedWorkout, value))
             } catch {
                 throw WorkoutPasteMaterializationError.workout(
                     name: parsedWorkout.name.isEmpty ? "Untitled Workout" : parsedWorkout.name,
@@ -101,6 +104,31 @@ struct WorkoutPasteMaterializer {
         } catch {
             throw WorkoutPasteMaterializationError.persistence(underlying: error)
         }
+        // Details enrichment happens only after the workout batch is committed;
+        // an invalid later workout therefore cannot leave canonical metadata behind.
+        for (parsedWorkout, workout) in importedPairs {
+            try await enrichCanonicalDetails(from: parsedWorkout, workout: workout)
+        }
         return values
+    }
+
+    /// Imported reference material only fills empty canonical fields. Existing
+    /// Details are user-owned and always win over an import.
+    private func enrichCanonicalDetails(from parsed: ParsedWorkout, workout: Workout) async throws {
+        for (source, occurrence) in zip(parsed.exercises, workout.exercises) {
+            guard source.reusableNotes != nil || source.youtubeVideoID != nil,
+                  var definition = try await exercises.exercise(id: occurrence.exerciseID) else { continue }
+            var changed = false
+            if definition.notes?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty != false,
+               let notes = source.reusableNotes?.trimmingCharacters(in: .whitespacesAndNewlines), !notes.isEmpty {
+                definition.notes = notes
+                changed = true
+            }
+            if definition.youtubeVideoID == nil, let videoID = source.youtubeVideoID {
+                definition.youtubeVideoID = videoID
+                changed = true
+            }
+            if changed { try await exercises.saveExercise(definition) }
+        }
     }
 }

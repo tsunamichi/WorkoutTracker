@@ -1,10 +1,7 @@
 import Foundation
 
 struct ParsedSetPrescription: Hashable, Sendable {
-    enum Target: Hashable, Sendable {
-        case repetitions(ClosedRange<Int>)
-        case duration(seconds: Int)
-    }
+    enum Target: Hashable, Sendable { case repetitions(ClosedRange<Int>), duration(seconds: Int) }
     var target: Target
     var suggestedPounds: Double?
 }
@@ -14,6 +11,12 @@ struct ParsedExercise: Identifiable, Hashable, Sendable {
     var name: String
     var prescriptions: [ParsedSetPrescription]
     var restDuration: TimeInterval?
+    var isTimeBased: Bool
+    var isTwoSided: Bool
+    var reusableNotes: String?
+    var workoutNotes: String?
+    var youtubeVideoID: String?
+    var groupIdentifier: String?
     let lineNumber: Int
 }
 
@@ -41,130 +44,273 @@ struct WorkoutParseResult: Hashable, Sendable {
     var hasBlockingIssues: Bool { workouts.isEmpty || issues.contains { $0.severity == .error } }
 }
 
+/// Deterministic, loss-averse plain-text importer. It recognises an exercise
+/// name followed by a prescription (on the same line or the next), then attaches
+/// subsequent bullets and YouTube links to that exercise.
 struct WorkoutTextParser: Sendable {
     func parse(_ rawText: String) -> WorkoutParseResult {
-        let source = rawText.replacingOccurrences(of: "\r\n", with: "\n")
-        guard !source.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+        let lines = rawText.replacingOccurrences(of: "\r\n", with: "\n").components(separatedBy: "\n")
+        guard lines.contains(where: { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }) else {
             return .init(workouts: [], issues: [.init(message: "Paste at least one workout and exercise.")])
         }
-        let lines = source.components(separatedBy: "\n")
-        var workouts: [ParsedWorkout] = []
-        var current: ParsedWorkout?
-        var issues: [ParseIssue] = []
 
-        func finishCurrent() {
-            guard let value = current else { return }
-            if value.exercises.isEmpty {
-                issues.append(.init(message: "Workout “\(value.name.isEmpty ? "Untitled Workout" : value.name)” has no valid exercises."))
-            } else { workouts.append(value) }
-            current = nil
+        var workouts: [ParsedWorkout] = []
+        var workout = ParsedWorkout(id: UUID(), name: "", exercises: [])
+        var issues: [ParseIssue] = []
+        var pendingName: (name: String, line: Int)?
+        var currentGroup: String?
+        var lastExerciseIndex: Int?
+
+        func finishWorkout() {
+            guard !workout.exercises.isEmpty else { return }
+            workouts.append(workout)
         }
 
-        for (index, rawLine) in lines.enumerated() {
-            let lineNumber = index + 1
+        func appendNote(_ value: String, reusable: Bool) {
+            guard let index = lastExerciseIndex else { return }
+            let existing = reusable ? workout.exercises[index].reusableNotes : workout.exercises[index].workoutNotes
+            let joined = [existing, value].compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }.joined(separator: "\n")
+            if reusable { workout.exercises[index].reusableNotes = joined.isEmpty ? nil : joined }
+            else { workout.exercises[index].workoutNotes = joined.isEmpty ? nil : joined }
+        }
+
+        func appendExercise(name: String, prescription: PrescriptionParse, line: Int) {
+            let cleanName = cleanName(name)
+            guard !cleanName.isEmpty else { return }
+            let values = Array(repeating: ParsedSetPrescription(target: prescription.target, suggestedPounds: prescription.suggestedPounds), count: prescription.sets)
+            workout.exercises.append(.init(
+                id: UUID(), name: cleanName, prescriptions: values, restDuration: prescription.restDuration,
+                isTimeBased: prescription.isDuration || prescription.isUnilateral,
+                isTwoSided: prescription.isUnilateral,
+                reusableNotes: nil, workoutNotes: nil, youtubeVideoID: nil,
+                groupIdentifier: currentGroup, lineNumber: line
+            ))
+            lastExerciseIndex = workout.exercises.indices.last
+        }
+
+        for (offset, rawLine) in lines.enumerated() {
+            let lineNumber = offset + 1
             let line = rawLine.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !line.isEmpty else { continue }
-            if isUnsupported(line) {
+
+            if line.range(of: #"(?i)\b(superset|circuit|rounds?|hiit)\b"#, options: .regularExpression) != nil {
                 issues.append(.init(lineNumber: lineNumber, content: line, message: "Unsupported grouping or workout semantics. Import exercises as individual prescriptions.", severity: .warning))
                 continue
             }
-            if let heading = headingName(line) {
-                finishCurrent(); current = .init(id: UUID(), name: heading, exercises: []); continue
+
+            if let day = headingName(line) {
+                finishWorkout()
+                workout = .init(id: UUID(), name: day, exercises: [])
+                pendingName = nil
+                currentGroup = nil
+                lastExerciseIndex = nil
+                continue
             }
-            if let exercise = parseExercise(line, lineNumber: lineNumber) {
-                if current == nil { current = .init(id: UUID(), name: "", exercises: []) }
-                current?.exercises.append(exercise); continue
+            if let group = groupIdentifier(in: line) {
+                pendingName = groupExerciseName(in: line).map { (name: $0, line: lineNumber) }
+                currentGroup = group
+                continue
             }
-            let followsBlank = index == 0 || lines[index - 1].trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            if followsBlank || current == nil, !looksMalformed(line) {
-                finishCurrent(); current = .init(id: UUID(), name: cleanHeading(line), exercises: []); continue
+            if line.range(of: #"(?i)^#{1,6}\s*warmup\b|^warmup\b"#, options: .regularExpression) != nil {
+                pendingName = nil
+                currentGroup = "Warmup"
+                continue
             }
-            let message = looksMalformed(line) ? "Malformed or invalid set prescription." : "Couldn’t find sets and reps. Use a format like “3×10” or “3×30 sec”."
-            issues.append(.init(lineNumber: lineNumber, content: line, message: message))
+            let exerciseLine = isBullet(line) ? stripBullet(line) : line
+            if let inline = inlineExercise(in: exerciseLine) {
+                appendExercise(name: inline.name, prescription: inline.prescription, line: lineNumber)
+                pendingName = nil
+                continue
+            }
+            if let prescription = prescription(in: line), let pending = pendingName {
+                appendExercise(name: pending.name, prescription: prescription, line: pending.line)
+                self.attachURLIfPresent(in: line, to: &workout, index: lastExerciseIndex)
+                self.attachTrailingInstruction(in: line, to: &workout, index: lastExerciseIndex)
+                pendingName = nil
+                continue
+            }
+            if isBullet(line) {
+                let text = stripBullet(line)
+                if let videoID = youtubeVideoID(in: text), let index = lastExerciseIndex {
+                    workout.exercises[index].youtubeVideoID = videoID
+                } else if text.range(of: #"(?i)\bdemo(?:s)?\s*(?:\(\d+\))?\b"#, options: .regularExpression) != nil,
+                          text.range(of: #"https?://"#, options: .regularExpression) == nil {
+                    issues.append(.init(lineNumber: lineNumber, content: text, message: "A demo was referenced but no supported YouTube URL was provided.", severity: .warning))
+                } else {
+                    appendNote(text, reusable: !isWorkoutSpecificInstruction(text))
+                }
+                continue
+            }
+            if let videoID = youtubeVideoID(in: line), let index = lastExerciseIndex {
+                workout.exercises[index].youtubeVideoID = videoID
+                continue
+            }
+            if line.range(of: #"(?i)\bdemo(?:s)?\s*(?:\(\d+\))?\b"#, options: .regularExpression) != nil {
+                issues.append(.init(lineNumber: lineNumber, content: line, message: "A demo was referenced but no supported YouTube URL was provided.", severity: .warning))
+                continue
+            }
+            if let distanceName = distanceOnlyExercise(in: line) {
+                // The current persisted SetTarget model has no distance case.
+                // Keep the source text visible for correction rather than inventing reps.
+                issues.append(.init(lineNumber: lineNumber, content: line, message: "Distance target “\(distanceName.target)” needs review; it was not converted to repetitions.", severity: .warning))
+                pendingName = (distanceName.name, lineNumber)
+                continue
+            }
+            if line.caseInsensitiveCompare("Down & Back") == .orderedSame, pendingName != nil {
+                issues.append(.init(lineNumber: lineNumber, content: line, message: "Distance-style prescription needs review; no repetitions were invented.", severity: .warning))
+                continue
+            }
+            if workout.name.isEmpty, workout.exercises.isEmpty, pendingName == nil, currentGroup == nil {
+                workout.name = cleanName(line)
+                continue
+            }
+            // Treat ordinary text as an exercise name only when it is not clearly
+            // instructional prose. This is what permits name/prescription blocks.
+            if (workout.name.isEmpty || currentGroup != nil || !line.localizedCaseInsensitiveContains("block")), !looksInstructional(line) {
+                pendingName = (cleanName(line), lineNumber)
+            } else {
+                issues.append(.init(lineNumber: lineNumber, content: line, message: "Couldn’t find sets and reps. Use a format like “3×10” or “3×30 sec”."))
+            }
         }
-        finishCurrent()
-        if workouts.isEmpty, issues.isEmpty { issues.append(.init(message: "No valid exercises were found.")) }
+
+        finishWorkout()
+        if workouts.isEmpty {
+            issues.append(.init(message: "No valid exercises were found."))
+            return .init(workouts: [], issues: issues)
+        }
         return .init(workouts: workouts, issues: issues)
     }
 
-    private func parseExercise(_ source: String, lineNumber: Int) -> ParsedExercise? {
-        var line = source.replacingOccurrences(of: #"^\s*[-•*]\s*"#, with: "", options: .regularExpression)
-        let rest = capture(#"(?i)\brest\s*[:=]?\s*(\d+)\s*(?:s|sec|secs|seconds?)\b"#, in: line).flatMap { Double($0[1]) }
-        line = line.replacingOccurrences(of: #"(?i)\s*[,;]?\s*rest\s*[:=]?\s*\d+\s*(?:s|sec|secs|seconds?)\b"#, with: "", options: .regularExpression)
-        var pounds: Double?
-        if let weight = capture(#"(?i)@\s*(\d+(?:\.\d+)?)\s*(lb|lbs|kg|kgs)\b"#, in: line), let value = Double(weight[1]) {
-            pounds = Weight(value, unit: weight[2].lowercased().hasPrefix("kg") ? .kilograms : .pounds).pounds
-            line = line.replacingOccurrences(of: #"(?i)\s*@\s*\d+(?:\.\d+)?\s*(?:lb|lbs|kg|kgs)\b"#, with: "", options: .regularExpression)
-        }
-        let patterns = [
-            #"^(.+?)\s*(?:—|-|:)?\s*(\d+)\s*[x×]\s*(\d+)\s*(?:-|–|\.\.)\s*(\d+)\s*(?:reps?)?$"#,
-            #"^(.+?)\s*(?:—|-|:)?\s*(\d+)\s*[x×]\s*(\d+)\s*(sec|secs|seconds?|s|min|mins|minutes?)\.?$"#,
-            #"^(.+?)\s*(?:—|-|:)?\s*(\d+)\s*[x×]\s*(\d+)\s*(?:reps?)?$"#,
-            #"^(.+?)\s*(?:—|-|:)?\s*(\d+)\s+sets?\s+of\s+(\d+)\s*(?:reps?)?$"#,
-            #"^(\d+)\s*[x×]\s*(\d+)\s*(?:-|–|\.\.)\s*(\d+)\s+(.+)$"#,
-            #"^(\d+)\s*[x×]\s*(\d+)\s+(.+)$"#,
-            #"^(.+?)(?:\s+(?:—|–|-)|\s*:)\s*(\d+)\s*(sec|secs|seconds?|s|min|mins|minutes?|reps?)?\.?$"#
-        ]
-        for (patternIndex, pattern) in patterns.enumerated() {
-            guard let match = capture(pattern, in: line, caseInsensitive: true) else { continue }
-            let name: String; let sets: Int; let target: ParsedSetPrescription.Target
-            switch patternIndex {
-            case 0:
-                name = match[1]; sets = Int(match[2]) ?? 0
-                let low = Int(match[3]) ?? 0, high = Int(match[4]) ?? 0; target = .repetitions(min(low, high)...max(low, high))
-            case 1:
-                name = match[1]; sets = Int(match[2]) ?? 0; let amount = Int(match[3]) ?? 0
-                target = .duration(seconds: match[4].lowercased().hasPrefix("min") ? amount * 60 : amount)
-            case 2, 3:
-                name = match[1]; sets = Int(match[2]) ?? 0; let reps = Int(match[3]) ?? 0; target = .repetitions(reps...reps)
-            case 4:
-                sets = Int(match[1]) ?? 0; let low = Int(match[2]) ?? 0, high = Int(match[3]) ?? 0; name = match[4]; target = .repetitions(min(low, high)...max(low, high))
-            case 5:
-                sets = Int(match[1]) ?? 0; let reps = Int(match[2]) ?? 0; name = match[3]; target = .repetitions(reps...reps)
-            default:
-                // A bare "Name — 10" is a single set.
-                name = match[1]; sets = 1; let amount = Int(match[2]) ?? 0; let unit = match[3].lowercased()
-                if unit.isEmpty || unit.hasPrefix("rep") { target = .repetitions(amount...amount) }
-                else { target = .duration(seconds: unit.hasPrefix("m") ? amount * 60 : amount) }
-            }
-            let cleanName = name.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines.union(CharacterSet(charactersIn: "—-:")))
-            guard sets > 0, sets <= 99, valid(target), !cleanName.isEmpty else { return nil }
-            let prescription = ParsedSetPrescription(target: target, suggestedPounds: pounds)
-            return .init(id: UUID(), name: cleanName, prescriptions: Array(repeating: prescription, count: sets), restDuration: rest, lineNumber: lineNumber)
-        }
-        return nil
-    }
-
-    /// Splits a leading title line from the exercise lines so it can be edited separately.
+    /// Splits a leading title line from exercise text for the existing import UI.
     func splitTitle(_ text: String) -> (title: String, body: String) {
         let lines = text.replacingOccurrences(of: "\r\n", with: "\n").components(separatedBy: "\n")
-        guard let index = lines.firstIndex(where: { !$0.trimmingCharacters(in: .whitespaces).isEmpty }) else { return ("", text) }
-        let line = lines[index].trimmingCharacters(in: .whitespaces)
-        guard parseExercise(line, lineNumber: index + 1) == nil, !isUnsupported(line), !looksMalformed(line) else { return ("", text) }
-        let title = headingName(line) ?? cleanHeading(line)
-        let body = lines[(index + 1)...].drop { $0.trimmingCharacters(in: .whitespaces).isEmpty }.joined(separator: "\n")
-        return (title, body)
+        guard let first = lines.firstIndex(where: { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }) else { return ("", text) }
+        let title = lines[first].trimmingCharacters(in: .whitespacesAndNewlines)
+        guard inlineExercise(in: title) == nil, prescription(in: title) == nil, !isBullet(title) else { return ("", text) }
+        return (cleanName(title), lines.dropFirst(first + 1).drop(while: { $0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }).joined(separator: "\n"))
     }
 
-    private func valid(_ target: ParsedSetPrescription.Target) -> Bool {
-        switch target { case .repetitions(let range): return range.lowerBound > 0 && range.upperBound <= 999; case .duration(let seconds): return seconds > 0 && seconds <= 86_400 }
+    private struct PrescriptionParse {
+        let sets: Int
+        let target: ParsedSetPrescription.Target
+        let suggestedPounds: Double?
+        let restDuration: TimeInterval?
+        let isUnilateral: Bool
+        var isDuration: Bool { if case .duration = target { true } else { false } }
     }
-    private func isUnsupported(_ line: String) -> Bool { line.range(of: #"(?i)\b(superset|circuit|rounds?|hiit|warm[ -]?up|accessor(?:y|ies)|per side)\b"#, options: .regularExpression) != nil }
-    private func looksMalformed(_ line: String) -> Bool { line.range(of: #"(?i)\d\s*[x×]|\bsets?\b|@\s*\d|\brest\b"#, options: .regularExpression) != nil }
-    private func headingName(_ line: String) -> String? {
-        if line.range(of: #"(?i)^day\s*\d+\b"#, options: .regularExpression) != nil {
-            let cleaned = line.replacingOccurrences(of: #"(?i)^day\s*\d+\s*(?:—|-|:)?\s*"#, with: "", options: .regularExpression)
-            return cleaned.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? cleanHeading(line) : cleanHeading(cleaned)
+
+    private func inlineExercise(in line: String) -> (name: String, prescription: PrescriptionParse)? {
+        if let match = firstCapture(#"(?i)(\d+\s*[x×]\s*\d+(?:(?:\s*(?:-|–|\.\.)\s*)\d+)?(?:.*)$)"#, in: line),
+           let range = Range(match.range, in: line) {
+            let name = String(line[..<range.lowerBound]).trimmingCharacters(in: CharacterSet.whitespacesAndNewlines.union(CharacterSet(charactersIn: "—–-:")))
+            if !name.isEmpty, let parsed = prescription(in: String(line[range])) { return (name, parsed) }
         }
-        if line.range(of: #"(?i)^(push|pull|legs?|upper|lower|full\s*body|chest|back|shoulders?|arms?|core)$"#, options: .regularExpression) != nil { return cleanHeading(line) }
+        if let match = capture(#"(?i)^(.+?)(?:\s+(?:—|–|-)|\s*:)\s*(\d+)\s*(sec|secs|seconds?|s|min|mins|minutes?|reps?)?\.?$"#, in: line),
+           let amount = Int(match[2]), amount > 0 {
+            let unit = match[3].lowercased()
+            let target: ParsedSetPrescription.Target = unit.isEmpty || unit.hasPrefix("rep")
+                ? .repetitions(amount...amount)
+                : .duration(seconds: unit.hasPrefix("m") ? amount * 60 : amount)
+            return (cleanName(match[1]), .init(sets: 1, target: target, suggestedPounds: nil, restDuration: nil, isUnilateral: false))
+        }
         return nil
     }
-    private func cleanHeading(_ line: String) -> String { line.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines.union(CharacterSet(charactersIn: "—-:"))) }
-    private func capture(_ pattern: String, in value: String, caseInsensitive: Bool = false) -> [String]? {
-        let options: NSRegularExpression.Options = caseInsensitive ? [.caseInsensitive] : []
-        guard let regex = try? NSRegularExpression(pattern: pattern, options: options), let match = regex.firstMatch(in: value, range: NSRange(value.startIndex..., in: value)) else { return nil }
-        return (0..<match.numberOfRanges).map { rangeIndex in
-            let range = match.range(at: rangeIndex); guard range.location != NSNotFound, let swiftRange = Range(range, in: value) else { return "" }; return String(value[swiftRange])
+
+    private func prescription(in source: String) -> PrescriptionParse? {
+        // A bare @ value is ambiguous (weight unit is required); do not silently
+        // accept it as an exercise instruction.
+        if source.range(of: #"(?i)@\s*\d+(?:\.\d+)?\b(?!\s*(?:lb|lbs|kg|kgs)\b)"#, options: .regularExpression) != nil {
+            return nil
         }
+        let isUnilateral = source.range(of: #"(?i)(?:/\s*(?:ea\b|each\b|leg\b|side\b)(?:\s+(?:leg|side|direction))?|\b(?:each|per)\s+(?:leg|side|direction)\b|\b(?:ea|each)\s+direction\b)"#, options: .regularExpression) != nil
+        let withoutUnilateralSuffix = source.replacingOccurrences(
+            of: #"(?i)\s*(?:/\s*(?:ea\b|each\b|leg\b|side\b)(?:\s+(?:leg|side|direction))?|\b(?:each|per)\s+(?:leg|side|direction)\b|\b(?:ea|each)\s+direction\b)"#,
+            with: "",
+            options: .regularExpression
+        )
+        let withoutWeight = withoutUnilateralSuffix.replacingOccurrences(of: #"(?i)@\s*\d+(?:\.\d+)?\s*(?:lb|lbs|kg|kgs)\b"#, with: "", options: .regularExpression)
+        let match: [String]
+        if let counted = capture(#"(?i)^\s*(\d+)\s+sets?\s+of\s+(\d+)\s*(.*?)\s*$"#, in: withoutWeight) {
+            match = [counted[0], counted[1], counted[2], "", counted[3]]
+        } else if let multiplied = capture(#"(?i)^\s*(\d+)\s*[x×]\s*(\d+)(?:\s*(?:-|–|\.\.)\s*(\d+))?\s*(.*?)\s*$"#, in: withoutWeight) {
+            match = multiplied
+        } else { return nil }
+        guard let sets = Int(match[1]), let low = Int(match[2]), sets > 0, sets <= 99, low > 0 else { return nil }
+        let high = Int(match[3]).map { max(low, $0) } ?? low
+        let suffix = match[4].lowercased()
+        let isDuration = suffix.range(of: #"^(?:s\b|sec|secs|second|min|mins|minute|['’]s\b)"#, options: .regularExpression) != nil
+        let target: ParsedSetPrescription.Target = isDuration
+            ? .duration(seconds: suffix.hasPrefix("min") ? low * 60 : low)
+            : .repetitions(low...high)
+        let pounds = capture(#"(?i)@\s*(\d+(?:\.\d+)?)\s*(lb|lbs|kg|kgs)\b"#, in: source).flatMap { value -> Double? in
+            guard let amount = Double(value[1]) else { return nil }
+            return Weight(amount, unit: value[2].lowercased().hasPrefix("kg") ? .kilograms : .pounds).pounds
+        }
+        let rest = capture(#"(?i)\brest\s*[:=]?\s*(\d+)\s*(?:s|sec|secs|seconds?)\b"#, in: source).flatMap { Double($0[1]) }
+        return .init(sets: sets, target: target, suggestedPounds: pounds, restDuration: rest, isUnilateral: isUnilateral)
+    }
+
+    private func attachURLIfPresent(in line: String, to workout: inout ParsedWorkout, index: Int?) {
+        guard let index, let id = youtubeVideoID(in: line) else { return }
+        workout.exercises[index].youtubeVideoID = id
+    }
+
+    private func attachTrailingInstruction(in line: String, to workout: inout ParsedWorkout, index: Int?) {
+        guard let index,
+              let match = firstCapture(#"(?i)^\s*\d+\s*[x×]\s*\d+.*?\s+[—–-]\s+(.+)$"#, in: line),
+              let range = Range(match.range, in: line) else { return }
+        let value = String(line[range]).trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !value.isEmpty else { return }
+        workout.exercises[index].reusableNotes = value
+    }
+
+    private func groupIdentifier(in line: String) -> String? {
+        let stripped = line.trimmingCharacters(in: CharacterSet(charactersIn: "*# "))
+        guard let match = capture(#"(?i)^([A-Z]\d*)\s*[—–-]\s*.+$"#, in: stripped) else { return nil }
+        return match[1].uppercased()
+    }
+
+    private func groupExerciseName(in line: String) -> String? {
+        let stripped = line.trimmingCharacters(in: CharacterSet(charactersIn: "*# "))
+        guard let match = capture(#"(?i)^[A-Z]\d*\s*[—–-]\s*(.+)$"#, in: stripped) else { return nil }
+        let name = cleanName(match[1])
+        return name.isEmpty ? nil : name
+    }
+
+    private func distanceOnlyExercise(in line: String) -> (name: String, target: String)? {
+        guard let match = capture(#"(?i)^(\d+(?:\.\d+)?)\s*(m|meters?|km|mi)\s+(.+)$"#, in: line) else { return nil }
+        return (match[3].trimmingCharacters(in: .whitespacesAndNewlines), "\(match[1]) \(match[2])")
+    }
+
+    private func youtubeVideoID(in text: String) -> String? {
+        if let direct = YouTubeVideoReference.videoID(from: text) { return direct }
+        guard let match = firstCapture(#"https?://[^\s)>]+"#, in: text),
+              let range = Range(match.range, in: text) else { return nil }
+        return YouTubeVideoReference.videoID(from: String(text[range]))
+    }
+
+    private func isBullet(_ line: String) -> Bool { line.range(of: #"^\s*[-•*]\s+"#, options: .regularExpression) != nil }
+    private func stripBullet(_ line: String) -> String { line.replacingOccurrences(of: #"^\s*[-•*]\s+"#, with: "", options: .regularExpression) }
+    private func isWorkoutSpecificInstruction(_ text: String) -> Bool { text.range(of: #"(?i)\b(first|next|this)\s+block\b|\bincrease\s+weight\b"#, options: .regularExpression) != nil }
+    private func looksInstructional(_ text: String) -> Bool { text.hasPrefix("-") || text.hasPrefix("•") || text.range(of: #"(?i)^(focus|maintain|increase|explosive|light weight|change)\b"#, options: .regularExpression) != nil }
+    private func headingName(_ line: String) -> String? {
+        guard line.range(of: #"(?i)^day\s*\d+\b"#, options: .regularExpression) != nil else { return nil }
+        let title = line.replacingOccurrences(of: #"(?i)^day\s*\d+\s*(?:—|–|-|:)?\s*"#, with: "", options: .regularExpression)
+        return cleanName(title)
+    }
+    private func cleanName(_ line: String) -> String { line.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines.union(CharacterSet(charactersIn: "—–-:"))) }
+    private func capture(_ pattern: String, in value: String) -> [String]? {
+        guard let match = firstCapture(pattern, in: value) else { return nil }
+        return match.groups
+    }
+    private func firstCapture(_ pattern: String, in value: String) -> (range: NSRange, groups: [String])? {
+        guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]),
+              let match = regex.firstMatch(in: value, range: NSRange(value.startIndex..., in: value)) else { return nil }
+        let groups = (0..<match.numberOfRanges).map { index -> String in
+            let range = match.range(at: index)
+            guard range.location != NSNotFound, let swift = Range(range, in: value) else { return "" }
+            return String(value[swift])
+        }
+        return (match.range, groups)
     }
 }

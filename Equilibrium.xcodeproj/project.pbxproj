@@ -12,6 +12,7 @@
 		B20000000000000000000002 /* ContextualActionMenu.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000000000000000000001 /* ContextualActionMenu.swift */; };
 		04A947B7B93272CE4ED09235 /* WorkoutHistoryImportTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79909464AC5DCC92A7C8B6B6 /* WorkoutHistoryImportTests.swift */; };
 		05E8EC79F238CC71D2F8E5C3 /* WorkoutTimerVisuals.swift in Sources */ = {isa = PBXBuildFile; fileRef = D998E5F2131071C40EFF28FD /* WorkoutTimerVisuals.swift */; };
+		E0D371A00000000000000002 /* ExerciseDetailsViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = E0D371A00000000000000001 /* ExerciseDetailsViews.swift */; };
 		063EBABF6B916CAD52811F07 /* StandaloneIntervalTimer.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7DCFD43CC8459B474AA2C0B /* StandaloneIntervalTimer.swift */; };
 		0D9CA2DBEEBF22EA4E2FA504 /* HomeQueueTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3DA997724AE63FFC5DBD32D4 /* HomeQueueTests.swift */; };
 		1433D01F8C32DB9F26FC9820 /* EquilibriumApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = D017002BD4397958FCA09910 /* EquilibriumApp.swift */; };
@@ -157,6 +158,7 @@
 		D998E5F2131071C40EFF28FD /* WorkoutTimerVisuals.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkoutTimerVisuals.swift; sourceTree = "<group>"; };
 		E270BE88AD8EEA3003C46A8C /* ProgressionEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProgressionEngine.swift; sourceTree = "<group>"; };
 		E35768B38BF1690A1B3E37C0 /* WorkoutExecutionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkoutExecutionView.swift; sourceTree = "<group>"; };
+		E0D371A00000000000000001 /* ExerciseDetailsViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExerciseDetailsViews.swift; sourceTree = "<group>"; };
 		F1A0B0020000000000000001 /* HomeExecutionGeometryProof.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeExecutionGeometryProof.swift; sourceTree = "<group>"; };
 		E43C3941374311D22633D5AB /* StandaloneTimerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StandaloneTimerView.swift; sourceTree = "<group>"; };
 		E9688645B2EEAF0B12FF8846 /* RNLegacyDTOs.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RNLegacyDTOs.swift; sourceTree = "<group>"; };
@@ -172,6 +174,7 @@
 			children = (
 				75C821A597461E8E8745EE42 /* WorkoutExecutionModel.swift */,
 				E35768B38BF1690A1B3E37C0 /* WorkoutExecutionView.swift */,
+				E0D371A00000000000000001 /* ExerciseDetailsViews.swift */,
 				F1A0B0020000000000000001 /* HomeExecutionGeometryProof.swift */,
 				D998E5F2131071C40EFF28FD /* WorkoutTimerVisuals.swift */,
 			);
@@ -641,6 +644,7 @@
 				8BEDD17C92022D698419AE30 /* WorkoutExecution.swift in Sources */,
 				5F730BA67FEEC27898C8C787 /* WorkoutExecutionModel.swift in Sources */,
 				A05E4B9E40B71DBF689C3751 /* WorkoutExecutionView.swift in Sources */,
+				E0D371A00000000000000002 /* ExerciseDetailsViews.swift in Sources */,
 				F1A0B0010000000000000001 /* HomeExecutionGeometryProof.swift in Sources */,
 				56101649CF1E2BDA12F9504C /* WorkoutHistoryQueries.swift in Sources */,
 				74F5CAB5CA4AA53361EBF0E5 /* WorkoutHistoryViews.swift in Sources */,

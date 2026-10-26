@@ -5,10 +5,12 @@ import SwiftData
     var id: String = ""
     var name: String = ""; var normalizedName: String = ""; var aliases: [String] = []
     var equipment: String?; var category: String?; var isCustom: Bool = false; var archivedAt: Date?
+    var notes: String?; var youtubeVideoID: String?
     var updatedAt: Date = Foundation.Date(timeIntervalSince1970: 0)
-    init(id: String, name: String, normalizedName: String, aliases: [String], equipment: String?, category: String?, isCustom: Bool, archivedAt: Date?, updatedAt: Date = .now) {
+    init(id: String, name: String, normalizedName: String, aliases: [String], equipment: String?, category: String?, isCustom: Bool, archivedAt: Date?, notes: String? = nil, youtubeVideoID: String? = nil, updatedAt: Date = .now) {
         self.id = id; self.name = name; self.normalizedName = normalizedName; self.aliases = aliases
-        self.equipment = equipment; self.category = category; self.isCustom = isCustom; self.archivedAt = archivedAt; self.updatedAt = updatedAt
+        self.equipment = equipment; self.category = category; self.isCustom = isCustom; self.archivedAt = archivedAt
+        self.notes = notes; self.youtubeVideoID = youtubeVideoID; self.updatedAt = updatedAt
     }
 }
 

@@ -133,7 +133,8 @@ public final class SwiftDataRepository: ExerciseRepository, WorkoutRepository, E
         if records.contains(where: { $0.id != exercise.id.rawValue && ($0.normalizedName == normalized || $0.aliases.contains(where: { Self.normalizeExerciseName($0) == normalized })) }) { throw RepositoryError.duplicateExerciseName }
         if let existing = winner(try exerciseRecords(exercise.id.rawValue), updatedAt: \ExerciseDefinitionRecord.updatedAt) {
             existing.name = exercise.name; existing.normalizedName = normalized; existing.aliases = exercise.aliases
-            existing.equipment = exercise.equipment; existing.category = exercise.category; existing.isCustom = exercise.isCustom; existing.archivedAt = exercise.archivedAt; existing.updatedAt = .now
+            existing.equipment = exercise.equipment; existing.category = exercise.category; existing.isCustom = exercise.isCustom; existing.archivedAt = exercise.archivedAt
+            existing.notes = exercise.notes; existing.youtubeVideoID = exercise.youtubeVideoID; existing.updatedAt = .now
         } else { var value = exercise; value.normalizedName = normalized; context.insert(DefinitionMapper.record(from: value)) }
         try saveOrRollback()
     }

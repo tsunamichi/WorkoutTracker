@@ -12,6 +12,35 @@ public struct Weight: Codable, Hashable, Sendable {
 public struct ExerciseDefinition: Identifiable, Codable, Hashable, Sendable {
     public let id: ExerciseID; public var name: String; public var normalizedName: String; public var aliases: [String]
     public var equipment: String?; public var category: String?; public var isCustom: Bool; public var archivedAt: Date?
+    /// Reusable reference material belongs to the canonical exercise definition,
+    /// never to an individual workout occurrence.
+    public var notes: String?
+    /// A validated YouTube video identifier, rather than a source URL.
+    public var youtubeVideoID: String?
+
+    public init(
+        id: ExerciseID,
+        name: String,
+        normalizedName: String,
+        aliases: [String],
+        equipment: String?,
+        category: String?,
+        isCustom: Bool,
+        archivedAt: Date?,
+        notes: String? = nil,
+        youtubeVideoID: String? = nil
+    ) {
+        self.id = id
+        self.name = name
+        self.normalizedName = normalizedName
+        self.aliases = aliases
+        self.equipment = equipment
+        self.category = category
+        self.isCustom = isCustom
+        self.archivedAt = archivedAt
+        self.notes = notes
+        self.youtubeVideoID = youtubeVideoID
+    }
 }
 
 public enum SetTarget: Codable, Hashable, Sendable {

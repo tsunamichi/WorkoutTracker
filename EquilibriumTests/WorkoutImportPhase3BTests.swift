@@ -4,6 +4,80 @@ import XCTest
 final class WorkoutImportPhase3BTests: XCTestCase {
     private let parser = WorkoutTextParser()
 
+    func testBlockImportPreservesUnilateralRepTargetsNotesAndVideoMetadata() throws {
+        let result = parser.parse("""
+        **A — Hand Eye Coordination**
+        SL Ball/Wall Toss (on foam pad)
+        3 x 45s
+        - Change angles between high & low
+
+        **B — Deep Tier Skater Bounds**
+        3 x 12/ea direction
+        - Focus on height > deceleration
+        - Land soft, load hips & knee
+        - Demos (1)
+
+        **C1 — Barbell Box Squat > Jump**
+        3 x 5/ea leg
+        - Increase weight
+        - 2s pause @ seated position
+        - Explosive through the ground, to standing position
+        - Light weight, maximum intent
+        - https://youtu.be/dQw4w9WgXcQ
+        """)
+
+        XCTAssertFalse(result.hasBlockingIssues)
+        let exercises = try XCTUnwrap(result.workouts.first?.exercises)
+        XCTAssertEqual(exercises.map(\.name), ["SL Ball/Wall Toss (on foam pad)", "Deep Tier Skater Bounds", "Barbell Box Squat > Jump"])
+        XCTAssertEqual(exercises[0].prescriptions[0].target, .duration(seconds: 45))
+        XCTAssertTrue(exercises[0].isTimeBased)
+        XCTAssertFalse(exercises[0].isTwoSided)
+        XCTAssertEqual(exercises[1].prescriptions[0].target, .repetitions(12...12))
+        XCTAssertTrue(exercises[1].isTimeBased)
+        XCTAssertTrue(exercises[1].isTwoSided)
+        XCTAssertEqual(exercises[2].prescriptions[0].target, .repetitions(5...5))
+        XCTAssertTrue(exercises[2].isTimeBased)
+        XCTAssertTrue(exercises[2].isTwoSided)
+        XCTAssertEqual(exercises[2].youtubeVideoID, "dQw4w9WgXcQ")
+        XCTAssertEqual(exercises[2].workoutNotes, "Increase weight")
+        XCTAssertTrue(exercises[2].reusableNotes?.contains("2s pause") == true)
+        XCTAssertTrue(result.issues.contains { $0.severity == .warning && $0.message.contains("demo") })
+    }
+
+    func testUnilateralNotationKeepsRepetitionsAndDraftSettings() throws {
+        for (notation, expected) in [("3 x 5/ea leg", 5), ("3 x 5/side", 5), ("3 x 5 each leg", 5), ("1 x 12/ea", 12)] {
+            let result = parser.parse("Import\n\nSplit Squat\n\(notation)")
+            let parsed = try XCTUnwrap(result.workouts.first?.exercises.first, notation)
+            XCTAssertEqual(parsed.prescriptions[0].target, .repetitions(expected...expected), notation)
+            XCTAssertTrue(parsed.isTimeBased, notation)
+            XCTAssertTrue(parsed.isTwoSided, notation)
+            let draft = WorkoutImportDraftConverter.lightweightDraft(from: try XCTUnwrap(result.workouts.first), catalog: []).exercises[0]
+            XCTAssertTrue(draft.isTimeBased, notation)
+            XCTAssertTrue(draft.isTwoSided, notation)
+        }
+    }
+
+    @MainActor func testMaterializationFillsOnlyMissingCanonicalDetails() async throws {
+        let repository = SwiftDataRepository(container: try PersistenceController.makeContainer(inMemory: true))
+        let id = ExerciseID.new()
+        let existing = ExerciseDefinition(id: id, name: "Split Squat", normalizedName: "split squat", aliases: [], equipment: nil, category: nil, isCustom: false, archivedAt: nil, notes: "Keep existing notes", youtubeVideoID: "dQw4w9WgXcQ")
+        try await repository.saveExercise(existing)
+        let parsed = parser.parse("""
+        Import
+
+        Split Squat
+        3 x 5/ea leg
+        - New imported note
+        - https://youtu.be/9bZkp7q19f0
+        """)
+        let workout = try await WorkoutPasteMaterializer(exercises: repository, workouts: repository, history: repository).materialize(parsed.workouts).first
+        XCTAssertTrue(try XCTUnwrap(workout).exercises[0].isTwoSided)
+        let loaded = try await repository.exercise(id: id)
+        let persisted = try XCTUnwrap(loaded)
+        XCTAssertEqual(persisted.notes, "Keep existing notes")
+        XCTAssertEqual(persisted.youtubeVideoID, "dQw4w9WgXcQ")
+    }
+
     func testAnyFirstLineIsTheWorkoutTitleEvenWhenNextLineIsInvalid() {
         let result = parser.parse("1:# Full Expression\nPower block\n- Seated Box Jump — 4×3")
         XCTAssertEqual(result.workouts.map(\.name), ["1:# Full Expression"])

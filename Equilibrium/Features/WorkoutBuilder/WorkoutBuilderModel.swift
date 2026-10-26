@@ -13,8 +13,12 @@ struct DraftExercise: Identifiable, Hashable, Sendable {
     var name: String
     var prescriptions: [DraftSet]
     var restDuration: TimeInterval?
-    init(id: UUID = UUID(), exerciseID: ExerciseID?, name: String, prescriptions: [DraftSet] = [], restDuration: TimeInterval? = nil) {
+    var isTimeBased: Bool
+    var isTwoSided: Bool
+    init(id: UUID = UUID(), exerciseID: ExerciseID?, name: String, prescriptions: [DraftSet] = [], restDuration: TimeInterval? = nil, isTimeBased: Bool? = nil, isTwoSided: Bool = false) {
         self.id = id; self.exerciseID = exerciseID; self.name = name; self.prescriptions = prescriptions; self.restDuration = restDuration
+        self.isTimeBased = isTimeBased ?? prescriptions.contains { if case .duration = $0.target { true } else { false } }
+        self.isTwoSided = isTwoSided
     }
 }
 
@@ -95,7 +99,7 @@ final class WorkoutBuilderModel {
             } else {
                 prescriptions = draftExercise.prescriptions.map(Self.prescription)
             }
-            workoutExercises.append(.init(id: .new(), exerciseID: definition.id, nameSnapshot: definition.name, prescriptions: prescriptions, loggedSets: [], restDuration: draftExercise.restDuration, skippedAt: nil))
+            workoutExercises.append(.init(id: .new(), exerciseID: definition.id, nameSnapshot: definition.name, prescriptions: prescriptions, loggedSets: [], restDuration: draftExercise.restDuration, skippedAt: nil, isTimeBased: draftExercise.isTimeBased, isTwoSided: draftExercise.isTwoSided))
         }
         return .init(id: .new(), titleSnapshot: draft.name.trimmingCharacters(in: .whitespacesAndNewlines), exercises: workoutExercises, status: .ready, startedAt: nil, completedAt: nil, createdAt: now, updatedAt: now)
     }
@@ -114,7 +118,7 @@ final class WorkoutBuilderModel {
 extension WorkoutDraft {
     init(recent workout: Workout) {
         name = workout.titleSnapshot
-        exercises = workout.exercises.map { .init(exerciseID: $0.exerciseID, name: $0.nameSnapshot, prescriptions: $0.prescriptions.map(DraftSet.init), restDuration: $0.restDuration) }
+        exercises = workout.exercises.map { .init(exerciseID: $0.exerciseID, name: $0.nameSnapshot, prescriptions: $0.prescriptions.map(DraftSet.init), restDuration: $0.restDuration, isTimeBased: $0.isTimeBased, isTwoSided: $0.isTwoSided) }
     }
 }
 private extension DraftSet {
