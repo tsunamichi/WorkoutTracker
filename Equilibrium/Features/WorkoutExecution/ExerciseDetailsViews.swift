@@ -76,7 +76,6 @@ struct ExerciseDetailsContent: View {
                         .frame(maxWidth: .infinity, alignment: .top)
                 } else {
                     notesSection
-                    Divider().overlay(EQColor.Execution.foregroundSecondaryText.opacity(0.2))
                     videoSection
                 }
             }
@@ -91,24 +90,39 @@ struct ExerciseDetailsContent: View {
     }
 
     private var notesSection: some View {
-        section("Notes", edit: onEditNotes) {
-            if let notes = value.notes {
-                Text(notes)
-                    .eqTextStyle(.body)
-                    .foregroundStyle(EQColor.Execution.foregroundText)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .textSelection(.enabled)
-            } else {
-                Text("No notes added")
-                    .eqTextStyle(.secondaryBody)
-                    .foregroundStyle(EQColor.Execution.foregroundSecondaryText)
+        HStack(alignment: .center, spacing: EQLayout.controlGap) {
+            Group {
+                if let notes = value.notes {
+                    Text(notes)
+                        .eqTextStyle(.body)
+                        .foregroundStyle(EQColor.Execution.foregroundText)
+                        .textSelection(.enabled)
+                } else {
+                    Text("No notes added")
+                        .eqTextStyle(.secondaryBody)
+                        .foregroundStyle(EQColor.Execution.foregroundSecondaryText)
+                }
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            editButton(action: onEditNotes, label: "Edit notes")
         }
+        .frame(maxWidth: .infinity, minHeight: EQLayout.minimumTouch, alignment: .leading)
+        .eqGroupedCard(fill: EQColor.surfaceHighlightDark)
     }
 
-    private var videoSection: some View {
-        section("Video", edit: onEditVideo) {
-            if let videoID = value.videoID {
+    @ViewBuilder private var videoSection: some View {
+        if let videoID = value.videoID {
+            VStack(alignment: .leading, spacing: EQSpacing.sm) {
+                HStack(spacing: EQLayout.controlGap) {
+                    Text("Video Demonstration")
+                        .eqTextStyle(.body)
+                        .foregroundStyle(EQColor.Execution.foregroundText)
+                    Spacer(minLength: EQLayout.controlGap)
+                    editButton(action: onEditVideo, label: "Edit video")
+                }
+                .frame(minHeight: EQLayout.minimumTouch)
+
                 if videoCannotEmbed {
                     VStack(alignment: .leading, spacing: EQSpacing.sm) {
                         Label("This video can’t play here.", systemImage: "play.slash")
@@ -117,7 +131,6 @@ struct ExerciseDetailsContent: View {
                             .eqTextStyle(.secondaryBody)
                     }
                     .frame(maxWidth: .infinity, minHeight: 120, alignment: .leading)
-                    .eqGroupedCard(fill: EQColor.surfaceHighlightDark)
                 } else {
                     YouTubeEmbeddedPlayer(videoID: videoID) {
                         videoCannotEmbed = true
@@ -125,32 +138,29 @@ struct ExerciseDetailsContent: View {
                     .aspectRatio(16 / 9, contentMode: .fit)
                     .clipShape(RoundedRectangle(cornerRadius: EQRadius.button, style: .continuous))
                 }
-            } else {
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            // Grouped cards provide an 8pt vertical inset. Add the remaining 8pt
+            // beneath a player so the preview's bottom inset matches the 16pt sides.
+            .padding(.bottom, EQSpacing.xs)
+            .eqGroupedCard(fill: EQColor.surfaceHighlightDark)
+        } else {
+            HStack(spacing: EQLayout.controlGap) {
                 Text("No video added")
                     .eqTextStyle(.secondaryBody)
                     .foregroundStyle(EQColor.Execution.foregroundSecondaryText)
+                Spacer(minLength: EQLayout.controlGap)
+                editButton(action: onEditVideo, label: "Edit video")
             }
+            .frame(maxWidth: .infinity, minHeight: EQLayout.minimumTouch, alignment: .leading)
+            .eqGroupedCard(fill: EQColor.surfaceHighlightDark)
         }
     }
 
-    private func section<Content: View>(
-        _ title: String,
-        edit: @escaping () -> Void,
-        @ViewBuilder content: () -> Content
-    ) -> some View {
-        VStack(alignment: .leading, spacing: EQSpacing.sm) {
-            HStack(spacing: EQLayout.controlGap) {
-                Text(title)
-                    .eqTextStyle(.sectionLabel)
-                    .foregroundStyle(EQColor.Execution.foregroundSecondaryText)
-                Spacer(minLength: EQLayout.controlGap)
-                EQIconButton(systemImage: "pencil", alignment: .trailing, action: edit)
-                    .foregroundStyle(EQColor.Execution.foregroundText)
-                    .accessibilityLabel("Edit \(title.lowercased())")
-            }
-            .frame(minHeight: EQLayout.minimumTouch)
-            content()
-        }
+    private func editButton(action: @escaping () -> Void, label: String) -> some View {
+        EQIconButton(systemImage: "chevron.right", alignment: .trailing, action: action)
+            .foregroundStyle(EQColor.Execution.foregroundText)
+            .accessibilityLabel(label)
     }
 
     @MainActor
@@ -275,10 +285,8 @@ struct ExerciseNotesEditPage: View {
                 .padding(.horizontal, -5)
                 .frame(minHeight: 180, alignment: .topLeading)
                 .accessibilityLabel("Exercise notes")
-                .padding(.horizontal, EQSpacing.md)
-                .padding(.vertical, EQSpacing.xs)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .background(EQColor.surfaceInput, in: RoundedRectangle(cornerRadius: EQRadius.card, style: .continuous))
+                .eqGroupedCard(fill: EQColor.surfaceHighlightDark)
                 .padding(.horizontal, EQLayout.WorkoutExecution.walletInset)
                 .padding(.top, EQLayout.ExerciseOptions.headerToContentSpacing - EQSpacing.xs)
                 .padding(.bottom, EQLayout.ExerciseOptions.bottomInset)
@@ -310,9 +318,6 @@ struct ExerciseVideoEditPage: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: EQSpacing.sm) {
-                Text("YouTube URL")
-                    .eqTextStyle(.sectionLabel)
-                    .foregroundStyle(EQColor.Execution.foregroundSecondaryText)
                 TextField("YouTube URL", text: $editor.youtubeURL, axis: .vertical)
                     .eqTextStyle(.body)
                     .textInputAutocapitalization(.never)
@@ -322,7 +327,7 @@ struct ExerciseVideoEditPage: View {
                     .accessibilityHint("Paste a standard YouTube, shortened, Shorts, or embed URL")
                     .padding(.horizontal, EQSpacing.md)
                     .padding(.vertical, EQSpacing.xs)
-                    .background(EQColor.surfaceInput, in: RoundedRectangle(cornerRadius: EQRadius.card, style: .continuous))
+                    .background(EQColor.surfaceHighlightDark, in: RoundedRectangle(cornerRadius: EQRadius.card, style: .continuous))
                 if let validationMessage = editor.validationMessage {
                     Text(validationMessage)
                         .eqTextStyle(.caption)

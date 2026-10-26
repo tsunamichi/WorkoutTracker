@@ -2040,10 +2040,6 @@ struct WorkoutExecutionView: View {
             .foregroundStyle(EQColor.Execution.primaryAction)
             .padding(.vertical, EQSpacing.xxs)
             .padding(.horizontal, EQSpacing.xs)
-            .background(
-                EQColor.surfaceHighlightDark,
-                in: RoundedRectangle(cornerRadius: EQSpacing.xxs, style: .continuous)
-            )
     }
 
     /// Selects a set, sliding the values in from the side of travel.
@@ -2166,8 +2162,12 @@ struct WorkoutExecutionView: View {
                    walletPresentation.resolvedMode(for: model.foregroundState) == .focusedExercise,
                    let exercise = foregroundExercise {
                     Button { presentExerciseDetails(for: exercise) } label: {
-                        foregroundEntryLabel("Details")
+                        Text("Details")
+                            .eqTextStyle(.secondaryBody)
+                            .foregroundStyle(EQColor.Execution.primaryAction)
+                            .underline()
                     }
+                        .padding(.top, EQSpacing.xxs)
                         .frame(minHeight: 32, alignment: .leading)
                         .buttonStyle(.plain)
                         .accessibilityHint("Shows notes and video for \(exercise.nameSnapshot)")
@@ -4127,6 +4127,7 @@ private struct ExerciseListRow: View {
             Text(exercise.nameSnapshot)
                 .eqTextStyle(.listItemTitle)
                 .strikethrough(presentation.strikethrough)
+                .underline(state == .current)
                 .foregroundStyle(restBlend(presentation.emphasis == .reduced ? EQColor.Execution.overviewSecondaryText : EQColor.Execution.overviewText))
 
             Spacer(minLength: EQLayout.controlGap)
@@ -4439,7 +4440,10 @@ private struct ExerciseOptionsCardContent: View {
         if let route = path.last {
             destination(route)
                 .id(route)
-                .transition(destinationNavigationTransition)
+                // Details is the parent page for its two editors. Give it the
+                // root-page transition so it exits left when an editor is pushed
+                // and returns from the left when that editor is popped.
+                .transition(route == .details ? rootNavigationTransition : destinationNavigationTransition)
         } else if let exercise {
             rootContent(exercise)
                 .id("exercise-settings-root")

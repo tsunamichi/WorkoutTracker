@@ -453,7 +453,11 @@ struct HomeView: View {
         Task { @MainActor in
             await Task.yield()
             guard !homeActionMenuIsPresented else { return }
-            model.creationRoute = route
+            // Do not pass the contextual menu's horizontal transition transaction
+            // into the system sheet. UIKit retains its native bottom-up animation.
+            withTransaction(Transaction(animation: nil)) {
+                model.creationRoute = route
+            }
             #if DEBUG
             homeMenuDiagnostics.notice("Create action assigned creation route")
             #endif
